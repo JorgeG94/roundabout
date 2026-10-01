@@ -1,0 +1,1405 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>remap_layer_to_vcoord_impl &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>remap_layer_to_vcoord_impl
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">80 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_diag_fills.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_diag_fills.f90.html'>rdb_ocean_diag_fills.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_diag_fills.html'>rdb_ocean_diag_fills</a></li>
+            <li class="breadcrumb-item active" aria-current="page">remap_layer_to_vcoord_impl</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-col_h">col_h</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-dz~10">dz</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-dz_new~8">dz_new</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-dz_old~8">dz_old</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-href">href</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-i~452">i</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-j~383">j</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-k~281">k</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-lvl_scale">lvl_scale</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-m~24">m</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-n~44">n</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-nx~413">nx</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-ny~413">ny</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-nz~324">nz</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-nz_out~2">nz_out</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-q_new~8">q_new</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-q_old~7">q_old</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-zf~2">zf</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#variable-zf_prev">zf_prev</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/remap_layer_to_vcoord_impl.html#src">remap_layer_to_vcoord_impl</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private pure subroutine remap_layer_to_vcoord_impl(coord_type, h_layer, levels, layer_buf, output_buf, is_extensive, method, mask_vanished, missing)  
+</h2>
+    
+
+    <p>Per-column conservative layer→output-coordinate remap as a
+<code>do concurrent</code> over (j, i).  Builds the source column TOP-DOWN
+(work index 1 = surface = state k=nz) and the target cells from the
+<code>levels</code> interface positions (implicit 0 surface), clips both to the
+column total, then runs the donor-cell overlap integral
+(<code>remap_column</code>, scheme <code>method</code>) on a common <code>n = max(nz, nz_out)</code>
+padded partition.  Intensive remaps the value directly; extensive
+divides in / multiplies out by thickness so the column integral
+redistributes (sum preserved).</p>
+<p><code>coord_type</code> selects how <code>levels(m)</code> maps to a target interface
+depth (a per-column scale hoisted out of the inner loop):
+  * <code>Z_FIXED</code>: <code>levels</code> are absolute depths (m, positive-down) —
+    scale 1 (the bit-identical legacy fixed-z path).
+  * <code>SIGMA</code>:   <code>levels</code> are cumulative fractions (0..1) — depth =
+    <code>levels(m) * col_h</code> (terrain-following).
+  * <code>ZSTAR</code>:   <code>levels</code> are reference depths (deepest = H_ref) —
+    depth = <code>levels(m) * col_h / H_ref</code> (SSH-tracking: when
+    col_h == H_ref the grid is the reference grid).  Identical to
+    SIGMA under uniform levels; differs only with a non-uniform
+    (e.g. fine-near-surface) reference.</p>
+<p><strong>Vanished source layers carry ZERO WEIGHT, not a value.</strong>  A
+source layer that is not live (<code>rdb_vl_is_live</code>) enters the
+overlap integral with <code>dz = 0</code> and <code>q = 0</code>, and its thickness is
+left out of the column total the targets are clipped to.  Its
+<code>layer_buf</code> value is never read: for a concentration it is the
+NaN missing-data sentinel (<code>fill_tracer_impl</code>), which the
+donor-cell reconstruction would otherwise smear into every target
+cell of the column; for content it is <code>h·c_live</code> by I1′, a copy of
+the donor layer the remap already counts.  A column with
+no vanished layer is bit-identical.</p>
+<p>Fixed-size <code>NZ_STACK_MAX</code> stack locals via <code>local(...)</code> — automatic
+arrays sized from a dummy crash NVHPC stdpar device codegen.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-coord_type~9"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>coord_type</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_layer~58"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_layer</strong>(:,:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-levels~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>levels</strong>(:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-layer_buf~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>layer_buf</strong>(:,:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-output_buf~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>output_buf</strong>(:,:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-is_extensive~7"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>is_extensive</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-method~12"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>method</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mask_vanished"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mask_vanished</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-missing~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>missing</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~remap_layer_to_vcoord_impl~~CallsGraph Pages: 1 -->
+<svg id="procremap_layer_to_vcoord_implCallsGraph" width="641pt" height="256pt"
+ viewBox="0.00 0.00 641.00 256.14" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph" class="graph" transform="scale(0.65 0.65) rotate(0) translate(4 392)">
+<title>proc~~remap_layer_to_vcoord_impl~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-392 987,-392 987,4 -4,4"/>
+<!-- proc~remap_layer_to_vcoord_impl -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node1" class="node">
+<title>proc~remap_layer_to_vcoord_impl</title>
+<polygon fill="none" stroke="black" points="166,-308 0,-308 0,-284 166,-284 166,-308"/>
+<text text-anchor="middle" x="83" y="-293.6" font-family="Helvetica,sans-Serif" font-size="10.50">remap_layer_to_vcoord_impl</text>
+</g>
+<!-- local -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node2" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="275,-350 221,-350 221,-326 275,-326 275,-350"/>
+<text text-anchor="middle" x="248" y="-335.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~remap_layer_to_vcoord_impl&#45;&gt;local -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge1" class="edge">
+<title>proc~remap_layer_to_vcoord_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M130.71,-308.04C156.11,-314.58 187.07,-322.56 210.65,-328.63"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="210.04,-332.09 220.6,-331.2 211.79,-325.31 210.04,-332.09"/>
+</g>
+<!-- proc~remap_column -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node3" class="node">
+<title>proc~remap_column</title>
+<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node3"><a xlink:href="../proc/remap_column.html" xlink:title="remap_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="294,-308 202,-308 202,-284 294,-284 294,-308"/>
+<text text-anchor="middle" x="248" y="-293.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_vcoord_impl&#45;&gt;proc~remap_column -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge2" class="edge">
+<title>proc~remap_layer_to_vcoord_impl&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#ff0000" d="M166.46,-296C175.01,-296 183.54,-296 191.69,-296"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="191.77,-299.5 201.77,-296 191.77,-292.5 191.77,-299.5"/>
+</g>
+<!-- rdb_vl_is_live -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node4" class="node">
+<title>rdb_vl_is_live</title>
+<polygon fill="#777777" stroke="#777777" points="289,-266 207,-266 207,-242 289,-242 289,-266"/>
+<text text-anchor="middle" x="248" y="-251.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_vl_is_live</text>
+</g>
+<!-- proc~remap_layer_to_vcoord_impl&#45;&gt;rdb_vl_is_live -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge3" class="edge">
+<title>proc~remap_layer_to_vcoord_impl&#45;&gt;rdb_vl_is_live</title>
+<path fill="none" stroke="#ff0000" d="M130.71,-283.96C151.5,-278.61 176.01,-272.29 197.15,-266.84"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="198.11,-270.21 206.92,-264.33 196.36,-263.43 198.11,-270.21"/>
+</g>
+<!-- proc~remap_column_pcm -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node5" class="node">
+<title>proc~remap_column_pcm</title>
+<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node5"><a xlink:href="../proc/remap_column_pcm.html" xlink:title="remap_column_pcm">
+<polygon fill="#d9534f" stroke="#d9534f" points="451,-388 330,-388 330,-364 451,-364 451,-388"/>
+<text text-anchor="middle" x="390.5" y="-373.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_pcm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_pcm -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge4" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_pcm</title>
+<path fill="none" stroke="#00ff00" d="M278.28,-308.07C283.67,-310.73 289.13,-313.74 294,-317 312.04,-329.06 311.81,-338.16 330,-350 335.39,-353.51 341.34,-356.75 347.33,-359.66"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="346.14,-362.97 356.69,-363.96 349.07,-356.61 346.14,-362.97"/>
+</g>
+<!-- proc~remap_column_plm -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node6" class="node">
+<title>proc~remap_column_plm</title>
+<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node6"><a xlink:href="../proc/remap_column_plm.html" xlink:title="remap_column_plm">
+<polygon fill="#d9534f" stroke="#d9534f" points="804,-348 686,-348 686,-324 804,-324 804,-348"/>
+<text text-anchor="middle" x="745" y="-333.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_plm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge5" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#00ff00" d="M294.28,-304.72C305.89,-306.71 318.38,-308.63 330,-310 451.23,-324.24 593.42,-331.02 675.67,-333.98"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="675.77,-337.48 685.88,-334.34 676.01,-330.49 675.77,-337.48"/>
+</g>
+<!-- proc~remap_column_ppm -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node7" class="node">
+<title>proc~remap_column_ppm</title>
+<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node7"><a xlink:href="../proc/remap_column_ppm.html" xlink:title="remap_column_ppm">
+<polygon fill="#d9534f" stroke="#d9534f" points="624.5,-226 503.5,-226 503.5,-202 624.5,-202 624.5,-226"/>
+<text text-anchor="middle" x="564" y="-211.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_ppm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_ppm -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge6" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_ppm</title>
+<path fill="none" stroke="#00ff00" d="M294.32,-284.16C350.55,-269.48 446.4,-244.45 507.12,-228.59"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="508.13,-231.95 516.92,-226.03 506.36,-225.17 508.13,-231.95"/>
+</g>
+<!-- proc~remap_column_ppm_h4 -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node8" class="node">
+<title>proc~remap_column_ppm_h4</title>
+<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node8"><a xlink:href="../proc/remap_column_ppm_h4.html" xlink:title="remap_column_ppm_h4">
+<polygon fill="#d9534f" stroke="#d9534f" points="634,-308 494,-308 494,-284 634,-284 634,-308"/>
+<text text-anchor="middle" x="564" y="-293.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_ppm_h4</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_ppm_h4 -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge7" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_ppm_h4</title>
+<path fill="none" stroke="#00ff00" d="M294.32,-296C343.77,-296 423.87,-296 483.76,-296"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="483.94,-299.5 493.94,-296 483.94,-292.5 483.94,-299.5"/>
+</g>
+<!-- proc~remap_column_pqm -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node9" class="node">
+<title>proc~remap_column_pqm</title>
+<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node9"><a xlink:href="../proc/remap_column_pqm.html" xlink:title="remap_column_pqm">
+<polygon fill="#d9534f" stroke="#d9534f" points="451,-106 330,-106 330,-82 451,-82 451,-106"/>
+<text text-anchor="middle" x="390.5" y="-91.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_pqm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_pqm -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge8" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_pqm</title>
+<path fill="none" stroke="#00ff00" d="M281.62,-283.93C286.09,-281.41 290.38,-278.45 294,-275 319.19,-251.01 361.71,-157.83 380.32,-115.34"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="383.53,-116.72 384.31,-106.16 377.12,-113.93 383.53,-116.72"/>
+</g>
+<!-- proc~boundary_half_jump -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node10" class="node">
+<title>proc~boundary_half_jump</title>
+<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node10"><a xlink:href="../proc/boundary_half_jump.html" xlink:title="boundary_half_jump">
+<polygon fill="#d9534f" stroke="#d9534f" points="976.5,-225 855.5,-225 855.5,-201 976.5,-201 976.5,-225"/>
+<text text-anchor="middle" x="916" y="-210.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">boundary_half_jump</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_plm&#45;&gt;proc~boundary_half_jump -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge9" class="edge">
+<title>proc~remap_column_plm&#45;&gt;proc~boundary_half_jump</title>
+<path fill="none" stroke="#cbff00" d="M784.81,-323.89C794.38,-320.12 804.36,-315.48 813,-310 847.07,-288.39 879.61,-254.32 898.43,-232.84"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="901.3,-234.87 905.17,-225.01 896,-230.3 901.3,-234.87"/>
+</g>
+<!-- proc~plm_slope_nonuniform -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node11" class="node">
+<title>proc~plm_slope_nonuniform</title>
+<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node11"><a xlink:href="../proc/plm_slope_nonuniform.html" xlink:title="plm_slope_nonuniform">
+<polygon fill="#d9534f" stroke="#d9534f" points="983,-348 849,-348 849,-324 983,-324 983,-348"/>
+<text text-anchor="middle" x="916" y="-333.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">plm_slope_nonuniform</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_plm&#45;&gt;proc~plm_slope_nonuniform -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge10" class="edge">
+<title>proc~remap_column_plm&#45;&gt;proc~plm_slope_nonuniform</title>
+<path fill="none" stroke="#cbff00" d="M804.16,-336C815.31,-336 827.14,-336 838.76,-336"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="838.9,-339.5 848.9,-336 838.9,-332.5 838.9,-339.5"/>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge15" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#00ff66" d="M582.82,-226.14C614.58,-247.79 681.11,-293.14 717.99,-318.27"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="716.02,-321.17 726.25,-323.91 719.96,-315.38 716.02,-321.17"/>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~boundary_half_jump -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge11" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~boundary_half_jump</title>
+<path fill="none" stroke="#00ff66" d="M580.55,-201.78C601.2,-186.41 639.45,-160.84 677,-151 735.47,-135.68 754.8,-134.7 813,-151 843.25,-159.47 873.43,-179.65 893.03,-194.69"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="890.98,-197.54 901,-200.98 895.32,-192.04 890.98,-197.54"/>
+</g>
+<!-- proc~ppm_edge_nonuniform -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node12" class="node">
+<title>proc~ppm_edge_nonuniform</title>
+<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node12"><a xlink:href="../proc/ppm_edge_nonuniform.html" xlink:title="ppm_edge_nonuniform">
+<polygon fill="#d9534f" stroke="#d9534f" points="813,-226 677,-226 677,-202 813,-202 813,-226"/>
+<text text-anchor="middle" x="745" y="-211.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_edge_nonuniform</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~ppm_edge_nonuniform -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge12" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~ppm_edge_nonuniform</title>
+<path fill="none" stroke="#00ff66" d="M624.6,-214C638.11,-214 652.64,-214 666.75,-214"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="666.94,-217.5 676.94,-214 666.94,-210.5 666.94,-217.5"/>
+</g>
+<!-- proc~ppm_edge_two_cell -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node13" class="node">
+<title>proc~ppm_edge_two_cell</title>
+<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node13"><a xlink:href="../proc/ppm_edge_two_cell.html" xlink:title="ppm_edge_two_cell">
+<polygon fill="#d9534f" stroke="#d9534f" points="803.5,-184 686.5,-184 686.5,-160 803.5,-160 803.5,-184"/>
+<text text-anchor="middle" x="745" y="-169.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_edge_two_cell</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~ppm_edge_two_cell -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge13" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~ppm_edge_two_cell</title>
+<path fill="none" stroke="#00ff66" d="M616.29,-201.96C637.08,-197.09 661.25,-191.42 682.93,-186.33"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="683.76,-189.73 692.7,-184.04 682.16,-182.91 683.76,-189.73"/>
+</g>
+<!-- proc~ppm_jump_nonuniform -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node14" class="node">
+<title>proc~ppm_jump_nonuniform</title>
+<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node14"><a xlink:href="../proc/ppm_jump_nonuniform.html" xlink:title="ppm_jump_nonuniform">
+<polygon fill="#d9534f" stroke="#d9534f" points="813,-268 677,-268 677,-244 813,-244 813,-268"/>
+<text text-anchor="middle" x="745" y="-253.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_jump_nonuniform</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~ppm_jump_nonuniform -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge14" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~ppm_jump_nonuniform</title>
+<path fill="none" stroke="#00ff66" d="M616.29,-226.04C637.08,-230.91 661.25,-236.58 682.93,-241.67"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="682.16,-245.09 692.7,-243.96 683.76,-238.27 682.16,-245.09"/>
+</g>
+<!-- proc~remap_column_ppm_h4&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge17" class="edge">
+<title>proc~remap_column_ppm_h4&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#0066ff" d="M618.71,-308C638,-312.31 659.95,-317.22 680.03,-321.7"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="679.5,-325.17 690.02,-323.94 681.03,-318.34 679.5,-325.17"/>
+</g>
+<!-- proc~remap_column_ppm_h4&#45;&gt;proc~boundary_half_jump -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge16" class="edge">
+<title>proc~remap_column_ppm_h4&#45;&gt;proc~boundary_half_jump</title>
+<path fill="none" stroke="#0066ff" d="M634.09,-299.47C684.83,-299.94 754.76,-296.2 813,-277 842.92,-267.14 872.96,-246.71 892.61,-231.57"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="894.94,-234.19 900.62,-225.25 890.6,-228.7 894.94,-234.19"/>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~remap_column_ppm -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge21" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~remap_column_ppm</title>
+<path fill="none" stroke="#cc00ff" d="M408.89,-106.17C439.27,-127.42 502.14,-171.41 537.47,-196.14"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="535.62,-199.11 545.82,-201.98 539.63,-193.38 535.62,-199.11"/>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~boundary_half_jump -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge18" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~boundary_half_jump</title>
+<path fill="none" stroke="#cc00ff" d="M451.09,-90.04C534.94,-86.63 691.1,-88.3 813,-136 845.87,-148.86 877.28,-175.47 896.34,-193.78"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="893.91,-196.29 903.5,-200.81 898.82,-191.31 893.91,-196.29"/>
+</g>
+<!-- proc~pqm_end_value_h4 -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node15" class="node">
+<title>proc~pqm_end_value_h4</title>
+<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node15"><a xlink:href="../proc/pqm_end_value_h4.html" xlink:title="pqm_end_value_h4">
+<polygon fill="#d9534f" stroke="#d9534f" points="621.5,-66 506.5,-66 506.5,-42 621.5,-42 621.5,-66"/>
+<text text-anchor="middle" x="564" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pqm_end_value_h4</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~pqm_end_value_h4 -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge19" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~pqm_end_value_h4</title>
+<path fill="none" stroke="#cc00ff" d="M442.96,-82C461.36,-77.71 482.28,-72.83 501.44,-68.36"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="502.34,-71.74 511.28,-66.06 500.75,-64.92 502.34,-71.74"/>
+</g>
+<!-- proc~pqm_solve_diag_dominant -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_node16" class="node">
+<title>proc~pqm_solve_diag_dominant</title>
+<g id="a_proc~~remap_layer_to_vcoord_impl~~CallsGraph_node16"><a xlink:href="../proc/pqm_solve_diag_dominant.html" xlink:title="pqm_solve_diag_dominant">
+<polygon fill="#d9534f" stroke="#d9534f" points="641,-24 487,-24 487,0 641,0 641,-24"/>
+<text text-anchor="middle" x="564" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pqm_solve_diag_dominant</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~pqm_solve_diag_dominant -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CallsGraph_edge20" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~pqm_solve_diag_dominant</title>
+<path fill="none" stroke="#cc00ff" d="M407.22,-81.85C425.49,-68.25 456.99,-46.37 487,-33 491.65,-30.93 496.55,-29.02 501.53,-27.26"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="502.77,-30.54 511.17,-24.08 500.57,-23.89 502.77,-30.54"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocremap_layer_to_vcoord_implCallsGraph = svgPanZoom('#procremap_layer_to_vcoord_implCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~remap_layer_to_vcoord_impl~~CalledByGraph Pages: 1 -->
+<svg id="procremap_layer_to_vcoord_implCalledByGraph" width="343pt" height="116pt"
+ viewBox="0.00 0.00 343.00 116.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~remap_layer_to_vcoord_impl~~CalledByGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 112)">
+<title>proc~~remap_layer_to_vcoord_impl~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-112 339,-112 339,4 -4,4"/>
+<!-- proc~remap_layer_to_vcoord_impl -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CalledByGraph_node1" class="node">
+<title>proc~remap_layer_to_vcoord_impl</title>
+<polygon fill="none" stroke="black" points="335,-66 169,-66 169,-42 335,-42 335,-66"/>
+<text text-anchor="middle" x="252" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50">remap_layer_to_vcoord_impl</text>
+</g>
+<!-- proc~remap_layer_to_sigma -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CalledByGraph_node2" class="node">
+<title>proc~remap_layer_to_sigma</title>
+<g id="a_proc~~remap_layer_to_vcoord_impl~~CalledByGraph_node2"><a xlink:href="../proc/remap_layer_to_sigma.html" xlink:title="remap_layer_to_sigma">
+<polygon fill="#d9534f" stroke="#d9534f" points="133,-108 0,-108 0,-84 133,-84 133,-108"/>
+<text text-anchor="middle" x="66.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_layer_to_sigma</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_sigma&#45;&gt;proc~remap_layer_to_vcoord_impl -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CalledByGraph_edge1" class="edge">
+<title>proc~remap_layer_to_sigma&#45;&gt;proc~remap_layer_to_vcoord_impl</title>
+<path fill="none" stroke="#ff0000" d="M120.08,-83.96C141.39,-79.09 166.17,-73.42 188.4,-68.33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="189.44,-71.68 198.41,-66.04 187.88,-64.86 189.44,-71.68"/>
+</g>
+<!-- proc~remap_layer_to_z -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CalledByGraph_node3" class="node">
+<title>proc~remap_layer_to_z</title>
+<g id="a_proc~~remap_layer_to_vcoord_impl~~CalledByGraph_node3"><a xlink:href="../proc/remap_layer_to_z.html" xlink:title="remap_layer_to_z">
+<polygon fill="#d9534f" stroke="#d9534f" points="119.5,-66 13.5,-66 13.5,-42 119.5,-42 119.5,-66"/>
+<text text-anchor="middle" x="66.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_layer_to_z</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_z&#45;&gt;proc~remap_layer_to_vcoord_impl -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CalledByGraph_edge2" class="edge">
+<title>proc~remap_layer_to_z&#45;&gt;proc~remap_layer_to_vcoord_impl</title>
+<path fill="none" stroke="#ff0000" d="M119.59,-54C131.84,-54 145.25,-54 158.67,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="158.92,-57.5 168.92,-54 158.92,-50.5 158.92,-57.5"/>
+</g>
+<!-- proc~remap_layer_to_zstar -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CalledByGraph_node4" class="node">
+<title>proc~remap_layer_to_zstar</title>
+<g id="a_proc~~remap_layer_to_vcoord_impl~~CalledByGraph_node4"><a xlink:href="../proc/remap_layer_to_zstar.html" xlink:title="remap_layer_to_zstar">
+<polygon fill="#d9534f" stroke="#d9534f" points="129.5,-24 3.5,-24 3.5,0 129.5,0 129.5,-24"/>
+<text text-anchor="middle" x="66.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_layer_to_zstar</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_zstar&#45;&gt;proc~remap_layer_to_vcoord_impl -->
+<g id="proc~~remap_layer_to_vcoord_impl~~CalledByGraph_edge3" class="edge">
+<title>proc~remap_layer_to_zstar&#45;&gt;proc~remap_layer_to_vcoord_impl</title>
+<path fill="none" stroke="#ff0000" d="M120.08,-24.04C141.39,-28.91 166.17,-34.58 188.4,-39.67"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="187.88,-43.14 198.41,-41.96 189.44,-36.32 187.88,-43.14"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-col_h"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>col_h</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz~10"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_new~8"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_new</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_old~8"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_old</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-href"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>href</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~452"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~383"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~281"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lvl_scale"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lvl_scale</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-m~24"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>m</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n~44"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~413"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~413"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~324"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz_out~2"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz_out</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_new~8"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_new</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_old~7"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_old</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zf~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zf</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zf_prev"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zf_prev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">remap_layer_to_vcoord_impl</span><span class="p">(</span><span class="n">coord_type</span><span class="p">,</span><span class="w"> </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">levels</span><span class="p">,</span><span class="w"> </span><span class="n">layer_buf</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                              </span><span class="n">output_buf</span><span class="p">,</span><span class="w"> </span><span class="n">is_extensive</span><span class="p">,</span><span class="w"> </span><span class="n">method</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                              </span><span class="n">mask_vanished</span><span class="p">,</span><span class="w"> </span><span class="n">missing</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Per-column conservative layer→output-coordinate remap as a</span>
+<span class="w">      </span><span class="c">!! `do concurrent` over (j, i).  Builds the source column TOP-DOWN</span>
+<span class="w">      </span><span class="c">!! (work index 1 = surface = state k=nz) and the target cells from the</span>
+<span class="w">      </span><span class="c">!! `levels` interface positions (implicit 0 surface), clips both to the</span>
+<span class="w">      </span><span class="c">!! column total, then runs the donor-cell overlap integral</span>
+<span class="w">      </span><span class="c">!! (`remap_column`, scheme `method`) on a common `n = max(nz, nz_out)`</span>
+<span class="w">      </span><span class="c">!! padded partition.  Intensive remaps the value directly; extensive</span>
+<span class="w">      </span><span class="c">!! divides in / multiplies out by thickness so the column integral</span>
+<span class="w">      </span><span class="c">!! redistributes (sum preserved).</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! `coord_type` selects how `levels(m)` maps to a target interface</span>
+<span class="w">      </span><span class="c">!! depth (a per-column scale hoisted out of the inner loop):</span>
+<span class="w">      </span><span class="c">!!   * `Z_FIXED`: `levels` are absolute depths (m, positive-down) —</span>
+<span class="w">      </span><span class="c">!!     scale 1 (the bit-identical legacy fixed-z path).</span>
+<span class="w">      </span><span class="c">!!   * `SIGMA`:   `levels` are cumulative fractions (0..1) — depth =</span>
+<span class="w">      </span><span class="c">!!     `levels(m) * col_h` (terrain-following).</span>
+<span class="w">      </span><span class="c">!!   * `ZSTAR`:   `levels` are reference depths (deepest = H_ref) —</span>
+<span class="w">      </span><span class="c">!!     depth = `levels(m) * col_h / H_ref` (SSH-tracking: when</span>
+<span class="w">      </span><span class="c">!!     col_h == H_ref the grid is the reference grid).  Identical to</span>
+<span class="w">      </span><span class="c">!!     SIGMA under uniform levels; differs only with a non-uniform</span>
+<span class="w">      </span><span class="c">!!     (e.g. fine-near-surface) reference.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! **Vanished source layers carry ZERO WEIGHT, not a value.**  A</span>
+<span class="w">      </span><span class="c">!! source layer that is not live (`rdb_vl_is_live`) enters the</span>
+<span class="w">      </span><span class="c">!! overlap integral with `dz = 0` and `q = 0`, and its thickness is</span>
+<span class="w">      </span><span class="c">!! left out of the column total the targets are clipped to.  Its</span>
+<span class="w">      </span><span class="c">!! `layer_buf` value is never read: for a concentration it is the</span>
+<span class="w">      </span><span class="c">!! NaN missing-data sentinel (`fill_tracer_impl`), which the</span>
+<span class="w">      </span><span class="c">!! donor-cell reconstruction would otherwise smear into every target</span>
+<span class="w">      </span><span class="c">!! cell of the column; for content it is `h·c_live` by I1′, a copy of</span>
+<span class="w">      </span><span class="c">!! the donor layer the remap already counts.  A column with</span>
+<span class="w">      </span><span class="c">!! no vanished layer is bit-identical.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Fixed-size `NZ_STACK_MAX` stack locals via `local(...)` — automatic</span>
+<span class="w">      </span><span class="c">!! arrays sized from a dummy crash NVHPC stdpar device codegen.</span>
+<span class="w">      </span><span class="c">! assumed-shape-ok: diag fill — fires once per output frame (cadence-bounded);</span>
+<span class="w">      </span><span class="c">! size() used to derive loop bounds from the actual buffer dimensions.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">coord_type</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">levels</span><span class="p">(:)</span><span class="w">  </span><span class="c">! assumed-shape-ok: diag fill — cadence-bounded</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">layer_buf</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span><span class="w">  </span><span class="c">! assumed-shape-ok: diag fill — cadence-bounded</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">output_buf</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">is_extensive</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">method</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">mask_vanished</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">missing</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nz_out</span><span class="p">,</span><span class="w"> </span><span class="n">n</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dz_old</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">),</span><span class="w"> </span><span class="n">dz_new</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">q_old</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">),</span><span class="w"> </span><span class="n">q_new</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">col_h</span><span class="p">,</span><span class="w"> </span><span class="n">zf_prev</span><span class="p">,</span><span class="w"> </span><span class="n">zf</span><span class="p">,</span><span class="w"> </span><span class="n">dz</span><span class="p">,</span><span class="w"> </span><span class="n">lvl_scale</span><span class="p">,</span><span class="w"> </span><span class="n">href</span>
+<span class="w">      </span><span class="n">nx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">layer_buf</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="n">ny</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">layer_buf</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span>
+<span class="w">      </span><span class="n">nz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">layer_buf</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">)</span>
+<span class="w">      </span><span class="n">nz_out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">levels</span><span class="p">)</span>
+<span class="w">      </span><span class="n">n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nz_out</span><span class="p">)</span>
+<span class="w">      </span><span class="n">href</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">levels</span><span class="p">(</span><span class="n">nz_out</span><span class="p">)</span><span class="w">   </span><span class="c">! ZSTAR reference total depth (deepest interface)</span>
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">         </span><span class="n">local</span><span class="p">(</span><span class="n">dz_old</span><span class="p">,</span><span class="w"> </span><span class="n">dz_new</span><span class="p">,</span><span class="w"> </span><span class="n">q_old</span><span class="p">,</span><span class="w"> </span><span class="n">q_new</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">,</span><span class="w"> </span><span class="n">col_h</span><span class="p">,</span><span class="w"> </span><span class="n">zf_prev</span><span class="p">,</span><span class="w"> </span><span class="n">zf</span><span class="p">,</span><span class="w"> </span><span class="n">dz</span><span class="p">,</span><span class="w"> </span><span class="n">lvl_scale</span><span class="p">)</span>
+<span class="w">         </span><span class="c">! --- source column TOP-DOWN: work index k = state index nz-k+1 ---</span>
+<span class="w">         </span><span class="c">! A vanished layer gets zero weight (see the docstring).</span>
+<span class="w">         </span><span class="n">col_h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">            </span><span class="n">dz_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">rdb_vl_is_live</span><span class="p">(</span><span class="n">dz_old</span><span class="p">(</span><span class="n">k</span><span class="p">)))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">layer_buf</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">            </span><span class="k">else</span>
+<span class="k">               </span><span class="n">dz_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">               </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">            </span><span class="n">col_h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">col_h</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dz_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">is_extensive</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">dz_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">1.0e-12_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="o">/</span><span class="n">dz_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w">   </span><span class="c">! integral -&gt; concentration</span>
+<span class="w">               </span><span class="k">else</span>
+<span class="k">                  </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">            end do</span>
+<span class="k">         end if</span>
+<span class="w">         </span><span class="c">! pad the source to n with zero-thickness layers at the deep end</span>
+<span class="w">         </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">n</span>
+<span class="w">            </span><span class="n">dz_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="w">         </span><span class="c">! --- per-column level-&gt;depth scale (loop-invariant, hoisted) ---</span>
+<span class="w">         </span><span class="k">select case</span><span class="w"> </span><span class="p">(</span><span class="n">coord_type</span><span class="p">)</span>
+<span class="w">         </span><span class="k">case</span><span class="w"> </span><span class="p">(</span><span class="n">DIAG_VGRID_SIGMA</span><span class="p">)</span>
+<span class="w">            </span><span class="n">lvl_scale</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">col_h</span>
+<span class="w">         </span><span class="k">case</span><span class="w"> </span><span class="p">(</span><span class="n">DIAG_VGRID_ZSTAR</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">href</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">1.0e-12_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">lvl_scale</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">col_h</span><span class="o">/</span><span class="n">href</span>
+<span class="w">            </span><span class="k">else</span>
+<span class="k">               </span><span class="n">lvl_scale</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         case </span><span class="n">default</span><span class="w">   </span><span class="c">! DIAG_VGRID_Z_FIXED: levels are absolute depths</span>
+<span class="w">            </span><span class="n">lvl_scale</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span>
+<span class="w">         </span><span class="k">end select</span>
+<span class="w">         </span><span class="c">! --- target cells from scaled interfaces (implicit 0 surface),</span>
+<span class="w">         </span><span class="c">!     clipped to the column total H so the totals match exactly ---</span>
+<span class="w">         </span><span class="n">zf_prev</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">do </span><span class="n">m</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz_out</span>
+<span class="w">            </span><span class="n">zf</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">levels</span><span class="p">(</span><span class="n">m</span><span class="p">)</span><span class="o">*</span><span class="n">lvl_scale</span><span class="p">,</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">),</span><span class="w"> </span><span class="n">col_h</span><span class="p">)</span>
+<span class="w">            </span><span class="n">dz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">zf</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">zf_prev</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">dz</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="n">dz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="n">dz_new</span><span class="p">(</span><span class="n">m</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dz</span>
+<span class="w">            </span><span class="n">zf_prev</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">zf</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">         do </span><span class="n">m</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nz_out</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">n</span>
+<span class="w">            </span><span class="n">dz_new</span><span class="p">(</span><span class="n">m</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">         call </span><span class="n">remap_column</span><span class="p">(</span><span class="n">method</span><span class="p">,</span><span class="w"> </span><span class="n">n</span><span class="p">,</span><span class="w"> </span><span class="n">dz_old</span><span class="p">,</span><span class="w"> </span><span class="n">dz_new</span><span class="p">,</span><span class="w"> </span><span class="n">q_old</span><span class="p">,</span><span class="w"> </span><span class="n">q_new</span><span class="p">)</span>
+<span class="w">         </span><span class="k">do </span><span class="n">m</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz_out</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">mask_vanished</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">dz_new</span><span class="p">(</span><span class="n">m</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">VANISHED_TARGET_FLOOR</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">               </span><span class="c">! Target cell overlaps no water (below-bottom / pinched-out):</span>
+<span class="w">               </span><span class="c">! emit the missing sentinel instead of a misleading 0.</span>
+<span class="w">               </span><span class="n">output_buf</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">missing</span>
+<span class="w">            </span><span class="k">else if</span><span class="w"> </span><span class="p">(</span><span class="n">is_extensive</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">output_buf</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">q_new</span><span class="p">(</span><span class="n">m</span><span class="p">)</span><span class="o">*</span><span class="n">dz_new</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
+<span class="w">            </span><span class="k">else</span>
+<span class="k">               </span><span class="n">output_buf</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">q_new</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         end do</span>
+<span class="k">      end do</span>
+<span class="k">   end subroutine </span><span class="n">remap_layer_to_vcoord_impl</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-01 23:35 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,714 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>continuity_step_split &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>continuity_step_split
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">11 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_continuity.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_continuity.f90.html'>rdb_continuity.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_continuity.html'>rdb_continuity</a></li>
+            <li class="breadcrumb-item active" aria-current="page">continuity_step_split</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/continuity_step_split.html#src">continuity_step_split</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private  subroutine continuity_step_split(grid, metrics, this, ms, dt)  
+</h2>
+    
+
+    <p><strong>Test-only</strong> (no production caller): continuity-only split wrapper;
+production runs the tracer-interleaved <code>continuity_tracer_step_split</code>.
+Directionally-split (Lie) PPM continuity step over <code>dt</code>:</p>
+<ol>
+<li>zonal flux Φx from current h</li>
+<li>apply x-divergence:  h ← h - dt·∂Φx/∂x</li>
+<li>meridional flux Φy from the <em>updated</em> h</li>
+<li>apply y-divergence:  h ← h - dt·∂Φy/∂y</li>
+</ol>
+<p>Standard Lie-split PPM continuity operator order.
+Compared to the unsplit
+<code>continuity_compute_fluxes</code> +
+<code>continuity_apply_fluxes</code> pair, this form
+relaxes the 2D-combined CFL constraint to the per-
+direction CFL ≤ 1.  For uniform <code>h_layer</code> and divergence-
+free flow the two forms are bit-identical (no advection of
+variation between substeps); they diverge under non-trivial
+advection at O(dt²·||∇h||) — same order as a vanilla Strang
+vs Lie split.</p>
+<p><code>flux_h_layer</code> ends the step holding the <em>total</em> horizontal
+divergence summed over both substeps, ready for the
+vertical-advection consumer.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~104"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-metrics~47"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>metrics</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~183"></span>
+              type(<a href='../type/continuity_t.html'>continuity_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ms~74"></span>
+              type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ms</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~63"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~continuity_step_split~~CallsGraph Pages: 1 -->
+<svg id="proccontinuity_step_splitCallsGraph" width="641pt" height="401pt"
+ viewBox="0.00 0.00 641.00 401.24" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~continuity_step_split~~CallsGraph" class="graph" transform="scale(0.97 0.97) rotate(0) translate(4 409.76)">
+<title>proc~~continuity_step_split~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-409.76 657,-409.76 657,4 -4,4"/>
+<!-- proc~continuity_step_split -->
+<g id="proc~~continuity_step_split~~CallsGraph_node1" class="node">
+<title>proc~continuity_step_split</title>
+<polygon fill="none" stroke="black" points="120,-251 0,-251 0,-227 120,-227 120,-251"/>
+<text text-anchor="middle" x="60" y="-236.6" font-family="Helvetica,sans-Serif" font-size="10.50">continuity_step_split</text>
+</g>
+<!-- proc~continuity_apply_meridional -->
+<g id="proc~~continuity_step_split~~CallsGraph_node2" class="node">
+<title>proc~continuity_apply_meridional</title>
+<g id="a_proc~~continuity_step_split~~CallsGraph_node2"><a xlink:href="../proc/continuity_apply_meridional.html" xlink:title="continuity_apply_meridional">
+<polygon fill="#d9534f" stroke="#d9534f" points="319,-314 156,-314 156,-290 319,-290 319,-314"/>
+<text text-anchor="middle" x="237.5" y="-299.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">continuity_apply_meridional</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_step_split&#45;&gt;proc~continuity_apply_meridional -->
+<g id="proc~~continuity_step_split~~CallsGraph_edge1" class="edge">
+<title>proc~continuity_step_split&#45;&gt;proc~continuity_apply_meridional</title>
+<path fill="none" stroke="#ff0000" d="M85.56,-251.17C104.49,-260.23 131.48,-272.44 156,-281 162.23,-283.17 168.8,-285.24 175.39,-287.17"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="174.45,-290.54 185.03,-289.89 176.35,-283.8 174.45,-290.54"/>
+</g>
+<!-- proc~continuity_apply_zonal -->
+<g id="proc~~continuity_step_split~~CallsGraph_node3" class="node">
+<title>proc~continuity_apply_zonal</title>
+<g id="a_proc~~continuity_step_split~~CallsGraph_node3"><a xlink:href="../proc/continuity_apply_zonal.html" xlink:title="continuity_apply_zonal">
+<polygon fill="#d9534f" stroke="#d9534f" points="304,-272 171,-272 171,-248 304,-248 304,-272"/>
+<text text-anchor="middle" x="237.5" y="-257.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">continuity_apply_zonal</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_step_split&#45;&gt;proc~continuity_apply_zonal -->
+<g id="proc~~continuity_step_split~~CallsGraph_edge2" class="edge">
+<title>proc~continuity_step_split&#45;&gt;proc~continuity_apply_zonal</title>
+<path fill="none" stroke="#ff0000" d="M120.42,-246.11C133.33,-247.66 147.17,-249.31 160.62,-250.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="160.47,-254.43 170.81,-252.14 161.3,-247.48 160.47,-254.43"/>
+</g>
+<!-- proc~continuity_meridional_flux -->
+<g id="proc~~continuity_step_split~~CallsGraph_node4" class="node">
+<title>proc~continuity_meridional_flux</title>
+<g id="a_proc~~continuity_step_split~~CallsGraph_node4"><a xlink:href="../proc/continuity_meridional_flux.html" xlink:title="continuity_meridional_flux">
+<polygon fill="#d9534f" stroke="#d9534f" points="314,-188 161,-188 161,-164 314,-164 314,-188"/>
+<text text-anchor="middle" x="237.5" y="-173.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">continuity_meridional_flux</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_step_split&#45;&gt;proc~continuity_meridional_flux -->
+<g id="proc~~continuity_step_split~~CallsGraph_edge3" class="edge">
+<title>proc~continuity_step_split&#45;&gt;proc~continuity_meridional_flux</title>
+<path fill="none" stroke="#ff0000" d="M85.56,-226.83C104.49,-217.77 131.48,-205.56 156,-197 162.23,-194.83 168.8,-192.76 175.39,-190.83"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="176.35,-194.2 185.03,-188.11 174.45,-187.46 176.35,-194.2"/>
+</g>
+<!-- proc~continuity_zonal_flux -->
+<g id="proc~~continuity_step_split~~CallsGraph_node5" class="node">
+<title>proc~continuity_zonal_flux</title>
+<g id="a_proc~~continuity_step_split~~CallsGraph_node5"><a xlink:href="../proc/continuity_zonal_flux.html" xlink:title="continuity_zonal_flux">
+<polygon fill="#d9534f" stroke="#d9534f" points="299.5,-230 175.5,-230 175.5,-206 299.5,-206 299.5,-230"/>
+<text text-anchor="middle" x="237.5" y="-215.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">continuity_zonal_flux</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_step_split&#45;&gt;proc~continuity_zonal_flux -->
+<g id="proc~~continuity_step_split~~CallsGraph_edge4" class="edge">
+<title>proc~continuity_step_split&#45;&gt;proc~continuity_zonal_flux</title>
+<path fill="none" stroke="#ff0000" d="M120.42,-231.89C134.8,-230.17 150.32,-228.31 165.18,-226.53"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="165.84,-229.98 175.35,-225.32 165,-223.03 165.84,-229.98"/>
+</g>
+<!-- local -->
+<g id="proc~~continuity_step_split~~CallsGraph_node6" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="653,-210 599,-210 599,-186 653,-186 653,-210"/>
+<text text-anchor="middle" x="626" y="-195.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~continuity_meridional_flux&#45;&gt;local -->
+<g id="proc~~continuity_step_split~~CallsGraph_edge5" class="edge">
+<title>proc~continuity_meridional_flux&#45;&gt;local</title>
+<path fill="none" stroke="#00ffff" d="M247.01,-163.84C264.21,-140.47 305.69,-89.94 355,-71 441.3,-37.85 484.59,-22.03 563,-71 599.88,-94.04 615.41,-146.05 621.48,-175.87"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="618.05,-176.57 623.31,-185.76 624.93,-175.29 618.05,-176.57"/>
+</g>
+<!-- proc~ocean_bc_outer_face_tag -->
+<g id="proc~~continuity_step_split~~CallsGraph_node7" class="node">
+<title>proc~ocean_bc_outer_face_tag</title>
+<g id="a_proc~~continuity_step_split~~CallsGraph_node7"><a xlink:href="../proc/ocean_bc_outer_face_tag.html" xlink:title="ocean_bc_outer_face_tag">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="533,-314 385,-314 385,-290 533,-290 533,-314"/>
+<text text-anchor="middle" x="459" y="-299.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_bc_outer_face_tag</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_meridional_flux&#45;&gt;proc~ocean_bc_outer_face_tag -->
+<g id="proc~~continuity_step_split~~CallsGraph_edge6" class="edge">
+<title>proc~continuity_meridional_flux&#45;&gt;proc~ocean_bc_outer_face_tag</title>
+<path fill="none" stroke="#00ffff" d="M305.55,-188.16C310.39,-190.6 314.95,-193.51 319,-197 349.79,-223.49 323.51,-255.35 355,-281 361.07,-285.94 368,-289.82 375.32,-292.85"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="374.19,-296.16 384.78,-296.25 376.55,-289.57 374.19,-296.16"/>
+</g>
+<!-- proc~ppm_cell_limiter -->
+<g id="proc~~continuity_step_split~~CallsGraph_node8" class="node">
+<title>proc~ppm_cell_limiter</title>
+<g id="a_proc~~continuity_step_split~~CallsGraph_node8"><a xlink:href="../proc/ppm_cell_limiter.html" xlink:title="ppm_cell_limiter">
+<polygon fill="#d9534f" stroke="#d9534f" points="509,-272 409,-272 409,-248 509,-248 509,-272"/>
+<text text-anchor="middle" x="459" y="-257.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_cell_limiter</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_meridional_flux&#45;&gt;proc~ppm_cell_limiter -->
+<g id="proc~~continuity_step_split~~CallsGraph_edge7" class="edge">
+<title>proc~continuity_meridional_flux&#45;&gt;proc~ppm_cell_limiter</title>
+<path fill="none" stroke="#00ffff" d="M300.76,-188.1C307.16,-190.54 313.37,-193.48 319,-197 339.85,-210.03 333.81,-226.54 355,-239 368.16,-246.74 383.73,-251.67 398.72,-254.79"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="398.5,-258.31 408.97,-256.67 399.76,-251.42 398.5,-258.31"/>
+</g>
+<!-- proc~ppm_limit_pos -->
+<g id="proc~~continuity_step_split~~CallsGraph_node9" class="node">
+<title>proc~ppm_limit_pos</title>
+<g id="a_proc~~continuity_step_split~~CallsGraph_node9"><a xlink:href="../proc/ppm_limit_pos.html" xlink:title="ppm_limit_pos">
+<polygon fill="#d9534f" stroke="#d9534f" points="503.5,-230 414.5,-230 414.5,-206 503.5,-206 503.5,-230"/>
+<text text-anchor="middle" x="459" y="-215.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_limit_pos</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_meridional_flux&#45;&gt;proc~ppm_limit_pos -->
+<g id="proc~~continuity_step_split~~CallsGraph_edge8" class="edge">
+<title>proc~continuity_meridional_flux&#45;&gt;proc~ppm_limit_pos</title>
+<path fill="none" stroke="#00ffff" d="M301.4,-188.04C333.84,-194.24 373,-201.74 404.04,-207.68"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="403.76,-211.18 414.24,-209.63 405.07,-204.31 403.76,-211.18"/>
+</g>
+<!-- proc~ppm_limited_slope -->
+<g id="proc~~continuity_step_split~~CallsGraph_node10" class="node">
+<title>proc~ppm_limited_slope</title>
+<g id="a_proc~~continuity_step_split~~CallsGraph_node10"><a xlink:href="../proc/ppm_limited_slope.html" xlink:title="ppm_limited_slope">
+<polygon fill="#d9534f" stroke="#d9534f" points="515,-188 403,-188 403,-164 515,-164 515,-188"/>
+<text text-anchor="middle" x="459" y="-173.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_limited_slope</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_meridional_flux&#45;&gt;proc~ppm_limited_slope -->
+<g id="proc~~continuity_step_split~~CallsGraph_edge9" class="edge">
+<title>proc~continuity_meridional_flux&#45;&gt;proc~ppm_limited_slope</title>
+<path fill="none" stroke="#00ffff" d="M314.04,-176C339.65,-176 368.03,-176 392.77,-176"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="392.77,-179.5 402.77,-176 392.77,-172.5 392.77,-179.5"/>
+</g>
+<!-- proc~ppm_mirror_h -->
+<g id="proc~~continuity_step_split~~CallsGraph_node11" class="node">
+<title>proc~ppm_mirror_h</title>
+<g id="a_proc~~continuity_step_split~~CallsGraph_node11"><a xlink:href="../proc/ppm_mirror_h.html" xlink:title="ppm_mirror_h">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="502.5,-146 415.5,-146 415.5,-122 502.5,-122 502.5,-146"/>
+<text text-anchor="middle" x="459" y="-131.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_mirror_h</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_meridional_flux&#45;&gt;proc~ppm_mirror_h -->
+<g id="proc~~continuity_step_split~~CallsGraph_edge10" class="edge">
+<title>proc~continuity_meridional_flux&#45;&gt;proc~ppm_mirror_h</title>
+<path fill="none" stroke="#00ffff" d="M301.4,-163.96C334.32,-157.67 374.17,-150.04 405.43,-144.06"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="406.09,-147.5 415.25,-142.18 404.78,-140.62 406.09,-147.5"/>
+</g>
+<!-- proc~renormalise_meridional_flux_to_vhbt -->
+<g id="proc~~continuity_step_split~~CallsGraph_node12" class="node">
+<title>proc~renormalise_meridional_flux_to_vhbt</title>
+<g id="a_proc~~continuity_step_split~~CallsGraph_node12"><a xlink:href="../proc/renormalise_meridional_flux_to_vhbt.html" xlink:title="renormalise_meridional_flux_to_vhbt">
+<polygon fill="#d9534f" stroke="#d9534f" points="563,-24 355,-24 355,0 563,0 563,-24"/>
+<text text-anchor="middle" x="459" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">renormalise_meridional_flux_to_vhbt</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_meridional_flux&#45;&gt;proc~renormalise_meridional_flux_to_vhbt -->
+<g id="proc~~continuity_step_split~~CallsGraph_edge11" class="edge">
+<title>proc~continuity_meridional_flux&#45;&gt;proc~renormalise_meridional_flux_to_vhbt</title>
+<path fill="none" stroke="#00ffff" d="M245.15,-163.85C260.63,-136.77 301.82,-71.23 355,-38 361.6,-33.88 368.82,-30.41 376.28,-27.49"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="377.59,-30.74 385.82,-24.07 375.23,-24.14 377.59,-30.74"/>
+</g>
+<!-- proc~volcfl_face -->
+<g id="proc~~continuity_step_split~~CallsGraph_node14" class="node">
+<title>proc~volcfl_face</title>
+<g id="a_proc~~continuity_step_split~~CallsGraph_node14"><a xlink:href="../proc/volcfl_face.html" xlink:title="volcfl_face">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="494,-104 424,-104 424,-80 494,-80 494,-104"/>
+<text text-anchor="middle" x="459" y="-89.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">volcfl_face</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_meridional_flux&#45;&gt;proc~volcfl_face -->
+<g id="proc~~continuity_step_split~~CallsGraph_edge12" class="edge">
+<title>proc~continuity_meridional_flux&#45;&gt;proc~volcfl_face</title>
+<path fill="none" stroke="#00ffff" d="M256.67,-163.97C278.94,-149.75 318.26,-126.35 355,-113 373.81,-106.17 395.42,-101.33 413.96,-98.04"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="414.63,-101.48 423.91,-96.37 413.47,-94.57 414.63,-101.48"/>
+</g>
+<!-- proc~continuity_zonal_flux&#45;&gt;local -->
+<g id="proc~~continuity_step_split~~CallsGraph_edge13" class="edge">
+<title>proc~continuity_zonal_flux&#45;&gt;local</title>
+<path fill="none" stroke="#7f00ff" d="M299.75,-226.58C306.87,-229.62 313.52,-233.65 319,-239 360.66,-279.7 308.5,-329.93 355,-365 428.8,-420.67 487.1,-417.78 563,-365 610.4,-332.04 621.64,-258.34 624.25,-220.85"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="627.77,-220.64 624.81,-210.46 620.78,-220.26 627.77,-220.64"/>
+</g>
+<!-- proc~continuity_zonal_flux&#45;&gt;proc~ocean_bc_outer_face_tag -->
+<g id="proc~~continuity_step_split~~CallsGraph_edge14" class="edge">
+<title>proc~continuity_zonal_flux&#45;&gt;proc~ocean_bc_outer_face_tag</title>
+<path fill="none" stroke="#7f00ff" d="M299.51,-229.63C306.35,-232.16 313,-235.25 319,-239 339.85,-252.03 333.81,-268.54 355,-281 361.27,-284.69 368.09,-287.74 375.13,-290.26"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="374.25,-293.65 384.84,-293.38 376.39,-286.99 374.25,-293.65"/>
+</g>
+<!-- proc~continuity_zonal_flux&#45;&gt;proc~ppm_cell_limiter -->
+<g id="proc~~continuity_step_split~~CallsGraph_edge15" class="edge">
+<title>proc~continuity_zonal_flux&#45;&gt;proc~ppm_cell_limiter</title>
+<path fill="none" stroke="#7f00ff" d="M299.64,-229.7C330.64,-235.63 368.13,-242.8 398.84,-248.68"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="398.5,-252.18 408.98,-250.62 399.81,-245.3 398.5,-252.18"/>
+</g>
+<!-- proc~continuity_zonal_flux&#45;&gt;proc~ppm_limit_pos -->
+<g id="proc~~continuity_step_split~~CallsGraph_edge16" class="edge">
+<title>proc~continuity_zonal_flux&#45;&gt;proc~ppm_limit_pos</title>
+<path fill="none" stroke="#7f00ff" d="M299.64,-218C332.35,-218 372.28,-218 403.86,-218"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="404.23,-221.5 414.23,-218 404.23,-214.5 404.23,-221.5"/>
+</g>
+<!-- proc~continuity_zonal_flux&#45;&gt;proc~ppm_limited_slope -->
+<g id="proc~~continuity_step_split~~CallsGraph_edge17" class="edge">
+<title>proc~continuity_zonal_flux&#45;&gt;proc~ppm_limited_slope</title>
+<path fill="none" stroke="#7f00ff" d="M299.64,-206.3C328.58,-200.76 363.16,-194.15 392.62,-188.51"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="393.64,-191.88 402.81,-186.56 392.33,-185 393.64,-191.88"/>
+</g>
+<!-- proc~continuity_zonal_flux&#45;&gt;proc~ppm_mirror_h -->
+<g id="proc~~continuity_step_split~~CallsGraph_edge18" class="edge">
+<title>proc~continuity_zonal_flux&#45;&gt;proc~ppm_mirror_h</title>
+<path fill="none" stroke="#7f00ff" d="M299.51,-206.37C306.35,-203.84 313,-200.75 319,-197 339.85,-183.97 333.81,-167.46 355,-155 370.05,-146.15 388.23,-140.98 405.1,-137.98"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="406.06,-141.37 415.4,-136.38 404.98,-134.46 406.06,-141.37"/>
+</g>
+<!-- proc~renormalise_zonal_flux_to_uhbt -->
+<g id="proc~~continuity_step_split~~CallsGraph_node13" class="node">
+<title>proc~renormalise_zonal_flux_to_uhbt</title>
+<g id="a_proc~~continuity_step_split~~CallsGraph_node13"><a xlink:href="../proc/renormalise_zonal_flux_to_uhbt.html" xlink:title="renormalise_zonal_flux_to_uhbt">
+<polygon fill="#d9534f" stroke="#d9534f" points="549,-356 369,-356 369,-332 549,-332 549,-356"/>
+<text text-anchor="middle" x="459" y="-341.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">renormalise_zonal_flux_to_uhbt</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_zonal_flux&#45;&gt;proc~renormalise_zonal_flux_to_uhbt -->
+<g id="proc~~continuity_step_split~~CallsGraph_edge19" class="edge">
+<title>proc~continuity_zonal_flux&#45;&gt;proc~renormalise_zonal_flux_to_uhbt</title>
+<path fill="none" stroke="#7f00ff" d="M299.54,-227.42C306.61,-230.33 313.31,-234.1 319,-239 349.79,-265.49 323.51,-297.35 355,-323 356.59,-324.3 358.24,-325.52 359.94,-326.67"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="358.44,-329.85 368.84,-331.88 361.98,-323.81 358.44,-329.85"/>
+</g>
+<!-- proc~continuity_zonal_flux&#45;&gt;proc~volcfl_face -->
+<g id="proc~~continuity_step_split~~CallsGraph_edge20" class="edge">
+<title>proc~continuity_zonal_flux&#45;&gt;proc~volcfl_face</title>
+<path fill="none" stroke="#7f00ff" d="M299.54,-208.58C306.61,-205.67 313.31,-201.9 319,-197 349.79,-170.51 323.51,-138.65 355,-113 371.27,-99.75 393.7,-94.17 413.47,-92.03"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="413.84,-95.52 423.52,-91.21 413.27,-88.54 413.84,-95.52"/>
+</g>
+<!-- proc~renormalise_meridional_flux_to_vhbt&#45;&gt;local -->
+<g id="proc~~continuity_step_split~~CallsGraph_edge21" class="edge">
+<title>proc~renormalise_meridional_flux_to_vhbt&#45;&gt;local</title>
+<path fill="none" stroke="#0000ff" d="M540.62,-24.1C548.77,-27.65 556.44,-32.2 563,-38 604.08,-74.33 618.14,-141.14 622.79,-175.81"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="619.33,-176.35 624,-185.86 626.28,-175.52 619.33,-176.35"/>
+</g>
+<!-- proc~renormalise_zonal_flux_to_uhbt&#45;&gt;local -->
+<g id="proc~~continuity_step_split~~CallsGraph_edge22" class="edge">
+<title>proc~renormalise_zonal_flux_to_uhbt&#45;&gt;local</title>
+<path fill="none" stroke="#aa00ff" d="M548.44,-331.84C553.61,-329.37 558.52,-326.45 563,-323 596.54,-297.2 613.17,-248.41 620.36,-220.01"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="623.78,-220.76 622.67,-210.22 616.97,-219.15 623.78,-220.76"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panproccontinuity_step_splitCallsGraph = svgPanZoom('#proccontinuity_step_splitCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">continuity_step_split</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! **Test-only** (no production caller): continuity-only split wrapper;</span>
+<span class="w">      </span><span class="c">!! production runs the tracer-interleaved `continuity_tracer_step_split`.</span>
+<span class="w">      </span><span class="c">!! Directionally-split (Lie) PPM continuity step over `dt`:</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!!   1. zonal flux Φx from current h</span>
+<span class="w">      </span><span class="c">!!   2. apply x-divergence:  h ← h - dt·∂Φx/∂x</span>
+<span class="w">      </span><span class="c">!!   3. meridional flux Φy from the *updated* h</span>
+<span class="w">      </span><span class="c">!!   4. apply y-divergence:  h ← h - dt·∂Φy/∂y</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Standard Lie-split PPM continuity operator order.</span>
+<span class="w">      </span><span class="c">!! Compared to the unsplit</span>
+<span class="w">      </span><span class="c">!! `continuity_compute_fluxes` +</span>
+<span class="w">      </span><span class="c">!! `continuity_apply_fluxes` pair, this form</span>
+<span class="w">      </span><span class="c">!! relaxes the 2D-combined CFL constraint to the per-</span>
+<span class="w">      </span><span class="c">!! direction CFL ≤ 1.  For uniform `h_layer` and divergence-</span>
+<span class="w">      </span><span class="c">!! free flow the two forms are bit-identical (no advection of</span>
+<span class="w">      </span><span class="c">!! variation between substeps); they diverge under non-trivial</span>
+<span class="w">      </span><span class="c">!! advection at O(dt²·||∇h||) — same order as a vanilla Strang</span>
+<span class="w">      </span><span class="c">!! vs Lie split.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! `flux_h_layer` ends the step holding the *total* horizontal</span>
+<span class="w">      </span><span class="c">!! divergence summed over both substeps, ready for the</span>
+<span class="w">      </span><span class="c">!! vertical-advection consumer.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_metrics_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">metrics</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">continuity_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt</span>
+
+<span class="w">      </span><span class="k">call </span><span class="n">continuity_zonal_flux</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">continuity_apply_zonal</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">continuity_meridional_flux</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">continuity_apply_meridional</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">)</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">continuity_step_split</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-01 23:35 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

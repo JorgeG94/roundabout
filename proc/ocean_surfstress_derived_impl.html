@@ -1,0 +1,1044 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>ocean_surfstress_derived_impl &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>ocean_surfstress_derived_impl
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">12 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_surface_stress.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_surface_stress.f90.html'>rdb_ocean_surface_stress.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_surface_stress.html'>rdb_ocean_surface_stress</a></li>
+            <li class="breadcrumb-item active" aria-current="page">ocean_surfstress_derived_impl</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/ocean_surfstress_derived_impl.html#variable-i~441">i</a>
+            <a class="list-group-item" href="../proc/ocean_surfstress_derived_impl.html#variable-j~374">j</a>
+            <a class="list-group-item" href="../proc/ocean_surfstress_derived_impl.html#variable-tau_x_cell">tau_x_cell</a>
+            <a class="list-group-item" href="../proc/ocean_surfstress_derived_impl.html#variable-tau_y_cell">tau_y_cell</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/ocean_surfstress_derived_impl.html#src">ocean_surfstress_derived_impl</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private pure subroutine ocean_surfstress_derived_impl(tau_x, tau_y, stress_mag, nx, ny)  
+</h2>
+    
+
+    <p><code>stress_mag(i,j) = |tau|</code> at cell centres — literal copy of the
+three lines this dedups from <code>rdb_ocean_vmix.F90</code> (KPP,
+<code>:575-577</code>/<code>:641-643</code>, pre-PR-12) and <code>rdb_ocean_epbl.F90</code>
+(<code>:974-976</code>, pre-PR-12): SAME face-average op order, so the
+substitution at each call site is bit-identical (PR-12 §7.5).
+Explicit-shape dummies, integer dims first (decl-order).</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tau_x~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tau_x</strong>(nx+1,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tau_y~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tau_y</strong>(nx,ny+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-stress_mag~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>stress_mag</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~404"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~404"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ocean_surfstress_derived_impl~~CallsGraph Pages: 1 -->
+<svg id="prococean_surfstress_derived_implCallsGraph" width="273pt" height="32pt"
+ viewBox="0.00 0.00 273.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_surfstress_derived_impl~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>proc~~ocean_surfstress_derived_impl~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 269,-28 269,4 -4,4"/>
+<!-- proc~ocean_surfstress_derived_impl -->
+<g id="proc~~ocean_surfstress_derived_impl~~CallsGraph_node1" class="node">
+<title>proc~ocean_surfstress_derived_impl</title>
+<polygon fill="none" stroke="black" points="175,-24 0,-24 0,0 175,0 175,-24"/>
+<text text-anchor="middle" x="87.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_surfstress_derived_impl</text>
+</g>
+<!-- local -->
+<g id="proc~~ocean_surfstress_derived_impl~~CallsGraph_node2" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="265,-24 211,-24 211,0 265,0 265,-24"/>
+<text text-anchor="middle" x="238" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~ocean_surfstress_derived_impl&#45;&gt;local -->
+<g id="proc~~ocean_surfstress_derived_impl~~CallsGraph_edge1" class="edge">
+<title>proc~ocean_surfstress_derived_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M175.31,-12C184.21,-12 192.87,-12 200.74,-12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="200.94,-15.5 210.94,-12 200.94,-8.5 200.94,-15.5"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ocean_surfstress_derived_impl~~CalledByGraph Pages: 1 -->
+<svg id="prococean_surfstress_derived_implCalledByGraph" width="641pt" height="99pt"
+ viewBox="0.00 0.00 641.00 99.01" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph" class="graph" transform="scale(0.32 0.32) rotate(0) translate(4 302)">
+<title>proc~~ocean_surfstress_derived_impl~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-302 1977,-302 1977,4 -4,4"/>
+<!-- proc~ocean_surfstress_derived_impl -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_node1" class="node">
+<title>proc~ocean_surfstress_derived_impl</title>
+<polygon fill="none" stroke="black" points="1973,-147 1798,-147 1798,-123 1973,-123 1973,-147"/>
+<text text-anchor="middle" x="1885.5" y="-132.6" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_surfstress_derived_impl</text>
+</g>
+<!-- proc~ocean_surface_stress_refresh_mag -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_node2" class="node">
+<title>proc~ocean_surface_stress_refresh_mag</title>
+<g id="a_proc~~ocean_surfstress_derived_impl~~CalledByGraph_node2"><a xlink:href="../proc/ocean_surface_stress_refresh_mag.html" xlink:title="ocean_surface_stress_refresh_mag">
+<polygon fill="#d9534f" stroke="#d9534f" points="1762,-147 1565,-147 1565,-123 1762,-123 1762,-147"/>
+<text text-anchor="middle" x="1663.5" y="-132.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_surface_stress_refresh_mag</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_surface_stress_refresh_mag&#45;&gt;proc~ocean_surfstress_derived_impl -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge1" class="edge">
+<title>proc~ocean_surface_stress_refresh_mag&#45;&gt;proc~ocean_surfstress_derived_impl</title>
+<path fill="none" stroke="#ff0000" d="M1762.28,-135C1770.68,-135 1779.18,-135 1787.58,-135"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1787.75,-138.5 1797.75,-135 1787.75,-131.5 1787.75,-138.5"/>
+</g>
+<!-- proc~ice_ocean_stress_flux -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_node3" class="node">
+<title>proc~ice_ocean_stress_flux</title>
+<g id="a_proc~~ocean_surfstress_derived_impl~~CalledByGraph_node3"><a xlink:href="../proc/ice_ocean_stress_flux.html" xlink:title="ice_ocean_stress_flux">
+<polygon fill="#d9534f" stroke="#d9534f" points="1494.5,-277 1367.5,-277 1367.5,-253 1494.5,-253 1494.5,-277"/>
+<text text-anchor="middle" x="1431" y="-262.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_ocean_stress_flux</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_ocean_stress_flux&#45;&gt;proc~ocean_surface_stress_refresh_mag -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge2" class="edge">
+<title>proc~ice_ocean_stress_flux&#45;&gt;proc~ocean_surface_stress_refresh_mag</title>
+<path fill="none" stroke="#ff0000" d="M1453.68,-252.77C1494.98,-229.48 1584.97,-178.73 1632.19,-152.09"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1634.05,-155.06 1641.04,-147.1 1630.61,-148.97 1634.05,-155.06"/>
+</g>
+<!-- proc~ice_ocean_stress_resume_apply -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_node4" class="node">
+<title>proc~ice_ocean_stress_resume_apply</title>
+<g id="a_proc~~ocean_surfstress_derived_impl~~CalledByGraph_node4"><a xlink:href="../proc/ice_ocean_stress_resume_apply.html" xlink:title="ice_ocean_stress_resume_apply">
+<polygon fill="#d9534f" stroke="#d9534f" points="1283.5,-64 1102.5,-64 1102.5,-40 1283.5,-40 1283.5,-64"/>
+<text text-anchor="middle" x="1193" y="-49.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_ocean_stress_resume_apply</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_ocean_stress_resume_apply&#45;&gt;proc~ocean_surface_stress_refresh_mag -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge3" class="edge">
+<title>proc~ice_ocean_stress_resume_apply&#45;&gt;proc~ocean_surface_stress_refresh_mag</title>
+<path fill="none" stroke="#ff0000" d="M1283.5,-59.98C1351.34,-66.94 1446.63,-78.67 1529,-96 1558.72,-102.26 1591.47,-111.78 1617.1,-119.85"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1616.31,-123.27 1626.9,-122.98 1618.44,-116.6 1616.31,-123.27"/>
+</g>
+<!-- proc~ocean_surface_stress_apply_cover -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_node5" class="node">
+<title>proc~ocean_surface_stress_apply_cover</title>
+<g id="a_proc~~ocean_surfstress_derived_impl~~CalledByGraph_node5"><a xlink:href="../proc/ocean_surface_stress_apply_cover.html" xlink:title="ocean_surface_stress_apply_cover">
+<polygon fill="#d9534f" stroke="#d9534f" points="1529,-147 1333,-147 1333,-123 1529,-123 1529,-147"/>
+<text text-anchor="middle" x="1431" y="-132.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_surface_stress_apply_cover</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_surface_stress_apply_cover&#45;&gt;proc~ocean_surface_stress_refresh_mag -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge4" class="edge">
+<title>proc~ocean_surface_stress_apply_cover&#45;&gt;proc~ocean_surface_stress_refresh_mag</title>
+<path fill="none" stroke="#ff0000" d="M1529.08,-135C1537.57,-135 1546.2,-135 1554.77,-135"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1554.79,-138.5 1564.79,-135 1554.79,-131.5 1554.79,-138.5"/>
+</g>
+<!-- proc~ocean_surface_stress_set_derived -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_node6" class="node">
+<title>proc~ocean_surface_stress_set_derived</title>
+<g id="a_proc~~ocean_surfstress_derived_impl~~CalledByGraph_node6"><a xlink:href="../proc/ocean_surface_stress_set_derived.html" xlink:title="ocean_surface_stress_set_derived">
+<polygon fill="#d9534f" stroke="#d9534f" points="1289.5,-106 1096.5,-106 1096.5,-82 1289.5,-82 1289.5,-106"/>
+<text text-anchor="middle" x="1193" y="-91.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_surface_stress_set_derived</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_surface_stress_set_derived&#45;&gt;proc~ocean_surface_stress_refresh_mag -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge5" class="edge">
+<title>proc~ocean_surface_stress_set_derived&#45;&gt;proc~ocean_surface_stress_refresh_mag</title>
+<path fill="none" stroke="#ff0000" d="M1289.51,-97.25C1356.64,-100.14 1448.48,-105.28 1529,-114 1547.01,-115.95 1566.3,-118.63 1584.45,-121.43"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1583.99,-124.9 1594.41,-122.99 1585.07,-117.98 1583.99,-124.9"/>
+</g>
+<!-- proc~ocean_surface_stress_set_derived&#45;&gt;proc~ocean_surface_stress_apply_cover -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge10" class="edge">
+<title>proc~ocean_surface_stress_set_derived&#45;&gt;proc~ocean_surface_stress_apply_cover</title>
+<path fill="none" stroke="#00ff66" d="M1263.21,-106.02C1290.71,-110.8 1322.5,-116.32 1350.9,-121.26"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="1350.34,-124.71 1360.79,-122.98 1351.53,-117.82 1350.34,-124.71"/>
+</g>
+<!-- proc~ocean_surfstress_refresh_stress_mag -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_node7" class="node">
+<title>proc~ocean_surfstress_refresh_stress_mag</title>
+<g id="a_proc~~ocean_surfstress_derived_impl~~CalledByGraph_node7"><a xlink:href="../proc/ocean_surfstress_refresh_stress_mag.html" xlink:title="ocean_surfstress_refresh_stress_mag">
+<polygon fill="#d9534f" stroke="#d9534f" points="1297,-216 1089,-216 1089,-192 1297,-192 1297,-216"/>
+<text text-anchor="middle" x="1193" y="-201.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_surfstress_refresh_stress_mag</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_surfstress_refresh_stress_mag&#45;&gt;proc~ocean_surface_stress_refresh_mag -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge6" class="edge">
+<title>proc~ocean_surfstress_refresh_stress_mag&#45;&gt;proc~ocean_surface_stress_refresh_mag</title>
+<path fill="none" stroke="#ff0000" d="M1280.11,-191.99C1347.8,-182.47 1444.46,-168.7 1529,-156 1544.66,-153.65 1561.34,-151.07 1577.42,-148.56"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1578,-152.01 1587.33,-147.01 1576.91,-145.1 1578,-152.01"/>
+</g>
+<!-- proc~configure_ocean_cavity -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_node8" class="node">
+<title>proc~configure_ocean_cavity</title>
+<g id="a_proc~~ocean_surfstress_derived_impl~~CalledByGraph_node8"><a xlink:href="../proc/configure_ocean_cavity.html" xlink:title="configure_ocean_cavity">
+<polygon fill="#d9534f" stroke="#d9534f" points="1262,-148 1124,-148 1124,-124 1262,-124 1262,-148"/>
+<text text-anchor="middle" x="1193" y="-133.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_cavity</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_cavity&#45;&gt;proc~ocean_surface_stress_apply_cover -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge9" class="edge">
+<title>proc~configure_ocean_cavity&#45;&gt;proc~ocean_surface_stress_apply_cover</title>
+<path fill="none" stroke="#00ff66" d="M1262.26,-135.71C1281.21,-135.63 1302.26,-135.54 1322.86,-135.45"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="1322.94,-138.95 1332.93,-135.41 1322.91,-131.95 1322.94,-138.95"/>
+</g>
+<!-- proc~engine_setup -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_node9" class="node">
+<title>proc~engine_setup</title>
+<g id="a_proc~~ocean_surfstress_derived_impl~~CalledByGraph_node9"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="476,-144 392,-144 392,-120 476,-120 476,-144"/>
+<text text-anchor="middle" x="434" y="-129.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~ice_ocean_stress_resume_apply -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge8" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~ice_ocean_stress_resume_apply</title>
+<path fill="none" stroke="#cbff00" d="M446.72,-119.83C461.82,-105.09 489.65,-80.99 519,-71 621.99,-35.93 931.09,-41.82 1092.07,-47.64"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="1092.33,-51.15 1102.45,-48.02 1092.59,-44.16 1092.33,-51.15"/>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~configure_ocean_cavity -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge15" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~configure_ocean_cavity</title>
+<path fill="none" stroke="#ff0000" d="M476.24,-132.22C597.53,-132.86 954.53,-134.75 1113.77,-135.59"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1113.95,-139.09 1123.97,-135.64 1113.99,-132.09 1113.95,-139.09"/>
+</g>
+<!-- proc~configure_ocean_forcing -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_node16" class="node">
+<title>proc~configure_ocean_forcing</title>
+<g id="a_proc~~ocean_surfstress_derived_impl~~CalledByGraph_node16"><a xlink:href="../proc/configure_ocean_forcing.html" xlink:title="configure_ocean_forcing">
+<polygon fill="#d9534f" stroke="#d9534f" points="676.5,-184 533.5,-184 533.5,-160 676.5,-160 676.5,-184"/>
+<text text-anchor="middle" x="605" y="-169.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_forcing</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~configure_ocean_forcing -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge28" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~configure_ocean_forcing</title>
+<path fill="none" stroke="#ffff00" d="M476.34,-141.79C496.43,-146.54 520.96,-152.34 543.13,-157.59"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="542.58,-161.06 553.12,-159.96 544.2,-154.25 542.58,-161.06"/>
+</g>
+<!-- proc~ocean_data_forcing_configure -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_node19" class="node">
+<title>proc~ocean_data_forcing_configure</title>
+<g id="a_proc~~ocean_surfstress_derived_impl~~CalledByGraph_node19"><a xlink:href="../proc/ocean_data_forcing_configure.html" xlink:title="ocean_data_forcing_configure">
+<polygon fill="#d9534f" stroke="#d9534f" points="691,-104 519,-104 519,-80 691,-80 691,-104"/>
+<text text-anchor="middle" x="605" y="-89.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_data_forcing_configure</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~ocean_data_forcing_configure -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge31" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~ocean_data_forcing_configure</title>
+<path fill="none" stroke="#0000ff" d="M476.34,-122.21C496.43,-117.46 520.96,-111.66 543.13,-106.41"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="544.2,-109.75 553.12,-104.04 542.58,-102.94 544.2,-109.75"/>
+</g>
+<!-- proc~engine_step_ice -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_node10" class="node">
+<title>proc~engine_step_ice</title>
+<g id="a_proc~~ocean_surfstress_derived_impl~~CalledByGraph_node10"><a xlink:href="../proc/engine_step_ice.html" xlink:title="engine_step_ice">
+<polygon fill="#d9534f" stroke="#d9534f" points="483,-298 385,-298 385,-274 483,-274 483,-298"/>
+<text text-anchor="middle" x="434" y="-283.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step_ice</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step_ice&#45;&gt;proc~ice_ocean_stress_flux -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge7" class="edge">
+<title>proc~engine_step_ice&#45;&gt;proc~ice_ocean_stress_flux</title>
+<path fill="none" stroke="#ff0000" d="M483.08,-285.58C587.06,-284.62 840.6,-281.93 1053,-277 1158.67,-274.55 1280.96,-270.42 1356.9,-267.7"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1357.44,-271.18 1367.31,-267.33 1357.19,-264.19 1357.44,-271.18"/>
+</g>
+<!-- proc~ocean_seam_refresh_surface_stress -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_node11" class="node">
+<title>proc~ocean_seam_refresh_surface_stress</title>
+<g id="a_proc~~ocean_surfstress_derived_impl~~CalledByGraph_node11"><a xlink:href="../proc/ocean_seam_refresh_surface_stress.html" xlink:title="ocean_seam_refresh_surface_stress">
+<polygon fill="#d9534f" stroke="#d9534f" points="991,-104 789,-104 789,-80 991,-80 991,-104"/>
+<text text-anchor="middle" x="890" y="-89.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_seam_refresh_surface_stress</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_seam_refresh_surface_stress&#45;&gt;proc~ocean_surface_stress_set_derived -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge11" class="edge">
+<title>proc~ocean_seam_refresh_surface_stress&#45;&gt;proc~ocean_surface_stress_set_derived</title>
+<path fill="none" stroke="#0066ff" d="M991.23,-92.67C1021.65,-92.87 1055.17,-93.09 1085.96,-93.3"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="1086.27,-96.8 1096.29,-93.36 1086.31,-89.8 1086.27,-96.8"/>
+</g>
+<!-- proc~ocean_surfstress_set_2gyre -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_node12" class="node">
+<title>proc~ocean_surfstress_set_2gyre</title>
+<g id="a_proc~~ocean_surfstress_derived_impl~~CalledByGraph_node12"><a xlink:href="../proc/ocean_surfstress_set_2gyre.html" xlink:title="ocean_surface_stress_t%ocean_surfstress_set_2gyre">
+<polygon fill="#d9534f" stroke="#d9534f" points="1034.5,-226 745.5,-226 745.5,-202 1034.5,-202 1034.5,-226"/>
+<text text-anchor="middle" x="890" y="-211.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_surface_stress_t%ocean_surfstress_set_2gyre</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_surfstress_set_2gyre&#45;&gt;proc~ocean_surfstress_refresh_stress_mag -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge12" class="edge">
+<title>proc~ocean_surfstress_set_2gyre&#45;&gt;proc~ocean_surfstress_refresh_stress_mag</title>
+<path fill="none" stroke="#cc00ff" d="M1034.89,-209.22C1049.48,-208.73 1064.16,-208.25 1078.37,-207.77"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="1078.75,-211.26 1088.63,-207.43 1078.52,-204.27 1078.75,-211.26"/>
+</g>
+<!-- proc~ocean_surfstress_set_const -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_node13" class="node">
+<title>proc~ocean_surfstress_set_const</title>
+<g id="a_proc~~ocean_surfstress_derived_impl~~CalledByGraph_node13"><a xlink:href="../proc/ocean_surfstress_set_const.html" xlink:title="ocean_surface_stress_t%ocean_surfstress_set_const">
+<polygon fill="#d9534f" stroke="#d9534f" points="1034,-184 746,-184 746,-160 1034,-160 1034,-184"/>
+<text text-anchor="middle" x="890" y="-169.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_surface_stress_t%ocean_surfstress_set_const</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_surfstress_set_const&#45;&gt;proc~ocean_surfstress_refresh_stress_mag -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge13" class="edge">
+<title>proc~ocean_surfstress_set_const&#45;&gt;proc~ocean_surfstress_refresh_stress_mag</title>
+<path fill="none" stroke="#cc00ff" d="M1003.94,-184.01C1028.42,-186.61 1054.32,-189.36 1078.82,-191.97"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="1078.54,-195.46 1088.86,-193.03 1079.28,-188.5 1078.54,-195.46"/>
+</g>
+<!-- proc~ocean_surfstress_set_neverworld2 -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_node14" class="node">
+<title>proc~ocean_surfstress_set_neverworld2</title>
+<g id="a_proc~~ocean_surfstress_derived_impl~~CalledByGraph_node14"><a xlink:href="../proc/ocean_surfstress_set_neverworld2.html" xlink:title="ocean_surface_stress_t%ocean_surfstress_set_neverworld2">
+<polygon fill="#d9534f" stroke="#d9534f" points="1053,-268 727,-268 727,-244 1053,-244 1053,-268"/>
+<text text-anchor="middle" x="890" y="-253.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_surface_stress_t%ocean_surfstress_set_neverworld2</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_surfstress_set_neverworld2&#45;&gt;proc~ocean_surfstress_refresh_stress_mag -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge14" class="edge">
+<title>proc~ocean_surfstress_set_neverworld2&#45;&gt;proc~ocean_surfstress_refresh_stress_mag</title>
+<path fill="none" stroke="#cc00ff" d="M994.92,-243.95C1014.27,-241.3 1034.29,-238.29 1053,-235 1079.43,-230.35 1108.44,-224.07 1133.08,-218.38"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="1134.06,-221.74 1143.01,-216.06 1132.47,-214.93 1134.06,-221.74"/>
+</g>
+<!-- proc~complete_ocean_create -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_node15" class="node">
+<title>proc~complete_ocean_create</title>
+<g id="a_proc~~ocean_surfstress_derived_impl~~CalledByGraph_node15"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="349,-144 209,-144 209,-120 349,-120 349,-144"/>
+<text text-anchor="middle" x="279" y="-129.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_setup -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge16" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ffda00" d="M349.34,-132C360.25,-132 371.36,-132 381.76,-132"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="381.9,-135.5 391.9,-132 381.9,-128.5 381.9,-135.5"/>
+</g>
+<!-- proc~configure_ocean_forcing&#45;&gt;proc~ocean_seam_refresh_surface_stress -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge20" class="edge">
+<title>proc~configure_ocean_forcing&#45;&gt;proc~ocean_seam_refresh_surface_stress</title>
+<path fill="none" stroke="#00ff91" d="M648.67,-159.94C698.97,-145.72 782.54,-122.1 836.69,-106.79"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="837.77,-110.12 846.44,-104.03 835.87,-103.38 837.77,-110.12"/>
+</g>
+<!-- proc~configure_ocean_forcing&#45;&gt;proc~ocean_surfstress_set_2gyre -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge23" class="edge">
+<title>proc~configure_ocean_forcing&#45;&gt;proc~ocean_surfstress_set_2gyre</title>
+<path fill="none" stroke="#0091ff" d="M672.17,-184.01C689.95,-187.1 709.19,-190.3 727,-193 744.39,-195.63 762.86,-198.23 780.87,-200.64"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="780.44,-204.11 790.82,-201.96 781.36,-197.17 780.44,-204.11"/>
+</g>
+<!-- proc~configure_ocean_forcing&#45;&gt;proc~ocean_surfstress_set_const -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge24" class="edge">
+<title>proc~configure_ocean_forcing&#45;&gt;proc~ocean_surfstress_set_const</title>
+<path fill="none" stroke="#4800ff" d="M676.68,-172C694.83,-172 715.08,-172 735.66,-172"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="735.78,-175.5 745.78,-172 735.78,-168.5 735.78,-175.5"/>
+</g>
+<!-- proc~configure_ocean_forcing&#45;&gt;proc~ocean_surfstress_set_neverworld2 -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge25" class="edge">
+<title>proc~configure_ocean_forcing&#45;&gt;proc~ocean_surfstress_set_neverworld2</title>
+<path fill="none" stroke="#ff00da" d="M624.38,-184.21C647.35,-198.83 688.36,-222.86 727,-235 735.26,-237.59 743.85,-239.87 752.57,-241.86"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="751.96,-245.31 762.47,-244 753.43,-238.47 751.96,-245.31"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_node17" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~ocean_surfstress_derived_impl~~CalledByGraph_node17"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="332,-216 226,-216 226,-192 332,-192 332,-216"/>
+<text text-anchor="middle" x="279" y="-201.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_setup -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge17" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ffda00" d="M305.61,-191.95C330.98,-180.01 370.03,-161.63 398.2,-148.37"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="399.75,-151.52 407.31,-144.09 396.77,-145.18 399.75,-151.52"/>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step_ice -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge18" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step_ice</title>
+<path fill="none" stroke="#48ff00" d="M302.58,-216.1C328.68,-230.09 371.82,-253.21 401.29,-269"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="399.86,-272.21 410.33,-273.85 403.17,-266.04 399.86,-272.21"/>
+</g>
+<!-- proc~ocean_data_forcing_apply -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_node18" class="node">
+<title>proc~ocean_data_forcing_apply</title>
+<g id="a_proc~~ocean_surfstress_derived_impl~~CalledByGraph_node18"><a xlink:href="../proc/ocean_data_forcing_apply.html" xlink:title="ocean_data_forcing_apply">
+<polygon fill="#d9534f" stroke="#d9534f" points="680.5,-24 529.5,-24 529.5,0 680.5,0 680.5,-24"/>
+<text text-anchor="middle" x="605" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_data_forcing_apply</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_data_forcing_apply&#45;&gt;proc~ocean_seam_refresh_surface_stress -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge21" class="edge">
+<title>proc~ocean_data_forcing_apply&#45;&gt;proc~ocean_seam_refresh_surface_stress</title>
+<path fill="none" stroke="#00ff91" d="M648.67,-24.06C698.97,-38.28 782.54,-61.9 836.69,-77.21"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="835.87,-80.62 846.44,-79.97 837.77,-73.88 835.87,-80.62"/>
+</g>
+<!-- proc~ocean_data_forcing_configure&#45;&gt;proc~ocean_seam_refresh_surface_stress -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge22" class="edge">
+<title>proc~ocean_data_forcing_configure&#45;&gt;proc~ocean_seam_refresh_surface_stress</title>
+<path fill="none" stroke="#00ff91" d="M691.29,-92C718.81,-92 749.71,-92 778.76,-92"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="778.95,-95.5 788.95,-92 778.95,-88.5 778.95,-95.5"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_node20" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~ocean_surfstress_derived_impl~~CalledByGraph_node20"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="327.5,-298 230.5,-298 230.5,-274 327.5,-274 327.5,-298"/>
+<text text-anchor="middle" x="279" y="-283.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step_ice -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge19" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step_ice</title>
+<path fill="none" stroke="#48ff00" d="M327.57,-286C342.54,-286 359.24,-286 374.85,-286"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="374.93,-289.5 384.93,-286 374.93,-282.5 374.93,-289.5"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_node21" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~ocean_surfstress_derived_impl~~CalledByGraph_node21"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="120,-216 53,-216 53,-192 120,-192 120,-216"/>
+<text text-anchor="middle" x="86.5" y="-201.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge29" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#00ff00" d="M120.25,-204C146.45,-204 183.96,-204 215.83,-204"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="215.95,-207.5 225.95,-204 215.95,-200.5 215.95,-207.5"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_node22" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~ocean_surfstress_derived_impl~~CalledByGraph_node22"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="472.5,-24 395.5,-24 395.5,0 472.5,0 472.5,-24"/>
+<text text-anchor="middle" x="434" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_data_forcing_apply -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge30" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_data_forcing_apply</title>
+<path fill="none" stroke="#00ffff" d="M472.51,-12C486.36,-12 502.68,-12 519.02,-12"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="519.18,-15.5 529.18,-12 519.18,-8.5 519.18,-15.5"/>
+</g>
+<!-- proc~rdb_ocean_create_finalize -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_node23" class="node">
+<title>proc~rdb_ocean_create_finalize</title>
+<g id="a_proc~~ocean_surfstress_derived_impl~~CalledByGraph_node23"><a xlink:href="../proc/rdb_ocean_create_finalize.html" xlink:title="rdb_ocean_create_finalize">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="162,-122 11,-122 11,-98 162,-98 162,-122"/>
+<text text-anchor="middle" x="86.5" y="-107.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge26" class="edge">
+<title>proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M162.24,-118.63C174.21,-120.01 186.64,-121.45 198.71,-122.84"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="198.42,-126.33 208.75,-124 199.22,-119.38 198.42,-126.33"/>
+</g>
+<!-- proc~rdb_ocean_create_from_string -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_node24" class="node">
+<title>proc~rdb_ocean_create_from_string</title>
+<g id="a_proc~~ocean_surfstress_derived_impl~~CalledByGraph_node24"><a xlink:href="../proc/rdb_ocean_create_from_string.html" xlink:title="rdb_ocean_create_from_string">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="173,-164 0,-164 0,-140 173,-140 173,-164"/>
+<text text-anchor="middle" x="86.5" y="-149.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_from_string</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~ocean_surfstress_derived_impl~~CalledByGraph_edge27" class="edge">
+<title>proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M173.28,-142.99C181.77,-142.1 190.37,-141.2 198.79,-140.32"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="199.39,-143.77 208.97,-139.25 198.65,-136.81 199.39,-143.77"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprococean_surfstress_derived_implCalledByGraph = svgPanZoom('#prococean_surfstress_derived_implCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~441"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~374"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tau_x_cell"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tau_x_cell</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tau_y_cell"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tau_y_cell</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">ocean_surfstress_derived_impl</span><span class="p">(</span><span class="n">tau_x</span><span class="p">,</span><span class="w"> </span><span class="n">tau_y</span><span class="p">,</span><span class="w"> </span><span class="n">stress_mag</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! `stress_mag(i,j) = |tau|` at cell centres — literal copy of the</span>
+<span class="w">      </span><span class="c">!! three lines this dedups from `rdb_ocean_vmix.F90` (KPP,</span>
+<span class="w">      </span><span class="c">!! `:575-577`/`:641-643`, pre-PR-12) and `rdb_ocean_epbl.F90`</span>
+<span class="w">      </span><span class="c">!! (`:974-976`, pre-PR-12): SAME face-average op order, so the</span>
+<span class="w">      </span><span class="c">!! substitution at each call site is bit-identical (PR-12 §7.5).</span>
+<span class="w">      </span><span class="c">!! Explicit-shape dummies, integer dims first (decl-order).</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">tau_x</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">),</span><span class="w"> </span><span class="n">tau_y</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">stress_mag</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">tau_x_cell</span><span class="p">,</span><span class="w"> </span><span class="n">tau_y_cell</span>
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="n">local</span><span class="p">(</span><span class="n">tau_x_cell</span><span class="p">,</span><span class="w"> </span><span class="n">tau_y_cell</span><span class="p">)</span>
+<span class="w">         </span><span class="n">tau_x_cell</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">tau_x</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">tau_x</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">))</span>
+<span class="w">         </span><span class="n">tau_y_cell</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">tau_y</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">tau_y</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span>
+<span class="w">         </span><span class="n">stress_mag</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">sqrt</span><span class="p">(</span><span class="n">tau_x_cell</span><span class="o">*</span><span class="n">tau_x_cell</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">tau_y_cell</span><span class="o">*</span><span class="n">tau_y_cell</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end do</span>
+<span class="k">   end subroutine </span><span class="n">ocean_surfstress_derived_impl</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-01 23:35 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

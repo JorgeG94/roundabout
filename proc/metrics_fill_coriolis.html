@@ -1,0 +1,997 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>metrics_fill_coriolis &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>metrics_fill_coriolis
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">37 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_metrics.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_metrics.f90.html'>rdb_ocean_metrics.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_metrics.html'>rdb_ocean_metrics</a></li>
+            <li class="breadcrumb-item active" aria-current="page">metrics_fill_coriolis</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/metrics_fill_coriolis.html#variable-i~596">i</a>
+            <a class="list-group-item" href="../proc/metrics_fill_coriolis.html#variable-j~522">j</a>
+            <a class="list-group-item" href="../proc/metrics_fill_coriolis.html#variable-ng~79">ng</a>
+            <a class="list-group-item" href="../proc/metrics_fill_coriolis.html#variable-y~27">y</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/metrics_fill_coriolis.html#src">metrics_fill_coriolis</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine metrics_fill_coriolis(this, scheme, f_0, beta, y_ref, omega, grid, f_corner, f_centre)  
+</h2>
+    
+
+    <p>Fill a corner array AND a centre array with the Coriolis
+parameter, from one of two schemes (D7).  Does NOT touch any
+existing fill sites in coriolis_adv / EPBL / kappa-shear (that
+re-routing is M2d); this routine just exists + is tested.</p>
+<p><code>beta_plane</code> : f = f_0 + beta<em>(y - y_ref), y from the
+     GLOBAL CARTESIAN coordinate.  On an undecomposed grid
+     (<code>grid%j_offset_global == 0</code>) the corner fill is
+     BIT-IDENTICAL to <code>coriolis_adv_set_beta_plane</code>
+     (y = (j-1-nghost)</em>dy, raw f) and the centre fill is
+     BIT-IDENTICAL to the EPBL / kappa-shear <code>set_f_centre</code>
+     (y = (j-nghost-0.5)<em>dy, abs(f)).  Under MPI y-decomposition
+     <code>grid%j_offset_global</code> shifts the local index to the GLOBAL
+     row so each rank&rsquo;s beta-plane y is correct.
+  <code>planetary</code> : f = 2</em>omega*sin(geolat) at the respective
+     stagger — uses <code>this%geolatBu</code> (corner) and <code>this%geolatT</code>
+     (centre), so a spherical generator must have run first.</p>
+<p><code>f_corner</code> is shaped <code>(nx+1,ny+1)</code> (like the metric corner
+arrays / <code>coriolis_adv%f_corner</code>); <code>f_centre</code> is <code>(nx,ny)</code>.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~523"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-scheme~3"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>scheme</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f_0~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f_0</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-beta~16"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>beta</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-y_ref~7"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>y_ref</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-omega~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>omega</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~313"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f_corner~12"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f_corner</strong>(:,:)</td>
+            <td>
+                <p>Coriolis at C-grid corners (1/s).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f_centre~16"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f_centre</strong>(:,:)</td>
+            <td>
+                <p>|Coriolis| at cell centres (1/s).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~metrics_fill_coriolis~~CalledByGraph Pages: 1 -->
+<svg id="procmetrics_fill_coriolisCalledByGraph" width="641pt" height="145pt"
+ viewBox="0.00 0.00 641.00 145.04" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph" class="graph" transform="scale(0.52 0.52) rotate(0) translate(4 276.36)">
+<title>proc~~metrics_fill_coriolis~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-276.36 1235,-276.36 1235,4 -4,4"/>
+<!-- proc~metrics_fill_coriolis -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_node1" class="node">
+<title>proc~metrics_fill_coriolis</title>
+<polygon fill="none" stroke="black" points="1231,-146.36 1117,-146.36 1117,-122.36 1231,-122.36 1231,-146.36"/>
+<text text-anchor="middle" x="1174" y="-131.96" font-family="Helvetica,sans-Serif" font-size="10.50">metrics_fill_coriolis</text>
+</g>
+<!-- proc~bt_wide_init -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_node2" class="node">
+<title>proc~bt_wide_init</title>
+<g id="a_proc~~metrics_fill_coriolis~~CalledByGraph_node2"><a xlink:href="../proc/bt_wide_init.html" xlink:title="bt_wide_t%bt_wide_init">
+<polygon fill="#d9534f" stroke="#d9534f" points="1081,-237.36 947,-237.36 947,-213.36 1081,-213.36 1081,-237.36"/>
+<text text-anchor="middle" x="1014" y="-222.96" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bt_wide_t%bt_wide_init</text>
+</a>
+</g>
+</g>
+<!-- proc~bt_wide_init&#45;&gt;proc~metrics_fill_coriolis -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_edge1" class="edge">
+<title>proc~bt_wide_init&#45;&gt;proc~metrics_fill_coriolis</title>
+<path fill="none" stroke="#ff0000" d="M1035.98,-213.27C1063.49,-197.43 1111.9,-169.55 1143.2,-151.52"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1145.01,-154.51 1151.93,-146.49 1141.52,-148.45 1145.01,-154.51"/>
+</g>
+<!-- proc~fill_coriolis_centre -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_node3" class="node">
+<title>proc~fill_coriolis_centre</title>
+<g id="a_proc~~metrics_fill_coriolis~~CalledByGraph_node3"><a xlink:href="../proc/fill_coriolis_centre.html" xlink:title="fill_coriolis_centre">
+<polygon fill="#d9534f" stroke="#d9534f" points="1068,-146.36 960,-146.36 960,-122.36 1068,-122.36 1068,-146.36"/>
+<text text-anchor="middle" x="1014" y="-131.96" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fill_coriolis_centre</text>
+</a>
+</g>
+</g>
+<!-- proc~fill_coriolis_centre&#45;&gt;proc~metrics_fill_coriolis -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_edge2" class="edge">
+<title>proc~fill_coriolis_centre&#45;&gt;proc~metrics_fill_coriolis</title>
+<path fill="none" stroke="#ff0000" d="M1068.05,-134.36C1080.43,-134.36 1093.77,-134.36 1106.64,-134.36"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1106.84,-137.86 1116.84,-134.36 1106.84,-130.86 1106.84,-137.86"/>
+</g>
+<!-- proc~fill_coriolis_corner -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_node4" class="node">
+<title>proc~fill_coriolis_corner</title>
+<g id="a_proc~~metrics_fill_coriolis~~CalledByGraph_node4"><a xlink:href="../proc/fill_coriolis_corner.html" xlink:title="fill_coriolis_corner">
+<polygon fill="#d9534f" stroke="#d9534f" points="1068.5,-41.36 959.5,-41.36 959.5,-17.36 1068.5,-17.36 1068.5,-41.36"/>
+<text text-anchor="middle" x="1014" y="-26.96" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fill_coriolis_corner</text>
+</a>
+</g>
+</g>
+<!-- proc~fill_coriolis_corner&#45;&gt;proc~metrics_fill_coriolis -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_edge3" class="edge">
+<title>proc~fill_coriolis_corner&#45;&gt;proc~metrics_fill_coriolis</title>
+<path fill="none" stroke="#ff0000" d="M1033.12,-41.4C1060.83,-59.82 1113.9,-95.08 1146.11,-116.48"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1144.33,-119.51 1154.6,-122.13 1148.21,-113.68 1144.33,-119.51"/>
+</g>
+<!-- proc~configure_ocean_cavity_melt -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_node5" class="node">
+<title>proc~configure_ocean_cavity_melt</title>
+<g id="a_proc~~metrics_fill_coriolis~~CalledByGraph_node5"><a xlink:href="../proc/configure_ocean_cavity_melt.html" xlink:title="configure_ocean_cavity_melt">
+<polygon fill="#d9534f" stroke="#d9534f" points="700,-216.36 533,-216.36 533,-192.36 700,-192.36 700,-216.36"/>
+<text text-anchor="middle" x="616.5" y="-201.96" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_cavity_melt</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_cavity_melt&#45;&gt;proc~fill_coriolis_centre -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_edge5" class="edge">
+<title>proc~configure_ocean_cavity_melt&#45;&gt;proc~fill_coriolis_centre</title>
+<path fill="none" stroke="#00ff00" d="M660.32,-216.36C718.85,-230.59 826.25,-248.76 911,-218.36 946.46,-205.64 978.39,-174.67 996.74,-154.11"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="999.4,-156.38 1003.3,-146.53 994.11,-151.8 999.4,-156.38"/>
+</g>
+<!-- proc~configure_ocean_epbl -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_node6" class="node">
+<title>proc~configure_ocean_epbl</title>
+<g id="a_proc~~metrics_fill_coriolis~~CalledByGraph_node6"><a xlink:href="../proc/configure_ocean_epbl.html" xlink:title="configure_ocean_epbl">
+<polygon fill="#d9534f" stroke="#d9534f" points="888.5,-125.36 758.5,-125.36 758.5,-101.36 888.5,-101.36 888.5,-125.36"/>
+<text text-anchor="middle" x="823.5" y="-110.96" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_epbl</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_epbl&#45;&gt;proc~fill_coriolis_centre -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_edge6" class="edge">
+<title>proc~configure_ocean_epbl&#45;&gt;proc~fill_coriolis_centre</title>
+<path fill="none" stroke="#00ff00" d="M888.58,-120.49C908.3,-122.69 930,-125.11 949.67,-127.3"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="949.42,-130.79 959.75,-128.42 950.2,-123.84 949.42,-130.79"/>
+</g>
+<!-- proc~configure_ocean_forcing -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_node7" class="node">
+<title>proc~configure_ocean_forcing</title>
+<g id="a_proc~~metrics_fill_coriolis~~CalledByGraph_node7"><a xlink:href="../proc/configure_ocean_forcing.html" xlink:title="configure_ocean_forcing">
+<polygon fill="#d9534f" stroke="#d9534f" points="688,-63.36 545,-63.36 545,-39.36 688,-39.36 688,-63.36"/>
+<text text-anchor="middle" x="616.5" y="-48.96" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_forcing</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_forcing&#45;&gt;proc~fill_coriolis_corner -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_edge11" class="edge">
+<title>proc~configure_ocean_forcing&#45;&gt;proc~fill_coriolis_corner</title>
+<path fill="none" stroke="#0000ff" d="M642.68,-39.3C666.2,-28.75 702.59,-14.23 736,-8.36 812.6,5.11 833.62,-0.47 911,-8.36 925.26,-9.81 940.46,-12.37 954.66,-15.23"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="954.3,-18.72 964.8,-17.34 955.73,-11.87 954.3,-18.72"/>
+</g>
+<!-- proc~configure_ocean_kappa_shear -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_node8" class="node">
+<title>proc~configure_ocean_kappa_shear</title>
+<g id="a_proc~~metrics_fill_coriolis~~CalledByGraph_node8"><a xlink:href="../proc/configure_ocean_kappa_shear.html" xlink:title="configure_ocean_kappa_shear">
+<polygon fill="#d9534f" stroke="#d9534f" points="911,-41.36 736,-41.36 736,-17.36 911,-17.36 911,-41.36"/>
+<text text-anchor="middle" x="823.5" y="-26.96" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_kappa_shear</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_kappa_shear&#45;&gt;proc~fill_coriolis_centre -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_edge7" class="edge">
+<title>proc~configure_ocean_kappa_shear&#45;&gt;proc~fill_coriolis_centre</title>
+<path fill="none" stroke="#00ff00" d="M888.51,-41.41C896.28,-43.88 903.95,-46.83 911,-50.36 944,-66.85 975.8,-95.78 994.88,-115"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="992.53,-117.61 1002.01,-122.34 997.55,-112.73 992.53,-117.61"/>
+</g>
+<!-- proc~configure_ocean_kappa_shear&#45;&gt;proc~fill_coriolis_corner -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_edge12" class="edge">
+<title>proc~configure_ocean_kappa_shear&#45;&gt;proc~fill_coriolis_corner</title>
+<path fill="none" stroke="#0000ff" d="M911.03,-29.36C923.88,-29.36 936.93,-29.36 949.2,-29.36"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="949.31,-32.86 959.31,-29.36 949.31,-25.86 949.31,-32.86"/>
+</g>
+<!-- proc~configure_ocean_meke -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_node9" class="node">
+<title>proc~configure_ocean_meke</title>
+<g id="a_proc~~metrics_fill_coriolis~~CalledByGraph_node9"><a xlink:href="../proc/configure_ocean_meke.html" xlink:title="configure_ocean_meke">
+<polygon fill="#d9534f" stroke="#d9534f" points="891.5,-83.36 755.5,-83.36 755.5,-59.36 891.5,-59.36 891.5,-83.36"/>
+<text text-anchor="middle" x="823.5" y="-68.96" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_meke</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_meke&#45;&gt;proc~fill_coriolis_centre -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_edge8" class="edge">
+<title>proc~configure_ocean_meke&#45;&gt;proc~fill_coriolis_centre</title>
+<path fill="none" stroke="#00ff00" d="M879.76,-83.44C890.22,-86.1 901.01,-89.11 911,-92.36 933.44,-99.65 957.9,-109.65 977.24,-118.06"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="976.01,-121.34 986.57,-122.17 978.83,-114.94 976.01,-121.34"/>
+</g>
+<!-- proc~configure_ocean_varmix -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_node10" class="node">
+<title>proc~configure_ocean_varmix</title>
+<g id="a_proc~~metrics_fill_coriolis~~CalledByGraph_node10"><a xlink:href="../proc/configure_ocean_varmix.html" xlink:title="configure_ocean_varmix">
+<polygon fill="#d9534f" stroke="#d9534f" points="895,-209.36 752,-209.36 752,-185.36 895,-185.36 895,-209.36"/>
+<text text-anchor="middle" x="823.5" y="-194.96" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_varmix</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_varmix&#45;&gt;proc~fill_coriolis_centre -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_edge9" class="edge">
+<title>proc~configure_ocean_varmix&#45;&gt;proc~fill_coriolis_centre</title>
+<path fill="none" stroke="#00ff00" d="M879.76,-185.27C890.22,-182.61 901.01,-179.61 911,-176.36 933.44,-169.06 957.9,-159.06 977.24,-150.65"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="978.83,-153.77 986.57,-146.54 976.01,-147.37 978.83,-153.77"/>
+</g>
+<!-- proc~configure_ocean_wavespeed -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_node11" class="node">
+<title>proc~configure_ocean_wavespeed</title>
+<g id="a_proc~~metrics_fill_coriolis~~CalledByGraph_node11"><a xlink:href="../proc/configure_ocean_wavespeed.html" xlink:title="configure_ocean_wavespeed">
+<polygon fill="#d9534f" stroke="#d9534f" points="906.5,-167.36 740.5,-167.36 740.5,-143.36 906.5,-143.36 906.5,-167.36"/>
+<text text-anchor="middle" x="823.5" y="-152.96" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_wavespeed</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_wavespeed&#45;&gt;proc~fill_coriolis_centre -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_edge10" class="edge">
+<title>proc~configure_ocean_wavespeed&#45;&gt;proc~fill_coriolis_centre</title>
+<path fill="none" stroke="#00ff00" d="M906.63,-146.21C921.02,-144.6 935.79,-142.96 949.58,-141.42"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="950.35,-144.86 959.9,-140.27 949.57,-137.9 950.35,-144.86"/>
+</g>
+<!-- proc~ocean_dyn_enable_bt_wide -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_node12" class="node">
+<title>proc~ocean_dyn_enable_bt_wide</title>
+<g id="a_proc~~metrics_fill_coriolis~~CalledByGraph_node12"><a xlink:href="../proc/ocean_dyn_enable_bt_wide.html" xlink:title="ocean_dyn_enable_bt_wide">
+<polygon fill="#d9534f" stroke="#d9534f" points="695.5,-272.36 537.5,-272.36 537.5,-248.36 695.5,-248.36 695.5,-272.36"/>
+<text text-anchor="middle" x="616.5" y="-257.96" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_enable_bt_wide</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_enable_bt_wide&#45;&gt;proc~bt_wide_init -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_edge4" class="edge">
+<title>proc~ocean_dyn_enable_bt_wide&#45;&gt;proc~bt_wide_init</title>
+<path fill="none" stroke="#ff0000" d="M695.76,-262.59C755.11,-263.16 838.56,-261.57 911,-251.36 928.53,-248.88 947.41,-244.56 964.09,-240.14"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="965.44,-243.4 974.17,-237.39 963.6,-236.64 965.44,-243.4"/>
+</g>
+<!-- proc~configure_ocean_lateral -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_node13" class="node">
+<title>proc~configure_ocean_lateral</title>
+<g id="a_proc~~metrics_fill_coriolis~~CalledByGraph_node13"><a xlink:href="../proc/configure_ocean_lateral.html" xlink:title="configure_ocean_lateral">
+<polygon fill="#d9534f" stroke="#d9534f" points="687,-146.36 546,-146.36 546,-122.36 687,-122.36 687,-146.36"/>
+<text text-anchor="middle" x="616.5" y="-131.96" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_lateral</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_lateral&#45;&gt;proc~configure_ocean_epbl -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_edge14" class="edge">
+<title>proc~configure_ocean_lateral&#45;&gt;proc~configure_ocean_epbl</title>
+<path fill="none" stroke="#ffbf00" d="M687.19,-127.22C706.76,-125.21 728.12,-123.02 747.96,-120.99"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="748.59,-124.45 758.18,-119.94 747.87,-117.48 748.59,-124.45"/>
+</g>
+<!-- proc~configure_ocean_lateral&#45;&gt;proc~configure_ocean_kappa_shear -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_edge16" class="edge">
+<title>proc~configure_ocean_lateral&#45;&gt;proc~configure_ocean_kappa_shear</title>
+<path fill="none" stroke="#00ff3f" d="M633.15,-122.14C660.06,-101.31 714.31,-60.23 736,-50.36 740.63,-48.25 745.49,-46.34 750.46,-44.6"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="751.67,-47.89 760.11,-41.49 749.52,-41.23 751.67,-47.89"/>
+</g>
+<!-- proc~configure_ocean_lateral&#45;&gt;proc~configure_ocean_meke -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_edge17" class="edge">
+<title>proc~configure_ocean_lateral&#45;&gt;proc~configure_ocean_meke</title>
+<path fill="none" stroke="#00ffff" d="M648.9,-122.24C672.62,-113.32 706.09,-101.26 736,-92.36 743.5,-90.12 751.41,-87.95 759.29,-85.91"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="760.38,-89.24 769.21,-83.39 758.65,-82.46 760.38,-89.24"/>
+</g>
+<!-- proc~configure_ocean_lateral&#45;&gt;proc~configure_ocean_varmix -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_edge18" class="edge">
+<title>proc~configure_ocean_lateral&#45;&gt;proc~configure_ocean_varmix</title>
+<path fill="none" stroke="#003fff" d="M648.9,-146.48C672.62,-155.39 706.09,-167.45 736,-176.36 743.5,-178.59 751.41,-180.76 759.29,-182.81"/>
+<polygon fill="#003fff" stroke="#003fff" points="758.65,-186.25 769.21,-185.33 760.38,-179.47 758.65,-186.25"/>
+</g>
+<!-- proc~configure_ocean_lateral&#45;&gt;proc~configure_ocean_wavespeed -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_edge19" class="edge">
+<title>proc~configure_ocean_lateral&#45;&gt;proc~configure_ocean_wavespeed</title>
+<path fill="none" stroke="#7f00ff" d="M687.19,-141.49C701.05,-142.92 715.81,-144.43 730.29,-145.91"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="729.96,-149.39 740.26,-146.93 730.67,-142.43 729.96,-149.39"/>
+</g>
+<!-- proc~engine_enter_data -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_node14" class="node">
+<title>proc~engine_enter_data</title>
+<g id="a_proc~~metrics_fill_coriolis~~CalledByGraph_node14"><a xlink:href="../proc/engine_enter_data.html" xlink:title="engine_enter_data">
+<polygon fill="#d9534f" stroke="#d9534f" points="497,-223.36 385,-223.36 385,-199.36 497,-199.36 497,-223.36"/>
+<text text-anchor="middle" x="441" y="-208.96" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_enter_data</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_enter_data&#45;&gt;proc~ocean_dyn_enable_bt_wide -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_edge20" class="edge">
+<title>proc~engine_enter_data&#45;&gt;proc~ocean_dyn_enable_bt_wide</title>
+<path fill="none" stroke="#ff00bf" d="M484.89,-223.47C508.54,-230.15 538.1,-238.5 563.11,-245.56"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="562.23,-248.95 572.81,-248.3 564.13,-242.21 562.23,-248.95"/>
+</g>
+<!-- proc~engine_setup -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_node15" class="node">
+<title>proc~engine_setup</title>
+<g id="a_proc~~metrics_fill_coriolis~~CalledByGraph_node15"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="483,-181.36 399,-181.36 399,-157.36 483,-157.36 483,-181.36"/>
+<text text-anchor="middle" x="441" y="-166.96" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~configure_ocean_cavity_melt -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_edge13" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~configure_ocean_cavity_melt</title>
+<path fill="none" stroke="#ff0000" d="M483.12,-177.65C501.89,-181.44 524.65,-186.03 545.96,-190.33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="545.46,-193.8 555.96,-192.34 546.85,-186.94 545.46,-193.8"/>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~configure_ocean_forcing -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_edge15" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~configure_ocean_forcing</title>
+<path fill="none" stroke="#7fff00" d="M459.91,-157.17C490.64,-136.27 553.53,-93.5 589.23,-69.22"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="591.38,-71.99 597.68,-63.47 587.45,-66.2 591.38,-71.99"/>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~configure_ocean_lateral -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_edge21" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~configure_ocean_lateral</title>
+<path fill="none" stroke="#ff0000" d="M483.12,-161.06C501.89,-157.27 524.65,-152.68 545.96,-148.38"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="546.85,-151.78 555.96,-146.37 545.46,-144.91 546.85,-151.78"/>
+</g>
+<!-- proc~complete_ocean_create -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_node16" class="node">
+<title>proc~complete_ocean_create</title>
+<g id="a_proc~~metrics_fill_coriolis~~CalledByGraph_node16"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="349,-223.36 209,-223.36 209,-199.36 349,-199.36 349,-223.36"/>
+<text text-anchor="middle" x="279" y="-208.96" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_enter_data -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_edge22" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_enter_data</title>
+<path fill="none" stroke="#00ff00" d="M349.25,-211.36C357.65,-211.36 366.22,-211.36 374.57,-211.36"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="374.62,-214.86 384.62,-211.36 374.62,-207.86 374.62,-214.86"/>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_setup -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_edge24" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#0000ff" d="M325.85,-199.32C345.61,-194.13 368.79,-188.05 389.08,-182.72"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="390,-186.1 398.79,-180.17 388.22,-179.33 390,-186.1"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_node17" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~metrics_fill_coriolis~~CalledByGraph_node17"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="332,-181.36 226,-181.36 226,-157.36 332,-157.36 332,-181.36"/>
+<text text-anchor="middle" x="279" y="-166.96" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_enter_data -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_edge23" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_enter_data</title>
+<path fill="none" stroke="#00ff00" d="M325.85,-181.39C344.09,-186.18 365.25,-191.73 384.36,-196.75"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="383.58,-200.16 394.14,-199.32 385.36,-193.39 383.58,-200.16"/>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_setup -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_edge25" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#0000ff" d="M332.39,-169.36C350.53,-169.36 370.83,-169.36 388.87,-169.36"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="388.91,-172.86 398.91,-169.36 388.91,-165.86 388.91,-172.86"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_node18" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~metrics_fill_coriolis~~CalledByGraph_node18"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="120,-181.36 53,-181.36 53,-157.36 120,-157.36 120,-181.36"/>
+<text text-anchor="middle" x="86.5" y="-166.96" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_edge28" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#00ffff" d="M120.25,-169.36C146.45,-169.36 183.96,-169.36 215.83,-169.36"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="215.95,-172.86 225.95,-169.36 215.95,-165.86 215.95,-172.86"/>
+</g>
+<!-- proc~rdb_ocean_create_finalize -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_node19" class="node">
+<title>proc~rdb_ocean_create_finalize</title>
+<g id="a_proc~~metrics_fill_coriolis~~CalledByGraph_node19"><a xlink:href="../proc/rdb_ocean_create_finalize.html" xlink:title="rdb_ocean_create_finalize">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="162,-223.36 11,-223.36 11,-199.36 162,-199.36 162,-223.36"/>
+<text text-anchor="middle" x="86.5" y="-208.96" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_edge26" class="edge">
+<title>proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M162.24,-211.36C174.21,-211.36 186.64,-211.36 198.71,-211.36"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="198.75,-214.86 208.75,-211.36 198.75,-207.86 198.75,-214.86"/>
+</g>
+<!-- proc~rdb_ocean_create_from_string -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_node20" class="node">
+<title>proc~rdb_ocean_create_from_string</title>
+<g id="a_proc~~metrics_fill_coriolis~~CalledByGraph_node20"><a xlink:href="../proc/rdb_ocean_create_from_string.html" xlink:title="rdb_ocean_create_from_string">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="173,-265.36 0,-265.36 0,-241.36 173,-241.36 173,-265.36"/>
+<text text-anchor="middle" x="86.5" y="-250.96" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_from_string</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~metrics_fill_coriolis~~CalledByGraph_edge27" class="edge">
+<title>proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M142.09,-241.32C164.41,-236.4 190.39,-230.67 213.63,-225.55"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="214.39,-228.96 223.4,-223.39 212.88,-222.13 214.39,-228.96"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocmetrics_fill_coriolisCalledByGraph = svgPanZoom('#procmetrics_fill_coriolisCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~596"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~522"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ng~79"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ng</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-y~27"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>y</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">metrics_fill_coriolis</span><span class="p">(</span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">scheme</span><span class="p">,</span><span class="w"> </span><span class="n">f_0</span><span class="p">,</span><span class="w"> </span><span class="n">beta</span><span class="p">,</span><span class="w"> </span><span class="n">y_ref</span><span class="p">,</span><span class="w"> </span><span class="n">omega</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">f_corner</span><span class="p">,</span><span class="w"> </span><span class="n">f_centre</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Fill a corner array AND a centre array with the Coriolis</span>
+<span class="w">      </span><span class="c">!! parameter, from one of two schemes (D7).  Does NOT touch any</span>
+<span class="w">      </span><span class="c">!! existing fill sites in coriolis_adv / EPBL / kappa-shear (that</span>
+<span class="w">      </span><span class="c">!! re-routing is M2d); this routine just exists + is tested.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!!   `beta_plane` : f = f_0 + beta*(y - y_ref), y from the</span>
+<span class="w">      </span><span class="c">!!      GLOBAL CARTESIAN coordinate.  On an undecomposed grid</span>
+<span class="w">      </span><span class="c">!!      (`grid%j_offset_global == 0`) the corner fill is</span>
+<span class="w">      </span><span class="c">!!      BIT-IDENTICAL to `coriolis_adv_set_beta_plane`</span>
+<span class="w">      </span><span class="c">!!      (y = (j-1-nghost)*dy, raw f) and the centre fill is</span>
+<span class="w">      </span><span class="c">!!      BIT-IDENTICAL to the EPBL / kappa-shear `set_f_centre`</span>
+<span class="w">      </span><span class="c">!!      (y = (j-nghost-0.5)*dy, abs(f)).  Under MPI y-decomposition</span>
+<span class="w">      </span><span class="c">!!      `grid%j_offset_global` shifts the local index to the GLOBAL</span>
+<span class="w">      </span><span class="c">!!      row so each rank's beta-plane y is correct.</span>
+<span class="w">      </span><span class="c">!!   `planetary` : f = 2*omega*sin(geolat) at the respective</span>
+<span class="w">      </span><span class="c">!!      stagger — uses `this%geolatBu` (corner) and `this%geolatT`</span>
+<span class="w">      </span><span class="c">!!      (centre), so a spherical generator must have run first.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! `f_corner` is shaped `(nx+1,ny+1)` (like the metric corner</span>
+<span class="w">      </span><span class="c">!! arrays / `coriolis_adv%f_corner`); `f_centre` is `(nx,ny)`.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_metrics_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">scheme</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">f_0</span><span class="p">,</span><span class="w"> </span><span class="n">beta</span><span class="p">,</span><span class="w"> </span><span class="n">y_ref</span><span class="p">,</span><span class="w"> </span><span class="n">omega</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">f_corner</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">         </span><span class="c">!! Coriolis at C-grid corners (1/s).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">f_centre</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">         </span><span class="c">!! |Coriolis| at cell centres (1/s).</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">y</span>
+
+<span class="w">      </span><span class="n">ng</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nghost</span>
+
+<span class="w">      </span><span class="k">select case</span><span class="w"> </span><span class="p">(</span><span class="n">scheme</span><span class="p">)</span>
+<span class="w">      </span><span class="k">case</span><span class="w"> </span><span class="p">(</span><span class="n">CORIOLIS_SCHEME_PLANETARY</span><span class="p">)</span>
+<span class="w">         </span><span class="c">! 2*omega*sin(geolat) at the respective stagger.</span>
+<span class="w">         </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">f_corner</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span>
+<span class="w">            </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">f_corner</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">               </span><span class="n">f_corner</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">2.0_wp</span><span class="o">*</span><span class="n">omega</span><span class="o">*</span><span class="nb">sin</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">geolatBu</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="n">DEG2RAD</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">         end do</span>
+<span class="k">         do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">f_centre</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span>
+<span class="w">            </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">f_centre</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">               </span><span class="n">f_centre</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">abs</span><span class="p">(</span><span class="mf">2.0_wp</span><span class="o">*</span><span class="n">omega</span><span class="o">*</span><span class="nb">sin</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">geolatT</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="n">DEG2RAD</span><span class="p">))</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">         end do</span>
+<span class="k">      case </span><span class="n">default</span><span class="w">   </span><span class="c">! CORIOLIS_SCHEME_BETA_PLANE</span>
+<span class="w">         </span><span class="c">! Corner: BIT-IDENTICAL to coriolis_adv_set_beta_plane on an</span>
+<span class="w">         </span><span class="c">! undecomposed grid (j_offset_global == 0).  Under MPI y-split</span>
+<span class="w">         </span><span class="c">! the global row index is j + j_offset_global, giving the correct</span>
+<span class="w">         </span><span class="c">! physical y coordinate on every rank.</span>
+<span class="w">         </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">f_corner</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span>
+<span class="w">            </span><span class="n">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kt">real</span><span class="p">(</span><span class="n">j</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">j_offset_global</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">wp</span><span class="p">)</span><span class="o">*</span><span class="n">grid</span><span class="p">%</span><span class="n">dy</span>
+<span class="w">            </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">f_corner</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">               </span><span class="n">f_corner</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">f_0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">beta</span><span class="o">*</span><span class="p">(</span><span class="n">y</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">y_ref</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">         end do</span>
+<span class="w">         </span><span class="c">! Centre: BIT-IDENTICAL to EPBL / kappa-shear set_f_centre on an</span>
+<span class="w">         </span><span class="c">! undecomposed grid (j_offset_global == 0).</span>
+<span class="w">         </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">f_centre</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span>
+<span class="w">            </span><span class="n">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">real</span><span class="p">(</span><span class="n">j</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">j_offset_global</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="p">)</span><span class="o">*</span><span class="n">grid</span><span class="p">%</span><span class="n">dy</span>
+<span class="w">            </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">f_centre</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">               </span><span class="n">f_centre</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">abs</span><span class="p">(</span><span class="n">f_0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">beta</span><span class="o">*</span><span class="p">(</span><span class="n">y</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">y_ref</span><span class="p">))</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">         end do</span>
+<span class="k">      end select</span>
+<span class="k">   end subroutine </span><span class="n">metrics_fill_coriolis</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-01 23:35 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

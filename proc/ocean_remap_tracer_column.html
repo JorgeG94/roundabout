@@ -1,0 +1,882 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>ocean_remap_tracer_column &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>ocean_remap_tracer_column
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">26 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_remap.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_remap.f90.html'>rdb_ocean_remap.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_remap.html'>rdb_ocean_remap</a></li>
+            <li class="breadcrumb-item active" aria-current="page">ocean_remap_tracer_column</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/ocean_remap_tracer_column.html#variable-c_new~2">c_new</a>
+            <a class="list-group-item" href="../proc/ocean_remap_tracer_column.html#variable-c_old~2">c_old</a>
+            <a class="list-group-item" href="../proc/ocean_remap_tracer_column.html#variable-htr_col~2">hTr_col</a>
+            <a class="list-group-item" href="../proc/ocean_remap_tracer_column.html#variable-htr_src">hTr_src</a>
+            <a class="list-group-item" href="../proc/ocean_remap_tracer_column.html#variable-h_new_col~2">h_new_col</a>
+            <a class="list-group-item" href="../proc/ocean_remap_tracer_column.html#variable-h_old_col~2">h_old_col</a>
+            <a class="list-group-item" href="../proc/ocean_remap_tracer_column.html#variable-k~199">k</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/ocean_remap_tracer_column.html#src">ocean_remap_tracer_column</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine ocean_remap_tracer_column(nz, h_old, h_new, hTr_inout, method)  
+</h2>
+    
+
+    <p>Single-column unit-test entry: wraps <code>remap_column</code> with the
+c = hTr/h ↔ hTr_new = c_new·h_new pattern, including the SAME two-sided
+vanishing-layer merge the production kernel runs
+(<code>rdb_vl_merge_content</code> + <code>rdb_vl_column_conc</code>), so this entry cannot drift from
+<code>ocean_remap_tracer_field</code>. Production callers go through that one.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~230"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_old~9"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_old</strong>(nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_new~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_new</strong>(nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-htr_inout"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hTr_inout</strong>(nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-method~9"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>method</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ocean_remap_tracer_column~~CallsGraph Pages: 1 -->
+<svg id="prococean_remap_tracer_columnCallsGraph" width="641pt" height="234pt"
+ viewBox="0.00 0.00 641.00 234.29" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph" class="graph" transform="scale(0.62 0.62) rotate(0) translate(4 376.86)">
+<title>proc~~ocean_remap_tracer_column~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-376.86 1038,-376.86 1038,4 -4,4"/>
+<!-- proc~ocean_remap_tracer_column -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_node1" class="node">
+<title>proc~ocean_remap_tracer_column</title>
+<polygon fill="none" stroke="black" points="168,-87 0,-87 0,-63 168,-63 168,-87"/>
+<text text-anchor="middle" x="84" y="-72.6" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_remap_tracer_column</text>
+</g>
+<!-- proc~remap_column -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_node2" class="node">
+<title>proc~remap_column</title>
+<g id="a_proc~~ocean_remap_tracer_column~~CallsGraph_node2"><a xlink:href="../proc/remap_column.html" xlink:title="remap_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="320.5,-178 228.5,-178 228.5,-154 320.5,-154 320.5,-178"/>
+<text text-anchor="middle" x="274.5" y="-163.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_remap_tracer_column&#45;&gt;proc~remap_column -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_edge1" class="edge">
+<title>proc~ocean_remap_tracer_column&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#ff0000" d="M110.03,-87.08C143.13,-103.06 201.6,-131.29 238.9,-149.3"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="237.84,-152.67 248.37,-153.87 240.88,-146.37 237.84,-152.67"/>
+</g>
+<!-- proc~remap_fold_filler_defect -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_node3" class="node">
+<title>proc~remap_fold_filler_defect</title>
+<g id="a_proc~~ocean_remap_tracer_column~~CallsGraph_node3"><a xlink:href="../proc/remap_fold_filler_defect.html" xlink:title="remap_fold_filler_defect">
+<polygon fill="#d9534f" stroke="#d9534f" points="345,-108 204,-108 204,-84 345,-84 345,-108"/>
+<text text-anchor="middle" x="274.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_fold_filler_defect</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_remap_tracer_column&#45;&gt;proc~remap_fold_filler_defect -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_edge2" class="edge">
+<title>proc~ocean_remap_tracer_column&#45;&gt;proc~remap_fold_filler_defect</title>
+<path fill="none" stroke="#ff0000" d="M168.23,-84.27C176.71,-85.22 185.32,-86.18 193.76,-87.12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="193.64,-90.62 203.97,-88.25 194.42,-83.67 193.64,-90.62"/>
+</g>
+<!-- rdb_vl_column_conc -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_node4" class="node">
+<title>rdb_vl_column_conc</title>
+<polygon fill="#777777" stroke="#777777" points="335,-66 214,-66 214,-42 335,-42 335,-66"/>
+<text text-anchor="middle" x="274.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_vl_column_conc</text>
+</g>
+<!-- proc~ocean_remap_tracer_column&#45;&gt;rdb_vl_column_conc -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_edge3" class="edge">
+<title>proc~ocean_remap_tracer_column&#45;&gt;rdb_vl_column_conc</title>
+<path fill="none" stroke="#ff0000" d="M168.23,-65.73C180.13,-64.4 192.26,-63.05 203.87,-61.76"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="204.35,-65.22 213.91,-60.64 203.58,-58.27 204.35,-65.22"/>
+</g>
+<!-- rdb_vl_merge_content -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_node5" class="node">
+<title>rdb_vl_merge_content</title>
+<polygon fill="#777777" stroke="#777777" points="340,-24 209,-24 209,0 340,0 340,-24"/>
+<text text-anchor="middle" x="274.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_vl_merge_content</text>
+</g>
+<!-- proc~ocean_remap_tracer_column&#45;&gt;rdb_vl_merge_content -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_edge4" class="edge">
+<title>proc~ocean_remap_tracer_column&#45;&gt;rdb_vl_merge_content</title>
+<path fill="none" stroke="#ff0000" d="M117.95,-62.91C141.76,-54.29 174.75,-42.58 204,-33 210.05,-31.02 216.42,-29 222.75,-27.04"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="224.08,-30.29 232.61,-24.01 222.02,-23.6 224.08,-30.29"/>
+</g>
+<!-- proc~remap_column_pcm -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_node6" class="node">
+<title>proc~remap_column_pcm</title>
+<g id="a_proc~~ocean_remap_tracer_column~~CallsGraph_node6"><a xlink:href="../proc/remap_column_pcm.html" xlink:title="remap_column_pcm">
+<polygon fill="#d9534f" stroke="#d9534f" points="502,-237 381,-237 381,-213 502,-213 502,-237"/>
+<text text-anchor="middle" x="441.5" y="-222.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_pcm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_pcm -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_edge5" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_pcm</title>
+<path fill="none" stroke="#ff0000" d="M309.29,-178.08C334.65,-187.15 369.57,-199.64 397.02,-209.45"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="396.16,-212.86 406.76,-212.93 398.52,-206.27 396.16,-212.86"/>
+</g>
+<!-- proc~remap_column_plm -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_node7" class="node">
+<title>proc~remap_column_plm</title>
+<g id="a_proc~~ocean_remap_tracer_column~~CallsGraph_node7"><a xlink:href="../proc/remap_column_plm.html" xlink:title="remap_column_plm">
+<polygon fill="#d9534f" stroke="#d9534f" points="855,-119 737,-119 737,-95 855,-95 855,-119"/>
+<text text-anchor="middle" x="796" y="-104.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_plm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_edge6" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#ff0000" d="M320.66,-158.58C339.33,-155.55 361.2,-152.05 381,-149 450.7,-138.28 467.9,-133.72 538,-126 601.89,-118.97 675.02,-113.84 726.89,-110.7"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="727.19,-114.19 736.97,-110.1 726.78,-107.2 727.19,-114.19"/>
+</g>
+<!-- proc~remap_column_ppm -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_node8" class="node">
+<title>proc~remap_column_ppm</title>
+<g id="a_proc~~ocean_remap_tracer_column~~CallsGraph_node8"><a xlink:href="../proc/remap_column_ppm.html" xlink:title="remap_column_ppm">
+<polygon fill="#d9534f" stroke="#d9534f" points="675.5,-237 554.5,-237 554.5,-213 675.5,-213 675.5,-237"/>
+<text text-anchor="middle" x="615" y="-222.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_ppm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_ppm -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_edge7" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_ppm</title>
+<path fill="none" stroke="#ff0000" d="M320.67,-173.32C366.41,-180.79 439.19,-192.84 502,-204 515.71,-206.44 530.36,-209.12 544.38,-211.73"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="543.99,-215.22 554.46,-213.62 545.27,-208.34 543.99,-215.22"/>
+</g>
+<!-- proc~remap_column_ppm_h4 -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_node9" class="node">
+<title>proc~remap_column_ppm_h4</title>
+<g id="a_proc~~ocean_remap_tracer_column~~CallsGraph_node9"><a xlink:href="../proc/remap_column_ppm_h4.html" xlink:title="remap_column_ppm_h4">
+<polygon fill="#d9534f" stroke="#d9534f" points="685,-159 545,-159 545,-135 685,-135 685,-159"/>
+<text text-anchor="middle" x="615" y="-144.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_ppm_h4</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_ppm_h4 -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_edge8" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_ppm_h4</title>
+<path fill="none" stroke="#ff0000" d="M320.8,-163.46C375.46,-160.39 468.31,-155.18 534.89,-151.44"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="535.13,-154.93 544.92,-150.88 534.74,-147.94 535.13,-154.93"/>
+</g>
+<!-- proc~remap_column_pqm -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_node10" class="node">
+<title>proc~remap_column_pqm</title>
+<g id="a_proc~~ocean_remap_tracer_column~~CallsGraph_node10"><a xlink:href="../proc/remap_column_pqm.html" xlink:title="remap_column_pqm">
+<polygon fill="#d9534f" stroke="#d9534f" points="502,-279 381,-279 381,-255 502,-255 502,-279"/>
+<text text-anchor="middle" x="441.5" y="-264.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_pqm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_pqm -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_edge9" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_pqm</title>
+<path fill="none" stroke="#ff0000" d="M288.56,-178.06C307.63,-195.15 344.77,-226.49 381,-246 384.28,-247.77 387.74,-249.43 391.27,-251"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="390.13,-254.32 400.71,-254.89 392.8,-247.84 390.13,-254.32"/>
+</g>
+<!-- rdb_vl_is_live -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_node11" class="node">
+<title>rdb_vl_is_live</title>
+<polygon fill="#777777" stroke="#777777" points="482.5,-79 400.5,-79 400.5,-55 482.5,-55 482.5,-79"/>
+<text text-anchor="middle" x="441.5" y="-64.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_vl_is_live</text>
+</g>
+<!-- proc~remap_fold_filler_defect&#45;&gt;rdb_vl_is_live -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_edge10" class="edge">
+<title>proc~remap_fold_filler_defect&#45;&gt;rdb_vl_is_live</title>
+<path fill="none" stroke="#7fff00" d="M344.04,-83.95C359.43,-81.25 375.49,-78.43 389.99,-75.88"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="390.99,-79.26 400.24,-74.08 389.78,-72.36 390.99,-79.26"/>
+</g>
+<!-- proc~boundary_half_jump -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_node12" class="node">
+<title>proc~boundary_half_jump</title>
+<g id="a_proc~~ocean_remap_tracer_column~~CallsGraph_node12"><a xlink:href="../proc/boundary_half_jump.html" xlink:title="boundary_half_jump">
+<polygon fill="#d9534f" stroke="#d9534f" points="1027.5,-179 906.5,-179 906.5,-155 1027.5,-155 1027.5,-179"/>
+<text text-anchor="middle" x="967" y="-164.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">boundary_half_jump</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_plm&#45;&gt;proc~boundary_half_jump -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_edge11" class="edge">
+<title>proc~remap_column_plm&#45;&gt;proc~boundary_half_jump</title>
+<path fill="none" stroke="#ffff00" d="M831.2,-119.14C857.51,-128.48 894.06,-141.46 922.46,-151.54"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="921.55,-154.93 932.14,-154.98 923.89,-148.33 921.55,-154.93"/>
+</g>
+<!-- proc~plm_slope_nonuniform -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_node13" class="node">
+<title>proc~plm_slope_nonuniform</title>
+<g id="a_proc~~ocean_remap_tracer_column~~CallsGraph_node13"><a xlink:href="../proc/plm_slope_nonuniform.html" xlink:title="plm_slope_nonuniform">
+<polygon fill="#d9534f" stroke="#d9534f" points="1034,-119 900,-119 900,-95 1034,-95 1034,-119"/>
+<text text-anchor="middle" x="967" y="-104.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">plm_slope_nonuniform</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_plm&#45;&gt;proc~plm_slope_nonuniform -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_edge12" class="edge">
+<title>proc~remap_column_plm&#45;&gt;proc~plm_slope_nonuniform</title>
+<path fill="none" stroke="#ffff00" d="M855.16,-107C866.31,-107 878.14,-107 889.76,-107"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="889.9,-110.5 899.9,-107 889.9,-103.5 889.9,-110.5"/>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_edge17" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#00ff00" d="M634.48,-212.82C666.19,-191.92 731.07,-149.14 767.9,-124.87"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="770.2,-127.54 776.62,-119.12 766.34,-121.7 770.2,-127.54"/>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~boundary_half_jump -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_edge13" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~boundary_half_jump</title>
+<path fill="none" stroke="#00ff00" d="M675.52,-213.48C692.46,-210.3 710.94,-206.92 728,-204 784.44,-194.32 848.61,-184.41 896.08,-177.28"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="896.88,-180.7 906.25,-175.76 895.84,-173.78 896.88,-180.7"/>
+</g>
+<!-- proc~ppm_edge_nonuniform -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_node14" class="node">
+<title>proc~ppm_edge_nonuniform</title>
+<g id="a_proc~~ocean_remap_tracer_column~~CallsGraph_node14"><a xlink:href="../proc/ppm_edge_nonuniform.html" xlink:title="ppm_edge_nonuniform">
+<polygon fill="#d9534f" stroke="#d9534f" points="864,-237 728,-237 728,-213 864,-213 864,-237"/>
+<text text-anchor="middle" x="796" y="-222.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_edge_nonuniform</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~ppm_edge_nonuniform -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_edge14" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~ppm_edge_nonuniform</title>
+<path fill="none" stroke="#00ff00" d="M675.6,-225C689.11,-225 703.64,-225 717.75,-225"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="717.94,-228.5 727.94,-225 717.94,-221.5 717.94,-228.5"/>
+</g>
+<!-- proc~ppm_edge_two_cell -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_node15" class="node">
+<title>proc~ppm_edge_two_cell</title>
+<g id="a_proc~~ocean_remap_tracer_column~~CallsGraph_node15"><a xlink:href="../proc/ppm_edge_two_cell.html" xlink:title="ppm_edge_two_cell">
+<polygon fill="#d9534f" stroke="#d9534f" points="854.5,-321 737.5,-321 737.5,-297 854.5,-297 854.5,-321"/>
+<text text-anchor="middle" x="796" y="-306.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_edge_two_cell</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~ppm_edge_two_cell -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_edge15" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~ppm_edge_two_cell</title>
+<path fill="none" stroke="#00ff00" d="M674,-237.08C680.32,-239.54 686.45,-242.48 692,-246 712.75,-259.18 707.48,-274.47 728,-288 730.56,-289.69 733.27,-291.25 736.07,-292.69"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="734.7,-295.92 745.25,-296.89 737.62,-289.55 734.7,-295.92"/>
+</g>
+<!-- proc~ppm_jump_nonuniform -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_node16" class="node">
+<title>proc~ppm_jump_nonuniform</title>
+<g id="a_proc~~ocean_remap_tracer_column~~CallsGraph_node16"><a xlink:href="../proc/ppm_jump_nonuniform.html" xlink:title="ppm_jump_nonuniform">
+<polygon fill="#d9534f" stroke="#d9534f" points="864,-279 728,-279 728,-255 864,-255 864,-279"/>
+<text text-anchor="middle" x="796" y="-264.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_jump_nonuniform</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~ppm_jump_nonuniform -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_edge16" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~ppm_jump_nonuniform</title>
+<path fill="none" stroke="#00ff00" d="M667.29,-237.04C688.08,-241.91 712.25,-247.58 733.93,-252.67"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="733.16,-256.09 743.7,-254.96 734.76,-249.27 733.16,-256.09"/>
+</g>
+<!-- proc~remap_column_ppm_h4&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_edge19" class="edge">
+<title>proc~remap_column_ppm_h4&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#00ffff" d="M669.71,-135C689,-130.69 710.95,-125.78 731.03,-121.3"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="732.03,-124.66 741.02,-119.06 730.5,-117.83 732.03,-124.66"/>
+</g>
+<!-- proc~remap_column_ppm_h4&#45;&gt;proc~boundary_half_jump -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_edge18" class="edge">
+<title>proc~remap_column_ppm_h4&#45;&gt;proc~boundary_half_jump</title>
+<path fill="none" stroke="#00ffff" d="M685.15,-150.95C746.17,-154.44 834.68,-159.5 895.97,-163"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="896.13,-166.51 906.32,-163.59 896.53,-159.52 896.13,-166.51"/>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~remap_column_ppm -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_edge23" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~remap_column_ppm</title>
+<path fill="none" stroke="#0000ff" d="M491.65,-254.96C511.38,-250.13 534.3,-244.52 554.93,-239.47"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="555.97,-242.82 564.85,-237.04 554.3,-236.02 555.97,-242.82"/>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~boundary_half_jump -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_edge20" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~boundary_half_jump</title>
+<path fill="none" stroke="#0000ff" d="M455.43,-279.19C472.68,-294.53 504.9,-320.07 538,-330 676.77,-371.65 737.25,-400.2 864,-330 918.75,-299.67 948.02,-226.34 959.76,-189.26"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="963.19,-190 962.73,-179.41 956.49,-187.97 963.19,-190"/>
+</g>
+<!-- proc~pqm_end_value_h4 -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_node17" class="node">
+<title>proc~pqm_end_value_h4</title>
+<g id="a_proc~~ocean_remap_tracer_column~~CallsGraph_node17"><a xlink:href="../proc/pqm_end_value_h4.html" xlink:title="pqm_end_value_h4">
+<polygon fill="#d9534f" stroke="#d9534f" points="672.5,-321 557.5,-321 557.5,-297 672.5,-297 672.5,-321"/>
+<text text-anchor="middle" x="615" y="-306.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pqm_end_value_h4</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~pqm_end_value_h4 -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_edge21" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~pqm_end_value_h4</title>
+<path fill="none" stroke="#0000ff" d="M491.65,-279.04C511.38,-283.87 534.3,-289.48 554.93,-294.53"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="554.3,-297.98 564.85,-296.96 555.97,-291.18 554.3,-297.98"/>
+</g>
+<!-- proc~pqm_solve_diag_dominant -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_node18" class="node">
+<title>proc~pqm_solve_diag_dominant</title>
+<g id="a_proc~~ocean_remap_tracer_column~~CallsGraph_node18"><a xlink:href="../proc/pqm_solve_diag_dominant.html" xlink:title="pqm_solve_diag_dominant">
+<polygon fill="#d9534f" stroke="#d9534f" points="692,-279 538,-279 538,-255 692,-255 692,-279"/>
+<text text-anchor="middle" x="615" y="-264.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pqm_solve_diag_dominant</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~pqm_solve_diag_dominant -->
+<g id="proc~~ocean_remap_tracer_column~~CallsGraph_edge22" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~pqm_solve_diag_dominant</title>
+<path fill="none" stroke="#0000ff" d="M502,-267C510.35,-267 519.06,-267 527.77,-267"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="527.99,-270.5 537.99,-267 527.99,-263.5 527.99,-270.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprococean_remap_tracer_columnCallsGraph = svgPanZoom('#prococean_remap_tracer_columnCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-c_new~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>c_new</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-c_old~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>c_old</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-htr_col~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hTr_col</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-htr_src"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hTr_src</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_new_col~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_new_col</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_old_col~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_old_col</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~199"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">ocean_remap_tracer_column</span><span class="p">(</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">h_old</span><span class="p">,</span><span class="w"> </span><span class="n">h_new</span><span class="p">,</span><span class="w"> </span><span class="n">hTr_inout</span><span class="p">,</span><span class="w"> </span><span class="n">method</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Single-column unit-test entry: wraps `remap_column` with the</span>
+<span class="w">      </span><span class="c">!! c = hTr/h ↔ hTr_new = c_new·h_new pattern, including the SAME two-sided</span>
+<span class="w">      </span><span class="c">!! vanishing-layer merge the production kernel runs</span>
+<span class="w">      </span><span class="c">!! (`rdb_vl_merge_content` + `rdb_vl_column_conc`), so this entry cannot drift from</span>
+<span class="w">      </span><span class="c">!! `ocean_remap_tracer_field`. Production callers go through that one.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">method</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_old</span><span class="p">(</span><span class="n">nz</span><span class="p">),</span><span class="w"> </span><span class="n">h_new</span><span class="p">(</span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hTr_inout</span><span class="p">(</span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">c_old</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">),</span><span class="w"> </span><span class="n">c_new</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_old_col</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">),</span><span class="w"> </span><span class="n">h_new_col</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hTr_col</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">),</span><span class="w"> </span><span class="n">hTr_src</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">k</span>
+<span class="w">      </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">         </span><span class="n">h_old_col</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">         </span><span class="n">h_new_col</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_new</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">         </span><span class="n">hTr_col</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hTr_inout</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end do</span>
+<span class="k">      call </span><span class="n">rdb_vl_merge_content</span><span class="p">(</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">h_old_col</span><span class="p">,</span><span class="w"> </span><span class="n">hTr_col</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">rdb_vl_column_conc</span><span class="p">(</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">h_old_col</span><span class="p">,</span><span class="w"> </span><span class="n">hTr_col</span><span class="p">,</span><span class="w"> </span><span class="n">c_old</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">remap_column</span><span class="p">(</span><span class="n">method</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">h_old</span><span class="p">,</span><span class="w"> </span><span class="n">h_new</span><span class="p">,</span><span class="w"> </span><span class="n">c_old</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">),</span><span class="w"> </span><span class="n">c_new</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">))</span>
+<span class="w">      </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">         </span><span class="n">hTr_src</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hTr_col</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">         </span><span class="n">hTr_col</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c_new</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="o">*</span><span class="n">h_new</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end do</span>
+<span class="k">      call </span><span class="n">remap_fold_filler_defect</span><span class="p">(</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">h_old_col</span><span class="p">,</span><span class="w"> </span><span class="n">h_new_col</span><span class="p">,</span><span class="w"> </span><span class="n">hTr_src</span><span class="p">,</span><span class="w"> </span><span class="n">hTr_col</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">rdb_vl_merge_content</span><span class="p">(</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">h_new_col</span><span class="p">,</span><span class="w"> </span><span class="n">hTr_col</span><span class="p">)</span>
+<span class="w">      </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">         </span><span class="n">hTr_inout</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hTr_col</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end do</span>
+<span class="k">   end subroutine </span><span class="n">ocean_remap_tracer_column</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-01 23:35 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

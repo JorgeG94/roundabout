@@ -1,0 +1,2864 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>rdb_ice_init &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>rdb_ice_init
+      <small>Module</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.2% of total for modules and submodules.">142 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ice_init.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ice_init.f90.html'>rdb_ice_init.F90</a></li>
+            <li class="breadcrumb-item active" aria-current="page">rdb_ice_init</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+
+  <div class="row">
+    <div class="col-md-3">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ice_init.html#variable-ice_ic_conc_invalid">ICE_IC_CONC_INVALID</a>
+            <a class="list-group-item" href="../module/rdb_ice_init.html#variable-ice_ic_conc_latitudes">ICE_IC_CONC_LATITUDES</a>
+            <a class="list-group-item" href="../module/rdb_ice_init.html#variable-ice_ic_conc_uniform">ICE_IC_CONC_UNIFORM</a>
+            <a class="list-group-item" href="../module/rdb_ice_init.html#variable-ice_ic_conc_zero">ICE_IC_CONC_ZERO</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#types-0"
+         aria-expanded="false" aria-controls="types-0">
+         <h4 class="card-header bg-primary text-white">Derived Types</h4>
+      </a>
+      <div id="types-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ice_init.html#type-ice_ic_params_t">ice_ic_params_t</a>
+        </div>
+      </div>
+    </div>
+
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#funcs-0"
+         aria-expanded="false" aria-controls="funcs-0">
+         <h4 class="card-header bg-primary text-white">Functions</h4>
+      </a>
+      <div id="funcs-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ice_init.html#proc-ice_ic_params_from_config">ice_ic_params_from_config</a>
+            <a class="list-group-item" href="../module/rdb_ice_init.html#proc-ice_ic_parse_conc_config">ice_ic_parse_conc_config</a>
+            <a class="list-group-item" href="../module/rdb_ice_init.html#proc-ice_ic_target_category">ice_ic_target_category</a>
+        </div>
+      </div>
+    </div>
+
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#subs-0"
+         aria-expanded="false" aria-controls="subs-0">
+         <h4 class="card-header bg-primary text-white">Subroutines</h4>
+      </a>
+      <div id="subs-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ice_init.html#proc-ice_init_apply">ice_init_apply</a>
+            <a class="list-group-item" href="../module/rdb_ice_init.html#proc-ice_init_apply_impl">ice_init_apply_impl</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+
+
+  </div>
+
+    </div>
+
+    <div class="col-md-9" id='text'>
+      <p>Seeds <code>ocean_sea_ice_t</code>&rsquo;s six category prognostics
+(<code>part_size</code>/<code>m_ice</code>/<code>m_snow</code>/<code>enth_ice</code>/<code>enth_snow</code>/<code>sal_ice</code>) from
+<code>&amp;ocean_ice_ic_nml</code>, so a run can <em>start</em> with a live ice pack
+instead of growing one from frazil (<code>PLAN_PR24_ice_ic_path.md</code>).</p>
+<p>v1 ships two ANALYTIC seeding modes on top of the default no-op:
+  <code>"zero"</code>      (default) — early return, touches nothing.
+  <code>"uniform"</code>   — scalar concentration/thickness everywhere wet.
+  <code>"latitudes"</code> — SIS2 <code>initialize_concentration_from_latitudes</code>
+                  (<code>SIS_state_initialization.F90:489-531</code>): a 0/1
+                  step at <code>arctic_edge</code>/<code>antarctic_edge</code> off
+                  <code>metrics%geolatT</code>. Defaults (+-91) =&gt; no ice.</p>
+<p><strong>Host-side setup code, called ONCE, before <code>ocean_state_enter_data</code>
+(<code>rdb_driver.F90</code>, between <code>configure_ocean_land_mask</code> and
+<code>ocean_state_enter_data</code>).</strong> No device kernel, no new state array,
+zero <code>do concurrent</code>.  A <code>do concurrent</code> here would either
+round-trip the (unmapped) host arrays through the device once per
+loop on <code>-stdpar=gpu</code> (measured 36.9 s regression elsewhere,
+<code>seed_h_layer_uniform_impl</code>) or read stale device memory — see
+<code>rdb_ocean_state</code>&rsquo;s &ldquo;Plain host loops, NOT do concurrent&rdquo; precedent.</p>
+<p><strong>Mass, not thickness — and per-ICE-area, not per-cell, at ncat&gt;1.</strong>
+The prognostic is <code>m_ice = ICE_RHO_ICE*h_ice</code> [kg/m^2], and at
+<code>ncat&gt;1</code> it is per unit ICE-COVERED area (SIS2 <code>mH_ice</code>) — NOT
+multiplied by <code>conc</code> (module docstring of <code>rdb_ice_state</code>,
+&ldquo;:65-86&rdquo;). At <code>ncat==1</code> (legacy lumped mode) <code>m_ice</code> is per unit
+CELL area instead, and <code>part_size</code> is left untouched
+(<code>part_size(:,:,0)=1</code> forever — the frozen PR 3b/3c contract).</p>
+<p><strong>Category allocation is an ITD fixed point, by construction.</strong> The
+pack&rsquo;s mass is binned directly against the already-computed
+<code>ice%mh_lim(1:ncat+1)</code> (filled at slot <code>init</code> by
+<code>ice_itd_category_bounds</code>) via <code>ice_ic_target_category</code> — the SAME
+bounds <code>ice_adjust_categories</code> (<code>rdb_ice_itd</code>) uses to restore the
+ITD every thermo window. Consumers of the ITD MUST read
+<code>ice%mh_lim</code>, never <code>HLIM_DFLT_TABLE</code> (that table is private to
+<code>rdb_ice_state</code>) and never a re-derivation from <code>ncat</code> alone — PR-58
+may override <code>mh_lim</code>&rsquo;s VALUES via <code>&amp;ocean_ice_nml hlim</code>, and this
+module&rsquo;s IC must stay consistent with whatever <code>init</code> actually
+computed. <code>ice_adjust_categories</code> applied to an IC-seeded state is
+therefore a bit-exact no-op (test oracle, not a call site — see
+&ldquo;What NOT to take&rdquo; below).</p>
+<p><strong>Enthalpy, not temperature.</strong> <code>enth_ice</code>/<code>enth_snow</code> are set from
+the namelist ice temperature <code>t_ice</code> through the EXACT
+<code>ice_enth_from_ts</code> inversion (<code>rdb_ice_enthalpy</code>), never assigned
+directly — the thermodynamic prognostic is specific enthalpy
+(J/kg), never temperature. <code>sal_ice = s_ice</code>; snow is fresh
+(<code>ice_enth_from_ts(t_ice, 0.0)</code>).</p>
+<p><strong>k-convention.</strong> <code>enth_ice</code>/<code>sal_ice</code> are <code>(..., nk_ice)</code> BOTTOM-UP
+(k=1 = ice bottom/ocean side, k=nk_ice = ice top/atm side) — the
+opposite of <code>rdb_ice_column</code>&rsquo;s internal top-down convention. A
+uniform-<code>t_ice</code> IC is k-symmetric so this cannot be gotten wrong
+here, but the first person to add a linear top-to-bottom
+temperature profile must respect it.</p>
+<p><strong>What NOT to take from SIS2 (D-list, deliberate divergences):</strong>
+  D1  Do NOT call <code>ice_adjust_categories</code> (SIS2&rsquo;s &ldquo;seed into cat 1,
+      then adjust_ice_categories&rdquo; flow) — it is a <code>do concurrent</code>
+      device kernel and the IC runs before <code>enter_data</code>. Bin
+      directly on the host against <code>mh_lim</code>; use the kernel only as
+      a TEST ORACLE.
+  D2  Do NOT seed a placeholder mass (<code>mh_lim(c+1)</code>) into empty
+      categories the way SIS2&rsquo;s <code>ice_state_mass_init</code> does. Roundabout&rsquo;s
+      live convention is <code>m_ice = 0</code> for an empty category (what
+      <code>ice_frazil_uptake_multicat_impl</code> already produces, and what
+      the column entry gate keys on) — adopting SIS2&rsquo;s placeholder
+      would run a full Winton solve on every empty category of every
+      cell for no change in the answer (part-weighted to zero).
+  D3  Do NOT port <code>ICE_RELATIVE_TEMP_IC</code>/<code>ICE_RELATIVE_SALINITY</code>/
+      <code>spec_thermo_sal</code> — v1 ships one bulk salinity + one bulk
+      temperature. Deferred.
+  D4  Do NOT port <code>data_override</code> / file-backed ICs — that is PR-14
+      (v1.1), explicitly out of scope here (<code>"file"</code> is deliberately
+      NOT in the <code>conc_config</code> allowed list).</p>
+<p><code>"zero"</code> (the default) is a stronger no-op than SIS2&rsquo;s own IC path
+(SIS2 sets the thermo fields unconditionally): it returns before
+touching a single array, including <code>sal_ice</code>/<code>enth_ice</code> (already
+sourced to <code>ICE_BULK_SALINITY</code>/<code>0.0</code> by <code>ocean_sea_ice_init</code>) — so
+the restart file bytes are unchanged too.</p>
+<br>          <div class="card mb-4">
+      <h3 class="card-header card-title bg-light">Uses</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <ul class="list-inline">
+                  <li class="list-inline-item"><a href='rdb_constants.html'>rdb_constants</a></li>
+                  <li class="list-inline-item"><a href='rdb_ocean_metrics.html'>rdb_ocean_metrics</a></li>
+                  <li class="list-inline-item"><a href='rdb_grid.html'>rdb_grid</a></li>
+                  <li class="list-inline-item"><a href='rdb_multilayer_state.html'>rdb_multilayer_state</a></li>
+                  <li class="list-inline-item"><a href='rdb_ice_enthalpy.html'>rdb_ice_enthalpy</a></li>
+                  <li class="list-inline-item"><a href='rdb_ice_column.html'>rdb_ice_column</a></li>
+                  <li class="list-inline-item"><a href='rdb_ice_state.html'>rdb_ice_state</a></li>
+              </ul>
+            </li>
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: module~~rdb_ice_init~~UsesGraph Pages: 1 -->
+<svg id="modulerdb_ice_initUsesGraph" width="641pt" height="587pt"
+ viewBox="0.00 0.00 641.00 586.71" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~rdb_ice_init~~UsesGraph" class="graph" transform="scale(0.72 0.72) rotate(0) translate(4 809.71)">
+<title>module~~rdb_ice_init~~UsesGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-809.71 885,-809.71 885,4 -4,4"/>
+<!-- module~rdb_ice_init -->
+<g id="module~~rdb_ice_init~~UsesGraph_node1" class="node">
+<title>module~rdb_ice_init</title>
+<polygon fill="none" stroke="black" points="881,-202 808,-202 808,-178 881,-178 881,-202"/>
+<text text-anchor="middle" x="844.5" y="-187.6" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ice_init</text>
+</g>
+<!-- module~rdb_constants -->
+<g id="module~~rdb_ice_init~~UsesGraph_node2" class="node">
+<title>module~rdb_constants</title>
+<g id="a_module~~rdb_ice_init~~UsesGraph_node2"><a xlink:href="../module/rdb_constants.html" xlink:title="rdb_constants">
+<polygon fill="#337ab7" stroke="#337ab7" points="194.5,-374 107.5,-374 107.5,-350 194.5,-350 194.5,-374"/>
+<text text-anchor="middle" x="151" y="-359.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_constants</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge1" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M729.5,-113C714.43,-107.28 455.87,-129.16 440,-132"/>
+</g>
+<!-- module~rdb_grid -->
+<g id="module~~rdb_ice_init~~UsesGraph_node3" class="node">
+<title>module~rdb_grid</title>
+<g id="a_module~~rdb_ice_init~~UsesGraph_node3"><a xlink:href="../module/rdb_grid.html" xlink:title="rdb_grid">
+<polygon fill="#337ab7" stroke="#337ab7" points="318.5,-218 261.5,-218 261.5,-194 318.5,-194 318.5,-218"/>
+<text text-anchor="middle" x="290" y="-203.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_grid</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge2" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M839.49,-202.21C828.37,-233.65 793.84,-316.88 731.5,-345"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M729.5,-345C723.29,-347.8 502.49,-272.06 496,-270 437.39,-251.44 369.22,-230.23 328.13,-217.49"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="329.13,-214.14 318.54,-214.52 327.06,-220.82 329.13,-214.14"/>
+</g>
+<!-- module~rdb_ice_column -->
+<g id="module~~rdb_ice_init~~UsesGraph_node4" class="node">
+<title>module~rdb_ice_column</title>
+<g id="a_module~~rdb_ice_init~~UsesGraph_node4"><a xlink:href="../module/rdb_ice_column.html" xlink:title="rdb_ice_column">
+<polygon fill="#337ab7" stroke="#337ab7" points="641,-104 544,-104 544,-80 641,-80 641,-104"/>
+<text text-anchor="middle" x="592.5" y="-89.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_column</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_ice_column -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge3" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_ice_column</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M729.5,-113C704.76,-103.33 675.86,-98.1 651.07,-95.28"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="651.39,-91.79 641.09,-94.24 650.67,-98.75 651.39,-91.79"/>
+</g>
+<!-- module~rdb_ice_enthalpy -->
+<g id="module~~rdb_ice_init~~UsesGraph_node5" class="node">
+<title>module~rdb_ice_enthalpy</title>
+<g id="a_module~~rdb_ice_init~~UsesGraph_node5"><a xlink:href="../module/rdb_ice_enthalpy.html" xlink:title="rdb_ice_enthalpy">
+<polygon fill="#337ab7" stroke="#337ab7" points="341.5,-104 238.5,-104 238.5,-80 341.5,-80 341.5,-104"/>
+<text text-anchor="middle" x="290" y="-89.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_enthalpy</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_ice_enthalpy -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge4" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_ice_enthalpy</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M830.21,-177.76C810.36,-160.25 771.06,-128.46 731.5,-113"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M729.5,-113C693.37,-98.88 690.11,-82.3 653,-71 562.08,-43.32 534.83,-45.7 440,-52"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M438,-52C400.39,-54.02 359.14,-66.17 329.93,-76.55"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="328.7,-73.27 320.51,-79.99 331.1,-79.85 328.7,-73.27"/>
+</g>
+<!-- module~rdb_ice_state -->
+<g id="module~~rdb_ice_init~~UsesGraph_node6" class="node">
+<title>module~rdb_ice_state</title>
+<g id="a_module~~rdb_ice_init~~UsesGraph_node6"><a xlink:href="../module/rdb_ice_state.html" xlink:title="rdb_ice_state">
+<polygon fill="#337ab7" stroke="#337ab7" points="772,-202 689,-202 689,-178 772,-178 772,-202"/>
+<text text-anchor="middle" x="730.5" y="-187.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_state</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_ice_state -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge5" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_ice_state</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M807.75,-190C799.74,-190 791.09,-190 782.6,-190"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="782.36,-186.5 772.36,-190 782.36,-193.5 782.36,-186.5"/>
+</g>
+<!-- module~rdb_multilayer_state -->
+<g id="module~~rdb_ice_init~~UsesGraph_node7" class="node">
+<title>module~rdb_multilayer_state</title>
+<g id="a_module~~rdb_ice_init~~UsesGraph_node7"><a xlink:href="../module/rdb_multilayer_state.html" xlink:title="rdb_multilayer_state">
+<polygon fill="#337ab7" stroke="#337ab7" points="653,-357 532,-357 532,-333 653,-333 653,-357"/>
+<text text-anchor="middle" x="592.5" y="-342.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_multilayer_state</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_multilayer_state -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge6" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_multilayer_state</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M729.5,-345C709.02,-353.6 685.21,-355.88 663.3,-355.32"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="663.21,-351.81 653.06,-354.86 662.89,-358.81 663.21,-351.81"/>
+</g>
+<!-- module~rdb_ocean_metrics -->
+<g id="module~~rdb_ice_init~~UsesGraph_node8" class="node">
+<title>module~rdb_ocean_metrics</title>
+<g id="a_module~~rdb_ice_init~~UsesGraph_node8"><a xlink:href="../module/rdb_ocean_metrics.html" xlink:title="rdb_ocean_metrics">
+<polygon fill="#337ab7" stroke="#337ab7" points="496,-576 382,-576 382,-552 496,-552 496,-576"/>
+<text text-anchor="middle" x="439" y="-561.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_metrics</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_ocean_metrics -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge7" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_ocean_metrics</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M729.5,-345C714.31,-351.38 530.77,-493.46 464.05,-545.29"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="461.54,-542.81 455.79,-551.71 465.84,-548.34 461.54,-542.81"/>
+</g>
+<!-- pic_types -->
+<g id="module~~rdb_ice_init~~UsesGraph_node23" class="node">
+<title>pic_types</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="65,-374 3,-374 3,-350 65,-350 65,-374"/>
+<text text-anchor="middle" x="34" y="-359.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_types</text>
+</g>
+<!-- module~rdb_constants&#45;&gt;pic_types -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge8" class="edge">
+<title>module~rdb_constants&#45;&gt;pic_types</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M107.18,-362C96.85,-362 85.84,-362 75.61,-362"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="75.29,-358.5 65.29,-362 75.29,-365.5 75.29,-358.5"/>
+</g>
+<!-- module~rdb_grid&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge9" class="edge">
+<title>module~rdb_grid&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ffda00" stroke-dasharray="5,2" d="M261.43,-215.4C252.03,-219.5 241.91,-225 234,-232 199.13,-262.88 173.69,-312.09 161.03,-340.28"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="157.74,-339.07 156.95,-349.64 164.15,-341.87 157.74,-339.07"/>
+</g>
+<!-- module~rdb_ice_column&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge10" class="edge">
+<title>module~rdb_ice_column&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M552.97,-104.03C522.58,-113.06 478.96,-125.03 440,-132"/>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M438,-132C371.99,-143.8 350.93,-135.92 291,-166"/>
+</g>
+<!-- module~rdb_ice_column&#45;&gt;module~rdb_ice_enthalpy -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge11" class="edge">
+<title>module~rdb_ice_column&#45;&gt;module~rdb_ice_enthalpy</title>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M566.27,-80C536.6,-67.14 485.6,-48.97 440,-52"/>
+</g>
+<!-- module~rdb_ice_mass -->
+<g id="module~~rdb_ice_init~~UsesGraph_node12" class="node">
+<title>module~rdb_ice_mass</title>
+<g id="a_module~~rdb_ice_init~~UsesGraph_node12"><a xlink:href="../module/rdb_ice_mass.html" xlink:title="rdb_ice_mass">
+<polygon fill="#337ab7" stroke="#337ab7" points="481.5,-104 396.5,-104 396.5,-80 481.5,-80 481.5,-104"/>
+<text text-anchor="middle" x="439" y="-89.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_mass</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_column&#45;&gt;module~rdb_ice_mass -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge12" class="edge">
+<title>module~rdb_ice_column&#45;&gt;module~rdb_ice_mass</title>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M543.98,-92C527.45,-92 508.83,-92 491.96,-92"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="491.72,-88.5 481.72,-92 491.72,-95.5 491.72,-88.5"/>
+</g>
+<!-- module~rdb_ice_optics -->
+<g id="module~~rdb_ice_init~~UsesGraph_node13" class="node">
+<title>module~rdb_ice_optics</title>
+<g id="a_module~~rdb_ice_init~~UsesGraph_node13"><a xlink:href="../module/rdb_ice_optics.html" xlink:title="rdb_ice_optics">
+<polygon fill="#337ab7" stroke="#337ab7" points="483,-24 395,-24 395,0 483,0 483,-24"/>
+<text text-anchor="middle" x="439" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_optics</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_column&#45;&gt;module~rdb_ice_optics -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge13" class="edge">
+<title>module~rdb_ice_column&#45;&gt;module~rdb_ice_optics</title>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M571.27,-79.93C552.11,-68.66 522.43,-51.58 496,-38 489.72,-34.77 482.97,-31.49 476.4,-28.39"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="477.53,-25.05 466.99,-24 474.57,-31.4 477.53,-25.05"/>
+</g>
+<!-- module~rdb_ice_enthalpy&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge14" class="edge">
+<title>module~rdb_ice_enthalpy&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M275.24,-104.19C263.07,-115.57 245.51,-133.53 234,-152 194.57,-215.3 168.41,-300.7 157.61,-340.24"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="154.23,-339.34 155.03,-349.91 160.99,-341.15 154.23,-339.34"/>
+</g>
+<!-- module~rdb_ice_state&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge16" class="edge">
+<title>module~rdb_ice_state&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M438,-170C372.85,-164.74 349.41,-136.68 291,-166"/>
+</g>
+<!-- module~rdb_ice_state&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge17" class="edge">
+<title>module~rdb_ice_state&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M438,-170C399.81,-168.04 357.53,-179.95 328.15,-190.58"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="326.85,-187.34 318.71,-194.12 329.3,-193.89 326.85,-187.34"/>
+</g>
+<!-- module~rdb_ice_state&#45;&gt;module~rdb_ice_column -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge18" class="edge">
+<title>module~rdb_ice_state&#45;&gt;module~rdb_ice_column</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M712.82,-177.98C689.27,-161.01 646.08,-129.89 618.63,-110.11"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="620.47,-107.12 610.31,-104.12 616.38,-112.8 620.47,-107.12"/>
+</g>
+<!-- module~rdb_ice_state&#45;&gt;module~rdb_ice_enthalpy -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge19" class="edge">
+<title>module~rdb_ice_state&#45;&gt;module~rdb_ice_enthalpy</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M688.78,-186.73C632.77,-182.34 528.8,-174.56 440,-170"/>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M438,-170C388.89,-166.04 339.97,-132.74 312.79,-110.95"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="314.7,-107.98 304.75,-104.33 310.25,-113.39 314.7,-107.98"/>
+</g>
+<!-- iso_fortran_env -->
+<g id="module~~rdb_ice_init~~UsesGraph_node9" class="node">
+<title>iso_fortran_env</title>
+<g id="a_module~~rdb_ice_init~~UsesGraph_node9"><a xlink:href="http://fortranwiki.org/fortran/show/iso_fortran_env" xlink:title="iso_fortran_env">
+<polygon fill="#337ab7" stroke="#337ab7" points="198,-416 104,-416 104,-392 198,-392 198,-416"/>
+<text text-anchor="middle" x="151" y="-401.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">iso_fortran_env</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_state&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge15" class="edge">
+<title>module~rdb_ice_state&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M688.6,-193.69C576.15,-204.17 268.36,-235.32 234,-265 192.51,-300.84 234.13,-341.75 198,-383 197.25,-383.86 196.45,-384.68 195.62,-385.48"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="193.18,-382.94 187.35,-391.79 197.42,-388.51 193.18,-382.94"/>
+</g>
+<!-- module~rdb_mem_report -->
+<g id="module~~rdb_ice_init~~UsesGraph_node15" class="node">
+<title>module~rdb_mem_report</title>
+<g id="a_module~~rdb_ice_init~~UsesGraph_node15"><a xlink:href="../module/rdb_mem_report.html" xlink:title="rdb_mem_report">
+<polygon fill="#337ab7" stroke="#337ab7" points="340.5,-576 239.5,-576 239.5,-552 340.5,-552 340.5,-576"/>
+<text text-anchor="middle" x="290" y="-561.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_mem_report</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_state&#45;&gt;module~rdb_mem_report -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge20" class="edge">
+<title>module~rdb_ice_state&#45;&gt;module~rdb_mem_report</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M727.82,-202.38C722.81,-234.49 704.89,-321.08 653,-366 610.86,-402.48 576.56,-365.51 532,-399 507.45,-417.46 518.47,-437.06 496,-458 449.57,-501.26 382.13,-531.56 337.44,-548.38"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="336.16,-545.13 327.99,-551.87 338.58,-551.69 336.16,-545.13"/>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge22" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M565.81,-332.97C546.73,-324.22 519.97,-312.32 496,-303 471.5,-293.48 463.31,-296.14 440,-284"/>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M438,-284C363.69,-245.31 365.87,-128.41 291,-166"/>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge25" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M438,-284C398,-263.17 352.12,-238.74 322.41,-222.85"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="323.82,-219.64 313.36,-218 320.52,-225.81 323.82,-219.64"/>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge21" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M559.86,-357.02C550.63,-361.01 540.69,-365.77 532,-371 487.27,-397.9 486.35,-420 440,-444"/>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M438,-444C379.98,-474.04 356.17,-448.66 291,-444"/>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M289,-444C254.44,-441.53 216.76,-429.82 189.68,-419.71"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="190.8,-416.39 180.21,-416.07 188.29,-422.92 190.8,-416.39"/>
+</g>
+<!-- module~rdb_efp -->
+<g id="module~~rdb_ice_init~~UsesGraph_node10" class="node">
+<title>module~rdb_efp</title>
+<g id="a_module~~rdb_ice_init~~UsesGraph_node10"><a xlink:href="../module/rdb_efp.html" xlink:title="rdb_efp">
+<polygon fill="#337ab7" stroke="#337ab7" points="466,-336 412,-336 412,-312 466,-312 466,-336"/>
+<text text-anchor="middle" x="439" y="-321.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_efp</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_efp -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge23" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_efp</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M531.62,-336.7C513.03,-334.12 493.11,-331.36 476.6,-329.07"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="476.68,-325.55 466.3,-327.65 475.72,-332.49 476.68,-325.55"/>
+</g>
+<!-- module~rdb_error_ring -->
+<g id="module~~rdb_ice_init~~UsesGraph_node11" class="node">
+<title>module~rdb_error_ring</title>
+<g id="a_module~~rdb_ice_init~~UsesGraph_node11"><a xlink:href="../module/rdb_error_ring.html" xlink:title="rdb_error_ring">
+<polygon fill="#337ab7" stroke="#337ab7" points="195,-775 107,-775 107,-751 195,-751 195,-775"/>
+<text text-anchor="middle" x="151" y="-760.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_error_ring</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_error_ring -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge24" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_error_ring</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M588.82,-357.04C575.36,-414.26 509.16,-659.19 346,-740 302.1,-761.74 245.99,-766.27 205.42,-766.09"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="205.24,-762.59 195.19,-765.95 205.14,-769.59 205.24,-762.59"/>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_mem_report -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge26" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_mem_report</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M438,-444C413.95,-456.45 404.22,-452.52 382,-468 377.76,-470.96 334.39,-517.32 309.09,-544.52"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="306.42,-542.24 302.18,-551.95 311.55,-547.01 306.42,-542.24"/>
+</g>
+<!-- module~rdb_tracer -->
+<g id="module~~rdb_ice_init~~UsesGraph_node19" class="node">
+<title>module~rdb_tracer</title>
+<g id="a_module~~rdb_ice_init~~UsesGraph_node19"><a xlink:href="../module/rdb_tracer.html" xlink:title="rdb_tracer">
+<polygon fill="#337ab7" stroke="#337ab7" points="473,-378 405,-378 405,-354 473,-354 473,-378"/>
+<text text-anchor="middle" x="439" y="-363.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_tracer</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_tracer -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge27" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_tracer</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M531.62,-353.3C515.49,-355.54 498.36,-357.91 483.33,-359.99"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="482.72,-356.55 473.29,-361.38 483.68,-363.48 482.72,-356.55"/>
+</g>
+<!-- pic_logger -->
+<g id="module~~rdb_ice_init~~UsesGraph_node21" class="node">
+<title>pic_logger</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="68,-734 0,-734 0,-710 68,-710 68,-734"/>
+<text text-anchor="middle" x="34" y="-719.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_logger</text>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;pic_logger -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge28" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M289,-444C228.27,-439.65 208.49,-421.28 152,-444"/>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M150,-444C49.62,-484.38 36.39,-641.44 35,-699.91"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="31.5,-699.88 34.86,-709.92 38.5,-699.98 31.5,-699.88"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge30" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M387.16,-552C330.41,-538.18 245.04,-515.98 234,-505 193.92,-465.13 235.05,-425.7 198,-383 197.25,-382.14 196.46,-381.31 195.63,-380.51"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="197.44,-377.49 187.38,-374.18 193.18,-383.05 197.44,-377.49"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge32" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M429.99,-551.83C417.76,-532.68 394.53,-493.97 382,-458 353.29,-375.6 385.31,-342.9 346,-265 338.26,-249.66 325.31,-235.47 313.91,-224.86"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="316.15,-222.16 306.36,-218.11 311.48,-227.38 316.15,-222.16"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge29" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M416.82,-576.06C388.47,-590.74 336.48,-612.59 291,-604"/>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M289,-604C263.59,-599.2 251.31,-604.22 234,-585 186.67,-532.45 240.36,-486.63 198,-430 195.85,-427.12 193.27,-424.51 190.46,-422.16"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="192.23,-419.13 182.05,-416.21 188.19,-424.84 192.23,-419.13"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_error_ring -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge31" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_error_ring</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M289,-726C262.83,-739.32 231.34,-748.26 205.15,-754.01"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="204.09,-750.65 195.02,-756.13 205.53,-757.5 204.09,-750.65"/>
+</g>
+<!-- module~rdb_io_netcdf -->
+<g id="module~~rdb_ice_init~~UsesGraph_node14" class="node">
+<title>module~rdb_io_netcdf</title>
+<g id="a_module~~rdb_ice_init~~UsesGraph_node14"><a xlink:href="../module/rdb_io_netcdf.html" xlink:title="rdb_io_netcdf">
+<polygon fill="#337ab7" stroke="#337ab7" points="332.5,-698 247.5,-698 247.5,-674 332.5,-674 332.5,-698"/>
+<text text-anchor="middle" x="290" y="-683.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_io_netcdf</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_io_netcdf -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge33" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_io_netcdf</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M429.77,-576.28C415.19,-597.19 382.84,-639.88 346,-665 343.62,-666.62 341.11,-668.14 338.51,-669.55"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="336.88,-666.45 329.44,-673.99 339.96,-672.74 336.88,-666.45"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_mem_report -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge34" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_mem_report</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M381.59,-564C371.51,-564 360.97,-564 350.8,-564"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="350.78,-560.5 340.78,-564 350.78,-567.5 350.78,-560.5"/>
+</g>
+<!-- module~rdb_ocean_bipolar -->
+<g id="module~~rdb_ice_init~~UsesGraph_node16" class="node">
+<title>module~rdb_ocean_bipolar</title>
+<g id="a_module~~rdb_ice_init~~UsesGraph_node16"><a xlink:href="../module/rdb_ocean_bipolar.html" xlink:title="rdb_ocean_bipolar">
+<polygon fill="#337ab7" stroke="#337ab7" points="346,-496 234,-496 234,-472 346,-472 346,-496"/>
+<text text-anchor="middle" x="290" y="-481.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_bipolar</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_ocean_bipolar -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge35" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_ocean_bipolar</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M418.55,-551.9C400.12,-540.6 371.54,-523.5 346,-510 339.91,-506.78 333.36,-503.52 326.98,-500.44"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="328.35,-497.22 317.81,-496.09 325.34,-503.54 328.35,-497.22"/>
+</g>
+<!-- module~rdb_ocean_fold -->
+<g id="module~~rdb_ice_init~~UsesGraph_node17" class="node">
+<title>module~rdb_ocean_fold</title>
+<g id="a_module~~rdb_ice_init~~UsesGraph_node17"><a xlink:href="../module/rdb_ocean_fold.html" xlink:title="rdb_ocean_fold">
+<polygon fill="#337ab7" stroke="#337ab7" points="337,-416 243,-416 243,-392 337,-392 337,-416"/>
+<text text-anchor="middle" x="290" y="-401.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_fold</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_ocean_fold -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge36" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_ocean_fold</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M432.34,-551.67C419.99,-525.96 388.33,-466.04 346,-430 342.03,-426.62 337.55,-423.58 332.9,-420.87"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="334.31,-417.65 323.83,-416.06 331.03,-423.84 334.31,-417.65"/>
+</g>
+<!-- module~rdb_ocean_status -->
+<g id="module~~rdb_ice_init~~UsesGraph_node18" class="node">
+<title>module~rdb_ocean_status</title>
+<g id="a_module~~rdb_ice_init~~UsesGraph_node18"><a xlink:href="../module/rdb_ocean_status.html" xlink:title="rdb_ocean_status">
+<polygon fill="#337ab7" stroke="#337ab7" points="343,-656 237,-656 237,-632 343,-632 343,-656"/>
+<text text-anchor="middle" x="290" y="-641.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_status</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_ocean_status -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge37" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_ocean_status</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M418.55,-576.1C400.12,-587.4 371.54,-604.5 346,-618 339.91,-621.22 333.36,-624.48 326.98,-627.56"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="325.34,-624.46 317.81,-631.91 328.35,-630.78 325.34,-624.46"/>
+</g>
+<!-- netcdf -->
+<g id="module~~rdb_ice_init~~UsesGraph_node20" class="node">
+<title>netcdf</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="178,-733 124,-733 124,-709 178,-709 178,-733"/>
+<text text-anchor="middle" x="151" y="-718.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">netcdf</text>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;netcdf -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge38" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;netcdf</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M433.38,-576.3C422.47,-603.76 392.43,-670.53 346,-707 325.66,-722.98 314.05,-714.27 291,-726"/>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M289,-726C257.74,-741.92 217.06,-737.85 188.17,-731.53"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="188.64,-728.04 178.1,-729.13 187.02,-734.85 188.64,-728.04"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;pic_logger -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge39" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M435.12,-576.35C426.99,-608.4 400.82,-694.84 346,-740 261.62,-809.51 206.08,-823.12 104,-784 82.25,-775.66 63.06,-756.96 50.47,-742.26"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="52.9,-739.7 43.85,-734.18 47.48,-744.14 52.9,-739.7"/>
+</g>
+<!-- pic_strings -->
+<g id="module~~rdb_ice_init~~UsesGraph_node22" class="node">
+<title>pic_strings</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="185.5,-611 116.5,-611 116.5,-587 185.5,-587 185.5,-611"/>
+<text text-anchor="middle" x="151" y="-596.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_strings</text>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;pic_strings -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge40" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;pic_strings</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M289,-604C258.24,-598.19 222.92,-597.03 195.85,-597.28"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="195.47,-593.78 185.53,-597.44 195.58,-600.78 195.47,-593.78"/>
+</g>
+<!-- module~rdb_efp&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge42" class="edge">
+<title>module~rdb_efp&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#ff6600" stroke-dasharray="5,2" d="M411.82,-322.42C371.62,-321.04 293.11,-322.58 234,-350 214.31,-359.13 216.09,-371.01 198,-383 195.74,-384.49 193.37,-385.93 190.93,-387.31"/>
+<polygon fill="#ff6600" stroke="#ff6600" points="189.19,-384.27 181.94,-391.99 192.42,-390.48 189.19,-384.27"/>
+</g>
+<!-- ieee_arithmetic -->
+<g id="module~~rdb_ice_init~~UsesGraph_node24" class="node">
+<title>ieee_arithmetic</title>
+<g id="a_module~~rdb_ice_init~~UsesGraph_node24"><a xlink:href="http://fortranwiki.org/fortran/show/ieee_arithmetic" xlink:title="ieee_arithmetic">
+<polygon fill="#337ab7" stroke="#337ab7" points="338,-298 242,-298 242,-274 338,-274 338,-298"/>
+<text text-anchor="middle" x="290" y="-283.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ieee_arithmetic</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_efp&#45;&gt;ieee_arithmetic -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge41" class="edge">
+<title>module~rdb_efp&#45;&gt;ieee_arithmetic</title>
+<path fill="none" stroke="#ff6600" stroke-dasharray="5,2" d="M411.72,-317.21C393.89,-312.6 369.62,-306.32 347.53,-300.61"/>
+<polygon fill="#ff6600" stroke="#ff6600" points="348.12,-297.15 337.56,-298.04 346.36,-303.93 348.12,-297.15"/>
+</g>
+<!-- module~rdb_error_ring&#45;&gt;pic_logger -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge43" class="edge">
+<title>module~rdb_error_ring&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#ffcc00" stroke-dasharray="5,2" d="M116.12,-750.92C104.08,-746.63 90.37,-741.74 77.69,-737.22"/>
+<polygon fill="#ffcc00" stroke="#ffcc00" points="78.84,-733.91 68.24,-733.85 76.49,-740.51 78.84,-733.91"/>
+</g>
+<!-- module~rdb_ice_mass&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge44" class="edge">
+<title>module~rdb_ice_mass&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M411.38,-104.03C402.04,-108.33 391.51,-113.29 382,-118 341.03,-138.3 331.87,-145.49 291,-166"/>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M289,-166C265.89,-177.6 253.19,-167.66 234,-185 186.89,-227.57 164.8,-302.73 156.35,-339.9"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="152.92,-339.22 154.24,-349.73 159.76,-340.69 152.92,-339.22"/>
+</g>
+<!-- module~rdb_ice_mass&#45;&gt;module~rdb_ice_enthalpy -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge45" class="edge">
+<title>module~rdb_ice_mass&#45;&gt;module~rdb_ice_enthalpy</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M396.27,-92C382.48,-92 366.83,-92 351.91,-92"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="351.72,-88.5 341.72,-92 351.72,-95.5 351.72,-88.5"/>
+</g>
+<!-- module~rdb_ice_optics&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge46" class="edge">
+<title>module~rdb_ice_optics&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#65ff00" stroke-dasharray="5,2" d="M394.83,-12.73C348.78,-15.88 276.74,-27.97 234,-71 158.9,-146.62 151.34,-285.36 151.43,-339.51"/>
+<polygon fill="#65ff00" stroke="#65ff00" points="147.94,-339.77 151.55,-349.73 154.94,-339.69 147.94,-339.77"/>
+</g>
+<!-- module~rdb_ice_optics&#45;&gt;module~rdb_ice_enthalpy -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge47" class="edge">
+<title>module~rdb_ice_optics&#45;&gt;module~rdb_ice_enthalpy</title>
+<path fill="none" stroke="#65ff00" stroke-dasharray="5,2" d="M410.67,-24.02C401.47,-28.24 391.2,-33.15 382,-38 360.41,-49.38 336.72,-63.49 318.93,-74.43"/>
+<polygon fill="#65ff00" stroke="#65ff00" points="316.86,-71.6 310.2,-79.84 320.55,-77.55 316.86,-71.6"/>
+</g>
+<!-- module~rdb_io_netcdf&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge50" class="edge">
+<title>module~rdb_io_netcdf&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M247.5,-675.96C242.33,-673.16 237.6,-669.58 234,-665 155.88,-565.69 272.92,-484.74 198,-383 197.43,-382.23 196.83,-381.48 196.19,-380.76"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="198.23,-377.9 188.36,-374.04 193.67,-383.21 198.23,-377.9"/>
+</g>
+<!-- module~rdb_io_netcdf&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge49" class="edge">
+<title>module~rdb_io_netcdf&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M247.33,-675.73C242.25,-672.96 237.59,-669.45 234,-665 167.64,-582.78 258.03,-516.96 198,-430 196.07,-427.21 193.74,-424.68 191.16,-422.39"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="192.97,-419.38 182.84,-416.27 188.82,-425.02 192.97,-419.38"/>
+</g>
+<!-- module~rdb_io_netcdf&#45;&gt;module~rdb_error_ring -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge51" class="edge">
+<title>module~rdb_io_netcdf&#45;&gt;module~rdb_error_ring</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M260,-698.03C251.39,-702.05 242.1,-706.83 234,-712 216.44,-723.21 215.63,-730.91 198,-742 195.71,-743.44 193.31,-744.84 190.85,-746.18"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="189.12,-743.13 181.81,-750.8 192.31,-749.37 189.12,-743.13"/>
+</g>
+<!-- module~rdb_io_netcdf&#45;&gt;netcdf -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge52" class="edge">
+<title>module~rdb_io_netcdf&#45;&gt;netcdf</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M247.15,-696.69C228.25,-701.52 206.14,-707.17 188,-711.8"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="186.92,-708.47 178.1,-714.33 188.65,-715.25 186.92,-708.47"/>
+</g>
+<!-- module~rdb_io_netcdf&#45;&gt;pic_logger -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge53" class="edge">
+<title>module~rdb_io_netcdf&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M247.49,-686.39C209.75,-687.39 152.69,-690.53 104,-700 95.21,-701.71 85.97,-704.17 77.22,-706.83"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="76.06,-703.53 67.58,-709.89 78.18,-710.2 76.06,-703.53"/>
+</g>
+<!-- module~rdb_io_netcdf&#45;&gt;pic_strings -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge54" class="edge">
+<title>module~rdb_io_netcdf&#45;&gt;pic_strings</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M249.5,-673.89C244.04,-671.38 238.71,-668.43 234,-665 213.31,-649.9 218.2,-635.75 198,-620 196.26,-618.64 194.41,-617.35 192.5,-616.11"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="194.23,-613.07 183.82,-611.14 190.75,-619.15 194.23,-613.07"/>
+</g>
+<!-- iso_c_binding -->
+<g id="module~~rdb_ice_init~~UsesGraph_node25" class="node">
+<title>iso_c_binding</title>
+<g id="a_module~~rdb_ice_init~~UsesGraph_node25"><a xlink:href="http://fortranwiki.org/fortran/show/iso_c_binding" xlink:title="iso_c_binding">
+<polygon fill="#337ab7" stroke="#337ab7" points="193,-653 109,-653 109,-629 193,-629 193,-653"/>
+<text text-anchor="middle" x="151" y="-638.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">iso_c_binding</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_io_netcdf&#45;&gt;iso_c_binding -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge48" class="edge">
+<title>module~rdb_io_netcdf&#45;&gt;iso_c_binding</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M252.29,-673.94C235.7,-668.49 215.92,-662 198.33,-656.22"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="199.41,-652.89 188.81,-653.09 197.22,-659.54 199.41,-652.89"/>
+</g>
+<!-- module~rdb_mem_report&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge56" class="edge">
+<title>module~rdb_mem_report&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M251.44,-551.88C244.86,-548.31 238.64,-543.75 234,-538 189.6,-482.95 242.76,-437.75 198,-383 197.28,-382.12 196.51,-381.27 195.7,-380.45"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="197.59,-377.48 187.57,-374.02 193.24,-382.97 197.59,-377.48"/>
+</g>
+<!-- module~rdb_mem_report&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge55" class="edge">
+<title>module~rdb_mem_report&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M252.71,-551.98C245.79,-548.36 239.12,-543.77 234,-538 200.43,-500.14 230.17,-469.05 198,-430 195.58,-427.07 192.74,-424.4 189.68,-421.99"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="191.43,-418.95 181.19,-416.22 187.49,-424.74 191.43,-418.95"/>
+</g>
+<!-- module~rdb_mem_report&#45;&gt;pic_logger -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge57" class="edge">
+<title>module~rdb_mem_report&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M257.75,-551.94C249.63,-548.1 241.16,-543.42 234,-538 189.78,-504.56 203.43,-423.31 152,-444"/>
+</g>
+<!-- module~rdb_mem_report&#45;&gt;pic_strings -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge58" class="edge">
+<title>module~rdb_mem_report&#45;&gt;pic_strings</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M241.85,-576.05C226.88,-579.87 210.41,-584.08 195.69,-587.84"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="194.65,-584.49 185.83,-590.36 196.38,-591.27 194.65,-584.49"/>
+</g>
+<!-- module~rdb_ocean_bipolar&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge59" class="edge">
+<title>module~rdb_ocean_bipolar&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00ffcb" stroke-dasharray="5,2" d="M254.11,-471.91C246.85,-468.25 239.69,-463.66 234,-458 207.78,-431.93 224.4,-408.89 198,-383 196.9,-381.92 195.74,-380.9 194.53,-379.92"/>
+<polygon fill="#00ffcb" stroke="#00ffcb" points="196.18,-376.81 185.93,-374.12 192.27,-382.61 196.18,-376.81"/>
+</g>
+<!-- module~rdb_ocean_fold&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge60" class="edge">
+<title>module~rdb_ocean_fold&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00cbff" stroke-dasharray="5,2" d="M249.74,-391.96C234.55,-387.31 217,-381.93 200.99,-377.02"/>
+<polygon fill="#00cbff" stroke="#00cbff" points="201.85,-373.62 191.26,-374.04 199.8,-380.31 201.85,-373.62"/>
+</g>
+<!-- module~rdb_tracer&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge62" class="edge">
+<title>module~rdb_tracer&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M404.98,-364.14C375.17,-362.8 330.1,-361.6 291,-364"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M289,-364C261.25,-365.7 230.27,-365.43 204.81,-364.64"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="204.73,-361.13 194.62,-364.28 204.49,-368.13 204.73,-361.13"/>
+</g>
+<!-- module~rdb_tracer&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge63" class="edge">
+<title>module~rdb_tracer&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M404.75,-358.38C396.58,-355.28 388.36,-350.97 382,-345 353.56,-318.33 367.58,-297.47 346,-265 336.3,-250.41 322.94,-235.98 311.82,-225.05"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="314.19,-222.48 304.55,-218.08 309.35,-227.53 314.19,-222.48"/>
+</g>
+<!-- module~rdb_tracer&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge61" class="edge">
+<title>module~rdb_tracer&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M289,-364C254.2,-366.13 216.26,-378.01 189.15,-388.27"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="187.73,-385.07 179.68,-391.96 190.27,-391.59 187.73,-385.07"/>
+</g>
+<!-- module~rdb_tracer&#45;&gt;module~rdb_mem_report -->
+<g id="module~~rdb_ice_init~~UsesGraph_edge64" class="edge">
+<title>module~rdb_tracer&#45;&gt;module~rdb_mem_report</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M425.31,-378.4C413.17,-390.71 394.85,-410.53 382,-430 361.64,-460.86 366.84,-474.46 346,-505 336.12,-519.47 322.76,-533.89 311.68,-544.85"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="309.2,-542.38 304.45,-551.85 314.07,-547.41 309.2,-542.38"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panmodulerdb_ice_initUsesGraph = svgPanZoom('#modulerdb_ice_initUsesGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsesGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsesGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="518pt" height="32pt"
+ viewBox="0.00 0.00 517.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 513.5,-28 513.5,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24 0,-24 0,0 54,0 54,-24"/>
+<text text-anchor="middle" x="27" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="145.5,-24 72.5,-24 72.5,0 145.5,0 145.5,-24"/>
+<text text-anchor="middle" x="109" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="234,-24 164,-24 164,0 234,0 234,-24"/>
+<text text-anchor="middle" x="199" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="310,-24 252,-24 252,0 310,0 310,-24"/>
+<text text-anchor="middle" x="281" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="386,-24 328,-24 328,0 386,0 386,-24"/>
+<text text-anchor="middle" x="357" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="509.5,-24 404.5,-24 404.5,0 509.5,0 509.5,-24"/>
+<text text-anchor="middle" x="457" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+          <div class="card">
+      <h3 class="card-header card-title bg-light">Used by</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: module~~rdb_ice_init~~UsedByGraph Pages: 1 -->
+<svg id="modulerdb_ice_initUsedByGraph" width="641pt" height="290pt"
+ viewBox="0.00 0.00 641.00 289.66" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~rdb_ice_init~~UsedByGraph" class="graph" transform="scale(0.33 0.33) rotate(0) translate(4 868.14)">
+<title>module~~rdb_ice_init~~UsedByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-868.14 1926,-868.14 1926,4 -4,4"/>
+<!-- module~rdb_ice_init -->
+<g id="module~~rdb_ice_init~~UsedByGraph_node1" class="node">
+<title>module~rdb_ice_init</title>
+<polygon fill="none" stroke="black" points="73,-797 0,-797 0,-773 73,-773 73,-797"/>
+<text text-anchor="middle" x="36.5" y="-782.6" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ice_init</text>
+</g>
+<!-- module~rdb_config -->
+<g id="module~~rdb_ice_init~~UsedByGraph_node2" class="node">
+<title>module~rdb_config</title>
+<g id="a_module~~rdb_ice_init~~UsedByGraph_node2"><a xlink:href="../module/rdb_config.html" xlink:title="rdb_config">
+<polygon fill="#337ab7" stroke="#337ab7" points="178,-738 109,-738 109,-714 178,-714 178,-738"/>
+<text text-anchor="middle" x="143.5" y="-723.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_config</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_config&#45;&gt;module~rdb_ice_init -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge1" class="edge">
+<title>module~rdb_config&#45;&gt;module~rdb_ice_init</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M121,-738.08C105.71,-746.67 84.96,-758.33 67.97,-767.88"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="65.98,-764.98 58.97,-772.93 69.41,-771.09 65.98,-764.98"/>
+</g>
+<!-- module~rdb_ocean_engine -->
+<g id="module~~rdb_ice_init~~UsedByGraph_node3" class="node">
+<title>module~rdb_ocean_engine</title>
+<g id="a_module~~rdb_ice_init~~UsedByGraph_node3"><a xlink:href="../module/rdb_ocean_engine.html" xlink:title="rdb_ocean_engine">
+<polygon fill="#337ab7" stroke="#337ab7" points="1686,-644 1575,-644 1575,-620 1686,-620 1686,-644"/>
+<text text-anchor="middle" x="1630.5" y="-629.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ice_init -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge2" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ice_init</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1618.91,-644.01C1580.62,-686.04 1444.01,-824 1300.5,-824 1300.5,-824 1300.5,-824 271,-824 204.95,-824 129.81,-808.63 83.02,-797.19"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="83.74,-793.76 73.19,-794.74 82.05,-800.55 83.74,-793.76"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_config -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge10" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_config</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1128,-672C1076.09,-671.62 1069.81,-703.35 1019,-714 694.48,-782.02 604.57,-708.13 273,-706"/>
+</g>
+<!-- module~rdb_decomp -->
+<g id="module~~rdb_ice_init~~UsedByGraph_node5" class="node">
+<title>module~rdb_decomp</title>
+<g id="a_module~~rdb_ice_init~~UsedByGraph_node5"><a xlink:href="../module/rdb_decomp.html" xlink:title="rdb_decomp">
+<polygon fill="#337ab7" stroke="#337ab7" points="311.5,-542 232.5,-542 232.5,-518 311.5,-518 311.5,-542"/>
+<text text-anchor="middle" x="272" y="-527.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_decomp</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_decomp -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge20" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_decomp</title>
+<path fill="none" stroke="#ff7f00" stroke-dasharray="5,2" d="M1128,-552C824.67,-503.3 453.17,-518.95 321.82,-526.74"/>
+<polygon fill="#ff7f00" stroke="#ff7f00" points="321.45,-523.26 311.68,-527.36 321.88,-530.25 321.45,-523.26"/>
+</g>
+<!-- module~rdb_ocean_data_forcing -->
+<g id="module~~rdb_ice_init~~UsedByGraph_node9" class="node">
+<title>module~rdb_ocean_data_forcing</title>
+<g id="a_module~~rdb_ice_init~~UsedByGraph_node9"><a xlink:href="../module/rdb_ocean_data_forcing.html" xlink:title="rdb_ocean_data_forcing">
+<polygon fill="#337ab7" stroke="#337ab7" points="1019,-642 879,-642 879,-618 1019,-618 1019,-642"/>
+<text text-anchor="middle" x="949" y="-627.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_data_forcing</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_data_forcing -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge26" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_data_forcing</title>
+<path fill="none" stroke="#00ff7f" stroke-dasharray="5,2" d="M1576.66,-644.07C1545.11,-651.54 1504.33,-661.65 1468.5,-672"/>
+<path fill="none" stroke="#00ff7f" stroke-dasharray="5,2" d="M1466.5,-672C1322.82,-713.5 1279.5,-667.85 1130,-672"/>
+<path fill="none" stroke="#00ff7f" stroke-dasharray="5,2" d="M1128,-672C1080.11,-671.65 1026.87,-657.13 991.2,-645.26"/>
+<polygon fill="#00ff7f" stroke="#00ff7f" points="992.22,-641.91 981.63,-642 989.96,-648.54 992.22,-641.91"/>
+</g>
+<!-- module~rdb_ocean_data_input -->
+<g id="module~~rdb_ice_init~~UsedByGraph_node10" class="node">
+<title>module~rdb_ocean_data_input</title>
+<g id="a_module~~rdb_ice_init~~UsedByGraph_node10"><a xlink:href="../module/rdb_ocean_data_input.html" xlink:title="rdb_ocean_data_input">
+<polygon fill="#337ab7" stroke="#337ab7" points="835.5,-680 705.5,-680 705.5,-656 835.5,-656 835.5,-680"/>
+<text text-anchor="middle" x="770.5" y="-665.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_data_input</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_data_input -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge29" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_data_input</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1128,-672C1048.89,-671.42 1028.73,-662.23 950,-670"/>
+</g>
+<!-- module~rdb_ocean_setup -->
+<g id="module~~rdb_ice_init~~UsedByGraph_node11" class="node">
+<title>module~rdb_ocean_setup</title>
+<g id="a_module~~rdb_ice_init~~UsedByGraph_node11"><a xlink:href="../module/rdb_ocean_setup.html" xlink:title="rdb_ocean_setup">
+<polygon fill="#337ab7" stroke="#337ab7" points="1351,-368 1248,-368 1248,-344 1351,-344 1351,-368"/>
+<text text-anchor="middle" x="1299.5" y="-353.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge31" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#007fff" stroke-dasharray="5,2" d="M1466.5,-354C1432.43,-332.06 1385.7,-334.82 1350.5,-341.77"/>
+<polygon fill="#007fff" stroke="#007fff" points="1349.48,-338.41 1340.44,-343.94 1350.95,-345.26 1349.48,-338.41"/>
+</g>
+<!-- module~rdb_ocean_stability_audit -->
+<g id="module~~rdb_ice_init~~UsedByGraph_node12" class="node">
+<title>module~rdb_ocean_stability_audit</title>
+<g id="a_module~~rdb_ice_init~~UsedByGraph_node12"><a xlink:href="../module/rdb_ocean_stability_audit.html" xlink:title="rdb_ocean_stability_audit">
+<polygon fill="#337ab7" stroke="#337ab7" points="1203,-168 1055,-168 1055,-144 1203,-144 1203,-168"/>
+<text text-anchor="middle" x="1129" y="-153.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_stability_audit</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_stability_audit -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge32" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_stability_audit</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1626.67,-619.79C1615.6,-575.14 1570.72,-419.83 1468.5,-354"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1466.5,-354C1422.21,-325.48 1408.18,-323.28 1360,-302 1307.08,-278.62 1281.63,-293.11 1239,-254 1212.64,-229.81 1229.79,-205.72 1203,-182 1198.91,-178.38 1194.28,-175.25 1189.38,-172.55"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="1190.86,-169.38 1180.34,-168.14 1187.79,-175.67 1190.86,-169.38"/>
+</g>
+<!-- module~rdb_ocean_state -->
+<g id="module~~rdb_ice_init~~UsedByGraph_node13" class="node">
+<title>module~rdb_ocean_state</title>
+<g id="a_module~~rdb_ice_init~~UsedByGraph_node13"><a xlink:href="../module/rdb_ocean_state.html" xlink:title="rdb_ocean_state">
+<polygon fill="#337ab7" stroke="#337ab7" points="1179,-604 1079,-604 1079,-580 1179,-580 1179,-604"/>
+<text text-anchor="middle" x="1129" y="-589.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge37" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1298.5,-554C1256.57,-556.21 1210.1,-567.37 1176.6,-577.03"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1175.24,-573.78 1166.64,-579.96 1177.22,-580.49 1175.24,-573.78"/>
+</g>
+<!-- module~rdb_state -->
+<g id="module~~rdb_ice_init~~UsedByGraph_node15" class="node">
+<title>module~rdb_state</title>
+<g id="a_module~~rdb_ice_init~~UsedByGraph_node15"><a xlink:href="../module/rdb_state.html" xlink:title="rdb_state">
+<polygon fill="#337ab7" stroke="#337ab7" points="459,-796 397,-796 397,-772 459,-772 459,-796"/>
+<text text-anchor="middle" x="428" y="-781.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_state</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_state -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge40" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_state</title>
+<path fill="none" stroke="#ff007f" stroke-dasharray="5,2" d="M1466.5,-672C1315.78,-718.14 1287.62,-784 1130,-784 1130,-784 1130,-784 769.5,-784 660.87,-784 532.73,-784 469.08,-784"/>
+<polygon fill="#ff007f" stroke="#ff007f" points="469.06,-780.5 459.06,-784 469.06,-787.5 469.06,-780.5"/>
+</g>
+<!-- module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_ice_init~~UsedByGraph_node17" class="node">
+<title>module~rdb_ocean_diag_derived</title>
+<g id="a_module~~rdb_ice_init~~UsedByGraph_node17"><a xlink:href="../module/rdb_ocean_diag_derived.html" xlink:title="rdb_ocean_diag_derived">
+<polygon fill="#337ab7" stroke="#337ab7" points="1539,-644 1396,-644 1396,-620 1539,-620 1539,-644"/>
+<text text-anchor="middle" x="1467.5" y="-629.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_derived</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge47" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M1574.99,-632C1566.73,-632 1558.06,-632 1549.38,-632"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="1549.22,-628.5 1539.22,-632 1549.22,-635.5 1549.22,-628.5"/>
+</g>
+<!-- module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_ice_init~~UsedByGraph_node18" class="node">
+<title>module~rdb_ocean_diag_fills</title>
+<g id="a_module~~rdb_ice_init~~UsedByGraph_node18"><a xlink:href="../module/rdb_ocean_diag_fills.html" xlink:title="rdb_ocean_diag_fills">
+<polygon fill="#337ab7" stroke="#337ab7" points="1360,-644 1239,-644 1239,-620 1360,-620 1360,-644"/>
+<text text-anchor="middle" x="1299.5" y="-629.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_fills</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge50" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M1466.5,-554C1410.08,-547.82 1351.75,-588.06 1321.53,-613.07"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="1319.12,-610.53 1313.77,-619.67 1323.65,-615.86 1319.12,-610.53"/>
+</g>
+<!-- module~rdb_ocean_halo -->
+<g id="module~~rdb_ice_init~~UsedByGraph_node19" class="node">
+<title>module~rdb_ocean_halo</title>
+<g id="a_module~~rdb_ice_init~~UsedByGraph_node19"><a xlink:href="../module/rdb_ocean_halo.html" xlink:title="rdb_ocean_halo">
+<polygon fill="#337ab7" stroke="#337ab7" points="476.5,-410 379.5,-410 379.5,-386 476.5,-386 476.5,-410"/>
+<text text-anchor="middle" x="428" y="-395.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_halo</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_halo -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge55" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_halo</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M1613.74,-619.76C1586.16,-599.44 1526.54,-560.36 1468.5,-554"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M1466.5,-554C1393.16,-545.97 1374.18,-550.12 1300.5,-554"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M1298.5,-554C1223.71,-557.94 1203.89,-564.25 1130,-552"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M1128,-552C1063.44,-541.3 1078.72,-479.77 1019,-453 888.09,-394.31 839.78,-440.91 698,-419 651.83,-411.86 641.72,-398 595,-398"/>
+</g>
+<!-- module~rdb_ocean_dyn -->
+<g id="module~~rdb_ice_init~~UsedByGraph_node26" class="node">
+<title>module~rdb_ocean_dyn</title>
+<g id="a_module~~rdb_ice_init~~UsedByGraph_node26"><a xlink:href="../module/rdb_ocean_dyn.html" xlink:title="rdb_ocean_dyn">
+<polygon fill="#337ab7" stroke="#337ab7" points="996,-330 902,-330 902,-306 996,-306 996,-330"/>
+<text text-anchor="middle" x="949" y="-315.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_dyn</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge70" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M1466.5,-354C1434.68,-333.51 1337.01,-325.95 1300.5,-316"/>
+</g>
+<!-- module~rdb_ocean_halo_state -->
+<g id="module~~rdb_ice_init~~UsedByGraph_node27" class="node">
+<title>module~rdb_ocean_halo_state</title>
+<g id="a_module~~rdb_ice_init~~UsedByGraph_node27"><a xlink:href="../module/rdb_ocean_halo_state.html" xlink:title="rdb_ocean_halo_state">
+<polygon fill="#337ab7" stroke="#337ab7" points="835,-410 706,-410 706,-386 835,-386 835,-410"/>
+<text text-anchor="middle" x="770.5" y="-395.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_halo_state</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_halo_state -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge75" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_halo_state</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1466.5,-354C1425.79,-327.78 1408.05,-371 1360,-377 1176.04,-399.96 957.41,-400.93 845.53,-399.54"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="845.41,-396.04 835.37,-399.41 845.32,-403.04 845.41,-396.04"/>
+</g>
+<!-- module~rdb_config_schema -->
+<g id="module~~rdb_ice_init~~UsedByGraph_node4" class="node">
+<title>module~rdb_config_schema</title>
+<g id="a_module~~rdb_ice_init~~UsedByGraph_node4"><a xlink:href="../module/rdb_config_schema.html" xlink:title="rdb_config_schema">
+<polygon fill="#337ab7" stroke="#337ab7" points="330,-758 214,-758 214,-734 330,-734 330,-758"/>
+<text text-anchor="middle" x="272" y="-743.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_config_schema</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_config_schema&#45;&gt;module~rdb_config -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge3" class="edge">
+<title>module~rdb_config_schema&#45;&gt;module~rdb_config</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M213.67,-736.94C205.12,-735.58 196.43,-734.21 188.22,-732.91"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="188.55,-729.42 178.13,-731.32 187.46,-736.34 188.55,-729.42"/>
+</g>
+<!-- module~rdb_decomp&#45;&gt;module~rdb_config -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge4" class="edge">
+<title>module~rdb_decomp&#45;&gt;module~rdb_config</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M263.09,-542.26C242.01,-574.92 184.33,-664.28 157.97,-705.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="154.89,-703.44 152.41,-713.74 160.77,-707.24 154.89,-703.44"/>
+</g>
+<!-- module~rdb_driver -->
+<g id="module~~rdb_ice_init~~UsedByGraph_node6" class="node">
+<title>module~rdb_driver</title>
+<g id="a_module~~rdb_ice_init~~UsedByGraph_node6"><a xlink:href="../module/rdb_driver.html" xlink:title="rdb_driver">
+<polygon fill="#337ab7" stroke="#337ab7" points="1792,-528 1725,-528 1725,-504 1792,-504 1792,-528"/>
+<text text-anchor="middle" x="1758.5" y="-513.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_config -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge5" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_config</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1755.19,-503.73C1749.12,-474.94 1730.1,-402.53 1686,-363 1552.08,-242.97 1477.62,-271.2 1300.5,-240"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1298.5,-240C1237.35,-224.5 1259.7,-162.66 1203,-135 1101.65,-85.56 1062.11,-128.1 950,-116"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M948,-116C894.02,-109.11 893.67,-72.86 843,-53 812.77,-41.15 803.61,-42.84 771.5,-38"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M769.5,-38C692.81,-26.44 672.56,-38 595,-38"/>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge16" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1744.02,-528.41C1722.04,-548.65 1678.34,-588.88 1652.34,-612.81"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1649.87,-610.33 1644.89,-619.68 1654.61,-615.48 1649.87,-610.33"/>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge33" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1724.73,-511.23C1640.98,-500.35 1413.41,-479.11 1239,-540 1220.37,-546.5 1220.47,-556.82 1203,-566 1195.72,-569.83 1187.75,-573.31 1179.84,-576.39"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1178.42,-573.18 1170.27,-579.95 1180.86,-579.75 1178.42,-573.18"/>
+</g>
+<!-- module~rdb_halo -->
+<g id="module~~rdb_ice_init~~UsedByGraph_node16" class="node">
+<title>module~rdb_halo</title>
+<g id="a_module~~rdb_ice_init~~UsedByGraph_node16"><a xlink:href="../module/rdb_halo.html" xlink:title="rdb_halo">
+<polygon fill="#337ab7" stroke="#337ab7" points="623.5,-90 564.5,-90 564.5,-66 623.5,-66 623.5,-90"/>
+<text text-anchor="middle" x="594" y="-75.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_halo</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_halo -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge41" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_halo</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M769.5,-38C743.62,-34.1 676.29,-52.64 633.24,-65.78"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="632.17,-62.45 623.65,-68.74 634.23,-69.14 632.17,-62.45"/>
+</g>
+<!-- module~rdb_ocean_console_stats -->
+<g id="module~~rdb_ice_init~~UsedByGraph_node25" class="node">
+<title>module~rdb_ocean_console_stats</title>
+<g id="a_module~~rdb_ice_init~~UsedByGraph_node25"><a xlink:href="../module/rdb_ocean_console_stats.html" xlink:title="rdb_ocean_console_stats">
+<polygon fill="#337ab7" stroke="#337ab7" points="843,-128 698,-128 698,-104 843,-104 843,-128"/>
+<text text-anchor="middle" x="770.5" y="-113.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_console_stats</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_console_stats -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge66" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_console_stats</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M948,-116C917.34,-112.69 883.51,-111.98 853.74,-112.34"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="853.34,-108.85 843.39,-112.51 853.45,-115.85 853.34,-108.85"/>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge68" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M1298.5,-240C1224.75,-227.01 1204.55,-232.91 1130,-240"/>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M1128,-240C1070.28,-245.49 1009.85,-278.76 976.35,-300.03"/>
+<polygon fill="#003fff" stroke="#003fff" points="974.12,-297.31 967.64,-305.68 977.93,-303.18 974.12,-297.31"/>
+</g>
+<!-- module~rdb_handle -->
+<g id="module~~rdb_ice_init~~UsedByGraph_node7" class="node">
+<title>module~rdb_handle</title>
+<g id="a_module~~rdb_ice_init~~UsedByGraph_node7"><a xlink:href="../module/rdb_handle.html" xlink:title="rdb_handle">
+<polygon fill="#337ab7" stroke="#337ab7" points="1795,-684 1722,-684 1722,-660 1795,-660 1795,-684"/>
+<text text-anchor="middle" x="1758.5" y="-669.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_handle&#45;&gt;module~rdb_config -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge6" class="edge">
+<title>module~rdb_handle&#45;&gt;module~rdb_config</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1466.5,-862C1316.95,-861.16 1279.56,-862 1130,-862 1130,-862 1130,-862 593,-862 446.82,-862 415.91,-816.76 273,-786"/>
+</g>
+<!-- module~rdb_handle&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge17" class="edge">
+<title>module~rdb_handle&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1721.73,-660.64C1708.49,-656.44 1693.26,-651.61 1679.13,-647.12"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1680.15,-643.77 1669.56,-644.08 1678.03,-650.44 1680.15,-643.77"/>
+</g>
+<!-- module~rdb_handle&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge34" class="edge">
+<title>module~rdb_handle&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1749.26,-684.12C1717.49,-729.24 1598.19,-883.76 1468.5,-862"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1466.5,-862C1446.44,-862.2 1224.18,-672.88 1152.29,-611.18"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1154.16,-608.17 1144.29,-604.31 1149.6,-613.48 1154.16,-608.17"/>
+</g>
+<!-- module~rdb_ocean_api -->
+<g id="module~~rdb_ice_init~~UsedByGraph_node8" class="node">
+<title>module~rdb_ocean_api</title>
+<g id="a_module~~rdb_ice_init~~UsedByGraph_node8"><a xlink:href="../module/rdb_ocean_api.html" xlink:title="rdb_ocean_api">
+<polygon fill="#337ab7" stroke="#337ab7" points="1922,-644 1831,-644 1831,-620 1922,-620 1922,-644"/>
+<text text-anchor="middle" x="1876.5" y="-629.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_config -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge7" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_config</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1873.63,-619.94C1859.78,-532.57 1769.7,0 1631.5,0 1631.5,0 1631.5,0 948,0 836.38,0 808.88,-11.15 698,-24 652.11,-29.32 641.2,-38 595,-38"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M593,-38C267.05,-33.38 165.58,-585.74 147.61,-703.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="144.12,-703.57 146.12,-713.97 151.05,-704.59 144.12,-703.57"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge18" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1757.5,-632C1737.85,-628.14 1716.14,-627.04 1696.36,-627.22"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1696.14,-623.72 1686.21,-627.42 1696.28,-630.72 1696.14,-623.72"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_handle -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge25" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_handle</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M1840.7,-644C1829.22,-647.96 1816.29,-652.42 1804.17,-656.6"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="1802.99,-653.3 1794.68,-659.87 1805.27,-659.92 1802.99,-653.3"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge46" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_derived</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M1757.5,-632C1692.87,-619.3 1696.56,-699.75 1631.5,-710"/>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M1629.5,-710C1583.68,-717.22 1581.02,-677.65 1539,-658 1531.19,-654.35 1522.7,-650.84 1514.42,-647.66"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="1515.44,-644.3 1504.84,-644.08 1512.98,-650.86 1515.44,-644.3"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge48" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M1629.5,-710C1526.45,-726.23 1495.4,-717.68 1396,-686 1370.27,-677.8 1343.74,-662.12 1325.2,-649.76"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="1327,-646.75 1316.77,-644 1323.06,-652.53 1327,-646.75"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge69" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M1830.77,-636.01C1809.06,-636.94 1782.72,-636.56 1759.5,-632"/>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M1757.5,-632C1598.45,-600.74 1680.12,-419.74 1539,-340 1446.25,-287.59 1403.29,-344 1300.5,-316"/>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M1298.5,-316C1271.14,-307.98 1265.1,-303.48 1239,-292 1189.87,-270.39 1183.43,-234.92 1130,-240"/>
+</g>
+<!-- module~rdb_ocean_data_forcing&#45;&gt;module~rdb_config -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge8" class="edge">
+<title>module~rdb_ocean_data_forcing&#45;&gt;module~rdb_config</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M878.68,-629.23C807.5,-628.53 693.52,-627.65 595,-628"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M593,-628C519.81,-628.16 346.18,-704.86 273,-706"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M271,-706C243.18,-705.82 212.33,-710.6 188.07,-715.52"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="187.16,-712.14 178.1,-717.63 188.61,-718.99 187.16,-712.14"/>
+</g>
+<!-- module~rdb_ocean_data_forcing&#45;&gt;module~rdb_ocean_data_input -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge28" class="edge">
+<title>module~rdb_ocean_data_forcing&#45;&gt;module~rdb_ocean_data_input</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M892.15,-642.02C874.69,-645.78 855.25,-649.97 837.17,-653.86"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="836.32,-650.46 827.29,-655.99 837.8,-657.31 836.32,-650.46"/>
+</g>
+<!-- module~rdb_ocean_data_forcing&#45;&gt;module~rdb_ocean_halo_state -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge73" class="edge">
+<title>module~rdb_ocean_data_forcing&#45;&gt;module~rdb_ocean_halo_state</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M942.36,-617.76C928.35,-588.12 889.66,-510.94 843,-457 829.62,-441.53 811.91,-426.89 797.46,-416.05"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="799.52,-413.23 789.39,-410.14 795.39,-418.87 799.52,-413.23"/>
+</g>
+<!-- module~rdb_ocean_data_input&#45;&gt;module~rdb_config -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge9" class="edge">
+<title>module~rdb_ocean_data_input&#45;&gt;module~rdb_config</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M737.2,-655.93C702.55,-644.09 645.66,-627.82 595,-628"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_config -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge11" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_config</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1285.18,-343.6C1272.39,-331.27 1253.01,-311.45 1239,-292 1219.47,-264.89 1230.68,-244.72 1203,-226 1109.21,-162.56 1059.97,-222.98 950,-196"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_decomp -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge23" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_decomp</title>
+<path fill="none" stroke="#ff7f00" stroke-dasharray="5,2" d="M769.5,-240C697.93,-215.43 483.55,-187.56 429,-240"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge38" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1293.64,-368.11C1276.49,-410.63 1219,-551.3 1203,-566 1198.62,-570.02 1193.58,-573.43 1188.23,-576.32"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1186.54,-573.25 1179.01,-580.7 1189.54,-579.57 1186.54,-573.25"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_halo -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge44" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_halo</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1247.95,-350.65C1214.46,-347.02 1169.58,-341.99 1130,-337"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1128,-337C1076.8,-330.55 1068.46,-311.71 1019,-297 910.8,-264.83 880.35,-269.91 771.5,-240"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M769.5,-240C738.4,-229.32 725.08,-239.65 698,-221 652.3,-189.52 619.65,-130.87 604.51,-99.35"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="607.61,-97.72 600.21,-90.13 601.26,-100.68 607.61,-97.72"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_halo -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge57" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_halo</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M1128,-337C1048.77,-328.7 1029.14,-348.95 950,-358"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M948,-358C870.06,-366.91 848.85,-344.94 771.5,-358"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge71" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M1128,-337C1087.31,-331.87 1041.27,-326.98 1006.2,-323.45"/>
+<polygon fill="#003fff" stroke="#003fff" points="1006.46,-319.95 996.16,-322.44 1005.76,-326.92 1006.46,-319.95"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_halo_state -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge76" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_halo_state</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M948,-358C905.24,-362.89 857.71,-374 822.75,-383.27"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="821.53,-379.98 812.78,-385.96 823.35,-386.74 821.53,-379.98"/>
+</g>
+<!-- module~rdb_ocean_stability_audit&#45;&gt;module~rdb_config -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge12" class="edge">
+<title>module~rdb_ocean_stability_audit&#45;&gt;module~rdb_config</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1092.01,-168.07C1048.13,-182.08 976.53,-202.51 950,-196"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M948,-196C916.56,-188.29 871.43,-110.48 843,-95 818.17,-81.48 623.27,-38 595,-38"/>
+</g>
+<!-- module~rdb_ocean_state&#45;&gt;module~rdb_config -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge13" class="edge">
+<title>module~rdb_ocean_state&#45;&gt;module~rdb_config</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M769.5,-708C693.88,-705.43 501.49,-684.3 429,-706"/>
+</g>
+<!-- module~rdb_ocean_state&#45;&gt;module~rdb_decomp -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge24" class="edge">
+<title>module~rdb_ocean_state&#45;&gt;module~rdb_decomp</title>
+<path fill="none" stroke="#ff7f00" stroke-dasharray="5,2" d="M593,-590C492.06,-582.22 464.11,-595.99 366,-571 344.5,-565.53 321.69,-555.54 304.04,-546.79"/>
+<polygon fill="#ff7f00" stroke="#ff7f00" points="305.31,-543.51 294.81,-542.1 302.13,-549.75 305.31,-543.51"/>
+</g>
+<!-- module~rdb_ocean_state&#45;&gt;module~rdb_ocean_data_forcing -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge27" class="edge">
+<title>module~rdb_ocean_state&#45;&gt;module~rdb_ocean_data_forcing</title>
+<path fill="none" stroke="#00ff7f" stroke-dasharray="5,2" d="M1078.89,-602.48C1059.61,-606.6 1037.18,-611.39 1016.49,-615.8"/>
+<polygon fill="#00ff7f" stroke="#00ff7f" points="1015.55,-612.43 1006.5,-617.94 1017.01,-619.27 1015.55,-612.43"/>
+</g>
+<!-- module~rdb_ocean_state&#45;&gt;module~rdb_ocean_data_input -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge30" class="edge">
+<title>module~rdb_ocean_state&#45;&gt;module~rdb_ocean_data_input</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1110.36,-604.27C1079.53,-624.62 1013.12,-663.77 950,-670"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M948,-670C914.57,-673.3 877.4,-673.41 845.83,-672.45"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="845.9,-668.95 835.78,-672.11 845.66,-675.95 845.9,-668.95"/>
+</g>
+<!-- module~rdb_ocean_z_init -->
+<g id="module~~rdb_ice_init~~UsedByGraph_node14" class="node">
+<title>module~rdb_ocean_z_init</title>
+<g id="a_module~~rdb_ice_init~~UsedByGraph_node14"><a xlink:href="../module/rdb_ocean_z_init.html" xlink:title="rdb_ocean_z_init">
+<polygon fill="#337ab7" stroke="#337ab7" points="644.5,-680 543.5,-680 543.5,-656 644.5,-656 644.5,-680"/>
+<text text-anchor="middle" x="594" y="-665.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_z_init</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_state&#45;&gt;module~rdb_ocean_z_init -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge39" class="edge">
+<title>module~rdb_ocean_state&#45;&gt;module~rdb_ocean_z_init</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M1114.69,-604.02C1088.14,-627.86 1030.18,-679.29 1019,-684 917.16,-726.92 881.84,-714.23 771.5,-708"/>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M769.5,-708C724.41,-706.47 674.34,-693.81 639.44,-683.14"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="640.16,-679.69 629.57,-680.05 638.07,-686.37 640.16,-679.69"/>
+</g>
+<!-- module~rdb_ocean_restart_io -->
+<g id="module~~rdb_ice_init~~UsedByGraph_node20" class="node">
+<title>module~rdb_ocean_restart_io</title>
+<g id="a_module~~rdb_ice_init~~UsedByGraph_node20"><a xlink:href="../module/rdb_ocean_restart_io.html" xlink:title="rdb_ocean_restart_io">
+<polygon fill="#337ab7" stroke="#337ab7" points="490,-562 366,-562 366,-538 490,-538 490,-562"/>
+<text text-anchor="middle" x="428" y="-547.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_restart_io</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_state&#45;&gt;module~rdb_ocean_restart_io -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge58" class="edge">
+<title>module~rdb_ocean_state&#45;&gt;module~rdb_ocean_restart_io</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M1078.71,-593.66C984.59,-596.43 772.81,-600.67 595,-590"/>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M593,-590C551.82,-586.83 506.28,-575.02 473.66,-565.06"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="474.56,-561.67 463.97,-562.03 472.48,-568.35 474.56,-561.67"/>
+</g>
+<!-- module~rdb_continuity -->
+<g id="module~~rdb_ice_init~~UsedByGraph_node22" class="node">
+<title>module~rdb_continuity</title>
+<g id="a_module~~rdb_ice_init~~UsedByGraph_node22"><a xlink:href="../module/rdb_continuity.html" xlink:title="rdb_continuity">
+<polygon fill="#337ab7" stroke="#337ab7" points="814.5,-490 726.5,-490 726.5,-466 814.5,-466 814.5,-490"/>
+<text text-anchor="middle" x="770.5" y="-475.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_continuity</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_state&#45;&gt;module~rdb_continuity -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge63" class="edge">
+<title>module~rdb_ocean_state&#45;&gt;module~rdb_continuity</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M1090.19,-579.91C1024.72,-558.97 890.43,-516.03 818.86,-493.15"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="819.79,-489.77 809.19,-490.05 817.65,-496.43 819.79,-489.77"/>
+</g>
+<!-- module~rdb_ocean_state&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge72" class="edge">
+<title>module~rdb_ocean_state&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M1078.69,-582.55C1069.69,-578.75 1061.2,-573.44 1055,-566 991.01,-489.21 1082.29,-421.37 1019,-344 1015.21,-339.37 1010.5,-335.56 1005.34,-332.43"/>
+<polygon fill="#003fff" stroke="#003fff" points="1006.79,-329.24 996.3,-327.77 1003.59,-335.46 1006.79,-329.24"/>
+</g>
+<!-- module~rdb_ocean_z_init&#45;&gt;module~rdb_config -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge14" class="edge">
+<title>module~rdb_ocean_z_init&#45;&gt;module~rdb_config</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M543.42,-677.78C510.66,-684.66 466.94,-694.64 429,-706"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M427,-706C353.11,-728.12 348.4,-802.23 273,-786"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M271,-786C244.89,-780.38 238.3,-778.07 214,-767 199.33,-760.32 183.81,-751.36 171.16,-743.52"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="172.84,-740.44 162.51,-738.06 169.1,-746.36 172.84,-740.44"/>
+</g>
+<!-- module~rdb_state&#45;&gt;module~rdb_config -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge15" class="edge">
+<title>module~rdb_state&#45;&gt;module~rdb_config</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M396.81,-773.5C386.65,-769.35 375.48,-764.11 366,-758 347.75,-746.24 348.71,-736.01 330,-725 306.98,-711.46 299.7,-705.58 273,-706"/>
+</g>
+<!-- module~rdb_halo&#45;&gt;module~rdb_decomp -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge19" class="edge">
+<title>module~rdb_halo&#45;&gt;module~rdb_decomp</title>
+<path fill="none" stroke="#ff7f00" stroke-dasharray="5,2" d="M580.77,-90.31C553.67,-117.53 486.42,-184.81 429,-240"/>
+<path fill="none" stroke="#ff7f00" stroke-dasharray="5,2" d="M427,-240C343.56,-320.2 295.61,-455.57 279.34,-508.18"/>
+<polygon fill="#ff7f00" stroke="#ff7f00" points="275.96,-507.24 276.42,-517.83 282.67,-509.27 275.96,-507.24"/>
+</g>
+<!-- module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge35" class="edge">
+<title>module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1411.7,-619.97C1395.15,-616.67 1376.89,-613.36 1360,-611 1302.26,-602.95 1235.86,-597.91 1189.29,-595.06"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1189.27,-591.56 1179.08,-594.45 1188.86,-598.54 1189.27,-591.56"/>
+</g>
+<!-- module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge49" class="edge">
+<title>module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M1395.62,-632C1387.22,-632 1378.66,-632 1370.28,-632"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="1370.18,-628.5 1360.18,-632 1370.18,-635.5 1370.18,-628.5"/>
+</g>
+<!-- module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge36" class="edge">
+<title>module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1247.94,-620C1229.37,-615.59 1208.18,-610.56 1188.93,-605.99"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1189.61,-602.55 1179.07,-603.65 1187.99,-609.36 1189.61,-602.55"/>
+</g>
+<!-- module~rdb_ocean_halo&#45;&gt;module~rdb_decomp -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge21" class="edge">
+<title>module~rdb_ocean_halo&#45;&gt;module~rdb_decomp</title>
+<path fill="none" stroke="#ff7f00" stroke-dasharray="5,2" d="M412.79,-410.18C385.86,-433.27 327.22,-483.53 295.11,-511.05"/>
+<polygon fill="#ff7f00" stroke="#ff7f00" points="292.49,-508.68 287.18,-517.85 297.05,-514 292.49,-508.68"/>
+</g>
+<!-- module~rdb_ocean_restart_io&#45;&gt;module~rdb_decomp -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge22" class="edge">
+<title>module~rdb_ocean_restart_io&#45;&gt;module~rdb_decomp</title>
+<path fill="none" stroke="#ff7f00" stroke-dasharray="5,2" d="M365.69,-542.04C350.98,-540.13 335.47,-538.11 321.43,-536.29"/>
+<polygon fill="#ff7f00" stroke="#ff7f00" points="321.87,-532.82 311.5,-535 320.97,-539.76 321.87,-532.82"/>
+</g>
+<!-- module~rdb_barotropic_substep -->
+<g id="module~~rdb_ice_init~~UsedByGraph_node21" class="node">
+<title>module~rdb_barotropic_substep</title>
+<g id="a_module~~rdb_ice_init~~UsedByGraph_node21"><a xlink:href="../module/rdb_barotropic_substep.html" xlink:title="rdb_barotropic_substep">
+<polygon fill="#337ab7" stroke="#337ab7" points="662,-330 526,-330 526,-306 662,-306 662,-330"/>
+<text text-anchor="middle" x="594" y="-315.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_barotropic_substep</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_barotropic_substep&#45;&gt;module~rdb_ocean_halo -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge51" class="edge">
+<title>module~rdb_barotropic_substep&#45;&gt;module~rdb_ocean_halo</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M568.09,-330.15C539.99,-343.86 494.14,-366.22 462.82,-381.5"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="461.06,-378.47 453.61,-386 464.13,-384.76 461.06,-378.47"/>
+</g>
+<!-- module~rdb_continuity&#45;&gt;module~rdb_ocean_halo -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge52" class="edge">
+<title>module~rdb_continuity&#45;&gt;module~rdb_ocean_halo</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M733.49,-465.97C722.01,-461.85 709.36,-457.02 698,-452 650.72,-431.12 646.69,-398 595,-398"/>
+</g>
+<!-- module~rdb_ocean_bt_wide -->
+<g id="module~~rdb_ice_init~~UsedByGraph_node23" class="node">
+<title>module~rdb_ocean_bt_wide</title>
+<g id="a_module~~rdb_ice_init~~UsedByGraph_node23"><a xlink:href="../module/rdb_ocean_bt_wide.html" xlink:title="rdb_ocean_bt_wide">
+<polygon fill="#337ab7" stroke="#337ab7" points="828,-330 713,-330 713,-306 828,-306 828,-330"/>
+<text text-anchor="middle" x="770.5" y="-315.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_bt_wide</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_bt_wide&#45;&gt;module~rdb_ocean_halo -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge53" class="edge">
+<title>module~rdb_ocean_bt_wide&#45;&gt;module~rdb_ocean_halo</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M733.49,-330.03C722.01,-334.15 709.36,-338.98 698,-344 650.72,-364.88 646.69,-398 595,-398"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M593,-398C557.83,-398 518.41,-398 487.04,-398"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="486.72,-394.5 476.72,-398 486.72,-401.5 486.72,-394.5"/>
+</g>
+<!-- module~rdb_ocean_bt_wide&#45;&gt;module~rdb_barotropic_substep -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge59" class="edge">
+<title>module~rdb_ocean_bt_wide&#45;&gt;module~rdb_barotropic_substep</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M712.84,-318C699.92,-318 685.97,-318 672.34,-318"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="672.01,-314.5 662.01,-318 672.01,-321.5 672.01,-314.5"/>
+</g>
+<!-- module~rdb_ocean_chksum -->
+<g id="module~~rdb_ice_init~~UsedByGraph_node24" class="node">
+<title>module~rdb_ocean_chksum</title>
+<g id="a_module~~rdb_ice_init~~UsedByGraph_node24"><a xlink:href="../module/rdb_ocean_chksum.html" xlink:title="rdb_ocean_chksum">
+<polygon fill="#337ab7" stroke="#337ab7" points="828,-170 713,-170 713,-146 828,-146 828,-170"/>
+<text text-anchor="middle" x="770.5" y="-155.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_chksum</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_chksum&#45;&gt;module~rdb_halo -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge42" class="edge">
+<title>module~rdb_ocean_chksum&#45;&gt;module~rdb_halo</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M722.41,-145.88C714.15,-143.27 705.74,-140.3 698,-137 670.87,-125.44 641.89,-108.37 621.61,-95.56"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="623.24,-92.45 612.93,-90.01 619.47,-98.35 623.24,-92.45"/>
+</g>
+<!-- module~rdb_ocean_console_stats&#45;&gt;module~rdb_halo -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge43" class="edge">
+<title>module~rdb_ocean_console_stats&#45;&gt;module~rdb_halo</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M714.29,-103.98C688.02,-98.26 657.25,-91.56 633.55,-86.39"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="634.04,-82.92 623.52,-84.21 632.55,-89.76 634.04,-82.92"/>
+</g>
+<!-- module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_halo -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge54" class="edge">
+<title>module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_halo</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M901.83,-329.95C866.38,-338.75 816.11,-350.47 771.5,-358"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M769.5,-358C730.27,-364.62 634.78,-398 595,-398"/>
+</g>
+<!-- module~rdb_ocean_dyn&#45;&gt;module~rdb_barotropic_substep -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge60" class="edge">
+<title>module~rdb_ocean_dyn&#45;&gt;module~rdb_barotropic_substep</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M901.78,-306.71C883.58,-302.8 862.42,-298.92 843,-297 778.87,-290.65 762.12,-290.53 698,-297 683.47,-298.47 667.96,-301.07 653.5,-303.95"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="652.76,-300.53 643.68,-305.98 654.18,-307.38 652.76,-300.53"/>
+</g>
+<!-- module~rdb_ocean_dyn&#45;&gt;module~rdb_continuity -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge62" class="edge">
+<title>module~rdb_ocean_dyn&#45;&gt;module~rdb_continuity</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M901.76,-329.8C893.53,-333.39 885.51,-338.03 879,-344 851.74,-368.98 865.79,-389.89 843,-419 830.56,-434.89 813.15,-449.37 798.63,-460.01"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="796.59,-457.16 790.47,-465.81 800.65,-462.87 796.59,-457.16"/>
+</g>
+<!-- module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_bt_wide -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge64" class="edge">
+<title>module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_bt_wide</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M901.63,-318C882.32,-318 859.52,-318 838.45,-318"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="838.27,-314.5 828.27,-318 838.27,-321.5 838.27,-314.5"/>
+</g>
+<!-- module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_chksum -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge65" class="edge">
+<title>module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_chksum</title>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M942.27,-305.89C928.86,-278.88 892.76,-213.39 843,-179 840.61,-177.34 838.08,-175.82 835.46,-174.41"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="836.82,-171.18 826.28,-170.07 833.83,-177.51 836.82,-171.18"/>
+</g>
+<!-- module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_console_stats -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge67" class="edge">
+<title>module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_console_stats</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M939.69,-305.96C926.25,-286.29 899.21,-245.86 879,-210 861.23,-178.49 870.69,-160.28 843,-137 841.44,-135.69 839.8,-134.46 838.1,-133.31"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="839.55,-130.1 829.14,-128.16 836.07,-136.17 839.55,-130.1"/>
+</g>
+<!-- module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_halo_state -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge74" class="edge">
+<title>module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_halo_state</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M909.84,-330.05C899.54,-333.92 888.6,-338.62 879,-344 861.32,-353.91 860.74,-362.19 843,-372 836.09,-375.82 828.51,-379.27 820.95,-382.32"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="819.52,-379.12 811.43,-385.97 822.02,-385.66 819.52,-379.12"/>
+</g>
+<!-- module~rdb_ocean_halo_state&#45;&gt;module~rdb_ocean_halo -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge56" class="edge">
+<title>module~rdb_ocean_halo_state&#45;&gt;module~rdb_ocean_halo</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M705.68,-398C672.65,-398 631.66,-398 595,-398"/>
+</g>
+<!-- proc~ocean_cavity_mass_step -->
+<g id="module~~rdb_ice_init~~UsedByGraph_node28" class="node">
+<title>proc~ocean_cavity_mass_step</title>
+<g id="a_module~~rdb_ice_init~~UsedByGraph_node28"><a xlink:href="../proc/ocean_cavity_mass_step.html" xlink:title="ocean_cavity_mass_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="842,-212 699,-212 699,-188 842,-188 842,-212"/>
+<text text-anchor="middle" x="770.5" y="-197.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_cavity_mass_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_mass_step&#45;&gt;module~rdb_halo -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge45" class="edge">
+<title>proc~ocean_cavity_mass_step&#45;&gt;module~rdb_halo</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M717.08,-187.87C710.44,-185.4 703.91,-182.47 698,-179 661.8,-157.76 628.85,-121.04 610.42,-98.22"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="613.03,-95.88 604.08,-90.21 607.54,-100.23 613.03,-95.88"/>
+</g>
+<!-- module~rdb_ice_transport -->
+<g id="module~~rdb_ice_init~~UsedByGraph_node29" class="node">
+<title>module~rdb_ice_transport</title>
+<g id="a_module~~rdb_ice_init~~UsedByGraph_node29"><a xlink:href="../module/rdb_ice_transport.html" xlink:title="rdb_ice_transport">
+<polygon fill="#337ab7" stroke="#337ab7" points="1002,-486 896,-486 896,-462 1002,-462 1002,-486"/>
+<text text-anchor="middle" x="949" y="-471.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_transport</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_transport&#45;&gt;module~rdb_continuity -->
+<g id="module~~rdb_ice_init~~UsedByGraph_edge61" class="edge">
+<title>module~rdb_ice_transport&#45;&gt;module~rdb_continuity</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M896,-475.18C873.51,-475.69 847.23,-476.28 824.62,-476.8"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="824.43,-473.3 814.51,-477.03 824.59,-480.3 824.43,-473.3"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panmodulerdb_ice_initUsedByGraph = svgPanZoom('#modulerdb_ice_initUsedByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsedByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsedByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="518pt" height="32pt"
+ viewBox="0.00 0.00 517.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 513.5,-28 513.5,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24 0,-24 0,0 54,0 54,-24"/>
+<text text-anchor="middle" x="27" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="145.5,-24 72.5,-24 72.5,0 145.5,0 145.5,-24"/>
+<text text-anchor="middle" x="109" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="234,-24 164,-24 164,0 234,0 234,-24"/>
+<text text-anchor="middle" x="199" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="310,-24 252,-24 252,0 310,0 310,-24"/>
+<text text-anchor="middle" x="281" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="386,-24 328,-24 328,0 386,0 386,-24"/>
+<text text-anchor="middle" x="357" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="509.5,-24 404.5,-24 404.5,0 509.5,0 509.5,-24"/>
+<text text-anchor="middle" x="457" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+      <br>
+
+
+        <section>
+          <h2>Variables</h2>
+            <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ice_ic_conc_invalid"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>ICE_IC_CONC_INVALID</strong></td>
+<td> =</td>
+                <td>-1</td>
+            <td>
+                <p>Sentinel for an unrecognised <code>conc_config</code> string (fail-loud
+idiom — a <code>pure</code> function cannot <code>error stop</code>; <code>validate_config</code>
+turns this into a <code>logger%error</code>).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ice_ic_conc_latitudes"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>ICE_IC_CONC_LATITUDES</strong></td>
+<td> =</td>
+                <td>2</td>
+            <td>
+                <p>SIS2 polar-cap analytic form off <code>metrics%geolatT</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ice_ic_conc_uniform"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>ICE_IC_CONC_UNIFORM</strong></td>
+<td> =</td>
+                <td>1</td>
+            <td>
+                <p>Scalar concentration/thickness/salinity/temperature everywhere wet.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ice_ic_conc_zero"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>ICE_IC_CONC_ZERO</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+                <p>Default: no-op, byte-identical to today.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+        </section>
+        <br>
+
+
+
+
+        <section>
+          <h2>Derived Types</h2>
+              <div class="card">
+    <div class="card-header codesum">
+      <span class="anchor" id="type-ice_ic_params_t"></span>
+      <h3>
+        type, public&nbsp;::&nbsp;
+        <a href='../type/ice_ic_params_t.html'>ice_ic_params_t</a>
+        
+      </h3>
+    </div>
+    <div class="card-body">
+      <p>Sea-ice IC scalar knob bundle (mirrors <code>ice_evp_params_t</code>).
+Built ONCE from <code>&amp;ocean_ice_ic_nml</code> via <code>ice_ic_params_from_config</code>;
+every field a plain scalar (no derived-type deref inside the
+host loop, same discipline as the EVP params — though this
+module never runs on-device at all).</p>
+
+        <h4>Components</h4>
+          <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-antarctic_edge~2"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>antarctic_edge</strong></td>
+<td> =</td>
+                <td>-91.0_wp</td>
+            <td>
+<p><code>"latitudes"</code> Antarctic edge (degrees_north) — SIS2
+<code>ANTARCTIC_ICE_EDGE_IC</code> default (no cell qualifies).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-arctic_edge~2"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>arctic_edge</strong></td>
+<td> =</td>
+                <td>91.0_wp</td>
+            <td>
+<p><code>"latitudes"</code> Arctic edge (degrees_north) — SIS2
+<code>ARCTIC_ICE_EDGE_IC</code> default (no cell qualifies).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-conc~2"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>conc</strong></td>
+<td> =</td>
+                <td>0.0_wp</td>
+            <td>
+<p>Uniform-mode concentration [0,1] (nondim).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-conc_config~2"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>conc_config</strong></td>
+<td> =</td>
+                <td>ICE_IC_CONC_ZERO</td>
+            <td>
+<p>Parsed <code>conc_config</code> enum (<code>ICE_IC_CONC_*</code>).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_ice~2"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_ice</strong></td>
+<td> =</td>
+                <td>0.0_wp</td>
+            <td>
+<p>Ice thickness (m) where seeded — SIS2 <code>ICE_INIT_MASS</code> as a
+thickness.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_snow~2"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_snow</strong></td>
+<td> =</td>
+                <td>0.0_wp</td>
+            <td>
+<p>Snow thickness (m) where seeded — SIS2 <code>SNOW_INIT_MASS</code> as a
+thickness.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s_ice~3"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s_ice</strong></td>
+<td> =</td>
+                <td>ICE_BULK_SALINITY</td>
+            <td>
+<p>Ice bulk salinity (PSU) — SIS2 <code>ICE_SALINITY_IC</code> default,
+which matches <code>ocean_sea_ice_init</code>&rsquo;s own <code>sal_ice</code> source
+value, so <code>"uniform"</code> at the default <code>s_ice</code> leaves <code>sal_ice</code>
+unchanged.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_ice~3"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t_ice</strong></td>
+<td> =</td>
+                <td>-4.0_wp</td>
+            <td>
+<p>Ice/snow temperature (degC) — SIS2 <code>ICE_TEMPERATURE_IC</code>
+default.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+
+
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+        <section>
+          <h2>Functions</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ice_ic_params_from_config"></span> <h3>public pure function <a href='../proc/ice_ic_params_from_config.html'>ice_ic_params_from_config</a>(conc_config, conc, h_ice, h_snow, t_ice, s_ice, arctic_edge, antarctic_edge) result(par)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Small constructor — build once from <code>&amp;ocean_ice_ic_nml</code>. Copies
+<code>ice_evp_params_from_config</code>&rsquo;s shape; the one difference is
+<code>conc_config</code>, a STRING here (parsed internally), because the
+namelist knob is a <code>nml_enum</code> string, not an already-parsed
+integer.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-conc_config~3"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>conc_config</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-conc~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>conc</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_ice~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_ice</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_snow~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_snow</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_ice~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t_ice</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s_ice~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s_ice</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-arctic_edge~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>arctic_edge</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-antarctic_edge~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>antarctic_edge</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>type(<a href='../type/ice_ic_params_t.html'>ice_ic_params_t</a>)</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ice_ic_parse_conc_config"></span> <h3>public pure function <a href='../proc/ice_ic_parse_conc_config.html'>ice_ic_parse_conc_config</a>(s) result(mode)  
+</h3></div>
+    <div class="card-body">
+          
+  <p><code>"zero"</code>/<code>"uniform"</code>/<code>"latitudes"</code> -&gt; <code>ICE_IC_CONC_*</code>; any other
+string -&gt; <code>ICE_IC_CONC_INVALID</code> (fail-loud idiom: a <code>pure</code>
+function cannot abort, so <code>validate_config</code> V8 turns the
+sentinel into a <code>logger%error</code>; <code>nml_enum allowed=</code> is the first
+line of defence).</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s~12"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>integer</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ice_ic_target_category"></span> <h3>public pure function <a href='../proc/ice_ic_target_category.html'>ice_ic_target_category</a>(m, mh_lim, ncat) result(c)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>The IC&rsquo;s target category for a pack of mass <code>m</code> [kg/m^2]
+(per-ICE-area, ncat&gt;1 convention): the top bin <code>ncat</code> is
+UNBOUNDED above (<code>mh_lim(ncat+1)</code> is stored but never used as a
+cap — <code>ice_adjust_categories</code>&rsquo;s upward pass stops at <code>c =
+ncat-1</code>), otherwise the unique <code>c</code> with
+<code>mh_lim(c) &lt;= m &lt; mh_lim(c+1)</code>. Declared <code>ncat</code> before the
+explicit-shape <code>mh_lim</code> that uses it (decl-order).</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-m~13"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>m</strong></td>
+            <td>
+<p>Pack mass (kg/m^2, per-ICE-area convention).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mh_lim~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mh_lim</strong>(ncat+1)</td>
+            <td>
+<p>Category lower mass limits (kg/m^2), <code>ice%mh_lim</code> — NEVER a
+re-derivation from <code>ncat</code> alone (PR-58 may override its
+values via <code>&amp;ocean_ice_nml hlim</code>).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ncat~10"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ncat</strong></td>
+            <td>
+<p>Number of ice thickness categories.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>integer</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+        <section>
+          <h2>Subroutines</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ice_init_apply"></span> <h3>public pure subroutine <a href='../proc/ice_init_apply.html'>ice_init_apply</a>(grid, ms, metrics, ice, par)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Outer shim (outer-shim + flat-impl pattern, mirrors
+<code>ice_adjust_categories</code>). No-op when the ice slot is not live
+(<code>is_init</code> gate) or when <code>par%conc_config == ICE_IC_CONC_ZERO</code>
+(the default-off bit-identity contract — nothing is written, not
+even <code>sal_ice</code>/<code>enth_ice</code>). <code>ice</code> is <code>intent(inout)</code> (not
+<code>out</code>): <code>h_lim</code>/<code>mh_lim</code> were filled at <code>init</code> and must survive.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~79"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ms~57"></span>
+              type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ms</strong></td>
+            <td>
+<p>READ-ONLY: only <code>wet_mask</code> is read.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-metrics~34"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>metrics</strong></td>
+            <td>
+<p>READ-ONLY: only <code>geolatT</code> is read (<code>"latitudes"</code> mode).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ice~21"></span>
+              type(<a href='../type/ocean_sea_ice_t.html'>ocean_sea_ice_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ice</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-par~12"></span>
+              type(<a href='../type/ice_ic_params_t.html'>ice_ic_params_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>par</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ice_init_apply_impl"></span> <h3>private pure subroutine <a href='../proc/ice_init_apply_impl.html'>ice_init_apply_impl</a>(wet_mask, geolatT, part_size, m_ice, m_snow, enth_ice, enth_snow, sal_ice, mh_lim, conc_config, conc_uniform, h_ice, h_snow, t_ice, s_ice, arctic_edge, antarctic_edge, ncat, nk_ice, nx, ny)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Per-cell seeder. Decl-order: integer dims before the
+explicit-shape arrays that use them.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wet_mask~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wet_mask</strong>(nx,ny)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-geolatt"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>geolatT</strong>(nx,ny)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-part_size~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>part_size</strong>(nx,ny,0:ncat)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-m_ice~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>m_ice</strong>(nx,ny,ncat)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-m_snow~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>m_snow</strong>(nx,ny,ncat)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-enth_ice~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>enth_ice</strong>(nx,ny,ncat,nk_ice)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-enth_snow~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>enth_snow</strong>(nx,ny,ncat,1)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sal_ice~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sal_ice</strong>(nx,ny,ncat,nk_ice)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mh_lim~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mh_lim</strong>(ncat+1)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-conc_config~4"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>conc_config</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-conc_uniform"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>conc_uniform</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_ice~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_ice</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_snow~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_snow</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_ice~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t_ice</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s_ice~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s_ice</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-arctic_edge~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>arctic_edge</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-antarctic_edge~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>antarctic_edge</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ncat~11"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ncat</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nk_ice~3"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nk_ice</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~133"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~133"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+
+
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-01 23:35 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

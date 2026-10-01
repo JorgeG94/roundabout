@@ -1,0 +1,1315 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>rdb_ice_optics.F90 &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>rdb_ice_optics.F90
+      <small>Source File</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for source files.">54 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ice_optics.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+            <li class="breadcrumb-item active" aria-current="page">rdb_ice_optics.F90</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#mods-0"
+         aria-expanded="false" aria-controls="mods-0">
+         <h4 class="card-header bg-primary text-white">Modules</h4>
+      </a>
+      <div id="mods-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ice_optics.html">rdb_ice_optics</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../sourcefile/rdb_ice_optics.f90.html#src">rdb_ice_optics.F90</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    <div class="col-md-9" id='text'>
+      <p>Sea-ice shortwave optics (SIS2 port, PR 3a).</p>
+      <br>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">This file depends on</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~rdb_ice_optics.f90~~EfferentGraph Pages: 1 -->
+<svg id="sourcefilerdb_ice_opticsf90EfferentGraph" width="424pt" height="52pt"
+ viewBox="0.00 0.00 424.00 52.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~rdb_ice_optics.f90~~EfferentGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 48)">
+<title>sourcefile~~rdb_ice_optics.f90~~EfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-48 420,-48 420,4 -4,4"/>
+<!-- sourcefile~rdb_ice_optics.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~EfferentGraph_node1" class="node">
+<title>sourcefile~rdb_ice_optics.f90</title>
+<polygon fill="none" stroke="black" points="416,-44 305,-44 305,-20 416,-20 416,-44"/>
+<text text-anchor="middle" x="360.5" y="-29.6" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ice_optics.F90</text>
+</g>
+<!-- sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~EfferentGraph_node2" class="node">
+<title>sourcefile~rdb_constants.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~EfferentGraph_node2"><a xlink:href="../sourcefile/rdb_constants.f90.html" xlink:title="rdb_constants.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="109,-44 0,-44 0,-20 109,-20 109,-44"/>
+<text text-anchor="middle" x="54.5" y="-29.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_constants.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_optics.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~EfferentGraph_edge1" class="edge">
+<title>sourcefile~rdb_ice_optics.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M304.94,-32.7C293.09,-32.83 280.63,-32.94 269,-33 213.89,-33.3 200.11,-33.31 145,-33 136.74,-32.95 128.04,-32.88 119.45,-32.8"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="119.49,-29.3 109.45,-32.7 119.42,-36.3 119.49,-29.3"/>
+</g>
+<!-- sourcefile~rdb_ice_enthalpy.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~EfferentGraph_node3" class="node">
+<title>sourcefile~rdb_ice_enthalpy.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~EfferentGraph_node3"><a xlink:href="../sourcefile/rdb_ice_enthalpy.f90.html" xlink:title="rdb_ice_enthalpy.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="269,-24 145,-24 145,0 269,0 269,-24"/>
+<text text-anchor="middle" x="207" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_enthalpy.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_optics.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~EfferentGraph_edge2" class="edge">
+<title>sourcefile~rdb_ice_optics.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M304.81,-24.78C296.46,-23.68 287.74,-22.53 279.11,-21.39"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="279.41,-17.9 269.03,-20.06 278.49,-24.84 279.41,-17.9"/>
+</g>
+<!-- sourcefile~rdb_ice_enthalpy.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~EfferentGraph_edge3" class="edge">
+<title>sourcefile~rdb_ice_enthalpy.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M144.79,-20.13C136.45,-21.24 127.89,-22.38 119.51,-23.49"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="118.86,-20.05 109.41,-24.84 119.78,-26.99 118.86,-20.05"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#EfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="EfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Files dependent on this one</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~rdb_ice_optics.f90~~AfferentGraph Pages: 1 -->
+<svg id="sourcefilerdb_ice_opticsf90AfferentGraph" width="641pt" height="232pt"
+ viewBox="0.00 0.00 641.00 231.59" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph" class="graph" transform="scale(0.29 0.29) rotate(0) translate(4 799.89)">
+<title>sourcefile~~rdb_ice_optics.f90~~AfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-799.89 2221,-799.89 2221,4 -4,4"/>
+<!-- sourcefile~rdb_ice_optics.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node1" class="node">
+<title>sourcefile~rdb_ice_optics.f90</title>
+<polygon fill="none" stroke="black" points="111,-603 0,-603 0,-579 111,-579 111,-603"/>
+<text text-anchor="middle" x="55.5" y="-588.6" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ice_optics.F90</text>
+</g>
+<!-- sourcefile~rdb_ice_column.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node2" class="node">
+<title>sourcefile~rdb_ice_column.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node2"><a xlink:href="../sourcefile/rdb_ice_column.f90.html" xlink:title="rdb_ice_column.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="266,-603 147,-603 147,-579 266,-579 266,-603"/>
+<text text-anchor="middle" x="206.5" y="-588.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_column.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_column.f90&#45;&gt;sourcefile~rdb_ice_optics.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge1" class="edge">
+<title>sourcefile~rdb_ice_column.f90&#45;&gt;sourcefile~rdb_ice_optics.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M146.61,-591C138.28,-591 129.68,-591 121.25,-591"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="121.08,-587.5 111.08,-591 121.08,-594.5 121.08,-587.5"/>
+</g>
+<!-- sourcefile~rdb_ice_basal_flux.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node3" class="node">
+<title>sourcefile~rdb_ice_basal_flux.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node3"><a xlink:href="../sourcefile/rdb_ice_basal_flux.f90.html" xlink:title="rdb_ice_basal_flux.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="587.5,-727 454.5,-727 454.5,-703 587.5,-703 587.5,-727"/>
+<text text-anchor="middle" x="521" y="-712.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_basal_flux.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_basal_flux.f90&#45;&gt;sourcefile~rdb_ice_column.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge2" class="edge">
+<title>sourcefile~rdb_ice_basal_flux.f90&#45;&gt;sourcefile~rdb_ice_column.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M475.38,-727.02C427.83,-739.75 358.93,-757.89 356,-757"/>
+</g>
+<!-- sourcefile~rdb_ice_state.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node7" class="node">
+<title>sourcefile~rdb_ice_state.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node7"><a xlink:href="../sourcefile/rdb_ice_state.f90.html" xlink:title="rdb_ice_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="408,-603 302,-603 302,-579 408,-579 408,-603"/>
+<text text-anchor="middle" x="355" y="-588.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_basal_flux.f90&#45;&gt;sourcefile~rdb_ice_state.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge17" class="edge">
+<title>sourcefile~rdb_ice_basal_flux.f90&#45;&gt;sourcefile~rdb_ice_state.f90</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M461.99,-702.92C455.68,-700.47 449.54,-697.53 444,-694 410.72,-672.82 383.27,-635.18 368.3,-611.74"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="371.26,-609.87 363.01,-603.22 365.32,-613.57 371.26,-609.87"/>
+</g>
+<!-- sourcefile~rdb_ice_evp.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node4" class="node">
+<title>sourcefile~rdb_ice_evp.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node4"><a xlink:href="../sourcefile/rdb_ice_evp.f90.html" xlink:title="rdb_ice_evp.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="570.5,-685 471.5,-685 471.5,-661 570.5,-661 570.5,-685"/>
+<text text-anchor="middle" x="521" y="-670.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_evp.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_evp.f90&#45;&gt;sourcefile~rdb_ice_column.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge3" class="edge">
+<title>sourcefile~rdb_ice_evp.f90&#45;&gt;sourcefile~rdb_ice_column.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M471.23,-683.73C461.97,-686.53 452.52,-689.93 444,-694 400.59,-714.73 402.02,-771.01 356,-757"/>
+</g>
+<!-- sourcefile~rdb_ice_evp.f90&#45;&gt;sourcefile~rdb_ice_state.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge18" class="edge">
+<title>sourcefile~rdb_ice_evp.f90&#45;&gt;sourcefile~rdb_ice_state.f90</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M471.28,-662.17C462.02,-659.38 452.55,-656 444,-652 420.06,-640.79 395.56,-623.21 378.51,-609.8"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="380.31,-606.75 370.32,-603.22 375.92,-612.21 380.31,-606.75"/>
+</g>
+<!-- sourcefile~rdb_ice_frazil_uptake.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node5" class="node">
+<title>sourcefile~rdb_ice_frazil_uptake.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node5"><a xlink:href="../sourcefile/rdb_ice_frazil_uptake.f90.html" xlink:title="rdb_ice_frazil_uptake.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="595,-643 447,-643 447,-619 595,-619 595,-643"/>
+<text text-anchor="middle" x="521" y="-628.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_frazil_uptake.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_frazil_uptake.f90&#45;&gt;sourcefile~rdb_ice_column.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge4" class="edge">
+<title>sourcefile~rdb_ice_frazil_uptake.f90&#45;&gt;sourcefile~rdb_ice_column.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M461.96,-643.02C455.65,-645.49 449.53,-648.45 444,-652 392.78,-684.93 414.25,-774.73 356,-757"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M354,-757C283.15,-735.44 235.96,-652.3 216.95,-612.49"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="220.11,-610.97 212.73,-603.37 213.75,-613.91 220.11,-610.97"/>
+</g>
+<!-- sourcefile~rdb_ice_frazil_uptake.f90&#45;&gt;sourcefile~rdb_ice_state.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge19" class="edge">
+<title>sourcefile~rdb_ice_frazil_uptake.f90&#45;&gt;sourcefile~rdb_ice_state.f90</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M470.79,-619C453.36,-614.75 433.56,-609.92 415.37,-605.48"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="416,-602.03 405.45,-603.06 414.34,-608.83 416,-602.03"/>
+</g>
+<!-- sourcefile~rdb_ice_init.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node6" class="node">
+<title>sourcefile~rdb_ice_init.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node6"><a xlink:href="../sourcefile/rdb_ice_init.f90.html" xlink:title="rdb_ice_init.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="569,-407 473,-407 473,-383 569,-383 569,-407"/>
+<text text-anchor="middle" x="521" y="-392.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_init.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_init.f90&#45;&gt;sourcefile~rdb_ice_column.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge5" class="edge">
+<title>sourcefile~rdb_ice_init.f90&#45;&gt;sourcefile~rdb_ice_column.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M472.97,-397.34C438.1,-401.06 390.78,-410.46 356,-434"/>
+</g>
+<!-- sourcefile~rdb_ice_init.f90&#45;&gt;sourcefile~rdb_ice_state.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge20" class="edge">
+<title>sourcefile~rdb_ice_init.f90&#45;&gt;sourcefile~rdb_ice_state.f90</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M472.82,-404.93C462.51,-408.71 452.24,-413.9 444,-421 397.23,-461.31 372,-532.64 361.67,-568.74"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="358.2,-568.17 358.94,-578.74 364.95,-570.02 358.2,-568.17"/>
+</g>
+<!-- sourcefile~rdb_ice_state.f90&#45;&gt;sourcefile~rdb_ice_column.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge6" class="edge">
+<title>sourcefile~rdb_ice_state.f90&#45;&gt;sourcefile~rdb_ice_column.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M301.94,-591C293.6,-591 284.87,-591 276.22,-591"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="276.13,-587.5 266.13,-591 276.13,-594.5 276.13,-587.5"/>
+</g>
+<!-- sourcefile~rdb_ice_thermo_driver.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node8" class="node">
+<title>sourcefile~rdb_ice_thermo_driver.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node8"><a xlink:href="../sourcefile/rdb_ice_thermo_driver.f90.html" xlink:title="rdb_ice_thermo_driver.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="598,-769 444,-769 444,-745 598,-745 598,-769"/>
+<text text-anchor="middle" x="521" y="-754.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_thermo_driver.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_thermo_driver.f90&#45;&gt;sourcefile~rdb_ice_column.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge7" class="edge">
+<title>sourcefile~rdb_ice_thermo_driver.f90&#45;&gt;sourcefile~rdb_ice_column.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M443.93,-766.17C415.77,-767.19 383.92,-765.5 356,-757"/>
+</g>
+<!-- sourcefile~rdb_ice_thermo_driver.f90&#45;&gt;sourcefile~rdb_ice_state.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge24" class="edge">
+<title>sourcefile~rdb_ice_thermo_driver.f90&#45;&gt;sourcefile~rdb_ice_state.f90</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M459.46,-744.95C453.96,-742.5 448.69,-739.55 444,-736 401.58,-703.93 375.22,-644.95 363.37,-612.99"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="366.56,-611.5 359.9,-603.26 359.96,-613.85 366.56,-611.5"/>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node9" class="node">
+<title>sourcefile~rdb_ice_transport.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node9"><a xlink:href="../sourcefile/rdb_ice_transport.f90.html" xlink:title="rdb_ice_transport.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="769,-563 641,-563 641,-539 769,-539 769,-563"/>
+<text text-anchor="middle" x="705" y="-548.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_transport.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ice_column.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge8" class="edge">
+<title>sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ice_column.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M682.6,-538.99C615.8,-502.22 412.22,-395.95 356,-434"/>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ice_state.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge25" class="edge">
+<title>sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ice_state.f90</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M665.36,-538.91C620.47,-525.51 549.1,-506.34 522,-511"/>
+</g>
+<!-- sourcefile~rdb_ice_itd.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node15" class="node">
+<title>sourcefile~rdb_ice_itd.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node15"><a xlink:href="../sourcefile/rdb_ice_itd.f90.html" xlink:title="rdb_ice_itd.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="567.5,-563 474.5,-563 474.5,-539 567.5,-539 567.5,-563"/>
+<text text-anchor="middle" x="521" y="-548.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_itd.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ice_itd.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge48" class="edge">
+<title>sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ice_itd.f90</title>
+<path fill="none" stroke="#5cff00" stroke-dasharray="5,2" d="M640.86,-551C620.31,-551 597.67,-551 577.71,-551"/>
+<polygon fill="#5cff00" stroke="#5cff00" points="577.54,-547.5 567.54,-551 577.54,-554.5 577.54,-547.5"/>
+</g>
+<!-- sourcefile~rdb_ocean_console_stats.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node10" class="node">
+<title>sourcefile~rdb_ocean_console_stats.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node10"><a xlink:href="../sourcefile/rdb_ocean_console_stats.f90.html" xlink:title="rdb_ocean_console_stats.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="980,-794 812,-794 812,-770 980,-770 980,-794"/>
+<text text-anchor="middle" x="896" y="-779.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_console_stats.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_console_stats.f90&#45;&gt;sourcefile~rdb_ice_column.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge9" class="edge">
+<title>sourcefile~rdb_ocean_console_stats.f90&#45;&gt;sourcefile~rdb_ice_column.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M811.93,-786.84C721.16,-790.83 571.66,-793.6 444,-778 404.09,-773.12 394.47,-768.71 356,-757"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node11" class="node">
+<title>sourcefile~rdb_ocean_diag_fills.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node11"><a xlink:href="../sourcefile/rdb_ocean_diag_fills.f90.html" xlink:title="rdb_ocean_diag_fills.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1552.5,-166 1409.5,-166 1409.5,-142 1552.5,-142 1552.5,-166"/>
+<text text-anchor="middle" x="1481" y="-151.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_fills.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ice_column.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge10" class="edge">
+<title>sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ice_column.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1422.22,-141.94C1304.57,-119.77 1029.91,-80.27 812,-143 580.96,-209.5 554.06,-297.71 356,-434"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M354,-434C294.73,-469.67 244.41,-536.11 221.21,-569.98"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="218.08,-568.37 215.4,-578.62 223.89,-572.27 218.08,-568.37"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node22" class="node">
+<title>sourcefile~rdb_ocean_state.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node22"><a xlink:href="../sourcefile/rdb_ocean_state.f90.html" xlink:title="rdb_ocean_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1349,-247 1226,-247 1226,-223 1349,-223 1349,-247"/>
+<text text-anchor="middle" x="1287.5" y="-232.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge65" class="edge">
+<title>sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff008b" stroke-dasharray="5,2" d="M1416.73,-166.05C1409.53,-168.51 1402.46,-171.46 1396,-175 1376.7,-185.57 1378.73,-197.44 1360,-209 1353.82,-212.81 1346.99,-216.19 1340.08,-219.14"/>
+<polygon fill="#ff008b" stroke="#ff008b" points="1338.66,-215.94 1330.67,-222.9 1341.25,-222.44 1338.66,-215.94"/>
+</g>
+<!-- sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node12" class="node">
+<title>sourcefile~rdb_config.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node12"><a xlink:href="../sourcefile/rdb_config.f90.html" xlink:title="rdb_config.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="750.5,-289 659.5,-289 659.5,-265 750.5,-265 750.5,-289"/>
+<text text-anchor="middle" x="705" y="-274.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_config.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_config.f90&#45;&gt;sourcefile~rdb_ice_init.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge14" class="edge">
+<title>sourcefile~rdb_config.f90&#45;&gt;sourcefile~rdb_ice_init.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M685.21,-289.18C652.84,-310.17 586.44,-353.22 549.08,-377.44"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="547.18,-374.51 540.69,-382.88 550.98,-380.38 547.18,-374.51"/>
+</g>
+<!-- sourcefile~rdb_driver.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node13" class="node">
+<title>sourcefile~rdb_driver.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node13"><a xlink:href="../sourcefile/rdb_driver.f90.html" xlink:title="rdb_driver.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="2064.5,-563 1976.5,-563 1976.5,-539 2064.5,-539 2064.5,-563"/>
+<text text-anchor="middle" x="2020.5" y="-548.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_console_stats.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge29" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_console_stats.f90</title>
+<path fill="none" stroke="#aa00ff" stroke-dasharray="5,2" d="M2018.82,-563.14C2016.07,-599.64 2002.46,-708.91 1937,-758 1847.34,-825.23 1798.06,-782 1686,-782 1686,-782 1686,-782 1286.5,-782 1185.38,-782 1069.5,-782 990.6,-782"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="990.2,-778.5 980.2,-782 990.2,-785.5 990.2,-778.5"/>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge36" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M2016.27,-538.87C2007.23,-506.29 1979.55,-414.86 1937,-349 1813.49,-157.83 1703.02,-59.68 1482,-114"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node20" class="node">
+<title>sourcefile~rdb_ocean_dyn.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node20"><a xlink:href="../sourcefile/rdb_ocean_dyn.f90.html" xlink:title="rdb_ocean_dyn.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1155.5,-719 1039.5,-719 1039.5,-695 1155.5,-695 1155.5,-719"/>
+<text text-anchor="middle" x="1097.5" y="-704.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_dyn.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge54" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#5c00ff" stroke-dasharray="5,2" d="M2015.77,-563.09C2003.16,-601.32 1957.99,-718.58 1871.5,-744"/>
+<path fill="none" stroke="#5c00ff" stroke-dasharray="5,2" d="M1869.5,-744C1738.66,-782.45 1328.52,-736.37 1165.9,-715.87"/>
+<polygon fill="#5c00ff" stroke="#5c00ff" points="1165.91,-712.35 1155.55,-714.56 1165.03,-719.29 1165.91,-712.35"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node21" class="node">
+<title>sourcefile~rdb_ocean_engine.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node21"><a xlink:href="../sourcefile/rdb_ocean_engine.f90.html" xlink:title="rdb_ocean_engine.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1937,-563 1804,-563 1804,-539 1937,-539 1937,-563"/>
+<text text-anchor="middle" x="1870.5" y="-548.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge59" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#e700ff" stroke-dasharray="5,2" d="M1976.29,-551C1967.08,-551 1957.09,-551 1947.06,-551"/>
+<polygon fill="#e700ff" stroke="#e700ff" points="1947.05,-547.5 1937.05,-551 1947.05,-554.5 1947.05,-547.5"/>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge62" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff008b" stroke-dasharray="5,2" d="M2009.47,-538.79C1959.11,-478.97 1726.48,-220.33 1482,-236"/>
+</g>
+<!-- sourcefile~rdb_ice_atm_forcing.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node14" class="node">
+<title>sourcefile~rdb_ice_atm_forcing.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node14"><a xlink:href="../sourcefile/rdb_ice_atm_forcing.f90.html" xlink:title="rdb_ice_atm_forcing.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="776,-681 634,-681 634,-657 776,-657 776,-681"/>
+<text text-anchor="middle" x="705" y="-666.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_atm_forcing.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_atm_forcing.f90&#45;&gt;sourcefile~rdb_ice_state.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge16" class="edge">
+<title>sourcefile~rdb_ice_atm_forcing.f90&#45;&gt;sourcefile~rdb_ice_state.f90</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M663.51,-656.98C653.51,-653.21 643.07,-648.55 634,-643 615.48,-631.68 617.12,-620.28 598,-610 567.34,-593.51 556.41,-596.3 522,-591"/>
+</g>
+<!-- sourcefile~rdb_ice_itd.f90&#45;&gt;sourcefile~rdb_ice_state.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge21" class="edge">
+<title>sourcefile~rdb_ice_itd.f90&#45;&gt;sourcefile~rdb_ice_state.f90</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M474.32,-562.14C456.08,-566.59 434.83,-571.77 415.42,-576.51"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="414.34,-573.17 405.46,-578.94 416,-579.97 414.34,-573.17"/>
+</g>
+<!-- sourcefile~rdb_ice_ocean_coupler.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node16" class="node">
+<title>sourcefile~rdb_ice_ocean_coupler.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node16"><a xlink:href="../sourcefile/rdb_ice_ocean_coupler.f90.html" xlink:title="rdb_ice_ocean_coupler.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1763.5,-643 1606.5,-643 1606.5,-619 1763.5,-619 1763.5,-643"/>
+<text text-anchor="middle" x="1685" y="-628.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_ocean_coupler.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_ocean_coupler.f90&#45;&gt;sourcefile~rdb_ice_state.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge22" class="edge">
+<title>sourcefile~rdb_ice_ocean_coupler.f90&#45;&gt;sourcefile~rdb_ice_state.f90</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M1606.33,-630.38C1526.58,-629.79 1398.88,-629 1288.5,-629 1288.5,-629 1288.5,-629 895,-629 728.36,-629 686.7,-616.34 522,-591"/>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M520,-591C486.68,-586.38 449.19,-586.03 418.47,-586.98"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="418.19,-583.49 408.32,-587.35 418.44,-590.49 418.19,-583.49"/>
+</g>
+<!-- sourcefile~rdb_ice_snow.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node17" class="node">
+<title>sourcefile~rdb_ice_snow.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node17"><a xlink:href="../sourcefile/rdb_ice_snow.f90.html" xlink:title="rdb_ice_snow.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1738,-563 1632,-563 1632,-539 1738,-539 1738,-563"/>
+<text text-anchor="middle" x="1685" y="-548.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_snow.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_snow.f90&#45;&gt;sourcefile~rdb_ice_state.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge23" class="edge">
+<title>sourcefile~rdb_ice_snow.f90&#45;&gt;sourcefile~rdb_ice_state.f90</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M1631.99,-548.62C1413.32,-538.68 577.3,-501.48 522,-511"/>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M520,-511C485.68,-516.86 475.71,-515.63 444,-530 419.78,-540.98 395.15,-558.74 378.13,-572.27"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="375.52,-569.88 369.96,-578.9 379.93,-575.31 375.52,-569.88"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node18" class="node">
+<title>sourcefile~rdb_ocean_api.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node18"><a xlink:href="../sourcefile/rdb_ocean_api.f90.html" xlink:title="rdb_ocean_api.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="2217,-202 2104,-202 2104,-178 2217,-178 2217,-202"/>
+<text text-anchor="middle" x="2160.5" y="-187.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge31" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#ff00aa" stroke-dasharray="5,2" d="M1869.5,-76C1745.22,-80.46 1602.7,-117.7 1530.06,-139.07"/>
+<polygon fill="#ff00aa" stroke="#ff00aa" points="1528.87,-135.77 1520.28,-141.97 1530.86,-142.48 1528.87,-135.77"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge38" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M2143.49,-177.9C2101.18,-147.26 1982.08,-69.47 1871.5,-76"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1869.5,-76C1694.27,-66.25 1657.5,0 1482,0 1482,0 1482,0 1096.5,0 954.98,0 921.72,-53.61 812,-143 771.3,-176.16 736.21,-227.52 718.43,-256.06"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="715.31,-254.45 713.08,-264.81 721.28,-258.11 715.31,-254.45"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node19" class="node">
+<title>sourcefile~rdb_ocean_diag_derived.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node19"><a xlink:href="../sourcefile/rdb_ocean_diag_derived.f90.html" xlink:title="rdb_ocean_diag_derived.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1768,-204 1602,-204 1602,-180 1768,-180 1768,-204"/>
+<text text-anchor="middle" x="1685" y="-189.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_derived.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge52" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90</title>
+<path fill="none" stroke="#002eff" stroke-dasharray="5,2" d="M1869.5,-76C1798.67,-78.54 1732.88,-139.95 1702.94,-172.36"/>
+<polygon fill="#002eff" stroke="#002eff" points="1700.22,-170.16 1696.13,-179.93 1705.42,-174.84 1700.22,-170.16"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge55" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#5c00ff" stroke-dasharray="5,2" d="M2019.5,-744C1958.31,-768.14 1933.92,-723.26 1871.5,-744"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge61" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#e700ff" stroke-dasharray="5,2" d="M2158.93,-202.08C2155.01,-279.28 2128.69,-701.71 2021.5,-744"/>
+<path fill="none" stroke="#e700ff" stroke-dasharray="5,2" d="M2019.5,-744C1938.14,-776.1 1891.54,-629.88 1876.72,-572.91"/>
+<polygon fill="#e700ff" stroke="#e700ff" points="1880.08,-571.92 1874.25,-563.08 1873.29,-573.63 1880.08,-571.92"/>
+</g>
+<!-- sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node25" class="node">
+<title>sourcefile~rdb_handle.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node25"><a xlink:href="../sourcefile/rdb_handle.f90.html" xlink:title="rdb_handle.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="2068,-202 1973,-202 1973,-178 2068,-178 2068,-202"/>
+<text text-anchor="middle" x="2020.5" y="-187.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge74" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90</title>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M2103.77,-190C2095.37,-190 2086.69,-190 2078.27,-190"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="2078.15,-186.5 2068.15,-190 2078.15,-193.5 2078.15,-186.5"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge32" class="edge">
+<title>sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#ff00aa" stroke-dasharray="5,2" d="M1620.09,-179.98C1599.63,-176.13 1576.82,-171.84 1555.72,-167.87"/>
+<polygon fill="#ff00aa" stroke="#ff00aa" points="1556.32,-164.42 1545.84,-166.01 1555.03,-171.3 1556.32,-164.42"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge64" class="edge">
+<title>sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff008b" stroke-dasharray="5,2" d="M1644.63,-204.03C1604.26,-215.54 1539.45,-231.76 1482,-236"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_console_stats.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge30" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_console_stats.f90</title>
+<path fill="none" stroke="#aa00ff" stroke-dasharray="5,2" d="M1064.45,-719.05C1030.27,-731.9 976.02,-752.29 938.58,-766.37"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="937.1,-763.18 928.97,-769.98 939.57,-769.74 937.1,-763.18"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_basal_flux.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge11" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_basal_flux.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M704,-715C669.27,-713.02 630.76,-712.75 598.13,-713.07"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="597.72,-709.58 587.76,-713.2 597.8,-716.58 597.72,-709.58"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_evp.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge12" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_evp.f90</title>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M704,-715C679.47,-713.6 620.21,-699.14 575.93,-687.58"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="576.72,-684.17 566.16,-685.01 574.94,-690.94 576.72,-684.17"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_frazil_uptake.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge13" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_frazil_uptake.f90</title>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M895,-715C811.01,-716.58 789.86,-719.77 706,-715"/>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M704,-715C671.02,-713.12 661.67,-708.04 634,-690 614.51,-677.29 617.94,-663.98 598,-652 594.97,-650.18 591.79,-648.52 588.5,-646.99"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="589.62,-643.67 579.04,-643.06 586.93,-650.13 589.62,-643.67"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_init.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge15" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_init.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M895,-435C787.64,-398.59 653.84,-393.2 579.18,-393.48"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="579.02,-389.98 569.05,-393.55 579.07,-396.98 579.02,-389.98"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_thermo_driver.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge27" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_thermo_driver.f90</title>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M704,-715C691.39,-714.28 626.74,-729.99 578.05,-742.4"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="577.06,-739.04 568.24,-744.91 578.8,-745.82 577.06,-739.04"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_transport.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge28" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_transport.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1818.36,-563.01C1802.32,-566.39 1784.49,-569.76 1768,-572 1641.77,-589.17 1609.39,-591 1482,-591 1482,-591 1482,-591 1286.5,-591 1113.39,-591 1069.88,-600.03 897,-591"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M895,-591C846.9,-588.25 793.26,-575.99 755.45,-565.76"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="756.28,-562.36 745.71,-563.07 754.42,-569.1 756.28,-562.36"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge33" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#ff00aa" stroke-dasharray="5,2" d="M1866.23,-538.95C1852.79,-491.77 1797.19,-317.99 1686,-232"/>
+<path fill="none" stroke="#ff00aa" stroke-dasharray="5,2" d="M1684,-232C1654.41,-209.11 1634.46,-231.59 1602,-213 1581.81,-201.44 1586.09,-186.73 1566,-175 1562.76,-173.11 1559.35,-171.38 1555.84,-169.81"/>
+<polygon fill="#ff00aa" stroke="#ff00aa" points="1556.93,-166.48 1546.35,-166.01 1554.33,-172.98 1556.93,-166.48"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge41" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1286.5,-515C1111.44,-490.82 1060.78,-501.38 897,-435"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M895,-435C817.38,-408.67 750.06,-333.22 721.11,-296.95"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="723.83,-294.74 714.91,-289.02 718.32,-299.05 723.83,-294.74"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_atm_forcing.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge47" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_atm_forcing.f90</title>
+<path fill="none" stroke="#e7ff00" stroke-dasharray="5,2" d="M1861.47,-563.25C1846.24,-585.34 1810.81,-631.45 1768,-652 1574.66,-744.81 1502.69,-716.68 1288.5,-706"/>
+<path fill="none" stroke="#e7ff00" stroke-dasharray="5,2" d="M1286.5,-706C1238.03,-702.45 1227.39,-690.46 1179,-686 1106.86,-679.35 1087.93,-677.36 1016,-686 961.95,-692.49 951.35,-711.9 897,-715"/>
+<path fill="none" stroke="#e7ff00" stroke-dasharray="5,2" d="M895,-715C841.84,-716 782.59,-698.37 744.84,-684.65"/>
+<polygon fill="#e7ff00" stroke="#e7ff00" points="745.85,-681.29 735.25,-681.08 743.4,-687.85 745.85,-681.29"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_itd.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge49" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_itd.f90</title>
+<path fill="none" stroke="#5cff00" stroke-dasharray="5,2" d="M895,-591C778.88,-584.36 749.34,-586.96 634,-572 615.55,-569.61 595.53,-566.14 577.6,-562.7"/>
+<polygon fill="#5cff00" stroke="#5cff00" points="578.07,-559.23 567.59,-560.75 576.73,-566.1 578.07,-559.23"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_ocean_coupler.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge50" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_ocean_coupler.f90</title>
+<path fill="none" stroke="#00ff2e" stroke-dasharray="5,2" d="M1849.43,-563.09C1829.33,-574.85 1797.26,-592.7 1768,-605 1758.71,-608.91 1748.61,-612.56 1738.79,-615.82"/>
+<polygon fill="#00ff2e" stroke="#00ff2e" points="1737.53,-612.55 1729.09,-618.95 1739.68,-619.21 1737.53,-612.55"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_snow.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge51" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_snow.f90</title>
+<path fill="none" stroke="#00ffb9" stroke-dasharray="5,2" d="M1803.77,-551C1785.63,-551 1766.02,-551 1748.09,-551"/>
+<polygon fill="#00ffb9" stroke="#00ffb9" points="1748.05,-547.5 1738.05,-551 1748.04,-554.5 1748.05,-547.5"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge53" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90</title>
+<path fill="none" stroke="#002eff" stroke-dasharray="5,2" d="M1869.59,-538.71C1869.26,-490.52 1861.49,-312.54 1768,-218 1764.57,-214.53 1760.68,-211.53 1756.51,-208.92"/>
+<polygon fill="#002eff" stroke="#002eff" points="1758.05,-205.78 1747.59,-204.11 1754.73,-211.94 1758.05,-205.78"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge56" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#5c00ff" stroke-dasharray="5,2" d="M1286.5,-706C1246.59,-704.01 1201.86,-704.15 1166.05,-704.84"/>
+<polygon fill="#5c00ff" stroke="#5c00ff" points="1165.64,-701.35 1155.72,-705.06 1165.79,-708.35 1165.64,-701.35"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge66" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff008b" stroke-dasharray="5,2" d="M1843.84,-538.89C1808.79,-522.7 1743.69,-493.85 1686,-475"/>
+<path fill="none" stroke="#ff008b" stroke-dasharray="5,2" d="M1684,-475C1563.91,-435.77 1596.35,-328.73 1482,-275"/>
+<path fill="none" stroke="#ff008b" stroke-dasharray="5,2" d="M1480,-275C1458.78,-265.03 1404.75,-254.18 1359.48,-246.3"/>
+<polygon fill="#ff008b" stroke="#ff008b" points="1359.82,-242.81 1349.37,-244.56 1358.63,-249.71 1359.82,-242.81"/>
+</g>
+<!-- sourcefile~rdb_decomp.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node24" class="node">
+<title>sourcefile~rdb_decomp.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node24"><a xlink:href="../sourcefile/rdb_decomp.f90.html" xlink:title="rdb_decomp.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1148.5,-405 1046.5,-405 1046.5,-381 1148.5,-381 1148.5,-405"/>
+<text text-anchor="middle" x="1097.5" y="-390.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_decomp.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_decomp.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge69" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_decomp.f90</title>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M1684,-475C1633.37,-458.46 1618.87,-489.5 1566,-496 1443.3,-511.07 1410.63,-534.12 1288.5,-515"/>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M1286.5,-515C1253.3,-510.41 1244.23,-507.41 1215,-491 1176.62,-469.45 1138.87,-434.46 1117.17,-412.64"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="1119.43,-409.94 1109.94,-405.25 1114.43,-414.84 1119.43,-409.94"/>
+</g>
+<!-- sourcefile~rdb_ocean_data_forcing.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node26" class="node">
+<title>sourcefile~rdb_ocean_data_forcing.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node26"><a xlink:href="../sourcefile/rdb_ocean_data_forcing.f90.html" xlink:title="rdb_ocean_data_forcing.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1179,-247 1016,-247 1016,-223 1179,-223 1179,-247"/>
+<text text-anchor="middle" x="1097.5" y="-232.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_data_forcing.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge75" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1480,-275C1402.97,-238.81 1373.49,-279.46 1288.5,-275"/>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1286.5,-275C1238.47,-272.48 1184.94,-260.12 1147.32,-249.8"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1148.2,-246.41 1137.63,-247.09 1146.32,-253.15 1148.2,-246.41"/>
+</g>
+<!-- sourcefile~rdb_ocean_data_input.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node27" class="node">
+<title>sourcefile~rdb_ocean_data_input.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node27"><a xlink:href="../sourcefile/rdb_ocean_data_input.f90.html" xlink:title="rdb_ocean_data_input.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="972.5,-289 819.5,-289 819.5,-265 972.5,-265 972.5,-289"/>
+<text text-anchor="middle" x="896" y="-274.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_data_input.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_data_input.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge78" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_data_input.f90</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M1286.5,-275C1182.29,-269.53 1062.18,-271.38 983.21,-273.72"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="982.71,-270.23 972.82,-274.03 982.92,-277.23 982.71,-270.23"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node28" class="node">
+<title>sourcefile~rdb_ocean_setup.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node28"><a xlink:href="../sourcefile/rdb_ocean_setup.f90.html" xlink:title="rdb_ocean_setup.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1544,-487 1418,-487 1418,-463 1544,-463 1544,-487"/>
+<text text-anchor="middle" x="1481" y="-472.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge80" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M1684,-475C1642.45,-461.43 1593.47,-461.07 1554.15,-464.28"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="1553.75,-460.8 1544.11,-465.19 1554.39,-467.77 1553.75,-460.8"/>
+</g>
+<!-- sourcefile~rdb_ocean_stability_audit.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node29" class="node">
+<title>sourcefile~rdb_ocean_stability_audit.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node29"><a xlink:href="../sourcefile/rdb_ocean_stability_audit.f90.html" xlink:title="rdb_ocean_stability_audit.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1566,-445 1396,-445 1396,-421 1566,-421 1566,-445"/>
+<text text-anchor="middle" x="1481" y="-430.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_stability_audit.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_stability_audit.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge81" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_stability_audit.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1684,-475C1647.28,-463 1605.64,-453.66 1569.75,-446.86"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="1570.26,-443.4 1559.79,-445.01 1568.98,-450.28 1570.26,-443.4"/>
+</g>
+<!-- sourcefile~rdb_state.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node31" class="node">
+<title>sourcefile~rdb_state.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node31"><a xlink:href="../sourcefile/rdb_state.f90.html" xlink:title="rdb_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1523.5,-208 1438.5,-208 1438.5,-184 1523.5,-184 1523.5,-208"/>
+<text text-anchor="middle" x="1481" y="-193.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_state.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge83" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_state.f90</title>
+<path fill="none" stroke="#ff00aa" stroke-dasharray="5,2" d="M1684,-232C1678.04,-227.39 1591.58,-213.13 1533.73,-204"/>
+<polygon fill="#ff00aa" stroke="#ff00aa" points="1534.06,-200.51 1523.64,-202.41 1532.98,-207.42 1534.06,-200.51"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ice_state.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge26" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ice_state.f90</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M1250.91,-247.04C1239.35,-251.2 1226.53,-256.05 1215,-261 1107.78,-307.01 1089.99,-339.07 980,-378 749.96,-459.43 655.96,-376.09 444,-497 412.23,-515.12 385.12,-548.48 369.69,-570.19"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="366.62,-568.49 363.82,-578.71 372.38,-572.47 366.62,-568.49"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge44" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1246.27,-222.92C1208.52,-212.44 1150.28,-198.41 1098.5,-195"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1096.5,-195C1006.43,-189.07 984.81,-136.12 897,-157"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge58" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#5c00ff" stroke-dasharray="5,2" d="M1233.84,-247.15C1226.77,-250.65 1220.18,-255.18 1215,-261 1168.59,-313.22 1196.26,-346.31 1179,-414 1153.07,-515.7 1118.82,-636.29 1104.85,-684.99"/>
+<polygon fill="#5c00ff" stroke="#5c00ff" points="1101.44,-684.18 1102.04,-694.76 1108.16,-686.12 1101.44,-684.18"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_decomp.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge73" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_decomp.f90</title>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M1238.1,-247.16C1229.81,-250.7 1221.71,-255.23 1215,-261 1189.66,-282.78 1200.31,-301.27 1179,-327 1163.59,-345.61 1142.32,-362.78 1125.51,-374.94"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="1123.33,-372.2 1117.19,-380.83 1127.37,-377.91 1123.33,-372.2"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge76" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1225.98,-235C1214.32,-235 1201.88,-235 1189.5,-235"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1189.14,-231.5 1179.14,-235 1189.14,-238.5 1189.14,-231.5"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_data_input.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge79" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_data_input.f90</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M1096.5,-195C1028.98,-190.55 957.39,-233.23 921.11,-258.73"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="918.74,-256.12 912.67,-264.8 922.83,-261.8 918.74,-256.12"/>
+</g>
+<!-- sourcefile~rdb_ocean_z_init.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node30" class="node">
+<title>sourcefile~rdb_ocean_z_init.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node30"><a xlink:href="../sourcefile/rdb_ocean_z_init.f90.html" xlink:title="rdb_ocean_z_init.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="958,-209 834,-209 834,-185 958,-185 958,-209"/>
+<text text-anchor="middle" x="896" y="-194.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_z_init.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_z_init.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge82" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_z_init.f90</title>
+<path fill="none" stroke="#aa00ff" stroke-dasharray="5,2" d="M1096.5,-195C1054.17,-192.21 1006.67,-192.55 968.65,-193.66"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="968.07,-190.18 958.19,-193.99 968.29,-197.17 968.07,-190.18"/>
+</g>
+<!-- sourcefile~rdb_config_schema.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node23" class="node">
+<title>sourcefile~rdb_config_schema.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node23"><a xlink:href="../sourcefile/rdb_config_schema.f90.html" xlink:title="rdb_config_schema.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="965.5,-369 826.5,-369 826.5,-345 965.5,-345 965.5,-369"/>
+<text text-anchor="middle" x="896" y="-354.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_config_schema.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_config_schema.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge34" class="edge">
+<title>sourcefile~rdb_config_schema.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M851.86,-344.99C838.89,-340.98 824.72,-336.19 812,-331 785.63,-320.24 756.92,-305.41 736.03,-294.01"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="737.47,-290.81 727.03,-289.04 734.09,-296.93 737.47,-290.81"/>
+</g>
+<!-- sourcefile~rdb_decomp.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge35" class="edge">
+<title>sourcefile~rdb_decomp.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1053.13,-380.95C1040.75,-376.72 1027.52,-371.39 1016,-365 998.03,-355.03 998.49,-344.97 980,-336 945.95,-319.49 933.18,-328.11 897,-317"/>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge37" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M2003.96,-177.91C1988,-166.07 1962.04,-148.34 1937,-138 1749.84,-60.68 1676.03,-56.04 1482,-114"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1480,-114C1442.83,-123.14 1431.65,-119.06 1396,-133 1344.63,-153.09 1343.65,-194.82 1288.5,-195"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1286.5,-195C1238.32,-195.16 1226.9,-186.16 1179,-181 1053.94,-167.54 1019.37,-127.9 897,-157"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M895,-157C858.09,-165.35 845.33,-158.09 812,-176 774.28,-196.27 740.3,-233.61 721.47,-256.76"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="718.5,-254.87 715.02,-264.88 723.98,-259.23 718.5,-254.87"/>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge60" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#e700ff" stroke-dasharray="5,2" d="M2014.58,-202.01C1993.2,-254.15 1908.27,-461.31 1880.41,-529.28"/>
+<polygon fill="#e700ff" stroke="#e700ff" points="1877,-528.36 1876.44,-538.94 1883.47,-531.02 1877,-528.36"/>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge63" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff008b" stroke-dasharray="5,2" d="M1972.74,-185.41C1922.29,-180.7 1839.54,-173.7 1768,-171 1694.27,-168.22 1668.32,-138.69 1602,-171 1578.66,-182.37 1587.93,-203.11 1566,-217 1533.66,-237.48 1520.17,-233.18 1482,-236"/>
+<path fill="none" stroke="#ff008b" stroke-dasharray="5,2" d="M1480,-236C1440.29,-238.55 1395.85,-238.49 1359.79,-237.71"/>
+<polygon fill="#ff008b" stroke="#ff008b" points="1359.45,-234.2 1349.37,-237.46 1359.28,-241.2 1359.45,-234.2"/>
+</g>
+<!-- sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge39" class="edge">
+<title>sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1015.91,-238.33C958.79,-241.32 880.46,-246.73 812,-256 795.22,-258.27 777.09,-261.55 760.66,-264.85"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="759.76,-261.46 750.67,-266.89 761.17,-268.32 759.76,-261.46"/>
+</g>
+<!-- sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_ocean_data_input.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge77" class="edge">
+<title>sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_ocean_data_input.f90</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M1039.33,-247.04C1015.85,-251.98 988.5,-257.74 964.08,-262.88"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="963.24,-259.48 954.18,-264.96 964.68,-266.33 963.24,-259.48"/>
+</g>
+<!-- sourcefile~rdb_ocean_data_input.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge40" class="edge">
+<title>sourcefile~rdb_ocean_data_input.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M819.49,-277C799.89,-277 779.15,-277 760.83,-277"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="760.65,-273.5 750.65,-277 760.65,-280.5 760.65,-273.5"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge42" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1286.5,-477C1164.12,-460.89 1111.7,-491.96 1016,-414 986.4,-389.89 1009.65,-360.06 980,-336 950.62,-312.15 933.39,-327.4 897,-317"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge57" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#5c00ff" stroke-dasharray="5,2" d="M1460.03,-487.15C1396.81,-525.59 1200.91,-644.72 1127.06,-689.63"/>
+<polygon fill="#5c00ff" stroke="#5c00ff" points="1125,-686.79 1118.28,-694.97 1128.64,-692.77 1125,-686.79"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge67" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff008b" stroke-dasharray="5,2" d="M1417.71,-468.14C1409.56,-464.9 1401.98,-460.35 1396,-454 1336.2,-390.46 1416.43,-327.56 1360,-261 1357.21,-257.71 1353.98,-254.84 1350.45,-252.33"/>
+<polygon fill="#ff008b" stroke="#ff008b" points="1352.14,-249.26 1341.76,-247.11 1348.53,-255.26 1352.14,-249.26"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_decomp.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge72" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_decomp.f90</title>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M1417.64,-480.08C1380.07,-482.04 1331.35,-482.64 1288.5,-477"/>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M1286.5,-477C1253.9,-472.71 1245.48,-470.33 1215,-458 1197.76,-451.03 1156.29,-427.22 1127.79,-410.44"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="1129.42,-407.34 1119.03,-405.27 1125.86,-413.37 1129.42,-407.34"/>
+</g>
+<!-- sourcefile~rdb_ocean_stability_audit.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge43" class="edge">
+<title>sourcefile~rdb_ocean_stability_audit.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1470.4,-420.73C1451.91,-398.17 1408.82,-350.71 1360,-332 1167.75,-258.31 1093.82,-377.43 897,-317"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M895,-317C870.21,-309.91 807.05,-296.92 760.53,-287.66"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="761.07,-284.2 750.58,-285.69 759.71,-291.06 761.07,-284.2"/>
+</g>
+<!-- sourcefile~rdb_ocean_z_init.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge45" class="edge">
+<title>sourcefile~rdb_ocean_z_init.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M851.86,-209.01C838.89,-213.02 824.72,-217.81 812,-223 785.63,-233.76 756.92,-248.59 736.03,-259.99"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="734.09,-257.07 727.03,-264.96 737.47,-263.19 734.09,-257.07"/>
+</g>
+<!-- sourcefile~rdb_state.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge46" class="edge">
+<title>sourcefile~rdb_state.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1438.16,-195.58C1399.36,-195.24 1340.03,-194.83 1288.5,-195"/>
+</g>
+<!-- sourcefile~rdb_halo.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node32" class="node">
+<title>sourcefile~rdb_halo.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node32"><a xlink:href="../sourcefile/rdb_halo.f90.html" xlink:title="rdb_halo.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1328,-365 1247,-365 1247,-341 1328,-341 1328,-365"/>
+<text text-anchor="middle" x="1287.5" y="-350.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_halo.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_halo.f90&#45;&gt;sourcefile~rdb_decomp.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge68" class="edge">
+<title>sourcefile~rdb_halo.f90&#45;&gt;sourcefile~rdb_decomp.f90</title>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M1246.63,-361.48C1221.08,-366.92 1187.44,-374.08 1158.67,-380.2"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="1157.77,-376.81 1148.72,-382.32 1159.23,-383.66 1157.77,-376.81"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node33" class="node">
+<title>sourcefile~rdb_ocean_halo.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node33"><a xlink:href="../sourcefile/rdb_ocean_halo.f90.html" xlink:title="rdb_ocean_halo.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1347,-449 1228,-449 1228,-425 1347,-425 1347,-449"/>
+<text text-anchor="middle" x="1287.5" y="-434.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_halo.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_halo.f90&#45;&gt;sourcefile~rdb_decomp.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge70" class="edge">
+<title>sourcefile~rdb_ocean_halo.f90&#45;&gt;sourcefile~rdb_decomp.f90</title>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M1235.13,-424.98C1211.43,-419.43 1183.15,-412.81 1158.48,-407.04"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="1159.04,-403.58 1148.51,-404.7 1157.45,-410.39 1159.04,-403.58"/>
+</g>
+<!-- sourcefile~rdb_ocean_restart_io.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node34" class="node">
+<title>sourcefile~rdb_ocean_restart_io.f90</title>
+<g id="a_sourcefile~~rdb_ice_optics.f90~~AfferentGraph_node34"><a xlink:href="../sourcefile/rdb_ocean_restart_io.f90.html" xlink:title="rdb_ocean_restart_io.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1360,-407 1215,-407 1215,-383 1360,-383 1360,-407"/>
+<text text-anchor="middle" x="1287.5" y="-392.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_restart_io.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_restart_io.f90&#45;&gt;sourcefile~rdb_decomp.f90 -->
+<g id="sourcefile~~rdb_ice_optics.f90~~AfferentGraph_edge71" class="edge">
+<title>sourcefile~rdb_ocean_restart_io.f90&#45;&gt;sourcefile~rdb_decomp.f90</title>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M1214.89,-394.24C1196.33,-394.04 1176.53,-393.83 1158.62,-393.64"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="1158.64,-390.14 1148.61,-393.53 1158.57,-397.14 1158.64,-390.14"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefilerdb_ice_opticsf90AfferentGraph = svgPanZoom('#sourcefilerdb_ice_opticsf90AfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#AfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="AfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+<br>
+      <section>
+        <h2><span class="anchor" id="src"></span>Source Code</h2>
+        <div class="hl codehilite"><pre><span></span><a id="ln-1" name="ln-1" href="#ln-1"></a><span class="c">!! Sea-ice shortwave optics (SIS2 port, PR 3a).</span>
+<a id="ln-2" name="ln-2" href="#ln-2"></a><span class="k">module </span><span class="n">rdb_ice_optics</span>
+<a id="ln-3" name="ln-3" href="#ln-3"></a><span class="w">   </span><span class="c">!! CSIM4 (non-delta-Eddington) branch of `ice_optics_SIS2`</span>
+<a id="ln-4" name="ln-4" href="#ln-4"></a><span class="w">   </span><span class="c">!! (SIS_optics.F90:371-409, Apache-2.0) — snow/ice albedo + the</span>
+<a id="ln-5" name="ln-5" href="#ln-5"></a><span class="w">   </span><span class="c">!! Beer's-law vertical partition of absorbed shortwave into the</span>
+<a id="ln-6" name="ln-6" href="#ln-6"></a><span class="w">   </span><span class="c">!! surface, snow, per-layer ice, and transmitted-to-ocean terms.</span>
+<a id="ln-7" name="ln-7" href="#ln-7"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-8" name="ln-8" href="#ln-8"></a><span class="w">   </span><span class="c">!! The delta-Eddington branch (SIS_optics.F90 `do_deltaEdd`, spectral</span>
+<a id="ln-9" name="ln-9" href="#ln-9"></a><span class="w">   </span><span class="c">!! direct/diffuse albedo bands) is deliberately NOT ported — CSIM4 is</span>
+<a id="ln-10" name="ln-10" href="#ln-10"></a><span class="w">   </span><span class="c">!! SIS2's non-delta-Eddington default and the only branch this PR</span>
+<a id="ln-11" name="ln-11" href="#ln-11"></a><span class="w">   </span><span class="c">!! needs.</span>
+<a id="ln-12" name="ln-12" href="#ln-12"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-13" name="ln-13" href="#ln-13"></a><span class="w">   </span><span class="c">!! Everything pure + `!$acc routine seq`: called from inside the</span>
+<a id="ln-14" name="ln-14" href="#ln-14"></a><span class="w">   </span><span class="c">!! per-column `do concurrent` driver in `rdb_ice_column`.</span>
+<a id="ln-15" name="ln-15" href="#ln-15"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_constants</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">wp</span>
+<a id="ln-16" name="ln-16" href="#ln-16"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_ice_enthalpy</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">ice_t_freeze</span>
+<a id="ln-17" name="ln-17" href="#ln-17"></a><span class="w">   </span><span class="k">implicit none</span>
+<a id="ln-18" name="ln-18" href="#ln-18"></a><span class="k">   private</span>
+<a id="ln-19" name="ln-19" href="#ln-19"></a>
+<a id="ln-20" name="ln-20" href="#ln-20"></a><span class="k">   public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ice_optics_csim4</span>
+<a id="ln-21" name="ln-21" href="#ln-21"></a>
+<a id="ln-22" name="ln-22" href="#ln-22"></a><span class="w">   </span><span class="c">! ---- CSIM4 optics constants (SIS_optics.F90:129-141 defaults) ----</span>
+<a id="ln-23" name="ln-23" href="#ln-23"></a><span class="w">   </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="p">,</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ICE_ALB_SNOW</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.85_wp</span>
+<a id="ln-24" name="ln-24" href="#ln-24"></a><span class="w">      </span><span class="c">!! Cold-snow albedo — SIS2 `SNOW_ALBEDO`.</span>
+<a id="ln-25" name="ln-25" href="#ln-25"></a><span class="w">   </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="p">,</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ICE_ALB_ICE</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5826_wp</span>
+<a id="ln-26" name="ln-26" href="#ln-26"></a><span class="w">      </span><span class="c">!! Cold bare-ice albedo (non-slab default) — SIS2 `ICE_ALBEDO`.</span>
+<a id="ln-27" name="ln-27" href="#ln-27"></a><span class="w">   </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="p">,</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ICE_PEN_ICE</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.3_wp</span>
+<a id="ln-28" name="ln-28" href="#ln-28"></a><span class="w">      </span><span class="c">!! Fraction of absorbed SW that penetrates below the surface skin</span>
+<a id="ln-29" name="ln-29" href="#ln-29"></a><span class="w">      </span><span class="c">!! for bare ice — SIS2 `ICE_SW_PEN_FRAC`.</span>
+<a id="ln-30" name="ln-30" href="#ln-30"></a><span class="w">   </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="p">,</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ICE_OPT_DEP_ICE</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.67_wp</span>
+<a id="ln-31" name="ln-31" href="#ln-31"></a><span class="w">      </span><span class="c">!! E-folding optical depth of penetrating SW in ice (m) — SIS2</span>
+<a id="ln-32" name="ln-32" href="#ln-32"></a><span class="w">      </span><span class="c">!! `ICE_OPTICAL_DEPTH`.</span>
+<a id="ln-33" name="ln-33" href="#ln-33"></a><span class="w">   </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="p">,</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ICE_T_RANGE_MELT</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span>
+<a id="ln-34" name="ln-34" href="#ln-34"></a><span class="w">      </span><span class="c">!! Temperature range (degC) over which the melting-albedo</span>
+<a id="ln-35" name="ln-35" href="#ln-35"></a><span class="w">      </span><span class="c">!! reduction ramps in — SIS2 `T_RANGE_MELT`.</span>
+<a id="ln-36" name="ln-36" href="#ln-36"></a><span class="w">   </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="p">,</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ICE_SNOW_PATCH</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.02_wp</span>
+<a id="ln-37" name="ln-37" href="#ln-37"></a><span class="w">      </span><span class="c">!! Thin-snow masking depth (m) — inline `0.02` at</span>
+<a id="ln-38" name="ln-38" href="#ln-38"></a><span class="w">      </span><span class="c">!! SIS_optics.F90:373; kept as a named constant here.</span>
+<a id="ln-39" name="ln-39" href="#ln-39"></a>
+<a id="ln-40" name="ln-40" href="#ln-40"></a><span class="k">contains</span>
+<a id="ln-41" name="ln-41" href="#ln-41"></a>
+<a id="ln-42" name="ln-42" href="#ln-42"></a><span class="k">   pure subroutine </span><span class="n">ice_optics_csim4</span><span class="p">(</span><span class="n">nk</span><span class="p">,</span><span class="w"> </span><span class="n">hs</span><span class="p">,</span><span class="w"> </span><span class="n">hi</span><span class="p">,</span><span class="w"> </span><span class="n">ts</span><span class="p">,</span><span class="w"> </span><span class="n">sal_ice_top</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-43" name="ln-43" href="#ln-43"></a><span class="w">                                    </span><span class="n">albedo</span><span class="p">,</span><span class="w"> </span><span class="n">abs_sfc</span><span class="p">,</span><span class="w"> </span><span class="n">abs_snow</span><span class="p">,</span><span class="w"> </span><span class="n">abs_ice_lay</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-44" name="ln-44" href="#ln-44"></a><span class="w">                                    </span><span class="n">abs_ocn</span><span class="p">,</span><span class="w"> </span><span class="n">abs_int</span><span class="p">,</span><span class="w"> </span><span class="n">pen</span><span class="p">)</span>
+<a id="ln-45" name="ln-45" href="#ln-45"></a><span class="w">      </span><span class="c">!! CSIM4 albedo + Beer's-law vertical SW partition</span>
+<a id="ln-46" name="ln-46" href="#ln-46"></a><span class="w">      </span><span class="c">!! (SIS_optics.F90:371-409). Exact port; inline literals</span>
+<a id="ln-47" name="ln-47" href="#ln-47"></a><span class="w">      </span><span class="c">!! `0.1235`/`0.075` (melt-albedo reductions) and `5.0`/`0.5`</span>
+<a id="ln-48" name="ln-48" href="#ln-48"></a><span class="w">      </span><span class="c">!! (thin-ice atan ramp) and `0.06` (thin-ice albedo floor) stay</span>
+<a id="ln-49" name="ln-49" href="#ln-49"></a><span class="w">      </span><span class="c">!! inline per SIS2 (SIS_optics.F90:378-384).</span>
+<a id="ln-50" name="ln-50" href="#ln-50"></a><span class="w">      </span><span class="c">!!</span>
+<a id="ln-51" name="ln-51" href="#ln-51"></a><span class="w">      </span><span class="c">!! Partition identity (up to ~1 `exp` round-off): `abs_sfc +</span>
+<a id="ln-52" name="ln-52" href="#ln-52"></a><span class="w">      </span><span class="c">!! abs_snow + sum(abs_ice_lay) + abs_ocn == 1`, because</span>
+<a id="ln-53" name="ln-53" href="#ln-53"></a><span class="w">      </span><span class="c">!! `opt_decay_lay**nk == exp(-hi/ICE_OPT_DEP_ICE)`.</span>
+<a id="ln-54" name="ln-54" href="#ln-54"></a><span class="w">      </span><span class="c">!$acc routine seq</span>
+<a id="ln-55" name="ln-55" href="#ln-55"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nk</span>
+<a id="ln-56" name="ln-56" href="#ln-56"></a><span class="w">         </span><span class="c">!! Number of ice layers (declared first — decl-order).</span>
+<a id="ln-57" name="ln-57" href="#ln-57"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hs</span>
+<a id="ln-58" name="ln-58" href="#ln-58"></a><span class="w">         </span><span class="c">!! Snow thickness (m).</span>
+<a id="ln-59" name="ln-59" href="#ln-59"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hi</span>
+<a id="ln-60" name="ln-60" href="#ln-60"></a><span class="w">         </span><span class="c">!! Ice thickness (m).</span>
+<a id="ln-61" name="ln-61" href="#ln-61"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ts</span>
+<a id="ln-62" name="ln-62" href="#ln-62"></a><span class="w">         </span><span class="c">!! Skin/surface temperature stand-in (degC).</span>
+<a id="ln-63" name="ln-63" href="#ln-63"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sal_ice_top</span>
+<a id="ln-64" name="ln-64" href="#ln-64"></a><span class="w">         </span><span class="c">!! Bulk salinity of the top ice layer (PSU) — sets the</span>
+<a id="ln-65" name="ln-65" href="#ln-65"></a><span class="w">         </span><span class="c">!! melt-onset freezing temperature.</span>
+<a id="ln-66" name="ln-66" href="#ln-66"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">albedo</span>
+<a id="ln-67" name="ln-67" href="#ln-67"></a><span class="w">         </span><span class="c">!! Combined snow+ice broadband albedo (nondim).</span>
+<a id="ln-68" name="ln-68" href="#ln-68"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">abs_sfc</span>
+<a id="ln-69" name="ln-69" href="#ln-69"></a><span class="w">         </span><span class="c">!! Fraction of absorbed SW deposited at the surface skin.</span>
+<a id="ln-70" name="ln-70" href="#ln-70"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">abs_snow</span>
+<a id="ln-71" name="ln-71" href="#ln-71"></a><span class="w">         </span><span class="c">!! Fraction of absorbed SW deposited in the snow (always 0</span>
+<a id="ln-72" name="ln-72" href="#ln-72"></a><span class="w">         </span><span class="c">!! in the CSIM4 branch — SIS2 keeps the term for symmetry</span>
+<a id="ln-73" name="ln-73" href="#ln-73"></a><span class="w">         </span><span class="c">!! with the delta-Eddington branch).</span>
+<a id="ln-74" name="ln-74" href="#ln-74"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">abs_ice_lay</span><span class="p">(</span><span class="n">nk</span><span class="p">)</span>
+<a id="ln-75" name="ln-75" href="#ln-75"></a><span class="w">         </span><span class="c">!! Fraction of absorbed SW deposited per ice layer, TOP-DOWN</span>
+<a id="ln-76" name="ln-76" href="#ln-76"></a><span class="w">         </span><span class="c">!! (`abs_ice_lay(1)` = top ice layer).</span>
+<a id="ln-77" name="ln-77" href="#ln-77"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">abs_ocn</span>
+<a id="ln-78" name="ln-78" href="#ln-78"></a><span class="w">         </span><span class="c">!! Fraction of absorbed SW transmitted through to the ocean.</span>
+<a id="ln-79" name="ln-79" href="#ln-79"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">abs_int</span>
+<a id="ln-80" name="ln-80" href="#ln-80"></a><span class="w">         </span><span class="c">!! Fraction of absorbed SW deposited in the ice interior</span>
+<a id="ln-81" name="ln-81" href="#ln-81"></a><span class="w">         </span><span class="c">!! (`pen - sw_frac_top` after the Beer's-law drain).</span>
+<a id="ln-82" name="ln-82" href="#ln-82"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">pen</span>
+<a id="ln-83" name="ln-83" href="#ln-83"></a><span class="w">         </span><span class="c">!! Fraction of the total (post-albedo) SW that penetrates</span>
+<a id="ln-84" name="ln-84" href="#ln-84"></a><span class="w">         </span><span class="c">!! below the surface skin.</span>
+<a id="ln-85" name="ln-85" href="#ln-85"></a>
+<a id="ln-86" name="ln-86" href="#ln-86"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">as</span><span class="p">,</span><span class="w"> </span><span class="n">ai</span><span class="p">,</span><span class="w"> </span><span class="n">snow_cover</span><span class="p">,</span><span class="w"> </span><span class="n">temp_ice_freeze</span><span class="p">,</span><span class="w"> </span><span class="n">fh</span><span class="p">,</span><span class="w"> </span><span class="n">melt_ramp</span>
+<a id="ln-87" name="ln-87" href="#ln-87"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">opt_decay_lay</span><span class="p">,</span><span class="w"> </span><span class="n">sw_frac_top</span>
+<a id="ln-88" name="ln-88" href="#ln-88"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">m</span>
+<a id="ln-89" name="ln-89" href="#ln-89"></a>
+<a id="ln-90" name="ln-90" href="#ln-90"></a><span class="w">      </span><span class="n">as</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ICE_ALB_SNOW</span>
+<a id="ln-91" name="ln-91" href="#ln-91"></a><span class="w">      </span><span class="n">ai</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ICE_ALB_ICE</span>
+<a id="ln-92" name="ln-92" href="#ln-92"></a><span class="w">      </span><span class="n">snow_cover</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hs</span><span class="o">/</span><span class="p">(</span><span class="n">hs</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ICE_SNOW_PATCH</span><span class="p">)</span>
+<a id="ln-93" name="ln-93" href="#ln-93"></a><span class="w">      </span><span class="n">temp_ice_freeze</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ice_t_freeze</span><span class="p">(</span><span class="n">sal_ice_top</span><span class="p">)</span>
+<a id="ln-94" name="ln-94" href="#ln-94"></a>
+<a id="ln-95" name="ln-95" href="#ln-95"></a><span class="w">      </span><span class="n">fh</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="nb">atan</span><span class="p">(</span><span class="mf">5.0_wp</span><span class="o">*</span><span class="n">hi</span><span class="p">)</span><span class="o">/</span><span class="nb">atan</span><span class="p">(</span><span class="mf">5.0_wp</span><span class="o">*</span><span class="mf">0.5_wp</span><span class="p">),</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="p">)</span>
+<a id="ln-96" name="ln-96" href="#ln-96"></a>
+<a id="ln-97" name="ln-97" href="#ln-97"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ts</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ICE_T_RANGE_MELT</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">temp_ice_freeze</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-98" name="ln-98" href="#ln-98"></a><span class="w">         </span><span class="c">! Reduce albedo for melting, CSIM4 0.53/0.47 vis/ir split</span>
+<a id="ln-99" name="ln-99" href="#ln-99"></a><span class="w">         </span><span class="c">! (SIS_optics.F90:378-384).</span>
+<a id="ln-100" name="ln-100" href="#ln-100"></a><span class="w">         </span><span class="n">melt_ramp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">((</span><span class="n">ts</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ICE_T_RANGE_MELT</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">temp_ice_freeze</span><span class="p">)</span><span class="o">/</span><span class="n">ICE_T_RANGE_MELT</span><span class="p">,</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="p">)</span>
+<a id="ln-101" name="ln-101" href="#ln-101"></a><span class="w">         </span><span class="n">as</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">as</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">0.1235_wp</span><span class="o">*</span><span class="n">melt_ramp</span>
+<a id="ln-102" name="ln-102" href="#ln-102"></a><span class="w">         </span><span class="n">ai</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ai</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">0.075_wp</span><span class="o">*</span><span class="n">melt_ramp</span>
+<a id="ln-103" name="ln-103" href="#ln-103"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-104" name="ln-104" href="#ln-104"></a><span class="k">      </span><span class="n">ai</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fh</span><span class="o">*</span><span class="n">ai</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">fh</span><span class="p">)</span><span class="o">*</span><span class="mf">0.06_wp</span>
+<a id="ln-105" name="ln-105" href="#ln-105"></a>
+<a id="ln-106" name="ln-106" href="#ln-106"></a><span class="w">      </span><span class="n">albedo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">snow_cover</span><span class="o">*</span><span class="n">as</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">snow_cover</span><span class="p">)</span><span class="o">*</span><span class="n">ai</span>
+<a id="ln-107" name="ln-107" href="#ln-107"></a>
+<a id="ln-108" name="ln-108" href="#ln-108"></a><span class="w">      </span><span class="n">pen</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">snow_cover</span><span class="p">)</span><span class="o">*</span><span class="n">ICE_PEN_ICE</span>
+<a id="ln-109" name="ln-109" href="#ln-109"></a><span class="w">      </span><span class="n">opt_decay_lay</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">exp</span><span class="p">(</span><span class="o">-</span><span class="n">hi</span><span class="o">/</span><span class="p">(</span><span class="kt">real</span><span class="p">(</span><span class="n">nk</span><span class="p">,</span><span class="w"> </span><span class="n">wp</span><span class="p">)</span><span class="o">*</span><span class="n">ICE_OPT_DEP_ICE</span><span class="p">))</span>
+<a id="ln-110" name="ln-110" href="#ln-110"></a><span class="w">      </span><span class="n">abs_ocn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pen</span><span class="o">*</span><span class="nb">exp</span><span class="p">(</span><span class="o">-</span><span class="n">hi</span><span class="o">/</span><span class="n">ICE_OPT_DEP_ICE</span><span class="p">)</span>
+<a id="ln-111" name="ln-111" href="#ln-111"></a><span class="w">      </span><span class="n">abs_sfc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">pen</span>
+<a id="ln-112" name="ln-112" href="#ln-112"></a><span class="w">      </span><span class="n">abs_snow</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-113" name="ln-113" href="#ln-113"></a>
+<a id="ln-114" name="ln-114" href="#ln-114"></a><span class="w">      </span><span class="n">sw_frac_top</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pen</span>
+<a id="ln-115" name="ln-115" href="#ln-115"></a><span class="w">      </span><span class="k">do </span><span class="n">m</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nk</span>
+<a id="ln-116" name="ln-116" href="#ln-116"></a><span class="w">         </span><span class="n">abs_ice_lay</span><span class="p">(</span><span class="n">m</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sw_frac_top</span><span class="o">*</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">opt_decay_lay</span><span class="p">)</span>
+<a id="ln-117" name="ln-117" href="#ln-117"></a><span class="w">         </span><span class="n">sw_frac_top</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sw_frac_top</span><span class="o">*</span><span class="n">opt_decay_lay</span>
+<a id="ln-118" name="ln-118" href="#ln-118"></a><span class="w">      </span><span class="k">end do</span>
+<a id="ln-119" name="ln-119" href="#ln-119"></a><span class="k">      </span><span class="n">abs_int</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pen</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">sw_frac_top</span>
+<a id="ln-120" name="ln-120" href="#ln-120"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">ice_optics_csim4</span>
+<a id="ln-121" name="ln-121" href="#ln-121"></a>
+<a id="ln-122" name="ln-122" href="#ln-122"></a><span class="k">end module </span><span class="n">rdb_ice_optics</span>
+</pre></div>
+
+      </section>
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-01 23:35 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

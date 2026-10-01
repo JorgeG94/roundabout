@@ -1,0 +1,3574 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>rdb_halo &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>rdb_halo
+      <small>Module</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 1.2% of total for modules and submodules.">758 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_halo.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_halo.f90.html'>rdb_halo.F90</a></li>
+            <li class="breadcrumb-item active" aria-current="page">rdb_halo</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+
+  <div class="row">
+    <div class="col-md-3">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-max_reqs">MAX_REQS</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-nfields">NFIELDS</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-ha_buf_recv_east">ha_buf_recv_east</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-ha_buf_recv_north">ha_buf_recv_north</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-ha_buf_recv_south">ha_buf_recv_south</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-ha_buf_recv_west">ha_buf_recv_west</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-ha_buf_send_east">ha_buf_send_east</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-ha_buf_send_north">ha_buf_send_north</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-ha_buf_send_south">ha_buf_send_south</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-ha_buf_send_west">ha_buf_send_west</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-hs3_buf_recv_east">hs3_buf_recv_east</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-hs3_buf_recv_north">hs3_buf_recv_north</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-hs3_buf_recv_south">hs3_buf_recv_south</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-hs3_buf_recv_west">hs3_buf_recv_west</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-hs3_buf_send_east">hs3_buf_send_east</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-hs3_buf_send_north">hs3_buf_send_north</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-hs3_buf_send_south">hs3_buf_send_south</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-hs3_buf_send_west">hs3_buf_send_west</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-hs3_nghost">hs3_nghost</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-hs3_nx_total">hs3_nx_total</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-hs3_ny_total">hs3_ny_total</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-hs3_nz_capacity">hs3_nz_capacity</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-hs_buf_recv_east">hs_buf_recv_east</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-hs_buf_recv_north">hs_buf_recv_north</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-hs_buf_recv_south">hs_buf_recv_south</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-hs_buf_recv_west">hs_buf_recv_west</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-hs_buf_send_east">hs_buf_send_east</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-hs_buf_send_north">hs_buf_send_north</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-hs_buf_send_south">hs_buf_send_south</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-hs_buf_send_west">hs_buf_send_west</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-hs_nghost">hs_nghost</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-hs_nx_total">hs_nx_total</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#variable-hs_ny_total">hs_ny_total</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#types-0"
+         aria-expanded="false" aria-controls="types-0">
+         <h4 class="card-header bg-primary text-white">Derived Types</h4>
+      </a>
+      <div id="types-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_halo.html#type-halo_async_t">halo_async_t</a>
+        </div>
+      </div>
+    </div>
+
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#subs-0"
+         aria-expanded="false" aria-controls="subs-0">
+         <h4 class="card-header bg-primary text-white">Subroutines</h4>
+      </a>
+      <div id="subs-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_halo.html#proc-halo_allreduce_efp_list">halo_allreduce_efp_list</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#proc-halo_allreduce_max">halo_allreduce_max</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#proc-halo_allreduce_min">halo_allreduce_min</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#proc-halo_allreduce_sum">halo_allreduce_sum</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#proc-halo_allreduce_sum_i8">halo_allreduce_sum_i8</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#proc-halo_async_destroy">halo_async_destroy</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#proc-halo_async_init">halo_async_init</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#proc-halo_exchange_2d">halo_exchange_2d</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#proc-halo_exchange_2d_device">halo_exchange_2d_device</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#proc-halo_exchange_3d">halo_exchange_3d</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#proc-halo_exchange_3d_device">halo_exchange_3d_device</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#proc-halo_exchange_begin">halo_exchange_begin</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#proc-halo_exchange_end">halo_exchange_end</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#proc-halo_sync_buffers_cleanup">halo_sync_buffers_cleanup</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#proc-halo_sync_buffers_cleanup_3d">halo_sync_buffers_cleanup_3d</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#proc-halo_sync_buffers_ensure">halo_sync_buffers_ensure</a>
+            <a class="list-group-item" href="../module/rdb_halo.html#proc-halo_sync_buffers_ensure_3d">halo_sync_buffers_ensure_3d</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+
+
+  </div>
+
+    </div>
+
+    <div class="col-md-9" id='text'>
+      <p>Exchanges ghost-cell strips between neighbouring MPI ranks</p>
+<p>Uses pic_mpi_lib for non-blocking sends/receives.
+Plus-shaped stencil: 4 exchanges (N/S/E/W), no corner exchanges.</p>
+<p>Three exchange modes:
+  halo_exchange_2d        — host-staged, blocking (caller copies device&lt;-&gt;host)
+  halo_exchange_2d_device — GPU-direct, blocking (CUDA-aware MPI)
+  halo_exchange_begin/end — async split for comm/compute overlap</p>
+<br>          <div class="card mb-4">
+      <h3 class="card-header card-title bg-light">Uses</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <ul class="list-inline">
+                  <li class="list-inline-item"><a href='rdb_efp.html'>rdb_efp</a></li>
+                  <li class="list-inline-item"><a href='rdb_constants.html'>rdb_constants</a></li>
+                  <li class="list-inline-item"><a href='http://fortranwiki.org/fortran/show/iso_fortran_env'>iso_fortran_env</a></li>
+                  <li class="list-inline-item"><a href='rdb_comm_env.html'>rdb_comm_env</a></li>
+                  <li class="list-inline-item"><a href='rdb_decomp.html'>rdb_decomp</a></li>
+                  <li class="list-inline-item">pic_logger</li>
+                  <li class="list-inline-item">pic_mpi_lib</li>
+              </ul>
+            </li>
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: module~~rdb_halo~~UsesGraph Pages: 1 -->
+<svg id="modulerdb_haloUsesGraph" width="641pt" height="541pt"
+ viewBox="0.00 0.00 641.00 541.11" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~rdb_halo~~UsesGraph" class="graph" transform="scale(0.59 0.59) rotate(0) translate(4 906.85)">
+<title>module~~rdb_halo~~UsesGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-906.85 1075,-906.85 1075,4 -4,4"/>
+<!-- module~rdb_halo -->
+<g id="module~~rdb_halo~~UsesGraph_node1" class="node">
+<title>module~rdb_halo</title>
+<polygon fill="none" stroke="black" points="1071,-778.71 1012,-778.71 1012,-754.71 1071,-754.71 1071,-778.71"/>
+<text text-anchor="middle" x="1041.5" y="-764.31" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_halo</text>
+</g>
+<!-- iso_fortran_env -->
+<g id="module~~rdb_halo~~UsesGraph_node2" class="node">
+<title>iso_fortran_env</title>
+<g id="a_module~~rdb_halo~~UsesGraph_node2"><a xlink:href="http://fortranwiki.org/fortran/show/iso_fortran_env" xlink:title="iso_fortran_env">
+<polygon fill="#337ab7" stroke="#337ab7" points="319.5,-817.71 225.5,-817.71 225.5,-793.71 319.5,-793.71 319.5,-817.71"/>
+<text text-anchor="middle" x="272.5" y="-803.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">iso_fortran_env</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_halo&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_halo~~UsesGraph_edge1" class="edge">
+<title>module~rdb_halo&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1011.83,-765.4C989.49,-764.7 957.72,-764.39 930,-766.71"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M928,-766.71C918.01,-767.54 579.49,-809.55 569.5,-808.71"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M567.5,-808.71C500.69,-804.95 477.03,-775.14 417,-804.71"/>
+</g>
+<!-- module~rdb_comm_env -->
+<g id="module~~rdb_halo~~UsesGraph_node3" class="node">
+<title>module~rdb_comm_env</title>
+<g id="a_module~~rdb_halo~~UsesGraph_node3"><a xlink:href="../module/rdb_comm_env.html" xlink:title="rdb_comm_env">
+<polygon fill="#337ab7" stroke="#337ab7" points="976,-818.71 882,-818.71 882,-794.71 976,-794.71 976,-818.71"/>
+<text text-anchor="middle" x="929" y="-804.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_comm_env</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_halo&#45;&gt;module~rdb_comm_env -->
+<g id="module~~rdb_halo~~UsesGraph_edge2" class="edge">
+<title>module~rdb_halo&#45;&gt;module~rdb_comm_env</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1011.76,-777.11C999.93,-781.39 985.99,-786.44 973,-791.14"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="971.51,-787.96 963.3,-794.65 973.89,-794.54 971.51,-787.96"/>
+</g>
+<!-- module~rdb_constants -->
+<g id="module~~rdb_halo~~UsesGraph_node4" class="node">
+<title>module~rdb_constants</title>
+<g id="a_module~~rdb_halo~~UsesGraph_node4"><a xlink:href="../module/rdb_constants.html" xlink:title="rdb_constants">
+<polygon fill="#337ab7" stroke="#337ab7" points="185,-653.71 98,-653.71 98,-629.71 185,-629.71 185,-653.71"/>
+<text text-anchor="middle" x="141.5" y="-639.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_constants</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_halo&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_halo~~UsesGraph_edge3" class="edge">
+<title>module~rdb_halo&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M700.5,-884.71C642.32,-882.47 627.58,-880.58 569.5,-884.71"/>
+</g>
+<!-- module~rdb_decomp -->
+<g id="module~~rdb_halo~~UsesGraph_node5" class="node">
+<title>module~rdb_decomp</title>
+<g id="a_module~~rdb_halo~~UsesGraph_node5"><a xlink:href="../module/rdb_decomp.html" xlink:title="rdb_decomp">
+<polygon fill="#337ab7" stroke="#337ab7" points="968.5,-702.71 889.5,-702.71 889.5,-678.71 968.5,-678.71 968.5,-702.71"/>
+<text text-anchor="middle" x="929" y="-688.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_decomp</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_halo&#45;&gt;module~rdb_decomp -->
+<g id="module~~rdb_halo~~UsesGraph_edge4" class="edge">
+<title>module~rdb_halo&#45;&gt;module~rdb_decomp</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1022.75,-754.5C1004.7,-742.09 976.56,-722.73 956,-708.59"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="957.93,-705.67 947.71,-702.89 953.97,-711.44 957.93,-705.67"/>
+</g>
+<!-- module~rdb_efp -->
+<g id="module~~rdb_halo~~UsesGraph_node6" class="node">
+<title>module~rdb_efp</title>
+<g id="a_module~~rdb_halo~~UsesGraph_node6"><a xlink:href="../module/rdb_efp.html" xlink:title="rdb_efp">
+<polygon fill="#337ab7" stroke="#337ab7" points="443,-856.71 389,-856.71 389,-832.71 443,-832.71 443,-856.71"/>
+<text text-anchor="middle" x="416" y="-842.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_efp</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_halo&#45;&gt;module~rdb_efp -->
+<g id="module~~rdb_halo~~UsesGraph_edge5" class="edge">
+<title>module~rdb_halo&#45;&gt;module~rdb_efp</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1031.01,-779.13C1019.56,-793.19 998.95,-815.72 976,-827.71 865.95,-885.21 826.35,-893.51 702.5,-884.71"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M700.5,-884.71C668.19,-882.56 660.98,-875.79 629,-870.71 567.56,-860.94 495.59,-852.81 453.29,-848.36"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="453.5,-844.87 443.19,-847.31 452.78,-851.83 453.5,-844.87"/>
+</g>
+<!-- pic_logger -->
+<g id="module~~rdb_halo~~UsesGraph_node7" class="node">
+<title>pic_logger</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="306.5,-90.71 238.5,-90.71 238.5,-66.71 306.5,-66.71 306.5,-90.71"/>
+<text text-anchor="middle" x="272.5" y="-76.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_logger</text>
+</g>
+<!-- module~rdb_halo&#45;&gt;pic_logger -->
+<g id="module~~rdb_halo~~UsesGraph_edge6" class="edge">
+<title>module~rdb_halo&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1039.61,-754.68C1032.12,-657.22 975.51,-0.71 811,-0.71 811,-0.71 811,-0.71 567.5,-0.71 474.66,-0.71 447.63,5.96 360,-24.71 336.66,-32.87 313.05,-48.2 296.4,-60.45"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="294.24,-57.69 288.37,-66.51 298.46,-63.28 294.24,-57.69"/>
+</g>
+<!-- pic_mpi_lib -->
+<g id="module~~rdb_halo~~UsesGraph_node8" class="node">
+<title>pic_mpi_lib</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="846,-818.71 774,-818.71 774,-794.71 846,-794.71 846,-818.71"/>
+<text text-anchor="middle" x="810" y="-804.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_mpi_lib</text>
+</g>
+<!-- module~rdb_halo&#45;&gt;pic_mpi_lib -->
+<g id="module~~rdb_halo~~UsesGraph_edge7" class="edge">
+<title>module~rdb_halo&#45;&gt;pic_mpi_lib</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M928,-766.71C898.61,-769.16 867.07,-780.5 844.15,-790.48"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="842.58,-787.35 834.89,-794.65 845.45,-793.74 842.58,-787.35"/>
+</g>
+<!-- module~rdb_comm_env&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_halo~~UsesGraph_edge8" class="edge">
+<title>module~rdb_comm_env&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#ffda00" stroke-dasharray="5,2" d="M886,-818.71C841.01,-830.49 767.31,-846.71 702.5,-846.71"/>
+<path fill="none" stroke="#ffda00" stroke-dasharray="5,2" d="M700.5,-846.71C639.97,-850.04 629.91,-813.8 569.5,-808.71"/>
+</g>
+<!-- module~rdb_comm_env&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_halo~~UsesGraph_edge9" class="edge">
+<title>module~rdb_comm_env&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ffda00" stroke-dasharray="5,2" d="M700.5,-846.71C639.97,-850.04 629.97,-880.41 569.5,-884.71"/>
+<path fill="none" stroke="#ffda00" stroke-dasharray="5,2" d="M567.5,-884.71C500.78,-889.45 482.78,-872.58 417,-884.71"/>
+</g>
+<!-- module~rdb_comm_env&#45;&gt;pic_mpi_lib -->
+<g id="module~~rdb_halo~~UsesGraph_edge10" class="edge">
+<title>module~rdb_comm_env&#45;&gt;pic_mpi_lib</title>
+<path fill="none" stroke="#ffda00" stroke-dasharray="5,2" d="M881.76,-806.71C873.31,-806.71 864.51,-806.71 856.1,-806.71"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="856.08,-803.21 846.08,-806.71 856.08,-810.21 856.08,-803.21"/>
+</g>
+<!-- pic_types -->
+<g id="module~~rdb_halo~~UsesGraph_node11" class="node">
+<title>pic_types</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="62,-653.71 0,-653.71 0,-629.71 62,-629.71 62,-653.71"/>
+<text text-anchor="middle" x="31" y="-639.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_types</text>
+</g>
+<!-- module~rdb_constants&#45;&gt;pic_types -->
+<g id="module~~rdb_halo~~UsesGraph_edge11" class="edge">
+<title>module~rdb_constants&#45;&gt;pic_types</title>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M97.93,-641.71C89.5,-641.71 80.67,-641.71 72.32,-641.71"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="72.05,-638.21 62.05,-641.71 72.05,-645.21 72.05,-638.21"/>
+</g>
+<!-- module~rdb_config -->
+<g id="module~~rdb_halo~~UsesGraph_node10" class="node">
+<title>module~rdb_config</title>
+<g id="a_module~~rdb_halo~~UsesGraph_node10"><a xlink:href="../module/rdb_config.html" xlink:title="rdb_config">
+<polygon fill="#337ab7" stroke="#337ab7" points="844.5,-666.71 775.5,-666.71 775.5,-642.71 844.5,-642.71 844.5,-666.71"/>
+<text text-anchor="middle" x="810" y="-652.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_config</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_decomp&#45;&gt;module~rdb_config -->
+<g id="module~~rdb_halo~~UsesGraph_edge12" class="edge">
+<title>module~rdb_decomp&#45;&gt;module~rdb_config</title>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M889.37,-678.82C878.25,-675.4 866.04,-671.64 854.64,-668.13"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="855.46,-664.73 844.88,-665.13 853.4,-671.42 855.46,-664.73"/>
+</g>
+<!-- module~rdb_efp&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_halo~~UsesGraph_edge14" class="edge">
+<title>module~rdb_efp&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M388.72,-837.46C371.4,-832.69 348.1,-826.27 326.99,-820.45"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="327.73,-817.02 317.16,-817.74 325.87,-823.77 327.73,-817.02"/>
+</g>
+<!-- ieee_arithmetic -->
+<g id="module~~rdb_halo~~UsesGraph_node9" class="node">
+<title>ieee_arithmetic</title>
+<g id="a_module~~rdb_halo~~UsesGraph_node9"><a xlink:href="http://fortranwiki.org/fortran/show/ieee_arithmetic" xlink:title="ieee_arithmetic">
+<polygon fill="#337ab7" stroke="#337ab7" points="320.5,-859.71 224.5,-859.71 224.5,-835.71 320.5,-835.71 320.5,-859.71"/>
+<text text-anchor="middle" x="272.5" y="-845.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ieee_arithmetic</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_efp&#45;&gt;ieee_arithmetic -->
+<g id="module~~rdb_halo~~UsesGraph_edge13" class="edge">
+<title>module~rdb_efp&#45;&gt;ieee_arithmetic</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M388.72,-845.26C372.38,-845.61 350.71,-846.07 330.58,-846.5"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="330.47,-843 320.55,-846.71 330.62,-850 330.47,-843"/>
+</g>
+<!-- module~rdb_config&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_halo~~UsesGraph_edge15" class="edge">
+<title>module~rdb_config&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M700.5,-770.71C646.18,-791.66 619.84,-741.45 569.5,-770.71"/>
+</g>
+<!-- module~rdb_config&#45;&gt;pic_logger -->
+<g id="module~~rdb_halo~~UsesGraph_edge22" class="edge">
+<title>module~rdb_config&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M700.5,-158.71C658.14,-118.77 627.59,-162.59 569.5,-158.71"/>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M567.5,-158.71C539.52,-156.84 531.13,-153.56 508,-137.71 487.72,-123.81 493.88,-106.93 472,-95.71 423.34,-70.76 359.07,-70.14 317.04,-73.32"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="316.51,-69.85 306.85,-74.2 317.11,-76.82 316.51,-69.85"/>
+</g>
+<!-- module~rdb_error_ring -->
+<g id="module~~rdb_halo~~UsesGraph_node12" class="node">
+<title>module~rdb_error_ring</title>
+<g id="a_module~~rdb_halo~~UsesGraph_node12"><a xlink:href="../module/rdb_error_ring.html" xlink:title="rdb_error_ring">
+<polygon fill="#337ab7" stroke="#337ab7" points="460,-128.71 372,-128.71 372,-104.71 460,-104.71 460,-128.71"/>
+<text text-anchor="middle" x="416" y="-114.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_error_ring</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_config&#45;&gt;module~rdb_error_ring -->
+<g id="module~~rdb_halo~~UsesGraph_edge16" class="edge">
+<title>module~rdb_config&#45;&gt;module~rdb_error_ring</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M567.5,-158.71C547.34,-157.36 499.67,-143.35 463.34,-131.88"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="464.01,-128.42 453.42,-128.72 461.89,-135.09 464.01,-128.42"/>
+</g>
+<!-- module~rdb_ice_enthalpy -->
+<g id="module~~rdb_halo~~UsesGraph_node13" class="node">
+<title>module~rdb_ice_enthalpy</title>
+<g id="a_module~~rdb_halo~~UsesGraph_node13"><a xlink:href="../module/rdb_ice_enthalpy.html" xlink:title="rdb_ice_enthalpy">
+<polygon fill="#337ab7" stroke="#337ab7" points="324,-653.71 221,-653.71 221,-629.71 324,-629.71 324,-653.71"/>
+<text text-anchor="middle" x="272.5" y="-639.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_enthalpy</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_config&#45;&gt;module~rdb_ice_enthalpy -->
+<g id="module~~rdb_halo~~UsesGraph_edge17" class="edge">
+<title>module~rdb_config&#45;&gt;module~rdb_ice_enthalpy</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M803.14,-666.71C789.71,-692.57 753.82,-752.64 702.5,-770.71"/>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M700.5,-770.71C669.96,-781.46 660.91,-762.24 629,-756.71 535.11,-740.44 509.86,-746.08 417,-724.71"/>
+</g>
+<!-- module~rdb_ice_init -->
+<g id="module~~rdb_halo~~UsesGraph_node14" class="node">
+<title>module~rdb_ice_init</title>
+<g id="a_module~~rdb_halo~~UsesGraph_node14"><a xlink:href="../module/rdb_ice_init.html" xlink:title="rdb_ice_init">
+<polygon fill="#337ab7" stroke="#337ab7" points="738,-666.71 665,-666.71 665,-642.71 738,-642.71 738,-666.71"/>
+<text text-anchor="middle" x="701.5" y="-652.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_init</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_config&#45;&gt;module~rdb_ice_init -->
+<g id="module~~rdb_halo~~UsesGraph_edge18" class="edge">
+<title>module~rdb_config&#45;&gt;module~rdb_ice_init</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M775.3,-654.71C766.71,-654.71 757.34,-654.71 748.25,-654.71"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="748.19,-651.21 738.19,-654.71 748.19,-658.21 748.19,-651.21"/>
+</g>
+<!-- module~rdb_nml_schema -->
+<g id="module~~rdb_halo~~UsesGraph_node15" class="node">
+<title>module~rdb_nml_schema</title>
+<g id="a_module~~rdb_halo~~UsesGraph_node15"><a xlink:href="../module/rdb_nml_schema.html" xlink:title="rdb_nml_schema">
+<polygon fill="#337ab7" stroke="#337ab7" points="620,-128.71 517,-128.71 517,-104.71 620,-104.71 620,-128.71"/>
+<text text-anchor="middle" x="568.5" y="-114.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_nml_schema</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_config&#45;&gt;module~rdb_nml_schema -->
+<g id="module~~rdb_halo~~UsesGraph_edge19" class="edge">
+<title>module~rdb_config&#45;&gt;module~rdb_nml_schema</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M808.21,-642.55C803.43,-573.19 776.19,-228.19 702.5,-158.71"/>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M700.5,-158.71C681.41,-140.71 654.58,-130.42 630.17,-124.54"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="630.76,-121.09 620.24,-122.36 629.25,-127.93 630.76,-121.09"/>
+</g>
+<!-- module~rdb_ocean_status -->
+<g id="module~~rdb_halo~~UsesGraph_node16" class="node">
+<title>module~rdb_ocean_status</title>
+<g id="a_module~~rdb_halo~~UsesGraph_node16"><a xlink:href="../module/rdb_ocean_status.html" xlink:title="rdb_ocean_status">
+<polygon fill="#337ab7" stroke="#337ab7" points="469,-212.71 363,-212.71 363,-188.71 469,-188.71 469,-212.71"/>
+<text text-anchor="middle" x="416" y="-198.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_status</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_config&#45;&gt;module~rdb_ocean_status -->
+<g id="module~~rdb_halo~~UsesGraph_edge20" class="edge">
+<title>module~rdb_config&#45;&gt;module~rdb_ocean_status</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M567.5,-158.71C546.63,-157.31 496.29,-172.84 459.56,-185.41"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="458.37,-182.11 450.07,-188.69 460.66,-188.73 458.37,-182.11"/>
+</g>
+<!-- pic_ascii -->
+<g id="module~~rdb_halo~~UsesGraph_node17" class="node">
+<title>pic_ascii</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="730.5,-624.71 672.5,-624.71 672.5,-600.71 730.5,-600.71 730.5,-624.71"/>
+<text text-anchor="middle" x="701.5" y="-610.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_ascii</text>
+</g>
+<!-- module~rdb_config&#45;&gt;pic_ascii -->
+<g id="module~~rdb_halo~~UsesGraph_edge21" class="edge">
+<title>module~rdb_config&#45;&gt;pic_ascii</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M778.48,-642.67C766.53,-637.96 752.7,-632.5 740.14,-627.55"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="741.42,-624.29 730.83,-623.88 738.85,-630.81 741.42,-624.29"/>
+</g>
+<!-- pic_strings -->
+<g id="module~~rdb_halo~~UsesGraph_node18" class="node">
+<title>pic_strings</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="450.5,-170.71 381.5,-170.71 381.5,-146.71 450.5,-146.71 450.5,-170.71"/>
+<text text-anchor="middle" x="416" y="-156.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_strings</text>
+</g>
+<!-- module~rdb_config&#45;&gt;pic_strings -->
+<g id="module~~rdb_halo~~UsesGraph_edge23" class="edge">
+<title>module~rdb_config&#45;&gt;pic_strings</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M567.5,-158.71C531.59,-156.3 490.74,-156.49 460.68,-157.17"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="460.42,-153.67 450.52,-157.43 460.6,-160.67 460.42,-153.67"/>
+</g>
+<!-- module~rdb_error_ring&#45;&gt;pic_logger -->
+<g id="module~~rdb_halo~~UsesGraph_edge24" class="edge">
+<title>module~rdb_error_ring&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M371.78,-105.1C354.25,-100.39 334.05,-94.97 316.54,-90.27"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="317.15,-86.8 306.58,-87.59 315.33,-93.57 317.15,-86.8"/>
+</g>
+<!-- module~rdb_ice_enthalpy&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_halo~~UsesGraph_edge25" class="edge">
+<title>module~rdb_ice_enthalpy&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ffda00" stroke-dasharray="5,2" d="M220.89,-641.71C212.46,-641.71 203.69,-641.71 195.21,-641.71"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="195.05,-638.21 185.05,-641.71 195.05,-645.21 195.05,-638.21"/>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_halo~~UsesGraph_edge26" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M689.81,-666.97C668.9,-690.27 620.19,-741.24 569.5,-770.71"/>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M567.5,-770.71C515.74,-800.8 522.8,-834.02 472,-865.71 450.06,-879.39 442.4,-879.84 417,-884.71"/>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M415,-884.71C330.03,-900.99 289.34,-921.76 221,-868.71 156.03,-818.28 144.57,-710.81 142.74,-664.13"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="146.23,-663.79 142.46,-653.89 139.23,-663.98 146.23,-663.79"/>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_ice_enthalpy -->
+<g id="module~~rdb_halo~~UsesGraph_edge29" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_ice_enthalpy</title>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M664.87,-665.42C638.5,-673.38 601.71,-684.58 569.5,-694.71"/>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M567.5,-694.71C502.43,-715.16 483.47,-740 417,-724.71"/>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M415,-724.71C389.01,-718.73 381.54,-716.44 360,-700.71 340.42,-686.4 344.06,-673.33 324,-659.71 323.49,-659.36 322.98,-659.03 322.46,-658.7"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="324.04,-655.57 313.59,-653.81 320.66,-661.7 324.04,-655.57"/>
+</g>
+<!-- module~rdb_grid -->
+<g id="module~~rdb_halo~~UsesGraph_node19" class="node">
+<title>module~rdb_grid</title>
+<g id="a_module~~rdb_halo~~UsesGraph_node19"><a xlink:href="../module/rdb_grid.html" xlink:title="rdb_grid">
+<polygon fill="#337ab7" stroke="#337ab7" points="444.5,-536.71 387.5,-536.71 387.5,-512.71 444.5,-512.71 444.5,-536.71"/>
+<text text-anchor="middle" x="416" y="-522.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_grid</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_halo~~UsesGraph_edge27" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M677.1,-642.56C672.88,-639.91 668.66,-636.92 665,-633.71 645.49,-616.58 650.46,-602.32 629,-587.71 575.23,-551.1 499.78,-535.35 454.9,-528.89"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="455.1,-525.38 444.72,-527.51 454.15,-532.32 455.1,-525.38"/>
+</g>
+<!-- module~rdb_ice_column -->
+<g id="module~~rdb_halo~~UsesGraph_node20" class="node">
+<title>module~rdb_ice_column</title>
+<g id="a_module~~rdb_halo~~UsesGraph_node20"><a xlink:href="../module/rdb_ice_column.html" xlink:title="rdb_ice_column">
+<polygon fill="#337ab7" stroke="#337ab7" points="464.5,-776.71 367.5,-776.71 367.5,-752.71 464.5,-752.71 464.5,-776.71"/>
+<text text-anchor="middle" x="416" y="-762.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_column</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_ice_column -->
+<g id="module~~rdb_halo~~UsesGraph_edge28" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_ice_column</title>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M567.5,-694.71C561.53,-696.59 494.26,-728.2 451.7,-748.29"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="450.05,-745.2 442.51,-752.63 453.04,-751.53 450.05,-745.2"/>
+</g>
+<!-- module~rdb_ice_state -->
+<g id="module~~rdb_halo~~UsesGraph_node21" class="node">
+<title>module~rdb_ice_state</title>
+<g id="a_module~~rdb_halo~~UsesGraph_node21"><a xlink:href="../module/rdb_ice_state.html" xlink:title="rdb_ice_state">
+<polygon fill="#337ab7" stroke="#337ab7" points="610,-666.71 527,-666.71 527,-642.71 610,-642.71 610,-666.71"/>
+<text text-anchor="middle" x="568.5" y="-652.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_state</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_ice_state -->
+<g id="module~~rdb_halo~~UsesGraph_edge30" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_ice_state</title>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M664.7,-654.71C651.04,-654.71 635.19,-654.71 620.38,-654.71"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="620.34,-651.21 610.34,-654.71 620.34,-658.21 620.34,-651.21"/>
+</g>
+<!-- module~rdb_multilayer_state -->
+<g id="module~~rdb_halo~~UsesGraph_node22" class="node">
+<title>module~rdb_multilayer_state</title>
+<g id="a_module~~rdb_halo~~UsesGraph_node22"><a xlink:href="../module/rdb_multilayer_state.html" xlink:title="rdb_multilayer_state">
+<polygon fill="#337ab7" stroke="#337ab7" points="629,-620.71 508,-620.71 508,-596.71 629,-596.71 629,-620.71"/>
+<text text-anchor="middle" x="568.5" y="-606.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_multilayer_state</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_multilayer_state -->
+<g id="module~~rdb_halo~~UsesGraph_edge31" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_multilayer_state</title>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M666.08,-642.62C649.99,-636.97 630.63,-630.17 613.49,-624.15"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="614.28,-620.72 603.69,-620.71 611.96,-627.33 614.28,-620.72"/>
+</g>
+<!-- module~rdb_ocean_metrics -->
+<g id="module~~rdb_halo~~UsesGraph_node23" class="node">
+<title>module~rdb_ocean_metrics</title>
+<g id="a_module~~rdb_halo~~UsesGraph_node23"><a xlink:href="../module/rdb_ocean_metrics.html" xlink:title="rdb_ocean_metrics">
+<polygon fill="#337ab7" stroke="#337ab7" points="625.5,-376.71 511.5,-376.71 511.5,-352.71 625.5,-352.71 625.5,-376.71"/>
+<text text-anchor="middle" x="568.5" y="-362.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_metrics</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_ocean_metrics -->
+<g id="module~~rdb_halo~~UsesGraph_edge32" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_ocean_metrics</title>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M674.74,-642.46C671.13,-639.94 667.73,-637.02 665,-633.71 662.92,-631.18 599.25,-449.67 577.05,-386.27"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="580.35,-385.11 573.74,-376.83 573.74,-387.43 580.35,-385.11"/>
+</g>
+<!-- module~rdb_nml_schema&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_halo~~UsesGraph_edge33" class="edge">
+<title>module~rdb_nml_schema&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M552,-104.44C525.97,-84.86 470.98,-47.81 417,-38.71"/>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M415,-38.71C329.57,-24.29 283.35,2.44 221,-57.71 138.84,-136.96 140.27,-521.83 141.99,-619.26"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="138.49,-619.51 142.19,-629.44 145.49,-619.38 138.49,-619.51"/>
+</g>
+<!-- module~rdb_nml_schema&#45;&gt;pic_logger -->
+<g id="module~~rdb_halo~~UsesGraph_edge35" class="edge">
+<title>module~rdb_nml_schema&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M415,-38.71C375.87,-32.11 332.1,-48.27 303.74,-61.98"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="302.11,-58.89 294.74,-66.5 305.25,-65.14 302.11,-58.89"/>
+</g>
+<!-- module~rdb_nml_schema&#45;&gt;module~rdb_error_ring -->
+<g id="module~~rdb_halo~~UsesGraph_edge34" class="edge">
+<title>module~rdb_nml_schema&#45;&gt;module~rdb_error_ring</title>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M516.97,-116.71C501.98,-116.71 485.52,-116.71 470.36,-116.71"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="470.11,-113.21 460.11,-116.71 470.11,-120.21 470.11,-113.21"/>
+</g>
+<!-- module~rdb_grid&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_halo~~UsesGraph_edge36" class="edge">
+<title>module~rdb_grid&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M387.4,-532.71C358.91,-540.93 313.18,-553.98 273.5,-564.71"/>
+</g>
+<!-- module~rdb_ice_column&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_halo~~UsesGraph_edge37" class="edge">
+<title>module~rdb_ice_column&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M384.18,-752.59C375.98,-748.72 367.36,-744.04 360,-738.71 341.16,-725.06 343.67,-713.13 324,-700.71 302.34,-687.03 240.61,-668.34 195.13,-655.69"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="195.97,-652.3 185.4,-653.01 194.11,-659.04 195.97,-652.3"/>
+</g>
+<!-- module~rdb_ice_column&#45;&gt;module~rdb_ice_enthalpy -->
+<g id="module~~rdb_halo~~UsesGraph_edge38" class="edge">
+<title>module~rdb_ice_column&#45;&gt;module~rdb_ice_enthalpy</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M380.48,-752.67C373.13,-748.99 365.83,-744.38 360,-738.71 334.64,-714.04 348.94,-692.8 324,-667.71 320.79,-664.47 317.08,-661.56 313.18,-658.95"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="314.79,-655.84 304.4,-653.74 311.21,-661.86 314.79,-655.84"/>
+</g>
+<!-- module~rdb_ice_mass -->
+<g id="module~~rdb_halo~~UsesGraph_node24" class="node">
+<title>module~rdb_ice_mass</title>
+<g id="a_module~~rdb_halo~~UsesGraph_node24"><a xlink:href="../module/rdb_ice_mass.html" xlink:title="rdb_ice_mass">
+<polygon fill="#337ab7" stroke="#337ab7" points="315,-775.71 230,-775.71 230,-751.71 315,-751.71 315,-775.71"/>
+<text text-anchor="middle" x="272.5" y="-761.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_mass</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_column&#45;&gt;module~rdb_ice_mass -->
+<g id="module~~rdb_halo~~UsesGraph_edge39" class="edge">
+<title>module~rdb_ice_column&#45;&gt;module~rdb_ice_mass</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M367.49,-764.37C354.05,-764.28 339.36,-764.17 325.67,-764.08"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="325.45,-760.57 315.43,-764 325.4,-767.57 325.45,-760.57"/>
+</g>
+<!-- module~rdb_ice_optics -->
+<g id="module~~rdb_halo~~UsesGraph_node25" class="node">
+<title>module~rdb_ice_optics</title>
+<g id="a_module~~rdb_halo~~UsesGraph_node25"><a xlink:href="../module/rdb_ice_optics.html" xlink:title="rdb_ice_optics">
+<polygon fill="#337ab7" stroke="#337ab7" points="316.5,-733.71 228.5,-733.71 228.5,-709.71 316.5,-709.71 316.5,-733.71"/>
+<text text-anchor="middle" x="272.5" y="-719.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_optics</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_column&#45;&gt;module~rdb_ice_optics -->
+<g id="module~~rdb_halo~~UsesGraph_edge40" class="edge">
+<title>module~rdb_ice_column&#45;&gt;module~rdb_ice_optics</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M375.21,-752.62C358.94,-747.67 339.96,-741.91 322.83,-736.7"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="323.58,-733.27 312.99,-733.71 321.54,-739.97 323.58,-733.27"/>
+</g>
+<!-- module~rdb_ice_state&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_halo~~UsesGraph_edge41" class="edge">
+<title>module~rdb_ice_state&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M527.38,-666.75C520.22,-670.33 513.35,-674.9 508,-680.71 474.57,-716.99 506.84,-750.78 472,-785.71 453.73,-804.02 440.2,-793.28 417,-804.71"/>
+</g>
+<!-- module~rdb_ice_state&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_halo~~UsesGraph_edge42" class="edge">
+<title>module~rdb_ice_state&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M540.19,-666.73C510.15,-678.5 460.38,-693.71 417,-686.71"/>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M415,-686.71C389.47,-682.59 380.97,-682.84 360,-667.71 311.52,-632.74 331.21,-549.11 273.5,-564.71"/>
+</g>
+<!-- module~rdb_ice_state&#45;&gt;module~rdb_ice_enthalpy -->
+<g id="module~~rdb_halo~~UsesGraph_edge45" class="edge">
+<title>module~rdb_ice_state&#45;&gt;module~rdb_ice_enthalpy</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M415,-686.71C379.26,-680.94 340.15,-667.95 312.12,-657.41"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="313.28,-654.11 302.69,-653.8 310.78,-660.64 313.28,-654.11"/>
+</g>
+<!-- module~rdb_ice_state&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_halo~~UsesGraph_edge43" class="edge">
+<title>module~rdb_ice_state&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M530.66,-642.68C522.76,-639.18 514.77,-634.88 508,-629.71 487.37,-613.95 488.87,-603.44 472,-583.71 460.47,-570.21 446.87,-555.62 436.08,-544.32"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="438.58,-541.86 429.12,-537.08 433.53,-546.72 438.58,-541.86"/>
+</g>
+<!-- module~rdb_ice_state&#45;&gt;module~rdb_ice_column -->
+<g id="module~~rdb_halo~~UsesGraph_edge44" class="edge">
+<title>module~rdb_ice_state&#45;&gt;module~rdb_ice_column</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M530.54,-666.73C522.56,-670.41 514.56,-675.03 508,-680.71 485.06,-700.57 494.64,-718.51 472,-738.71 468.21,-742.09 463.89,-745.12 459.39,-747.81"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="457.72,-744.74 450.59,-752.57 461.05,-750.9 457.72,-744.74"/>
+</g>
+<!-- module~rdb_mem_report -->
+<g id="module~~rdb_halo~~UsesGraph_node27" class="node">
+<title>module~rdb_mem_report</title>
+<g id="a_module~~rdb_halo~~UsesGraph_node27"><a xlink:href="../module/rdb_mem_report.html" xlink:title="rdb_mem_report">
+<polygon fill="#337ab7" stroke="#337ab7" points="466.5,-658.71 365.5,-658.71 365.5,-634.71 466.5,-634.71 466.5,-658.71"/>
+<text text-anchor="middle" x="416" y="-644.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_mem_report</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_state&#45;&gt;module~rdb_mem_report -->
+<g id="module~~rdb_halo~~UsesGraph_edge46" class="edge">
+<title>module~rdb_ice_state&#45;&gt;module~rdb_mem_report</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M526.77,-652.54C511.42,-651.73 493.61,-650.78 476.87,-649.89"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="476.79,-646.38 466.61,-649.34 476.41,-653.37 476.79,-646.38"/>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_halo~~UsesGraph_edge47" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M524.82,-620.73C518.48,-624.07 512.56,-628.32 508,-633.71 463.13,-686.68 518.57,-734.22 472,-785.71 454.65,-804.89 440.2,-793.28 417,-804.71"/>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_halo~~UsesGraph_edge48" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M538.67,-596.66C485.48,-576.14 368.66,-538.99 273.5,-564.71"/>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_efp -->
+<g id="module~~rdb_halo~~UsesGraph_edge49" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_efp</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M524.33,-620.73C518.13,-624.07 512.38,-628.32 508,-633.71 455.16,-698.7 523.4,-752.57 472,-818.71 466.94,-825.22 459.86,-830.17 452.45,-833.92"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="450.78,-830.83 443.02,-838.04 453.59,-837.24 450.78,-830.83"/>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;pic_logger -->
+<g id="module~~rdb_halo~~UsesGraph_edge54" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M558.01,-596.52C541.72,-576.01 506.81,-533.9 472,-503.71 426.56,-464.29 394.4,-477.06 360,-427.71 286.22,-321.87 275.19,-159.45 273.68,-100.79"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="277.18,-100.72 273.49,-90.79 270.18,-100.85 277.18,-100.72"/>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_error_ring -->
+<g id="module~~rdb_halo~~UsesGraph_edge50" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_error_ring</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M563.63,-596.26C553.29,-562.61 524.68,-466.96 508,-385.71 496.8,-331.16 506.8,-181.18 472,-137.71 470.88,-136.31 469.66,-135 468.35,-133.78"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="470.19,-130.8 460.05,-127.71 466.05,-136.44 470.19,-130.8"/>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_halo~~UsesGraph_edge51" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M548.81,-596.56C529.8,-584.39 499.33,-565.42 472,-550.71 465.94,-547.45 459.4,-544.16 453.02,-541.07"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="454.39,-537.85 443.85,-536.72 451.38,-544.17 454.39,-537.85"/>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_mem_report -->
+<g id="module~~rdb_halo~~UsesGraph_edge52" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_mem_report</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M519.88,-620.73C505.4,-624.39 489.33,-628.44 474.28,-632.24"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="473.41,-628.86 464.57,-634.7 475.12,-635.64 473.41,-628.86"/>
+</g>
+<!-- module~rdb_tracer -->
+<g id="module~~rdb_halo~~UsesGraph_node30" class="node">
+<title>module~rdb_tracer</title>
+<g id="a_module~~rdb_halo~~UsesGraph_node30"><a xlink:href="../module/rdb_tracer.html" xlink:title="rdb_tracer">
+<polygon fill="#337ab7" stroke="#337ab7" points="450,-616.71 382,-616.71 382,-592.71 450,-592.71 450,-616.71"/>
+<text text-anchor="middle" x="416" y="-602.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_tracer</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_tracer -->
+<g id="module~~rdb_halo~~UsesGraph_edge53" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_tracer</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M507.59,-607.12C491.89,-606.7 475.26,-606.26 460.59,-605.87"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="460.39,-602.36 450.3,-605.59 460.2,-609.36 460.39,-602.36"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_halo~~UsesGraph_edge55" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M563.93,-376.71C554.11,-409.99 526.21,-506.38 508,-587.71 488.45,-674.99 530.23,-717.82 472,-785.71 455.16,-805.34 440.2,-793.28 417,-804.71"/>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M415,-804.71C389.01,-817.51 356.94,-818.73 329.9,-816.32"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="330.12,-812.82 319.81,-815.24 329.38,-819.78 330.12,-812.82"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_halo~~UsesGraph_edge56" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M549.08,-376.83C512.74,-400.8 429.32,-456.06 360,-503.71 321.23,-530.36 318.92,-552.47 273.5,-564.71"/>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M271.5,-564.71C230.44,-576.42 189.15,-604.64 164.7,-623.46"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="162.49,-620.76 156.79,-629.69 166.81,-626.26 162.49,-620.76"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;pic_logger -->
+<g id="module~~rdb_halo~~UsesGraph_edge65" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M559.54,-352.48C544.8,-330.77 511.16,-285.36 472,-259.71 428.03,-230.9 400.97,-254.63 360,-221.71 319.36,-189.05 293.15,-131.78 281.14,-100.55"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="284.37,-99.18 277.61,-91.02 277.81,-101.62 284.37,-99.18"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_error_ring -->
+<g id="module~~rdb_halo~~UsesGraph_edge57" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_error_ring</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M565.78,-352.48C559.89,-315.04 537.16,-200.72 472,-137.71 470.74,-136.49 469.4,-135.33 467.99,-134.25"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="469.69,-131.18 459.39,-128.72 465.91,-137.07 469.69,-131.18"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_ocean_status -->
+<g id="module~~rdb_halo~~UsesGraph_edge63" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_ocean_status</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M561.79,-352.41C549.06,-326.17 515.99,-264.03 472,-226.71 468.02,-223.34 463.54,-220.3 458.88,-217.59"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="460.3,-214.38 449.82,-212.79 457.02,-220.56 460.3,-214.38"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;pic_strings -->
+<g id="module~~rdb_halo~~UsesGraph_edge66" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;pic_strings</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M564.47,-352.45C555.79,-319.75 527.78,-229.57 472,-179.71 468.38,-176.47 464.21,-173.71 459.82,-171.37"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="461.15,-168.13 450.6,-167.11 458.21,-174.48 461.15,-168.13"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_halo~~UsesGraph_edge58" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M561.5,-377.03C548.45,-402.71 515.17,-462.6 472,-498.71 466.61,-503.22 460.31,-507.14 453.93,-510.47"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="452.14,-507.45 444.64,-514.94 455.17,-513.76 452.14,-507.45"/>
+</g>
+<!-- module~rdb_io_netcdf -->
+<g id="module~~rdb_halo~~UsesGraph_node26" class="node">
+<title>module~rdb_io_netcdf</title>
+<g id="a_module~~rdb_halo~~UsesGraph_node26"><a xlink:href="../module/rdb_io_netcdf.html" xlink:title="rdb_io_netcdf">
+<polygon fill="#337ab7" stroke="#337ab7" points="458.5,-418.71 373.5,-418.71 373.5,-394.71 458.5,-394.71 458.5,-418.71"/>
+<text text-anchor="middle" x="416" y="-404.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_io_netcdf</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_io_netcdf -->
+<g id="module~~rdb_halo~~UsesGraph_edge59" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_io_netcdf</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M524.37,-376.74C506.93,-381.61 486.65,-387.27 468.45,-392.35"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="467.27,-389.05 458.58,-395.1 469.15,-395.79 467.27,-389.05"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_mem_report -->
+<g id="module~~rdb_halo~~UsesGraph_edge60" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_mem_report</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M566.54,-376.96C562.69,-417.95 544.84,-551.84 472,-625.71 470.92,-626.8 469.78,-627.84 468.59,-628.82"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="466.42,-626.06 460.1,-634.56 470.35,-631.86 466.42,-626.06"/>
+</g>
+<!-- module~rdb_ocean_bipolar -->
+<g id="module~~rdb_halo~~UsesGraph_node28" class="node">
+<title>module~rdb_ocean_bipolar</title>
+<g id="a_module~~rdb_halo~~UsesGraph_node28"><a xlink:href="../module/rdb_ocean_bipolar.html" xlink:title="rdb_ocean_bipolar">
+<polygon fill="#337ab7" stroke="#337ab7" points="472,-376.71 360,-376.71 360,-352.71 472,-352.71 472,-376.71"/>
+<text text-anchor="middle" x="416" y="-362.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_bipolar</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_ocean_bipolar -->
+<g id="module~~rdb_halo~~UsesGraph_edge61" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_ocean_bipolar</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M511.46,-364.71C501.91,-364.71 491.91,-364.71 482.15,-364.71"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="482.09,-361.21 472.09,-364.71 482.09,-368.21 482.09,-361.21"/>
+</g>
+<!-- module~rdb_ocean_fold -->
+<g id="module~~rdb_halo~~UsesGraph_node29" class="node">
+<title>module~rdb_ocean_fold</title>
+<g id="a_module~~rdb_halo~~UsesGraph_node29"><a xlink:href="../module/rdb_ocean_fold.html" xlink:title="rdb_ocean_fold">
+<polygon fill="#337ab7" stroke="#337ab7" points="463,-334.71 369,-334.71 369,-310.71 463,-310.71 463,-334.71"/>
+<text text-anchor="middle" x="416" y="-320.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_fold</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_ocean_fold -->
+<g id="module~~rdb_halo~~UsesGraph_edge62" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_ocean_fold</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M524.37,-352.67C507.37,-347.93 487.67,-342.43 469.83,-337.45"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="470.71,-334.06 460.13,-334.74 468.82,-340.8 470.71,-334.06"/>
+</g>
+<!-- netcdf -->
+<g id="module~~rdb_halo~~UsesGraph_node31" class="node">
+<title>netcdf</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="443,-292.71 389,-292.71 389,-268.71 443,-268.71 443,-292.71"/>
+<text text-anchor="middle" x="416" y="-278.31" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">netcdf</text>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;netcdf -->
+<g id="module~~rdb_halo~~UsesGraph_edge64" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;netcdf</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M551.6,-352.65C533.16,-339.04 501.51,-316.85 472,-301.71 465.89,-298.57 459.2,-295.64 452.65,-293.01"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="453.84,-289.72 443.25,-289.4 451.33,-296.25 453.84,-289.72"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panmodulerdb_haloUsesGraph = svgPanZoom('#modulerdb_haloUsesGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsesGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsesGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="518pt" height="32pt"
+ viewBox="0.00 0.00 517.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 513.5,-28 513.5,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24 0,-24 0,0 54,0 54,-24"/>
+<text text-anchor="middle" x="27" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="145.5,-24 72.5,-24 72.5,0 145.5,0 145.5,-24"/>
+<text text-anchor="middle" x="109" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="234,-24 164,-24 164,0 234,0 234,-24"/>
+<text text-anchor="middle" x="199" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="310,-24 252,-24 252,0 310,0 310,-24"/>
+<text text-anchor="middle" x="281" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="386,-24 328,-24 328,0 386,0 386,-24"/>
+<text text-anchor="middle" x="357" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="509.5,-24 404.5,-24 404.5,0 509.5,0 509.5,-24"/>
+<text text-anchor="middle" x="457" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+          <div class="card">
+      <h3 class="card-header card-title bg-light">Used by</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: module~~rdb_halo~~UsedByGraph Pages: 1 -->
+<svg id="modulerdb_haloUsedByGraph" width="641pt" height="149pt"
+ viewBox="0.00 0.00 641.00 148.52" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~rdb_halo~~UsedByGraph" class="graph" transform="scale(0.52 0.52) rotate(0) translate(4 281.68)">
+<title>module~~rdb_halo~~UsedByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-281.68 1229,-281.68 1229,4 -4,4"/>
+<!-- module~rdb_halo -->
+<g id="module~~rdb_halo~~UsedByGraph_node1" class="node">
+<title>module~rdb_halo</title>
+<polygon fill="none" stroke="black" points="59,-201 0,-201 0,-177 59,-177 59,-201"/>
+<text text-anchor="middle" x="29.5" y="-186.6" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_halo</text>
+</g>
+<!-- module~rdb_driver -->
+<g id="module~~rdb_halo~~UsedByGraph_node2" class="node">
+<title>module~rdb_driver</title>
+<g id="a_module~~rdb_halo~~UsedByGraph_node2"><a xlink:href="../module/rdb_driver.html" xlink:title="rdb_driver">
+<polygon fill="#337ab7" stroke="#337ab7" points="1095,-264 1028,-264 1028,-240 1095,-240 1095,-264"/>
+<text text-anchor="middle" x="1061.5" y="-249.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_halo -->
+<g id="module~~rdb_halo~~UsedByGraph_edge1" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_halo</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M322,-271C220.97,-264.53 187.09,-294.07 95,-252 74.41,-242.59 56.5,-223.71 44.81,-209.05"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="47.53,-206.84 38.68,-201.02 41.96,-211.09 47.53,-206.84"/>
+</g>
+<!-- module~rdb_ocean_console_stats -->
+<g id="module~~rdb_halo~~UsedByGraph_node4" class="node">
+<title>module~rdb_ocean_console_stats</title>
+<g id="a_module~~rdb_halo~~UsedByGraph_node4"><a xlink:href="../module/rdb_ocean_console_stats.html" xlink:title="rdb_ocean_console_stats">
+<polygon fill="#337ab7" stroke="#337ab7" points="240,-243 95,-243 95,-219 240,-219 240,-243"/>
+<text text-anchor="middle" x="167.5" y="-228.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_console_stats</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_console_stats -->
+<g id="module~~rdb_halo~~UsedByGraph_edge7" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_console_stats</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M455,-271C397.4,-262.52 382.1,-274.72 324,-271"/>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M322,-271C283.23,-268.51 240.59,-256.62 210.1,-246.45"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="210.85,-243 200.25,-243.08 208.58,-249.62 210.85,-243"/>
+</g>
+<!-- module~rdb_ocean_dyn -->
+<g id="module~~rdb_halo~~UsedByGraph_node7" class="node">
+<title>module~rdb_ocean_dyn</title>
+<g id="a_module~~rdb_halo~~UsedByGraph_node7"><a xlink:href="../module/rdb_ocean_dyn.html" xlink:title="rdb_ocean_dyn">
+<polygon fill="#337ab7" stroke="#337ab7" points="370,-201 276,-201 276,-177 370,-177 370,-201"/>
+<text text-anchor="middle" x="323" y="-186.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_dyn</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_halo~~UsedByGraph_edge10" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M769.5,-271C632.59,-247.65 594.34,-291.68 457,-271"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M455,-271C409.69,-264.33 366.56,-230.09 342.85,-208.02"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="345.22,-205.44 335.57,-201.06 340.38,-210.5 345.22,-205.44"/>
+</g>
+<!-- module~rdb_ocean_engine -->
+<g id="module~~rdb_halo~~UsedByGraph_node8" class="node">
+<title>module~rdb_ocean_engine</title>
+<g id="a_module~~rdb_halo~~UsedByGraph_node8"><a xlink:href="../module/rdb_ocean_engine.html" xlink:title="rdb_ocean_engine">
+<polygon fill="#337ab7" stroke="#337ab7" points="989,-205 878,-205 878,-181 989,-181 989,-205"/>
+<text text-anchor="middle" x="933.5" y="-190.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_halo~~UsedByGraph_edge15" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1034.7,-239.91C1015.84,-231.09 990.06,-219.01 969.37,-209.32"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="970.81,-206.13 960.27,-205.06 967.84,-212.47 970.81,-206.13"/>
+</g>
+<!-- module~rdb_ocean_state -->
+<g id="module~~rdb_halo~~UsedByGraph_node11" class="node">
+<title>module~rdb_ocean_state</title>
+<g id="a_module~~rdb_halo~~UsedByGraph_node11"><a xlink:href="../module/rdb_ocean_state.html" xlink:title="rdb_ocean_state">
+<polygon fill="#337ab7" stroke="#337ab7" points="506,-161 406,-161 406,-137 506,-137 506,-161"/>
+<text text-anchor="middle" x="456" y="-146.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_halo~~UsedByGraph_edge19" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1027.74,-259.09C973.88,-269.65 863.45,-286.67 771.5,-271"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M769.5,-271C737.65,-265.57 690.71,-188.61 663,-172 639.19,-157.72 631.18,-155.12 603.5,-153"/>
+</g>
+<!-- module~rdb_ocean_chksum -->
+<g id="module~~rdb_halo~~UsedByGraph_node3" class="node">
+<title>module~rdb_ocean_chksum</title>
+<g id="a_module~~rdb_halo~~UsedByGraph_node3"><a xlink:href="../module/rdb_ocean_chksum.html" xlink:title="rdb_ocean_chksum">
+<polygon fill="#337ab7" stroke="#337ab7" points="225,-201 110,-201 110,-177 225,-177 225,-201"/>
+<text text-anchor="middle" x="167.5" y="-186.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_chksum</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_chksum&#45;&gt;module~rdb_halo -->
+<g id="module~~rdb_halo~~UsedByGraph_edge2" class="edge">
+<title>module~rdb_ocean_chksum&#45;&gt;module~rdb_halo</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M109.61,-189C96.08,-189 81.94,-189 69.42,-189"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="69.34,-185.5 59.34,-189 69.34,-192.5 69.34,-185.5"/>
+</g>
+<!-- module~rdb_ocean_console_stats&#45;&gt;module~rdb_halo -->
+<g id="module~~rdb_halo~~UsedByGraph_edge3" class="edge">
+<title>module~rdb_ocean_console_stats&#45;&gt;module~rdb_halo</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M124.85,-218.99C115.04,-216.1 104.64,-212.98 95,-210 86.42,-207.34 77.22,-204.4 68.54,-201.58"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="69.61,-198.25 59.02,-198.48 67.44,-204.91 69.61,-198.25"/>
+</g>
+<!-- module~rdb_ocean_setup -->
+<g id="module~~rdb_halo~~UsedByGraph_node5" class="node">
+<title>module~rdb_ocean_setup</title>
+<g id="a_module~~rdb_halo~~UsedByGraph_node5"><a xlink:href="../module/rdb_ocean_setup.html" xlink:title="rdb_ocean_setup">
+<polygon fill="#337ab7" stroke="#337ab7" points="654,-205 551,-205 551,-181 654,-181 654,-205"/>
+<text text-anchor="middle" x="602.5" y="-190.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_halo -->
+<g id="module~~rdb_halo~~UsedByGraph_edge4" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_halo</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M550.92,-193.09C523.15,-192.77 488.12,-191.75 457,-189"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M455,-189C416.24,-185.57 408.63,-172.7 370,-168 248.67,-153.23 215.71,-148.84 95,-168 86.39,-169.36 77.37,-171.69 68.89,-174.32"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="67.64,-171.04 59.24,-177.5 69.83,-177.69 67.64,-171.04"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_halo~~UsedByGraph_edge13" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M455,-189C430.53,-186.83 403.39,-186.49 380.18,-186.82"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="380.1,-183.33 370.16,-187.01 380.23,-190.32 380.1,-183.33"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_halo~~UsedByGraph_edge24" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M562.01,-180.97C544.73,-175.71 524.28,-169.48 506.03,-163.93"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="507.02,-160.57 496.44,-161 504.98,-167.27 507.02,-160.57"/>
+</g>
+<!-- proc~ocean_cavity_mass_step -->
+<g id="module~~rdb_halo~~UsedByGraph_node6" class="node">
+<title>proc~ocean_cavity_mass_step</title>
+<g id="a_module~~rdb_halo~~UsedByGraph_node6"><a xlink:href="../proc/ocean_cavity_mass_step.html" xlink:title="ocean_cavity_mass_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="239,-121 96,-121 96,-97 239,-97 239,-121"/>
+<text text-anchor="middle" x="167.5" y="-106.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_cavity_mass_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_mass_step&#45;&gt;module~rdb_halo -->
+<g id="module~~rdb_halo~~UsedByGraph_edge5" class="edge">
+<title>proc~ocean_cavity_mass_step&#45;&gt;module~rdb_halo</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M125.69,-121.07C115.35,-124.86 104.5,-129.52 95,-135 78.39,-144.57 61.86,-158.52 49.69,-169.84"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="47.19,-167.4 42.37,-176.83 52.02,-172.46 47.19,-167.4"/>
+</g>
+<!-- module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_chksum -->
+<g id="module~~rdb_halo~~UsedByGraph_edge6" class="edge">
+<title>module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_chksum</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M275.94,-189C263.21,-189 249.12,-189 235.45,-189"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="235.11,-185.5 225.11,-189 235.11,-192.5 235.11,-185.5"/>
+</g>
+<!-- module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_console_stats -->
+<g id="module~~rdb_halo~~UsedByGraph_edge8" class="edge">
+<title>module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_console_stats</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M278.01,-201.03C260.67,-205.78 240.58,-211.27 222.38,-216.25"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="221.22,-212.94 212.49,-218.96 223.06,-219.7 221.22,-212.94"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_halo~~UsedByGraph_edge9" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M769.5,-193C734.8,-193 696.03,-193 664.68,-193"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="664.36,-189.5 654.36,-193 664.36,-196.5 664.36,-189.5"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_halo~~UsedByGraph_edge12" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M769.5,-193C721.26,-193 711.02,-209.31 663,-214 549.21,-225.11 519.44,-217.24 406,-203 397.66,-201.95 388.87,-200.65 380.27,-199.28"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="380.73,-195.81 370.3,-197.64 379.59,-202.71 380.73,-195.81"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_halo~~UsedByGraph_edge23" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M877.73,-193C846.59,-193 806.86,-193 771.5,-193"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M769.5,-193C693.61,-193 679.19,-158.52 603.5,-153"/>
+</g>
+<!-- module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_halo~~UsedByGraph_node12" class="node">
+<title>module~rdb_ocean_diag_derived</title>
+<g id="a_module~~rdb_halo~~UsedByGraph_node12"><a xlink:href="../module/rdb_ocean_diag_derived.html" xlink:title="rdb_ocean_diag_derived">
+<polygon fill="#337ab7" stroke="#337ab7" points="842,-87 699,-87 699,-63 842,-63 842,-87"/>
+<text text-anchor="middle" x="770.5" y="-72.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_derived</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_halo~~UsedByGraph_edge26" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M923.51,-180.88C908.58,-161.52 876.82,-123.48 842,-101 836.18,-97.24 829.75,-93.92 823.2,-91.03"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="824.17,-87.64 813.59,-87.08 821.51,-94.11 824.17,-87.64"/>
+</g>
+<!-- module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_halo~~UsedByGraph_node13" class="node">
+<title>module~rdb_ocean_diag_fills</title>
+<g id="a_module~~rdb_halo~~UsedByGraph_node13"><a xlink:href="../module/rdb_ocean_diag_fills.html" xlink:title="rdb_ocean_diag_fills">
+<polygon fill="#337ab7" stroke="#337ab7" points="663,-47 542,-47 542,-23 663,-23 663,-47"/>
+<text text-anchor="middle" x="602.5" y="-32.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_fills</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_halo~~UsedByGraph_edge29" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M898.41,-180.97C852.17,-164.19 767.49,-131.75 699,-96 674.31,-83.11 647.72,-65.82 628.88,-52.94"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="630.77,-49.99 620.55,-47.18 626.79,-55.75 630.77,-49.99"/>
+</g>
+<!-- module~rdb_handle -->
+<g id="module~~rdb_halo~~UsedByGraph_node9" class="node">
+<title>module~rdb_handle</title>
+<g id="a_module~~rdb_halo~~UsedByGraph_node9"><a xlink:href="../module/rdb_handle.html" xlink:title="rdb_handle">
+<polygon fill="#337ab7" stroke="#337ab7" points="1098,-165 1025,-165 1025,-141 1098,-141 1098,-165"/>
+<text text-anchor="middle" x="1061.5" y="-150.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_handle&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_halo~~UsedByGraph_edge16" class="edge">
+<title>module~rdb_handle&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1024.73,-164.35C1011.49,-168.56 996.26,-173.39 982.13,-177.88"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="981.03,-174.55 972.56,-180.91 983.15,-181.22 981.03,-174.55"/>
+</g>
+<!-- module~rdb_handle&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_halo~~UsedByGraph_edge20" class="edge">
+<title>module~rdb_handle&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1024.88,-154.76C947.87,-158.18 760.18,-164.44 603.5,-153"/>
+</g>
+<!-- module~rdb_ocean_api -->
+<g id="module~~rdb_halo~~UsedByGraph_node10" class="node">
+<title>module~rdb_ocean_api</title>
+<g id="a_module~~rdb_halo~~UsedByGraph_node10"><a xlink:href="../module/rdb_ocean_api.html" xlink:title="rdb_ocean_api">
+<polygon fill="#337ab7" stroke="#337ab7" points="1225,-165 1134,-165 1134,-141 1225,-141 1225,-165"/>
+<text text-anchor="middle" x="1179.5" y="-150.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_halo~~UsedByGraph_edge11" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1154.69,-140.98C1111.9,-120.41 1018.62,-80.14 934.5,-75"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M932.5,-75C859.86,-62.34 844.05,-48.16 771.5,-35"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M769.5,-35C669.59,-16.86 637.79,19.69 542,-14 453.04,-45.29 373.54,-129.89 340.38,-168.86"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="337.41,-166.96 333.67,-176.87 342.77,-171.45 337.41,-166.96"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_halo~~UsedByGraph_edge17" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1136.97,-165.01C1124.52,-168.29 1110.78,-171.6 1098,-174 1065.7,-180.06 1029.43,-184.5 999.27,-187.57"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="998.89,-184.09 989.29,-188.55 999.58,-191.05 998.89,-184.09"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_handle -->
+<g id="module~~rdb_halo~~UsedByGraph_edge18" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_handle</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1133.98,-153C1125.53,-153 1116.68,-153 1108.2,-153"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1108.08,-149.5 1098.08,-153 1108.08,-156.5 1108.08,-149.5"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_halo~~UsedByGraph_edge25" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_derived</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M932.5,-75C906.39,-73.4 877.86,-72.97 852.16,-73.07"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="852.07,-69.57 842.09,-73.13 852.11,-76.57 852.07,-69.57"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_halo~~UsedByGraph_edge27" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M769.5,-35C738.3,-29.33 703.26,-28.54 673.43,-29.47"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="672.98,-25.99 663.12,-29.87 673.25,-32.98 672.98,-25.99"/>
+</g>
+<!-- module~rdb_ocean_state&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_halo~~UsedByGraph_edge14" class="edge">
+<title>module~rdb_ocean_state&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M415.7,-161C402.48,-165.03 387.55,-169.59 373.64,-173.84"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="372.27,-170.6 363.73,-176.87 374.32,-177.29 372.27,-170.6"/>
+</g>
+<!-- module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_halo~~UsedByGraph_edge21" class="edge">
+<title>module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M755.85,-87.3C728.67,-110.38 665.11,-157.5 603.5,-153"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M601.5,-153C573.55,-150.96 542.48,-149.93 516.34,-149.43"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="516.27,-145.93 506.21,-149.26 516.15,-152.93 516.27,-145.93"/>
+</g>
+<!-- module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_halo~~UsedByGraph_edge28" class="edge">
+<title>module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M719.69,-62.99C701.97,-58.72 681.82,-53.87 663.34,-49.41"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="664.1,-46 653.56,-47.06 662.46,-52.8 664.1,-46"/>
+</g>
+<!-- module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_halo~~UsedByGraph_edge22" class="edge">
+<title>module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M586.04,-47.2C560.72,-67.17 510.29,-106.96 480.52,-130.44"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="478.04,-127.94 472.35,-136.88 482.37,-133.44 478.04,-127.94"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panmodulerdb_haloUsedByGraph = svgPanZoom('#modulerdb_haloUsedByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsedByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsedByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="518pt" height="32pt"
+ viewBox="0.00 0.00 517.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 513.5,-28 513.5,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24 0,-24 0,0 54,0 54,-24"/>
+<text text-anchor="middle" x="27" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="145.5,-24 72.5,-24 72.5,0 145.5,0 145.5,-24"/>
+<text text-anchor="middle" x="109" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="234,-24 164,-24 164,0 234,0 234,-24"/>
+<text text-anchor="middle" x="199" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="310,-24 252,-24 252,0 310,0 310,-24"/>
+<text text-anchor="middle" x="281" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="386,-24 328,-24 328,0 386,0 386,-24"/>
+<text text-anchor="middle" x="357" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="509.5,-24 404.5,-24 404.5,0 509.5,0 509.5,-24"/>
+<text text-anchor="middle" x="457" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+      <br>
+
+
+        <section>
+          <h2>Variables</h2>
+            <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-max_reqs"></span>
+              integer,
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>MAX_REQS</strong></td>
+<td> =</td>
+                <td>8</td>
+            <td>
+                <p>Max MPI requests: 4 directions x 2 (send + recv)</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nfields"></span>
+              integer,
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>NFIELDS</strong></td>
+<td> =</td>
+                <td>4</td>
+            <td>
+                <p>Number of fields exchanged (h, hu, hv, b)</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ha_buf_recv_east"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>ha_buf_recv_east</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ha_buf_recv_north"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>ha_buf_recv_north</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ha_buf_recv_south"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>ha_buf_recv_south</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ha_buf_recv_west"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>ha_buf_recv_west</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ha_buf_send_east"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>ha_buf_send_east</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ha_buf_send_north"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>ha_buf_send_north</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ha_buf_send_south"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>ha_buf_send_south</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ha_buf_send_west"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>ha_buf_send_west</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hs3_buf_recv_east"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>hs3_buf_recv_east</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hs3_buf_recv_north"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>hs3_buf_recv_north</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hs3_buf_recv_south"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>hs3_buf_recv_south</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hs3_buf_recv_west"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>hs3_buf_recv_west</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hs3_buf_send_east"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>hs3_buf_send_east</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hs3_buf_send_north"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>hs3_buf_send_north</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hs3_buf_send_south"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>hs3_buf_send_south</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hs3_buf_send_west"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>hs3_buf_send_west</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hs3_nghost"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hs3_nghost</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hs3_nx_total"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hs3_nx_total</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hs3_ny_total"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hs3_ny_total</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hs3_nz_capacity"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hs3_nz_capacity</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hs_buf_recv_east"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>hs_buf_recv_east</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hs_buf_recv_north"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>hs_buf_recv_north</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hs_buf_recv_south"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>hs_buf_recv_south</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hs_buf_recv_west"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>hs_buf_recv_west</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hs_buf_send_east"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>hs_buf_send_east</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hs_buf_send_north"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>hs_buf_send_north</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hs_buf_send_south"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>hs_buf_send_south</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hs_buf_send_west"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>hs_buf_send_west</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hs_nghost"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hs_nghost</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hs_nx_total"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hs_nx_total</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hs_ny_total"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hs_ny_total</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+        </section>
+        <br>
+
+
+
+
+        <section>
+          <h2>Derived Types</h2>
+              <div class="card">
+    <div class="card-header codesum">
+      <span class="anchor" id="type-halo_async_t"></span>
+      <h3>
+        type, public&nbsp;::&nbsp;
+        <a href='../type/halo_async_t.html'>halo_async_t</a>
+        
+      </h3>
+    </div>
+    <div class="card-body">
+      <p>Persistent state for split begin/end halo exchange</p><a href="../type/halo_async_t.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+        <h4>Components</h4>
+          <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-decomp"></span>
+              type(<a href='../type/decomp_t.html'>decomp_t</a>),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>decomp</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-initialised"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>initialised</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nghost~8"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nghost</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nreq"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nreq</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_local"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_local</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_total~3"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_total</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_local"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_local</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_total~3"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_total</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rank_east"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rank_east</strong></td>
+<td> =</td>
+                <td>-1</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rank_north"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rank_north</strong></td>
+<td> =</td>
+                <td>-1</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rank_south"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rank_south</strong></td>
+<td> =</td>
+                <td>-1</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rank_west"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rank_west</strong></td>
+<td> =</td>
+                <td>-1</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-reqs"></span>
+              type(request_t),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>reqs</strong>(MAX_REQS)</td>
+                <td></td>
+                <td></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-strip_ew"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>strip_ew</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-strip_sn"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>strip_sn</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+
+
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+
+        <section>
+          <h2>Subroutines</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-halo_allreduce_efp_list"></span> <h3>public  subroutine <a href='../proc/halo_allreduce_efp_list.html'>halo_allreduce_efp_list</a>(local_list, global_list, nval)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Order-invariant EXACT cross-rank combine of <code>nval</code> EFP values in
+ONE collective (PR-32).  Replaces N separate scalar
+<code>halo_allreduce_sum</code> calls with one packed <code>allreduce</code>.</p><a href="../proc/halo_allreduce_efp_list.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-local_list"></span>
+              type(<a href='../type/efp_t.html'>efp_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>local_list</strong>(:)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-global_list"></span>
+              type(<a href='../type/efp_t.html'>efp_t</a>),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>global_list</strong>(:)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nval"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nval</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-halo_allreduce_max"></span> <h3>public  subroutine <a href='../proc/halo_allreduce_max.html'>halo_allreduce_max</a>(local_val, global_val)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>MPI_Allreduce with MPI_MAX — max-type reductions are exact in FP,
+so a global max stays layout-reproducible (ocean-MPI plan D5).
+Used for auto_n_inner&rsquo;s global gravity-wave CFL (shared n_inner).</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-local_val~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>local_val</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-global_val~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>global_val</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-halo_allreduce_min"></span> <h3>public  subroutine <a href='../proc/halo_allreduce_min.html'>halo_allreduce_min</a>(local_val, global_val)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>MPI_Allreduce with MPI_MIN for global timestep</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-local_val"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>local_val</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-global_val"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>global_val</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-halo_allreduce_sum"></span> <h3>public  subroutine <a href='../proc/halo_allreduce_sum.html'>halo_allreduce_sum</a>(local_val, global_val)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>MPI_Allreduce with MPI_SUM for CG dot products</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-local_val~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>local_val</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-global_val~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>global_val</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-halo_allreduce_sum_i8"></span> <h3>public  subroutine <a href='../proc/halo_allreduce_sum_i8.html'>halo_allreduce_sum_i8</a>(local_val, global_val)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Cross-rank int64 sum for the decomposition-invariant chksum
+bitcount (<code>rdb_ocean_chksum</code>).  <code>pic_mpi_lib</code> exposes no
+<code>integer(int64)</code> allreduce overload (MPI_INTEGER8 reaches only
+send/recv), so the value rides the EXACT <code>real64</code> allreduce: a
+per-field POPCNT sum is bounded by (#elements x 64), which stays
+FAR below the double-mantissa bound 2<strong>53 for any realistic grid
+(2</strong>53/64 ~ 1.4e14 cells), so both the local-&gt;double cast and
+every partial MPI_SUM are exact — the invariant survives.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-local_val~4"></span>
+              integer(kind=int64),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>local_val</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-global_val~4"></span>
+              integer(kind=int64),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>global_val</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-halo_async_destroy"></span> <h3>public  subroutine <a href='../proc/halo_async_destroy.html'>halo_async_destroy</a>(ha)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Free pre-allocated halo buffers</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ha~3"></span>
+              type(<a href='../type/halo_async_t.html'>halo_async_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ha</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-halo_async_init"></span> <h3>public  subroutine <a href='../proc/halo_async_init.html'>halo_async_init</a>(ha, decomp, nghost, nx_local, ny_local)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Pre-allocate halo buffers for all 4 fields</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ha~2"></span>
+              type(<a href='../type/halo_async_t.html'>halo_async_t</a>),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ha</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-decomp~4"></span>
+              type(<a href='../type/decomp_t.html'>decomp_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>decomp</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nghost~12"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nghost</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_local~4"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_local</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_local~4"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_local</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-halo_exchange_2d"></span> <h3>public  subroutine <a href='../proc/halo_exchange_2d.html'>halo_exchange_2d</a>(fld, decomp, nghost, nx_local, ny_local)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Exchange ghost-cell halos for a single 2D field</p><a href="../proc/halo_exchange_2d.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-fld"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>fld</strong>(:,:)</td>
+            <td>
+<p>2D field with ghost cells</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-decomp~2"></span>
+              type(<a href='../type/decomp_t.html'>decomp_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>decomp</strong></td>
+            <td>
+<p>Domain decomposition descriptor</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nghost~9"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nghost</strong></td>
+            <td>
+<p>Ghost cell width</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_local~2"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_local</strong></td>
+            <td>
+<p>Local physical cells in x</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_local~2"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_local</strong></td>
+            <td>
+<p>Local physical cells in y</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-halo_exchange_2d_device"></span> <h3>public  subroutine <a href='../proc/halo_exchange_2d_device.html'>halo_exchange_2d_device</a>(fld, decomp, nghost, nx_local, ny_local)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>GPU-direct halo exchange via CUDA-aware MPI</p><a href="../proc/halo_exchange_2d_device.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-fld~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>fld</strong>(:,:)</td>
+            <td>
+<p>2D field with ghost cells (present on device)</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-decomp~3"></span>
+              type(<a href='../type/decomp_t.html'>decomp_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>decomp</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nghost~10"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nghost</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_local~3"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_local</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_local~3"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_local</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-halo_exchange_3d"></span> <h3>public  subroutine <a href='../proc/halo_exchange_3d.html'>halo_exchange_3d</a>(fld, decomp, nghost, nx_local, ny_local, nz)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Exchange ghost-cell halos for a 3D field (all nz layers packed per direction)</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-fld~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>fld</strong>(:,:,:)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-decomp~5"></span>
+              type(<a href='../type/decomp_t.html'>decomp_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>decomp</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nghost~13"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nghost</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_local~5"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_local</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_local~5"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_local</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~34"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-halo_exchange_3d_device"></span> <h3>public  subroutine <a href='../proc/halo_exchange_3d_device.html'>halo_exchange_3d_device</a>(fld, decomp, nghost, nx_local, ny_local, nz)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>GPU-direct halo exchange for a 3D field, batched across layers.</p><a href="../proc/halo_exchange_3d_device.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-fld~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>fld</strong>(nx_local+2*nghost,ny_local+2*nghost,nz)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-decomp~6"></span>
+              type(<a href='../type/decomp_t.html'>decomp_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>decomp</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nghost~14"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nghost</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_local~6"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_local</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_local~6"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_local</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~35"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-halo_exchange_begin"></span> <h3>public  subroutine <a href='../proc/halo_exchange_begin.html'>halo_exchange_begin</a>(ha, h, hu, hv, b_fld)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Pack and post non-blocking MPI sends/recvs for all 4 fields</p><a href="../proc/halo_exchange_begin.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ha~4"></span>
+              type(<a href='../type/halo_async_t.html'>halo_async_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ha</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h</strong>(:,:)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hu"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hu</strong>(:,:)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hv~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hv</strong>(:,:)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-b_fld"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>b_fld</strong>(:,:)</td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-halo_exchange_end"></span> <h3>public  subroutine <a href='../proc/halo_exchange_end.html'>halo_exchange_end</a>(ha, h, hu, hv, b_fld)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Wait for MPI to complete and unpack received ghost cells</p><a href="../proc/halo_exchange_end.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ha~5"></span>
+              type(<a href='../type/halo_async_t.html'>halo_async_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ha</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h~9"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h</strong>(:,:)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hu~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hu</strong>(:,:)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hv~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hv</strong>(:,:)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-b_fld~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>b_fld</strong>(:,:)</td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-halo_sync_buffers_cleanup"></span> <h3>public  subroutine <a href='../proc/halo_sync_buffers_cleanup.html'>halo_sync_buffers_cleanup</a>()  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Release the persistent halo buffers.  Idempotent.</p>
+
+  <h4>Arguments</h4>
+    <em>None</em>
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-halo_sync_buffers_cleanup_3d"></span> <h3>public  subroutine <a href='../proc/halo_sync_buffers_cleanup_3d.html'>halo_sync_buffers_cleanup_3d</a>()  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Release the persistent 3D halo buffers.  Idempotent.</p>
+
+  <h4>Arguments</h4>
+    <em>None</em>
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-halo_sync_buffers_ensure"></span> <h3>public  subroutine <a href='../proc/halo_sync_buffers_ensure.html'>halo_sync_buffers_ensure</a>(nghost, nx_total, ny_total)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Lazy-allocate the persistent send/recv buffers used by
+<code>halo_exchange_2d_device</code> (and <code>halo_exchange_2d</code> via the same
+pool).  Sized to the per-rank subdomain; resizes on grid change.</p><a href="../proc/halo_sync_buffers_ensure.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nghost~11"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nghost</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_total~6"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_total</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_total~6"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_total</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-halo_sync_buffers_ensure_3d"></span> <h3>public  subroutine <a href='../proc/halo_sync_buffers_ensure_3d.html'>halo_sync_buffers_ensure_3d</a>(nghost, nx_total, ny_total, nz)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Lazy-allocate the persistent 3D send/recv buffers used by
+<code>halo_exchange_3d_device</code>.  Sized to the per-rank subdomain
+and the largest <code>nz</code> seen so far &ndash; subsequent calls with a
+smaller <code>nz</code> reuse the existing buffer (just write fewer
+elements), grow-only on <code>nz</code> so an ML run that later does an
+NH <code>w</code> halo (nz_ml+1) doesn&rsquo;t free/reallocate.  Resizes in
+full if (nx_total, ny_total, nghost) change.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nghost~15"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nghost</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_total~9"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_total</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_total~9"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_total</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~36"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+
+
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-01 23:35 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>
