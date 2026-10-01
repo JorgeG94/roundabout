@@ -259,6 +259,10 @@ wrong. If a section found nothing, say so in one line rather than omitting it,
 so the author knows it was looked at. Do not invent findings to fill a
 section. Do not approve or request changes; the maintainer decides.
 
-**In the GitHub workflow:** post the whole report as one PR comment with
-`gh pr comment <N> --body-file <file>`, and put each **Must fix** finding
-inline on its line with the inline-comment tool as well. Post nothing else.
+**In the GitHub workflow:** write the whole report to `review.md` with the
+Write tool, post it as one PR comment with
+`gh pr comment <N> --body-file review.md`, and put each **Must fix** finding
+inline on its line with the inline-comment tool as well. Always post the
+summary, even when every section is empty; post nothing else. Run each shell
+command on its own (no pipes, `&&` or redirection): the workflow's allow-list
+only matches single commands.
