@@ -12,6 +12,30 @@ module rdb_ocean_isopycnal_slopes
    !! (below, bed side).  A vert-fill pre-pass diffuses T/S into massless
    !! layers so `T=S=0` ghosts don't corrupt gradients.
    !!
+   !! ### Partial-step z-level faces (`&vcoord_nml zfixed_closed_faces`)
+   !!
+   !! Two changes, both host-gated on `metrics%use_closed_faces` (which
+   !! configure admits under `z_fixed` only), knob off ⇒ byte-identical:
+   !!
+   !!   * **No interface-tilt term.**  The z_fixed target hangs every
+   !!     nominal interface at a FIXED depth below the column top (the
+   !!     free surface, or the ice base) and puts `η` and the fillers'
+   !!     `h_min` debt into the partial bottom cell, so two columns' common
+   !!     interior interface sits at the same geopotential height up to
+   !!     `η_W − η_E`.  The along-layer gradient IS the horizontal
+   !!     gradient, and the rotation term `−∂zρ·(e_W − e_E)` is the free-
+   !!     surface tilt of the coordinate, `O(Δη/Δx) ~ 1e-6` — dropped.
+   !!     Kept, it is WRONG here: `e_int` is built bed-up from a zero bed
+   !!     datum, so `e_W − e_E` is the difference of the heights ABOVE THE
+   !!     LOCAL BED, i.e. it carries the bathymetry step `D_W − D_E` (plus
+   !!     the bed fillers' `n·h_min`), and a flat stratification over a
+   !!     staircase would read as a slope `~ΔD/Δx` (0.01–0.1 at a shelf
+   !!     break, at or above GM's `slope_max`).
+   !!   * **Open-column mask.**  slope / N² are zeroed at every interface
+   !!     that is not strictly inside the face's open column
+   !!     (`open(ka) .and. open(kb)`), so no consumer (GM, its `gm_src`,
+   !!     VarMix) reads a gradient formed against a filler.
+   !!
    !! Default off (`&ocean_slopes_nml enable=.false.`) ⇒ slot allocated but
    !! `ocean_slopes_compute` no-ops ⇒ bit-identical.
 #ifdef LFORTRAN_PASSING
@@ -218,6 +242,7 @@ contains
       real(wp), intent(in) :: t_htr(slopes%nx_total, slopes%ny_total, slopes%nz_ml)
       real(wp), intent(in) :: s_htr(slopes%nx_total, slopes%ny_total, slopes%nz_ml)
       real(wp), intent(in) :: dt
+      logical :: use_tilt
 
       nx = slopes%nx_total
       ny = slopes%ny_total
@@ -233,19 +258,70 @@ contains
       call ocean_slopes_build_e(nx, ny, nz, h_layer, slopes%e_int)
 
       ! (3) u-face slopes + N².
+      use_tilt = .not. metrics%use_closed_faces
       call ocean_slopes_pass_x(nx, ny, nz, eos, slopes%rho0, &
                                slopes%min_dz_for_n2, h_layer, &
                                slopes%t_fill, slopes%s_fill, slopes%e_int, &
-                               metrics%idxCu, metrics%wet_u, &
+                               metrics%idxCu, metrics%wet_u, use_tilt, &
                                slopes%slope_x, slopes%n2_u)
 
       ! (4) v-face slopes + N².
       call ocean_slopes_pass_y(nx, ny, nz, eos, slopes%rho0, &
                                slopes%min_dz_for_n2, h_layer, &
                                slopes%t_fill, slopes%s_fill, slopes%e_int, &
-                               metrics%idyCv, metrics%wet_v, &
+                               metrics%idyCv, metrics%wet_v, use_tilt, &
                                slopes%slope_y, slopes%n2_v)
+
+      ! (5) z-level closed faces: a slope / N² exists only at an interface
+      ! STRICTLY INSIDE the face's open column — both layers it separates
+      ! (`ka = K` above, `kb = K-1` below) open at that face.  Anywhere
+      ! else the four-cell stencil pairs a live cell with a filler (whose
+      ! T/S is the vert-fill's invention, not water) and the value is
+      ! meaningless; zeroing it is what lets GM's open-column recurrence,
+      ! its `gm_src` and VarMix's SN read only real water.  Assigned, not
+      ! multiplied, so no non-finite value can survive behind a 0 mask.
+      ! Host-gated: knob off ⇒ not taken, the `(1,1,1)` mask placeholders
+      ! are never named ⇒ byte-identical.  (This routine launches no
+      ! `do concurrent` of its own, so the escaping-array cost of a gated
+      ! call — CLAUDE.md — has nothing here to pessimise.)
+      if (metrics%use_closed_faces) then
+         call ocean_slopes_mask_open_column(nx, ny, nz, metrics%open_u, &
+                                            metrics%open_v, slopes%slope_x, &
+                                            slopes%slope_y, slopes%n2_u, &
+                                            slopes%n2_v)
+      end if
    end subroutine ocean_slopes_compute_impl
+
+   pure subroutine ocean_slopes_mask_open_column(nx, ny, nz, open_u, open_v, &
+                                                 slope_x, slope_y, n2_u, n2_v)
+      !! Zero slope / N² at every interior interface `K` that is NOT
+      !! strictly inside its face's open column, i.e. unless both layers it
+      !! separates (`K` above, `K-1` below) are open at that face
+      !! (`&vcoord_nml zfixed_closed_faces`).  Assigned under a test, never
+      !! multiplied by the 0/1 mask, so a non-finite value formed against a
+      !! filler cannot survive as `NaN·0`.
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in) :: open_u(nx + 1, ny, nz)
+      real(wp), intent(in) :: open_v(nx, ny + 1, nz)
+      real(wp), intent(inout) :: slope_x(nx + 1, ny, nz + 1)
+      real(wp), intent(inout) :: slope_y(nx, ny + 1, nz + 1)
+      real(wp), intent(inout) :: n2_u(nx + 1, ny, nz + 1)
+      real(wp), intent(inout) :: n2_v(nx, ny + 1, nz + 1)
+      integer :: i, j, k
+
+      do concurrent(k=2:nz, j=1:ny, i=1:nx + 1)
+         if (open_u(i, j, k) < 0.5_wp .or. open_u(i, j, k - 1) < 0.5_wp) then
+            slope_x(i, j, k) = 0.0_wp
+            n2_u(i, j, k) = 0.0_wp
+         end if
+      end do
+      do concurrent(k=2:nz, j=1:ny + 1, i=1:nx)
+         if (open_v(i, j, k) < 0.5_wp .or. open_v(i, j, k - 1) < 0.5_wp) then
+            slope_y(i, j, k) = 0.0_wp
+            n2_v(i, j, k) = 0.0_wp
+         end if
+      end do
+   end subroutine ocean_slopes_mask_open_column
 
    pure subroutine ocean_slopes_build_e(nx, ny, nz, h_layer, e_int)
       !! Build interface heights bottom-up: `e_int(:,:,1) = 0` (bed),
@@ -352,7 +428,7 @@ contains
 
    pure subroutine ocean_slopes_pass_x(nx, ny, nz, eos, rho0, min_dz, &
                                        h_layer, t_fill, s_fill, e_int, &
-                                       idxCu, wet_u, slope_x, n2_u)
+                                       idxCu, wet_u, use_tilt, slope_x, n2_u)
       !! u-face slope + N² pass.  Interface `K` (interior 2..nz) straddles
       !! layer `k=K` (above, surface side) and `k=K-1` (below, bed side).
       !! Bed (K=1) + surface (K=nz+1) are forced to zero.  The u-face at
@@ -367,6 +443,10 @@ contains
       real(wp), intent(in) :: e_int(nx, ny, nz + 1)
       real(wp), intent(in) :: idxCu(nx + 1, ny)
       real(wp), intent(in) :: wet_u(nx + 1, ny)
+      logical, intent(in) :: use_tilt
+         !! Include the interface-tilt rotation `-drdz·(e_W - e_E)`.
+         !! `.false.` only on the z_fixed closed-face path (see
+         !! `ocean_slopes_compute_impl`).
       real(wp), intent(out) :: slope_x(nx + 1, ny, nz + 1)
       real(wp), intent(out) :: n2_u(nx + 1, ny, nz + 1)
 
@@ -457,9 +537,14 @@ contains
 
          drdz = ((wtL*drdkL) + (wtR*drdkR))/((dzaL*wtL) + (dzaR*wtR))
 
-         ! Interface-tilt rotation term + metric scaling.
-         drdx = ((wtA*drdiA + wtB*drdiB)/(wtA + wtB) - &
-                 drdz*(e_int(iw, j, k) - e_int(i, j, k)))*idxCu(i, j)
+         ! Interface-tilt rotation term + metric scaling (dropped on the
+         ! geopotential z_fixed path, see `use_tilt`).
+         if (use_tilt) then
+            drdx = ((wtA*drdiA + wtB*drdiB)/(wtA + wtB) - &
+                    drdz*(e_int(iw, j, k) - e_int(i, j, k)))*idxCu(i, j)
+         else
+            drdx = ((wtA*drdiA + wtB*drdiB)/(wtA + wtB))*idxCu(i, j)
+         end if
 
          mag2 = drdx*drdx + drdz*drdz
          if (mag2 > 0.0_wp) then
@@ -496,7 +581,7 @@ contains
 
    pure subroutine ocean_slopes_pass_y(nx, ny, nz, eos, rho0, min_dz, &
                                        h_layer, t_fill, s_fill, e_int, &
-                                       idyCv, wet_v, slope_y, n2_v)
+                                       idyCv, wet_v, use_tilt, slope_y, n2_v)
       !! v-face slope + N² pass — mirror of `pass_x` with v-staggering.
       !! The v-face at (i,j) sits between cells (i,j-1) and (i,j); pairs
       !! columns `js=j-1` (south) and `j` (north), loop `j=2:ny`.
@@ -509,6 +594,8 @@ contains
       real(wp), intent(in) :: e_int(nx, ny, nz + 1)
       real(wp), intent(in) :: idyCv(nx, ny + 1)
       real(wp), intent(in) :: wet_v(nx, ny + 1)
+      logical, intent(in) :: use_tilt
+         !! See `ocean_slopes_pass_x`.
       real(wp), intent(out) :: slope_y(nx, ny + 1, nz + 1)
       real(wp), intent(out) :: n2_v(nx, ny + 1, nz + 1)
 
@@ -585,8 +672,12 @@ contains
 
          drdz = ((wtL*drdkL) + (wtR*drdkR))/((dzaL*wtL) + (dzaR*wtR))
 
-         drdy = ((wtA*drdjA + wtB*drdjB)/(wtA + wtB) - &
-                 drdz*(e_int(i, js, k) - e_int(i, j, k)))*idyCv(i, j)
+         if (use_tilt) then
+            drdy = ((wtA*drdjA + wtB*drdjB)/(wtA + wtB) - &
+                    drdz*(e_int(i, js, k) - e_int(i, j, k)))*idyCv(i, j)
+         else
+            drdy = ((wtA*drdjA + wtB*drdjB)/(wtA + wtB))*idyCv(i, j)
+         end if
 
          mag2 = drdy*drdy + drdz*drdz
          if (mag2 > 0.0_wp) then

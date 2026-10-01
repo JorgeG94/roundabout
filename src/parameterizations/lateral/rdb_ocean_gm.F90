@@ -30,6 +30,46 @@ module rdb_ocean_gm
    !! K=nz+1 surface); the slopes slot zeroes the slope at both caps so the
    !! streamfunction vanishes there and the recurrence closes.
    !!
+   !! ### Partial-step z-level faces (`&vcoord_nml zfixed_closed_faces`)
+   !!
+   !! Under `z_fixed` a face column is not the whole water column: a layer
+   !! that is an inert FILLER on either side (inside the bed or the ice
+   !! draft) is a WALL for that layer at that face (`metrics%open_u/open_v
+   !! == 0`).  Continuity applies that mask to the resolved flux BEFORE
+   !! `gm_fold_x/y` adds `uhD`, so GM must build its overturning on the
+   !! OPEN part of each face column itself.  With the knob on, each face
+   !! first marks its open layers,
+   !!     ok(k) = open(k) .and. live(h_W(k)) .and. live(h_E(k))
+   !! (`rdb_vl_is_live`, the one vanished-layer predicate), and the
+   !! recurrence then:
+   !!
+   !!   * gives a not-`ok` layer ZERO transport and zero availability
+   !!     (`h_avail = 0`, so it adds nothing to `rsum`): the streamfunction
+   !!     is carried UNCHANGED across it, so it is 0 at the BOTTOM of the
+   !!     open column (it starts at 0 at the bed, and the bed-side closed /
+   !!     filler layers cannot change it);
+   !!   * closes the column into the TOPMOST open layer `k_top_open`
+   !!     (`uhD(k_top_open) = -uhtot`) instead of `k = nz`, so the
+   !!     streamfunction is also 0 at the TOP of the open column — the free
+   !!     surface, or the ice base with fillers above it.  The full-column
+   !!     closure into `nz` would push the residual through a filler under
+   !!     the ice, or through a face whose top layer is closed.
+   !!
+   !! Hence `uhD == 0` on every closed face-layer and every filler, and
+   !! `Sum_k uhD = 0` at every face (the open-column integral IS the column
+   !! integral).  With nothing closed `ok` is all-true, `k_top_open = nz`
+   !! and the arithmetic is the full-column form operation for operation.
+   !! The slopes slot zeroes slope / N^2 at every interface not strictly
+   !! inside a face's open column on this path, so `gm_src` (the MEKE
+   !! source) sees only the open column as well.  Knob OFF ⇒ `use_open =
+   !! .false.`, `ok` all-true, the masks are never indexed ⇒ byte-identical.
+   !!
+   !! Non-finite guard: the streamfunction limiters are `min`/`max`
+   !! clamps, which nvfortran's relaxed FP lowers NaN-blind (CLAUDE.md) —
+   !! a NaN slope would come out as a plausible `±rsum` transport.  A
+   !! non-finite slope is therefore read as ZERO slope (no GM at that
+   !! interface) before any clamp sees it; finite inputs are untouched.
+   !!
    !! Default off (`&ocean_gm_nml enable=.false.`) => slot allocated but
    !! `gm_compute_transports` no-ops => bit-identical.
    !! Refs: Gent & McWilliams (1990); Gent et al. (1995); Griffies (1998).
@@ -44,6 +84,7 @@ module rdb_ocean_gm
    use rdb_ocean_isopycnal_slopes, only: ocean_slopes_t
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_mem_report, only: arr_bytes
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    implicit none
    private
 
@@ -220,7 +261,7 @@ contains
       real(wp), intent(in), optional :: khth_ext_v(:, :)
 
       integer :: nx, ny, nz
-      logical :: use_ext
+      logical :: use_ext, use_open
 
       if (.not. this%is_init) return
       if (.not. this%enable) return
@@ -235,46 +276,78 @@ contains
       if (slopes%nz_ml /= nz) return
 
       use_ext = present(khth_ext_u) .and. present(khth_ext_v)
+      use_open = metrics%use_closed_faces
 
       ! Explicit-shape flat-impl: pass the top-level allocatables so NVHPC
       ! does not descriptor-walk per launch.  When the external VarMix base
       ! is absent, pass `this%khth_u/khth_v` as a harmless placeholder for
       ! the `khth_ext_*` dummy and gate it off with `use_ext`.
-      if (use_ext) then
+      !
+      ! The z-level open masks follow the continuity convention (the
+      ! `open_f` dummy of the barotropic renormaliser): with the knob OFF
+      ! they are `(1,1,1)` placeholders, and NVHPC derives an explicit-shape
+      ! dummy's present-check extent from its DECLARED bounds, so handing
+      ! over the placeholder aborts `mem:separate` ("partially present")
+      ! even though `use_open = .false.` never indexes it.  The knob-off
+      ! calls therefore pass the slopes' own read-only `slope_x`/`slope_y`
+      ! as the inert stand-in: `(nx+1,ny,nz+1)`/`(nx,ny+1,nz+1)`, i.e. at
+      ! least the `(..,nz)` the dummy declares, already device-mapped, and
+      ! only ever read here.
+      if (use_open) then
+         if (use_ext) then
+            call gm_compute_impl(nx, ny, nz, dt, this%khth, this%khth_max_cfl, &
+                                 this%khth_slope_max, this%rho0, use_ext, use_open, &
+                                 metrics%dy_cu, metrics%dx_cv, metrics%idxCu, &
+                                 metrics%idyCv, metrics%idyCu, metrics%idxCv, &
+                                 metrics%areaT, metrics%wet_u, metrics%wet_v, &
+                                 ms%h_layer, slopes%slope_x, slopes%slope_y, &
+                                 slopes%n2_u, slopes%n2_v, khth_ext_u, khth_ext_v, &
+                                 metrics%open_u, metrics%open_v, &
+                                 this%khth_u, this%khth_v, &
+                                 this%uhD, this%vhD, this%gm_src)
+         else
+            call gm_compute_impl(nx, ny, nz, dt, this%khth, this%khth_max_cfl, &
+                                 this%khth_slope_max, this%rho0, use_ext, use_open, &
+                                 metrics%dy_cu, metrics%dx_cv, metrics%idxCu, &
+                                 metrics%idyCv, metrics%idyCu, metrics%idxCv, &
+                                 metrics%areaT, metrics%wet_u, metrics%wet_v, &
+                                 ms%h_layer, slopes%slope_x, slopes%slope_y, &
+                                 slopes%n2_u, slopes%n2_v, this%khth_u, this%khth_v, &
+                                 metrics%open_u, metrics%open_v, &
+                                 this%khth_u, this%khth_v, &
+                                 this%uhD, this%vhD, this%gm_src)
+         end if
+      else if (use_ext) then
          call gm_compute_impl(nx, ny, nz, dt, this%khth, this%khth_max_cfl, &
-                              this%khth_slope_max, this%rho0, &
-                              use_ext, &
+                              this%khth_slope_max, this%rho0, use_ext, use_open, &
                               metrics%dy_cu, metrics%dx_cv, metrics%idxCu, &
                               metrics%idyCv, metrics%idyCu, metrics%idxCv, &
-                              metrics%areaT, metrics%wet_u, &
-                              metrics%wet_v, ms%h_layer, &
+                              metrics%areaT, metrics%wet_u, metrics%wet_v, &
+                              ms%h_layer, slopes%slope_x, slopes%slope_y, &
+                              slopes%n2_u, slopes%n2_v, khth_ext_u, khth_ext_v, &
                               slopes%slope_x, slopes%slope_y, &
-                              slopes%n2_u, slopes%n2_v, &
-                              khth_ext_u, khth_ext_v, &
                               this%khth_u, this%khth_v, &
                               this%uhD, this%vhD, this%gm_src)
       else
          call gm_compute_impl(nx, ny, nz, dt, this%khth, this%khth_max_cfl, &
-                              this%khth_slope_max, this%rho0, &
-                              use_ext, &
+                              this%khth_slope_max, this%rho0, use_ext, use_open, &
                               metrics%dy_cu, metrics%dx_cv, metrics%idxCu, &
                               metrics%idyCv, metrics%idyCu, metrics%idxCv, &
-                              metrics%areaT, metrics%wet_u, &
-                              metrics%wet_v, ms%h_layer, &
+                              metrics%areaT, metrics%wet_u, metrics%wet_v, &
+                              ms%h_layer, slopes%slope_x, slopes%slope_y, &
+                              slopes%n2_u, slopes%n2_v, this%khth_u, this%khth_v, &
                               slopes%slope_x, slopes%slope_y, &
-                              slopes%n2_u, slopes%n2_v, &
-                              this%khth_u, this%khth_v, &
                               this%khth_u, this%khth_v, &
                               this%uhD, this%vhD, this%gm_src)
       end if
    end subroutine gm_compute_transports
 
    subroutine gm_compute_impl(nx, ny, nz, dt, khth, khth_max_cfl, slope_max, &
-                              rho0, use_ext, dy_cu, dx_cv, idxCu, &
+                              rho0, use_ext, use_open, dy_cu, dx_cv, idxCu, &
                               idyCv, idyCu, idxCv, areaT, wet_u, wet_v, h_layer, &
                               slope_x, slope_y, &
-                              n2_u, n2_v, khth_ext_u, khth_ext_v, khth_u, khth_v, &
-                              uhD, vhD, gm_src)
+                              n2_u, n2_v, khth_ext_u, khth_ext_v, open_u, open_v, &
+                              khth_u, khth_v, uhD, vhD, gm_src)
       !! Flat-impl GM kernel.  Passes: CFL-clamp the 2D face KhTh, the
       !! u-face and v-face column recurrences into `uhD`/`vhD`, the
       !! `gm_src` PE release.  Each face's column sweep is serial in k (the
@@ -282,6 +355,9 @@ contains
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: dt, khth, khth_max_cfl, slope_max, rho0
       logical, intent(in) :: use_ext
+      logical, intent(in) :: use_open
+         !! z-level closed faces active (`metrics%use_closed_faces`).
+         !! `.false.` ⇒ `open_u`/`open_v` are never indexed.
       real(wp), intent(in) :: dy_cu(nx + 1, ny)
       real(wp), intent(in) :: dx_cv(nx, ny + 1)
       real(wp), intent(in) :: idxCu(nx + 1, ny)
@@ -298,6 +374,11 @@ contains
       real(wp), intent(in) :: n2_v(nx, ny + 1, nz + 1)
       real(wp), intent(in) :: khth_ext_u(nx + 1, ny)
       real(wp), intent(in) :: khth_ext_v(nx, ny + 1)
+      real(wp), intent(in) :: open_u(nx + 1, ny, nz)
+         !! Per-layer 0/1 u-face open mask (`metrics%open_u`), read only
+         !! when `use_open`; an inert device-present stand-in otherwise.
+      real(wp), intent(in) :: open_v(nx, ny + 1, nz)
+         !! v-face twin of `open_u`.
       real(wp), intent(out) :: khth_u(nx + 1, ny)
       real(wp), intent(out) :: khth_v(nx, ny + 1)
       real(wp), intent(out) :: uhD(nx + 1, ny, nz)
@@ -322,16 +403,16 @@ contains
          uhD(1, j, k) = 0.0_wp
          uhD(nx + 1, j, k) = 0.0_wp
       end do
-      call gm_column_x(nx, ny, nz, i_smax2, i4dt, &
-                       dy_cu, areaT, h_layer, slope_x, khth_u, uhD)
+      call gm_column_x(nx, ny, nz, i_smax2, i4dt, use_open, &
+                       dy_cu, areaT, h_layer, slope_x, khth_u, open_u, uhD)
 
       ! ---- 3. v-face bolus transport (mirror).
       do concurrent(k=1:nz, i=1:nx)
          vhD(i, 1, k) = 0.0_wp
          vhD(i, ny + 1, k) = 0.0_wp
       end do
-      call gm_column_y(nx, ny, nz, i_smax2, i4dt, &
-                       dx_cv, areaT, h_layer, slope_y, khth_v, vhD)
+      call gm_column_y(nx, ny, nz, i_smax2, i4dt, use_open, &
+                       dx_cv, areaT, h_layer, slope_y, khth_v, open_v, vhD)
 
       ! ---- 4. gm_src PE release (cell centres).
       call gm_pe_release(nx, ny, nz, slope_max, rho0, h_layer, &
@@ -402,8 +483,8 @@ contains
       if (h_avail_k > 0.0_wp) hf = h_avail_k/(rsum_k + H_DIV_EPS)
    end function gm_h_frac
 
-   pure subroutine gm_column_x(nx, ny, nz, i_smax2, i4dt, &
-                               dy_cu, areaT, h_layer, slope_x, khth_u, uhD)
+   pure subroutine gm_column_x(nx, ny, nz, i_smax2, i4dt, use_open, &
+                               dy_cu, areaT, h_layer, slope_x, khth_u, open_u, uhD)
       !! u-face GM streamfunction + bolus-transport column recurrence.
       !! Interior u-face (i=2..nx) pairs columns iw=i-1 (west) and i (east).
       !! Bottom-up sweep: interior interfaces Kr=2 (bed-most) -> nz
@@ -412,6 +493,15 @@ contains
       !! `Sum_k uhD=0` exactly.  Interface Kr straddles ka=Kr (above) and
       !! kb=Kr-1 (below) and fills LAYER kb; the rsum bound keys on ka, the
       !! donor `h_frac` and per-layer cap on kb.
+      !!
+      !! OPEN COLUMN (`use_open`, `&vcoord_nml zfixed_closed_faces`): a
+      !! layer is part of the face column only if `ok(k) = open_u(i,j,k)`
+      !! and it is live on both sides.  A not-`ok` layer gets `h_avail = 0`
+      !! and `uhD = 0`, leaving `uhtot` (the streamfunction at its top)
+      !! unchanged, and the closure lands in the topmost `ok` layer
+      !! `ktop` instead of `nz` — Sfn = 0 at the bottom AND the top of the
+      !! open column (see the module docstring).  `use_open = .false.` ⇒
+      !! `ok` all-true, `ktop = nz`: the full-column recurrence verbatim.
       !!
       !! DIVERGENCE (MOM6 nk_linear): MOM6's `thickness_diffuse_full`
       !! sets `nk_linear = max(GV%nkml, 1)`; in
@@ -441,37 +531,75 @@ contains
       real(wp), intent(in) :: h_layer(nx, ny, nz)
       real(wp), intent(in) :: slope_x(nx + 1, ny, nz + 1)
       real(wp), intent(in) :: khth_u(nx + 1, ny)
+      logical, intent(in) :: use_open
+      real(wp), intent(in) :: open_u(nx + 1, ny, nz)
       real(wp), intent(inout) :: uhD(nx + 1, ny, nz)
 
-      integer :: i, j, k, iw, ka, kb
+      integer :: i, j, k, iw, ka, kb, ktop
       real(wp) :: havL(NZ_STACK_MAX), havR(NZ_STACK_MAX)
       real(wp) :: rsumL(NZ_STACK_MAX + 1), rsumR(NZ_STACK_MAX + 1)
+      logical :: ok(NZ_STACK_MAX)
       real(wp) :: uhtot, slope, s2r, sfn_unlim, sfn_safe, sfn_est, sfn_in_h
       real(wp) :: h_frac_d, uhd_k, kh
 
       do concurrent(j=1:ny, i=2:nx) &
-         local(k, iw, ka, kb, havL, havR, rsumL, rsumR, uhtot, slope, s2r, &
-               sfn_unlim, sfn_safe, sfn_est, sfn_in_h, h_frac_d, uhd_k, kh)
+         local(k, iw, ka, kb, ktop, havL, havR, rsumL, rsumR, ok, uhtot, slope, &
+               s2r, sfn_unlim, sfn_safe, sfn_est, sfn_in_h, h_frac_d, uhd_k, kh)
          iw = i - 1
          kh = khth_u(i, j)
 
+         ! The face's OPEN column (all-true without closed faces).
+         do k = 1, nz
+            ok(k) = .true.
+         end do
+         if (use_open) then
+            do k = 1, nz
+               ok(k) = open_u(i, j, k) > 0.5_wp .and. &
+                       rdb_vl_is_live(h_layer(iw, j, k)) .and. &
+                       rdb_vl_is_live(h_layer(i, j, k))
+            end do
+         end if
+         ktop = 0
+         do k = nz, 1, -1
+            if (ok(k)) then
+               ktop = k
+               exit
+            end if
+         end do
+
          ! Per-layer availability + cumulative rsum from the SURFACE down:
          ! rsum*(k) = Sum_{k'=k}^{nz} h_avail(k') (mass above interface k).
+         ! A layer outside the open column has nothing available here.
          rsumL(nz + 1) = 0.0_wp
          rsumR(nz + 1) = 0.0_wp
          do k = nz, 1, -1
-            havL(k) = max(i4dt*areaT(iw, j)*(h_layer(iw, j, k) - H_VANISHED), 0.0_wp)
-            havR(k) = max(i4dt*areaT(i, j)*(h_layer(i, j, k) - H_VANISHED), 0.0_wp)
+            if (ok(k)) then
+               havL(k) = max(i4dt*areaT(iw, j)*(h_layer(iw, j, k) - H_VANISHED), 0.0_wp)
+               havR(k) = max(i4dt*areaT(i, j)*(h_layer(i, j, k) - H_VANISHED), 0.0_wp)
+            else
+               havL(k) = 0.0_wp
+               havR(k) = 0.0_wp
+            end if
             rsumL(k) = rsumL(k + 1) + havL(k)
             rsumR(k) = rsumR(k + 1) + havR(k)
          end do
 
          ! Sweep interior interfaces bed-most (Kr=2) -> surface-most (Kr=nz).
          uhtot = 0.0_wp
+         uhD(i, j, nz) = 0.0_wp
          do k = 2, nz       ! k is the interface index Kr
             ka = k           ! layer above interface (surface side)
             kb = k - 1       ! layer below interface (bed side) -> uhD(kb)
+            if (.not. ok(kb) .or. kb >= ktop) then
+               ! Outside the open column, or its top layer (closed below):
+               ! no transport, Sfn carried unchanged across it.
+               uhD(i, j, kb) = 0.0_wp
+               cycle
+            end if
             slope = slope_x(i, j, k)
+            ! NaN-safe: a non-finite slope must not reach the min/max
+            ! limiters below (they launder NaN into a bound, CLAUDE.md).
+            if (.not. ieee_is_finite(slope)) slope = 0.0_wp
             s2r = slope*slope*i_smax2
             sfn_unlim = -(kh*dy_cu(i, j))*slope
             if (uhtot <= 0.0_wp) then
@@ -487,17 +615,18 @@ contains
             uhD(i, j, kb) = uhd_k
             uhtot = uhtot + uhd_k
          end do
-         ! Surface BC (Sfn=0 above layer nz): close the column so Sum=0.
-         uhD(i, j, nz) = -uhtot
+         ! Top BC (Sfn=0 above the topmost open layer, `nz` without closed
+         ! faces): close the column so Sum=0.  No open layer ⇒ all zero.
+         if (ktop > 0) uhD(i, j, ktop) = -uhtot
       end do
    end subroutine gm_column_x
 
-   pure subroutine gm_column_y(nx, ny, nz, i_smax2, i4dt, &
-                               dx_cv, areaT, h_layer, slope_y, khth_v, vhD)
+   pure subroutine gm_column_y(nx, ny, nz, i_smax2, i4dt, use_open, &
+                               dx_cv, areaT, h_layer, slope_y, khth_v, open_v, vhD)
       !! v-face GM column recurrence — mirror of `gm_column_x` with the
       !! v-stagger.  Interior v-face (j=2..ny) pairs columns js=j-1 (south)
-      !! and j (north).  See `gm_column_x` for the MOM6 `nk_linear`
-      !! divergence note.
+      !! and j (north).  See `gm_column_x` for the open-column (`use_open`)
+      !! rule and the MOM6 `nk_linear` divergence note.
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: i_smax2, i4dt
       real(wp), intent(in) :: dx_cv(nx, ny + 1)
@@ -505,34 +634,66 @@ contains
       real(wp), intent(in) :: h_layer(nx, ny, nz)
       real(wp), intent(in) :: slope_y(nx, ny + 1, nz + 1)
       real(wp), intent(in) :: khth_v(nx, ny + 1)
+      logical, intent(in) :: use_open
+      real(wp), intent(in) :: open_v(nx, ny + 1, nz)
       real(wp), intent(inout) :: vhD(nx, ny + 1, nz)
 
-      integer :: i, j, k, js, ka, kb
+      integer :: i, j, k, js, ka, kb, ktop
       real(wp) :: havS(NZ_STACK_MAX), havN(NZ_STACK_MAX)
       real(wp) :: rsumS(NZ_STACK_MAX + 1), rsumN(NZ_STACK_MAX + 1)
+      logical :: ok(NZ_STACK_MAX)
       real(wp) :: vhtot, slope, s2r, sfn_unlim, sfn_safe, sfn_est, sfn_in_h
       real(wp) :: h_frac_d, vhd_k, kh
 
       do concurrent(j=2:ny, i=1:nx) &
-         local(k, js, ka, kb, havS, havN, rsumS, rsumN, vhtot, slope, s2r, &
-               sfn_unlim, sfn_safe, sfn_est, sfn_in_h, h_frac_d, vhd_k, kh)
+         local(k, js, ka, kb, ktop, havS, havN, rsumS, rsumN, ok, vhtot, slope, &
+               s2r, sfn_unlim, sfn_safe, sfn_est, sfn_in_h, h_frac_d, vhd_k, kh)
          js = j - 1
          kh = khth_v(i, j)
+
+         do k = 1, nz
+            ok(k) = .true.
+         end do
+         if (use_open) then
+            do k = 1, nz
+               ok(k) = open_v(i, j, k) > 0.5_wp .and. &
+                       rdb_vl_is_live(h_layer(i, js, k)) .and. &
+                       rdb_vl_is_live(h_layer(i, j, k))
+            end do
+         end if
+         ktop = 0
+         do k = nz, 1, -1
+            if (ok(k)) then
+               ktop = k
+               exit
+            end if
+         end do
 
          rsumS(nz + 1) = 0.0_wp
          rsumN(nz + 1) = 0.0_wp
          do k = nz, 1, -1
-            havS(k) = max(i4dt*areaT(i, js)*(h_layer(i, js, k) - H_VANISHED), 0.0_wp)
-            havN(k) = max(i4dt*areaT(i, j)*(h_layer(i, j, k) - H_VANISHED), 0.0_wp)
+            if (ok(k)) then
+               havS(k) = max(i4dt*areaT(i, js)*(h_layer(i, js, k) - H_VANISHED), 0.0_wp)
+               havN(k) = max(i4dt*areaT(i, j)*(h_layer(i, j, k) - H_VANISHED), 0.0_wp)
+            else
+               havS(k) = 0.0_wp
+               havN(k) = 0.0_wp
+            end if
             rsumS(k) = rsumS(k + 1) + havS(k)
             rsumN(k) = rsumN(k + 1) + havN(k)
          end do
 
          vhtot = 0.0_wp
+         vhD(i, j, nz) = 0.0_wp
          do k = 2, nz
             ka = k
             kb = k - 1
+            if (.not. ok(kb) .or. kb >= ktop) then
+               vhD(i, j, kb) = 0.0_wp
+               cycle
+            end if
             slope = slope_y(i, j, k)
+            if (.not. ieee_is_finite(slope)) slope = 0.0_wp
             s2r = slope*slope*i_smax2
             sfn_unlim = -(kh*dx_cv(i, j))*slope
             if (vhtot <= 0.0_wp) then
@@ -547,19 +708,32 @@ contains
             vhD(i, j, kb) = vhd_k
             vhtot = vhtot + vhd_k
          end do
-         vhD(i, j, nz) = -vhtot
+         if (ktop > 0) vhD(i, j, ktop) = -vhtot
       end do
    end subroutine gm_column_y
 
    pure function gm_clamp_slope(s, smax) result(sc)
       !$acc routine seq
       !! Clamp a slope to +/- smax (bounded slope for the PE release).
+      !! A non-finite slope reads as 0 (no release) rather than being
+      !! laundered into `±smax` by the NaN-blind clamp (CLAUDE.md).
       real(wp), intent(in) :: s, smax
       real(wp) :: sc
       sc = s
+      if (.not. ieee_is_finite(sc)) sc = 0.0_wp
       if (sc > smax) sc = smax
       if (sc < -smax) sc = -smax
    end function gm_clamp_slope
+
+   pure function gm_pos_n2(n2) result(np)
+      !$acc routine seq
+      !! `max(N^2, 0)` for the PE release, with a non-finite N^2 read as 0
+      !! (a bare `max` is NaN-blind under relaxed FP, CLAUDE.md).
+      real(wp), intent(in) :: n2
+      real(wp) :: np
+      np = 0.0_wp
+      if (ieee_is_finite(n2)) np = max(n2, 0.0_wp)
+   end function gm_pos_n2
 
    pure subroutine gm_pe_release(nx, ny, nz, slope_max, rho0, h_layer, &
                                  slope_x, slope_y, n2_u, n2_v, &
@@ -594,10 +768,10 @@ contains
             sx_e = gm_clamp_slope(slope_x(i + 1, j, k), slope_max)
             sy_s = gm_clamp_slope(slope_y(i, j, k), slope_max)
             sy_n = gm_clamp_slope(slope_y(i, j + 1, k), slope_max)
-            n2w = max(n2_u(i, j, k), 0.0_wp)
-            n2e = max(n2_u(i + 1, j, k), 0.0_wp)
-            n2s = max(n2_v(i, j, k), 0.0_wp)
-            n2n = max(n2_v(i, j + 1, k), 0.0_wp)
+            n2w = gm_pos_n2(n2_u(i, j, k))
+            n2e = gm_pos_n2(n2_u(i + 1, j, k))
+            n2s = gm_pos_n2(n2_v(i, j, k))
+            n2n = gm_pos_n2(n2_v(i, j + 1, k))
             fsum = (khth_u(i, j)*sx_w*sx_w*n2w + khth_u(i + 1, j)*sx_e*sx_e*n2e) + &
                    (khth_v(i, j)*sy_s*sy_s*n2s + khth_v(i, j + 1)*sy_n*sy_n*n2n)
             acc = acc + fsum*h_layer(i, j, kb)
@@ -653,5 +827,7 @@ contains
                + arr_bytes(this%vhD) &
                + arr_bytes(this%gm_src)
    end function ocean_gm_bytes
+
+#include "rdb_vanished_layer.inc"
 
 end module rdb_ocean_gm
