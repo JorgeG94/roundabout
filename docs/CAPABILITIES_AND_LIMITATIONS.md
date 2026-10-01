@@ -225,7 +225,15 @@ The full operator-by-operator surface, with knobs and limits, is in the [Ocean p
   Opting in means regenerating any regression baseline that byte-compares
   diagnostic NetCDF.
 - Restart / warm start, bit-exact round-trip (including the wet/dry
-  hysteresis registry)
+  hysteresis registry) -- through the production engine path as well as
+  the hand-built states: a resume reproduces the writer's next steps
+  bitwise, ghosts included (`test_ocean_restart_engine`; on GPU, a 4-rank
+  1/4-degree Southern Ocean resumed from day 730 matches the straight run
+  bit-for-bit at day 732).  The checkpoint carries the `pred_corr`
+  predictor's reused viscous tendency (`hvisc_du_visc`/`dv_visc`,
+  optional on read: an older checkpoint resumes with one inviscid
+  predictor), and setup does not re-seed the land columns or re-derive
+  the prognostic ghosts on a warm start.
 
 ### Not yet shipped
 - MPI I/O server hand-off for the diag manager — `&output_nml use_io_server`
