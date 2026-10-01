@@ -196,7 +196,7 @@ program om1deg_subset
          if (vndims /= 1) then
             write (error_unit, "(a,a)") "om1deg_subset: only rank-1 int supported: ", &
                trim(vname)
-            stop 1
+            error stop 1
          end if
          call copy_i4_1d(ncid_in, v, ncid_out, v, vdimids, in_dim_start0, in_dim_count)
       case default

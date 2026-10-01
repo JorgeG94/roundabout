@@ -41,16 +41,13 @@ program om_topo_limit
 
    if (command_argument_count() < 4) then
       write (error_unit, "(a)") "usage: om_topo_limit file.nc min_depth max_depth masking_depth "// &
-         "[--depth-var NAME] [--wet-var NAME]"
+         "[--depth-var NAME] [--wet-var NAME] [--rename-dim OLD:NEW ...]"
       error stop 1
    end if
    call get_command_argument(1, fpath)
-   call get_command_argument(2, arg)
-   read (arg, *) min_depth
-   call get_command_argument(3, arg)
-   read (arg, *) max_depth
-   call get_command_argument(4, arg)
-   read (arg, *) masking_depth
+   min_depth = real_arg(2, "min_depth")
+   max_depth = real_arg(3, "max_depth")
+   masking_depth = real_arg(4, "masking_depth")
    depth_var = "depth"
    wet_var = "wet"
    n_renames = 0
@@ -60,12 +57,15 @@ program om_topo_limit
       select case (trim(arg))
       case ("--depth-var")
          i = i + 1
+         call need_value(i, "--depth-var")
          call get_command_argument(i, depth_var)
       case ("--wet-var")
          i = i + 1
+         call need_value(i, "--wet-var")
          call get_command_argument(i, wet_var)
       case ("--rename-dim")
          i = i + 1
+         call need_value(i, "--rename-dim")
          n_renames = n_renames + 1
          if (n_renames > MAX_RENAMES) then
             write (error_unit, "(a)") "om_topo_limit: too many --rename-dim options"
@@ -151,6 +151,31 @@ program om_topo_limit
       " raised-to-min=", nraised, " capped-to-max=", ncapped
 
 contains
+
+   real(dp) function real_arg(pos, what) result(val)
+      !! Positional argument `pos` read as a real; fails loud on a value that
+      !! does not parse instead of crashing in the list-directed read.
+      integer, intent(in) :: pos
+      character(len=*), intent(in) :: what
+      character(len=256) :: txt
+      integer :: ios
+      call get_command_argument(pos, txt)
+      read (txt, *, iostat=ios) val
+      if (ios /= 0) then
+         write (error_unit, "(a)") "om_topo_limit: "//what//" is not a number: '"//trim(txt)//"'"
+         error stop 1
+      end if
+   end function real_arg
+
+   subroutine need_value(pos, opt)
+      !! Fail loud when option `opt` is the last argument (no value at `pos`).
+      integer, intent(in) :: pos
+      character(len=*), intent(in) :: opt
+      if (pos > command_argument_count()) then
+         write (error_unit, "(a)") "om_topo_limit: "//opt//" needs a value"
+         error stop 1
+      end if
+   end subroutine need_value
 
    subroutine check(status, what)
       integer, intent(in) :: status
