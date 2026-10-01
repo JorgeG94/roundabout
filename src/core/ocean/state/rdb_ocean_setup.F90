@@ -2658,15 +2658,19 @@ contains
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
-      if (cfg%ocean%gm%enable .or. cfg%ocean%redi%enable .or. &
-          cfg%ocean%foxkemper%enable) then
+      ! GM composes: `gm_column_x/y` build the streamfunction on each face's
+      ! OPEN column (`metrics%open_u/open_v` x live on both sides) and the
+      ! slopes slot masks slope / N^2 to it, so `uhD`/`vhD` are zero on
+      ! every closed face-layer by construction (`test_ocean_gm_zfixed`).
+      if (cfg%ocean%redi%enable .or. cfg%ocean%foxkemper%enable) then
          call fail("&vcoord_nml zfixed_closed_faces does not yet compose "// &
-                   "with GM / Redi / MLE: all three form their face fluxes "// &
-                   "from a 2-D `wet_u`/`wet_v` gate and fold them into "// &
+                   "with Redi / MLE: both form their face fluxes from a 2-D "// &
+                   "`wet_u`/`wet_v` gate (Redi's neutral-diffusion tracer "// &
+                   "flux; MLE's restratification transport, folded into "// &
                    "mass_flux_*_layer AFTER continuity has applied the "// &
-                   "per-layer mask, so their transports would leak through "// &
-                   "a closed face.  Per-layer seams in those three kernels "// &
-                   "are the follow-up slice", ierr, OCEAN_STATUS_ERR_SETUP)
+                   "per-layer mask), so their transports would leak through "// &
+                   "a closed face.  GM is ported (open-column streamfunction); "// &
+                   "Redi + MLE are the follow-up slice", ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
       if (cfg%ocean%hvisc%nu_4 > 0.0_wp .or. cfg%ocean%hvisc%stress_tensor) then

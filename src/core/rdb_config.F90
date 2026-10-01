@@ -5871,11 +5871,15 @@ contains
                end if
                if (cfg%ocean%gm%enable) then
                   call logger%error("&ocean_gm_nml enable=.true. is refused with "// &
-                                    "vcoord_type='z_fixed' under a cavity: the "// &
-                                    "non-divergence closure dumps the residual "// &
-                                    "streamfunction transport into k = nz.  GM x "// &
-                                    "cavity is unvalidated on any coordinate; "// &
-                                    "revisited with the coordinate study.")
+                                    "vcoord_type='z_fixed' under a cavity: without "// &
+                                    "zfixed_closed_faces the non-divergence closure "// &
+                                    "dumps the residual streamfunction transport "// &
+                                    "into k = nz (a filler under the ice); with it "// &
+                                    "the closure is open-column, but the slopes "// &
+                                    "slot GM needs is itself refused under a "// &
+                                    "cavity (below).  GM x cavity is unvalidated "// &
+                                    "on any coordinate; revisited with the "// &
+                                    "coordinate study.")
                   has_error = .true.
                end if
                if (cfg%ocean%redi%enable .or. cfg%ocean%slopes%enable) then
