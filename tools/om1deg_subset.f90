@@ -57,7 +57,7 @@ program om1deg_subset
    if (nargs < 2) then
       write (error_unit, "(a)") "usage: om1deg_subset in.nc out.nc "// &
          "[dimname:start0:count ...]"
-      stop 1
+      error stop 1
    end if
 
    call get_command_argument(1, in_path)
@@ -71,12 +71,12 @@ program om1deg_subset
       if (p1 == 0 .or. p2 == p1) then
          write (error_unit, "(a)") "om1deg_subset: bad slice spec '"//trim(arg)// &
             "' (want name:start0:count)"
-         stop 1
+         error stop 1
       end if
       n_slices = n_slices + 1
       if (n_slices > MAX_SLICES) then
          write (error_unit, "(a)") "om1deg_subset: too many slice specs"
-         stop 1
+         error stop 1
       end if
       slice_name(n_slices) = arg(1:p1 - 1)
       read (arg(p1 + 1:p2 - 1), *) slice_start(n_slices)
@@ -87,7 +87,7 @@ program om1deg_subset
    call check(nf90_inquire(ncid_in, ndims, nvars, ngatts, unlimdimid), "inquire")
    if (ndims > MAX_DIMS) then
       write (error_unit, "(a)") "om1deg_subset: MAX_DIMS too small"
-      stop 1
+      error stop 1
    end if
 
    allocate (out_dimid(ndims), in_dim_start0(ndims), in_dim_count(ndims))
@@ -105,7 +105,7 @@ program om1deg_subset
             if (slice_start(k) < 0 .or. slice_start(k) + slice_count(k) > dlen) then
                write (error_unit, "(a)") "om1deg_subset: slice '"//trim(dname)// &
                   "' out of range for input length"
-               stop 1
+               error stop 1
             end if
             in_dim_start0(d) = slice_start(k)
             in_dim_count(d) = slice_count(k)
@@ -136,7 +136,7 @@ program om1deg_subset
                  "inquire_variable")
       if (vndims > MAX_VDIMS) then
          write (error_unit, "(a)") "om1deg_subset: MAX_VDIMS too small for "//trim(vname)
-         stop 1
+         error stop 1
       end if
       do k = 1, vndims
          out_vdimids(k) = out_dimid(vdimids(k))
@@ -169,7 +169,7 @@ program om1deg_subset
          case default
             write (error_unit, "(a,a,a,i0)") "om1deg_subset: unsupported rank for ", &
                trim(vname), " ndims=", vndims
-            stop 1
+            error stop 1
          end select
       case (nf90_float)
          select case (vndims)
@@ -182,19 +182,19 @@ program om1deg_subset
          case default
             write (error_unit, "(a,a,a,i0)") "om1deg_subset: unsupported rank for ", &
                trim(vname), " ndims=", vndims
-            stop 1
+            error stop 1
          end select
       case (nf90_char)
          if (vndims /= 1) then
             write (error_unit, "(a,a)") "om1deg_subset: only rank-1 char supported: ", &
                trim(vname)
-            stop 1
+            error stop 1
          end if
          call copy_char_1d(ncid_in, v, ncid_out, v, vdimids, in_dim_start0, in_dim_count)
       case default
          write (error_unit, "(a,a)") "om1deg_subset: unsupported NetCDF type for ", &
             trim(vname)
-         stop 1
+         error stop 1
       end select
    end do
 
@@ -210,7 +210,7 @@ contains
       character(len=*), intent(in) :: what
       if (status /= nf90_noerr) then
          write (error_unit, "(a)") "om1deg_subset: "//what//": "//trim(nf90_strerror(status))
-         stop 1
+         error stop 1
       end if
    end subroutine check
 
