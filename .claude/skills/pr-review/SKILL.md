@@ -11,18 +11,8 @@ debugging time). The point of this skill is the part **no hook catches** — rea
 what CI and the hooks already report first, so you never spend a finding on it,
 then read the diff for the rules below.
 
-`CLAUDE.md` wins where it and `FORTRAN_STYLE.md` disagree. The style guide was
-inherited from another project, and these parts of it are **stale** — do not
-raise findings from them:
-
-| `FORTRAN_STYLE.md` says | roundabout actually does |
-|---|---|
-| kinds from `pic_types` (`dp`) | `wp` from `rdb_constants`, `_wp` literals |
-| files `rdb_<name>.f90`, tests `test_rdb_<name>.f90` | every source file is `.F90`; tests are `tests/test_<name>.F90` |
-| errors via `error_t` / `create_error` from `rdb_error` | no such module: optional `ierr` returning `OCEAN_STATUS_*` codes (`rdb_ocean_status`), errors logged with `global_logger%error`, and `error stop` (fail loud) when no `ierr` is passed |
-| units Bohr / Hartree, `to_bohr()` | SI: m, s, kg, Pa, °C, psu |
-| use `associate` for long expressions | **never** `associate` over a derived-type component around a `do concurrent` (see §3a) |
-| `pic_blas` for BLAS | not used anywhere; there is no BLAS in this code |
+`CLAUDE.md` wins where it and `FORTRAN_STYLE.md` disagree. When a finding
+rests on a rule, name its section (e.g. "FORTRAN_STYLE.md, Error Handling").
 
 ## 1. Establish the target
 
