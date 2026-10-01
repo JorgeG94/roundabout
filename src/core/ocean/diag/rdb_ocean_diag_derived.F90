@@ -71,6 +71,10 @@ module rdb_ocean_diag_derived
          !! and for the same reason: a requested diagnostic that comes
          !! back as a plane of missing values, or worse as a plane of
          !! zeros, is indistinguishable from a physical answer.
+      logical :: masks_land = .false.
+         !! The fill writes `DIAG_MISSING_VALUE` at land T-cells, so the
+         !! NetCDF variable advertises `_FillValue` on BOTH registration
+         !! paths, independent of `requires` and `mask_vanished_layers`.
    end type derived_entry_t
 
    integer, parameter :: N_CATALOG = 23
@@ -116,7 +120,7 @@ contains
                    long_name="vertical_relative_vorticity_at_cell_centre", &
                    units="s-1", &
                    standard_name="ocean_relative_vorticity", &
-                   fill=fill_vorticity_z, is_layered=.true.)
+                   fill=fill_vorticity_z, is_layered=.true., masks_land=.true.)
       CATALOG(4) = derived_entry_t( &
                    name="ke_total", &
                    long_name="depth_integrated_kinetic_energy", &
@@ -362,20 +366,21 @@ contains
                                   standard_name=trim(entry%standard_name), &
                                   time_op=time_op, dt_out=dt_out, &
                                   output_vgrid=ocoord, remap=remap, is_extensive=.false., &
-                                  ! `vorticity_z` writes `DIAG_MISSING_VALUE` at every land
-                                  ! T-cell on this (remapped, layered) path too, so it must
-                                  ! advertise `_FillValue` here as well as below.
+                                  ! A `masks_land` entry (`vorticity_z`) writes
+                                  ! `DIAG_MISSING_VALUE` at every land T-cell on this
+                                  ! (remapped, layered) path too, so it must advertise
+                                  ! `_FillValue` here as well as below.
                                   has_missing=((diag_mask_vanished_is_on() .and. &
                                                 ocoord /= DIAG_VGRID_DENSITY) .or. &
-                                               trim(entry%name) == "vorticity_z"))
+                                               entry%masks_land))
       else
          ! Every cavity entry writes the NaN sentinel outside the cover
          ! (`cavity_mask_impl`), so the NetCDF variable must advertise a
          ! `_FillValue` — unconditionally, not via
          ! `diag_mask_vanished_is_on()`, which gates the REMAP path's
          ! below-target fill and has nothing to do with a calving front.
-         ! `vorticity_z` writes the same `DIAG_MISSING_VALUE` sentinel at
-         ! every land T-cell (`fill_vorticity_z_impl`) regardless of
+         ! A `masks_land` entry (`vorticity_z`, `fill_vorticity_z_impl`)
+         ! writes `DIAG_MISSING_VALUE` at every land T-cell regardless of
          ! `mask_vanished_layers`, so it advertises unconditionally too.
          call state%diag%register(name=trim(entry%name), units=trim(entry%units), &
                                   fill=entry%fill, n1=nx, n2=ny, n3=n3, &
@@ -383,7 +388,7 @@ contains
                                   standard_name=trim(entry%standard_name), &
                                   time_op=time_op, dt_out=dt_out, &
                                   has_missing=(entry%requires /= DERIVED_REQ_NONE .or. &
-                                               trim(entry%name) == "vorticity_z"))
+                                               entry%masks_land))
       end if
    end subroutine register_derived
 
