@@ -114,5 +114,6 @@ every module that includes them.
 
 | File | Concern |
 |---|---|
+| `rdb_rel_vort_corner.inc` | The C-grid corner relative vorticity ζ (circulation form, with the C1 free-/no-slip factor) — `rdb_rvc_zeta_corner`. One consumer today, the `vorticity_z` derived diag; `rdb_coriolis_adv`'s four `q_corner` passes still carry inline twins of it, marked in the source, pending migration. |
 | `rdb_roquet_spv.inc` | The VALUE of the Roquet et al. (2015) SpV polynomial, split into its (T, S) part (`rdb_roq_ts_coeffs`) and its pressure part (`rdb_roq_spv_p`) — `rdb_eos`'s `roquet_spv_ts_coeffs` / `roquet_spv_value` and the FV-MOM6 PGF's per-EOS density integrals. The consumer imports the coefficient table from `rdb_eos` (see the file header). |
 | `rdb_vanished_layer.inc` | The vanished-layer rule (invariant I1′, a filler carries its donor live layer's concentration) — `rdb_vl_is_live`, `rdb_vl_conc`, `rdb_vl_column_conc`, `rdb_vl_holds_live_conc`, `rdb_vl_merge_content`. Contract: `src/core/ocean/README.md`, "The vanished-layer content rule". |
