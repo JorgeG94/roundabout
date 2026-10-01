@@ -55,14 +55,18 @@ on:
       - 'tools/acc_to_omp.py'
       - 'tools/dc_audit.py'
       - 'tools/omp_optional_map.py'
+      - 'tools/_progress.py'        # imported by omp_optional_map.py
       - 'tools/regen_dc_openmp.sh'
       - 'patches/openmp/**'
       - 'CMakeLists.txt'
       - 'cmake/**'
   workflow_dispatch:
 
+# Read-only by default. Only `regenerate` (which force-pushes
+# auto/dc-openmp) gets a write token; `verify` builds and runs code from
+# that bot-pushed branch, so it must not hold one.
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: sync-dc-openmp-${{ github.ref }}
@@ -72,6 +76,8 @@ jobs:
   regenerate:
     name: Regenerate auto/dc-openmp
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # force-pushes auto/dc-openmp
     steps:
       - uses: actions/checkout@v4
         with:
