@@ -12,25 +12,34 @@ module rdb_ocean_isopycnal_slopes
    !! (below, bed side).  A vert-fill pre-pass diffuses T/S into massless
    !! layers so `T=S=0` ghosts don't corrupt gradients.
    !!
+   !! ### Geopotential interface heights (the bed datum)
+   !!
+   !! The along-layer density gradient is rotated to the horizontal by the
+   !! interface-tilt term `−∂zρ·(e_W − e_E)`, so `e_int` must be the TRUE
+   !! geopotential height of each interface: it is built bed-up from
+   !! `e_int(:,:,1) = −D`, with `D` the slot's own copy of the bathymetry
+   !! (`barotropic%b`, m, positive down below the `z = 0` datum — the
+   !! same datum the FV-MOM6 PGF builds `e_face` from).  The column top is
+   !! then `Σh − D`, i.e. `η` in open ocean and `−z_draft + η` under an
+   !! ice shelf (`Σh = bt_H_ref + η`, `bt_H_ref = b − z_draft`), and a
+   !! horizontally uniform stratification over ANY bathymetry reads zero
+   !! slope on every coordinate.  (The pre-fix zero bed datum differenced
+   !! heights above the LOCAL bed and read a bathymetry step as an
+   !! isopycnal slope `~ΔD/Δx`.)  `set_bathymetry` fills the copy at setup
+   !! from the wrapped + halo-exchanged `b` (ghost-correct at periodic and
+   !! MPI seams), before `enter_data`; an enabled `ocean_slopes_compute`
+   !! fails loud if it was never set.
+   !!
    !! ### Partial-step z-level faces (`&vcoord_nml zfixed_closed_faces`)
    !!
-   !! Two changes, both host-gated on `metrics%use_closed_faces` (which
-   !! configure admits under `z_fixed` only), knob off ⇒ byte-identical:
+   !! The z_fixed target hangs every nominal interface at a fixed depth
+   !! below `z = 0`, so with geopotential `e_int` two columns' common
+   !! interior interface differs in height by `O(η_W − η_E)` only and the
+   !! tilt term is the (small, correct) free-surface tilt of the
+   !! coordinate — the general formula, no special case.  One addition,
+   !! host-gated on `metrics%use_closed_faces` (configure admits it under
+   !! `z_fixed` only), knob off ⇒ not taken:
    !!
-   !!   * **No interface-tilt term.**  The z_fixed target hangs every
-   !!     nominal interface at a FIXED depth below the column top (the
-   !!     free surface, or the ice base) and puts `η` and the fillers'
-   !!     `h_min` debt into the partial bottom cell, so two columns' common
-   !!     interior interface sits at the same geopotential height up to
-   !!     `η_W − η_E`.  The along-layer gradient IS the horizontal
-   !!     gradient, and the rotation term `−∂zρ·(e_W − e_E)` is the free-
-   !!     surface tilt of the coordinate, `O(Δη/Δx) ~ 1e-6` — dropped.
-   !!     Kept, it is WRONG here: `e_int` is built bed-up from a zero bed
-   !!     datum, so `e_W − e_E` is the difference of the heights ABOVE THE
-   !!     LOCAL BED, i.e. it carries the bathymetry step `D_W − D_E` (plus
-   !!     the bed fillers' `n·h_min`), and a flat stratification over a
-   !!     staircase would read as a slope `~ΔD/Δx` (0.01–0.1 at a shelf
-   !!     break, at or above GM's `slope_max`).
    !!   * **Open-column mask.**  slope / N² are zeroed at every interface
    !!     that is not strictly inside the face's open column
    !!     (`open(ka) .and. open(kb)`), so no consumer (GM, its `gm_src`,
@@ -103,10 +112,24 @@ module rdb_ocean_isopycnal_slopes
       real(wp), allocatable :: s_fill(:, :, :)
          !! Massless-layer-filled salinity scratch, `(nx, ny, nz)`.
       real(wp), allocatable :: e_int(:, :, :)
-         !! Interface height (m), bottom-up cumulative from bathy,
-         !! `(nx, ny, nz+1)`; `e_int(:,:,1)` = bed, `(:,:,nz+1)` = surface.
+         !! Geopotential interface height (m, positive up from `z = 0`),
+         !! `(nx, ny, nz+1)`: `e_int(:,:,1) = −bathy` (bed), then bottom-up
+         !! cumulative `+ h_layer`; `(:,:,nz+1)` = column top.
+
+      ! ---- Static geometry ----
+      real(wp), allocatable :: bathy(:, :)
+         !! Bed depth `D` below the `z = 0` datum (m, positive down),
+         !! `(nx, ny)` INCLUDING ghosts — the slot's own copy of
+         !! `barotropic%b`, taken by `set_bathymetry` after the periodic
+         !! wrap + halo exchange and before `enter_data`.  The bed datum of
+         !! `e_int`; see the module docstring.
+      logical :: bathy_set = .false.
+         !! True once `set_bathymetry` has filled `bathy`.  An enabled
+         !! `ocean_slopes_compute` fails loud without it: a silent zero
+         !! datum is exactly the bathymetry-as-slope defect.
    contains
       procedure, non_overridable :: init => ocean_slopes_init
+      procedure, non_overridable :: set_bathymetry => ocean_slopes_set_bathymetry
       procedure, non_overridable :: destroy => ocean_slopes_destroy
       procedure, non_overridable :: enter_data => ocean_slopes_enter_data
       procedure, non_overridable :: exit_data => ocean_slopes_exit_data
@@ -148,8 +171,33 @@ contains
       allocate (this%t_fill(nx, ny, nz), source=0.0_wp)
       allocate (this%s_fill(nx, ny, nz), source=0.0_wp)
       allocate (this%e_int(nx, ny, nz + 1), source=0.0_wp)
+      allocate (this%bathy(nx, ny), source=0.0_wp)
+      this%bathy_set = .false.
       this%is_init = .true.
    end subroutine ocean_slopes_init
+
+   subroutine ocean_slopes_set_bathymetry(this, b)
+      !! Copy the bed depth `b` (m, positive down, `(nx_total, ny_total)`
+      !! incl. ghosts) into `this%bathy` on the host.  Call it with the
+      !! WRAPPED + halo-exchanged `barotropic%b` (the seam faces read the
+      !! ghosts) and BEFORE `enter_data` (the device copy is taken from
+      !! the host values); to refresh after `enter_data` the caller issues
+      !! `!$acc update device(this%bathy)` itself.  No-op on an
+      !! uninitialised slot.
+      class(ocean_slopes_t), intent(inout) :: this
+      real(wp), intent(in) :: b(:, :)
+      integer :: i, j
+      if (.not. this%is_init) return
+      if (size(b, 1) /= this%nx_total .or. size(b, 2) /= this%ny_total) then
+         error stop "ocean_slopes_set_bathymetry: shape mismatch"
+      end if
+      do j = 1, this%ny_total
+         do i = 1, this%nx_total
+            this%bathy(i, j) = b(i, j)
+         end do
+      end do
+      this%bathy_set = .true.
+   end subroutine ocean_slopes_set_bathymetry
 
    subroutine ocean_slopes_destroy(this)
       class(ocean_slopes_t), intent(inout) :: this
@@ -161,6 +209,8 @@ contains
       if (allocated(this%t_fill)) deallocate (this%t_fill)
       if (allocated(this%s_fill)) deallocate (this%s_fill)
       if (allocated(this%e_int)) deallocate (this%e_int)
+      if (allocated(this%bathy)) deallocate (this%bathy)
+      this%bathy_set = .false.
       this%nx_total = 0
       this%ny_total = 0
       this%nz_ml = 0
@@ -183,6 +233,7 @@ contains
       !$acc enter data copyin(this%slope_x, this%slope_y)
       !$acc enter data copyin(this%n2_u, this%n2_v)
       !$acc enter data copyin(this%t_fill, this%s_fill, this%e_int)
+      !$acc enter data copyin(this%bathy)
    end subroutine ocean_slopes_enter_data_impl
 
    subroutine ocean_slopes_exit_data(this)
@@ -196,6 +247,7 @@ contains
    subroutine ocean_slopes_exit_data_impl(this)
       type(ocean_slopes_t), intent(inout) :: this
       if (.not. this%is_init) return
+      !$acc exit data delete(this%bathy)
       !$acc exit data delete(this%t_fill, this%s_fill, this%e_int)
       !$acc exit data delete(this%n2_u, this%n2_v)
       !$acc exit data delete(this%slope_x, this%slope_y)
@@ -218,6 +270,10 @@ contains
       if (.not. slopes%enable) return
       if (ms%idx_temperature <= 0 .or. ms%idx_salinity <= 0) return
       if (.not. allocated(ms%h_layer)) return
+      if (.not. slopes%bathy_set) then
+         error stop "ocean_slopes_compute: bed datum never set; call "// &
+            "slopes%set_bathymetry(barotropic%b) before enter_data"
+      end if
 
       ! Outer shim: dereference the tracer-registry hTr arrays (array of
       ! derived types ⇒ device indirection) on the host, pass the flat
@@ -242,7 +298,6 @@ contains
       real(wp), intent(in) :: t_htr(slopes%nx_total, slopes%ny_total, slopes%nz_ml)
       real(wp), intent(in) :: s_htr(slopes%nx_total, slopes%ny_total, slopes%nz_ml)
       real(wp), intent(in) :: dt
-      logical :: use_tilt
 
       nx = slopes%nx_total
       ny = slopes%ny_total
@@ -254,22 +309,21 @@ contains
                                      slopes%kd_smooth, dt, &
                                      slopes%t_fill, slopes%s_fill)
 
-      ! (2) Bottom-up interface heights from Σ h_layer (bed datum 0).
-      call ocean_slopes_build_e(nx, ny, nz, h_layer, slopes%e_int)
+      ! (2) Geopotential interface heights: bed at -D, then Σ h_layer.
+      call ocean_slopes_build_e(nx, ny, nz, slopes%bathy, h_layer, slopes%e_int)
 
       ! (3) u-face slopes + N².
-      use_tilt = .not. metrics%use_closed_faces
       call ocean_slopes_pass_x(nx, ny, nz, eos, slopes%rho0, &
                                slopes%min_dz_for_n2, h_layer, &
                                slopes%t_fill, slopes%s_fill, slopes%e_int, &
-                               metrics%idxCu, metrics%wet_u, use_tilt, &
+                               metrics%idxCu, metrics%wet_u, &
                                slopes%slope_x, slopes%n2_u)
 
       ! (4) v-face slopes + N².
       call ocean_slopes_pass_y(nx, ny, nz, eos, slopes%rho0, &
                                slopes%min_dz_for_n2, h_layer, &
                                slopes%t_fill, slopes%s_fill, slopes%e_int, &
-                               metrics%idyCv, metrics%wet_v, use_tilt, &
+                               metrics%idyCv, metrics%wet_v, &
                                slopes%slope_y, slopes%n2_v)
 
       ! (5) z-level closed faces: a slope / N² exists only at an interface
@@ -323,17 +377,21 @@ contains
       end do
    end subroutine ocean_slopes_mask_open_column
 
-   pure subroutine ocean_slopes_build_e(nx, ny, nz, h_layer, e_int)
-      !! Build interface heights bottom-up: `e_int(:,:,1) = 0` (bed),
+   pure subroutine ocean_slopes_build_e(nx, ny, nz, bathy, h_layer, e_int)
+      !! Build GEOPOTENTIAL interface heights bottom-up: `e_int(:,:,1) =
+      !! −bathy` (the bed, below the `z = 0` datum),
       !! `e_int(:,:,K+1) = e_int(:,:,K) + h_layer(:,:,K)`.  A per-column
-      !! serial cumulative sum (parallel over i,j); only the across-face
-      !! difference is consumed, so the absolute bed datum is irrelevant.
+      !! serial cumulative sum (parallel over i,j).  The across-face
+      !! difference `e_W − e_E` feeds the interface-tilt term, so the bed
+      !! datum is NOT irrelevant: it must be the true bed depth, or a
+      !! bathymetry step reads as an isopycnal slope.
       integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in) :: bathy(nx, ny)
       real(wp), intent(in) :: h_layer(nx, ny, nz)
       real(wp), intent(out) :: e_int(nx, ny, nz + 1)
       integer :: i, j, k
       do concurrent(j=1:ny, i=1:nx)
-         e_int(i, j, 1) = 0.0_wp
+         e_int(i, j, 1) = -bathy(i, j)
          do k = 1, nz
             e_int(i, j, k + 1) = e_int(i, j, k) + h_layer(i, j, k)
          end do
@@ -428,7 +486,7 @@ contains
 
    pure subroutine ocean_slopes_pass_x(nx, ny, nz, eos, rho0, min_dz, &
                                        h_layer, t_fill, s_fill, e_int, &
-                                       idxCu, wet_u, use_tilt, slope_x, n2_u)
+                                       idxCu, wet_u, slope_x, n2_u)
       !! u-face slope + N² pass.  Interface `K` (interior 2..nz) straddles
       !! layer `k=K` (above, surface side) and `k=K-1` (below, bed side).
       !! Bed (K=1) + surface (K=nz+1) are forced to zero.  The u-face at
@@ -443,10 +501,6 @@ contains
       real(wp), intent(in) :: e_int(nx, ny, nz + 1)
       real(wp), intent(in) :: idxCu(nx + 1, ny)
       real(wp), intent(in) :: wet_u(nx + 1, ny)
-      logical, intent(in) :: use_tilt
-         !! Include the interface-tilt rotation `-drdz·(e_W - e_E)`.
-         !! `.false.` only on the z_fixed closed-face path (see
-         !! `ocean_slopes_compute_impl`).
       real(wp), intent(out) :: slope_x(nx + 1, ny, nz + 1)
       real(wp), intent(out) :: n2_u(nx + 1, ny, nz + 1)
 
@@ -537,14 +591,11 @@ contains
 
          drdz = ((wtL*drdkL) + (wtR*drdkR))/((dzaL*wtL) + (dzaR*wtR))
 
-         ! Interface-tilt rotation term + metric scaling (dropped on the
-         ! geopotential z_fixed path, see `use_tilt`).
-         if (use_tilt) then
-            drdx = ((wtA*drdiA + wtB*drdiB)/(wtA + wtB) - &
-                    drdz*(e_int(iw, j, k) - e_int(i, j, k)))*idxCu(i, j)
-         else
-            drdx = ((wtA*drdiA + wtB*drdiB)/(wtA + wtB))*idxCu(i, j)
-         end if
+         ! Interface-tilt rotation term + metric scaling.  `e_int` is
+         ! geopotential (bed datum −D), so `e_W − e_E` is the real tilt of
+         ! the interface, never the bathymetry step.
+         drdx = ((wtA*drdiA + wtB*drdiB)/(wtA + wtB) - &
+                 drdz*(e_int(iw, j, k) - e_int(i, j, k)))*idxCu(i, j)
 
          mag2 = drdx*drdx + drdz*drdz
          if (mag2 > 0.0_wp) then
@@ -581,7 +632,7 @@ contains
 
    pure subroutine ocean_slopes_pass_y(nx, ny, nz, eos, rho0, min_dz, &
                                        h_layer, t_fill, s_fill, e_int, &
-                                       idyCv, wet_v, use_tilt, slope_y, n2_v)
+                                       idyCv, wet_v, slope_y, n2_v)
       !! v-face slope + N² pass — mirror of `pass_x` with v-staggering.
       !! The v-face at (i,j) sits between cells (i,j-1) and (i,j); pairs
       !! columns `js=j-1` (south) and `j` (north), loop `j=2:ny`.
@@ -594,8 +645,6 @@ contains
       real(wp), intent(in) :: e_int(nx, ny, nz + 1)
       real(wp), intent(in) :: idyCv(nx, ny + 1)
       real(wp), intent(in) :: wet_v(nx, ny + 1)
-      logical, intent(in) :: use_tilt
-         !! See `ocean_slopes_pass_x`.
       real(wp), intent(out) :: slope_y(nx, ny + 1, nz + 1)
       real(wp), intent(out) :: n2_v(nx, ny + 1, nz + 1)
 
@@ -672,12 +721,8 @@ contains
 
          drdz = ((wtL*drdkL) + (wtR*drdkR))/((dzaL*wtL) + (dzaR*wtR))
 
-         if (use_tilt) then
-            drdy = ((wtA*drdjA + wtB*drdjB)/(wtA + wtB) - &
-                    drdz*(e_int(i, js, k) - e_int(i, j, k)))*idyCv(i, j)
-         else
-            drdy = ((wtA*drdjA + wtB*drdjB)/(wtA + wtB))*idyCv(i, j)
-         end if
+         drdy = ((wtA*drdjA + wtB*drdjB)/(wtA + wtB) - &
+                 drdz*(e_int(i, js, k) - e_int(i, j, k)))*idyCv(i, j)
 
          mag2 = drdy*drdy + drdz*drdz
          if (mag2 > 0.0_wp) then
@@ -704,7 +749,8 @@ contains
                + arr_bytes(this%n2_v) &
                + arr_bytes(this%t_fill) &
                + arr_bytes(this%s_fill) &
-               + arr_bytes(this%e_int)
+               + arr_bytes(this%e_int) &
+               + arr_bytes(this%bathy)
    end function ocean_slopes_bytes
 
 end module rdb_ocean_isopycnal_slopes

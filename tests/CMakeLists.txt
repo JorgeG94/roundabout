@@ -180,6 +180,7 @@ set(RDB_TESTS
     "test_ocean_isopycnal_slopes|test_ocean_isopycnal_slopes|collect_ocean_isopycnal_slopes_tests|ocean_isopycnal_slopes|ocean"
     "test_ocean_gm|test_ocean_gm|collect_ocean_gm_tests|ocean_gm|ocean"
     "test_ocean_gm_zfixed|test_ocean_gm_zfixed|collect_ocean_gm_zfixed_tests|ocean_gm_zfixed|ocean"
+    "test_ocean_slopes_datum|test_ocean_slopes_datum|collect_ocean_slopes_datum_tests|ocean_slopes_datum|ocean"
     "test_ocean_redi|test_ocean_redi|collect_ocean_redi_tests|ocean_redi|ocean"
     "test_ocean_varmix|test_ocean_varmix|collect_ocean_varmix_tests|ocean_varmix|ocean"
     "test_ocean_meke|test_ocean_meke|collect_ocean_meke_tests|ocean_meke|ocean"

@@ -112,6 +112,12 @@ contains
       type(hgrid_t), intent(in) :: grid
       type(ocean_slopes_t), intent(inout) :: sl
       call make_cartesian_metrics(metrics, grid)
+      ! Bed datum of the geopotential interface heights: a FLAT bed under
+      ! the deepest column (every case here has a flat bed; in
+      ! `slopes_tilted_interface` the column thickness varies, so it is
+      ! the free surface that tilts).  Host-side, BEFORE the slot's map.
+      call sl%set_bathymetry(spread(spread(maxval(sum(ms%h_layer, dim=3)), &
+                                           1, grid%nx_total), 2, grid%ny_total))
       !$acc enter data copyin(ms)
       call ms%enter_data()
       !$acc enter data copyin(sl)

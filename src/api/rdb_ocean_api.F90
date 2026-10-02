@@ -1548,6 +1548,12 @@ contains
          end if
          !$acc update device(b)
       end associate
+      ! The isopycnal slopes' bed datum is a copy of `b` (no-op when the
+      ! slot is off); refresh it from the re-wrapped field.
+      if (h%state%slopes%is_init) then
+         call h%state%slopes%set_bathymetry(h%state%barotropic%b)
+         !$acc update device(h%state%slopes%bathy)
+      end if
 
       if (h%state%dyn%n_inner >= 1) then
          associate (bref => h%state%dyn%bt_work%bt_H_ref)
