@@ -2654,15 +2654,19 @@ contains
       ! OPEN column (`metrics%open_u/open_v` x live on both sides) and the
       ! slopes slot masks slope / N^2 to it, so `uhD`/`vhD` are zero on
       ! every closed face-layer by construction (`test_ocean_gm_zfixed`).
-      if (cfg%ocean%redi%enable .or. cfg%ocean%foxkemper%enable) then
+      ! Redi composes: each face pairs only its OPEN WINDOW (the contiguous
+      ! open + live-both-sides run), so the neutral-surface sweep, the PPM
+      ! reconstruction and the flux scatter never touch a closed face-layer
+      ! or a filler (`test_ocean_redi_zfixed`).
+      if (cfg%ocean%foxkemper%enable) then
          call fail("&vcoord_nml zfixed_closed_faces does not yet compose "// &
-                   "with Redi / MLE: both form their face fluxes from a 2-D "// &
-                   "`wet_u`/`wet_v` gate (Redi's neutral-diffusion tracer "// &
-                   "flux; MLE's restratification transport, folded into "// &
+                   "with MLE: its restratification transport is formed from "// &
+                   "a 2-D `wet_u`/`wet_v` gate and folded into "// &
                    "mass_flux_*_layer AFTER continuity has applied the "// &
-                   "per-layer mask), so their transports would leak through "// &
-                   "a closed face.  GM is ported (open-column streamfunction); "// &
-                   "Redi + MLE are the follow-up slice", ierr, OCEAN_STATUS_ERR_SETUP)
+                   "per-layer mask, so it would leak through a closed face.  "// &
+                   "GM (open-column streamfunction) and Redi (open-window "// &
+                   "pairing) are ported; MLE is the follow-up slice", &
+                   ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
       if (cfg%ocean%hvisc%nu_4 > 0.0_wp .or. cfg%ocean%hvisc%stress_tensor) then
