@@ -1709,6 +1709,7 @@ contains
       !! dynamics-off slot (kernel-level defence-in-depth guard).
       use rdb_ice_evp, only: ice_evp_step
       use rdb_multilayer_state, only: multilayer_state_t
+      use rdb_ocean_boundary_types, only: ocean_bc_state_t
       type(error_type), allocatable, intent(out) :: error
       integer, parameter :: NXP = 4, NYP = 4
       real(wp), parameter :: DX = 1000.0_wp
@@ -1717,6 +1718,7 @@ contains
       type(ocean_sea_ice_t) :: ice_uninit, ice_off
       type(multilayer_state_t) :: ms
       type(ice_evp_params_t) :: par
+      type(ocean_bc_state_t) :: wall_bc   ! defaults: walls, physical edges
       real(wp), allocatable :: f_corner(:, :)
       integer :: nx, ny
 
@@ -1730,7 +1732,7 @@ contains
       allocate (f_corner(nx + 1, ny + 1), source=0.0_wp)
       !$acc enter data copyin(f_corner)
       call ice_evp_step(grid, metrics, f_corner, ice_uninit, ms, 3600.0_wp, par, &
-                        .false., .false.)
+                        wall_bc)
       call check(error,.not. ice_uninit%is_init, &
                  "disabled_bitident: uninit slot must stay uninit after a no-op call")
 
@@ -1752,7 +1754,7 @@ contains
          allocate (u_ice0, source=ice_off%u_ice)
          allocate (v_ice0, source=ice_off%v_ice)
          call ice_evp_step(grid, metrics, f_corner, ice_off, ms, 3600.0_wp, par, &
-                           .false., .false.)
+                           wall_bc)
          !$acc update self(ice_off%u_ice, ice_off%v_ice)
          if (.not. allocated(error)) then
             call check(error, all(ice_off%u_ice == u_ice0), &

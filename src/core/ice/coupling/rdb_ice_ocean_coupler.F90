@@ -64,6 +64,9 @@ module rdb_ice_ocean_coupler
                                        ocean_surface_stress_refresh_mag
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_ice_state, only: ocean_sea_ice_t, ice_cell_concentration_impl
+   use rdb_grid, only: hgrid_t
+   use rdb_ocean_boundary_types, only: ocean_bc_state_t
+   use rdb_ocean_halo_state, only: ocean_seam_refresh_surface_stress
    implicit none
    private
 
@@ -315,7 +318,7 @@ contains
       stress_scratch_ready = .false.
    end subroutine ice_ocean_stress_cleanup
 
-   subroutine ice_ocean_stress_flux(metrics, stress, ice)
+   subroutine ice_ocean_stress_flux(metrics, stress, ice, grid, bc)
       !! Ice->ocean momentum-mediation blend (PR 5), the momentum mirror
       !! of `ice_ocean_brine_flux`: FULL overwrite each outer step from
       !! the pristine wind snapshot + the lagged EVP drag, weighted by
@@ -352,9 +355,23 @@ contains
       !! it converts this leak (zero at steady free drift) into a
       !! PERMANENT one, `-(1-a)*a*tau_a`, nonzero at steady state forever.
       !! Do not implement that half-measure.
+      !!
+      !! **Seam ghosts (X5).**  With `grid` + `bc` present (the engine
+      !! always passes them) the blended pair goes through
+      !! `ocean_seam_refresh_surface_stress` — halo exchange, local
+      !! periodic wrap on an axis the halo does not own, fold — which also
+      !! re-derives `stress_mag`.  The blend itself is correct only on the
+      !! faces this rank owns: a ghost face blends against `fxoc = 0`
+      !! (the EVP momentum writes physical faces only), yet the ocean's
+      !! KPP/EPBL/MLE read `tau` one cell into the halo.  The mirror into
+      !! `tau_ocn_x/y` is taken AFTER the refresh so a restart resumes the
+      !! exchanged ghosts the uninterrupted run stepped on.  Absent (the
+      !! single-tile unit-test seam): the legacy `stress_mag`-only refresh.
       type(ocean_metrics_t), intent(in) :: metrics
       type(ocean_surface_stress_t), intent(inout) :: stress
       type(ocean_sea_ice_t), intent(inout) :: ice
+      type(hgrid_t), intent(in), optional :: grid
+      type(ocean_bc_state_t), intent(in), optional :: bc
 
       call stress_scratch_ensure(ice%nx_total, ice%ny_total)
       call ice_cell_concentration_impl(metrics%wet_T, ice%part_size, ice%m_ice, ice%m_snow, &
@@ -362,31 +379,36 @@ contains
                                        ice%nx_total, ice%ny_total)
       call ice_ocean_stress_flux_impl(stress%tau_x, stress%tau_y, ice%tau_a_x, ice%tau_a_y, &
                                       ice%fxoc, ice%fyoc, ci_scratch, ice%nx_total, ice%ny_total)
-      ! PR 63: mirror the exact blended value into the restart-carried
-      ! tau_ocn_x/y (device copy — ice_tau_mirror_impl is NOT part of the
-      ! blend math above, so ice_ocean_stress_flux_impl stays byte-identical
-      ! by inspection and the tau_coupling gate is unaffected).  The host
-      ! scalar write needs no signature change: this routine is already
-      ! non-pure (stress_scratch_ensure) with ice intent(inout).
-      call ice_tau_mirror_impl(ice%tau_ocn_x, ice%tau_ocn_y, stress%tau_x, stress%tau_y, &
-                               ice%nx_total, ice%ny_total)
-      ice%tau_ocn_valid = 1.0_wp
       ! The blend above OVERWROTE `tau_x`/`tau_y`, so the cell-centred
       ! `|tau|` the boundary-layer schemes take `u_* = sqrt(|tau|/rho0)`
       ! from is stale until it is re-derived from the new pair.  KPP
       ! (`rdb_ocean_vmix`) and EPBL (`rdb_ocean_epbl`) read
       ! `stress%stress_mag` and NOTHING else, and no other per-step path
-      ! refreshes it (the wind setters run at configure; the seam refresh
-      ! runs only under `&ocean_dataovr_nml`), so without this call both
-      ! schemes mix on the configure-time WIND under ice — identically
+      ! refreshes it (the wind setters run at configure; the data-override
+      ! seam refresh runs only under `&ocean_dataovr_nml`), so without this
+      ! both schemes mix on the configure-time WIND under ice — identically
       ! zero, and therefore `u_* == 0`, in a windless ice-covered run.
-      ! Device-resident and allocation-free: `refresh_mag` is one `do
-      ! concurrent` over the already-mapped `tau_x`/`tau_y`/`stress_mag`,
-      ! so there is no host round trip.  Reached only through this routine,
-      ! which the engine calls only when `&ocean_ice_nml enable` AND
-      ! `dynamics` are both on — an ice-free run never executes it and
+      ! Device-resident and allocation-free.  Reached only through this
+      ! routine, which the engine calls only when `&ocean_ice_nml enable`
+      ! AND `dynamics` are both on — an ice-free run never executes it and
       ! stays bit-identical.  Gate: `test_ocean_ice_stress_mag`.
-      call ocean_surface_stress_refresh_mag(stress)
+      if (present(grid) .and. present(bc)) then
+         ! X5: seam ghosts first (exchange -> wrap -> fold), then
+         ! `stress_mag` over the full array from the refreshed pair.
+         call ocean_seam_refresh_surface_stress(stress, grid, bc)
+      else
+         call ocean_surface_stress_refresh_mag(stress)
+      end if
+      ! PR 63: mirror the exact blended value into the restart-carried
+      ! tau_ocn_x/y (device copy — ice_tau_mirror_impl is NOT part of the
+      ! blend math above, so ice_ocean_stress_flux_impl stays byte-identical
+      ! by inspection and the tau_coupling gate is unaffected).  After the
+      ! seam refresh, so the checkpoint carries the exchanged ghosts.  The
+      ! host scalar write needs no signature change: this routine is
+      ! already non-pure (stress_scratch_ensure) with ice intent(inout).
+      call ice_tau_mirror_impl(ice%tau_ocn_x, ice%tau_ocn_y, stress%tau_x, stress%tau_y, &
+                               ice%nx_total, ice%ny_total)
+      ice%tau_ocn_valid = 1.0_wp
    end subroutine ice_ocean_stress_flux
 
    pure subroutine ice_ocean_stress_flux_impl(tau_x, tau_y, tau_a_x, tau_a_y, fxoc, fyoc, ci, &

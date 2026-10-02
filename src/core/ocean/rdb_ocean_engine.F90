@@ -83,6 +83,7 @@ module rdb_ocean_engine
    !! impossible combination: `rdb_driver.F90` itself was excluded from
    !! the NetCDF-free build, so no code path could reach this
    !! contradiction; reachable via the API today).
+   use, intrinsic :: iso_fortran_env, only: int64
    use rdb_constants, only: wp
    use rdb_config, only: config_t, resolve_bt_halo, bt_halo_auto_exclusion, &
                          BT_HALO_AUTO_SENTINEL
@@ -96,8 +97,10 @@ module rdb_ocean_engine
    use rdb_ocean_halo, only: ocean_halo_init, ocean_halo_destroy, ocean_halo_reserve, &
                              ocean_halo_centre, &
                              ocean_halo_bt_group_2d, ocean_halo_face_x, &
-                             ocean_halo_bt_group_2d_wide
-   use rdb_ocean_halo_state, only: ocean_halo_exchange_ml_state
+                             ocean_halo_bt_group_2d_wide, ocean_halo_is_decomposed
+   use rdb_halo, only: halo_allreduce_sum_i8
+   use rdb_ocean_halo_state, only: ocean_halo_exchange_ml_state, ocean_halo_exchange_ice_state, &
+                                   ocean_halo_exchange_ice_fluxes
    use rdb_ocean_periodic, only: ocean_periodic_wrap_state, ocean_periodic_wrap_centre_2d
    use rdb_ocean_fold_apply, only: ocean_fold_wrap_state, ocean_fold_wrap_eta_2d
    use rdb_ocean_boundary_data, only: ocean_boundary_data_constant_t
@@ -411,11 +414,24 @@ contains
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
-         if (cfg%ocean%ice%enable) then
-            call fail("&ocean_ice_nml enable = .true. is single-rank ("// &
-                      to_string(csize)//" ranks requested): the sea-ice slot (thermo, "// &
-                      "ITD transport, EVP) carries no cross-rank halo exchange.  Run on "// &
-                      "1 rank.", ierr, OCEAN_STATUS_ERR_SETUP)
+         ! Sea ice runs on the ocean's decomposition: the category state,
+         ! the EVP ice velocity and the blended surface stress are
+         ! halo-exchanged (`engine_step_ice`).  Two pieces are not yet:
+         ! the tripolar fold of the ice fields, and the category
+         ! transport's per-substep exchange.
+         if (cfg%ocean%ice%enable .and. &
+             ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD) then
+            call fail("&ocean_ice_nml enable = .true. with north = 'tripolar_fold' is "// &
+                      "single-rank ("//to_string(csize)//" ranks requested): the ice "// &
+                      "fields are not folded across the north seam.  Run on 1 rank.", &
+                      ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+         if (cfg%ocean%ice%enable .and. cfg%ocean%ice%transport) then
+            call fail("&ocean_ice_nml transport = .true. is single-rank ("// &
+                      to_string(csize)//" ranks requested): the category transport "// &
+                      "carries no per-substep halo exchange yet.  Run on 1 rank.", &
+                      ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          ! In-memory geometry injection (the API's staged bathymetry /
@@ -906,7 +922,13 @@ contains
       call ocean_halo_init(engine%decomp, engine%grid%nghost, &
                            engine%state%bc%periodic_x, engine%state%bc%periodic_y, ierr=ierr)
       if (setup_failed(ierr)) return
-      call ocean_halo_reserve(cfg%nz_layers, &
+      ! The sea-ice category exchanges batch `ncat*nk_ice` (and
+      ! `ncat+1`) levels per message: reserve for the widest so the
+      ! buffers never regrow mid-run (a device reallocation breaks UCX IPC
+      ! handle reuse).
+      call ocean_halo_reserve(merge(max(cfg%nz_layers, cfg%ocean%ice%ncat*cfg%ocean%ice%nk_ice, &
+                                        cfg%ocean%ice%ncat + 1), cfg%nz_layers, &
+                                    cfg%ocean%ice%enable), &
                               merge(engine%grid%nghost + cfg%ocean%bt%bt_halo, 0, &
                                     cfg%ocean%bt%bt_halo > 0), ierr=ierr)
       if (setup_failed(ierr)) return
@@ -1051,6 +1073,12 @@ contains
                                                       cfg%ocean%ice_ic%antarctic_edge)
             call ice_init_apply(engine%grid, engine%state%multilayer, engine%state%metrics, &
                                 engine%state%ice, engine%ic_par)
+            ! X1 at cold start (host, before `enter_data`): the analytic
+            ! IC is a pointwise formula, but its ghost band is only as
+            ! right as the inputs' ghosts — make the category state the
+            ! owner's by construction.  Never on a warm restart: the
+            ! checkpoint carries the writer's ghosts (8e1931f20).
+            call ocean_halo_exchange_ice_state(engine%state%ice, device_resident=.false.)
             if (rank == 0 .and. engine%ic_par%conc_config /= ICE_IC_CONC_ZERO) then
                call logger%info("Sea-ice IC:       conc_config='"// &
                                 trim(cfg%ocean%ice_ic%conc_config)// &
@@ -1440,6 +1468,7 @@ contains
 
       logical :: ice_ok
       integer :: ice_n_trunc
+      integer(int64) :: n_trunc_loc, n_trunc_glob
 
       if (present(ierr)) ierr = OCEAN_STATUS_OK
       if (.not. engine%state%ice%enable) return
@@ -1477,17 +1506,30 @@ contains
          call ice_evp_step(engine%grid, engine%state%metrics, &
                            engine%state%coriolis_adv%f_corner, &
                            engine%state%ice, engine%state%multilayer, dt, &
-                           engine%evp_params, &
-                           engine%state%bc%periodic_x, engine%state%bc%periodic_y, &
+                           engine%evp_params, engine%state%bc, &
                            dt_transport=engine%state%dyn%therm_dt(dt), &
                            n_trunc=ice_n_trunc)
+         ! The truncation count is per tile; the warning reports the whole
+         ! domain.  Exact integer sum, and only when the clip is on (the
+         ! count is identically 0 otherwise), so the default costs no
+         ! collective.  Gated on the RUN's decomposition, not the job's
+         ! rank count (a serial reference inside a multi-rank job).
+         if (engine%evp_params%cfl_trunc > 0.0_wp .and. ocean_halo_is_decomposed()) then
+            n_trunc_loc = int(ice_n_trunc, int64)
+            call halo_allreduce_sum_i8(n_trunc_loc, n_trunc_glob)
+            ice_n_trunc = int(n_trunc_glob)
+         end if
          if (ice_n_trunc > 0 .and. engine%decomp%rx == 0 .and. engine%decomp%ry == 0) then
-            call logger%warning("ice_evp_step: ice velocity CFL-truncated at N faces "// &
+            call logger%warning("ice_evp_step: ice velocity CFL-truncated at "// &
+                                to_string(ice_n_trunc)//" faces "// &
                                 "(&ocean_ice_nml cfl_trunc); the ice dynamics is "// &
                                 "unstable or the transport step is too long")
          end if
+         ! X5 rides inside: the blended tau pair is seam-refreshed
+         ! (exchange -> wrap -> fold) before `stress_mag` and the restart
+         ! mirror are taken from it.
          call ice_ocean_stress_flux(engine%state%metrics, engine%state%surface_stress, &
-                                    engine%state%ice)
+                                    engine%state%ice, engine%grid, engine%state%bc)
          call profiler_stop("ice_evp")
       end if
 
@@ -1572,11 +1614,22 @@ contains
             call ice_snowfall_ocean_share(engine%grid, engine%state%ice, &
                                           engine%state%dyn%therm_dt(dt))
          end if
+         ! Every contributor above wrote the per-cell flux diags on
+         ! PHYSICAL cells; the couplers below copy the FULL array into the
+         ! ocean's surface fluxes, whose seam ghosts the ocean reads.
+         call ocean_halo_exchange_ice_fluxes(engine%state%ice)
          call ice_ocean_brine_flux(engine%state%surface_flux, engine%state%ice)
          call ice_ocean_heat_flux(engine%state%surface_flux, engine%state%ice)
          call ice_ocean_sw_flux(engine%state%surface_flux, engine%state%ice)
          call ice_adjust_categories(engine%grid, engine%state%multilayer, engine%state%ice)
          call profiler_stop("ice_thermo")
+         ! X1: the transport compress, the column thermodynamics and the
+         ! ITD restore above all write PHYSICAL cells only, and the
+         ! category state changes nowhere else — so this one exchange per
+         ! thermo window is what keeps the ghosts the next EVP gather and
+         ! stress blend read equal to the neighbour's (or, on one rank, to
+         ! the periodic partner's) owned cells.
+         call ocean_halo_exchange_ice_state(engine%state%ice)
       end if
    end subroutine engine_step_ice
 

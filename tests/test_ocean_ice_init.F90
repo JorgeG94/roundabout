@@ -42,6 +42,7 @@ module test_ocean_ice_init
    use rdb_ice_state, only: ocean_sea_ice_t, ice_cell_concentration_impl
    use rdb_ice_itd, only: ice_adjust_categories
    use rdb_ice_evp, only: ice_evp_step, ice_evp_params_t
+   use rdb_ocean_boundary_types, only: ocean_bc_state_t
    use rdb_ice_column, only: ICE_RHO_ICE, ICE_RHO_SNOW, ICE_BULK_SALINITY
    use rdb_ice_enthalpy, only: ice_enth_from_ts, ice_temp_from_en_s, ice_enthalpy_liquid_freeze
    use rdb_ice_init, only: ice_ic_params_t, ice_ic_params_from_config, ice_ic_parse_conc_config, &
@@ -711,6 +712,7 @@ contains
       type(ocean_metrics_t) :: metrics
       type(ice_ic_params_t) :: ic_par
       type(ice_evp_params_t) :: par
+      type(ocean_bc_state_t) :: periodic_bc
       real(wp), allocatable :: f_corner(:, :)
       integer :: nx, ny, itau, n, i, j
       real(wp) :: u_mean, u_min, u_max
@@ -750,6 +752,8 @@ contains
       call ice%enter_data()
       !$acc enter data copyin(f_corner)
 
+      periodic_bc%periodic_x = .true.
+      periodic_bc%periodic_y = .true.
       checks: block
          do itau = 1, N_TAU
             ice%u_ice = 0.0_wp
@@ -774,7 +778,7 @@ contains
 
             do n = 1, N_OUTER
                call ice_evp_step(grid, metrics, f_corner, ice, ms, DT_SLOW, par, &
-                                 .true., .true.)
+                                 periodic_bc)
             end do
 
             associate (ui => ice%u_ice, vi => ice%v_ice)

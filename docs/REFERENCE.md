@@ -1157,7 +1157,7 @@ stable past day 580 on a single V100:
 | Vertical coordinate | ALE (Lagrangian-then-remap) | One remap path serves every `VCOORD_*` family |
 | Data layout | SoA, `(nx, ny, nz)` | Coalesced GPU memory access on the first index |
 | MPI | Routed through `pic_mpi_lib` only | Lint-enforced (`tools/no_mpi_in_rdb.sh`); never `use mpi` / `use mpi_f08` directly |
-| Comm backend | One implementation in `src/comm/` | No stub twin; pic-mpi picks MPI vs its serial backend (`PIC_ENABLE_MPI`). Call sites must not reach point-to-point at one rank — see `src/comm/README.md` |
+| Comm backend | One implementation in `src/comm/` | No stub twin; pic-mpi picks MPI vs its serial backend (`PIC_ENABLE_MPI`). Call sites must not reach point-to-point at one rank — see the `!!` header of `src/comm/rdb_ocean_halo.F90` |
 | I/O strategy | Per-rank files + offline merge (`tools/merge_output.py`) | Eliminates the MPI gather |
 | Build system | CMake | Multi-configuration support, industry standard |
 | Configuration | Fortran namelist, schema-validated | Zero dependencies, native to Fortran; the schema generates `docs/generated_nml_knobs.md` |
