@@ -885,7 +885,8 @@ contains
       !! Penetrating irradiance at downward depth `d`:
       !!   I(d) = I0 · [ R·exp(-d/zeta1) + (1-R)·exp(-d/zeta2) ]
       !! with `I0 = sw_pen_frac · Q_heat(i,j)`.  Per-layer absorbed SW =
-      !! `I(d_top) - I(d_bot)`; the bed (`k = 1`) is treated as opaque
+      !! `I(d_top) - I(d_bot)`; the bed (`k = k_bot`, the first LIVE layer
+      !! counting up — `1` off `z_fixed`) is treated as opaque
       !! (`I_bot := 0`) so the column absorbs all of `I0` and energy is
       !! conserved exactly (Σ_k absorbed_k = I0).
       !!
@@ -958,14 +959,14 @@ contains
          if (sf%sw_from_qsw) then
             call apply_sw_penetration_cover_impl(ms%tracers(idx_T)%hTr, &
                                                  ms%heat_budget_surface, &
-                                                 ms%h_layer, ms%wet_mask, cover_frac, sf%q_sw, &
+                                                 ms%h_layer, ms%k_bot, ms%wet_mask, cover_frac, sf%q_sw, &
                                                  dt/(sf%rho0*sf%cp), sf%sw_pen_frac, &
                                                  sf%sw_band_ratio, sf%sw_zeta1, sf%sw_zeta2, &
                                                  nz, nx, ny)
          else
             call apply_sw_penetration_cover_impl(ms%tracers(idx_T)%hTr, &
                                                  ms%heat_budget_surface, &
-                                                 ms%h_layer, ms%wet_mask, cover_frac, sf%Q_heat, &
+                                                 ms%h_layer, ms%k_bot, ms%wet_mask, cover_frac, sf%Q_heat, &
                                                  dt/(sf%rho0*sf%cp), sf%sw_pen_frac, &
                                                  sf%sw_band_ratio, sf%sw_zeta1, sf%sw_zeta2, &
                                                  nz, nx, ny)
@@ -975,14 +976,14 @@ contains
       if (sf%sw_from_qsw) then
          call apply_sw_penetration_impl(ms%tracers(idx_T)%hTr, &
                                         ms%heat_budget_surface, &
-                                        ms%h_layer, ms%wet_mask, sf%q_sw, &
+                                        ms%h_layer, ms%k_bot, ms%wet_mask, sf%q_sw, &
                                         dt/(sf%rho0*sf%cp), sf%sw_pen_frac, &
                                         sf%sw_band_ratio, sf%sw_zeta1, sf%sw_zeta2, &
                                         nz, nx, ny)
       else
          call apply_sw_penetration_impl(ms%tracers(idx_T)%hTr, &
                                         ms%heat_budget_surface, &
-                                        ms%h_layer, ms%wet_mask, sf%Q_heat, &
+                                        ms%h_layer, ms%k_bot, ms%wet_mask, sf%Q_heat, &
                                         dt/(sf%rho0*sf%cp), sf%sw_pen_frac, &
                                         sf%sw_band_ratio, sf%sw_zeta1, sf%sw_zeta2, &
                                         nz, nx, ny)
@@ -1039,7 +1040,7 @@ contains
       end if
    end function sw_pe_cost_shape
 
-   pure subroutine apply_sw_penetration_impl(hTr, budget, h_layer, wet_mask, &
+   pure subroutine apply_sw_penetration_impl(hTr, budget, h_layer, k_bot, wet_mask, &
                                              sw_src, inv_scale, sw_pen_frac, R, &
                                              zeta1, zeta2, nz, nx, ny)
       !! Per-column two-band shortwave redistribution.  Explicit-shape
@@ -1063,6 +1064,10 @@ contains
       real(wp), intent(inout) :: hTr(nx, ny, nz)
       real(wp), intent(inout) :: budget(nx, ny, nz)
       real(wp), intent(in)    :: h_layer(nx, ny, nz)
+      integer, intent(in)     :: k_bot(nx, ny)
+         !! `ms%k_bot` — the first LIVE layer counting up from the bed.  The
+         !! opaque-bed residual lands HERE, not on `k = 1`: under `z_fixed`
+         !! the layers below are inert fillers (`1` elsewhere ⇒ unchanged).
       real(wp), intent(in)    :: wet_mask(nx, ny)
       real(wp), intent(in)    :: sw_src(nx, ny)
       real(wp), intent(in)    :: inv_scale, sw_pen_frac, R, zeta1, zeta2
@@ -1073,10 +1078,10 @@ contains
                                           trans_bot, absorbed, add, k)
          i0col = sw_pen_frac*sw_src(i, j)*wet_mask(i, j)
          d_top = 0.0_wp
-         do k = nz, 1, -1
+         do k = nz, k_bot(i, j), -1
             d_bot = d_top + h_layer(i, j, k)
             trans_top = sw_transmission(d_top, R, zeta1, zeta2)
-            if (k > 1) then
+            if (k > k_bot(i, j)) then
                trans_bot = sw_transmission(d_bot, R, zeta1, zeta2)
             else
                trans_bot = 0.0_wp   ! bed opaque: column absorbs all of I0
@@ -1091,7 +1096,7 @@ contains
       end do
    end subroutine apply_sw_penetration_impl
 
-   pure subroutine apply_sw_penetration_cover_impl(hTr, budget, h_layer, wet_mask, &
+   pure subroutine apply_sw_penetration_cover_impl(hTr, budget, h_layer, k_bot, wet_mask, &
                                                    cover_frac, sw_src, inv_scale, &
                                                    sw_pen_frac, R, zeta1, zeta2, nz, nx, ny)
       !! Ice-shelf-cover twin of `apply_sw_penetration_impl`: the
@@ -1111,6 +1116,10 @@ contains
       real(wp), intent(inout) :: hTr(nx, ny, nz)
       real(wp), intent(inout) :: budget(nx, ny, nz)
       real(wp), intent(in)    :: h_layer(nx, ny, nz)
+      integer, intent(in)     :: k_bot(nx, ny)
+         !! `ms%k_bot` — the first LIVE layer counting up from the bed.  The
+         !! opaque-bed residual lands HERE, not on `k = 1`: under `z_fixed`
+         !! the layers below are inert fillers (`1` elsewhere ⇒ unchanged).
       real(wp), intent(in)    :: wet_mask(nx, ny)
       real(wp), intent(in)    :: cover_frac(nx, ny)
       real(wp), intent(in)    :: sw_src(nx, ny)
@@ -1122,10 +1131,10 @@ contains
                                           trans_bot, absorbed, add, k)
          i0col = sw_pen_frac*sw_src(i, j)*wet_mask(i, j)*(1.0_wp - cover_frac(i, j))
          d_top = 0.0_wp
-         do k = nz, 1, -1
+         do k = nz, k_bot(i, j), -1
             d_bot = d_top + h_layer(i, j, k)
             trans_top = sw_transmission(d_top, R, zeta1, zeta2)
-            if (k > 1) then
+            if (k > k_bot(i, j)) then
                trans_bot = sw_transmission(d_bot, R, zeta1, zeta2)
             else
                trans_bot = 0.0_wp   ! bed opaque: column absorbs all of I0

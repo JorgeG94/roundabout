@@ -521,7 +521,7 @@ contains
             this%hvel_mom6, this%hbbl_visc, &
             this%bbl_glue, this%bbl_piston, this%hvel_upwind, &
             do_corner, corner_prandtl_l, kv_corner_source, &
-            this%zlevel_faces, ms%k_top_u)
+            this%zlevel_faces, ms%k_top_u, ms%k_bot_u)
          call diffuse_velocity_columns_impl( &
             nx_vface, ny_face, nz, dt, &
             ms%v_face_y_layer, ms%h_layer, kv_source, ms%wet_mask, &
@@ -534,7 +534,7 @@ contains
             this%hvel_mom6, this%hbbl_visc, &
             this%bbl_glue, this%bbl_piston, this%hvel_upwind, &
             do_corner, corner_prandtl_l, kv_corner_source, &
-            this%zlevel_faces, ms%k_top_v)
+            this%zlevel_faces, ms%k_top_v, ms%k_bot_v)
       else
          ! Pure-vdiff no-op short-circuit ONLY when there is also no
          ! boundary forcing to fold; stress/drag/remnant must still be
@@ -558,7 +558,7 @@ contains
             this%hvel_mom6, this%hbbl_visc, &
             this%bbl_glue, this%bbl_piston, this%hvel_upwind, &
             do_corner, corner_prandtl_l, kv_corner_source, &
-            this%zlevel_faces, ms%k_top_u)
+            this%zlevel_faces, ms%k_top_u, ms%k_bot_u)
          call diffuse_velocity_columns_impl( &
             nx_vface, ny_face, nz, dt, &
             ms%v_face_y_layer, ms%h_layer, this%kv_scalar_buf%data, ms%wet_mask, &
@@ -571,7 +571,7 @@ contains
             this%hvel_mom6, this%hbbl_visc, &
             this%bbl_glue, this%bbl_piston, this%hvel_upwind, &
             do_corner, corner_prandtl_l, kv_corner_source, &
-            this%zlevel_faces, ms%k_top_v)
+            this%zlevel_faces, ms%k_top_v, ms%k_bot_v)
       end if
    end subroutine vdiff_apply_momentum
 
@@ -900,7 +900,7 @@ contains
                                                  hvel_mom6, hbbl_visc, &
                                                  bbl_glue, bbl_piston, hvel_upwind, &
                                                  do_corner, kv_prandtl, kv_corner, &
-                                                 zlevel_faces, k_top_face)
+                                                 zlevel_faces, k_top_face, k_bot_face)
       !! Build + solve the tridiagonal system per face column.
       !! `u_face` is either `u_face_x_layer` (`x_face = .true.`,
       !! shape (nx+1, ny)) or `v_face_y_layer` (`x_face = .false.`,
@@ -938,7 +938,7 @@ contains
       logical, intent(in) :: do_stress
          !! Fold the surface wind stress into the `k = nz` RHS row.
       logical, intent(in) :: do_drag
-         !! Fold the bottom drag into the `k = 1` diagonal.
+         !! Fold the bottom drag into the `k = k_bot_face` diagonal.
       real(wp), intent(in) :: rho0
          !! Boussinesq reference density for the `τ/ρ₀` stress conversion.
       real(wp), intent(in), optional :: tau_face(nu, nv)
@@ -1008,6 +1008,19 @@ contains
          !! `k_top_face` by `rdb_ocean_top_drag`, so the two MUST agree.
          !! With `k_top_face ≡ nz` every expression below is the one it
          !! replaced, bit for bit.
+      integer, intent(in) :: k_bot_face(nu, nv)
+         !! `ms%k_bot_u` / `k_bot_v` — the first layer LIVE on BOTH sides
+         !! of this face counting UP from the bed (`max` of its two
+         !! columns), `1` wherever nothing vanishes against the bed.  The
+         !! bed row of the column solve (no-flux-below BC, the implicit
+         !! bottom-drag diagonal fold and the `bbl_glue` piston) sits on
+         !! THIS row instead of on `k = 1`, and the rows below it — inert
+         !! `z_fixed` bed fillers — are the identity.  The drag rate
+         !! `lambda_bot` is itself captured at `k_bot_face` by
+         !! `ocean_bottom_drag_compute_tendencies`, so the two MUST agree.
+         !! The height-above-bed stack `zint` (BBL glue, upwind blend)
+         !! also starts accumulating here.  With `k_bot_face ≡ 1` every
+         !! expression below is the one it replaced, bit for bit.
       logical, intent(in) :: zlevel_faces
          !! `&vcoord_nml zfixed_closed_faces` — z-level partial steps.
          !!
@@ -1057,7 +1070,7 @@ contains
          !! — the direct corner→face route, never via a tracer point.
          !! Present iff `do_corner`.
 
-      integer :: i, j, k, ktop, i_left, i_right, j_below, j_above, i_c2, j_c2
+      integer :: i, j, k, ktop, kb, i_left, i_right, j_below, j_above, i_c2, j_c2
       real(wp) :: hf_km1, hf_k, hf_kp1, dz_bot, dz_top
       real(wp) :: hvel(NZ_STACK_MAX)
       real(wp) :: zint(NZ_STACK_MAX)
@@ -1091,7 +1104,7 @@ contains
       do concurrent(j=1:nv, i=1:nu) &
          local(i_left, i_right, j_below, j_above, i_c2, j_c2, &
                hf_km1, hf_k, hf_kp1, dz_bot, dz_top, &
-               nu_face_k, nu_face_kp1, alpha, beta, denom, k, ktop, &
+               nu_face_k, nu_face_kp1, alpha, beta, denom, k, ktop, kb, &
                hvel, zint, zacc, z2, botfn, botfn_int, &
                h_harm, h_arith, h_delta, hl_c, hr_c, wind_open)
          ! Neighbour cell indices for averaging h.  (i_c2, j_c2) is the
@@ -1114,6 +1127,10 @@ contains
             i_c2 = i + 1
             j_c2 = j
          end if
+
+         ! First live layer of this face counting up from the bed (`1`
+         ! everywhere but a `z_fixed` bed filler band).
+         kb = k_bot_face(i, j)
 
          ! Seed RHS with u^n.
          do k = 1, nz
@@ -1153,7 +1170,9 @@ contains
                   botfn = 1.0_wp/(1.0_wp + 0.09_wp*z2*z2*z2*z2*z2*z2)
                   hvel(k) = (1.0_wp - botfn)*h_harm + botfn*h_arith
                end if
-               zacc = zacc + h_harm*i_hbbl
+               ! Height above the LIVE bed: the inert fillers below `kb`
+               ! do not count (bit-identical at kb = 1).
+               if (k >= kb) zacc = zacc + h_harm*i_hbbl
                zint(k) = zacc
             else
                hvel(k) = 0.5_wp*(hl_c + hr_c)
@@ -1165,7 +1184,19 @@ contains
             if (zlevel_faces) hvel(k) = min(hl_c, hr_c)
          end do
 
-         ! ---- k = 1: bed BC, no flux below ----
+         ! ---- Rows BELOW the first live layer: the identity ----
+         ! Empty whenever `kb = 1`, so bit-identical everywhere a face has
+         ! no bed-side filler.  Where it is not empty those rows are inert
+         ! `z_fixed` fillers inside the bed: no mass, not coupled to
+         ! anything, and `rhs` holds `u^n`, so the Thomas sweep returns
+         ! them unchanged (the mirror of the identity rows above `k_top`).
+         do k = 1, kb - 1
+            a_diag(i, j, k) = 0.0_wp
+            b_diag(i, j, k) = 1.0_wp
+            c_diag(i, j, k) = 0.0_wp
+         end do
+
+         ! ---- k = kb: bed BC, no flux below ----
          ! Floor the face thicknesses at H_VANISHED before they enter the
          ! α/β denominators (dt·ν/(hf_k·dz)).  For an exactly-collapsed layer
          ! (both neighbour cells h=0 ⇒ hvel=0) with kv>0, a raw hf_k=0 (and the
@@ -1176,9 +1207,9 @@ contains
          ! bit-identical.  Floor at the READ site (not by reassigning hvel(k))
          ! — gfortran mis-optimizes a local() array element reassigned across
          ! branches.
-         hf_k = max(hvel(1), H_VANISHED)
-         ! SINGLE-LAYER COLUMN (nz = 1).  The bed row IS the surface row:
-         ! there is no interior interface above it, so the interior
+         hf_k = max(hvel(kb), H_VANISHED)
+         ! SINGLE-LAYER COLUMN (nz = 1, or kb = nz: one live layer).  The
+         ! bed row IS the surface row: there is no interior interface above it, so the interior
          ! coupling is identically zero and the surface is a pure
          ! stress-Neumann BC (a RHS source, added below with the k = nz
          ! block's).  Without this gate the code reads `hvel(2)` — one
@@ -1193,21 +1224,22 @@ contains
          ! if/else: gfortran 15.1 miscompiles a `local()` scalar reassigned
          ! across the two arms of an if/else inside `do concurrent`.
          alpha = 0.0_wp
-         if (nz > 1) then
-            hf_kp1 = max(hvel(2), H_VANISHED)
+         if (kb < nz) then
+            hf_kp1 = max(hvel(kb + 1), H_VANISHED)
             if (hvel_mom6) then
                dz_top = 0.5_wp*(hf_k + hf_kp1)   ! MOM6 h_shear: arithmetic of hvels
             else
                dz_top = face_thick(hf_k, hf_kp1, use_harmonic)
             end if
-            nu_face_kp1 = 0.5_wp*(kv_centre(i_left, j_below, 2) + kv_centre(i_right, j_above, 2))
+            nu_face_kp1 = 0.5_wp*(kv_centre(i_left, j_below, kb + 1) + &
+                                  kv_centre(i_right, j_above, kb + 1))
             ! Corner-viscosity add-on (vertex kappa-shear Kv seam): direct
             ! 2-point end-corner average onto this face, BEFORE the BBL
             ! glue (all viscosity contributions fold ahead of the
             ! coupling-coefficient blend).
             if (do_corner) then
                nu_face_kp1 = nu_face_kp1 + &
-                             kv_prandtl*(0.5_wp*(kv_corner(i, j, 2) + kv_corner(i_c2, j_c2, 2)))
+                             kv_prandtl*(0.5_wp*(kv_corner(i, j, kb + 1) + kv_corner(i_c2, j_c2, kb + 1)))
             end if
             ! BBL glue at the interface above the bed layer (MOM6
             ! find_coupling_coef, vert_friction:2214-2229): within botfn reach
@@ -1216,8 +1248,8 @@ contains
             ! rigidly coupled, which is the mechanism that absorbs the
             ! spurious grounded-layer PGF every step (PGF_BUG.md §9).
             if (bbl_glue) then
-               botfn_int = 1.0_wp/(1.0_wp + 0.09_wp*zint(1)*zint(1)*zint(1)* &
-                                   zint(1)*zint(1)*zint(1))
+               botfn_int = 1.0_wp/(1.0_wp + 0.09_wp*zint(kb)*zint(kb)*zint(kb)* &
+                                   zint(kb)*zint(kb)*zint(kb))
                nu_face_kp1 = nu_face_kp1 + (kv_bbl - nu_face_kp1)*botfn_int
                if (dz_top > bbl_thick) then
                   dz_top = (1.0_wp - botfn_int)*dz_top + botfn_int*bbl_thick
@@ -1230,13 +1262,13 @@ contains
             if (zlevel_faces) then
                ! vanished-ok: row decoupling across a z-level wall (the closed-face rule) —
                ! a momentum-grid question, not a tracer concentration.
-               if (hvel(1) <= H_VANISHED .or. hvel(2) <= H_VANISHED) alpha = 0.0_wp
+               if (hvel(kb) <= H_VANISHED .or. hvel(kb + 1) <= H_VANISHED) alpha = 0.0_wp
             end if
          end if
-         a_diag(i, j, 1) = 0.0_wp
-         c_diag(i, j, 1) = -alpha
-         b_diag(i, j, 1) = 1.0_wp + alpha
-         ! Bottom-drag stress BC (Roundabout bed = k=1; MIRROR of MOM6 k=nz).
+         a_diag(i, j, kb) = 0.0_wp
+         c_diag(i, j, kb) = -alpha
+         b_diag(i, j, kb) = 1.0_wp + alpha
+         ! Bottom-drag stress BC (Roundabout bed = k=kb; MIRROR of MOM6 k=nz).
          ! λ_bot is the Rayleigh RATE (c_d·|U|/h_1 quadratic, r linear) the
          ! bottom-drag slot already forms — the row is pre-normalized by
          ! h_1, so the MOM6 `h_1 + dt·a_bot` diagonal becomes `1 + dt·λ_bot`
@@ -1255,15 +1287,15 @@ contains
                ! drag physics for resolved columns: at h₁ = bbl_thick this
                ! equals dt·(bbl_piston/h₁), the distributed-linear-drag
                ! rate.  Replaces (not augments) the λ fold — one bed sink.
-               b_diag(i, j, 1) = b_diag(i, j, 1) + dt*kv_bbl/ &
-                                 (hf_k*(min(0.5_wp*hvel(1), bbl_thick) + EPS_HVEL))
+               b_diag(i, j, kb) = b_diag(i, j, kb) + dt*kv_bbl/ &
+                                  (hf_k*(min(0.5_wp*hvel(kb), bbl_thick) + EPS_HVEL))
             else
-               b_diag(i, j, 1) = b_diag(i, j, 1) + dt*lambda_bot(i, j)
+               b_diag(i, j, kb) = b_diag(i, j, kb) + dt*lambda_bot(i, j)
             end if
          end if
 
-         ! ---- k = 2..nz-1 ----
-         do k = 2, nz - 1
+         ! ---- k = kb+1..nz-1 ----
+         do k = kb + 1, nz - 1
             ! Floor the face thicknesses (see the k=1 block) — keeps the α/β
             ! denominators non-zero for a collapsed interior layer; no-op for
             ! hvel ≫ H_VANISHED ⇒ bit-identical.
@@ -1336,8 +1368,11 @@ contains
          ! `hvel(0)` / `zint(0)` (out of bounds) and overwrite the bed
          ! row's drag.  Only the stress RHS below still applies, which is
          ! exactly right: one layer carries BOTH the wind stress and the
-         ! bottom drag.  Loop-invariant gate ⇒ nz >= 2 bit-identical.
-         if (ktop > 1) then
+         ! bottom drag.  The gate is `ktop > kb` (was `ktop > 1`), which
+         ! also covers a face with ONE live layer (`kb = ktop`, a z_fixed
+         ! column shallower than one nominal layer): the bed row built
+         ! above is then the surface row too.  kb = 1 ⇒ bit-identical.
+         if (ktop > kb) then
             hf_km1 = max(hvel(ktop - 1), H_VANISHED)
             if (hvel_mom6) then
                dz_bot = 0.5_wp*(hf_km1 + hf_k)
