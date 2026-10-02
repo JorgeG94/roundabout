@@ -1001,6 +1001,17 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   namelists that set exactly `1.5e-4` are legal and unaffected. The density
   families (`RHO` / `HYCOM`) carry the opposite, keep-alive contract on the same
   knob (`max(zstar_h_min, 2·H_VANISHED)`) and are not policed by this rule.
+  A density-family column too thin to hold every layer at that floor
+  (`H + η < nz·max(zstar_h_min, 2·H_VANISHED)` — every land column, which
+  holds `nz·H_VANISHED`, and any dry sliver) is **not regridded**: it keeps
+  its layers, so the remap is the identity there. Before 2026-10-02 the
+  inflation step debited the whole floor deficit from the one surviving
+  layer (a 50-layer land column went to `−7.2e-3` m — the step-3 crash of
+  the 1° Southern Ocean `rho` run) or, when no layer survived, set every
+  layer to the floor and minted water; and a column just thick enough
+  whose thickest layer could not pay the debit alone went negative too —
+  that case now shares the debit across every above-floor layer. Gate:
+  `test_ocean_vcoord_rho :: thin_column_*`.
 - **OBC dispatch wired end-to-end** (2026-06-10, `&ocean_bc_nml` →
   per-edge tags → driver → kernels). Shipped types: WALL (default),
   OPEN (Flather + per-layer zero-gradient baroclinic anomaly), TIDAL
