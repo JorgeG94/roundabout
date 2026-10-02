@@ -931,7 +931,7 @@ and, on `rx0_060` with the scalar operator and no drag (14.6-day probes;
 `bound_kh` no effect (160 is under its 333 m² s⁻¹ ceiling);
 `remap_boundary_extrap = .false.` **earlier** (d3.8); PCM remap much earlier
 (d2.1); `pc_be = 1` earlier (d5.0); `remap_nonuniform_weights = .false.` /
-`correction_h_weighted` later (d10.8 / d10.2); y-periodic earlier (d2.3, so
+`correction_h_weighted` (since retired) later (d10.8 / d10.2); y-periodic earlier (d2.3, so
 the walls are not the cause); `nghost = 3` bit-identical; a frozen regrid
 (`regrid_time_scale = 10 d`), `N² = 0`, `f = 0`, `ssp_rk2` and `dt = 300/450`
 clean to the probe horizon.
