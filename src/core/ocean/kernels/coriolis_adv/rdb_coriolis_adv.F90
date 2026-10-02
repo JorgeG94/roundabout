@@ -869,6 +869,19 @@ contains
       !! evaluates to `q/4`, so the sum of 4 mass-flux terms is `q · vh`
       !! and the kernel collapses to the Sadourny `(f+ζ)·v` form
       !! bit-identically.  This is the basis for the regression test.
+      !!
+      !! Under `&vcoord_nml zfixed_closed_faces` (`metrics%use_closed_faces`)
+      !! Passes 5/6 run a PAIR-FLOORED twin: every PV in a pair coefficient
+      !! is evaluated with a corner thickness of at least half the larger of
+      !! the pair's two face thicknesses (`hk_pair_coef`).  Without it the
+      !! "cross" pairs — a corner PV times a transport whose far cell lies
+      !! outside that corner — carry an unbounded `h_face/h_corner`, which a
+      !! z-level staircase (a live partial bottom cell as thin as
+      !! `H_VANISHED` against a full-depth neighbour) turns into a runaway
+      !! (1-degree Southern Ocean: NaN at step 11).  The floor keeps the
+      !! pair coefficients symmetric, so the energy-conserving antisymmetry
+      !! is kept, and is inactive wherever no cell outweighs the other three
+      !! of its corner.  Knob off ⇒ the original passes, bit-identical.
       type(hgrid_t), intent(in) :: grid
       type(ocean_metrics_t), intent(in) :: metrics
       type(coriolis_adv_t), intent(inout) :: this
@@ -887,6 +900,10 @@ contains
       real(wp) :: q_S, q_N, q_W, q_E, q_NE, q_NW, q_SE, q_SW
       real(wp) :: a_NE, b_NW, c_SW, d_SE
       real(wp) :: ke_grad_x, ke_grad_y
+      real(wp) :: h_S, h_N, h_W, h_E, h_NE, h_NW, h_SE, h_SW
+         !! Closed-face branch only: corner thicknesses of the stencil.
+      real(wp) :: h_u, h_v, hv_NE, hv_NW, hv_SW, hv_SE, hu_NE, hu_NW, hu_SW, hu_SE
+         !! Closed-face branch only: face thicknesses of the stencil.
       real(wp) :: ns
       real(wp), parameter :: C1_12 = 1.0_wp/12.0_wp
       real(wp), parameter :: H_MIN_PV = 1.0e-12_wp
@@ -1028,56 +1045,145 @@ contains
                                         metrics%areaCv(i, j + 1)*v(i, j + 1, k)**2)
       end do
 
-      ! ---- Pass 5: u-face HK tendency ----
-      do concurrent(k=1:nz, j=1:ny, i=2:nx) &
-         local(q_S, q_N, q_NE, q_NW, q_SE, q_SW, &
-               a_NE, b_NW, c_SW, d_SE, ke_grad_x)
-         q_S = this%q_corner%data(i, j, k)
-         q_N = this%q_corner%data(i, j + 1, k)
-         q_NE = this%q_corner%data(i + 1, j + 1, k)
-         q_NW = this%q_corner%data(i - 1, j + 1, k)
-         q_SE = this%q_corner%data(i + 1, j, k)
-         q_SW = this%q_corner%data(i - 1, j, k)
-         a_NE = (q_N + q_NE + q_S)*C1_12
-         b_NW = (q_N + q_NW + q_S)*C1_12
-         c_SW = (q_N + q_SW + q_S)*C1_12
-         d_SE = (q_N + q_SE + q_S)*C1_12
-         ke_grad_x = (this%ke_centre%data(i, j, k) - &
-                      this%ke_centre%data(i - 1, j, k))*metrics%idxCu(i, j)
-         ! q·vh sum is a transport-weighted PV flux (m³/s); the u-face
-         ! IdxCu closes it to a per-length acceleration (= /dx on uniform).
-         this%pv_flux_x%data(i, j, k) = &
-            (a_NE*this%mass_flux_v%data(i, j + 1, k) + &
-             b_NW*this%mass_flux_v%data(i - 1, j + 1, k) + &
-             c_SW*this%mass_flux_v%data(i - 1, j, k) + &
-             d_SE*this%mass_flux_v%data(i, j, k))*metrics%idxCu(i, j) - ke_grad_x
-      end do
+      if (metrics%use_closed_faces) then
+         ! ---- Passes 5f/6f: the same stencil, PAIR-FLOORED PV ----
+         ! `&vcoord_nml zfixed_closed_faces` only; knob off ⇒ the ELSE branch,
+         ! the original Passes 5/6, textually untouched ⇒ bit-identical.  Inline,
+         ! not a call: a host-gated call handing the tendency buffers to another
+         ! procedure pessimises every loop of this routine on nvfortran.
+         ! Each pair coefficient sums three corner PVs; the "cross" ones meet a
+         ! transport whose far cell lies outside the corner, so `h_face/h_corner`
+         ! is unbounded there (a thin live partial cell next to a full level).
+         ! `hk_pair_coef` re-evaluates each PV at a corner thickness of at least
+         ! half the pair's larger face thickness — the bound `sadourny_energy`
+         ! has by construction — and the floor belongs to the PAIR, so the
+         ! u- and v-tendencies share the coefficient (HK energy antisymmetry).
+         ! See the routine docstring and `hk_pair_coef`.
+         ! ---- Pass 5f: u-face ----
+         do concurrent(k=1:nz, j=1:ny, i=2:nx) &
+            local(q_S, q_N, q_NE, q_NW, q_SE, q_SW, &
+                  a_NE, b_NW, c_SW, d_SE, ke_grad_x, &
+                  h_S, h_N, h_NE, h_NW, h_SE, h_SW, h_u, &
+                  hv_NE, hv_NW, hv_SW, hv_SE)
+            q_S = this%q_corner%data(i, j, k)
+            q_N = this%q_corner%data(i, j + 1, k)
+            q_NE = this%q_corner%data(i + 1, j + 1, k)
+            q_NW = this%q_corner%data(i - 1, j + 1, k)
+            q_SE = this%q_corner%data(i + 1, j, k)
+            q_SW = this%q_corner%data(i - 1, j, k)
+            h_S = hk_corner_h(i, j, k, nx, ny, nz, h, metrics%wet_T, metrics%areaT)
+            h_N = hk_corner_h(i, j + 1, k, nx, ny, nz, h, metrics%wet_T, metrics%areaT)
+            h_NE = hk_corner_h(i + 1, j + 1, k, nx, ny, nz, h, metrics%wet_T, metrics%areaT)
+            h_NW = hk_corner_h(i - 1, j + 1, k, nx, ny, nz, h, metrics%wet_T, metrics%areaT)
+            h_SE = hk_corner_h(i + 1, j, k, nx, ny, nz, h, metrics%wet_T, metrics%areaT)
+            h_SW = hk_corner_h(i - 1, j, k, nx, ny, nz, h, metrics%wet_T, metrics%areaT)
+            ! Face thicknesses exactly as Pass 3 builds the transports
+            ! (one-sided at the array edge: 0.5·(a+a) == a).
+            h_u = 0.5_wp*(h(i - 1, j, k) + h(i, j, k))
+            hv_NE = 0.5_wp*(h(i, j, k) + h(i, min(ny, j + 1), k))
+            hv_NW = 0.5_wp*(h(i - 1, j, k) + h(i - 1, min(ny, j + 1), k))
+            hv_SW = 0.5_wp*(h(i - 1, max(1, j - 1), k) + h(i - 1, j, k))
+            hv_SE = 0.5_wp*(h(i, max(1, j - 1), k) + h(i, j, k))
+            a_NE = hk_pair_coef(q_N, h_N, q_NE, h_NE, q_S, h_S, max(h_u, hv_NE))
+            b_NW = hk_pair_coef(q_N, h_N, q_NW, h_NW, q_S, h_S, max(h_u, hv_NW))
+            c_SW = hk_pair_coef(q_N, h_N, q_SW, h_SW, q_S, h_S, max(h_u, hv_SW))
+            d_SE = hk_pair_coef(q_N, h_N, q_SE, h_SE, q_S, h_S, max(h_u, hv_SE))
+            ke_grad_x = (this%ke_centre%data(i, j, k) - &
+                         this%ke_centre%data(i - 1, j, k))*metrics%idxCu(i, j)
+            this%pv_flux_x%data(i, j, k) = &
+               (a_NE*this%mass_flux_v%data(i, j + 1, k) + &
+                b_NW*this%mass_flux_v%data(i - 1, j + 1, k) + &
+                c_SW*this%mass_flux_v%data(i - 1, j, k) + &
+                d_SE*this%mass_flux_v%data(i, j, k))*metrics%idxCu(i, j) - ke_grad_x
+         end do
+         ! ---- Pass 6f: v-face ----
+         do concurrent(k=1:nz, j=2:ny, i=1:nx) &
+            local(q_W, q_E, q_NE, q_NW, q_SE, q_SW, &
+                  a_NE, b_NW, c_SW, d_SE, ke_grad_y, &
+                  h_W, h_E, h_NE, h_NW, h_SE, h_SW, h_v, &
+                  hu_NE, hu_NW, hu_SW, hu_SE)
+            q_W = this%q_corner%data(i, j, k)
+            q_E = this%q_corner%data(i + 1, j, k)
+            q_NE = this%q_corner%data(i + 1, j + 1, k)
+            q_NW = this%q_corner%data(i, j + 1, k)
+            q_SE = this%q_corner%data(i + 1, j - 1, k)
+            q_SW = this%q_corner%data(i, j - 1, k)
+            h_W = hk_corner_h(i, j, k, nx, ny, nz, h, metrics%wet_T, metrics%areaT)
+            h_E = hk_corner_h(i + 1, j, k, nx, ny, nz, h, metrics%wet_T, metrics%areaT)
+            h_NE = hk_corner_h(i + 1, j + 1, k, nx, ny, nz, h, metrics%wet_T, metrics%areaT)
+            h_NW = hk_corner_h(i, j + 1, k, nx, ny, nz, h, metrics%wet_T, metrics%areaT)
+            h_SE = hk_corner_h(i + 1, j - 1, k, nx, ny, nz, h, metrics%wet_T, metrics%areaT)
+            h_SW = hk_corner_h(i, j - 1, k, nx, ny, nz, h, metrics%wet_T, metrics%areaT)
+            h_v = 0.5_wp*(h(i, j - 1, k) + h(i, j, k))
+            hu_NE = 0.5_wp*(h(i, j, k) + h(min(nx, i + 1), j, k))
+            hu_NW = 0.5_wp*(h(max(1, i - 1), j, k) + h(i, j, k))
+            hu_SW = 0.5_wp*(h(max(1, i - 1), j - 1, k) + h(i, j - 1, k))
+            hu_SE = 0.5_wp*(h(i, j - 1, k) + h(min(nx, i + 1), j - 1, k))
+            a_NE = hk_pair_coef(q_W, h_W, q_NE, h_NE, q_E, h_E, max(h_v, hu_NE))
+            b_NW = hk_pair_coef(q_W, h_W, q_NW, h_NW, q_E, h_E, max(h_v, hu_NW))
+            c_SW = hk_pair_coef(q_W, h_W, q_SW, h_SW, q_E, h_E, max(h_v, hu_SW))
+            d_SE = hk_pair_coef(q_W, h_W, q_SE, h_SE, q_E, h_E, max(h_v, hu_SE))
+            ke_grad_y = (this%ke_centre%data(i, j, k) - &
+                         this%ke_centre%data(i, j - 1, k))*metrics%idyCv(i, j)
+            this%pv_flux_y%data(i, j, k) = &
+               -(a_NE*this%mass_flux_u%data(i + 1, j, k) + &
+                 b_NW*this%mass_flux_u%data(i, j, k) + &
+                 c_SW*this%mass_flux_u%data(i, j - 1, k) + &
+                 d_SE*this%mass_flux_u%data(i + 1, j - 1, k))*metrics%idyCv(i, j) - ke_grad_y
+         end do
+      else
+         ! ---- Pass 5: u-face HK tendency ----
+         do concurrent(k=1:nz, j=1:ny, i=2:nx) &
+            local(q_S, q_N, q_NE, q_NW, q_SE, q_SW, &
+                  a_NE, b_NW, c_SW, d_SE, ke_grad_x)
+            q_S = this%q_corner%data(i, j, k)
+            q_N = this%q_corner%data(i, j + 1, k)
+            q_NE = this%q_corner%data(i + 1, j + 1, k)
+            q_NW = this%q_corner%data(i - 1, j + 1, k)
+            q_SE = this%q_corner%data(i + 1, j, k)
+            q_SW = this%q_corner%data(i - 1, j, k)
+            a_NE = (q_N + q_NE + q_S)*C1_12
+            b_NW = (q_N + q_NW + q_S)*C1_12
+            c_SW = (q_N + q_SW + q_S)*C1_12
+            d_SE = (q_N + q_SE + q_S)*C1_12
+            ke_grad_x = (this%ke_centre%data(i, j, k) - &
+                         this%ke_centre%data(i - 1, j, k))*metrics%idxCu(i, j)
+            ! q·vh sum is a transport-weighted PV flux (m³/s); the u-face
+            ! IdxCu closes it to a per-length acceleration (= /dx on uniform).
+            this%pv_flux_x%data(i, j, k) = &
+               (a_NE*this%mass_flux_v%data(i, j + 1, k) + &
+                b_NW*this%mass_flux_v%data(i - 1, j + 1, k) + &
+                c_SW*this%mass_flux_v%data(i - 1, j, k) + &
+                d_SE*this%mass_flux_v%data(i, j, k))*metrics%idxCu(i, j) - ke_grad_x
+         end do
+
+         ! ---- Pass 6: v-face HK tendency ----
+         do concurrent(k=1:nz, j=2:ny, i=1:nx) &
+            local(q_W, q_E, q_NE, q_NW, q_SE, q_SW, &
+                  a_NE, b_NW, c_SW, d_SE, ke_grad_y)
+            q_W = this%q_corner%data(i, j, k)
+            q_E = this%q_corner%data(i + 1, j, k)
+            q_NE = this%q_corner%data(i + 1, j + 1, k)
+            q_NW = this%q_corner%data(i, j + 1, k)
+            q_SE = this%q_corner%data(i + 1, j - 1, k)
+            q_SW = this%q_corner%data(i, j - 1, k)
+            a_NE = (q_W + q_NE + q_E)*C1_12
+            b_NW = (q_W + q_NW + q_E)*C1_12
+            c_SW = (q_W + q_SW + q_E)*C1_12
+            d_SE = (q_W + q_SE + q_E)*C1_12
+            ke_grad_y = (this%ke_centre%data(i, j, k) - &
+                         this%ke_centre%data(i, j - 1, k))*metrics%idyCv(i, j)
+            this%pv_flux_y%data(i, j, k) = &
+               -(a_NE*this%mass_flux_u%data(i + 1, j, k) + &
+                 b_NW*this%mass_flux_u%data(i, j, k) + &
+                 c_SW*this%mass_flux_u%data(i, j - 1, k) + &
+                 d_SE*this%mass_flux_u%data(i + 1, j - 1, k))*metrics%idyCv(i, j) - ke_grad_y
+         end do
+      end if
+      ! Array-edge faces carry no tendency (both branches).
       do concurrent(k=1:nz, j=1:ny)
          this%pv_flux_x%data(1, j, k) = 0.0_wp
          this%pv_flux_x%data(nx + 1, j, k) = 0.0_wp
-      end do
-
-      ! ---- Pass 6: v-face HK tendency ----
-      do concurrent(k=1:nz, j=2:ny, i=1:nx) &
-         local(q_W, q_E, q_NE, q_NW, q_SE, q_SW, &
-               a_NE, b_NW, c_SW, d_SE, ke_grad_y)
-         q_W = this%q_corner%data(i, j, k)
-         q_E = this%q_corner%data(i + 1, j, k)
-         q_NE = this%q_corner%data(i + 1, j + 1, k)
-         q_NW = this%q_corner%data(i, j + 1, k)
-         q_SE = this%q_corner%data(i + 1, j - 1, k)
-         q_SW = this%q_corner%data(i, j - 1, k)
-         a_NE = (q_W + q_NE + q_E)*C1_12
-         b_NW = (q_W + q_NW + q_E)*C1_12
-         c_SW = (q_W + q_SW + q_E)*C1_12
-         d_SE = (q_W + q_SE + q_E)*C1_12
-         ke_grad_y = (this%ke_centre%data(i, j, k) - &
-                      this%ke_centre%data(i, j - 1, k))*metrics%idyCv(i, j)
-         this%pv_flux_y%data(i, j, k) = &
-            -(a_NE*this%mass_flux_u%data(i + 1, j, k) + &
-              b_NW*this%mass_flux_u%data(i, j, k) + &
-              c_SW*this%mass_flux_u%data(i, j - 1, k) + &
-              d_SE*this%mass_flux_u%data(i + 1, j - 1, k))*metrics%idyCv(i, j) - ke_grad_y
       end do
       do concurrent(k=1:nz, i=1:nx)
          this%pv_flux_y%data(i, 1, k) = 0.0_wp
@@ -1418,6 +1524,67 @@ contains
       end if
       av = q_val*h_corner
    end function corner_abs_vort
+
+   pure function hk_corner_h(ic, jc, k, nx, ny, nz, h, wet_T, areaT) result(hc)
+      !$acc routine seq
+      !! Corner thickness of the HK PV, recomputed with EXACTLY the Pass 2
+      !! formula of `coriolis_adv_compute_tendencies_hk` (wet-area-weighted
+      !! 4-cell mean, array-edge clamps, `CORIOLIS_H_MIN_PV` floor), so the
+      !! closed-face branch knows the `h_corner` each stored `q` was divided
+      !! by without a persistent buffer.
+      integer, intent(in) :: ic, jc, k, nx, ny, nz
+      real(wp), intent(in) :: h(nx, ny, nz)
+      real(wp), intent(in) :: wet_T(nx, ny), areaT(nx, ny)
+      real(wp) :: hc
+      integer :: iw, ie, js, jn
+      real(wp) :: aSW, aSE, aNW, aNE, hm_num, hm_den
+      iw = max(1, ic - 1)
+      ie = min(nx, ic)
+      js = max(1, jc - 1)
+      jn = min(ny, jc)
+      aSW = wet_T(iw, js)*areaT(iw, js)
+      aSE = wet_T(ie, js)*areaT(ie, js)
+      aNW = wet_T(iw, jn)*areaT(iw, jn)
+      aNE = wet_T(ie, jn)*areaT(ie, jn)
+      hm_num = aSW*h(iw, js, k) + aSE*h(ie, js, k) + &
+               aNW*h(iw, jn, k) + aNE*h(ie, jn, k)
+      hm_den = aSW + aSE + aNW + aNE
+      hc = hm_num/max(hm_den, H_DIV_EPS)
+      hc = max(hc, CORIOLIS_H_MIN_PV)
+   end function hk_corner_h
+
+   pure function hk_pair_coef(q1, h1, q2, h2, q3, h3, h_ref) result(coef)
+      !$acc routine seq
+      !! One Arakawa-Hsu pair coefficient `(q1 + q2 + q3)/12` with each PV
+      !! re-evaluated at a corner thickness of at least `h_ref/2`:
+      !! `q → q·h_X/(h_ref/2)` where `h_X < h_ref/2`, `q` unchanged
+      !! otherwise (so an inactive floor returns the unfloored sum bit for
+      !! bit).  `h_ref` is the larger thickness of the pair's u- and v-face.
+      !!
+      !! The bound is the one `sadourny_energy` satisfies by construction:
+      !! there each corner PV multiplies only transports through faces whose
+      !! two cells both sit inside that corner's 4-cell mean, so
+      !! `h_corner >= h_face/2` (equal areas) and `q·vh <= 2·|f+ζ|·|v|·dx`.
+      !! The HK stencil also pairs a corner with a transport whose far cell
+      !! lies OUTSIDE it, and there `h_face/h_corner` is unbounded.  Because
+      !! `h_ref` belongs to the PAIR, the u-tendency's coefficient on `vh_V`
+      !! and the v-tendency's on `uh_U` stay equal (energy antisymmetry).
+      real(wp), intent(in) :: q1, h1, q2, h2, q3, h3
+         !! The three corner PVs and the corner thicknesses they carry.
+      real(wp), intent(in) :: h_ref
+         !! `max(h_U, h_V)` of the pair's two faces (m).
+      real(wp) :: coef
+      real(wp), parameter :: C1_12 = 1.0_wp/12.0_wp
+      real(wp) :: hh, p1, p2, p3
+      hh = 0.5_wp*h_ref
+      p1 = q1
+      p2 = q2
+      p3 = q3
+      if (h1 < hh) p1 = q1*(h1/hh)
+      if (h2 < hh) p2 = q2*(h2/hh)
+      if (h3 < hh) p3 = q3*(h3/hh)
+      coef = (p1 + p2 + p3)*C1_12
+   end function hk_pair_coef
 
    subroutine coriolis_adv_apply_tendencies(this, ms, dt, no_wait)
       !! Per-layer forward-Euler velocity update.

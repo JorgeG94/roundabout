@@ -455,7 +455,12 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   under `eos="linear"`).
 - **Coriolis**: Sadourny PV-flux (`sadourny`); Sadourny +
   Hollingsworth-Källén guard (`sadourny_hk`, enums live, kernel
-  refinement deferred).
+  refinement deferred). Under `&vcoord_nml zfixed_closed_faces` the HK
+  stencil runs pair-floored (each PV at a corner thickness of at least
+  half its pair's larger face thickness — the bound `sadourny_energy`
+  has by construction); without it a thin live partial bottom cell made
+  the HK cross pairs run away (1-degree Southern Ocean: NaN at step 11).
+  Byte-identical with the knob off; `docs/CLOSURE_MATRIX.md`, Coriolis.
 - **Lateral closures**: Leith (vorticity-gradient ν_h per face);
   Smagorinsky_KH + Smagorinsky_AH (flow-aware biharmonic); constant
   `nu_h` / `nu_4` floors.
