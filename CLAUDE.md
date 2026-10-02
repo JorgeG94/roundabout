@@ -64,6 +64,8 @@ When adding a new capability (typical pattern for ocean-physics work):
 5. **`ctest`** (no `-j`) green on the GPU build.
 6. **One commit per capability; one PR per capability.** Smaller PRs review faster and bisect cleanly.
 
+**Compatibility matrix.** A change that adds, lifts or moves a configure-time refusal, adds an axis value (a closure, scheme or coordinate), or fixes a composition crash runs `python3 tests/regression/compat_matrix.py run --build-dir build_gfortran --jobs 4` (≈1 min on CPU; pairwise over every closure / coordinate / edge axis on a 24x16x10 domain). An unexplained refusal, crash, non-finite or budget miss is a FAIL; a `KNOWN_GAP` row in `tests/regression/compat_expect.py` that now passes is an XPASS and also fails — delete the row in the same PR. See `tests/regression/README.md`, "The pairwise compatibility matrix".
+
 ## Project Layout
 
 ```

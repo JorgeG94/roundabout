@@ -141,7 +141,8 @@ diagnostics (low physics value). Run
 | `stability.py` | **the two-tier stability suite** (see below) — parses the model's own console time series and asserts on PHYSICS, not on a golden |
 | `stability_manifest.py` | its case list: every tracked ocean namelist (73 base cases), with per-case run length, physics assertions, tier-2 downscale spec and known-failure markers |
 | `downscale.py` | the dimensionless-number rules a tier-2 twin must satisfy, plus the standalone checker that validates every twin |
-| `compat_matrix.py` | **the pairwise compatibility matrix** (see the last section): the synthetic domain, its namelist builder, the per-coordinate viability sweep and the `rdb --validate-only` contract |
+| `compat_matrix.py` | **the pairwise compatibility matrix** (see the last section): the synthetic domain, the seeded IPOG covering-array generator, the `rdb --validate-only` driven fixed point, checks 1–3 and the report |
+| `compat_expect.py` | what the matrix EXPECTS to fail: `PHYSICAL` rows (forever) and `KNOWN_GAP` rows (reason, owner, v0.1.0 tracker item) |
 | `README.md` | this file |
 
 ## Build the CPU app
@@ -1441,3 +1442,147 @@ staircase PGF, v0.1.0 tracker item 11). † the remap precondition guard stops
 step 1 on the island's land columns: `rho`/`hycom` write a negative thickness
 there (vcoord audit H3), and `zstar_full`'s land-column target misses the
 column total by 1/3 (a new site of the same class).
+
+## The covering array
+
+A t = 2 covering array puts every PAIR of axis values in at least one cell.
+`ipog()` is a stdlib In-Parameter-Order-General generator (Lei et al. 2007):
+seeded (`SEED`, so the cell list is stable across runs and machines),
+deterministic, and constraint-aware — it never emits a row containing a
+forbidden tuple, and it re-seats any pair a higher-arity constraint knocked
+out of a row. Unconstrained, the 16 axes give **89 cells** (the floor is
+11 x 8 = 88).
+
+The axes (v1, 71 values):
+
+| axis | n | values |
+|---|---|---|
+| `vcoord` | 11 | sigma, zstar, zstar_full, zstar_sigma, z_fixed_cf (closed faces), z_fixed_open, hycom, rho, eulerian_z, lagrangian, zsigma |
+| `split` | 2 | pred_corr, ssp_rk2 |
+| `vmix_bl` | 3 | kpp (PP81 + KPP), epbl, pp81 |
+| `vmix_extra` | 6 | none, kappa_shear, kappa_shear_vertex, tidal, conv, ddiff |
+| `vmix_bg` | 3 | scalar, bryan_lewis, henyey |
+| `lateral` | 8 | const_nu_h, smagorinsky (KH + AH), leith, leith_biharm, nu_4, stress_tensor, kh_aniso, meke_backscatter |
+| `eddy` | 7 | none, gm, gm_meke, redi, gm_redi_meke, gm_varmix_resscaled, mle |
+| `tracers` | 3 | ts, ideal_age, pseudo_salt |
+| `pgf` | 4 | mont, fv_mom6, fv_mom6_plm, fv_mom6_ppm |
+| `eos` | 3 | wright, roquet, linear |
+| `coriolis` | 3 | sadourny, sadourny_energy, sadourny_hk |
+| `pv_adv` | 4 | centered, weno3, weno5, weno7 |
+| `bt` | 5 | default, correction_bc_pgf, substep_drag, wave_drag, visc_rem |
+| `geometry` | 5 | closed, channel, obc, tripolar, cavity |
+| `grid` | 2 | cartesian, spherical |
+| `forcing` | 2 | cool, warm_sw |
+
+A value that needs a prerequisite carries it (`meke_backscatter` brings GM +
+MEKE + a non-zero biharmonic backstop; `visc_rem` brings the implicit drag
+fold and bed-only drag); the shared blocks are spelled once, so overlays merge
+without conflict. The one structural clash (`geometry=tripolar` IS a grid, so
+it cannot meet `grid=spherical`) is excluded by `builder_conflicts()`, a
+property of these tables and not a model rule.
+
+**The exclusion rules are NOT re-encoded in Python** — they would drift from
+the model. The run is a fixed point: generate the array → evaluate every new
+cell → for each EXPECTED refusal, and each XFAIL of a deterministic runtime gap
+(`scope="cell"`), forbid the minimal tuple that caused it → regenerate, until
+no new tuple appears. The tuple is derived from the explaining row's features
+(`forbidden_tuple`): the axes where another value turns the feature off (an
+`unless` feature joins through the axes that would turn it on). The cell that
+produced each tuple is kept in the report as its WITNESS, so the gap is still
+proved on every run; the pairs a forbidden tuple makes unreachable are
+reported, not silently dropped.
+
+## Checks, classes and the expectation table
+
+Per cell, in order, stopping at the first failure:
+
+1. **REFUSED** — `rdb --validate-only` at `log_level = "error"`; stdout is then
+   exactly the refusal reasons, and EVERY reason must be explained by a row.
+2. **CRASH / NONFINITE** — non-zero exit or short run, a `[nan-catch]`, the I1′
+   vanished-content tripwire, the remap precondition guard, a non-finite
+   console scalar. A crashing cell is re-run with `&ocean_debug_nml chksum`
+   over its last steps and the first non-finite `CHKSUM` row (via
+   `tools/read_chksum.py`) names the minting phase.
+3. **BUDGET** — the model's own Mass / Salt / Heat closed-budget residuals,
+   `|Error| <= 1e-9` (the `stability_manifest.BUDGET_OPEN` band — every cell
+   carries a surface flux).
+
+Classes: `PASS`, `REFUSED_PHYSICAL`, `REFUSED_GAP`, `XFAIL`, `XPASS`, `FAIL`.
+The suite exits non-zero on any `FAIL` or `XPASS`.
+
+`compat_expect.py` holds the rows. Each matches on FEATURES read off the cell's
+merged namelist (with the model's defaults), never on axis value names, AND on
+a signature: a `refused` row's regex must match the logged reason, a `runtime`
+row's must match the crash text or budget line, so a cell a row covers that
+fails for a DIFFERENT reason is still a FAIL.
+
+* `PHYSICAL` — a design exclusion, expected forever (WENO PV interpolation is
+  an enstrophy-form scheme; Henyey needs a latitude; the cavity's ice load
+  needs the FV pressure-stack top boundary condition).
+* `KNOWN_GAP(reason, owner, link)` — should work and does not yet; the link is
+  the `python_prototypes/design/v010_blockers.md` item that will close it
+  (`NOT TRACKED` where there is none yet — those are the ones to file).
+* `scope="cell"` (default): every matching cell must fail; one that passes is
+  an **XPASS** and fails the suite until the row is deleted, so the gap list
+  can only shrink. `scope="any"`: a gap that bites only in SOME combinations;
+  the row pins a `witness` cell that is evaluated on every run and must fail
+  with the row's signature, or the row itself is an XPASS.
+
+## Running it
+
+```bash
+# (gfortran / NetCDF toolchain loaded in this shell)
+python3 tests/regression/compat_matrix.py list            # the axes + the cell list, no model
+python3 tests/regression/compat_matrix.py run --build-dir build_gfortran --jobs 4 \
+        --out tmp_local_artifacts/compat/last.json [--previous <last nightly>.json]
+python3 tests/regression/compat_matrix.py self-test       # no model; ctest rdb_compat_matrix_selftest
+```
+
+The report prints the class counts, every FAIL / XPASS with its cell and the
+chksum attribution, every KNOWN_GAP row with its owner and how many cells hit
+it, and (with `--previous`) the class diff against the last run. The JSON
+record carries one entry per cell: `axes`, `role` (`cover` / `witness` /
+`pinned`), `class`, `rows`, and a `checks` map with a slot for each of
+`validate`, `run`, `budget`, `decomp`, `restart`, `cross_backend` — the last
+three are `not_run` until their legs land, and `run.metrics` (final En / Mass /
+Salt / Temp, peak MaxCFL, worst budget residuals) is what the cross-backend
+band and the decomposition / restart legs will compare. Scratch lives in
+`tmp_local_artifacts/compat_matrix/` and is removed on a green run.
+
+**Cost (measured 2026-10-02, gfortran, a shared 4-core box under load ~8-18):**
+the fixed point converges in 7 iterations and evaluates 406 cells — the final
+array is **77 covering cells + 53 witnesses** — in **61 s of wall on 4 jobs**
+(serial sums: validate 25 s, run 186 s). 2046 of the 2316 value pairs are
+covered; the other 270 contain a forbidden single or pair. Nightly-GPU sizing
+for the next phase: the run itself is ~85 cells x ~1 s.
+
+## The first full run (2026-10-02, `main` @ 11b2d134d)
+
+Seeded with today's refusals from the z_fixed closure audit and the vertical-
+coordinate audit, the first run met **11 unexpected FAILs** in three groups —
+each now a row, so the committed table is green:
+
+| finding | class now | evidence |
+|---|---|---|
+| Redi + a Flather open edge: the model's own **salt budget misses ~4e-5** of the content in 24 steps, on every such cell (Redi on walls or a periodic channel closes to 1e-15) | `redi_obc_salt_budget` (NOT TRACKED) | 6 cells: `Salt residual -3.8e-05 .. -5.2e-05` |
+| `correction_bc_pgf` with the Montgomery PGF is **accepted at configure** and `error stop`s in step 1 (`compute_pbce: requires ocean_pgf_form = 'fv_mom6'`) — a missing `validate_config` refusal | `bc_pgf_needs_fv_mom6` (NOT TRACKED) | 4 cells |
+| z_fixed WITHOUT closed faces: En 23-85x the closed-face run in 24 steps everywhere, and a negative thickness the remap guard stops at step 20 in one combination | `zfixed_open_steps` (item 11, `scope="any"`) | 1 cell |
+
+It also showed that `zstar_full`, `hycom` and `rho` cannot run a step on any
+domain with LAND (the island): the remap precondition guard stops step 1 on the
+six island columns — `rho`/`hycom` write `-1.2e-3 m` there (vcoord audit H3),
+and `zstar_full` builds a land column's target as `nz x zstar_h_min` = 1.0e-3 m
+against `nz x H_VANISHED` = 1.5e-3 m, a NEW site of the same land-column class.
+Today's table: **76 PASS, 10 REFUSED_PHYSICAL, 37 REFUSED_GAP, 8 XFAIL, 0 XPASS,
+0 FAIL.**
+
+## Not done yet (next phase)
+
+Checks 4-6 — `DECOMP` (1 vs 2x2 vs 4x1 bitwise on the restart registry, with
+the `test_ocean_decomp_bitid_mpi` exemptions), `RESTART` (12 + restart + 12 vs
+24 through the engine path) and `CROSS_BACKEND` (the GPU cell finite +
+budget-closed and inside the gfortran/nvfortran En / MaxCFL band, modelled on
+`global_1deg/check_against_reference.py`) — the nightly workflow, the weekly
+t = 3 (vcoord x eddy x vertical mixing) slice, and the per-PR slice (closure →
+source paths). The record format already carries their slots; `tripolar` and
+`cavity` are the single-rank geometry rows the MPI leg skips.

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Pairwise compatibility matrix -- phase 1: the synthetic domain, the
-namelist builder and the `rdb --validate-only` contract it stands on.
+"""Pairwise compatibility matrix: does every configuration the model accepts
+also RUN, on a small realistic domain, with every pair of features met?
 
 Why this exists
 ---------------
@@ -8,11 +8,10 @@ Every composition bug found in the autumn of 2026 was two features meeting for
 the first time: GM x z_fixed fillers (NaN in 3 steps), closed faces x
 GM/Redi/MLE, sponge x periodic seam, carried tendency x restart registry...
 None needed exotic physics; each needed one specific PAIR of features that no
-hand-written test held.  Per-feature tests cover features, not pairs.  The
-matrix will enumerate pairs (design: python_prototypes/design/
-compat_matrix_plan.md); this first slice builds what it runs on.
+hand-written test held.  Per-feature tests cover features, not pairs.  This
+suite enumerates pairs (design: python_prototypes/design/compat_matrix_plan.md).
 
-What is here
+What it does
 ------------
 1. **The domain** (`merged_namelist`).  ONE synthetic family, sized for
    seconds: 24 x 16 x 10, dx = 20 km, f-plane + beta, a staircase shelf (with
@@ -22,30 +21,55 @@ What is here
    non-trivial), wind + a surface heat flux, 24 steps of 900 s.  The
    bathymetry and the z-level T/S are written as classic NetCDF by the
    stdlib writer below (`write_netcdf_classic`) -- nothing to install.
-2. **The axes** (`AXES`): every value of every axis the plan names, as a
-   namelist overlay; a cell is one value per axis.
-3. **The checks a cell can run today**: `validate_cell` (`rdb
-   --validate-only`), `run_cell` (crash / non-finite / budget, with a
-   `&ocean_debug_nml chksum` re-run of a crashing cell naming the phase that
-   minted the first non-finite).
+2. **The covering array** (`ipog`).  A seeded, deterministic t = 2 IPOG
+   generator over the axes in `AXES`: every PAIR of axis values appears in at
+   least one cell.  The exclusion rules are NOT re-encoded here (they would
+   drift from the model): forbidden tuples are DISCOVERED by running
+   `rdb --validate-only` on candidate cells and classifying each refusal
+   against `compat_expect.py`.  An expected refusal -- and a deterministic
+   runtime gap -- forbids the tuple that caused it, the array is regenerated
+   around it to a fixed point (`build_matrix`), and the cell that produced the
+   tuple stays in the report as its witness.
+3. **The checks** (`evaluate_cell`), in order, stop at the first failure:
+     1  REFUSED  -- expected (PHYSICAL / KNOWN_GAP) or FAIL;
+     2  CRASH / NONFINITE -- non-zero exit, a nan-catch, the vanished-content
+        tripwire (`check_vanished_content`, ON in every cell), the remap
+        precondition guard, a non-finite console scalar; a crashing cell is
+        re-run with `&ocean_debug_nml chksum` over the last steps to name the
+        phase that MINTED the first non-finite;
+     3  BUDGET -- the model's own closed mass/salt/heat residuals.
+   Checks 4-6 (MPI decomposition, restart, GPU cross-backend band) slot into
+   the same record (`CHECKS`); this phase runs 1-3 on CPU.
+4. **The verdict**.  A KNOWN_GAP row that does not fail where it says it
+   will is an XPASS, and an XPASS FAILS the suite until the row is deleted --
+   so the gap list can only shrink.
 
 Usage
 -----
+    # the cell list (no model)
+    python3 tests/regression/compat_matrix.py list
+    # the whole pairwise set, CPU (gfortran toolchain loaded in this shell)
+    python3 tests/regression/compat_matrix.py run --build-dir build_gfortran \\
+            --jobs 4 --out tmp_local_artifacts/compat/last.json
     # every vertical coordinate x split x edge variant x grid, base closures
     python3 tests/regression/compat_matrix.py domain --build-dir build_gfortran
     # one cell by hand: emit its namelist + inputs and run rdb on it
-    python3 tests/regression/compat_matrix.py emit --set vcoord=hycom --out DIR
-    # the builder's own checks (no model; also in ctest)
+    python3 tests/regression/compat_matrix.py emit --cell c017 --out DIR
+    # who tests the test (no model; also in ctest)
     python3 tests/regression/compat_matrix.py self-test
     # the --validate-only contract (needs the binary; in ctest)
     python3 tests/regression/compat_matrix.py validate-smoke --binary build_gfortran/rdb
 
 Stdlib only -- never `pip install` anything for this.
 """
+
 import argparse
 import hashlib
+import itertools
+import json
 import math
 import os
+import random
 import re
 import shutil
 import struct
@@ -60,8 +84,10 @@ REPO_ROOT = os.path.abspath(os.path.join(THIS_DIR, os.pardir, os.pardir))
 sys.path.insert(0, THIS_DIR)
 sys.path.insert(0, os.path.join(REPO_ROOT, "tools"))
 
+import compat_expect  # noqa: E402
 
 DEFAULT_SCRATCH = os.path.join(REPO_ROOT, "tmp_local_artifacts", "compat_matrix")
+SEED = 20261002
 
 # ===========================================================================
 # 1. The domain
@@ -251,9 +277,10 @@ def _vc(vtype, **extra):
     return {"vcoord_nml": dict({"vcoord_type": vtype}, **extra)}
 
 
-# The axes (the plan's v1 list, with hycom + rho promoted).  Each value is
-# (name, overlay); a cell is one value per axis over BASE.  Append new axes
-# and values at the END: the covering-array generator will key on order.
+# The axes.  ORDER IS PART OF THE SEED: append new axes at the end and new
+# values at the end of an axis, or every cell id moves.  Each value is
+# (name, overlay).  `compat_expect.FEATURES` reads the merged namelist, never
+# these names, so a row keeps matching when a value is renamed.
 AXES = [
     ("vcoord", [
         ("sigma", _vc("sigma")),
@@ -492,7 +519,180 @@ def cell_header(cell, cid, extra=""):
 
 
 # ===========================================================================
-# 3. Running the model
+# 3. The covering array: seeded IPOG with forbidden tuples
+# ===========================================================================
+def _violates(test, forbidden):
+    """`test` (list of value indices or None) contains a forbidden tuple."""
+    for tup in forbidden:
+        for a, v in tup:
+            if test[a] != v:
+                break
+        else:
+            return True
+    return False
+
+
+def ipog(sizes, forbidden=(), seed=SEED):
+    """A t = 2 covering array over axes of `sizes` values (In-Parameter-Order-
+    General, Lei et al. 2007).  `forbidden` is a collection of tuples of
+    (axis, value) pairs no row may contain in full.  Deterministic for a
+    given (sizes, forbidden, seed).  Returns (rows, uncoverable) -- rows are
+    lists of value indices; `uncoverable` lists the pairs no valid row holds.
+    """
+    forbidden = [tuple(sorted(t)) for t in sorted(set(tuple(sorted(t)) for t in forbidden))]
+    n = len(sizes)
+    rng = random.Random(seed)
+    pref = []                       # a seeded, fixed value-preference order per axis
+    for s in sizes:
+        order = list(range(s))
+        rng.shuffle(order)
+        pref.append(order)
+    order = sorted(range(n), key=lambda a: (-sizes[a], a))
+
+    def ok(t):
+        return not _violates(t, forbidden)
+
+    def pair_ok(a, va, b, vb):
+        t = [None] * n
+        t[a], t[b] = va, vb
+        return ok(t)
+
+    a0, a1 = order[0], order[1]
+    rows = []
+    for va in pref[a0]:
+        for vb in pref[a1]:
+            t = [None] * n
+            t[a0], t[a1] = va, vb
+            if ok(t):
+                rows.append(t)
+    done = [a0, a1]
+    uncoverable = []
+    for k in order[2:]:
+        need = set()
+        for a in done:
+            for va in range(sizes[a]):
+                for vk in range(sizes[k]):
+                    if pair_ok(a, va, k, vk):
+                        need.add((a, va, vk))
+        # Horizontal growth: give each row the value of k covering most.
+        for t in rows:
+            best, best_gain = None, -1
+            for vk in pref[k]:
+                t[k] = vk
+                if not ok(t):
+                    continue
+                gain = sum(1 for a in done if t[a] is not None and (a, t[a], vk) in need)
+                if gain > best_gain:
+                    best, best_gain = vk, gain
+            t[k] = best
+            if best is not None:
+                for a in done:
+                    if t[a] is not None:
+                        need.discard((a, t[a], best))
+        # Vertical growth: fit each still-uncovered pair into a row with
+        # don't-cares, else open a new row.
+        for (a, va, vk) in sorted(need, key=lambda p: (p[0], pref[p[0]].index(p[1]),
+                                                       pref[k].index(p[2]))):
+            placed = False
+            for t in rows:
+                if t[a] not in (None, va) or t[k] not in (None, vk):
+                    continue
+                old = (t[a], t[k])
+                t[a], t[k] = va, vk
+                if ok(t):
+                    placed = True
+                    break
+                t[a], t[k] = old
+            if not placed:
+                t = [None] * n
+                t[a], t[k] = va, vk
+                rows.append(t)
+        done.append(k)
+
+    # Fill the don't-cares with valid values (backtracking, seeded order).
+    def fill(t, idx):
+        while idx < n and t[idx] is not None:
+            idx += 1
+        if idx == n:
+            return True
+        for v in pref[idx]:
+            t[idx] = v
+            if ok(t) and fill(t, idx + 1):
+                return True
+        t[idx] = None
+        return False
+
+    full, seen = [], set()
+    for t in rows:
+        t = list(t)
+        if not fill(t, 0):
+            continue
+        key = tuple(t)
+        if key not in seen:
+            seen.add(key)
+            full.append(t)
+    # A row whose don't-cares could not be completed (a higher-arity
+    # forbidden tuple closed every option) dropped its pairs: re-seat each
+    # lost pair in a fresh row of its own.
+    covered = {(a, t[a], b, t[b]) for t in full for a, b in itertools.combinations(range(n), 2)}
+    for a, b in itertools.combinations(range(n), 2):
+        for va in pref[a]:
+            for vb in pref[b]:
+                if (a, va, b, vb) in covered or not pair_ok(a, va, b, vb):
+                    continue
+                t = [None] * n
+                t[a], t[b] = va, vb
+                if fill(t, 0) and tuple(t) not in seen:
+                    seen.add(tuple(t))
+                    full.append(t)
+                    covered |= {(x, t[x], y, t[y]) for x, y in itertools.combinations(range(n), 2)}
+    # Report every valid pair no row ended up holding (higher-arity
+    # constraints can make a pairwise-valid pair unreachable).
+    covered = set()
+    for t in full:
+        for a, b in itertools.combinations(range(n), 2):
+            covered.add((a, t[a], b, t[b]))
+    for a, b in itertools.combinations(range(n), 2):
+        for va in range(sizes[a]):
+            for vb in range(sizes[b]):
+                if pair_ok(a, va, b, vb) and (a, va, b, vb) not in covered:
+                    uncoverable.append((a, va, b, vb))
+    return full, uncoverable
+
+
+def builder_conflicts():
+    """Value pairs whose overlays set the same knob differently (the tripolar
+    geometry IS a grid, so it cannot meet `grid=spherical`).  A property of
+    these tables, not a model rule -- excluded structurally."""
+    out = []
+    for (a, b) in itertools.combinations(AXIS_NAMES, 2):
+        for va in VALUE_NAMES[a]:
+            for vb in VALUE_NAMES[b]:
+                probe = dict(BASE_CELL, **{a: va, b: vb})
+                try:
+                    merged_namelist(probe)
+                except BuilderConflict:
+                    out.append(((a, va), (b, vb)))
+    return out
+
+
+def generate_cells(forbidden=(), seed=SEED):
+    """IPOG over AXES with `forbidden` tuples of (axis_name, value_name),
+    plus the structural `builder_conflicts`."""
+    sizes = [len(VALUE_NAMES[a]) for a in AXIS_NAMES]
+    fidx = []
+    for tup in list(forbidden) + builder_conflicts():
+        fidx.append(tuple((AXIS_INDEX[a], VALUE_NAMES[a].index(v)) for a, v in tup))
+    rows, unc = ipog(sizes, fidx, seed)
+    cells = [{AXIS_NAMES[a]: VALUE_NAMES[AXIS_NAMES[a]][r[a]] for a in range(len(r))}
+             for r in rows]
+    uncoverable = [((AXIS_NAMES[a], VALUE_NAMES[AXIS_NAMES[a]][va]),
+                    (AXIS_NAMES[b], VALUE_NAMES[AXIS_NAMES[b]][vb])) for a, va, b, vb in unc]
+    return cells, uncoverable
+
+
+# ===========================================================================
+# 4. Running the model
 # ===========================================================================
 _NUM = r"[-+]?(?:\d+\.?\d*|\.\d+)(?:[EeDd][-+]?\d+)?|[-+]?NaN|[-+]?Infinity|[-+]?Inf"
 # The console formats, as `stability.py` parses them (kept in step with it).
@@ -521,6 +721,10 @@ _NOISE_RE = re.compile(r"^\s*$|^\[gpu-bind\]|^VALIDATE-ONLY:|^ERROR STOP 3\s*$|"
 # to the open/forced band `stability_manifest.BUDGET_OPEN` uses.
 BUDGET_TOL = {"Mass": 1.0e-9, "Salt": 1.0e-9, "Heat": 1.0e-9}
 
+# The checks a record carries, in the order the plan runs them.  Phase 2
+# fills 1-3; 4-6 stay "not_run" until their legs land (the record format is
+# fixed now so they slot in without a schema change).
+CHECKS = ("validate", "run", "budget", "decomp", "restart", "cross_backend")
 
 
 def _f(tok):
@@ -750,7 +954,134 @@ def run_cell(binary, cell, cid, root, timeout=300, attribute=True):
 
 
 # ===========================================================================
-# 4. The driver
+# 5. Classification against compat_expect
+# ===========================================================================
+def classify(cell, nml, val, run):
+    """The record's verdict.  Returns (cls, rows, note).
+
+    cls: PASS | REFUSED_PHYSICAL | REFUSED_GAP | XFAIL | XPASS | FAIL
+    """
+    feats = compat_expect.features(nml)
+    refuse_rows = [r for r in compat_expect.ROWS if r.kind == "refused" and r.matches(feats)]
+    if val["status"] == "crashed":
+        return "FAIL", [], "--validate-only crashed (rc {}): {}".format(
+            val["rc"], " | ".join(val["messages"][-3:]))
+    if val["status"] == "refused":
+        unexplained, used = [], []
+        for msg in val["messages"]:
+            # The NARROWEST explaining row: it names the tuple to forbid.
+            hit = sorted((r for r in refuse_rows if r.explains(msg)),
+                         key=lambda r: (len(r.when) + len(r.unless), r.rid))
+            if hit:
+                if hit[0] not in used:
+                    used.append(hit[0])
+            else:
+                unexplained.append(msg)
+        if unexplained or not used:
+            return "FAIL", used, "UNEXPECTED refusal: " + " | ".join(
+                m[:240] for m in (unexplained or val["messages"]))
+        cls = "REFUSED_PHYSICAL" if all(r.cls == "PHYSICAL" for r in used) else "REFUSED_GAP"
+        return cls, used, "expected refusal ({})".format(", ".join(r.rid for r in used))
+    # accepted
+    if refuse_rows:
+        return "XPASS", refuse_rows, "accepted, but row(s) {} say it is refused: delete them".format(
+            ", ".join(r.rid for r in refuse_rows))
+    run_rows = [r for r in compat_expect.ROWS if r.kind == "runtime" and r.matches(feats)]
+    if run is None:
+        return "FAIL", [], "accepted but not run"
+    if run["outcome"] == "PASS":
+        strict = [r for r in run_rows if r.scope == "cell"]
+        if strict:
+            return "XPASS", strict, "passes, but row(s) {} say it fails: delete them".format(
+                ", ".join(r.rid for r in strict))
+        return "PASS", [], run["detail"]
+    # A row explains a failure only if the OUTCOME and its SIGNATURE (the
+    # crash text / budget line) both match -- a different crash on a cell a
+    # row covers is still a FAIL.
+    hit = [r for r in run_rows if run["outcome"] in r.expect and r.explains(run["detail"])]
+    if hit:
+        return "XFAIL", hit, "{}: {}".format(run["outcome"], run["detail"])
+    return "FAIL", [], "{}: {}".format(run["outcome"], run["detail"])
+
+
+def witness_cell(row):
+    """The full cell a `scope="any"` row pins (its axes over BASE_CELL)."""
+    return dict(BASE_CELL, **row.witness)
+
+
+def row_xpasses(records):
+    """Row-level XPASS for `scope="any"` rows: the gap bites only in some
+    combinations, so the row pins a witness cell that must fail with its
+    signature on every run; a witness that passes (or fails for another
+    reason) means the row is stale.  Returns [(rid, witness class)]."""
+    out = []
+    for row in compat_expect.ROWS:
+        if row.scope != "any":
+            continue
+        key = cell_key(witness_cell(row))
+        rec = [r for r in records if cell_key(r["axes"]) == key]
+        if not rec or not (rec[0]["class"] == "XFAIL" and row.rid in rec[0]["rows"]):
+            out.append((row.rid, rec[0]["class"] if rec else "not evaluated"))
+    return out
+
+
+def forbidden_tuple(cell, nml, rows):
+    """The (axis, value) tuple an expected refusal forbids.
+
+    For each feature the explaining rows require, the RESPONSIBLE axes are
+    those where some other value of that axis alone turns the feature off.
+    A feature two axes both supply (GM from `eddy` and from
+    `lateral=meke_backscatter`) has no single responsible axis; then every
+    axis whose own overlay carries it is taken.  Nothing found (an emergent
+    feature) forbids the whole cell, which is always sound."""
+    need, unless = set(), set()
+    for r in rows:
+        need |= set(r.when)
+        unless |= set(r.unless)
+    ref = compat_expect.features(BASE)
+    tup = set()
+    # An `unless` feature is part of the cause by its ABSENCE: the axes
+    # whose other values would turn it on belong to the tuple too.
+    for f in sorted(unless):
+        for a in AXIS_NAMES:
+            for w in VALUE_NAMES[a]:
+                if w == cell[a]:
+                    continue
+                try:
+                    alt = compat_expect.features(merged_namelist(dict(cell, **{a: w})))
+                except BuilderConflict:
+                    continue
+                if alt[f]:
+                    tup.add((a, cell[a]))
+                    break
+    for f in sorted(need):
+        resp = []
+        for a in AXIS_NAMES:
+            for w in VALUE_NAMES[a]:
+                if w == cell[a]:
+                    continue
+                try:
+                    alt = compat_expect.features(merged_namelist(dict(cell, **{a: w})))
+                except BuilderConflict:
+                    continue
+                if not alt[f]:
+                    resp.append(a)
+                    break
+        if not resp:
+            for a in AXIS_NAMES:
+                solo = {g: dict(kv) for g, kv in BASE.items()}
+                for g, kv in OVERLAY[(a, cell[a])].items():
+                    solo.setdefault(g, {}).update(kv)
+                if compat_expect.features(solo)[f] and not ref[f]:
+                    resp.append(a)
+        if not resp:
+            return tuple(sorted((a, cell[a]) for a in AXIS_NAMES))
+        tup |= {(a, cell[a]) for a in resp}
+    return tuple(sorted(tup))
+
+
+# ===========================================================================
+# 6. The driver
 # ===========================================================================
 _PRINT_LOCK = threading.Lock()
 
@@ -767,15 +1098,234 @@ def _pmap(fn, items, jobs):
         return list(ex.map(fn, items))
 
 
+def evaluate_cell(binary, cell, root, timeout, attribute):
+    """Checks 1-3 on one cell -> (val, run, cls, rows, note).  Scratch lives
+    in root/<hash>; a refused cell is never run."""
+    cid = "h" + cell_hash(cell)
+    val = validate_cell(binary, cell, cid, os.path.join(root, "validate"))
+    run = None
+    if val["status"] == "accepted":
+        run = run_cell(binary, cell, cid, os.path.join(root, "run"), timeout=timeout,
+                       attribute=attribute)
+    cls, rows, note = classify(cell, merged_namelist(cell), val, run)
+    return val, run, cls, rows, note
+
+
+def _forbids(cls, rows):
+    """Does this verdict take its cause out of the covering array?  Expected
+    refusals do; so does a DETERMINISTIC runtime gap (every matching cell
+    fails), because every other pair packed into such a cell is untested.
+    A `scope="any"` gap bites only in some combinations: it stays in."""
+    if cls in ("REFUSED_PHYSICAL", "REFUSED_GAP"):
+        return True
+    return cls == "XFAIL" and all(r.scope == "cell" for r in rows)
+
+
+def build_matrix(binary, root, jobs, seed=SEED, timeout=300, attribute=True, max_iter=40):
+    """The fixed point the plan prescribes: generate -> evaluate -> forbid the
+    tuple behind every expected refusal and every deterministic XFAIL ->
+    regenerate, until no new tuple appears.  The pairs a forbidden tuple
+    makes unreachable are reported as `uncoverable`.
+
+    Returns (final cells, results by cell key, forbidden tuples, iterations,
+    uncoverable pairs, witness cells -- one per forbidden tuple, the cell
+    that produced it, kept in the report so the gap is still proved)."""
+    results, forbidden, witness = {}, set(), {}
+    it = 0
+    while True:
+        it += 1
+        cells, unc = generate_cells(sorted(forbidden), seed)
+        todo = [c for c in cells if cell_key(c) not in results]
+
+        def _e(c):
+            return cell_key(c), evaluate_cell(binary, c, root, timeout, attribute)
+
+        for k, res in _pmap(_e, todo, jobs):
+            results[k] = res
+        new = 0
+        for c in cells:
+            val, run, cls, rows, note = results[cell_key(c)]
+            if not _forbids(cls, rows):
+                continue
+            # Each explaining row is an independent, sufficient cause (one
+            # refusal message each), so each forbids its OWN minimal tuple.
+            for row in rows:
+                tup = forbidden_tuple(c, merged_namelist(c), [row])
+                if tup not in forbidden:
+                    forbidden.add(tup)
+                    witness[tup] = c
+                    new += 1
+        _log("  iteration {}: {} cells, {} newly evaluated, {} forbidden tuples (+{})".format(
+            it, len(cells), len(todo), len(forbidden), new))
+        if not new or it >= max_iter:
+            break
+    return cells, results, sorted(forbidden), it, unc, [witness[t] for t in sorted(witness)]
+
+
+def make_record(cid, cell, val, run, cls, rows, note, backend, role):
+    nml = merged_namelist(cell)
+    checks = {c: {"status": "not_run"} for c in CHECKS}
+    checks["validate"] = {"status": val["status"], "stage": val["stage"],
+                          "messages": val["messages"][:6], "wall_s": val["wall_s"]}
+    matching = []
+    if run is not None:
+        checks["run"] = {"status": run["outcome"] if run["outcome"] in ("CRASH", "NONFINITE")
+                         else "PASS", "detail": run["detail"], "steps": run["steps"],
+                         "wall_s": run["wall_s"]}
+        checks["run"]["metrics"] = run["metrics"]
+        if "attribution" in run:
+            checks["run"]["attribution"] = run["attribution"]
+        if run["outcome"] in ("PASS", "BUDGET"):
+            checks["budget"] = {"status": run["outcome"], "detail": run["detail"]}
+        feats = compat_expect.features(nml)
+        matching = [r.rid for r in compat_expect.ROWS if r.kind == "runtime" and r.matches(feats)]
+    return {"id": cid, "hash": cell_hash(cell), "role": role, "axes": dict(cell),
+            "backend": backend, "ranks": "1", "class": cls, "rows": [r.rid for r in rows],
+            "note": note, "matching_rows": matching, "checks": checks}
+
+
+def cmd_run(args):
+    binary = find_binary(args.build_dir, args.binary)
+    root = os.path.abspath(args.scratch_root)
+    if os.path.isdir(root):
+        shutil.rmtree(root)
+    os.makedirs(root, exist_ok=True)
+    t0 = time.time()
+    _log("compat matrix: binary {}\n  axes: {}".format(binary, ", ".join(
+        "{}({})".format(a, len(VALUE_NAMES[a])) for a in AXIS_NAMES)))
+    cells, results, forbidden, iters, unc, witnesses = build_matrix(
+        binary, root, args.jobs, args.seed, timeout=args.timeout,
+        attribute=not args.no_attribution)
+    wall = time.time() - t0
+    pinned = [witness_cell(r) for r in compat_expect.ROWS if r.scope == "any"]
+    todo = [c for c in pinned if cell_key(c) not in results]
+    for k, res in _pmap(lambda c: (cell_key(c), evaluate_cell(
+            binary, c, root, args.timeout, not args.no_attribution)), todo, args.jobs):
+        results[k] = res
+    wall = time.time() - t0
+    records, seen = [], set()
+    for role, group, prefix in (("cover", cells, "c"), ("witness", witnesses, "w"),
+                                ("pinned", pinned, "p")):
+        for k, c in enumerate(group):
+            if cell_key(c) in seen:
+                continue
+            seen.add(cell_key(c))
+            val, run, cls, rows, note = results[cell_key(c)]
+            records.append(make_record("{}{:03d}".format(prefix, k), c, val, run, cls, rows,
+                                       note, args.backend, role))
+    summary = summarise(records, forbidden, unc, iters, results, wall)
+    summary["row_xpass"] = row_xpasses(records)
+    report = {"schema": 1, "seed": args.seed, "binary": binary, "backend": args.backend,
+              "axes": {a: VALUE_NAMES[a] for a in AXIS_NAMES},
+              "forbidden": [list(map(list, t)) for t in forbidden],
+              "uncoverable": [list(map(list, u)) for u in unc],
+              "summary": summary, "cells": records}
+    if args.out:
+        os.makedirs(os.path.dirname(os.path.abspath(args.out)) or ".", exist_ok=True)
+        with open(args.out, "w") as fh:
+            json.dump(report, fh, indent=1, sort_keys=True)
+    print_report(report, args.previous)
+    bad = (summary["counts"].get("FAIL", 0) + summary["counts"].get("XPASS", 0)
+           + len(summary["row_xpass"]))
+    if not args.keep_scratch and bad == 0:
+        shutil.rmtree(root, ignore_errors=True)
+    return 1 if bad else 0
+
+
+def summarise(records, forbidden, unc, iters, results, wall):
+    counts = {}
+    for r in records:
+        counts[r["class"]] = counts.get(r["class"], 0) + 1
+    v_sum = sum(res[0]["wall_s"] for res in results.values())
+    r_sum = sum(res[1]["wall_s"] for res in results.values() if res[1] is not None)
+    return {"counts": counts, "cells": len(records),
+            "cover_cells": sum(1 for r in records if r["role"] == "cover"),
+            "witness_cells": sum(1 for r in records if r["role"] == "witness"),
+            "run_cells": sum(1 for r in records if r["checks"]["run"]["status"] != "not_run"),
+            "evaluated_cells": len(results),
+            "forbidden_tuples": len(forbidden), "uncoverable_pairs": len(unc),
+            "iterations": iters, "wall_total_s": round(wall, 1),
+            "cpu_validate_s_serial_sum": round(v_sum, 1),
+            "cpu_run_s_serial_sum": round(r_sum, 1)}
+
+
+def print_report(report, previous=None):
+    s = report["summary"]
+    print("\n=== compat matrix: {} covering cells + {} witnesses ({} run); {} forbidden "
+          "tuples after {} iterations ({} cells evaluated)".format(
+              s["cover_cells"], s["witness_cells"], s["run_cells"], s["forbidden_tuples"],
+              s["iterations"], s["evaluated_cells"]))
+    print("    wall {} s; serial CPU sums: validate {} s, run {} s".format(
+        s["wall_total_s"], s["cpu_validate_s_serial_sum"], s["cpu_run_s_serial_sum"]))
+    for k in ("PASS", "REFUSED_PHYSICAL", "REFUSED_GAP", "XFAIL", "XPASS", "FAIL"):
+        print("    {:17s} {}".format(k, s["counts"].get(k, 0)))
+    for rid, cls in s.get("row_xpass", []):
+        print("    ROW XPASS         {}: its pinned witness is {}, not the row's XFAIL -- "
+              "delete or re-pin the row".format(rid, cls))
+    if s["uncoverable_pairs"]:
+        print("    {} pair(s) are reachable only through refused / XFAIL cells "
+              "(listed in the JSON report)".format(s["uncoverable_pairs"]))
+    for cls in ("FAIL", "XPASS"):
+        rows = [r for r in report["cells"] if r["class"] == cls]
+        if rows:
+            print("\n--- {} ---".format(cls))
+        for r in rows:
+            print("  {} {}".format(r["id"], " ".join("{}={}".format(a, r["axes"][a])
+                                                    for a in AXIS_NAMES)))
+            print("      {}".format(r["note"]))
+            att = r["checks"]["run"].get("attribution")
+            if att:
+                print("      chksum: {}".format(att))
+    used = {}
+    for r in report["cells"]:
+        for rid in r["rows"]:
+            used[rid] = used.get(rid, 0) + 1
+    print("\n--- KNOWN_GAP rows (owner) ---")
+    for row in compat_expect.ROWS:
+        if row.cls != "KNOWN_GAP":
+            continue
+        print("  {:28s} {:3d} cell(s)  owner {:12s} {}".format(
+            row.rid, used.get(row.rid, 0), row.owner, row.link))
+    unused = [row.rid for row in compat_expect.ROWS if row.rid not in used]
+    if unused:
+        print("  (no cell exercised: {})".format(", ".join(unused)))
+    if previous and os.path.isfile(previous):
+        with open(previous) as fh:
+            prev = {r["hash"]: r["class"] for r in json.load(fh)["cells"]}
+        diff = [(r["id"], prev[r["hash"]], r["class"]) for r in report["cells"]
+                if r["hash"] in prev and prev[r["hash"]] != r["class"]]
+        print("\n--- diff vs {} ---".format(previous))
+        for d in diff:
+            print("  {}: {} -> {}".format(*d))
+        if not diff:
+            print("  no class changes on common cells")
+
+
+def cmd_list(args):
+    cells, unc = generate_cells((), args.seed)
+    print("{} cells over {} axes (no forbidden tuples; `run` regenerates around the "
+          "refusals it finds)".format(len(cells), len(AXIS_NAMES)))
+    for a in AXIS_NAMES:
+        print("  {:11s} {:2d}  {}".format(a, len(VALUE_NAMES[a]), ", ".join(VALUE_NAMES[a])))
+    if args.verbose:
+        for k, c in enumerate(cells):
+            print("c{:03d} {}".format(k, " ".join(c[a] for a in AXIS_NAMES)))
+    return 0
+
+
 def cmd_emit(args):
     root = os.path.abspath(args.out)
-    cell = dict(BASE_CELL)
+    if args.cell == "base":
+        cell = dict(BASE_CELL)
+    else:
+        cells, _ = generate_cells((), args.seed)
+        cell = cells[int(args.cell.lstrip("c"))]
     for kv in args.set or []:
         a, v = kv.split("=", 1)
         if v not in VALUE_NAMES[a]:
             raise SystemExit("{}: no value {} (have {})".format(a, v, VALUE_NAMES[a]))
         cell[a] = v
-    path = prepare_cell_dir(cell, "cell", root)
+    path = prepare_cell_dir(cell, args.cell, root)
     print(path)
     return 0
 
@@ -810,12 +1360,12 @@ def cmd_domain(args):
         if val["status"] == "accepted":
             run = run_cell(binary, c, cid, os.path.join(root, "run"), timeout=args.timeout,
                            attribute=not args.no_attribution)
-        note = " | ".join(m[:200] for m in val["messages"][:2])
-        return cid, c, val, run, (run["outcome"] if run else val["status"].upper()), note
+        cls, rows, note = classify(c, merged_namelist(c), val, run)
+        return cid, c, val, run, cls, note
 
     t0 = time.time()
     res = _pmap(_go, cases, args.jobs)
-    print("{:48s} {:9s} {:16s} {}".format("case", "validate", "outcome", "detail"))
+    print("{:48s} {:9s} {:16s} {}".format("case", "validate", "class", "detail"))
     for cid, c, val, run, cls, note in res:
         print("{:48s} {:9s} {:16s} {}".format(cid, val["status"], cls,
                                               (run["outcome"] + ": " + run["detail"]
@@ -837,7 +1387,7 @@ def cmd_domain(args):
 
 
 # ===========================================================================
-# 5. Who tests the test
+# 7. Who tests the test
 # ===========================================================================
 def _check(cond, what, fails):
     print("  {} {}".format("ok  " if cond else "FAIL", what))
@@ -848,16 +1398,48 @@ def _check(cond, what, fails):
 def cmd_self_test(args):
     fails = []
     print("compat_matrix self-test (no model)")
-    # Every axis value merges onto the base cell without a knob conflict.
-    conflicts = []
-    for a in AXIS_NAMES:
-        for v in VALUE_NAMES[a]:
-            try:
-                merged_namelist(dict(BASE_CELL, **{a: v}))
-            except BuilderConflict as exc:
-                conflicts.append(str(exc))
-    _check(not conflicts, "every axis value merges onto the base cell {}".format(conflicts[:2]),
+    # IPOG covers every pair, deterministically, around forbidden tuples.
+    sizes = [5, 4, 3, 3, 2, 2]
+    rows, unc = ipog(sizes, [], 7)
+    cov = {(a, t[a], b, t[b]) for t in rows for a, b in itertools.combinations(range(6), 2)}
+    allp = {(a, va, b, vb) for a, b in itertools.combinations(range(6), 2)
+            for va in range(sizes[a]) for vb in range(sizes[b])}
+    _check(cov == allp and not unc, "ipog covers all {} pairs in {} rows".format(len(allp), len(rows)),
            fails)
+    _check(rows == ipog(sizes, [], 7)[0], "ipog is deterministic for a seed", fails)
+    forb = [((0, 1), (1, 2)), ((2, 0),)]
+    rows, unc = ipog(sizes, forb, 7)
+    _check(not any(_violates(t, forb) for t in rows), "ipog never emits a forbidden tuple", fails)
+    cov = {(a, t[a], b, t[b]) for t in rows for a, b in itertools.combinations(range(6), 2)}
+    want = {p for p in allp if not (p[0] == 0 and p[1] == 1 and p[2] == 1 and p[3] == 2)
+            and not (p[0] == 2 and p[1] == 0) and not (p[2] == 2 and p[3] == 0)}
+    _check(want <= cov and not unc, "ipog covers every pair a forbidden tuple leaves legal", fails)
+    # The real axes build without conflicts, and the base cell is in range.
+    cells, _ = generate_cells((), SEED)
+    conflicts = []
+    for c in cells:
+        try:
+            merged_namelist(c)
+        except BuilderConflict as exc:
+            conflicts.append(str(exc))
+    _check(not conflicts, "{} generated cells merge without knob conflicts {}".format(
+        len(cells), conflicts[:2]), fails)
+    _check(cells == generate_cells((), SEED)[0], "the real cell list is seed-stable", fails)
+    # An expected refusal forbids exactly the tuple that causes it.
+    rows = {r.rid: r for r in compat_expect.ROWS}
+    probes = [
+        (dict(BASE_CELL, eddy="gm"), "closed_faces_gm",
+         (("eddy", "gm"), ("vcoord", "z_fixed_cf"))),
+        (dict(BASE_CELL, eddy="mle"), "mle_needs_epbl",       # `unless` joins the tuple
+         (("eddy", "mle"), ("vmix_bl", "kpp"))),
+        (dict(BASE_CELL, pv_adv="weno5"), "pv_weno_needs_sadourny",
+         (("coriolis", "sadourny_energy"), ("pv_adv", "weno5"))),
+        (dict(BASE_CELL, eddy="gm", lateral="meke_backscatter"), "closed_faces_gm",
+         (("eddy", "gm"), ("lateral", "meke_backscatter"), ("vcoord", "z_fixed_cf"))),
+    ]
+    for cell, rid, want in probes:
+        got = forbidden_tuple(cell, merged_namelist(cell), [rows[rid]])
+        _check(got == want, "forbidden tuple for {} -> {}".format(rid, got), fails)
     # The NetCDF writer emits a well-formed CDF-1 header.
     d = os.path.join(os.path.abspath(args.scratch_root), "selftest")
     os.makedirs(d, exist_ok=True)
@@ -880,6 +1462,16 @@ def cmd_self_test(args):
             if (0.77 * (s1 - s0) - 0.2 * (t1 - t0)) <= 0.0:
                 unstable += 1
     _check(unstable == 0, "the tilted-front IC is statically stable (linear EOS)", fails)
+    # Classification: an expected refusal, an unexplained one, an XPASS.
+    for name, fn in compat_expect.SELF_TESTS:
+        ok, what = fn(sys.modules[__name__])
+        _check(ok, "compat_expect: " + what, fails)
+    rid_dupes = [r.rid for r in compat_expect.ROWS
+                 if sum(1 for x in compat_expect.ROWS if x.rid == r.rid) > 1]
+    _check(not rid_dupes, "row ids are unique {}".format(sorted(set(rid_dupes))), fails)
+    bad_feats = [(r.rid, f) for r in compat_expect.ROWS for f in r.when + r.unless
+                 if f not in compat_expect.FEATURES]
+    _check(not bad_feats, "every row names known features {}".format(bad_feats[:3]), fails)
     shutil.rmtree(d, ignore_errors=True)
     print("{} failure(s)".format(len(fails)))
     return 1 if fails else 0
@@ -952,15 +1544,29 @@ def main(argv=None):
         p.add_argument("--scratch-root", default=os.path.join(DEFAULT_SCRATCH, scratch))
         p.add_argument("--jobs", type=int, default=4)
         p.add_argument("--timeout", type=int, default=300)
+        p.add_argument("--seed", type=int, default=SEED)
         p.add_argument("--no-attribution", action="store_true",
                        help="skip the chksum re-run of crashing cells")
 
+    p = sub.add_parser("run", help="the full pairwise matrix, checks 1-3")
+    common(p, "run")
+    p.add_argument("--out", default=None, help="JSON report path")
+    p.add_argument("--previous", default=None, help="last report, for a class diff")
+    p.add_argument("--backend", default="cpu-gfortran")
+    p.add_argument("--keep-scratch", action="store_true")
+    p.set_defaults(fn=cmd_run)
     p = sub.add_parser("domain", help="every vcoord x geometry x grid on the base closures")
     common(p, "domain")
     p.set_defaults(fn=cmd_domain)
-    p = sub.add_parser("emit", help="write the base cell's namelist + inputs (--set overrides)")
+    p = sub.add_parser("list", help="the axes and the unconstrained cell list")
+    p.add_argument("--seed", type=int, default=SEED)
+    p.add_argument("-v", "--verbose", action="store_true")
+    p.set_defaults(fn=cmd_list)
+    p = sub.add_parser("emit", help="write one cell's namelist + inputs")
+    p.add_argument("--cell", default="base", help="'base' or cNNN of the unconstrained list")
     p.add_argument("--set", action="append", help="axis=value override (repeatable)")
     p.add_argument("--out", required=True)
+    p.add_argument("--seed", type=int, default=SEED)
     p.set_defaults(fn=cmd_emit)
     p = sub.add_parser("self-test", help="no model: generator, builder, classifier")
     p.add_argument("--scratch-root", default=DEFAULT_SCRATCH)
