@@ -300,13 +300,20 @@ contains
          ! z-level T/S IC) on files the test writes, with the global-1-degree
          ! physics set: z_fixed + closed partial-step faces, fv_mom6 PGF,
          ! energy Coriolis, Wright EOS, periodic in x — plus Redi with a
-         ! real diffusivity on the closed-face open-window path.
+         ! real diffusivity on the closed-face open-window path, and
+         ! Fox-Kemper MLE (EPBL supplies its MLD, so EPBL replaces KPP
+         ! here) on the closed-face open-column path.  The z_fixed levels
+         ! are tanh-stretched (100 m at the surface) so the mixed layer
+         ! spans several of the four layers: with uniform 750 m layers the
+         ! ML is the top layer alone, mu(0) - mu(-1) = 0, and MLE moves
+         ! nothing.
          nml = common// &
                "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3 /"//NL// &
                "&ocean_grid_nml grid_config = 'supergrid', supergrid_file = '"//SG_FILE// &
                "', coriolis_scheme = 'planetary', rad_earth = 6.371e6 /"//NL// &
                "&physics_nml wind_stress_x = 0.08, wind_stress_y = 0.0 /"//NL// &
                "&vcoord_nml vcoord_type = 'z_fixed', zfixed_closed_faces = .true., "// &
+               "z_fixed_profile = 'tanh', z_fixed_dz_top = 100.0, "// &
                "check_vanished_content = .true. /"//NL// &
                "&ocean_topo_nml topo_config = 'file', max_depth = 3000.0 /"//NL// &
                "&output_nml bathymetry_file = '"//BATHY_FILE//"', output_to_file = .false. /"//NL// &
@@ -316,6 +323,9 @@ contains
                "&ocean_eos_nml eos = 'wright' /"//NL// &
                "&ocean_bdrag_nml form = 'quadratic', cd = 3.0e-3, hbbl = 10.0, bg_vel = 0.1 /"//NL// &
                "&ocean_redi_nml enable = .true., khtr = 600.0 /"//NL// &
+               "&ocean_vmix_nml use_kpp = .false. /"//NL// &
+               "&ocean_epbl_nml enable = .true. /"//NL// &
+               "&ocean_foxkemper_nml enable = .true., ce = 0.08 /"//NL// &
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'wall' /"//NL
       case default
