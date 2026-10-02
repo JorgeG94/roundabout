@@ -138,6 +138,12 @@ ocean_state_exit_data            map back from the GPU (once)
 diag close / finalize
 ```
 
+`rdb --validate-only <nml>` stops after `configure_ocean_*` (`driver_validate`:
+`validate_config` + the whole `engine_setup`, no diag stream opened, no
+`enter_data`, no step) and exits 0 if the configuration is accepted, 3 if it is
+refused — the entry point the compatibility matrix
+(`tests/regression/compat_matrix.py`) classifies refusals with.
+
 ## Notes on the layout
 
 The mental model:

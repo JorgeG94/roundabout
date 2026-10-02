@@ -57,6 +57,7 @@ module rdb_driver
    private
 
    public :: driver_run
+   public :: driver_validate
    public :: configure_log_level
    public :: diag_vgrid_from_name
 
@@ -69,6 +70,34 @@ contains
 
       call driver_run_ocean(cfg)
    end subroutine driver_run
+
+   subroutine driver_validate(cfg, ierr)
+      !! `rdb --validate-only`: everything `driver_run` does before the
+      !! first step that can REFUSE a configuration — the full
+      !! `engine_setup` sequence, so every fail-loud configure-time check
+      !! in the `configure_ocean_*` stages (`rdb_ocean_setup.F90`), the
+      !! stability audit and the IC seed — and nothing after it: no device
+      !! mapping, no stepping, no output files (the diag stream is not
+      !! opened; see `engine_setup`'s `validate_only`).
+      !!
+      !! `validate_config` is the caller's job (it runs on the bare config,
+      !! before the process grid exists).  `ierr` is `OCEAN_STATUS_OK` when
+      !! the configuration is accepted, else the `rdb_ocean_status` code of
+      !! the refusing stage, whose reason has already been logged.  A stage
+      !! that has no `ierr` path still `error stop`s, which is a refusal
+      !! with a non-zero exit too.
+      type(config_t), intent(inout) :: cfg
+      integer, intent(out) :: ierr
+
+      type(ocean_engine_t) :: engine
+
+      call engine_setup(engine, cfg, ierr, compute_rank=comm_env_compute_rank(), &
+                        compute_size=comm_env_compute_size(), mpi_rank=comm_env_rank(), &
+                        restart_file=cfg%restart_file, validate_only=.true.)
+      ! A refused setup leaves a partially-built engine; the process is
+      ! about to exit, so only an accepted one is torn down.
+      if (ierr == OCEAN_STATUS_OK) call engine_teardown(engine)
+   end subroutine driver_validate
 
    subroutine report_throughput(global_cells, n_steps, elapsed, compute_size, &
                                 compute_rank, total_mcells)
