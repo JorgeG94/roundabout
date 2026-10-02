@@ -2666,17 +2666,12 @@ contains
       ! open + live-both-sides run), so the neutral-surface sweep, the PPM
       ! reconstruction and the flux scatter never touch a closed face-layer
       ! or a filler (`test_ocean_redi_zfixed`).
-      if (cfg%ocean%foxkemper%enable) then
-         call fail("&vcoord_nml zfixed_closed_faces does not yet compose "// &
-                   "with MLE: its restratification transport is formed from "// &
-                   "a 2-D `wet_u`/`wet_v` gate and folded into "// &
-                   "mass_flux_*_layer AFTER continuity has applied the "// &
-                   "per-layer mask, so it would leak through a closed face.  "// &
-                   "GM (open-column streamfunction) and Redi (open-window "// &
-                   "pairing) are ported; MLE is the follow-up slice", &
-                   ierr, OCEAN_STATUS_ERR_SETUP)
-         return
-      end if
+      ! Fox-Kemper MLE composes: the ML walk skips fillers and each face
+      ! builds its overturning on its OPEN column (masked face thickness,
+      ! `H_vel` clamped to it), so `uhml`/`vhml` — folded into
+      ! mass_flux_*_layer after the per-layer mask — are zero on every
+      ! closed face-layer and filler and still sum to zero per face
+      ! (`test_ocean_mle_zfixed`).
       if (cfg%ocean%hvisc%nu_4 > 0.0_wp .or. cfg%ocean%hvisc%stress_tensor) then
          call fail("&vcoord_nml zfixed_closed_faces does not yet compose "// &
                    "with the BIHARMONIC viscosity (&ocean_hvisc_nml nu_4) or "// &

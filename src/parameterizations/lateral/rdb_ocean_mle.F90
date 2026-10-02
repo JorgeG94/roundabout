@@ -17,12 +17,51 @@ module rdb_ocean_mle
    !! momentum-mixrate (production-recommended; suppresses restratification
    !! under vigorous mixing).  Default off ⇒ bit-identical.
    !!
+   !! ### Partial-step z-level faces (`&vcoord_nml zfixed_closed_faces`)
+   !!
+   !! Under `z_fixed` a face column is not the whole water column: a layer
+   !! that is an inert FILLER on either side (inside the bed or the ice
+   !! draft) is a WALL for that layer at that face (`metrics%open_u/open_v
+   !! == 0`).  Continuity applies that mask to the resolved flux BEFORE
+   !! `mle_fold_x/y` adds `uhml`/`vhml`, so the overturning must be built
+   !! on the OPEN part of each face column here.  With the knob on:
+   !!
+   !!   * the ML walk (b_bar, htot) at cell centres SKIPS every non-live
+   !!     layer (`rdb_vl_is_live`), so no ML property is read from a
+   !!     filler and the walk starts at the first live layer from the top
+   !!     (the free surface, or the ice base under a draft);
+   !!   * each face marks its open layers
+   !!         ok(k) = open(k) .and. live(h_W(k)) .and. live(h_E(k))
+   !!     (the set GM's open column and Redi's open window use) and walks
+   !!     the FK sigma coordinate over the OPEN face thickness only
+   !!     (`hf(k) = 0` off the open set ⇒ sigma is carried unchanged across
+   !!     it ⇒ `a(k) = mu(s) - mu(s) = 0`): sigma = 0 at the TOP of the open
+   !!     column, so a filler above it (ice draft) carries nothing;
+   !!   * `H_vel` is clamped to the open-column thickness `Sum_k hf(k)`.
+   !!     The sigma walk must reach -1 inside the open column for
+   !!     `Sum_k a(k) = mu(0) - mu(-1) = 0`; with the ML deeper than a
+   !!     face's open column (a deep column abutting a shallow step) the
+   !!     unclamped walk stops above -1 and the face transport no longer
+   !!     closes (prototype `python_prototypes/mle_zfixed`: Sum a = -0.93).
+   !!     The clamped `H_vel` also sets the `H_vel^2` amplitude and the
+   !!     timescale's `H_vel`: the cell a face can carry is at most as deep
+   !!     as its open column;
+   !!   * `uhml`/`vhml` are written EXACTLY zero off the open set.
+   !!
+   !! Hence the FK transport is zero on every closed face-layer and every
+   !! filler, its face streamfunction vanishes at the top of the open
+   !! column and below the ML (at the latest at the open column's bottom),
+   !! and `Sum_k uhml = 0` at every face.  The open face thickness is
+   !! staged in `uhml`/`vhml` themselves by a host-gated pre-pass, so the
+   !! transport kernels never name the `(1,1,1)` mask placeholders with the
+   !! knob off.  Knob OFF ⇒ byte-identical.
+   !!
    !! References: Fox-Kemper, Ferrari & Hallberg (2008); Fox-Kemper et al.
    !! (2011).
 #ifdef LFORTRAN_PASSING
-   use rdb_constants, only: wp, GRAVITY
+   use rdb_constants, only: wp, GRAVITY, H_VANISHED
 #else
-   use rdb_constants, only: NZ_STACK_MAX, wp, GRAVITY
+   use rdb_constants, only: NZ_STACK_MAX, wp, GRAVITY, H_VANISHED
 #endif
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
@@ -349,8 +388,9 @@ contains
       real(wp) :: ce_l, f_floor_l, rho0_l, g_over_rho0
       real(wp) :: cr_l, mstar_l, nstar_l, minw2_l
       logical :: use_mr_l, use_bodner_l, has_ustar, do_limit, do_filter, n_seam, s_seam, w_seam, e_seam
+      logical :: use_open
       real(wp) :: h_remain, w, htot, rho_int
-      real(wp) :: db, h_vel, f_abs, ustar, ts, uDml, vDml, i4dt, h_av
+      real(wp) :: db, h_vel, f_abs, ustar, ts, uDml, vDml, i4dt, h_av, h_open
       real(wp) :: a_stack(NZ_STACK_MAX), hf_stack(NZ_STACK_MAX)
       real(wp) :: a_fac, b_fac, mld_inst, mld_use
 
@@ -376,6 +416,9 @@ contains
       mstar_l = this%bodner_mstar
       nstar_l = this%bodner_nstar
       minw2_l = this%min_wstar2
+      ! z-level closed faces (module header): open-column ML walk + face
+      ! overturning.  Host scalar; `.false.` ⇒ the legacy arithmetic.
+      use_open = metrics%use_closed_faces
       ! Bodner needs the surface buoyancy flux (epbl%b0); if EPBL didn't
       ! persist it, there is nothing to restratify with -> no-op.
       if (use_bodner_l .and. .not. allocated(epbl%b0)) return
@@ -430,6 +473,9 @@ contains
       ! the MLD base so htot reaches mld exactly.  b = -(g/rho0)*rho_bar.
       ! `mld_use` is the filtered MLD when the decay-time filter is on,
       ! else the instantaneous EPBL MLD (bit-identical legacy path).
+      ! Closed faces (`use_open`): a filler (in the bed or the ice draft)
+      ! is not water — it is skipped, so the walk starts at the first live
+      ! layer from the top and its EOS-reference rho never enters b_bar.
       do concurrent(j=1:ny, i=1:nx) local(k, h_remain, w, htot, rho_int, mld_use)
          if (do_filter) then
             mld_use = this%mld_filtered(i, j)
@@ -441,6 +487,9 @@ contains
          do k = nz, 1, -1
             h_remain = mld_use - htot
             if (h_remain <= 0.0_wp) exit
+            if (use_open) then
+               if (.not. rdb_vl_is_live(ms%h_layer(i, j, k))) cycle
+            end if
             w = min(ms%h_layer(i, j, k), h_remain)   ! partial weight
             htot = htot + w
             rho_int = rho_int + ms%rho_layer(i, j, k)*w
@@ -460,10 +509,40 @@ contains
          this%uhml(1, j, k) = 0.0_wp
          this%uhml(nx + 1, j, k) = 0.0_wp
       end do
+      ! Closed faces: stage the OPEN face thickness in `uhml` (the kernel
+      ! below reads it, then overwrites it with the transport, column by
+      ! column — no cross-iteration dependence).  Inline and host-gated:
+      ! with the knob off this kernel is never launched, so `open_u` (the
+      ! `(1,1,1)` placeholder) is never present-checked over the face range.
+      if (use_open) then
+         do concurrent(k=1:nz, j=1:ny, i=2:nx)
+            if (metrics%open_u(i, j, k) > 0.5_wp .and. &
+                rdb_vl_is_live(ms%h_layer(i - 1, j, k)) .and. &
+                rdb_vl_is_live(ms%h_layer(i, j, k))) then
+               this%uhml(i, j, k) = 0.5_wp*(ms%h_layer(i - 1, j, k) + ms%h_layer(i, j, k))
+            else
+               this%uhml(i, j, k) = 0.0_wp
+            end if
+         end do
+      end if
       do concurrent(j=1:ny, i=2:nx) &
-         local(k, db, h_vel, f_abs, ustar, ts, uDml, h_av, a_stack, hf_stack)
+         local(k, db, h_vel, f_abs, ustar, ts, uDml, h_av, h_open, a_stack, hf_stack)
          db = this%b_ml(i, j) - this%b_ml(i - 1, j)        ! b_E - b_W
          h_vel = 0.5_wp*(this%htot_ml(i - 1, j) + this%htot_ml(i, j))
+         if (use_open) then
+            ! Open face column (module header): the masked thickness, and a
+            ! cell no deeper than the open column so sigma reaches -1.
+            h_open = 0.0_wp
+            do k = 1, nz
+               hf_stack(k) = this%uhml(i, j, k)
+               h_open = h_open + hf_stack(k)
+            end do
+            h_vel = min(h_vel, h_open)
+         else
+            do k = 1, nz
+               hf_stack(k) = 0.5_wp*(ms%h_layer(i - 1, j, k) + ms%h_layer(i, j, k))
+            end do
+         end if
          f_abs = abs(0.5_wp*(epbl%f_centre(i - 1, j) + epbl%f_centre(i, j)))
          ustar = 0.0_wp
          if (has_ustar) ustar = mle_face_ustar_x(ss, rho0_l, i, j)
@@ -480,9 +559,6 @@ contains
          ! transport aspect ratio (FK streamfunction * face width). Omitting
          ! idxCu made uDml ~dxCu too large (the FK over-amplification bug).
          uDml = ts*metrics%dy_cu(i, j)*metrics%idxCu(i, j)*db*h_vel*h_vel
-         do k = 1, nz
-            hf_stack(k) = 0.5_wp*(ms%h_layer(i - 1, j, k) + ms%h_layer(i, j, k))
-         end do
          call mle_layer_weights(hf_stack, nz, h_vel, a_stack)
          ! Per-layer availability cap (MOM6).  Donor is the WEST cell (i-1)
          ! for positive transport a(k)*uDml > 0, the EAST cell (i) for
@@ -503,6 +579,13 @@ contains
          do k = 1, nz
             this%uhml(i, j, k) = a_stack(k)*uDml
          end do
+         if (use_open) then
+            ! Exactly zero off the open set (a(k) = 0 there already; this
+            ! also holds should uDml ever be non-finite).
+            do k = 1, nz
+               if (.not. (hf_stack(k) > 0.0_wp)) this%uhml(i, j, k) = 0.0_wp
+            end do
+         end if
       end do
 
       ! ---- 2+3. v-face transports.  Mirror; wall faces j=1, j=ny+1 = 0.
@@ -510,10 +593,34 @@ contains
          this%vhml(i, 1, k) = 0.0_wp
          this%vhml(i, ny + 1, k) = 0.0_wp
       end do
+      ! Closed faces: stage the open face thickness in `vhml` (as above).
+      if (use_open) then
+         do concurrent(k=1:nz, j=2:ny, i=1:nx)
+            if (metrics%open_v(i, j, k) > 0.5_wp .and. &
+                rdb_vl_is_live(ms%h_layer(i, j - 1, k)) .and. &
+                rdb_vl_is_live(ms%h_layer(i, j, k))) then
+               this%vhml(i, j, k) = 0.5_wp*(ms%h_layer(i, j - 1, k) + ms%h_layer(i, j, k))
+            else
+               this%vhml(i, j, k) = 0.0_wp
+            end if
+         end do
+      end if
       do concurrent(j=2:ny, i=1:nx) &
-         local(k, db, h_vel, f_abs, ustar, ts, vDml, h_av, a_stack, hf_stack)
+         local(k, db, h_vel, f_abs, ustar, ts, vDml, h_av, h_open, a_stack, hf_stack)
          db = this%b_ml(i, j) - this%b_ml(i, j - 1)        ! b_N - b_S
          h_vel = 0.5_wp*(this%htot_ml(i, j - 1) + this%htot_ml(i, j))
+         if (use_open) then
+            h_open = 0.0_wp
+            do k = 1, nz
+               hf_stack(k) = this%vhml(i, j, k)
+               h_open = h_open + hf_stack(k)
+            end do
+            h_vel = min(h_vel, h_open)
+         else
+            do k = 1, nz
+               hf_stack(k) = 0.5_wp*(ms%h_layer(i, j - 1, k) + ms%h_layer(i, j, k))
+            end do
+         end if
          f_abs = abs(0.5_wp*(epbl%f_centre(i, j - 1) + epbl%f_centre(i, j)))
          ustar = 0.0_wp
          if (has_ustar) ustar = mle_face_ustar_y(ss, rho0_l, i, j)
@@ -528,9 +635,6 @@ contains
          ! idyCv = 1/dyCv turns the raw db = b_N - b_S into db/dy; the
          ! dx_cv*idyCv = dxCv/dyCv aspect ratio mirrors the u-face above.
          vDml = ts*metrics%dx_cv(i, j)*metrics%idyCv(i, j)*db*h_vel*h_vel
-         do k = 1, nz
-            hf_stack(k) = 0.5_wp*(ms%h_layer(i, j - 1, k) + ms%h_layer(i, j, k))
-         end do
          call mle_layer_weights(hf_stack, nz, h_vel, a_stack)
          ! Per-layer availability cap.  Donor is the SOUTH cell (i,j-1) for
          ! positive transport, the NORTH cell (i,j) for negative.
@@ -550,6 +654,11 @@ contains
          do k = 1, nz
             this%vhml(i, j, k) = a_stack(k)*vDml
          end do
+         if (use_open) then
+            do k = 1, nz
+               if (.not. (hf_stack(k) > 0.0_wp)) this%vhml(i, j, k) = 0.0_wp
+            end do
+         end if
       end do
 
       ! ---- Physical closed-wall face mask -------
@@ -669,5 +778,7 @@ contains
                + arr_bytes(this%uhml) &
                + arr_bytes(this%vhml)
    end function ocean_mle_bytes
+
+#include "rdb_vanished_layer.inc"
 
 end module rdb_ocean_mle
