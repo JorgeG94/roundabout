@@ -1758,7 +1758,13 @@ contains
       !!      H_VANISHED)` (MUST-HAVE #2: keeps RHO-collapsed layers
       !!      above the remap-drain `H_FLOOR` so the next regrid does
       !!      not zero their tracer mass); debit the single thickest
-      !!      layer once.
+      !!      layer once — or, when that would take it below the floor,
+      !!      every above-floor layer in proportion to its excess.
+      !!   (guard) A column thinner than `nz·h_floor_eff` cannot hold
+      !!      every layer at the floor (land columns hold `nz·H_VANISHED`):
+      !!      it keeps `h_new = h_old` (the remap is the identity on it).
+      !!      Without the guard step 5 wrote a negative thickness or
+      !!      minted mass on every such column (audit finding H3).
       !!
       !! Internal working frame is TOP-DOWN (index 1 = surface, +down),
       !! matching the validated prototype and the `rho_target(0)` =
@@ -1963,7 +1969,7 @@ contains
       real(wp) :: hc(NZ_STACK_MAX), rhoc(NZ_STACK_MAX), rtgt(NZ_STACK_MAX)
       real(wp) :: z_new(NZ_STACK_MAX + 1), h_new(NZ_STACK_MAX)
       real(wp) :: col_extent, donate
-      real(wp) :: total_need, thick_max
+      real(wp) :: total_need, thick_max, excess, frac
       real(wp) :: nominal_z, stretching, h_ref_col
 
       ! One column per (j,i).  NZ_STACK_MAX fixed-size locals; no name
@@ -1983,6 +1989,25 @@ contains
          t_col(k) = t_conc(i, j, ii)
          s_col(k) = s_conc(i, j, ii)
       end do
+
+      ! --- too-thin column: cannot carry the coordinate, keep h_old ---
+      ! A column thinner than `nz*h_floor_eff` (land / dry columns hold
+      ! `nz*H_VANISHED`; a wet/dry or ice-cavity sliver can be any size)
+      ! cannot have every layer at the inflation floor.  Step 5 then either
+      ! minted mass (`ns == 0`: every layer to the floor) or debited the one
+      ! surviving layer below zero (`ns > 0`: a 50 x 1.5e-4 m land column
+      ! collapsed into one layer gave 0.0075 - 49*3e-4 = -0.0072 m).  Leave
+      ! such a column exactly where it is — the same no-motion answer as the
+      ! `nk <= 1` fast path below — so the remap is the identity on it: no
+      ! negative thickness, no created mass, `sum(h)` preserved bit-for-bit.
+      ! Every column the guard catches was mis-handled by step 5, so it is
+      ! inert on every column that step handled correctly.
+      if (col_extent < real(nz, wp)*h_floor_eff) then
+         do k = 1, nz
+            target_h(i, j, k) = remap_h_old(i, j, k)
+         end do
+         return
+      end if
 
       ! --- step 0: pre-compaction (strip h <= h_min, donate) ---
       nk = 0
@@ -2108,7 +2133,29 @@ contains
                idx_thick = kk
             end if
          end do
-         h_new(idx_thick) = h_new(idx_thick) - total_need
+         if (thick_max - total_need >= h_floor_eff) then
+            h_new(idx_thick) = h_new(idx_thick) - total_need
+         else
+            ! The thickest layer alone cannot pay (several comparably thin
+            ! survivors): debit EVERY above-floor layer in proportion to its
+            ! excess over the floor.  `col_extent >= nz*h_floor_eff` (guard
+            ! above) makes the total excess >= total_need, so every layer
+            ! stays >= h_floor_eff and the sum is unchanged to round-off.
+            ! The single-layer debit used to drive the thickest one below
+            ! the floor, or negative.
+            excess = 0.0_wp
+            do kk = 1, nz
+               if (h_new(kk) > h_floor_eff) excess = excess + (h_new(kk) - h_floor_eff)
+            end do
+            if (excess > 0.0_wp) then
+               frac = total_need/excess
+               do kk = 1, nz
+                  if (h_new(kk) > h_floor_eff) then
+                     h_new(kk) = h_new(kk) - frac*(h_new(kk) - h_floor_eff)
+                  end if
+               end do
+            end if
+         end if
       end if
 
       ! --- assignment: FLIP top-down working -> bottom-up state ---
