@@ -98,6 +98,8 @@ module rdb_ocean_engine
                              ocean_halo_bt_group_2d, ocean_halo_face_x, &
                              ocean_halo_bt_group_2d_wide
    use rdb_ocean_halo_state, only: ocean_halo_exchange_ml_state
+   use rdb_ocean_fold_exchange, only: ocean_fold_exchange_init, ocean_fold_exchange_reserve, &
+                                      ocean_fold_exchange_destroy
    use rdb_ocean_periodic, only: ocean_periodic_wrap_state, ocean_periodic_wrap_centre_2d
    use rdb_ocean_fold_apply, only: ocean_fold_wrap_state, ocean_fold_wrap_eta_2d
    use rdb_ocean_boundary_data, only: ocean_boundary_data_constant_t
@@ -898,6 +900,20 @@ contains
                               merge(engine%grid%nghost + cfg%ocean%bt%bt_halo, 0, &
                                     cfg%ocean%bt%bt_halo > 0), ierr=ierr)
       if (setup_failed(ierr)) return
+      ! Distributed tripolar fold (px > 1): routing plan + buffers, built
+      ! from the same decomposition.  Inactive (no plan, no buffers) unless
+      ! this rank folds the north edge of an east-west split, so a no-op on
+      ! every px = 1 run.  Reserve the largest group (the `ml_state` one:
+      ! h, u, v and every tracer, at most ng+1 rows each).
+      call ocean_fold_exchange_init(engine%decomp, engine%grid%nghost, &
+                                    engine%state%bc%north_fold, ierr=ierr)
+      if (setup_failed(ierr)) return
+      block
+         integer :: ntr
+         ntr = 0
+         if (allocated(engine%state%multilayer%tracers)) ntr = size(engine%state%multilayer%tracers)
+         call ocean_fold_exchange_reserve((engine%grid%nghost + 1)*cfg%nz_layers*(3 + ntr))
+      end block
 
       ! Host-side seam ghost fill (D0 init-halo, O2): single-rank
       ! non-periodic ⇒ no-op, periodic ⇒ local wrap.
@@ -1667,7 +1683,7 @@ contains
 
    subroutine engine_teardown(engine)
       !! Close the diag NetCDF stream (if one was opened), release the
-      !! process-global ocean-halo module state, then release host-side
+      !! process-global ocean-halo and fold-exchange module state, then release host-side
       !! allocations. Call after `engine_exit_data`.
       type(ocean_engine_t), intent(inout) :: engine
 
@@ -1675,6 +1691,7 @@ contains
       if (engine%diag_enabled) call close_stream(engine%state%diag)
 #endif
       call ocean_halo_destroy()
+      call ocean_fold_exchange_destroy()
       call engine%geo%destroy()
       call engine%state%destroy()
       engine%is_setup = .false.

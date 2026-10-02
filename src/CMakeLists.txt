@@ -209,7 +209,8 @@ set(COMM_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/comm/rdb_comm_env.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/comm/rdb_halo.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/comm/rdb_ocean_halo_counters.F90
-    ${CMAKE_CURRENT_SOURCE_DIR}/comm/rdb_ocean_halo.F90)
+    ${CMAKE_CURRENT_SOURCE_DIR}/comm/rdb_ocean_halo.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/comm/rdb_ocean_fold_exchange.F90)
 
 if(RDB_ENABLE_MPI)
   message(STATUS "Comm backend: pic-mpi over MPI (multi-rank)")
