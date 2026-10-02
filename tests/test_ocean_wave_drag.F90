@@ -152,12 +152,12 @@ contains
       real(wp), intent(in) :: dt_inner, r_linear, hbbl
       logical, intent(in) :: bt_substep_drag
       if (bt_substep_drag) then
-         call compute_bt_rem(grid, dyn%bt_work, ms, r_linear, hbbl, dt_inner)
+         call compute_bt_rem(grid, dyn%bt_work, ms, metrics, r_linear, hbbl, dt_inner)
       else if (dyn%bt_work%lwd_enable) then
          call reset_bt_rem(grid, dyn%bt_work)
       end if
       if (dyn%bt_work%lwd_enable) then
-         call compute_bt_rem_wave_drag(grid, dyn%bt_work, ms, dt_inner)
+         call compute_bt_rem_wave_drag(grid, dyn%bt_work, ms, metrics, dt_inner)
       end if
       call mask_bt_rem(grid, metrics, dyn%bt_work)
    end subroutine run_wave_drag_dispatch
