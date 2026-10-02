@@ -4,8 +4,10 @@
 !! MPI implementation.  This module always compiles and always talks to
 !! `pic_mpi_lib`; whether that resolves to a real MPI library or to
 !! pic-mpi's serial backend is pic-mpi's build-time choice
-!! (`PIC_ENABLE_MPI`), invisible here.  See `src/comm/README` on the
-!! single-rank contract every collective call site must honour.
+!! (`PIC_ENABLE_MPI`), invisible here.  The single-rank contract every
+!! collective call site must honour (never reach point-to-point or a
+!! collective at one rank: take the local path) is spelled out in the
+!! `rdb_ocean_halo` module header and at each `halo_allreduce_*`.
 module rdb_comm_env
    !! Wraps pic_mpi_lib for MPI init/finalize, rank/size queries,
    !! broadcast, abort, and per-node GPU binding.

@@ -6644,18 +6644,17 @@ contains
                              "but narrower use of the diagnostic")
       end if
       ! ---- Sea-ice: whole-slot envelope (applies to enable=.true.) ----
-      ! The sea-ice slot carries NO cross-rank halo exchange anywhere — not
-      ! in the column thermodynamics, the ITD transport, the EVP dynamics,
-      ! nor the ocean coupler.  It is single-rank by design in v1 (the
-      ! C-grid MPI halo is deferred).  Guard at the `enable` level so the
-      ! fail-loud covers thermo-only configurations too, not just the
-      ! transport/dynamics sub-features guarded below.
+      ! The sea ice runs on the ocean's decomposition: the category state,
+      ! the EVP ice velocity and the blended surface stress are
+      ! halo-exchanged (`engine_step_ice`).  The ice fields are NOT folded
+      ! across a tripolar north seam, so a folded grid stays single-rank.
+      ! (The engine repeats this on the ACTUAL rank count, which an unset
+      ! process grid does not show here.)
       if (cfg%ocean%ice%enable) then
-         if (cfg%px*cfg%py > 1) then
-            call logger%error("&ocean_ice_nml enable=.true. is single-rank in v1 "// &
-                              "(px*py = 1); the sea-ice path carries no cross-rank "// &
-                              "halo exchange — MPI support is deferred to the C-grid "// &
-                              "MPI work")
+         if (cfg%px*cfg%py > 1 .and. trim(cfg%ocean%bc%north) == "tripolar_fold") then
+            call logger%error("&ocean_ice_nml enable=.true. with north='tripolar_fold' "// &
+                              "is single-rank (px*py = 1): the ice fields are not "// &
+                              "folded across the north seam")
             has_error = .true.
          end if
          ! Sea ice is tuned for global, ice-covered basins — not for
@@ -6732,18 +6731,11 @@ contains
       ! machinery in `rdb_ice_evp` mirrors the ocean's own periodic-wrap
       ! contract), so this is a separate (looser on periodicity, otherwise
       ! similar) envelope, not a re-use of the transport block above.
+      ! Multi-rank: the ice velocity is halo-exchanged every subcycle.
       if (cfg%ocean%ice%dynamics) then
          if (.not. cfg%ocean%ice%enable) then
             call logger%error("&ocean_ice_nml dynamics=.true. requires "// &
                               "enable=.true. (the ice slot must be live)")
-            has_error = .true.
-         end if
-         ! Single-rank only in v1: the EVP substep loop's ghost-wrap
-         ! machinery carries no cross-rank halo exchange yet.
-         if (cfg%px*cfg%py > 1) then
-            call logger%error("&ocean_ice_nml dynamics=.true. is single-rank in v1 "// &
-                              "(px*py = 1); the EVP substep halo exchange is deferred "// &
-                              "to the C-grid MPI work")
             has_error = .true.
          end if
          ! v1 envelope: every edge must be WALL or PERIODIC — no OBC/tidal/

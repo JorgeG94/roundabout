@@ -41,6 +41,7 @@ module test_ocean_ice_restart
    use rdb_ocean_surface_flux, only: ocean_surface_flux_t
    use rdb_ice_column, only: ICE_RHO_ICE
    use rdb_ice_evp, only: ice_evp_step, ice_evp_params_t
+   use rdb_ocean_boundary_types, only: ocean_bc_state_t
    use rdb_ice_ocean_coupler, only: ice_ocean_stress_flux, ice_ocean_stress_resume_apply, &
                                     ice_ocean_stress_cleanup
    implicit none
@@ -199,6 +200,7 @@ contains
       type(ocean_surface_flux_t), intent(in) :: sf
       type(ice_evp_params_t), intent(in) :: par
       logical, intent(in) :: mutate_ci
+      type(ocean_bc_state_t) :: wall_bc   ! defaults: walls, physical edges
 
       call ocean_dyn_step_split(grid, state%metrics, state%dyn, state%eos, &
                                 state%coriolis_adv, state%continuity, &
@@ -215,7 +217,7 @@ contains
       ! with dynamics=.false. the blend must never touch stress%tau_x.
       if (state%ice%dynamics) then
          call ice_evp_step(grid, state%metrics, state%coriolis_adv%f_corner, state%ice, &
-                           state%multilayer, DT, par, .false., .false.)
+                           state%multilayer, DT, par, wall_bc)
          call ice_ocean_stress_flux(state%metrics, state%surface_stress, state%ice)
       end if
       if (mutate_ci) call scripted_thermo(state%ice)

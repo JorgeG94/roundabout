@@ -202,8 +202,9 @@ endif()
 #
 # There is no `single/` stub twin any more. Every call site talks to
 # `pic_mpi_lib`, and pic-mpi decides at ITS build time (`PIC_ENABLE_MPI`)
-# whether that is a real MPI library or its serial backend. See `comm/README.md`
-# for the single-rank contract that makes this safe.
+# whether that is a real MPI library or its serial backend. The single-rank
+# contract that makes this safe is in the `rdb_ocean_halo` module header and at
+# each `halo_allreduce_*` (comm/rdb_halo.F90).
 set(COMM_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/comm/rdb_comm_env.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/comm/rdb_halo.F90

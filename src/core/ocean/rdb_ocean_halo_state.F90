@@ -28,11 +28,15 @@ module rdb_ocean_halo_state
    use rdb_ocean_fold, only: fold_north_u_face, fold_north_v_face
    use rdb_ocean_surface_stress, only: ocean_surface_stress_t, &
                                        ocean_surface_stress_set_derived
+   use rdb_ice_state, only: ocean_sea_ice_t
+   use rdb_constants, only: wp
    implicit none
    private
 
    public :: ocean_halo_exchange_ml_state
    public :: ocean_seam_refresh_surface_stress
+   public :: ocean_halo_exchange_ice_state
+   public :: ocean_halo_exchange_ice_fluxes
 
 contains
 
@@ -161,5 +165,100 @@ contains
 
       call ocean_surface_stress_set_derived(grid, ss)
    end subroutine ocean_seam_refresh_surface_stress
+
+   subroutine ocean_halo_exchange_ice_state(ice, device_resident)
+      !! Make the sea-ice CATEGORY state valid in every ghost cell (X1 of
+      !! the sea-ice MPI plan): `part_size`, `m_ice`, `m_snow`,
+      !! `enth_ice`, `sal_ice`, `enth_snow`, one two-pass centre exchange
+      !! each, all categories (and ice layers) in one message per
+      !! direction.
+      !!
+      !! **Why.**  Nothing inside the ice step refreshes these ghosts — the
+      !! column thermodynamics, ITD and (PR 4b) transport compress write
+      !! PHYSICAL cells only — yet three consumers read them one cell into
+      !! the halo: the EVP's category gather (`mis`/`mice`/`ci` over the
+      !! full array, then strength, face mass and corner ratios), and the
+      !! stress coupler's face concentration `a_u = (ci(i-1)+ci(i))/2` at
+      !! the west/south-most owned face.  On one rank with a periodic axis
+      !! the primitives' local wrap closes the seam the same way (the
+      !! pre-existing "D7" stale-ghost note in `rdb_ice_evp`).
+      !!
+      !! **When.**  At the end of every thermo block (the category state
+      !! changes only there) and once at cold-start configure, host-side,
+      !! BEFORE `enter_data` and NEVER on a warm restart (the checkpoint
+      !! carries the writer's ghosts; re-deriving them resumed a different
+      !! state, `8e1931f20`).  Single-rank non-periodic: a no-op.  Requires
+      !! `ocean_halo_init`; the caller skips it otherwise.
+      !!
+      !! The rank-4 `enth_ice`/`sal_ice`/`enth_snow` and the `0:ncat`
+      !! `part_size` are contiguous and go out as one flat `nz` each,
+      !! through an explicit-shape seam (`ice_halo_centre_flat`), never
+      !! the aggregate `ice` (CLAUDE.md: component arrays only).
+      type(ocean_sea_ice_t), intent(inout) :: ice
+         !! Live sea-ice slot (`ice%is_init`); a no-op otherwise.
+      logical, intent(in), optional :: device_resident
+         !! Forwarded to the halo primitives; `.false.` for the host-side
+         !! configure-time call.
+
+      integer :: nxt, nyt
+
+      if (.not. ice%is_init) return
+      nxt = ice%nx_total
+      nyt = ice%ny_total
+
+      call profiler_start("ice_comms_state")
+      call oh_count_suppress_on()
+      call ice_halo_centre_flat(ice%part_size, nxt, nyt, ice%ncat + 1, device_resident)
+      call ice_halo_centre_flat(ice%m_ice, nxt, nyt, ice%ncat, device_resident)
+      call ice_halo_centre_flat(ice%m_snow, nxt, nyt, ice%ncat, device_resident)
+      call ice_halo_centre_flat(ice%enth_ice, nxt, nyt, ice%ncat*ice%nk_ice, device_resident)
+      call ice_halo_centre_flat(ice%sal_ice, nxt, nyt, ice%ncat*ice%nk_ice, device_resident)
+      call ice_halo_centre_flat(ice%enth_snow, nxt, nyt, ice%ncat, device_resident)
+      call oh_count_suppress_off()
+      call profiler_stop("ice_comms_state")
+   end subroutine ocean_halo_exchange_ice_state
+
+   subroutine ocean_halo_exchange_ice_fluxes(ice, device_resident)
+      !! Seam ghosts of the three per-cell ice->ocean flux diagnostics the
+      !! couplers hand to the ocean — `salt_flux_diag`, `heat_flux_diag`,
+      !! `sw_thru_diag` — one two-pass centre exchange each.
+      !!
+      !! **Why.**  The column driver, frazil uptake and snowfall share write
+      !! them on PHYSICAL cells only, but the brine / heat / shortwave
+      !! couplers copy them over the FULL array into `Q_salt` / `Q_heat` /
+      !! `q_sw` (or their components), and the ocean's surface-flux
+      !! application reads a seam ghost before its next exchange.  A stale
+      !! ghost there is the neighbour's flux replaced by this tile's old
+      !! one (measured: the first decomposed run diverged from the serial
+      !! one in the outer step after the first thermo block).  Call after
+      !! the last contributor and before the couplers.  Single-rank
+      !! non-periodic: a no-op; requires `ocean_halo_init`.
+      type(ocean_sea_ice_t), intent(inout) :: ice
+         !! Live sea-ice slot (`ice%is_init`); a no-op otherwise.
+      logical, intent(in), optional :: device_resident
+         !! Forwarded to the halo primitives.
+
+      if (.not. ice%is_init) return
+      call profiler_start("ice_comms_fluxes")
+      call oh_count_suppress_on()
+      call ocean_halo_centre(ice%salt_flux_diag, device_resident)
+      call ocean_halo_centre(ice%heat_flux_diag, device_resident)
+      call ocean_halo_centre(ice%sw_thru_diag, device_resident)
+      call oh_count_suppress_off()
+      call profiler_stop("ice_comms_fluxes")
+   end subroutine ocean_halo_exchange_ice_fluxes
+
+   subroutine ice_halo_centre_flat(fld, nxt, nyt, nz, device_resident)
+      !! Explicit-shape seam: a contiguous ice array of any rank (`0:ncat`
+      !! third bound, rank-4 category x layer) is handed in by sequence
+      !! association and exchanged as one `(nxt, nyt, nz)` centre field.
+      !! The generic `ocean_halo_centre` resolves on the DUMMY's rank, so
+      !! the rank-4 actuals cannot call it directly.
+      integer, intent(in) :: nxt, nyt, nz
+      real(wp), intent(inout) :: fld(nxt, nyt, nz)
+      logical, intent(in), optional :: device_resident
+
+      call ocean_halo_centre(fld, nz, device_resident)
+   end subroutine ice_halo_centre_flat
 
 end module rdb_ocean_halo_state

@@ -47,7 +47,14 @@
 !!   * file_readers — the per-rank windowed readers (a periodic 360-degree
 !!     MOM6 supergrid, a C-order bathymetry file with land, a z-level T/S
 !!     IC), all written by rank 0 first, with the global-1-degree physics
-!!     set (z_fixed + closed faces, fv_mom6, energy Coriolis, Wright).
+!!     set (z_fixed + closed faces, fv_mom6, energy Coriolis, Wright);
+!!   * sea_ice — sea ice on the ocean's decomposition: Winton thermo +
+!!     ITD, EVP dynamics (CFL clip, `project_ci`) and the ice->ocean
+!!     stress blend in a cooled periodic channel, `dt_therm_ratio = 2`;
+!!     the category transport is off (single-rank).  Every ice registry
+!!     field is compared like the ocean's.  `run_one` calls
+!!     `engine_step_ice` between the step and the finalize, as the driver
+!!     does (a no-op for every other case).
 !! All are stratified with a boundary-layer scheme on, so the tiles exchange real
 !! flow and real tracer structure.  26 x 18 cells, nghost = 3: every
 !! factorisation above is uneven somewhere.
@@ -67,7 +74,8 @@ program test_ocean_decomp_bitid_mpi
    use rdb_config, only: config_t, read_config_from_string, validate_config
    use rdb_ocean_status, only: OCEAN_STATUS_OK
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
-                               engine_step, engine_step_finalize, engine_exit_data, &
+                               engine_step, engine_step_ice, engine_step_finalize, &
+                               engine_exit_data, &
                                engine_teardown
    use rdb_ocean_state, only: ocean_state_build_restart_registry
    use rdb_ocean_restart, only: restart_registry_t
@@ -91,7 +99,7 @@ program test_ocean_decomp_bitid_mpi
    integer, parameter :: NG = 3
    integer, parameter :: N_STEPS = 48
    real(wp), parameter :: DT = 900.0_wp
-   integer, parameter :: MAXF = 64
+   integer, parameter :: MAXF = 128
    character(len=*), parameter :: SG_FILE = "bitid_supergrid.nc"
    character(len=*), parameter :: BATHY_FILE = "bitid_bathy.nc"
    character(len=*), parameter :: ZINIT_FILE = "bitid_zinit.nc"
@@ -117,11 +125,11 @@ program test_ocean_decomp_bitid_mpi
    integer :: rank, nprocs, n_fail, total_fail, ic
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(8) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(9) = [character(len=24) :: &
                                                "island_basin", "periodic_channel_zstar", &
                                                "periodic_sponge", &
                                                "open_obc", "spherical", "obc_radiation_sponge", &
-                                               "closures", "file_readers"]
+                                               "closures", "file_readers", "sea_ice"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -311,6 +319,44 @@ contains
                "&ocean_bdrag_nml form = 'quadratic', cd = 3.0e-3, hbbl = 10.0, bg_vel = 0.1 /"//NL// &
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'wall' /"//NL
+      case ("sea_ice")
+         ! Sea ice on the ocean's decomposition (thermo + EVP dynamics +
+         ! the ice->ocean stress blend; category transport off): a cold,
+         ! cooled re-entrant channel over a seamount under an oblique wind,
+         ! partial ice cover, `dt_therm_ratio = 2` so the EVP (every step)
+         ! and thermo (every other step) cadences both run, and the CFL
+         ! clip + `project_ci` on.  `cfl_trunc = 0.01` is deliberately
+         ! tight (bound ~0.1 m/s against a ~0.17 m/s drift) so the final
+         ! clip really fires: the post-clip exchange and the rank-summed
+         ! truncation count are exercised on live values, not zeros.  The periodic edge
+         ! puts the ice across a wrap seam on every factorisation, the
+         ! interior seams across a rank seam.  Its own tracer/thermo
+         ! groups (the common block's 4-20 degC column would melt the ice
+         ! out in a step).
+         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
+               "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
+               "&time_nml t_end = 86400.0, dt_fixed = 900.0 /"//NL// &
+               "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
+               "&tracer_nml initial_temperature = -1.5, initial_salinity = 34.0, "// &
+               "T_init_surface = -1.2, T_init_bottom = -1.8 /"//NL// &
+               "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"' /"//NL// &
+               "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
+               "smag_ah = .true. /"//NL// &
+               "&ocean_diag_nml enabled = .false. /"//NL// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.4e-4, wind_stress_x = 0.1, wind_stress_y = 0.04 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 1000.0, "// &
+               "edge_depth = 800.0, slope_scale = 60000.0 /"//NL// &
+               "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -100.0 /"//NL// &
+               "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL// &
+               "&ocean_ice_nml enable = .true., ncat = 5, nk_ice = 2, air_temp = -20.0, "// &
+               "restore_lambda = 20.0, sw_down = 0.0, dynamics = .true., "// &
+               "evp_sub_steps = 30, cfl_trunc = 0.01, project_ci = .true. /"//NL// &
+               "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.7 /"//NL// &
+               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+               "north = 'wall' /"//NL
       case default
          error stop "test_ocean_decomp_bitid_mpi: unknown case"
       end select
@@ -344,6 +390,10 @@ contains
       ierr = OCEAN_STATUS_OK
       do n = 1, N_STEPS
          call engine_step(engine, DT, t, ierr=ierr)
+         if (ierr /= OCEAN_STATUS_OK) exit
+         ! Driver order: the sea-ice block (a no-op unless `&ocean_ice_nml
+         ! enable`) between the dyn-core advance and the finalize.
+         call engine_step_ice(engine, cfg, DT, t, ierr=ierr)
          if (ierr /= OCEAN_STATUS_OK) exit
          call engine_step_finalize(engine, DT, t, ierr=ierr)
          if (ierr /= OCEAN_STATUS_OK) exit
@@ -750,9 +800,9 @@ contains
       !! the engine auto-factors and which `validate_config`'s px*py fences
       !! cannot see), so the engine-side gate is the one exercised.
       character(len=*), parameter :: NL = new_line("a")
-      character(len=48), parameter :: KNOBS(4) = [character(len=48) :: &
+      character(len=64), parameter :: KNOBS(4) = [character(len=64) :: &
                                                   "&ocean_wetdry_nml enable = .true. /", &
-                                                  "&ocean_ice_nml enable = .true. /", &
+                                                  "&ocean_ice_nml enable = .true., ncat = 5, transport = .true. /", &
                                                   "&ocean_cavity_dyn_nml enable = .true. /", &
                                                   "&ocean_bc_nml east = 'chapman' /"]
       type(ocean_engine_t) :: engine
