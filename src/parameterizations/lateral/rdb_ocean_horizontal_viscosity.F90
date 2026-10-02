@@ -590,29 +590,57 @@ contains
          if (lateral_mix%is_init .and. &
              (lateral_mix%smag_ah_active .or. &
               lateral_mix%closure == LMIX_LEITH_BIHARM)) then
-            call hvisc_compute_biharmonic_face_impl( &
-               u, v, &
-               this%lap_u%data, this%lap_v%data, &
-               this%du_visc%data, this%dv_visc%data, &
-               lateral_mix%nu4_face_x, lateral_mix%nu4_face_y, &
-               this%bound_coef, dt_local, &
-               metrics%idxCu, metrics%idyCu, metrics%idxCv, metrics%idyCv, metrics%wet_q, &
-               metrics%dy_dxT, metrics%dx_dyBu, metrics%iareaCu, &
-               metrics%dx_dyT, metrics%dy_dxBu, metrics%iareaCv, &
-               nx, ny, nz)
+            ! z-level closed faces: written twice, as for the harmonic
+            ! arms above (the `(1,1,1)` placeholder masks must never reach
+            ! the explicit-shape dummies).
+            if (metrics%use_closed_faces) then
+               call hvisc_compute_biharmonic_face_impl( &
+                  u, v, &
+                  this%lap_u%data, this%lap_v%data, &
+                  this%du_visc%data, this%dv_visc%data, &
+                  lateral_mix%nu4_face_x, lateral_mix%nu4_face_y, &
+                  this%bound_coef, dt_local, &
+                  metrics%idxCu, metrics%idyCu, metrics%idxCv, metrics%idyCv, metrics%wet_q, &
+                  metrics%dy_dxT, metrics%dx_dyBu, metrics%iareaCu, &
+                  metrics%dx_dyT, metrics%dy_dxBu, metrics%iareaCv, &
+                  nx, ny, nz, metrics%open_u, metrics%open_v)
+            else
+               call hvisc_compute_biharmonic_face_impl( &
+                  u, v, &
+                  this%lap_u%data, this%lap_v%data, &
+                  this%du_visc%data, this%dv_visc%data, &
+                  lateral_mix%nu4_face_x, lateral_mix%nu4_face_y, &
+                  this%bound_coef, dt_local, &
+                  metrics%idxCu, metrics%idyCu, metrics%idxCv, metrics%idyCv, metrics%wet_q, &
+                  metrics%dy_dxT, metrics%dx_dyBu, metrics%iareaCu, &
+                  metrics%dx_dyT, metrics%dy_dxBu, metrics%iareaCv, &
+                  nx, ny, nz)
+            end if
             return
          end if
       end if
       if (nu_4 > 0.0_wp) then
-         call hvisc_compute_biharmonic_impl( &
-            u, v, &
-            this%lap_u%data, this%lap_v%data, &
-            this%du_visc%data, this%dv_visc%data, &
-            nu_4, this%bound_coef, dt_local, &
-            metrics%idxCu, metrics%idyCu, metrics%idxCv, metrics%idyCv, metrics%wet_q, &
-            metrics%dy_dxT, metrics%dx_dyBu, metrics%iareaCu, &
-            metrics%dx_dyT, metrics%dy_dxBu, metrics%iareaCv, &
-            nx, ny, nz)
+         if (metrics%use_closed_faces) then
+            call hvisc_compute_biharmonic_impl( &
+               u, v, &
+               this%lap_u%data, this%lap_v%data, &
+               this%du_visc%data, this%dv_visc%data, &
+               nu_4, this%bound_coef, dt_local, &
+               metrics%idxCu, metrics%idyCu, metrics%idxCv, metrics%idyCv, metrics%wet_q, &
+               metrics%dy_dxT, metrics%dx_dyBu, metrics%iareaCu, &
+               metrics%dx_dyT, metrics%dy_dxBu, metrics%iareaCv, &
+               nx, ny, nz, metrics%open_u, metrics%open_v)
+         else
+            call hvisc_compute_biharmonic_impl( &
+               u, v, &
+               this%lap_u%data, this%lap_v%data, &
+               this%du_visc%data, this%dv_visc%data, &
+               nu_4, this%bound_coef, dt_local, &
+               metrics%idxCu, metrics%idyCu, metrics%idxCv, metrics%idyCv, metrics%wet_q, &
+               metrics%dy_dxT, metrics%dx_dyBu, metrics%iareaCu, &
+               metrics%dx_dyT, metrics%dy_dxBu, metrics%iareaCv, &
+               nx, ny, nz)
+         end if
       end if
    end subroutine ocean_horizontal_viscosity_compute_tendencies_on
 
@@ -898,7 +926,7 @@ contains
                                                  idxCu, idyCu, idxCv, idyCv, wet_q, &
                                                  dy_dxT, dx_dyBu, iareaCu, &
                                                  dx_dyT, dy_dxBu, iareaCv, &
-                                                 nx, ny, nz)
+                                                 nx, ny, nz, open_u, open_v)
       !! Constant-coefficient biharmonic friction: applies
       !! `-ν₄ · ∇²(∇²u)` to the face velocities via two chained 5-point
       !! Laplacians.  Adds into the existing `du_visc` / `dv_visc`
@@ -941,11 +969,51 @@ contains
          !! BIHARMONIC.  All-wet corner => factor 1 => bit-identical.
       real(wp), intent(in)    :: dy_dxT(nx, ny), dx_dyBu(nx + 1, ny + 1), iareaCu(nx + 1, ny)
       real(wp), intent(in)    :: dx_dyT(nx, ny), dy_dxBu(nx + 1, ny + 1), iareaCv(nx, ny + 1)
+      real(wp), intent(in), optional :: open_u(nx + 1, ny, nz)
+         !! Per-layer 0/1 u-face open mask (`&vcoord_nml
+         !! zfixed_closed_faces`).  ABSENT (the default path) => the loops
+         !! below are textually the ones this routine has always run =>
+         !! bit-identical.  PRESENT => see `hvisc_biharm_lap_closed`: in
+         !! BOTH chained Laplacians every face-to-face difference carries
+         !! `open(a)*open(b)`, so a closed face-layer is a free-slip
+         !! (Neumann/mirror) boundary of the stencil exactly as a land
+         !! corner is under `wet_q`, and receives zero tendency.
+      real(wp), intent(in), optional :: open_v(nx, ny + 1, nz)
+         !! v-face twin.  Present iff `open_u` is.
       integer :: i, j, k
       real(wp) :: l_u, l_v, idt, nu4_u, nu4_v, sa, sb
       idt = 1.0_wp/dt
       sa = 1.0_wp
       sb = 0.0_wp
+
+      if (present(open_u)) then
+         ! z-level closed faces: Pass 1 is the gated Laplacian (closed
+         ! face-layers hold lap = 0 and are never read as a value);
+         ! Pass 2 gates every difference by the NEIGHBOUR's open flag
+         ! and the tendency by the face's OWN.  Same per-face CFL clamp as below.
+         call hvisc_biharm_lap_closed(u_face, v_face, lap_u, lap_v, wet_q, &
+                                      dy_dxT, dx_dyBu, iareaCu, dx_dyT, dy_dxBu, iareaCv, &
+                                      nx, ny, nz, open_u, open_v)
+         do concurrent(k=1:nz, j=2:ny - 1, i=2:nx) local(l_u, nu4_u)
+            l_u = iareaCu(i, j)*( &
+                  (dy_dxT(i, j)*(lap_u(i + 1, j, k) - lap_u(i, j, k))*open_u(i + 1, j, k) - &
+                   dy_dxT(i - 1, j)*(lap_u(i, j, k) - lap_u(i - 1, j, k))*open_u(i - 1, j, k)) + &
+                  (dx_dyBu(i, j + 1)*wet_q(i, j + 1)*(lap_u(i, j + 1, k) - lap_u(i, j, k))*open_u(i, j + 1, k) - &
+                   dx_dyBu(i, j)*wet_q(i, j)*(lap_u(i, j, k) - lap_u(i, j - 1, k))*open_u(i, j - 1, k)))
+            nu4_u = min(nu_4, hvisc_nu4_cfl_bound(idxCu(i, j), idyCu(i, j), bound_coef, idt))
+            du_visc(i, j, k) = du_visc(i, j, k) - nu4_u*l_u*open_u(i, j, k)
+         end do
+         do concurrent(k=1:nz, j=2:ny, i=2:nx - 1) local(l_v, nu4_v)
+            l_v = iareaCv(i, j)*( &
+                  (dx_dyT(i, j)*(lap_v(i, j + 1, k) - lap_v(i, j, k))*open_v(i, j + 1, k) - &
+                   dx_dyT(i, j - 1)*(lap_v(i, j, k) - lap_v(i, j - 1, k))*open_v(i, j - 1, k)) + &
+                  (dy_dxBu(i + 1, j)*wet_q(i + 1, j)*(lap_v(i + 1, j, k) - lap_v(i, j, k))*open_v(i + 1, j, k) - &
+                   dy_dxBu(i, j)*wet_q(i, j)*(lap_v(i, j, k) - lap_v(i - 1, j, k))*open_v(i - 1, j, k)))
+            nu4_v = min(nu_4, hvisc_nu4_cfl_bound(idxCv(i, j), idyCv(i, j), bound_coef, idt))
+            dv_visc(i, j, k) = dv_visc(i, j, k) - nu4_v*l_v*open_v(i, j, k)
+         end do
+         return
+      end if
 
       ! ---- Pass 1: lap_u, lap_v at interior u-faces and v-faces ----
       ! Wall BC on the intermediate Laplacian: MIRROR (Neumann),
@@ -1023,7 +1091,7 @@ contains
                                                       idxCu, idyCu, idxCv, idyCv, wet_q, &
                                                       dy_dxT, dx_dyBu, iareaCu, &
                                                       dx_dyT, dy_dxBu, iareaCv, &
-                                                      nx, ny, nz)
+                                                      nx, ny, nz, open_u, open_v)
       !! Flow-aware biharmonic friction (MOM6 SMAGORINSKY_AH analogue).
       !! Identical to `hvisc_compute_biharmonic_impl` except Pass 2
       !! multiplies the second Laplacian by the per-face viscosity
@@ -1053,11 +1121,53 @@ contains
          !! BIHARMONIC.  All-wet corner => factor 1 => bit-identical.
       real(wp), intent(in)    :: dy_dxT(nx, ny), dx_dyBu(nx + 1, ny + 1), iareaCu(nx + 1, ny)
       real(wp), intent(in)    :: dx_dyT(nx, ny), dy_dxBu(nx + 1, ny + 1), iareaCv(nx, ny + 1)
+      real(wp), intent(in), optional :: open_u(nx + 1, ny, nz)
+         !! Per-layer 0/1 u-face open mask (`&vcoord_nml
+         !! zfixed_closed_faces`).  ABSENT (the default path) => the loops
+         !! below are textually the ones this routine has always run =>
+         !! bit-identical.  PRESENT => see `hvisc_biharm_lap_closed`: in
+         !! BOTH chained Laplacians every face-to-face difference carries
+         !! `open(a)*open(b)`, so a closed face-layer is a free-slip
+         !! (Neumann/mirror) boundary of the stencil exactly as a land
+         !! corner is under `wet_q`, and receives zero tendency.
+      real(wp), intent(in), optional :: open_v(nx, ny + 1, nz)
+         !! v-face twin.  Present iff `open_u` is.
       integer :: i, j, k
       real(wp) :: l_u, l_v, idt, nu4_u, nu4_v, sa, sb
       idt = 1.0_wp/dt
       sa = 1.0_wp
       sb = 0.0_wp
+
+      if (present(open_u)) then
+         ! z-level closed faces: Pass 1 is the gated Laplacian (closed
+         ! face-layers hold lap = 0 and are never read as a value);
+         ! Pass 2 gates every difference by the NEIGHBOUR's open flag
+         ! and the tendency by the face's OWN.  Same per-face CFL clamp as below.
+         call hvisc_biharm_lap_closed(u_face, v_face, lap_u, lap_v, wet_q, &
+                                      dy_dxT, dx_dyBu, iareaCu, dx_dyT, dy_dxBu, iareaCv, &
+                                      nx, ny, nz, open_u, open_v)
+         do concurrent(k=1:nz, j=2:ny - 1, i=2:nx) local(l_u, nu4_u)
+            l_u = iareaCu(i, j)*( &
+                  (dy_dxT(i, j)*(lap_u(i + 1, j, k) - lap_u(i, j, k))*open_u(i + 1, j, k) - &
+                   dy_dxT(i - 1, j)*(lap_u(i, j, k) - lap_u(i - 1, j, k))*open_u(i - 1, j, k)) + &
+                  (dx_dyBu(i, j + 1)*wet_q(i, j + 1)*(lap_u(i, j + 1, k) - lap_u(i, j, k))*open_u(i, j + 1, k) - &
+                   dx_dyBu(i, j)*wet_q(i, j)*(lap_u(i, j, k) - lap_u(i, j - 1, k))*open_u(i, j - 1, k)))
+            nu4_u = min(nu4_face_x(i, j, k), &
+                        hvisc_nu4_cfl_bound(idxCu(i, j), idyCu(i, j), bound_coef, idt))
+            du_visc(i, j, k) = du_visc(i, j, k) - nu4_u*l_u*open_u(i, j, k)
+         end do
+         do concurrent(k=1:nz, j=2:ny, i=2:nx - 1) local(l_v, nu4_v)
+            l_v = iareaCv(i, j)*( &
+                  (dx_dyT(i, j)*(lap_v(i, j + 1, k) - lap_v(i, j, k))*open_v(i, j + 1, k) - &
+                   dx_dyT(i, j - 1)*(lap_v(i, j, k) - lap_v(i, j - 1, k))*open_v(i, j - 1, k)) + &
+                  (dy_dxBu(i + 1, j)*wet_q(i + 1, j)*(lap_v(i + 1, j, k) - lap_v(i, j, k))*open_v(i + 1, j, k) - &
+                   dy_dxBu(i, j)*wet_q(i, j)*(lap_v(i, j, k) - lap_v(i - 1, j, k))*open_v(i - 1, j, k)))
+            nu4_v = min(nu4_face_y(i, j, k), &
+                        hvisc_nu4_cfl_bound(idxCv(i, j), idyCv(i, j), bound_coef, idt))
+            dv_visc(i, j, k) = dv_visc(i, j, k) - nu4_v*l_v*open_v(i, j, k)
+         end do
+         return
+      end if
 
       ! ---- Pass 1: lap_u, lap_v at interior u/v faces (metric FV) ----
       do concurrent(k=1:nz, j=2:ny - 1, i=2:nx) local(l_u)
@@ -1119,6 +1229,91 @@ contains
          dv_visc(i, j, k) = dv_visc(i, j, k) - nu4_v*l_v
       end do
    end subroutine hvisc_compute_biharmonic_face_impl
+
+   pure subroutine hvisc_biharm_lap_closed(u_face, v_face, lap_u, lap_v, wet_q, &
+                                           dy_dxT, dx_dyBu, iareaCu, dx_dyT, dy_dxBu, iareaCv, &
+                                           nx, ny, nz, open_u, open_v)
+      !! Pass 1 of BOTH velocity biharmonics (scalar `nu_4` and the
+      !! flow-aware `nu4_face_*`) under `&vcoord_nml zfixed_closed_faces`:
+      !! the intermediate Laplacian `lap_u`/`lap_v` with a closed
+      !! face-layer treated as a FREE-SLIP wall.
+      !!
+      !! Rule (derived and checked in the `biharm_zfixed` prototype): every
+      !! face-to-face difference `(f_b - f_a)` carries the weight
+      !! `open(a)*open(b)` — the neighbour's flag on the difference, the
+      !! face's own on the result.  This is TEXTUALLY the gating of the
+      !! harmonic closed-face kernels (`hvisc_compute_scalar_impl` /
+      !! `hvisc_compute_face_impl` with `open_u` present), with the
+      !! biharmonic's fixed free-slip corner factor `wet_q`, so this pass
+      !! IS the harmonic closed-face Laplacian; Pass 2 applies the same
+      !! gating to `lap`.  Consequences:
+      !!
+      !! * a closed neighbour contributes NOTHING — the stencil behaves as
+      !!   if the neighbour held the face's own value (Neumann / mirror),
+      !!   the per-layer analogue of the `wet_q` free-slip land corner.
+      !!   Ungated, the zero `mask_layer_velocities` stores there is read
+      !!   as a Dirichlet value: no-slip drag at every staircase step, and
+      !!   a `lap` that reads across the wall;
+      !! * a closed face holds `lap = 0` and its Pass-2 tendency is
+      !!   multiplied by its own flag, so it receives exactly zero;
+      !! * every difference weight is symmetric in (a, b), so the gated
+      !!   Laplacian is `A^-1 L` with `L` symmetric negative semi-
+      !!   definite, and for a constant `nu_4` the biharmonic
+      !!   `-nu_4 A^-1 L A^-1 L` dissipates: `dE/dt = -nu_4 (Lu)^T A^-1 (Lu)
+      !!   <= 0` (A = face areas).
+      !!
+      !! The gate is applied to the NORMAL differences as well as the
+      !! tangential ones, as in the harmonic kernel (a closed face's
+      !! normal velocity is a wall value, not an interior sample).  The
+      !! array-edge mirror rows below are unchanged from the ungated pass.
+      integer, intent(in)    :: nx, ny, nz
+      real(wp), intent(in)    :: u_face(nx + 1, ny, nz), v_face(nx, ny + 1, nz)
+      real(wp), intent(inout) :: lap_u(nx + 1, ny, nz), lap_v(nx, ny + 1, nz)
+      real(wp), intent(in)    :: wet_q(nx + 1, ny + 1)
+         !! Bu-corner wet mask (free-slip corner factor, as in the ungated pass).
+      real(wp), intent(in)    :: dy_dxT(nx, ny), dx_dyBu(nx + 1, ny + 1), iareaCu(nx + 1, ny)
+      real(wp), intent(in)    :: dx_dyT(nx, ny), dy_dxBu(nx + 1, ny + 1), iareaCv(nx, ny + 1)
+      real(wp), intent(in)    :: open_u(nx + 1, ny, nz)
+         !! Per-layer 0/1 u-face open mask (`metrics%open_u`).
+      real(wp), intent(in)    :: open_v(nx, ny + 1, nz)
+         !! Per-layer 0/1 v-face open mask (`metrics%open_v`).
+      integer :: i, j, k
+      real(wp) :: l_u, l_v
+
+      do concurrent(k=1:nz, j=2:ny - 1, i=2:nx) local(l_u)
+         l_u = iareaCu(i, j)*( &
+               (dy_dxT(i, j)*(u_face(i + 1, j, k) - u_face(i, j, k))*open_u(i + 1, j, k) - &
+                dy_dxT(i - 1, j)*(u_face(i, j, k) - u_face(i - 1, j, k))*open_u(i - 1, j, k)) + &
+               (dx_dyBu(i, j + 1)*wet_q(i, j + 1)*(u_face(i, j + 1, k) - u_face(i, j, k))*open_u(i, j + 1, k) - &
+                dx_dyBu(i, j)*wet_q(i, j)*(u_face(i, j, k) - u_face(i, j - 1, k))*open_u(i, j - 1, k)))
+         lap_u(i, j, k) = l_u*open_u(i, j, k)
+      end do
+      do concurrent(k=1:nz, j=1:ny)
+         lap_u(1, j, k) = lap_u(2, j, k)
+         lap_u(nx + 1, j, k) = lap_u(nx, j, k)
+      end do
+      do concurrent(k=1:nz, i=1:nx + 1)
+         lap_u(i, 1, k) = lap_u(i, 2, k)
+         lap_u(i, ny, k) = lap_u(i, ny - 1, k)
+      end do
+
+      do concurrent(k=1:nz, j=2:ny, i=2:nx - 1) local(l_v)
+         l_v = iareaCv(i, j)*( &
+               (dx_dyT(i, j)*(v_face(i, j + 1, k) - v_face(i, j, k))*open_v(i, j + 1, k) - &
+                dx_dyT(i, j - 1)*(v_face(i, j, k) - v_face(i, j - 1, k))*open_v(i, j - 1, k)) + &
+               (dy_dxBu(i + 1, j)*wet_q(i + 1, j)*(v_face(i + 1, j, k) - v_face(i, j, k))*open_v(i + 1, j, k) - &
+                dy_dxBu(i, j)*wet_q(i, j)*(v_face(i, j, k) - v_face(i - 1, j, k))*open_v(i - 1, j, k)))
+         lap_v(i, j, k) = l_v*open_v(i, j, k)
+      end do
+      do concurrent(k=1:nz, i=1:nx)
+         lap_v(i, 1, k) = lap_v(i, 2, k)
+         lap_v(i, ny + 1, k) = lap_v(i, ny, k)
+      end do
+      do concurrent(k=1:nz, j=1:ny + 1)
+         lap_v(1, j, k) = lap_v(2, j, k)
+         lap_v(nx, j, k) = lap_v(nx - 1, j, k)
+      end do
+   end subroutine hvisc_biharm_lap_closed
 
    pure subroutine hvisc_fill_A_scalar(ah_t, ah_q, nu_h, nx, ny, nz)
       !! Fill the T-cell and corner harmonic-viscosity fields with the
