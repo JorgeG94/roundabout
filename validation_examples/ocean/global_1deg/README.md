@@ -223,27 +223,28 @@ map for SSH), a built-in bitmap font, PPM frames, then `ffmpeg` to MP4
 
 ## 4. What the year shows
 
-Measured on one V100 (nvfortran 26.5, `-gpu=cc70,mem:separate`), 2026-09-30,
-on branch `fix/free-slip-visc-sponge-seed` — the velocity-form Laplacian/
-biharmonic is now free-slip at land (it was partly no-slip), and `z_fixed`
-layers are now seeded on their target when zinit sets T/S (they were seeded
-terrain-following first): 365 days, 17 520 steps, 4064 s wall
-(11.1 s per simulated day), 10.4 GB of device memory. The top-10 m speed
+Measured on one V100 (nvfortran 26.5, `-gpu=cc70,mem:separate`), 2026-10-01,
+on branch `fix/biharmonic-zfixed-closed-faces` (213e4e012) — the flow-aware
+Smagorinsky biharmonic now treats `z_fixed` closed face-layers as free-slip
+walls (it used to read the closed layers' zero velocities as open water,
+i.e. a spurious drag at every staircase step): 365 days, 17 520 steps,
+6771 s wall on a GPU shared with other jobs (the previous year took 4064 s
+on an idle card; the change itself adds no measurable cost). The top-10 m speed
 column is measured directly from this run's own diagnostic file (a small
 stdlib NetCDF scan, the same approach as
 `python_prototypes/global_1deg/wind_analysis.py`).
 
 | day | En (m²/s²) | MaxCFL | Mass Error | Salt Error | Heat Error | max top-10 m speed (m/s) and where |
 |---:|---:|---:|---:|---:|---:|---|
-| 1 | 5.762e-04 | 0.048 | -1.80e-14 | -5.2e-16 | -4.2e-16 | 0.58, Cape Hatteras shelf, 30 m cell |
-| 10 | 5.211e-04 | 0.238 | -1.80e-13 | -3.7e-15 | -2.7e-15 | 0.86, Taiwan Strait, 17 m cell |
-| 30 | 5.121e-04 | 0.240 | -5.41e-13 | -1.2e-14 | -8.6e-15 | 0.81, North Carolina shelf, 16 m cell |
-| 60 | 5.171e-04 | 0.225 | -1.08e-12 | -2.4e-14 | -1.9e-14 | 0.72, Taiwan Strait |
-| 90 | 5.174e-04 | 0.221 | -1.62e-12 | -3.6e-14 | -2.8e-14 | 0.66, Taiwan Strait |
-| 180 | 4.680e-04 | 0.148 | -3.25e-12 | -7.1e-14 | -5.8e-14 | 0.68, North Carolina shelf |
-| 240 | 4.442e-04 | 0.113 | -4.33e-12 | -9.5e-14 | -7.6e-14 | 0.70, Bering Strait, 42 m cell |
-| 300 | 4.197e-04 | 0.087 | -5.41e-12 | -1.19e-13 | -9.3e-14 | 0.72, Bering Strait |
-| 365 | 3.946e-04 | 0.066 | -6.58e-12 | -1.44e-13 | -1.12e-13 | 0.73, Bering Strait |
+| 1 | 5.779e-04 | 0.049 | -1.80e-14 | -5.2e-16 | -4.2e-16 | 0.58, Cape Hatteras shelf |
+| 10 | 5.307e-04 | 0.241 | -1.80e-13 | -3.7e-15 | -2.7e-15 | 0.86, Taiwan Strait |
+| 30 | 5.259e-04 | 0.235 | -5.41e-13 | -1.2e-14 | -8.6e-15 | 0.83, North Carolina shelf |
+| 60 | 5.330e-04 | 0.229 | -1.08e-12 | -2.3e-14 | -1.9e-14 | 0.72, Taiwan Strait |
+| 90 | 5.352e-04 | 0.230 | -1.62e-12 | -3.6e-14 | -2.8e-14 | 0.67, Taiwan Strait |
+| 180 | 5.160e-04 | 0.177 | -3.25e-12 | -7.1e-14 | -5.7e-14 | 0.70, North Carolina shelf |
+| 240 | 4.841e-04 | 0.128 | -4.33e-12 | -9.5e-14 | -7.5e-14 | 0.71, Bering Strait |
+| 300 | 4.579e-04 | 0.107 | -5.41e-12 | -1.2e-13 | -9.3e-14 | 0.72, Bering Strait |
+| 365 | 4.329e-04 | 0.091 | -6.58e-12 | -1.4e-13 | -1.1e-13 | 0.73, Bering Strait |
 
 (Speeds are the daily means of the diagnostic file's one top-10 m level;
 the file carries no deeper velocity.)
@@ -253,27 +254,30 @@ the file carries no deeper velocity.)
   none. The 6 m/s `maxvel` clamp keeps no counter, and the 3-D maximum
   speed was not re-measured for this year (the diagnostic file holds only
   the top 10 m; an earlier reference year's 3-D maximum was 4.33 m/s, in
-  the Celebes trench, day 38 — see §5). MaxCFL stays at or below 0.24307
-  all year (day 28).
+  the Celebes trench, day 38 — see §5). MaxCFL stays at or below 0.24728
+  all year (day 9).
 * **Why the curve differs from the previous reference.** The previous
-  reference (main `df34a995d` plus the barotropic gravity fix, 2026-09-28)
-  ran the same physics with a partly no-slip coastal Laplacian/biharmonic
-  and `z_fixed` layers seeded terrain-following before being remapped onto
-  their target. With both fixed, En differs from the previous reference by
-  up to 1.9 % (day 114) and MaxCFL by up to 5.2 %, relative, over the year —
-  the early-spinup shape (En peaking on day 3, MaxCFL on day 28) and the
-  overall magnitude are unchanged; the coastal boundary layers and the
-  initial adjustment transient are where the two runs disagree most.
-* **Energy is bounded.** En peaks at 5.982e-04 m²/s² on day 3, settles to a
-  plateau of 5.0–5.2e-04 through day ~100 (a secondary maximum of 5.211e-04
-  on day 71), and then decays slowly (3.946e-04 at day 365): with no forcing
+  reference (`fix/free-slip-visc-sponge-seed`, 2026-09-30) ran the same
+  physics with the flow-aware Smagorinsky biharmonic reading `z_fixed` closed
+  face-layers as open water: their velocities are held at zero, so every
+  staircase step acted as a no-slip wall for the biharmonic — a spurious
+  drag. With closed faces treated as free-slip walls, the circulation keeps
+  more energy: En is higher by up to 10.7 % and MaxCFL by up to 37 %,
+  relative, over the year (day 365: 4.329e-04 vs 3.946e-04, MaxCFL 0.091 vs
+  0.066). The early spin-up shape (En peaking on day 3) is unchanged; the
+  difference grows through the year, mostly in the slow spin-down.
+* **Energy is bounded.** En peaks at 6.042e-04 m²/s² on day 3, settles to a
+  plateau of 5.2–5.4e-04 through day ~100 (a secondary maximum of 5.388e-04
+  on day 99), and then decays slowly (4.329e-04 at day 365): with no forcing
   the closures spin it down.
 * **Budgets close to round-off, linearly.** The relative residuals grow at
   a constant rate — mass −1.80e-14 per day, salt −4.0e-16, heat −3.1e-16 —
   i.e. round-off accumulating, not a leak; the tracked boundary fluxes
-  (`out`) stay at round-off size in this closed domain (mass at most 11.4 kg
-  of 1.4e21, heat at most 2.5e5 J of 5.0e21).
+  (`out`) stay at round-off size in this closed domain (mass at most 21 kg
+  of 1.4e21, heat at most 3.8e5 J of 5.0e21).
 * **The fastest surface water is in one-cell shallow straits and shelves.**
+  (Details below measured on the previous reference year; this year's table
+  rows put the daily maximum at the same sites within 0.03 m/s.)
   The top-10 m daily mean peaks at 0.94 m/s on day 5 in the Taiwan Strait (a
   17 m cell), just above the 0.92 m/s reached on day 2 on the Yucatán shelf
   (9.5 m); after that the domain maximum, 0.6–0.9 m/s, sits mostly in the
@@ -285,7 +289,7 @@ the file carries no deeper velocity.)
   72–63° W × 70–52° S, peaks at about 0.51 m/s, day 327), and the movie
   shows them spinning up and slowly decaying. The Drake Passage transport
   is not measured: the diagnostic file carries no depth-integrated transport.
-* **The Florida Straits jet is gone.** With uniform 130 m layers (the
+* **The Florida Straits jet is gone.** (Previous reference year.) With uniform 130 m layers (the
   scoping probe) a 9.5 m cell next to 587 m cells in the Straits carried
   6 m/s by day 2 — with bed-only or HBBL drag alike. With the stretched
   profile the same cells are 2–5 m layers like their neighbours: the
