@@ -3547,8 +3547,15 @@ module rdb_config
          !!
          !! Default `.false.` ⇒ the mask arrays stay at their `(1,1,1)`
          !! placeholder, no kernel branch is taken, byte-identical.
-         !! Refused on any coordinate but `z_fixed`, and without a
-         !! resolved `z_fixed_h_ref` (there would be no fillers to close).
+         !! Accepted on `z_fixed` and `zstar_full` — the two GEOMETRIC
+         !! families whose bed-side fillers sit at fixed reference depths
+         !! (under `zstar_full`: every layer below a column's partial cell
+         !! when the column is shallower than the `zstar_h_surf_target`
+         !! fine zone; the mask is built from the `ZSTAR_FULL` target at
+         !! `η = 0`, and the IC is then seeded on that target).  Refused on
+         !! every other coordinate, and without fillers to close
+         !! (`z_fixed` without a resolved `z_fixed_h_ref`; `zstar_full`
+         !! with `zstar_h_surf_target <= 0`).  The name is historical.
       character(len=16) :: z_fixed_profile = "uniform"
          !! Nominal layer-thickness profile of `vcoord_type = "z_fixed"`:
          !! `"uniform"` (default — `max_depth/nz_layers` everywhere,
@@ -8252,8 +8259,9 @@ contains
                              "concentration (debug/validation)"))
       pl => cfg%zfixed_closed_faces
       call g%add(nml_logical("zfixed_closed_faces", pl, &
-                             "z_fixed partial steps: close every face whose layer is "// &
-                             "an inert filler on either side (z-level wall, free-slip)"))
+                             "z_fixed / zstar_full partial steps: close every face whose "// &
+                             "layer is an inert filler on either side (z-level wall, "// &
+                             "free-slip)"))
       ps => cfg%z_fixed_profile
       call g%add(nml_enum("z_fixed_profile", ps, &
                           "z_fixed levels / hycom z* floor nominal layer-thickness "// &
