@@ -7,7 +7,12 @@
 !! thickness-independent: `d(hT_{k=1}) = Q_geo * dt / (rho0 * cp)`.
 !! Under `VCOORD_ZSTAR_FULL` the bed layer can pinch to near-zero, so
 !! the increment lands in the lowest massive layer (first `k` with
-!! `h_layer > h_min`), `k=1` in the common case.
+!! `h_layer > h_min`), `k=1` in the common case.  The scan starts at
+!! `ms%k_bot(i,j)`, the first LIVE layer counting up from the bed: under
+!! `z_fixed` the layers below it are static inert fillers
+!! (`h <= H_VANISHED < h_min`), so the scan already skipped them and the
+!! start index changes no answer — it states the bed-side contract in one
+!! place (`k_bot ≡ 1` off `z_fixed`).
 module rdb_ocean_geothermal
    use rdb_constants, only: wp
    use rdb_grid, only: hgrid_t
@@ -107,11 +112,11 @@ contains
       ! (array-of-DT registry indirection blocks NVHPC device codegen).
       call apply_geothermal_src_impl(ms%tracers(idx_T)%hTr, &
                                      ms%heat_budget_geothermal, &
-                                     ms%wet_mask, ms%h_layer, src_T, nz, &
+                                     ms%wet_mask, ms%h_layer, ms%k_bot, src_T, nz, &
                                      geo%h_min)
    end subroutine ocean_geothermal_apply_tracers
 
-   pure subroutine apply_geothermal_src_impl(hTr, budget, wet_mask, h_layer, src, nz, h_min)
+   pure subroutine apply_geothermal_src_impl(hTr, budget, wet_mask, h_layer, k_bot, src, nz, h_min)
       !! Stamp `src * wet_mask(i,j)` onto the lowest *massive* layer of
       !! a tracer's hTr array (first `k` with `h_layer > h_min`,
       !! scanning `k = 1..nz` from the bed up), mirror into the matching
@@ -125,6 +130,7 @@ contains
       real(wp), intent(inout) :: budget(:, :, :)  ! assumed-shape-ok: tracer registry outer-shim; thermo cadence
       real(wp), intent(in)    :: wet_mask(:, :)  ! assumed-shape-ok: tracer registry outer-shim; thermo cadence
       real(wp), intent(in)    :: h_layer(:, :, :)  ! assumed-shape-ok: tracer registry outer-shim; thermo cadence
+      integer, intent(in)     :: k_bot(:, :)  ! assumed-shape-ok: tracer registry outer-shim; thermo cadence
       real(wp), intent(in)    :: src
       integer, intent(in)    :: nz
       real(wp), intent(in)    :: h_min
@@ -133,12 +139,13 @@ contains
       nx = size(hTr, 1)
       ny = size(hTr, 2)
       do concurrent(j=1:ny, i=1:nx) local(cell, k, k_dep)
-         ! Lowest massive layer: scan from the bed (k=1) up.  In the
-         ! common case h_layer(i,j,1) > h_min and k_dep = 1.  Falls back
+         ! Lowest massive layer: scan from the first LIVE layer `k_bot`
+         ! (the bed, k=1, off z_fixed) up.  In the common case
+         ! h_layer(i,j,k_bot) > h_min and k_dep = k_bot.  Falls back
          ! to nz if every layer is below the floor (deposits at the
          ! surface rather than dropping the energy).
          k_dep = nz
-         do k = 1, nz
+         do k = k_bot(i, j), nz
             if (h_layer(i, j, k) > h_min) then
                k_dep = k
                exit

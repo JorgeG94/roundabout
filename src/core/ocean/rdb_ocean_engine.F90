@@ -124,7 +124,7 @@ module rdb_ocean_engine
                               configure_ocean_tides, configure_ocean_p_surf, &
                               configure_ocean_wave_drag, configure_ocean_porous, &
                               configure_ocean_closed_faces, &
-                              configure_ocean_k_top, &
+                              configure_ocean_k_top, configure_ocean_k_bot, &
                               configure_ocean_cavity, &
                               configure_ocean_cavity_melt, &
                               configure_ocean_top_drag, &
@@ -1009,6 +1009,16 @@ contains
       ! Literal no-op on every coordinate but `z_fixed` under a cavity:
       ! the arrays already hold the `nz` fallback.
       call configure_ocean_k_top(cfg, engine%state, engine%grid, rank)
+
+      ! Its bed-side mirror `ms%k_bot` (+ face twins, `max` rule): the
+      ! first LIVE layer counting UP from the bed, read by every bed-side
+      ! consumer (bottom drag, the vdiff bed row, geothermal, tidal-mixing
+      ! bed anchor, MEKE bed speed, bed-reaching shortwave) instead of
+      ! `k = 1`.  Same inputs and ordering as `k_top`, but NOT gated on a
+      ! cavity: every z_fixed column shallower than the nominal stack has
+      ! bed fillers.  Literal no-op off z_fixed (arrays hold the `1`
+      ! fallback).
+      call configure_ocean_k_bot(engine%state, engine%grid, rank)
 
       ! Sea-ice PR 24: analytic IC path. Host-side, run once, AFTER
       ! wet_mask/geolatT/wet_T are valid, BEFORE enter_data. Skips on a
