@@ -352,7 +352,7 @@ class Vcoord(Group):
 
     zfixed_closed_faces = Bool(
         'zfixed_closed_faces',
-        doc='z_fixed partial steps: close every face whose layer is an inert filler on either side (z-level wall, free-slip)',
+        doc='z_fixed / zstar_full partial steps: close every face whose layer is an inert filler on either side (z-level wall, free-slip)',
         units='',
         required=False,
         default=False,

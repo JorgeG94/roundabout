@@ -77,6 +77,7 @@ module rdb_ocean_vcoord
    public :: ocean_vcoord_z_fixed_target_uniform
    public :: ocean_vcoord_set_z_fixed_profile
    public :: ocean_vcoord_closed_face_masks
+   public :: ocean_vcoord_eta0_target
    public :: ocean_vcoord_k_top_from_target
    public :: ocean_vcoord_k_bot_from_target
    public :: ocean_vcoord_count_ledges
@@ -423,16 +424,18 @@ module rdb_ocean_vcoord
          !! `.false.` ⇒ no scan, no cost.
       logical :: zfixed_closed_faces = .false.
          !! `&vcoord_nml zfixed_closed_faces` — partial-step z-level face
-         !! closure.  Only meaningful on `VCOORD_Z_FIXED`, where a layer
-         !! whose nominal geopotential range lies inside the bed or the
-         !! ice draft is an inert FILLER; a velocity face at which that
-         !! layer is a filler on EITHER side is a z-level WALL, not a
-         !! thin passage (Adcroft, Hill & Marshall 1997; Losch 2008).
+         !! closure.  Meaningful on the two GEOMETRIC families that
+         !! vanish bed-side layers, `VCOORD_Z_FIXED` and
+         !! `VCOORD_ZSTAR_FULL`, where a layer whose reference range lies
+         !! inside the bed (or, under `z_fixed`, the ice draft) is an
+         !! inert FILLER; a velocity face at which that layer is a filler
+         !! on EITHER side is a z-level WALL, not a thin passage (Adcroft,
+         !! Hill & Marshall 1997; Losch 2008).
          !!
          !! The per-layer 0/1 face mask itself lives on `ocean_metrics_t`
          !! (`open_u`/`open_v`, built once at configure by
-         !! `ocean_vcoord_closed_face_masks` from THIS module's `z_fixed`
-         !! target at `eta = 0`).  The flag is carried here so the ALE
+         !! `ocean_vcoord_closed_face_masks` from THIS module's target at
+         !! `eta = 0`, `ocean_vcoord_eta0_target`).  The flag is carried here so the ALE
          !! remap driver — which never sees `ocean_metrics_t` — can build
          !! its FACE columns as `min(h_L, h_R)` and drop the closed
          !! layers, instead of pouring momentum into water that is not
@@ -1260,6 +1263,61 @@ contains
          end do
       end do
    end subroutine ocean_vcoord_z_fixed_target
+
+   pure subroutine ocean_vcoord_eta0_target(vc, target_h, total_h, nx, ny, nz)
+      !! The target layer thickness at `eta = 0` of a GEOMETRIC family
+      !! that vanishes layers — the ONE definition of "live" that the
+      !! partial-step face mask (`configure_ocean_closed_faces`) and the
+      !! on-target initial seed share with the running ALE regrid.
+      !!
+      !! * `VCOORD_Z_FIXED` — `ocean_vcoord_z_fixed_target` with the
+      !!   slot's nominal layering (uniform `z_fixed_h_ref/nz` or the
+      !!   stretched `z_fixed_zi`/`z_fixed_dz` profile) and its rigid top
+      !!   `z_top`: exactly the call `configure_ocean_closed_faces` has
+      !!   always made, argument for argument.
+      !! * `VCOORD_ZSTAR_FULL` — the `ZSTAR_FULL` branch of
+      !!   `ocean_vcoord_geometric_target`, the kernel
+      !!   `compute_target_h` dispatches to every regrid, walking the
+      !!   per-column `z_ref` table `build_zref_full` laid from the
+      !!   bathymetry.  The caller must have built that table first.
+      !!
+      !! Any other family leaves `target_h` untouched (the caller refuses
+      !! it before getting here).  Configure / seed time only: the host
+      !! arrays are local, so the `do concurrent` kernels underneath get
+      !! their own implicit data regions.
+      integer, intent(in) :: nx
+         !! i-extent (total, incl. halos).
+      integer, intent(in) :: ny
+         !! j-extent (total, incl. halos).
+      integer, intent(in) :: nz
+         !! Number of layers; `k = 1` is the bed.
+      type(ocean_vcoord_t), intent(in) :: vc
+         !! The vertical-coordinate slot (coord_type + every table).
+      real(wp), intent(inout) :: target_h(nx, ny, nz)
+         !! Target thickness at `eta = 0` (m), bottom-up.
+      real(wp), intent(in) :: total_h(nx, ny)
+         !! Reference column thickness (m) — `bt_H_ref` at configure,
+         !! the seed's water column at IC time.
+      real(wp), allocatable :: eta0(:, :)
+      real(wp) :: h_nominal
+
+      allocate (eta0(nx, ny), source=0.0_wp)
+      select case (vc%coord_type)
+      case (VCOORD_Z_FIXED)
+         h_nominal = vc%z_fixed_h_ref/real(nz, wp)
+         call ocean_vcoord_z_fixed_target(target_h, total_h, eta0, vc%z_top, &
+                                          nx, ny, nz, h_nominal, &
+                                          vc%z_fixed_use_profile, vc%z_fixed_zi, &
+                                          vc%z_fixed_dz, vc%zstar_h_min)
+      case (VCOORD_ZSTAR_FULL)
+         call ocean_vcoord_geometric_target(VCOORD_ZSTAR_FULL, nx, ny, nz, target_h, &
+                                            total_h, eta0, vc%dsig, vc%z_ref_global, &
+                                            vc%z_ref, vc%zsigma_depth_transition, &
+                                            vc%zsigma_blend_width, vc%zstar_h_min)
+      case default
+      end select
+      deallocate (eta0)
+   end subroutine ocean_vcoord_eta0_target
 
    pure subroutine ocean_vcoord_closed_face_masks(open_u, open_v, target_h, &
                                                   nx, ny, nz, h_vanished)
