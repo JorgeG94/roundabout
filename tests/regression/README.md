@@ -141,6 +141,7 @@ diagnostics (low physics value). Run
 | `stability.py` | **the two-tier stability suite** (see below) — parses the model's own console time series and asserts on PHYSICS, not on a golden |
 | `stability_manifest.py` | its case list: every tracked ocean namelist (73 base cases), with per-case run length, physics assertions, tier-2 downscale spec and known-failure markers |
 | `downscale.py` | the dimensionless-number rules a tier-2 twin must satisfy, plus the standalone checker that validates every twin |
+| `compat_matrix.py` | **the pairwise compatibility matrix** (see the last section): the synthetic domain, its namelist builder, the per-coordinate viability sweep and the `rdb --validate-only` contract |
 | `README.md` | this file |
 
 ## Build the CPU app
@@ -1362,3 +1363,81 @@ it. Neither of those is a defect of this gate.
 - the tracer-concentration diag `mean` is NaN on every case with land, a halo
   or a vanishing coordinate — a real (if benign) defect in the reduction, not a
   blow-up. See *the NaN that is not a bug*.
+
+# The pairwise compatibility matrix (`compat_matrix.py`)
+
+Every composition bug found in the autumn of 2026 was two features meeting for
+the first time — GM x z_fixed fillers, closed faces x GM/Redi/MLE, sponge x
+periodic seam, carried tendency x restart. None needed exotic physics; each
+needed one specific PAIR of features that no test held. Per-feature tests
+cover features, not pairs. This suite enumerates pairs, on one small
+synthetic domain, and holds every configuration the model ACCEPTS to running
+clean (design: `python_prototypes/design/compat_matrix_plan.md`).
+
+## `rdb --validate-only`
+
+The matrix asks the model, not a Python copy of its rules, what it refuses:
+
+```bash
+./rdb --validate-only case.nml     # exit 0 = accepted, 3 = refused
+```
+
+parses the namelist, runs `validate_config` (logging EVERY failed check, not
+just the first) and then the whole `engine_setup` sequence (`driver_validate`)
+— so every fail-loud configure-time refusal in the `configure_ocean_*` stages
+of `rdb_ocean_setup.F90`, the stability audit and the IC seed is exercised —
+and exits before mapping the device or taking a step. No output is written:
+the diag selection is still parsed, but the per-rank stream is not opened and
+the output directory and parameter-doc dumps are not created. With
+`&logging_nml log_level = "error"` stdout carries exactly the refusal reasons.
+About 0.02 s on the matrix domain. ctest `rdb_validate_only` holds the
+contract (accept → 0 and no file, with a positive control that the same
+namelist run for one step DOES write; a `validate_config` and an
+`engine_setup` refusal → 3 with the reason).
+
+## The domain
+
+One synthetic family, NOT a shipped validation case, built by
+`merged_namelist` / `write_domain_inputs` (the bathymetry and the z-level T/S
+go through a stdlib classic-NetCDF writer — nothing to install):
+
+* 24 x 16 x 10, dx = dy = 20 km, f = 1e-4 + beta = 2e-11, 24 steps of 900 s;
+* a STAIRCASE shelf on the south (100 / 250 / 500 / 800 / 1200 / 1600 / 2000 m,
+  one row wider over i = 8..15 so steps face both ways; rx0 <= 0.5) and a
+  3 x 2 ISLAND — z-like coordinates get closed faces and filler layers, and
+  every cell has land columns;
+* stratified T/S (`&ocean_zinit_nml source="file"`) with a front whose
+  position tilts 40 m north per metre of depth — slopes, GM and Redi act;
+* 0.1 Pa of wind and a surface heat flux (`forcing`: -60 W/m2, or +60 W/m2
+  with 40 % penetrating shortwave);
+* the v0.1.0 vertical-coordinate safety configuration everywhere:
+  `remap_boundary_extrap`, `remap_nonuniform_weights`,
+  `remap_check_preconditions` and the I1′ `check_vanished_content` tripwire;
+* edge variants: `closed` (walls + island), `channel` (re-entrant in x, a
+  north sponge band), `obc` (a Flather open east edge), and the single-rank
+  rows `tripolar` (the analytic tripolar generator: 15 x 1 degree from 59 N,
+  bipolar cap above 70 N, north fold, px = 1) and `cavity` (a flat 200 m ice
+  draft over the deep northern third);
+* `grid`: Cartesian, or a 0.25 x 0.18 degree spherical sector at 40 N.
+
+`compat_matrix.py domain` proves the domain on every vertical coordinate x
+both split schemes x every edge variant x both grids (base closures: KPP,
+Smagorinsky KH + AH, FV-MOM6 PGF, Wright, Sadourny energy; PP81 without KPP
+under the cavity). Today (`main` @ 11b2d134d, gfortran, 198 cells, 19 s):
+
+| vcoord | closed | channel | obc | tripolar | cavity |
+|---|---|---|---|---|---|
+| sigma, zstar | PASS | PASS | PASS | PASS | PASS |
+| zstar_sigma, lagrangian | PASS | PASS | PASS | PASS | refused |
+| z_fixed + closed faces | PASS | PASS | PASS | PASS | PASS |
+| z_fixed, open steps | PASS* | PASS* | PASS* | PASS* | PASS* |
+| zstar_full | CRASH† | CRASH† | CRASH† | CRASH† | refused |
+| hycom, rho | CRASH† | CRASH† | CRASH† | CRASH† | refused |
+| eulerian_z | PASS on ssp_rk2, refused on pred_corr (its v1 envelope) |||||
+| zsigma | refused (the `z_ref_global` units defect) |||||
+
+\* runs the 24 steps, but at 23-85x the closed-face kinetic energy (the open
+staircase PGF, v0.1.0 tracker item 11). † the remap precondition guard stops
+step 1 on the island's land columns: `rho`/`hycom` write a negative thickness
+there (vcoord audit H3), and `zstar_full`'s land-column target misses the
+column total by 1/3 (a new site of the same class).

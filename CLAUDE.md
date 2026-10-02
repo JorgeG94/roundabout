@@ -19,6 +19,8 @@ cd build && ctest --output-on-failure
 
 Key CMake options: `RDB_ENABLE_GPU` (default **OFF** — opt-in; enable with `-DRDB_ENABLE_GPU=ON` on the NVHPC toolchain. An explicit ON with a compiler lacking a GPU path is a configure-time error, never a silent CPU downgrade; the value prints on the `GPU offload:` configure line), `RDB_ENABLE_MPI` (default OFF), `RDB_CUDA_AWARE_MPI`, `RDB_GPU_ARCH` (cc70/80/90), `RDB_ENABLE_DOUBLE` (default ON). Full table in `cmake/options.cmake`.
 
+`./rdb --validate-only case.nml` runs every configure-time check — `validate_config` (all failures, not just the first) and the whole `engine_setup` sequence — and exits **0** (accepted) or **3** (refused, each reason logged) without mapping the device, stepping or writing anything. It is how the compatibility matrix (`tests/regression/compat_matrix.py`) asks the model what it refuses.
+
 ## Local development conventions (agents + contributors)
 
 Two standing rules for anything run against this repo — humans and AI agents alike:
