@@ -30,6 +30,7 @@ module rdb_ocean_setup
                                VCOORD_RHO, VCOORD_HYCOM, VCOORD_LAGRANGIAN, &
                                VCOORD_Z_FIXED, ocean_vcoord_z_fixed_target, &
                                ocean_vcoord_closed_face_masks, &
+                               ocean_vcoord_eta0_target, &
                                ocean_vcoord_k_top_from_target, &
                                ocean_vcoord_set_z_fixed_profile, &
                                ocean_vcoord_count_ledges
@@ -2567,12 +2568,27 @@ contains
       !! layer: no normal velocity, no mass or tracer flux, free-slip.
       !!
       !! This fills `metrics%open_u/open_v` with that wall, ONCE, from
-      !! `ocean_vcoord_z_fixed_target` at `η = 0` — the same kernel the
-      !! ALE regrid and the IC seed use, so there is no second definition
-      !! of "live".  The mask is STATIC: the bed and the draft are
-      !! static, and under `z_fixed` `η` is absorbed by the first LIVE
-      !! layer (the partial cell), so the live/filler pattern does not
-      !! move.
+      !! the coordinate's target at `η = 0` (`ocean_vcoord_eta0_target`)
+      !! — the same kernel the ALE regrid and the IC seed use, so there
+      !! is no second definition of "live".  The mask is STATIC: the bed
+      !! and the draft are static, and under `z_fixed` `η` is absorbed by
+      !! the first LIVE layer (the partial cell), so the live/filler
+      !! pattern does not move to first order in `η/h_partial`.
+      !!
+      !! **`zstar_full` too.**  `build_zref_full` lays a z-level fine
+      !! zone (`h_surf` layers from the surface) over a terrain-following
+      !! coarse zone; a column shallower than the fine zone ends in a
+      !! partial cell and every layer below it is a `zstar_h_min` filler —
+      !! the same staircase as `z_fixed`'s bed, with the same
+      !! thickness-independent FV-PGF defect across it.  Its target puts
+      !! `η ≥ 0` in the surface layer (pattern EXACTLY static) and clips
+      !! `η < 0` from the bed (a bed-most live layer thinner than `|η|`
+      !! flips — fewer columns than `z_fixed` flips at the same `|η|` on
+      !! the 1-degree Southern Ocean).  So the mask is built from the
+      !! `ZSTAR_FULL` target exactly as it is from the `z_fixed` one, and
+      !! every consumer is reused unchanged.  It closes FILLER faces
+      !! only; the terrain-following coarse zone's open faces keep the
+      !! sigma PGF error.
       !!
       !! It also seeds the barotropic face widths `dy_cu_bt`/`dx_cv_bt`
       !! with the OPEN-depth fraction of the face, so the barotropic
@@ -2598,8 +2614,9 @@ contains
 
       integer :: nx, ny, nz, i, j, k
       integer :: n_closed_u, n_closed_v, n_open_u, n_open_v, n_ledge
-      real(wp) :: h_nominal, h_min, h_face, sum_all, sum_open
-      real(wp), allocatable :: tgt(:, :, :), eta0(:, :)
+      real(wp) :: h_face, sum_all, sum_open
+      real(wp), allocatable :: tgt(:, :, :)
+      character(len=10) :: vcoord_label
 
       if (present(ierr)) ierr = OCEAN_STATUS_OK
       if (.not. cfg%zfixed_closed_faces) return
@@ -2609,19 +2626,33 @@ contains
                    "multilayer path (the mask is per-layer)", ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
-      if (ocean_state%vcoord%coord_type /= VCOORD_Z_FIXED) then
+      if (ocean_state%vcoord%coord_type /= VCOORD_Z_FIXED .and. &
+          ocean_state%vcoord%coord_type /= VCOORD_ZSTAR_FULL) then
          call fail("&vcoord_nml zfixed_closed_faces is only defined for "// &
-                   "vcoord_type='z_fixed': the live/filler staircase it "// &
-                   "closes is a z-level artefact, and on a terrain-following "// &
-                   "or z* family every layer is live on every wet face", &
+                   "vcoord_type='z_fixed' and 'zstar_full': the live/filler "// &
+                   "staircase it closes is made by a GEOMETRIC coordinate "// &
+                   "that vanishes bed-side layers at fixed reference depths. "// &
+                   "On sigma / zstar / zstar_sigma every layer is live on "// &
+                   "every wet face, and rho / hycom vanish layers by DENSITY, "// &
+                   "so their pattern is not static", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
-      if (ocean_state%vcoord%z_fixed_h_ref <= 0.0_wp) then
+      if (ocean_state%vcoord%coord_type == VCOORD_Z_FIXED .and. &
+          ocean_state%vcoord%z_fixed_h_ref <= 0.0_wp) then
          call fail("&vcoord_nml zfixed_closed_faces needs a resolved "// &
                    "z_fixed_h_ref (set &ocean_topo_nml max_depth): without "// &
                    "it the z_fixed target degenerates to uniform sigma, "// &
                    "there are no fillers, and the mask would close nothing", &
+                   ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+      if (ocean_state%vcoord%coord_type == VCOORD_ZSTAR_FULL .and. &
+          ocean_state%vcoord%zstar_h_surf_target <= 0.0_wp) then
+         call fail("&vcoord_nml zfixed_closed_faces under vcoord_type="// &
+                   "'zstar_full' needs zstar_h_surf_target > 0: without it "// &
+                   "build_zref_full lays uniform sigma, there are no fillers, "// &
+                   "and the mask would close nothing", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
@@ -2721,19 +2752,19 @@ contains
       nx = grid%nx_total
       ny = grid%ny_total
       nz = ocean_state%multilayer%nz_ml
-      h_nominal = ocean_state%vcoord%z_fixed_h_ref/real(nz, wp)
-      h_min = ocean_state%vcoord%zstar_h_min
+      vcoord_label = "z_fixed"
+      if (ocean_state%vcoord%coord_type == VCOORD_ZSTAR_FULL) vcoord_label = "zstar_full"
 
       call metrics_closed_faces_alloc(ocean_state%metrics, grid, nz)
 
+      ! The eta = 0 target of the running coordinate — `z_fixed` or
+      ! `zstar_full` — through the SAME kernel the ALE regrid dispatches
+      ! to, so "live" has one definition.  Under `zstar_full` it walks the
+      ! per-column `z_ref` table the engine rebuilt from the
+      ! halo-exchanged bathymetry just before the static-geometry pass.
       allocate (tgt(nx, ny, nz), source=0.0_wp)
-      allocate (eta0(nx, ny), source=0.0_wp)
-      call ocean_vcoord_z_fixed_target(tgt, ocean_state%dyn%bt_work%bt_H_ref, &
-                                       eta0, ocean_state%vcoord%z_top, &
-                                       nx, ny, nz, h_nominal, &
-                                       ocean_state%vcoord%z_fixed_use_profile, &
-                                       ocean_state%vcoord%z_fixed_zi, &
-                                       ocean_state%vcoord%z_fixed_dz, h_min)
+      call ocean_vcoord_eta0_target(ocean_state%vcoord, tgt, &
+                                    ocean_state%dyn%bt_work%bt_H_ref, nx, ny, nz)
       call ocean_vcoord_closed_face_masks(ocean_state%metrics%open_u, &
                                           ocean_state%metrics%open_v, &
                                           tgt, nx, ny, nz, H_VANISHED)
@@ -2813,7 +2844,7 @@ contains
                                           ocean_state%metrics%open_v, &
                                           tgt, nx, ny, nz, H_VANISHED)
 
-      deallocate (tgt, eta0)
+      deallocate (tgt)
 
       ! Flip the switches LAST — every consumer branches on them, and the
       ! mask has to be in place before any of them can read a closed face.
@@ -2822,7 +2853,7 @@ contains
       ocean_state%vdiff%zlevel_faces = .true.
 
       if (compute_rank == 0) then
-         call logger%info("z_fixed closed faces: ON (partial steps, "// &
+         call logger%info(trim(vcoord_label)//" closed faces: ON (partial steps, "// &
                           "Adcroft/Hill/Marshall 1997) — u closed "// &
                           to_string(n_closed_u)//"/"// &
                           to_string(n_closed_u + n_open_u)//", v closed "// &
@@ -2830,7 +2861,7 @@ contains
                           to_string(n_closed_v + n_open_v)// &
                           ", isolated ledge cells "//to_string(n_ledge))
          if (n_ledge > 0) then
-            call logger%warning("z_fixed closed faces: "//to_string(n_ledge)// &
+            call logger%warning(trim(vcoord_label)//" closed faces: "//to_string(n_ledge)// &
                                 " LIVE cells have all four own-layer faces "// &
                                 "closed — the mask has isolated water.  They "// &
                                 "are inert (no flux in or out, velocity zeroed "// &

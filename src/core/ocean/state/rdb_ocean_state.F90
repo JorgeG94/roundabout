@@ -8,7 +8,7 @@ module rdb_ocean_state
    !! requires wiring it into both.
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_constants, only: wp, LAND_DEPTH_THRESHOLD, GRAVITY, H_VANISHED, H_DIV_EPS, &
-                            DEG2RAD, TWO_PI, VCOORD_Z_FIXED
+                            DEG2RAD, TWO_PI, VCOORD_Z_FIXED, VCOORD_ZSTAR_FULL
    use rdb_grid, only: hgrid_t
    use pic_logger, only: logger => global_logger
    use rdb_error_ring, only: fail
@@ -69,7 +69,8 @@ module rdb_ocean_state
    use rdb_decomp, only: decomp_t
    use rdb_ocean_vcoord, only: ocean_vcoord_t, parse_ocean_vcoord_type, &
                                ocean_vcoord_z_fixed_target, &
-                               ocean_vcoord_z_fixed_target_uniform
+                               ocean_vcoord_z_fixed_target_uniform, &
+                               ocean_vcoord_eta0_target
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_ocean_cavity, only: parse_cavity_draft_config, parse_cavity_draft_source, &
                                CAVITY_DRAFT_NONE, CAVITY_DRAFT_FLAT, CAVITY_DRAFT_LINEAR, &
@@ -1129,6 +1130,10 @@ contains
 
       integer :: nz_ml, idx_S, idx_T, i, j, k, nx, ny, local_ierr
       logical :: per_x, per_y, north_fold
+      logical :: seeded_on_zstar_full_target
+         !! The FOURTH `h_layer` seed branch (`zstar_full` under
+         !! `zfixed_closed_faces`) was taken ⇒ establish I1′ after the
+         !! tracer IC.
       real(wp), allocatable :: water(:, :)
          !! Reference water-column thickness the IC seeds work on:
          !! `b − z_draft` under an ice shelf, a byte copy of `b`
@@ -1442,6 +1447,23 @@ contains
       ! consistent.  `z_fixed` WITHOUT zinit keeps the sigma-style seed: its
       ! `&tracer_nml` IC is defined PER LAYER INDEX, so moving the layers
       ! would change what that IC means.
+      !
+      ! FOURTH BRANCH — `VCOORD_ZSTAR_FULL` under `&vcoord_nml
+      ! zfixed_closed_faces`.  The closed-face mask is built from the
+      ! `ZSTAR_FULL` target at `η = 0`; a sigma-style seed is not on that
+      ! coordinate, so step 1 would run the FULL sigma pressure gradient on
+      ! the `b/nz` stack (on the 1-degree Southern Ocean, 0.67 m/s from
+      ! rest in one step, at faces the mask does not even see) before the
+      ! first regrid moved the layers, and a `target_source = "ic"` sponge
+      ! would snapshot T/S on the wrong layers — the `z_fixed` seed bug
+      ! above.  So seed `h_layer` from the SAME target the mask is built
+      ! from (`ocean_vcoord_eta0_target`, after laying the `z_ref` table
+      ! it walks), with or without zinit: a per-index `&tracer_nml` IC
+      ! then means "per coordinate layer", which is the only reading under
+      ! which the mask's live/filler pattern is the IC's.  Knob-gated, so
+      ! every existing `zstar_full` namelist keeps its sigma-style seed
+      ! byte for byte.
+      seeded_on_zstar_full_target = .false.
       if (trim(cfg%thickness_config) == "uniform_z") then
          call seed_h_layer_uniform_z_impl(state%multilayer%h_layer, &
                                           water, nz_ml, &
@@ -1488,6 +1510,13 @@ contains
                                                         h_min_seed)
             end if
          end block
+      else if (cfg%zfixed_closed_faces .and. state%vcoord%is_init .and. &
+               state%vcoord%coord_type == VCOORD_ZSTAR_FULL .and. &
+               parse_ocean_vcoord_type(cfg%vcoord_type) == VCOORD_ZSTAR_FULL) then
+         call state%vcoord%build_zref_full(state%barotropic%b)
+         call ocean_vcoord_eta0_target(state%vcoord, state%multilayer%h_layer, &
+                                       water, nx, ny, nz_ml)
+         seeded_on_zstar_full_target = .true.
       else
          call seed_h_layer_uniform_impl(state%multilayer%h_layer, &
                                         h_col, nz_ml, &
@@ -1681,6 +1710,23 @@ contains
                    "rdb_ocean_z_init reader is needed to load the z-level T/S file).", ierr, OCEAN_STATUS_ERR_IO)
          return
 #endif
+      end if
+
+      ! The on-target `zstar_full` seed (`zfixed_closed_faces`, FOURTH
+      ! BRANCH above) laid inert `zstar_h_min` fillers, and every IC writer
+      ! since (`&tracer_nml` per layer index, the zinit overlay at the
+      ! filler's own depth) gave them a concentration that is not their
+      ! donor's.  Establish invariant I1′ NOW, with the one definition (host
+      ! twin — before `enter_data`), so the sponge snapshot and the budget
+      ! latch see the state every later step holds.  Left to the first
+      ! in-step enforcement, the pooling moves that foreign content into the
+      ! live partial cell above at step 1: a real horizontal density
+      ! difference at a face the mask keeps open (measured 4.6e-6 m/s after
+      ! two hours on `test_ocean_zstar_full_closed_faces`' resting
+      ! staircase).  Column-conservative.  Before the pseudo-salt seed, so
+      ! that copies the settled S.
+      if (seeded_on_zstar_full_target) then
+         call state%multilayer%enforce_vanished_content_host(nx, ny)
       end if
 
       ! Pseudo-salt seed — MUST run after every write to salinity's initial

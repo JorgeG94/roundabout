@@ -117,11 +117,12 @@ program test_ocean_decomp_bitid_mpi
    integer :: rank, nprocs, n_fail, total_fail, ic
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(8) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(9) = [character(len=24) :: &
                                                "island_basin", "periodic_channel_zstar", &
                                                "periodic_sponge", &
                                                "open_obc", "spherical", "obc_radiation_sponge", &
-                                               "closures", "file_readers"]
+                                               "closures", "file_readers", &
+                                               "file_readers_zstar_full"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -136,7 +137,8 @@ program test_ocean_decomp_bitid_mpi
 
    do ic = 1, size(CASES)
 #ifdef RDB_NO_NETCDF
-      if (trim(CASES(ic)) == "file_readers") cycle
+      if (trim(CASES(ic)) == "file_readers" .or. &
+          trim(CASES(ic)) == "file_readers_zstar_full") cycle
 #endif
       call run_case(trim(CASES(ic)), trim(SCHEMES(1)))
       call run_case(trim(CASES(ic)), trim(SCHEMES(2)))
@@ -290,7 +292,7 @@ contains
                "sponge_strength = 1.0e-4, sponge_relax_tracers = .true., "// &
                "radiation_scheme = 'orlanski', res_lscale_out = 20000.0, "// &
                "res_lscale_in = 20000.0 /"//NL
-      case ("file_readers")
+      case ("file_readers", "file_readers_zstar_full")
          ! The three per-rank windowed readers (supergrid, bathymetry,
          ! z-level T/S IC) on files the test writes, with the global-1-degree
          ! physics set: z_fixed + closed partial-step faces, fv_mom6 PGF,
@@ -300,8 +302,6 @@ contains
                "&ocean_grid_nml grid_config = 'supergrid', supergrid_file = '"//SG_FILE// &
                "', coriolis_scheme = 'planetary', rad_earth = 6.371e6 /"//NL// &
                "&physics_nml wind_stress_x = 0.08, wind_stress_y = 0.0 /"//NL// &
-               "&vcoord_nml vcoord_type = 'z_fixed', zfixed_closed_faces = .true., "// &
-               "check_vanished_content = .true. /"//NL// &
                "&ocean_topo_nml topo_config = 'file', max_depth = 3000.0 /"//NL// &
                "&output_nml bathymetry_file = '"//BATHY_FILE//"', output_to_file = .false. /"//NL// &
                "&ocean_zinit_nml enable = .true., source = 'file', file = '"//ZINIT_FILE//"' /"//NL// &
@@ -314,7 +314,22 @@ contains
       case default
          error stop "test_ocean_decomp_bitid_mpi: unknown case"
       end select
-      if (label /= "file_readers") nml = nml//"&output_nml output_to_file = .false. /"//NL
+      ! The closed partial-step faces on both geometric coordinates.  The
+      ! `zstar_full` twin's 1500 m fine zone (nz/3 = 1 layer) leaves every
+      ! column shallower than that — the northern shelf and the ridge crest
+      ! — as one partial cell over three fillers, so its mask (built per
+      ! rank from the exchanged bathymetry) and its on-target seed both
+      ! straddle the rank seams.
+      if (label == "file_readers") then
+         nml = nml//"&vcoord_nml vcoord_type = 'z_fixed', zfixed_closed_faces = .true., "// &
+               "check_vanished_content = .true. /"//NL
+      else if (label == "file_readers_zstar_full") then
+         nml = nml//"&vcoord_nml vcoord_type = 'zstar_full', zstar_h_surf_target = 1500.0, "// &
+               "zfixed_closed_faces = .true., check_vanished_content = .true. /"//NL
+      end if
+      if (label /= "file_readers" .and. label /= "file_readers_zstar_full") then
+         nml = nml//"&output_nml output_to_file = .false. /"//NL
+      end if
    end function case_nml
 
    subroutine run_one(nml, csize, crank, snap, ok)
