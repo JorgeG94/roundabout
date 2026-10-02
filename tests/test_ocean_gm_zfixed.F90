@@ -176,6 +176,8 @@ contains
       call ms%enforce_vanished_content_host(ni, nj)
 
       call sl%init(grid, nz_ml=NZ)
+      ! Bed datum: the staircase bed depth (the column holds `bed - draft`).
+      call sl%set_bathymetry(tot_h + draft)
       sl%enable = .true.
       sl%rho0 = RHO0
       ! No vert-fill smoothing: the smoothing couples each live layer to

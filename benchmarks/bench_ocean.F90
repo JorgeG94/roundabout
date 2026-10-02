@@ -106,6 +106,8 @@ program bench_ocean
    call configure_ocean_bt(cfg, os, grid, 0)
    call configure_ocean_bt_split(cfg, os, grid, 0)   ! may auto-set cfg%ocean%bt%n_inner
    call configure_ocean_land_mask(cfg, os, grid, 0)  ! static land masking (CHUNK A)
+   ! Bed datum of the isopycnal slopes (no-op when the slot is off).
+   call os%slopes%set_bathymetry(os%barotropic%b)
 
    n_inner = cfg%ocean%bt%n_inner
    if (n_inner < 1) then

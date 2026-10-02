@@ -935,6 +935,12 @@ contains
       ! bathymetry, which on a periodic edge is the B2 seam jet.  Before
       ! `enter_data` (the device copy is taken from the host values).
       call engine%state%pressure_force%set_bathymetry(engine%state%barotropic%b)
+      ! The isopycnal-slopes slot keeps its own copy too: it is the bed
+      ! datum of the geopotential interface heights whose across-face
+      ! difference is the interface-tilt term, and a seam face reads the
+      ! GHOST column — so it is taken from the same wrapped + halo-
+      ! exchanged `b`, for the same reason.  No-op when the slot is off.
+      call engine%state%slopes%set_bathymetry(engine%state%barotropic%b)
       ! Same for the ZSTAR_FULL per-column reference table the seed built
       ! from `b`: rebuilt from the halo-exchanged field so a DECOMPOSED
       ! axis's seam ghost columns are right too (a pure function of `b` —
