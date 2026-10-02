@@ -60,7 +60,8 @@ module rdb_ocean_setup
                                        obc_tide_nodal_fill, obc_match_constituent
    use rdb_ocean_sponge, only: sponge_band_alpha, SPONGE_RAMP_COSINE, SPONGE_RAMP_LINEAR
    use rdb_ocean_halo, only: ocean_halo_centre, ocean_halo_is_decomposed, &
-                             ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y
+                             ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y, &
+                             ocean_halo_face_x, ocean_halo_face_y, ocean_halo_is_init
    use rdb_ocean_halo_state, only: ocean_seam_refresh_surface_stress
    use rdb_ocean_metrics, only: metrics_finalize, metrics_fill_cartesian, &
                                 metrics_fill_spherical, metrics_fill_from_supergrid, &
@@ -2672,15 +2673,23 @@ contains
       ! mass_flux_*_layer after the per-layer mask — are zero on every
       ! closed face-layer and filler and still sum to zero per face
       ! (`test_ocean_mle_zfixed`).
-      if (cfg%ocean%hvisc%nu_4 > 0.0_wp .or. cfg%ocean%hvisc%stress_tensor) then
+      ! The velocity-form BIHARMONIC (scalar `nu_4` and the flow-aware
+      ! `smag_ah` / `leith_biharm` `nu4_face_*`) composes: both chained
+      ! Laplacians gate every difference by `open(a)*open(b)` (free-slip,
+      ! `hvisc_biharm_lap_closed`).  The stress-tensor assembly (and
+      ! `kh_aniso`, which only it reads) does not: its T-cell tension and
+      ! corner shear are built from the face velocities with the 2-D
+      ! `wet_*` masks only.
+      if (cfg%ocean%hvisc%stress_tensor) then
          call fail("&vcoord_nml zfixed_closed_faces does not yet compose "// &
-                   "with the BIHARMONIC viscosity (&ocean_hvisc_nml nu_4) or "// &
-                   "with stress_tensor: the free-slip closure of a closed "// &
-                   "face is implemented for the HARMONIC velocity-Laplacian "// &
-                   "kernels only (scalar nu_h and the per-face ah_face_*), "// &
-                   "and a mirror-Neumann biharmonic pass or a wet_q-style "// &
-                   "corner factor needs its own derivation and its own "// &
-                   "test.  Use a harmonic closure, or land that slice first", &
+                   "with &ocean_hvisc_nml stress_tensor (nor kh_aniso, which "// &
+                   "only the stress-tensor path reads): its T-cell tension and "// &
+                   "corner shear are masked by the 2-D wet_* fields only, so a "// &
+                   "closed face-layer's zeroed velocity enters the strain as a "// &
+                   "Dirichlet value (no-slip at every staircase step).  The "// &
+                   "velocity-Laplacian harmonic kernels and both biharmonic "// &
+                   "paths (nu_4, smag_ah, leith_biharm) carry the free-slip "// &
+                   "closure; use those", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
@@ -2748,6 +2757,22 @@ contains
       call ocean_vcoord_closed_face_masks(ocean_state%metrics%open_u, &
                                           ocean_state%metrics%open_v, &
                                           tgt, nx, ny, nz, H_VANISHED)
+      ! The builder cannot evaluate the OUTERMOST face of the array (it
+      ! needs a cell beyond it) and leaves it open.  On a tile that face
+      ! is a SEAM ghost, three cells from the owned region, and on a
+      ! periodic edge it is the wrap of an interior face — so without
+      ! this exchange the ghost band of the mask is decomposition-
+      ! dependent.  The harmonic kernels never read that deep; the
+      ! biharmonic's chained stencil does (its ghost-band tendency at
+      ! depth 1 reads the mask at depth 3), which broke 1x4 bit-identity
+      ! in `test_ocean_decomp_bitid_mpi` (`file_readers`).  A plain face
+      ! exchange (no sign flip: a 0/1 mask, not a vector) makes every
+      ! ghost face carry its owner's value.  Single-rank non-periodic:
+      ! a no-op.
+      if (ocean_halo_is_init()) then
+         call ocean_halo_face_x(ocean_state%metrics%open_u, nz, device_resident=.false.)
+         call ocean_halo_face_y(ocean_state%metrics%open_v, nz, device_resident=.false.)
+      end if
 
       ! Seed the BAROTROPIC face widths with the eta = 0 open-depth
       ! fraction.  `ocean_porous_refresh` recomputes them from the live
