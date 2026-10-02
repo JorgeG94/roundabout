@@ -22,11 +22,20 @@
 !!   5. fully_vanished_column — all but one source layer below the
 !!      min-thickness floor: the `<=1`-survivor fast path keeps
 !!      `h_new = h_old` exactly.
+!!   7. thin_column_{land,minted,shared_debit}_{rho,hycom} — columns too
+!!      thin for every layer to sit at the inflation floor (`nz` x
+!!      `2*H_VANISHED`), and a column just thick enough whose thickest
+!!      layer alone cannot pay the inflation debit.  The step-5 inflation
+!!      used to write a NEGATIVE thickness (a 50 x 1.5e-4 m land column
+!!      collapsed into one layer gave -7.2e-3 m, the 1-degree Southern
+!!      Ocean `rho` crash) or mint mass (`ns == 0`).  Asserts h >= 0,
+!!      every layer at or above the floor (or untouched), and h, T*h, S*h
+!!      conserved to round-off, on both density families.
 !!
 !! Uses the linear EOS so layer densities are an exact closed form of
 !! (T, S): with uniform S, rho = rho0 - alpha_T*(T - T_ref).
 module test_ocean_vcoord_rho
-   use rdb_constants, only: wp, REMAP_PPM, VCOORD_RHO
+   use rdb_constants, only: wp, REMAP_PPM, VCOORD_RHO, VCOORD_HYCOM, H_VANISHED
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_eos, only: eos_t, eos_density_point, EOS_VARIANT_LINEAR
@@ -58,7 +67,12 @@ contains
                   new_unittest("unstable_column_graceful", test_unstable), &
                   new_unittest("regrid_runs_on_device", test_on_device), &
                   new_unittest("fully_vanished_column", test_vanished), &
-                  new_unittest("multi_regrid_conserves", test_multi_regrid) &
+                  new_unittest("multi_regrid_conserves", test_multi_regrid), &
+                  new_unittest("thin_column_land_rho", test_thin_land_rho), &
+                  new_unittest("thin_column_land_hycom", test_thin_land_hycom), &
+                  new_unittest("thin_column_minted_rho", test_thin_minted_rho), &
+                  new_unittest("thin_column_minted_hycom", test_thin_minted_hycom), &
+                  new_unittest("thin_column_shared_debit_rho", test_shared_debit_rho) &
                   ]
    end subroutine collect_ocean_vcoord_rho_tests
 
@@ -496,5 +510,163 @@ contains
       call vc%destroy()
       call ms%destroy()
    end subroutine test_multi_regrid
+
+   ! -----------------------------------------------------------------
+   ! 7. thin columns — the step-5 inflation must neither write a negative
+   !    thickness nor mint mass when the column cannot hold nz floors.
+   ! -----------------------------------------------------------------
+   subroutine check_thin_column(error, coord, label, h_lay, T_lay, rho_lo, rho_hi, all_vanished)
+      !! Regrid one column with targets linspace(rho_lo, rho_hi) and
+      !! assert: every h >= 0; every h either >= the floor or unchanged
+      !! from h_old (the too-thin column keeps h_old); sum(h), sum(T*h),
+      !! sum(S*h) conserved to round-off.
+      !!
+      !! `all_vanished`: every source layer is at `H_VANISHED` (a land
+      !! column).  Such a column has no live layer, so the remap's I1'
+      !! content rule zeroes its tracer content whatever the coordinate
+      !! does (`rdb_vl_merge_content`: `hTr = 0` in a column with no live
+      !! layer) — the T/S checks are replaced by "h is left bit-for-bit".
+      type(error_type), allocatable, intent(out) :: error
+      integer, intent(in) :: coord
+      character(len=*), intent(in) :: label
+      real(wp), intent(in) :: h_lay(:), T_lay(:)
+      real(wp), intent(in) :: rho_lo, rho_hi
+      logical, intent(in) :: all_vanished
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_vcoord_t) :: vc
+      type(eos_t) :: eos
+      real(wp), allocatable :: S_lay(:), h_before(:)
+      real(wp) :: H0, Th0, Sh0, floor_eff, hmin
+      integer :: k, nz
+      logical :: floored
+      nz = size(h_lay)
+      allocate (S_lay(nz), source=S_REF)
+      checks: block
+         call make_eos(eos)
+         call setup_column(grid, ms, nz, h_lay, T_lay, S_lay)
+         h_before = ms%h_layer(1, 1, :)
+         H0 = sum(ms%h_layer(1, 1, :))
+         Th0 = sum(ms%tracers(ms%idx_temperature)%hTr(1, 1, :))
+         Sh0 = sum(ms%tracers(ms%idx_salinity)%hTr(1, 1, :))
+         call vc%init(grid, nz_ml=nz)
+         vc%coord_type = coord
+         do k = 0, nz
+            vc%rho_target(k) = rho_lo + (rho_hi - rho_lo)*real(k, wp)/real(nz, wp)
+         end do
+         floor_eff = max(vc%zstar_h_min, 2.0_wp*H_VANISHED)
+
+         call run_remap_host(grid, vc, ms, eos)
+
+         hmin = minval(ms%h_layer(1, 1, :))
+         call check(error, hmin >= 0.0_wp, label//": no negative thickness (min h = "// &
+                    real_str(hmin)//")")
+         if (allocated(error)) exit checks
+         floored = .true.
+         do k = 1, nz
+            if (ms%h_layer(1, 1, k) < floor_eff*(1.0_wp - 1.0e-9_wp) .and. &
+                ms%h_layer(1, 1, k) /= h_before(k)) floored = .false.
+         end do
+         call check(error, floored, label//": every layer >= the floor or untouched")
+         if (allocated(error)) exit checks
+         call check(error, abs(sum(ms%h_layer(1, 1, :)) - H0) <= 1.0e-14_wp*max(H0, 1.0_wp), &
+                    label//": column total conserved (no minted mass)")
+         if (allocated(error)) exit checks
+         if (all_vanished) then
+            call check(error, all(ms%h_layer(1, 1, :) == h_before), &
+                       label//": too-thin column left bit-for-bit")
+            exit checks
+         end if
+         call check(error, abs(sum(ms%tracers(ms%idx_temperature)%hTr(1, 1, :)) - Th0) &
+                    <= 1.0e-13_wp*max(abs(Th0), 1.0_wp), label//": T*h conserved")
+         if (allocated(error)) exit checks
+         call check(error, abs(sum(ms%tracers(ms%idx_salinity)%hTr(1, 1, :)) - Sh0) &
+                    <= 1.0e-13_wp*max(abs(Sh0), 1.0_wp), label//": S*h conserved")
+      end block checks
+      call vc%destroy()
+      call ms%destroy()
+   end subroutine check_thin_column
+
+   function real_str(x) result(s)
+      real(wp), intent(in) :: x
+      character(len=:), allocatable :: s
+      character(len=32) :: buf
+      write (buf, '(es12.4)') x
+      s = trim(adjustl(buf))
+   end function real_str
+
+   subroutine test_thin_land_rho(error)
+      !! A land column (50 x H_VANISHED = 7.5e-3 m), uniform and lighter
+      !! than every target: the inversion puts the whole column in the
+      !! surface layer, the inflation needs 49 x 3e-4 = 1.47e-2 m — main
+      !! debited it from the one survivor: 7.5e-3 - 1.47e-2 = -7.2e-3 m.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: h(50), T(50)
+      h = H_VANISHED
+      T = 10.0_wp
+      call check_thin_column(error, VCOORD_RHO, "land/rho", h, T, &
+                             RHO0 + 1.0_wp, RHO0 + 5.0_wp, .true.)
+   end subroutine test_thin_land_rho
+
+   subroutine test_thin_land_hycom(error)
+      !! Same land column on HYCOM: the (sigma) floor spreads it into 50
+      !! layers of 1.5e-4 <= floor, so `ns == 0` set every layer to 3e-4 —
+      !! minting 7.5e-3 m of water (and T, S) per land column per regrid.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: h(50), T(50)
+      h = H_VANISHED
+      T = 10.0_wp
+      call check_thin_column(error, VCOORD_HYCOM, "land/hycom", h, T, &
+                             RHO0 + 1.0_wp, RHO0 + 5.0_wp, .true.)
+   end subroutine test_thin_land_hycom
+
+   subroutine test_thin_minted_rho(error)
+      !! A thin wet sliver (50 x 2e-4 = 1e-2 m < 50 x 3e-4), stratified so
+      !! the inversion spreads it: every layer <= floor => `ns == 0` minted
+      !! 5e-3 m, or a partial spread debited a survivor negative.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: h(50), T(50)
+      integer :: k
+      h = 2.0e-4_wp
+      do k = 1, 50
+         T(k) = 4.0_wp + 0.2_wp*real(k - 1, wp)
+      end do
+      call check_thin_column(error, VCOORD_RHO, "minted/rho", h, T, &
+                             lin_rho(T(50), S_REF), lin_rho(T(1), S_REF), .false.)
+   end subroutine test_thin_minted_rho
+
+   subroutine test_thin_minted_hycom(error)
+      !! As `test_thin_minted_rho` on HYCOM.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: h(50), T(50)
+      integer :: k
+      h = 2.0e-4_wp
+      do k = 1, 50
+         T(k) = 4.0_wp + 0.2_wp*real(k - 1, wp)
+      end do
+      call check_thin_column(error, VCOORD_HYCOM, "minted/hycom", h, T, &
+                             lin_rho(T(50), S_REF), lin_rho(T(1), S_REF), .false.)
+   end subroutine test_thin_minted_hycom
+
+   subroutine test_shared_debit_rho(error)
+      !! A column just thick enough (50 x 3.2e-4 = 1.6e-2 m >= 50 x 3e-4)
+      !! that is a two-layer step (warm 25 over cold 25) with the first
+      !! interior target on the step and every other target denser than
+      !! the column: the inversion leaves two ~8e-3 m layers and 48 empty
+      !! ones.  The 48 x 3e-4 = 1.44e-2 m debit exceeds either survivor —
+      !! main drove the thickest to -6.4e-3 m; the fix shares the debit.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: h(50), T(50), rho_w, rho_c
+      h = 3.2e-4_wp
+      T(1:25) = 4.0_wp
+      T(26:50) = 12.0_wp
+      rho_w = lin_rho(12.0_wp, S_REF)
+      rho_c = lin_rho(4.0_wp, S_REF)
+      ! target(1) = midway between the two layer densities; target(k>=2)
+      ! denser than the cold layer => interfaces 2..49 land on the bed.
+      call check_thin_column(error, VCOORD_RHO, "shared-debit/rho", h, T, &
+                             rho_w - 0.5_wp*(rho_c - rho_w), &
+                             rho_w - 0.5_wp*(rho_c - rho_w) + 50.0_wp*(rho_c - rho_w), .false.)
+   end subroutine test_shared_debit_rho
 
 end module test_ocean_vcoord_rho
