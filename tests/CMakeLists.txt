@@ -176,6 +176,7 @@ set(RDB_TESTS
     "test_ocean_epbl|test_ocean_epbl|collect_ocean_epbl_tests|ocean_epbl|ocean"
     "test_ocean_wave_speed|test_ocean_wave_speed|collect_ocean_wave_speed_tests|ocean_wave_speed|ocean"
     "test_ocean_foxkemper|test_ocean_foxkemper|collect_ocean_foxkemper_tests|ocean_foxkemper|ocean"
+    "test_ocean_mle_zfixed|test_ocean_mle_zfixed|collect_ocean_mle_zfixed_tests|ocean_mle_zfixed|ocean"
     "test_ocean_kappa_shear|test_ocean_kappa_shear|collect_ocean_kappa_shear_tests|ocean_kappa_shear|ocean"
     "test_ocean_isopycnal_slopes|test_ocean_isopycnal_slopes|collect_ocean_isopycnal_slopes_tests|ocean_isopycnal_slopes|ocean"
     "test_ocean_gm|test_ocean_gm|collect_ocean_gm_tests|ocean_gm|ocean"
