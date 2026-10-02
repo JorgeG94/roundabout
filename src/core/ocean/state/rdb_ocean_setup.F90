@@ -32,7 +32,8 @@ module rdb_ocean_setup
                                ocean_vcoord_closed_face_masks, &
                                ocean_vcoord_k_top_from_target, &
                                ocean_vcoord_set_z_fixed_profile, &
-                               ocean_vcoord_count_ledges
+                               ocean_vcoord_count_ledges, &
+                               ocean_vcoord_count_bed_steps
    use rdb_vcoord, only: parse_remap_method, parse_z_fixed_profile, z_fixed_nominal_dz, &
                          ZFIXED_PROFILE_UNIFORM, ZFIXED_PROFILE_INVALID, ZFIXED_DZ_OK
    use rdb_ocean_bottom_drag, only: parse_bdrag_variant
@@ -91,7 +92,7 @@ module rdb_ocean_setup
    use rdb_ocean_dyn, only: ocean_dt_tracer_advect_ratios_ok, &
                             SPLIT_SCHEME_SSP_RK2, SPLIT_SCHEME_PRED_CORR
    use rdb_recon_weno, only: parse_tracer_recon, TRACER_RECON_PPM
-   use rdb_halo, only: halo_allreduce_min
+   use rdb_halo, only: halo_allreduce_min, halo_allreduce_sum
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_SETUP
    use rdb_error_ring, only: fail
    use pic_logger, only: logger => global_logger
@@ -2602,7 +2603,10 @@ contains
       real(wp), allocatable :: tgt(:, :, :), eta0(:, :)
 
       if (present(ierr)) ierr = OCEAN_STATUS_OK
-      if (.not. cfg%zfixed_closed_faces) return
+      if (.not. cfg%zfixed_closed_faces) then
+         call refuse_open_zfixed_staircase(ocean_state, grid, ierr)
+         return
+      end if
 
       if (.not. ocean_state%multilayer%is_init) then
          call fail("&vcoord_nml zfixed_closed_faces requires the ocean "// &
@@ -2840,6 +2844,82 @@ contains
       end if
       if (present(ierr)) ierr = OCEAN_STATUS_OK
    end subroutine configure_ocean_closed_faces
+
+   subroutine refuse_open_zfixed_staircase(ocean_state, grid, ierr)
+      !! The `zfixed_closed_faces = .false.` leg of
+      !! `configure_ocean_closed_faces`: refuse `vcoord_type = "z_fixed"`
+      !! with OPEN staircase faces over a STEPPED bed.
+      !!
+      !! A face where the two columns' bed falls in different nominal
+      !! `z_fixed` layers pairs a live layer with a bed filler.  Left
+      !! open, the FV pressure gradient across that step drives
+      !! `|ρ′|·g·Δz_step/(ρ₀·dx)` out of rest whatever the filler
+      !! thickness — measured on the 1° Southern Ocean: u ≈ 250 m/s by
+      !! step 3, 4e9 m/s on the filler faces, `h → −2e9`, the first
+      !! non-finite in `post_bt`, with or without any closure.  That is
+      !! the case the closed-face mask exists for, so the combination
+      !! fails loud here instead of blowing up three steps in.
+      !!
+      !! A flat or step-free bed is ACCEPTED untouched (no state is
+      !! written, so it stays bit-identical), and so is every coordinate
+      !! but `z_fixed`.  Top-side (ice-draft) steps are not counted.
+      !!
+      !! MPI: each rank counts its OWNED faces off the same GHOST-FILLED
+      !! `bt_H_ref` / `z_top` the mask builder reads (so a tile-seam
+      !! step is seen by exactly one rank) and the count is summed over
+      !! the compute communicator, so every rank takes the same decision.
+      !! Every early return is on rank-uniform state, so either all
+      !! ranks reach the collective or none does.
+      type(ocean_state_t), intent(in) :: ocean_state
+      type(hgrid_t), intent(in) :: grid
+      integer, intent(out), optional :: ierr
+
+      integer :: nx, ny, nz, ng, n_local
+      real(wp) :: h_nominal, steps_local, steps_global
+      real(wp), allocatable :: tgt(:, :, :), eta0(:, :)
+
+      if (present(ierr)) ierr = OCEAN_STATUS_OK
+      if (.not. ocean_state%multilayer%is_init) return
+      if (ocean_state%vcoord%coord_type /= VCOORD_Z_FIXED) return
+      if (ocean_state%vcoord%z_fixed_h_ref <= 0.0_wp) return
+      if (.not. ocean_state%dyn%bt_work%is_init) return
+
+      nx = grid%nx_total
+      ny = grid%ny_total
+      ng = grid%nghost
+      nz = ocean_state%multilayer%nz_ml
+      h_nominal = ocean_state%vcoord%z_fixed_h_ref/real(nz, wp)
+
+      allocate (tgt(nx, ny, nz), source=0.0_wp)
+      allocate (eta0(nx, ny), source=0.0_wp)
+      call ocean_vcoord_z_fixed_target(tgt, ocean_state%dyn%bt_work%bt_H_ref, &
+                                       eta0, ocean_state%vcoord%z_top, &
+                                       nx, ny, nz, h_nominal, &
+                                       ocean_state%vcoord%z_fixed_use_profile, &
+                                       ocean_state%vcoord%z_fixed_zi, &
+                                       ocean_state%vcoord%z_fixed_dz, &
+                                       ocean_state%vcoord%zstar_h_min)
+      n_local = ocean_vcoord_count_bed_steps(tgt, ocean_state%dyn%bt_work%bt_H_ref, &
+                                             ocean_state%metrics%dy_cu, &
+                                             ocean_state%metrics%dx_cv, &
+                                             nx, ny, nz, ng + 1, ng + grid%nx_phys, &
+                                             ng + 1, ng + grid%ny_phys, H_VANISHED)
+      deallocate (tgt, eta0)
+
+      ! An integer count rides the real64 sum exactly (far below 2**53).
+      steps_local = real(n_local, wp)
+      call halo_allreduce_sum(steps_local, steps_global)
+      if (steps_global < 0.5_wp) return
+
+      call fail("&vcoord_nml zfixed_closed_faces = .false. is refused with "// &
+                "vcoord_type='z_fixed' over a stepped bed: "// &
+                to_string(nint(steps_global))//" wet faces join columns whose "// &
+                "bed lies in different nominal z_fixed layers, so an open face "// &
+                "pairs a live layer with a bed filler and the pressure gradient "// &
+                "across the open staircase step drives flow from rest (blows "// &
+                "up within steps).  Set &vcoord_nml zfixed_closed_faces = .true.", &
+                ierr, OCEAN_STATUS_ERR_SETUP)
+   end subroutine refuse_open_zfixed_staircase
 
    subroutine configure_ocean_porous(cfg, ocean_state, grid, compute_rank, ierr)
       !! Configure porous barriers (`&ocean_porous_nml`, Adcroft 2013).

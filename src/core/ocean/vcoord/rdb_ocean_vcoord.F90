@@ -79,6 +79,7 @@ module rdb_ocean_vcoord
    public :: ocean_vcoord_closed_face_masks
    public :: ocean_vcoord_k_top_from_target
    public :: ocean_vcoord_count_ledges
+   public :: ocean_vcoord_count_bed_steps
    public :: VCOORD_EULERIAN_Z
    public :: VCOORD_LAGRANGIAN
    public :: VCOORD_Z_FIXED
@@ -1502,6 +1503,90 @@ contains
          end do
       end do
    end function ocean_vcoord_count_ledges
+
+   pure function ocean_vcoord_count_bed_steps(target_h, total_h, dy_cu, dx_cv, &
+                                              nx, ny, nz, i0, i1, j0, j1, &
+                                              h_vanished) result(n_step)
+      !! Count the wet velocity faces at which the two columns' BED falls
+      !! in different nominal `z_fixed` layers — a bed staircase step that
+      !! crosses a nominal interface, so that an OPEN face pairs a live
+      !! layer on one side with a bed FILLER on the other.  That is the
+      !! face `&vcoord_nml zfixed_closed_faces` closes; left open, the FV
+      !! pressure gradient across the step drives the flow from rest
+      !! (`configure_ocean_closed_faces` refuses the configuration).
+      !!
+      !! The bed layer of a column is its LOWEST live layer under the
+      !! `z_fixed` target at `η = 0` (`target_h > h_vanished`) — the same
+      !! single definition of "live" the closed-face mask is built from,
+      !! so the count is exactly the set of faces whose bed-side layers
+      !! the mask would close.  A column with no live layer, or with
+      !! `total_h <= 0`, is dry and pairs with nothing; a face whose
+      !! land-masked width is zero is a wall and is skipped.  Top-side
+      !! (ice-draft) fillers are deliberately not counted: only the bed
+      !! side is refused.
+      !!
+      !! Only the OWNED faces are visited — `i0:i1` / `j0:j1` are the
+      !! owned CELL ranges and each owned cell contributes its WEST
+      !! (`I = i`) and SOUTH (`J = j`) face, which pairs it with the
+      !! ghost-filled neighbour — so a step at a tile seam or a periodic
+      !! seam is counted exactly once across the decomposition and the
+      !! per-rank counts sum to the global one.
+      integer, intent(in) :: nx
+         !! i-extent of the CENTRE arrays (total, incl. halos).
+      integer, intent(in) :: ny
+         !! j-extent of the CENTRE arrays (total, incl. halos).
+      integer, intent(in) :: nz
+         !! Number of layers; `k = 1` is the bed, `k = nz` the top.
+      real(wp), intent(in) :: target_h(nx, ny, nz)
+         !! The `z_fixed` target thickness at `η = 0`.
+      real(wp), intent(in) :: total_h(nx, ny)
+         !! Column reference thickness (`bt_H_ref`, ghost-filled).
+      real(wp), intent(in) :: dy_cu(nx + 1, ny)
+         !! Land-masked u-face width.
+      real(wp), intent(in) :: dx_cv(nx, ny + 1)
+         !! Land-masked v-face width.
+      integer, intent(in) :: i0, i1, j0, j1
+         !! Owned cell range (`nghost+1 : nghost+n_phys`).
+      real(wp), intent(in) :: h_vanished
+         !! Inert-filler marker (`H_VANISHED`).
+      integer :: n_step
+      integer :: i, j
+
+      n_step = 0
+      do j = j0, j1
+         do i = i0, i1
+            if (dy_cu(i, j) > 0.0_wp) then
+               if (bed_layer(i - 1, j) /= bed_layer(i, j) .and. &
+                   bed_layer(i - 1, j) > 0 .and. bed_layer(i, j) > 0) then
+                  n_step = n_step + 1
+               end if
+            end if
+            if (dx_cv(i, j) > 0.0_wp) then
+               if (bed_layer(i, j - 1) /= bed_layer(i, j) .and. &
+                   bed_layer(i, j - 1) > 0 .and. bed_layer(i, j) > 0) then
+                  n_step = n_step + 1
+               end if
+            end if
+         end do
+      end do
+
+   contains
+
+      pure function bed_layer(ii, jj) result(kb)
+         !! Lowest live layer of column `(ii, jj)`; `0` if dry.
+         integer, intent(in) :: ii, jj
+         integer :: kb
+         integer :: kk
+         kb = 0
+         if (total_h(ii, jj) <= 0.0_wp) return
+         do kk = 1, nz
+            if (target_h(ii, jj, kk) > h_vanished) then
+               kb = kk
+               return
+            end if
+         end do
+      end function bed_layer
+   end function ocean_vcoord_count_bed_steps
 
    pure subroutine ocean_vcoord_compute_target_h_rho(this, total_h, eta, T, S, eos, hybrid)
       !! Thin polymorphic wrapper for the isopycnal (`VCOORD_RHO`) and
