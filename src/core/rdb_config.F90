@@ -3443,13 +3443,28 @@ module rdb_config
          !! potential density that defines the VCOORD_RHO coordinate.
       real(wp) :: rho_target_light = 1020.0_wp
          !! Lightest target interface potential density (kg/m³) — the
-         !! surface interface for VCOORD_RHO.  With `rho_target_dense`
-         !! builds the uniform light→dense target-density linspace
-         !! (MOM6 `ALE_COORDINATE_CONFIG=UNIFORM` analogue for the RHO
-         !! mode).  A stretched (RFNC1-style) profile is a P3 follow-up.
+         !! surface interface for VCOORD_RHO / VCOORD_HYCOM.  With
+         !! `rho_target_dense` builds the uniform light→dense
+         !! target-density linspace (MOM6 `ALE_COORDINATE_CONFIG=UNIFORM`
+         !! analogue) under `rho_target_profile = "uniform"`.
       real(wp) :: rho_target_dense = 1030.0_wp
          !! Densest target interface potential density (kg/m³) — the bed
-         !! interface for VCOORD_RHO.  See `rho_target_light`.
+         !! interface for VCOORD_RHO / VCOORD_HYCOM.  See `rho_target_light`.
+      character(len=16) :: rho_target_profile = "uniform"
+         !! Target-density profile of `vcoord_type = "rho" | "hycom"`:
+         !! `"uniform"` (default — the `rho_target_light`→`rho_target_dense`
+         !! linspace, byte-identical) or `"list"` (the `nz_layers+1`
+         !! interface densities in `rho_target_list`, light first — MOM6
+         !! target densities from a list/file, e.g. the
+         !! `HYBRID:file,sigma2,dz` coordinate of OM4).  A uniform list is a
+         !! poor fit wherever most of the volume sits in a narrow density
+         !! range (the Southern Ocean: half its volume inside ~2 linspace
+         !! layers).  Refused on any other coordinate.
+      real(wp) :: rho_target_list(MAX_Z_FIXED_DZ + 1) = -1.0_wp
+         !! `rho_target_profile = "list"`: interface potential densities
+         !! (kg/m³) at `rho_ref_pressure`, LIGHTEST (surface) FIRST, strictly
+         !! increasing.  Exactly `nz_layers+1` leading positive entries; the
+         !! rest unset (`<= 0`, default `-1`).
       ! ALE-regrid refinements (ocean path)
       real(wp) :: regrid_time_scale = 0.0_wp
          !! Grid time-filter timescale τ (s).  The ALE regrid relaxes the
@@ -3534,8 +3549,17 @@ module rdb_config
          !! `&ocean_topo_nml max_depth`; see `rdb_vcoord ::
          !! z_fixed_nominal_dz`).  The z_fixed target builder, the
          !! closed-face mask, `k_top`, the cavity partial-top rule and the
-         !! bed partial-cell rule all read the profile.  Refused on any
-         !! other coordinate.
+         !! bed partial-cell rule all read the profile.
+         !!
+         !! It is the z* COORDINATE RESOLUTION, and `vcoord_type = "hycom"`
+         !! reads it too, as its z* nominal floor (MOM6 HYCOM1 floors its
+         !! interfaces at the `coordinateResolution` that
+         !! `ALE_COORDINATE_CONFIG` / `HYBRID:` defines): interface `k` is
+         !! kept at least `Σ dz·(H+η)/H` deep.  "uniform" there means
+         !! `max_depth/nz_layers` METRES, not `1/nz_layers` of the column.
+         !! The `z_fixed_*` names are kept for both readers rather than
+         !! introducing a parallel table that could disagree.  Refused on
+         !! any other coordinate.
       real(wp) :: z_fixed_dz(MAX_Z_FIXED_DZ) = -1.0_wp
          !! `z_fixed_profile = "list"`: nominal layer thicknesses (m),
          !! SURFACE FIRST (MOM6 `ALE_COORDINATE_CONFIG = "PARAM:..."` /
@@ -4039,7 +4063,8 @@ contains
                             ZFIXED_DZ_ERR_TOO_DEEP
       use rdb_constants, only: VCOORD_SIGMA, VCOORD_ZSTAR, VCOORD_EULERIAN_Z, &
                                VCOORD_ZSIGMA, VCOORD_LAGRANGIAN, VCOORD_ZSTAR_SIGMA, &
-                               VCOORD_ZSTAR_FULL, VCOORD_Z_FIXED, H_VANISHED
+                               VCOORD_ZSTAR_FULL, VCOORD_Z_FIXED, VCOORD_RHO, VCOORD_HYCOM, &
+                               H_VANISHED
       use rdb_ocean_boundary_types, only: ocean_bc_type_from_string, OBC_PERIODIC, OBC_WALL, &
                                           OBC_INVALID
       use rdb_coriolis_adv, only: parse_pv_variant, pv_variant_is_implemented, &
@@ -4437,11 +4462,12 @@ contains
             has_error = .true.
          end if
 
-         ! Stretched `z_fixed` nominal profile.  Default "uniform" ⇒ no
-         ! check fires and nothing downstream changes.  Anything else must
-         ! be on `z_fixed` (no other family reads it — silently ignoring it
-         ! would be the bug) and must build: list length = nz_layers, tanh
-         ! parameters in range and leaving room to stretch.
+         ! Stretched z* nominal profile.  Default "uniform" ⇒ no check
+         ! fires and nothing downstream changes.  Anything else must be on
+         ! a family that reads it — `z_fixed` (its levels) or `hycom` (its
+         ! z* nominal floor); silently ignoring it would be the bug — and
+         ! must build: list length = nz_layers, tanh parameters in range
+         ! and leaving room to stretch.
          block
             integer :: zf_code, zf_ierr
             real(wp), allocatable :: zf_dz(:)
@@ -4452,10 +4478,11 @@ contains
                                  "'uniform', 'list', 'tanh'")
                has_error = .true.
             else if (zf_code /= ZFIXED_PROFILE_UNIFORM) then
-               if (parse_vcoord_type(cfg%vcoord_type, VCOORD_EULERIAN_Z) /= VCOORD_Z_FIXED) then
+               if (parse_vcoord_type(cfg%vcoord_type, VCOORD_EULERIAN_Z) /= VCOORD_Z_FIXED .and. &
+                   parse_vcoord_type(cfg%vcoord_type, VCOORD_EULERIAN_Z) /= VCOORD_HYCOM) then
                   call logger%error("&vcoord_nml z_fixed_profile = '"// &
                                     trim(cfg%z_fixed_profile)//"' is only read by "// &
-                                    "vcoord_type = 'z_fixed' (got '"// &
+                                    "vcoord_type = 'z_fixed' or 'hycom' (got '"// &
                                     trim(cfg%vcoord_type)//"'); it would be silently ignored")
                   has_error = .true.
                else if (cfg%nz_layers >= 1) then
@@ -4493,6 +4520,60 @@ contains
                                          "excess in their bed layer")
                   end if
                end if
+            end if
+         end block
+
+         ! Target-density profile of the density families.  Default
+         ! "uniform" ⇒ the light→dense linspace, nothing checked.  "list"
+         ! must be on rho/hycom (nothing else reads it) and give exactly
+         ! nz_layers+1 strictly increasing interface densities, light first.
+         block
+            integer :: n_rho, kr, vc_code
+            logical :: rho_ok
+            vc_code = parse_vcoord_type(cfg%vcoord_type, VCOORD_EULERIAN_Z)
+            if (trim(cfg%rho_target_profile) /= "uniform" .and. &
+                trim(cfg%rho_target_profile) /= "list") then
+               call logger%error("&vcoord_nml rho_target_profile = '"// &
+                                 trim(cfg%rho_target_profile)//"' is not one of "// &
+                                 "'uniform', 'list'")
+               has_error = .true.
+            else if (trim(cfg%rho_target_profile) == "list") then
+               if (vc_code /= VCOORD_RHO .and. vc_code /= VCOORD_HYCOM) then
+                  call logger%error("&vcoord_nml rho_target_profile = 'list' is only "// &
+                                    "read by vcoord_type = 'rho' or 'hycom' (got '"// &
+                                    trim(cfg%vcoord_type)//"'); it would be silently ignored")
+                  has_error = .true.
+               else
+                  ! Leading positive entries, no gaps.
+                  n_rho = 0
+                  do kr = 1, size(cfg%rho_target_list)
+                     if (cfg%rho_target_list(kr) <= 0.0_wp) exit
+                     n_rho = n_rho + 1
+                  end do
+                  rho_ok = n_rho == cfg%nz_layers + 1 .and. &
+                           count(cfg%rho_target_list > 0.0_wp) == n_rho
+                  if (rho_ok) then
+                     do kr = 2, n_rho
+                        if (cfg%rho_target_list(kr) <= cfg%rho_target_list(kr - 1)) then
+                           rho_ok = .false.
+                        end if
+                     end do
+                  end if
+                  if (.not. rho_ok) then
+                     call logger%error("&vcoord_nml rho_target_profile = 'list' needs "// &
+                                       "exactly nz_layers+1 = "// &
+                                       to_string(cfg%nz_layers + 1)// &
+                                       " leading positive, strictly increasing "// &
+                                       "rho_target_list entries (lightest first, no gaps), "// &
+                                       "got "//to_string(n_rho))
+                     has_error = .true.
+                  end if
+               end if
+            else if (count(cfg%rho_target_list > 0.0_wp) > 0) then
+               call logger%error("&vcoord_nml rho_target_list is set but "// &
+                                 "rho_target_profile = 'uniform' ignores it; set "// &
+                                 "rho_target_profile = 'list'")
+               has_error = .true.
             end if
          end block
 
@@ -8084,6 +8165,16 @@ contains
       pr => cfg%rho_target_dense
       call g%add(nml_real("rho_target_dense", pr, &
                           "rho-coord: densest (bed) target density", units="kg/m^3"))
+      ps => cfg%rho_target_profile
+      call g%add(nml_enum("rho_target_profile", ps, &
+                          "rho/hycom target densities: uniform (rho_target_light.."// &
+                          "rho_target_dense linspace) or list (rho_target_list)", &
+                          allowed=[character(len=7) :: "uniform", "list"]))
+      pra => cfg%rho_target_list
+      call g%add(nml_real_array("rho_target_list", pra, &
+                                "rho_target_profile='list': interface densities, "// &
+                                "lightest first (exactly nz_layers+1 entries)", &
+                                units="kg/m^3"))
       pr => cfg%regrid_time_scale
       call g%add(nml_real("regrid_time_scale", pr, &
                           "ALE regrid grid time-filter timescale (0 = jump to target)", &
@@ -8116,8 +8207,9 @@ contains
                              "an inert filler on either side (z-level wall, free-slip)"))
       ps => cfg%z_fixed_profile
       call g%add(nml_enum("z_fixed_profile", ps, &
-                          "z_fixed nominal layer-thickness profile: uniform "// &
-                          "(max_depth/nz), list (z_fixed_dz) or tanh stretching", &
+                          "z_fixed levels / hycom z* floor nominal layer-thickness "// &
+                          "profile: uniform (max_depth/nz), list (z_fixed_dz) or "// &
+                          "tanh stretching", &
                           allowed=[character(len=7) :: "uniform", "list", "tanh"]))
       pra => cfg%z_fixed_dz
       call g%add(nml_real_array("z_fixed_dz", pra, &

@@ -282,6 +282,24 @@ class Vcoord(Group):
         default=1030.0,
     )
 
+    rho_target_profile = Enum(
+        'rho_target_profile',
+        doc='rho/hycom target densities: uniform (rho_target_light..rho_target_dense linspace) or list (rho_target_list)',
+        units='',
+        required=False,
+        default='uniform',
+        allowed=('uniform', 'list'),
+    )
+
+    rho_target_list = RealArray(
+        'rho_target_list',
+        doc="rho_target_profile='list': interface densities, lightest first (exactly nz_layers+1 entries)",
+        units='kg/m^3',
+        required=False,
+        default=(-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0),
+        size=129,
+    )
+
     regrid_time_scale = Real(
         'regrid_time_scale',
         doc='ALE regrid grid time-filter timescale (0 = jump to target)',
@@ -342,7 +360,7 @@ class Vcoord(Group):
 
     z_fixed_profile = Enum(
         'z_fixed_profile',
-        doc='z_fixed nominal layer-thickness profile: uniform (max_depth/nz), list (z_fixed_dz) or tanh stretching',
+        doc='z_fixed levels / hycom z* floor nominal layer-thickness profile: uniform (max_depth/nz), list (z_fixed_dz) or tanh stretching',
         units='',
         required=False,
         default='uniform',
@@ -6237,4 +6255,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 60
-N_KNOBS = 683
+N_KNOBS = 685
