@@ -1156,15 +1156,21 @@ contains
       nxp = grid%nx_phys
       nyp = grid%ny_phys
       ! Which physical-domain edges are no-normal-flow walls (default closed).
+      ! The edge tags are GLOBAL: under a domain decomposition a tile edge
+      ! that is not a physical domain edge (`.not. bc%has_*`) is an MPI
+      ! seam, which the neutral flux must cross exactly as an interior face
+      ! does — keyed on the tag alone, a wall-tagged edge would close every
+      ! seam parallel to it (`test_ocean_decomp_bitid_mpi`, 1x2 split).
+      ! Single rank: `has_* = .true.` ⇒ unchanged.
       wall_w = .true.
       wall_e = .true.
       wall_s = .true.
       wall_n = .true.
       if (present(bc)) then
-         wall_w = (ocean_bc_outer_face_tag(bc%west%bc_type) == OBC_WALL)
-         wall_e = (ocean_bc_outer_face_tag(bc%east%bc_type) == OBC_WALL)
-         wall_s = (ocean_bc_outer_face_tag(bc%south%bc_type) == OBC_WALL)
-         wall_n = (ocean_bc_outer_face_tag(bc%north%bc_type) == OBC_WALL)
+         wall_w = (ocean_bc_outer_face_tag(bc%west%bc_type) == OBC_WALL) .and. bc%has_west
+         wall_e = (ocean_bc_outer_face_tag(bc%east%bc_type) == OBC_WALL) .and. bc%has_east
+         wall_s = (ocean_bc_outer_face_tag(bc%south%bc_type) == OBC_WALL) .and. bc%has_south
+         wall_n = (ocean_bc_outer_face_tag(bc%north%bc_type) == OBC_WALL) .and. bc%has_north
       end if
 
       use_ext = present(khtr_u_ext) .and. present(khtr_v_ext)
