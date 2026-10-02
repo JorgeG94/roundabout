@@ -230,6 +230,7 @@ program rdb_tests
    use test_ocean_cfl_trunc, only: ocean_cfl_trunc_collect => collect_ocean_cfl_trunc_tests
    use test_ocean_periodic, only: ocean_periodic_collect => collect_ocean_periodic_tests
    use test_ocean_fold, only: ocean_fold_collect => collect_ocean_fold_tests
+   use test_ocean_fold_plan, only: ocean_fold_plan_collect => collect_ocean_fold_plan_tests
    use test_ocean_tripolar, only: ocean_tripolar_collect => collect_ocean_tripolar_tests
    use test_ocean_tripolar_determinism, only: ocean_tripolar_determinism_collect => collect_ocean_tripolar_determinism_tests
    use test_ocean_stability_audit, only: ocean_stability_audit_collect => &
@@ -425,6 +426,7 @@ program rdb_tests
                 new_testsuite("ocean_cfl_trunc", ocean_cfl_trunc_collect), &
                 new_testsuite("ocean_periodic", ocean_periodic_collect), &
                 new_testsuite("ocean_fold", ocean_fold_collect), &
+                new_testsuite("ocean_fold_plan", ocean_fold_plan_collect), &
                 new_testsuite("ocean_tripolar", ocean_tripolar_collect), &
                 new_testsuite("ocean_tripolar_determinism", ocean_tripolar_determinism_collect), &
                 new_testsuite("ocean_stability_audit", ocean_stability_audit_collect), &
