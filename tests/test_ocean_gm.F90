@@ -105,6 +105,10 @@ contains
       type(ocean_gm_t), intent(inout) :: gm
       !$acc enter data copyin(ms)
       call ms%enter_data()
+      ! Bed datum of the slopes' geopotential interface heights: every
+      ! case here has a flat bed under a constant-depth column at rest
+      ! (eta = 0), so D = Sum_k h.  Host-side, BEFORE the slot's map.
+      call sl%set_bathymetry(sum(ms%h_layer, dim=3))
       !$acc enter data copyin(sl)
       call sl%enter_data()
       !$acc enter data copyin(gm)
@@ -551,6 +555,10 @@ contains
       type(continuity_t), intent(inout) :: ct
       !$acc enter data copyin(ms)
       call ms%enter_data()
+      ! Bed datum of the slopes' geopotential interface heights: every
+      ! case here has a flat bed under a constant-depth column at rest
+      ! (eta = 0), so D = Sum_k h.  Host-side, BEFORE the slot's map.
+      call sl%set_bathymetry(sum(ms%h_layer, dim=3))
       !$acc enter data copyin(sl)
       call sl%enter_data()
       !$acc enter data copyin(gm)
