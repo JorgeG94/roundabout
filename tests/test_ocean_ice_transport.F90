@@ -57,7 +57,8 @@ module test_ocean_ice_transport
    use rdb_ocean_metrics, only: ocean_metrics_t
    use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
    use rdb_ice_state, only: ocean_sea_ice_t
-   use rdb_ice_transport, only: ice_transport_step, ice_transport_compress_cell
+   use rdb_ice_transport, only: ice_transport_step, ice_transport_compress_cell, &
+                                ice_cat_flux_x_impl, ice_cat_flux_y_impl
    use rdb_ice_column, only: ICE_RHO_ICE
    use rdb_ice_evp, only: evp_truncate_final_impl
    implicit none
@@ -96,7 +97,8 @@ contains
                   new_unittest("ncat1_noop", test_ncat1_noop), &
                   new_unittest("disabled_bitident", test_disabled_bitident), &
                   new_unittest("runaway_truncates_and_completes", &
-                               test_runaway_truncates_and_completes) &
+                               test_runaway_truncates_and_completes), &
+                  new_unittest("seam_face_is_interior_ppm", test_seam_face_is_interior_ppm) &
                   ]
    end subroutine collect_ocean_ice_transport_tests
 
@@ -1053,5 +1055,98 @@ contains
       end block checks
       call teardown(metrics, ms, ice)
    end subroutine test_runaway_truncates_and_completes
+
+   subroutine test_seam_face_is_interior_ppm(error)
+      !! F2 regression (sea-ice MPI plan): the `u > 0` flux at the WEST
+      !! tile-edge face `nghost+1`, with that face NOT a wall (an MPI or
+      !! periodic seam), must be the full PPM flux — bit-for-bit the flux
+      !! the same five cells give at an INTERIOR face.  Its donor is cell
+      !! `nghost` and its stencil cells `1 .. nghost+2`; with
+      !! `nghost = 3` that is exactly the kernel's first PPM cell, whose
+      !! left edge the old first-order fallback overwrote (`hr_x_work(3) =
+      !! htot(2)`), so a decomposed run's seam face disagreed with the
+      !! serial run's interior face.  Profile A puts a curved column at
+      !! cells 1..5 (read by face 4); profile B shifts it by `S` cells
+      !! (read by face 4+S, an interior face).  Translation invariance of
+      !! the interior PPM makes the two fluxes bitwise equal.  The meridional
+      !! twin (`hr_y_work(:,3)`) is checked the same way.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NG3 = 3, NXP = 10, NYP = 10, S = 3, NC1 = 1
+      integer, parameter :: NXT = NXP + 2*NG3, NYT = NYP + 2*NG3
+      real(wp), parameter :: U0 = 0.2_wp, DTA = 400.0_wp
+      real(wp) :: wet(NXT, NYT), idx(NXT, NYT), idy(NXT, NYT)
+      real(wp) :: dycu(NXT + 1, NYT), dxcv(NXT, NYT + 1)
+      real(wp) :: uf(NXT + 1, NYT), vf(NXT, NYT + 1)
+      real(wp) :: mca_a(NXT, NYT, NC1), mca_b(NXT, NYT, NC1)
+      real(wp) :: htot(NXT, NYT)
+      real(wp) :: hlx(NXT + 1, NYT), hrx(NXT + 1, NYT), uht(NXT + 1, NYT)
+      real(wp) :: hly(NXT, NYT + 1), hry(NXT, NYT + 1), vht(NXT, NYT + 1)
+      real(wp) :: uh_a(NXT + 1, NYT, NC1), uh_b(NXT + 1, NYT, NC1)
+      real(wp) :: vh_a(NXT, NYT + 1, NC1), vh_b(NXT, NYT + 1, NC1)
+      integer :: i, j
+      integer, parameter :: JM = NG3 + 5, IM = NG3 + 5
+         !! A physical row / column to read the fluxes on.
+
+      wet = 1.0_wp
+      idx = 1.0_wp/DX
+      idy = 1.0_wp/DY
+      dycu = DY
+      dxcv = DX
+      uf = U0
+      vf = U0
+      ! A strongly curved, non-monotone column (so the PPM edge, slope and
+      ! curvature all matter) -- the same in every row / column.
+      do j = 1, NYT
+         do i = 1, NXT
+            mca_a(i, j, 1) = curve(i)
+            mca_b(i, j, 1) = curve(i - S)
+         end do
+      end do
+
+      !$acc enter data copyin(wet, idx, idy, dycu, dxcv, uf, vf, mca_a, mca_b) &
+      !$acc&           create(htot, hlx, hrx, uht, hly, hry, vht, uh_a, uh_b, vh_a, vh_b)
+      call ice_cat_flux_x_impl(wet, dycu, idx, uf, mca_a, htot, hlx, hrx, uht, uh_a, DTA, &
+                               NG3, NXP, NC1, NXT, NYT, .false., .false.)
+      call ice_cat_flux_x_impl(wet, dycu, idx, uf, mca_b, htot, hlx, hrx, uht, uh_b, DTA, &
+                               NG3, NXP, NC1, NXT, NYT, .false., .false.)
+      !$acc update self(uh_a, uh_b)
+
+      call check(error, uh_a(NG3 + 1, JM, 1) > 0.0_wp, &
+                 "seam_face_ppm: x seam-face flux must be positive (u > 0, mass > 0)")
+      if (allocated(error)) return
+      call check(error, uh_a(NG3 + 1, JM, 1) == uh_b(NG3 + 1 + S, JM, 1), &
+                 "seam_face_ppm: x seam-face flux must equal the interior PPM flux bitwise")
+      if (allocated(error)) return
+
+      ! Meridional twin: the same column along j.
+      do j = 1, NYT
+         do i = 1, NXT
+            mca_a(i, j, 1) = curve(j)
+            mca_b(i, j, 1) = curve(j - S)
+         end do
+      end do
+      !$acc update device(mca_a, mca_b)
+      call ice_cat_flux_y_impl(wet, dxcv, idy, vf, mca_a, htot, hly, hry, vht, vh_a, DTA, &
+                               NG3, NYP, NC1, NXT, NYT, .false., .false.)
+      call ice_cat_flux_y_impl(wet, dxcv, idy, vf, mca_b, htot, hly, hry, vht, vh_b, DTA, &
+                               NG3, NYP, NC1, NXT, NYT, .false., .false.)
+      !$acc update self(vh_a, vh_b)
+      !$acc exit data delete(wet, idx, idy, dycu, dxcv, uf, vf, mca_a, mca_b, htot, hlx, hrx, &
+      !$acc&                 uht, hly, hry, vht, uh_a, uh_b, vh_a, vh_b)
+
+      call check(error, vh_a(IM, NG3 + 1, 1) > 0.0_wp, &
+                 "seam_face_ppm: y seam-face flux must be positive (v > 0, mass > 0)")
+      if (allocated(error)) return
+      call check(error, vh_a(IM, NG3 + 1, 1) == vh_b(IM, NG3 + 1 + S, 1), &
+                 "seam_face_ppm: y seam-face flux must equal the interior PPM flux bitwise")
+   contains
+      pure real(wp) function curve(k)
+         !! Curved positive mass profile [kg/m2] of a (possibly shifted)
+         !! cell index; non-monotone across cells 1..5.
+         integer, intent(in) :: k
+         curve = 900.0_wp + 20.0_wp*real(k, wp) - real(k, wp)**2 + &
+                 30.0_wp*real(mod(k*k, 5), wp)
+      end function curve
+   end subroutine test_seam_face_is_interior_ppm
 
 end module test_ocean_ice_transport

@@ -695,29 +695,30 @@ contains
       end do
 
       ! ---- PR 36: FINAL CFL clip (cfl_trunc) -- always on when cfl_trunc>0
-      ! and dt_tr>0. 0.95*bound back-off; counts ice-bearing faces touched.
-      ! The clip walks PHYSICAL faces only -- the periodic re-wrap after it
-      ! is MANDATORY (without it a periodic ghost face keeps its unclipped
-      ! value, transport's PPM reads it as a donor velocity, and the run
-      ! aborts anyway for a reason no test would name). ----
+      ! and dt_tr>0. 0.95*bound back-off; counts ice-bearing faces touched. ----
       n_out = 0
       if (do_trunc_fin) then
          call evp_truncate_final_impl(metrics%areaT, metrics%dy_cu, metrics%dx_cv, &
                                       mi_u_w, mi_v_w, ui, vi, par%cfl_trunc, dt_tr, &
                                       m_neglect, nghost, nx_phys, ny_phys, nx, ny, n_out, &
                                       count_w=land_w, count_s=land_s)
-         ! X3: the clip walked physical faces only; refresh the seam
-         ! ghosts (transport reads them as donor velocities) before the
-         ! local wrap, same order as X2.
-         if (halo_x .or. halo_y) then
-            call ocean_halo_face_x(ui)
-            call ocean_halo_face_y(vi)
-         end if
-         call ocean_periodic_wrap_face_x_2d(ui, nx + 1, ny, nx_phys, ny_phys, nghost, &
-                                            wrap_x, wrap_y)
-         call ocean_periodic_wrap_face_y_2d(vi, nx, ny + 1, nx_phys, ny_phys, nghost, &
-                                            wrap_x, wrap_y)
       end if
+      ! X3: the last subcycle's momentum solve (and the clip) wrote PHYSICAL
+      ! faces only, so every ghost face still holds the value exchanged at
+      ! the TOP of that subcycle -- one subcycle old.  Transport reads them
+      ! as donor velocities (and, in the ghost rows, as the x-pass's own
+      ! face velocities), so refresh them on EVERY call, clip or not: seam
+      ! ghosts first, then the local wrap, same order as X2.  (A periodic
+      ! ghost face that kept its unclipped value would also make transport
+      ! abort for a reason no test would name.)
+      if (halo_x .or. halo_y) then
+         call ocean_halo_face_x(ui)
+         call ocean_halo_face_y(vi)
+      end if
+      call ocean_periodic_wrap_face_x_2d(ui, nx + 1, ny, nx_phys, ny_phys, nghost, &
+                                         wrap_x, wrap_y)
+      call ocean_periodic_wrap_face_y_2d(vi, nx, ny + 1, nx_phys, ny_phys, nghost, &
+                                         wrap_x, wrap_y)
       if (present(n_trunc)) n_trunc = n_out
 
       ! ---- fxoc/fyoc average + mask (:1415-1441) ----
