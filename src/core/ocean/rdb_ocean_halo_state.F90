@@ -37,6 +37,7 @@ module rdb_ocean_halo_state
    public :: ocean_seam_refresh_surface_stress
    public :: ocean_halo_exchange_ice_state
    public :: ocean_halo_exchange_ice_fluxes
+   public :: ocean_halo_exchange_ice_transport
 
 contains
 
@@ -247,6 +248,37 @@ contains
       call oh_count_suppress_off()
       call profiler_stop("ice_comms_fluxes")
    end subroutine ocean_halo_exchange_ice_fluxes
+
+   subroutine ocean_halo_exchange_ice_transport(ice, device_resident)
+      !! X4 of the sea-ice MPI plan: the seam ghosts every advective
+      !! substep of `ice_transport_step` reads — the cell-averaged
+      !! category masses `mca_ice`/`mca_snow` (the PPM donors, 5-point
+      !! stencil) and the riding intensive tracers `m_ice`, `enth_ice`,
+      !! `sal_ice`, `enth_snow` (the PCM donors).  `mca_*` ghosts are
+      !! zeroed by the IST->CAS conversion and the ride/mass updates leave
+      !! the ghost band one substep old, so this runs at the top of EVERY
+      !! substep.  On one rank with a periodic axis the primitives wrap.
+      type(ocean_sea_ice_t), intent(inout) :: ice
+         !! Live sea-ice slot (`ice%is_init`); a no-op otherwise.
+      logical, intent(in), optional :: device_resident
+         !! Forwarded to the halo primitives.
+
+      integer :: nxt, nyt
+
+      if (.not. ice%is_init) return
+      nxt = ice%nx_total
+      nyt = ice%ny_total
+      call profiler_start("ice_comms_transport")
+      call oh_count_suppress_on()
+      call ice_halo_centre_flat(ice%mca_ice, nxt, nyt, ice%ncat, device_resident)
+      call ice_halo_centre_flat(ice%mca_snow, nxt, nyt, ice%ncat, device_resident)
+      call ice_halo_centre_flat(ice%m_ice, nxt, nyt, ice%ncat, device_resident)
+      call ice_halo_centre_flat(ice%enth_ice, nxt, nyt, ice%ncat*ice%nk_ice, device_resident)
+      call ice_halo_centre_flat(ice%sal_ice, nxt, nyt, ice%ncat*ice%nk_ice, device_resident)
+      call ice_halo_centre_flat(ice%enth_snow, nxt, nyt, ice%ncat, device_resident)
+      call oh_count_suppress_off()
+      call profiler_stop("ice_comms_transport")
+   end subroutine ocean_halo_exchange_ice_transport
 
    subroutine ice_halo_centre_flat(fld, nxt, nyt, nz, device_resident)
       !! Explicit-shape seam: a contiguous ice array of any rank (`0:ncat`
