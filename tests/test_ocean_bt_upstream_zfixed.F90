@@ -54,7 +54,7 @@
 !! the 400 | 200 m face; `bt_rem` at the full-column value).  The three
 !! integration legs are regression gates for the ported path and do NOT
 !! discriminate at this size: MEASURED (gfortran 15.1) `KE+PE` ratios
-!! 0.896 / 0.947 (seiche / rotating) ported against 0.896 / 0.942 with
+!! 0.848 / 0.923 (seiche / rotating) ported against 0.851 / 0.924 with
 !! the full-column sum restored — an 80 km, 4-layer, unforced basin
 !! damps the inconsistency faster than it amplifies.  The amplification
 !! needs the production envelope; it is measured on the 1-degree Southern
@@ -113,8 +113,14 @@ module test_ocean_bt_upstream_zfixed
       !! deep side and `0.4` off the shelf — the ratios of the prototype.
    real(wp), parameter :: ETA0 = 0.05_wp
    real(wp), parameter :: PI_L = 3.14159265358979324_wp
-   real(wp), parameter :: DT = 60.0_wp
-   integer, parameter :: N_PERIODS = 22
+   real(wp), parameter :: DT = 240.0_wp
+      !! Outer step (s): ~17 steps per seiche period.  The gravity wave is
+      !! carried by the fast loop (`dt_inner = 12 s`, barotropic Courant
+      !! 0.38 in the deep half), so the outer step only has to resolve the
+      !! zero crossings the period is measured from.  Chosen with the leg
+      !! lengths below to keep the whole file well under a minute on one
+      !! V100 (the integration legs are launch-bound, ~0.13 s per step).
+   integer, parameter :: N_PERIODS = 10
 
    real(wp), parameter :: ENERGY_GROWTH_BAR = 1.30_wp
       !! Bar for `(KE+PE)_end/(KE+PE)_0` over `N_PERIODS` seiche periods,
@@ -125,9 +131,9 @@ module test_ocean_bt_upstream_zfixed
       !! Fractional tolerance on the seiche period against the EXACT
       !! gravest-mode period of the two-step basin (`stepped_basin_period`;
       !! the width-weighted `2L/√(g·H_eff)` estimate the sibling test uses
-      !! is far off for a 4:1 step).  MEASURED 1.01 % apart on gfortran
-      !! (4243 s against 4201 s; the residual is the C-grid dispersion and
-      !! the discrete step), so 3 % is ~3x of headroom.  A barotropic mode that saw the FULL
+      !! is far off for a 4:1 step).  MEASURED 1.04 % apart on gfortran
+      !! (4244 s against 4201 s at `DT = 240`; the residual is the C-grid
+      !! dispersion and the discrete step), so 3 % is ~3x of headroom.  A barotropic mode that saw the FULL
       !! upstream column would be off by the depth error, not by this.
    real(wp), parameter :: REST_U_BAR = 1.0e-12_wp
       !! Bound on `max|u|` (m/s) for the resting stratified staircase.
@@ -135,11 +141,11 @@ module test_ocean_bt_upstream_zfixed
       !! bed, identical `ρ` per layer in every column), so the only
       !! velocity is round-off in the `η`-gradient of a flat free surface:
       !! `g·Δη·dt/dx` with `Δη ~ 1e-16·H` is `~1e-15` per step.
-   real(wp), parameter :: REST_PERIODS = 3.0_wp
-      !! Length of the resting leg (seiche periods, ~200 steps): it has no
+   real(wp), parameter :: REST_PERIODS = 2.0_wp
+      !! Length of the resting leg (seiche periods, ~35 steps): it has no
       !! mode to resolve, only round-off that must stay round-off.
-   real(wp), parameter :: ROT_PERIODS = 8.0_wp
-      !! Length of the rotating leg (~5 inertial periods at `F_ROT`).
+   real(wp), parameter :: ROT_PERIODS = 4.0_wp
+      !! Length of the rotating leg (~2.7 inertial periods at `F_ROT`).
    real(wp), parameter :: F_ROT = 1.0e-3_wp
       !! Coriolis parameter of the rotating leg (1/s).  Ten times a
       !! mid-latitude `f` so the barotropic deformation radius
