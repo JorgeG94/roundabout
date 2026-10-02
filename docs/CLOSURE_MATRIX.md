@@ -76,7 +76,7 @@ split. Tests: `test_ocean_vmix_assembly`, `test_ocean_vdiff`.
 | Anisotropic ν_h (Smith & McWilliams 2003) | `kh_aniso` + `aniso_dir` (stress-tensor path) | `test_ocean_hvisc_aniso` |
 | Tensor-strain Laplacian (free-slip walls) | `form="tensor"` | — |
 | Fox-Kemper ML-eddy restratification (B5) | `&ocean_foxkemper_nml enable` | `test_ocean_foxkemper`, `test_ocean_mle_zfixed` |
-| Gent-McWilliams thickness diffusion ([2]) | `&ocean_gm_nml enable` (needs `&ocean_slopes_nml enable`) | `test_ocean_gm`, `test_ocean_gm_zfixed` |
+| Gent-McWilliams thickness diffusion ([2]) | `&ocean_gm_nml enable` (needs `&ocean_slopes_nml enable`) | `test_ocean_gm`, `test_ocean_gm_zfixed`, `test_ocean_slopes_datum` |
 | Redi neutral (along-isopycnal) tracer diffusion ([3]) | `&ocean_redi_nml enable` (continuous variant) | `test_ocean_redi`, `test_ocean_redi_zfixed` |
 | MEKE prognostic eddy energy ([5]) | `&ocean_meke_nml enable` (needs `&ocean_gm_nml enable`) | `test_ocean_meke` |
 | MEKE harmonic backscatter ([5], negative-ν momentum return) | `&ocean_meke_nml backscatter` + `backscatter_visc_coeff_ku` (needs a flow-aware closure active) | `test_ocean_meke_backscatter` |
@@ -146,7 +146,11 @@ kernel test.
 Gent-McWilliams ([2], `rdb_ocean_gm`) is the interior eddy-induced **bolus**
 thickness diffusion (GM90/Griffies98): the skew-flux streamfunction
 `Ψ = -KhTh·dy·S` on the stored isopycnal slope `S` (`&ocean_slopes_nml`, a loud
-configure prerequisite) is turned into per-layer thickness transports
+configure prerequisite; its interface-tilt rotation term `−∂zρ·(e_W − e_E)`
+differences GEOPOTENTIAL interface heights built bed-up from `−D`, the slot's own
+ghost-correct copy of `barotropic%b`, so a flat stratification over any
+bathymetry reads zero slope on every coordinate — `test_ocean_slopes_datum`)
+is turned into per-layer thickness transports
 (`uhD`/`vhD`) by the MOM6 `uhtot` column recurrence with a safe-streamfunction
 slope limiter + a mass-availability limiter (keeps `h ≥ H_VANISHED` without a
 post-hoc clamp).  Folded into the continuity mass fluxes BEFORE the divergence
@@ -163,10 +167,9 @@ transport and zero availability, so the streamfunction is carried unchanged
 across it and is 0 at the bottom of the open column; the non-divergence closure
 lands in the TOPMOST open layer instead of `k = nz`, so it is 0 at the top as
 well.  `uhD = 0` on every closed face-layer and filler, `Σ_k uhD = 0` at every
-face.  The slopes slot, on the same knob, drops the interface-tilt rotation
-term (z_fixed interfaces are geopotential up to `η`; the term as built
-differences heights above the LOCAL bed and so reads a bathymetry step as an
-isopycnal slope) and zeroes slope / N² at every interface not strictly inside
+face.  The slopes slot keeps its general geopotential tilt term (z_fixed
+interfaces sit at fixed depths below `z = 0`, so their tilt is `O(Δη)`) and,
+on the same knob, zeroes slope / N² at every interface not strictly inside
 the face's open column, so `gm_src` (and hence MEKE) sees only real water.
 Non-finite slopes / N² are read as zero before the NaN-blind limiter clamps.
 With nothing closed the recurrence is the full-column form operation for
