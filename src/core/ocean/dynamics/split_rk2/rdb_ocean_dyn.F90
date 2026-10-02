@@ -4312,7 +4312,7 @@ contains
       ! otherwise feeds the BT substep + corrector with the same
       ! face-thickness convention slow continuity uses, eliminating
       ! the centred-vs-upstream mismatch at slopes.
-      call compute_h_face_upstream(grid, dyn%bt_work, ms)
+      call compute_h_face_upstream(grid, dyn%bt_work, ms, metrics)
       ! Build the per-face BT_cont_type flux closure from the same ML
       ! snapshot.  No-op when `use_bt_cont_type = .false.`; otherwise
       ! BTCL_u/v feed the BT substep's flux paths instead of the
@@ -4652,7 +4652,7 @@ contains
       ! `bt_rem_u/v` at their init value of 1 ⇒ multiplication is a
       ! no-op (bit-identical to pre-knob path).
       if (dyn%bt_work%bt_substep_drag) then
-         call compute_bt_rem(grid, dyn%bt_work, ms, bd%r_linear, bd%hbbl, dt_inner)
+         call compute_bt_rem(grid, dyn%bt_work, ms, metrics, bd%r_linear, bd%hbbl, dt_inner)
       else if (dyn%bt_work%lwd_enable) then
          ! `bt_rem_u/v` is reset ONLY by `compute_bt_rem` above; when
          ! `substep_drag` is off but wave drag is on, nothing else resets
@@ -4669,7 +4669,7 @@ contains
          ! composes `lin_drag_u` with the viscous remnant.
          ! Must run AFTER the base fill
          ! above and BEFORE `mask_bt_rem` (land masking must be last).
-         call compute_bt_rem_wave_drag(grid, dyn%bt_work, ms, dt_inner)
+         call compute_bt_rem_wave_drag(grid, dyn%bt_work, ms, metrics, dt_inner)
       end if
       ! Fold the static land face masks into bt_rem (C4 / R4a): zeroes the
       ! BT-substep velocity update across land faces.  No-op for all-wet.

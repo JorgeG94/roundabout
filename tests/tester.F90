@@ -165,6 +165,8 @@ program rdb_tests
                                           collect_ocean_zfixed_bt_seiche_tests
    use test_ocean_zfixed_cor_ref, only: ocean_zfixed_cor_ref_collect => &
                                         collect_ocean_zfixed_cor_ref_tests
+   use test_ocean_bt_upstream_zfixed, only: ocean_bt_upstream_zfixed_collect => &
+                                            collect_ocean_bt_upstream_zfixed_tests
    use test_ocean_remap, only: ocean_remap_collect => collect_ocean_remap_tests
    use test_ocean_remap_vanished, only: ocean_remap_vanished_collect => &
                                         collect_ocean_remap_vanished_tests
@@ -351,6 +353,7 @@ program rdb_tests
                 new_testsuite("ocean_zfixed_closed_faces", ocean_zfixed_closed_faces_collect), &
                 new_testsuite("ocean_zfixed_bt_seiche", ocean_zfixed_bt_seiche_collect), &
                 new_testsuite("ocean_zfixed_cor_ref", ocean_zfixed_cor_ref_collect), &
+                new_testsuite("ocean_bt_upstream_zfixed", ocean_bt_upstream_zfixed_collect), &
                 new_testsuite("ocean_remap", ocean_remap_collect), &
                 new_testsuite("ocean_remap_vanished", ocean_remap_vanished_collect), &
                 new_testsuite("ocean_vanished_constancy", ocean_vanished_constancy_collect), &

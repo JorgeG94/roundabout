@@ -2675,13 +2675,15 @@ contains
       end if
       ! ---- Barotropic paths still on FULL-column weights ----
       !
-      ! `derive_bt_from_layers`, `face_depth_mean_*`, `set_cor_ref_velocity`
-      ! and the `apply_bt_correction` fold weight by `h_face·open` under
-      ! this knob.  Three barotropic paths do NOT: each sums
-      ! `0.5·(h_L + h_R)` over EVERY layer.  Their answers are not wrong
-      ! by a round-off — the closed layers' thickness is O(h_nominal) at
-      ! a staircase face — so they are refused until they are ported,
-      ! rather than left to run on the wrong column.
+      ! `derive_bt_from_layers`, `face_depth_mean_*`, `set_cor_ref_velocity`,
+      ! the `apply_bt_correction` fold, `compute_h_face_upstream`
+      ! (`upstream_h_face`), `compute_bt_rem` (`substep_drag`) and
+      ! `compute_bt_rem_wave_drag` (`wave_drag`) weight by `h_face·open`
+      ! under this knob.  The bc-PGF correction does NOT: it sums
+      ! `0.5·(h_L + h_R)` over EVERY layer.  Its answer is not wrong by a
+      ! round-off — the closed layers' thickness is O(h_nominal) at a
+      ! staircase face — so it is refused until it is ported, rather than
+      ! left to run on the wrong column.
       if (cfg%ocean%bt%correction_bc_pgf) then
          call fail("&vcoord_nml zfixed_closed_faces does not yet compose "// &
                    "with &ocean_bt_nml correction_bc_pgf: compute_pbce, "// &
@@ -2692,28 +2694,6 @@ contains
                    "on the OPEN column ubt is the mean of — it would leak a "// &
                    "barotropic increment into the open layers and push one "// &
                    "into the closed ones.  Set correction_bc_pgf=.false.", &
-                   ierr, OCEAN_STATUS_ERR_SETUP)
-         return
-      end if
-      if (cfg%ocean%bt%substep_drag) then
-         call fail("&vcoord_nml zfixed_closed_faces does not yet compose "// &
-                   "with &ocean_bt_nml substep_drag: compute_bt_rem builds "// &
-                   "the per-face damping Htot/(Htot + r*hbbl*dt_inner) from "// &
-                   "the FULL-column face depth, while the barotropic "// &
-                   "transport under this knob runs on the OPEN column only, "// &
-                   "so a partially closed face is under-damped by the "// &
-                   "closed fraction.  Set substep_drag=.false.", &
-                   ierr, OCEAN_STATUS_ERR_SETUP)
-         return
-      end if
-      if (cfg%ocean%bt%wave_drag) then
-         call fail("&vcoord_nml zfixed_closed_faces does not yet compose "// &
-                   "with &ocean_bt_nml wave_drag: compute_bt_rem_wave_drag "// &
-                   "multiplies Htot/(Htot + r_H*dt_inner) into bt_rem from "// &
-                   "the FULL-column face depth, while the barotropic "// &
-                   "transport under this knob runs on the OPEN column only, "// &
-                   "so a partially closed face is under-damped by the "// &
-                   "closed fraction.  Set wave_drag=.false.", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
