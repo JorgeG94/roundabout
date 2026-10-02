@@ -98,6 +98,23 @@ module rdb_ice_transport
    !!     to round-off (each boundary visited once in a fixed order with
    !!     running masses; same argument as the PR-4a `ice_adjust_categories`
    !!     merge).
+   !!
+   !! **Multi-rank / periodic** (`ice_transport_step` with `bc`): the ice
+   !! uses the ocean's decomposition and `nghost` (>= 3 on a decomposed
+   !! run, `ocean_halo_init`).  X4 — the CAS masses and every riding
+   !! tracer are halo-exchanged at the TOP of every advective substep
+   !! (`ocean_halo_exchange_ice_transport`; on one rank with a periodic
+   !! axis the same call wraps it).  One exchange per substep suffices at
+   !! `nghost = 3`: the x-pass flux, ride and mass update run over every
+   !! row, ghost rows included, from corner-valid inputs, so the y-pass
+   !! reads ghost rows that are already post-x-pass.  The physical-edge
+   !! wall faces are zeroed only on a PHYSICAL, non-periodic edge
+   !! (`bc%has_*`) — an MPI or periodic seam is an ordinary face.  The
+   !! zero-velocity early exit and the validity / compress `ok` flags are
+   !! made RANK-UNIFORM (global max / min) before anyone acts on them: a
+   !! rank that skipped the CAS<->IST round trip or returned early while
+   !! another entered X4 would deadlock, and a rank-local abort would
+   !! strand the others in the next exchange.
    use rdb_constants, only: wp
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
@@ -107,11 +124,17 @@ module rdb_ice_transport
    use rdb_ice_column, only: ICE_RHO_ICE
    use rdb_continuity, only: ppm_mirror_h, volcfl_face, ppm_limited_slope, &
                              ppm_cell_limiter, ppm_limit_pos
+   use rdb_ocean_boundary_types, only: ocean_bc_state_t
+   use rdb_ocean_halo, only: ocean_halo_is_init, ocean_halo_is_decomposed
+   use rdb_ocean_halo_state, only: ocean_halo_exchange_ice_transport
+   use rdb_halo, only: halo_allreduce_max, halo_allreduce_min
    implicit none
    private
 
    public :: ice_transport_step
    public :: ice_transport_compress_cell
+   public :: ice_cat_flux_x_impl
+   public :: ice_cat_flux_y_impl
    public :: H_NEGLECT_ICE_TRANSPORT
    public :: MASS_NEGLECT_ICE_TRANSPORT
 
@@ -132,7 +155,7 @@ module rdb_ice_transport
 
 contains
 
-   subroutine ice_transport_step(grid, metrics, ms, ice, dt, adv_substeps, roll_factor, ok)
+   subroutine ice_transport_step(grid, metrics, ms, ice, dt, adv_substeps, roll_factor, ok, bc)
       !! Entry point (host orchestration; kernels inside).  Outer-shim +
       !! flat-impl: every phase below dispatches to a `pure` `_impl`
       !! kernel; this routine only sequences them and owns the
@@ -153,10 +176,16 @@ contains
       logical, intent(out) :: ok
          !! `.false.` => the caller (driver) must abort fail-loud
          !! (conservation/positivity violation, or a compress-time
-         !! consistency failure SIS2 would FATAL on).
+         !! consistency failure SIS2 would FATAL on).  Rank-uniform.
+      type(ocean_bc_state_t), intent(in), optional :: bc
+         !! Edge policy (`periodic_x/_y`, `has_*`).  Present (the engine
+         !! always passes it): X4 per substep and walls only on a physical,
+         !! non-periodic edge.  Absent (the single-tile unit-test seam):
+         !! no exchange and every tile edge is a wall, as before.
 
       integer :: nx, ny, nz, nghost, n
-      real(wp) :: dt_adv, vmax
+      real(wp) :: dt_adv, vmax, vglob
+      logical :: wall_w, wall_e, wall_s, wall_n, x4
 
       ok = .true.
       if (.not. ice%is_init) return
@@ -166,6 +195,18 @@ contains
       ny = grid%ny_total
       nz = ms%nz_ml
       nghost = grid%nghost
+      wall_w = .true.
+      wall_e = .true.
+      wall_s = .true.
+      wall_n = .true.
+      x4 = .false.
+      if (present(bc)) then
+         wall_w = bc%has_west .and. .not. bc%periodic_x
+         wall_e = bc%has_east .and. .not. bc%periodic_x
+         wall_s = bc%has_south .and. .not. bc%periodic_y
+         wall_n = bc%has_north .and. .not. bc%periodic_y
+         x4 = ocean_halo_is_init()
+      end if
 
       ! ---- Phase 0: sample the ocean surface-layer velocity onto the
       ! ice C-grid faces (v1 interim filler).  PR 5: skipped when EVP
@@ -182,6 +223,12 @@ contains
       ! last bits even under zero flow. ----
       call ice_max_speed_impl(ice%u_ice, ice%v_ice, nghost, grid%nx_phys, grid%ny_phys, &
                               nx, ny, vmax)
+      ! Rank-uniform: a rank that skips the round trip while another
+      ! enters the substep exchanges deadlocks.  A max is exact.
+      if (ocean_halo_is_decomposed()) then
+         call halo_allreduce_max(vmax, vglob)
+         vmax = vglob
+      end if
       if (vmax == 0.0_wp) return
 
       ! ---- Phase 1: IST -> CAS ----
@@ -191,9 +238,14 @@ contains
       ! ---- Phase 2: adv_substeps advective iterations, x-pass then y-pass ----
       dt_adv = dt/real(max(adv_substeps, 1), wp)
       do n = 1, adv_substeps
-         call ice_pass_x(grid, metrics, ice, dt_adv, ok)
+         ! X4: seam ghosts of the CAS masses + riding tracers (and, on one
+         ! periodic rank, the wrap) before this substep's stencils read them.
+         if (x4) call ocean_halo_exchange_ice_transport(ice)
+         call ice_pass_x(grid, metrics, ice, dt_adv, wall_w, wall_e, ok)
+         call ok_all_ranks(ok)
          if (.not. ok) return
-         call ice_pass_y(grid, metrics, ice, dt_adv, ok)
+         call ice_pass_y(grid, metrics, ice, dt_adv, wall_s, wall_n, ok)
+         call ok_all_ranks(ok)
          if (.not. ok) return
       end do
 
@@ -206,11 +258,27 @@ contains
       call ice_compress_impl(ms%wet_mask, ice%part_size, ice%m_ice, ice%m_snow, &
                              ice%enth_ice, ice%enth_snow, ice%sal_ice, ice%mh_lim, &
                              nghost, ice%ncat, ice%nk_ice, nx, ny, ok)
+      call ok_all_ranks(ok)
       if (.not. ok) return
 
       ! ---- Phase 5: recategorize (PR 4a, unchanged) ----
       call ice_adjust_categories(grid, ms, ice)
    end subroutine ice_transport_step
+
+   subroutine ok_all_ranks(ok)
+      !! Make a validity flag rank-uniform (global AND, as an exact min of
+      !! 0/1) BEFORE anyone acts on it: a rank-local early return would
+      !! strand the other ranks in the next substep's exchange.  No
+      !! collective unless the run is decomposed (a serial run inside a
+      !! multi-rank job — the bit-identity reference — stays local).
+      logical, intent(inout) :: ok
+      real(wp) :: loc, glob
+
+      if (.not. ocean_halo_is_decomposed()) return
+      loc = merge(1.0_wp, 0.0_wp, ok)
+      call halo_allreduce_min(loc, glob)
+      ok = glob > 0.5_wp
+   end subroutine ok_all_ranks
 
    ! ======================================================================
    ! Phase 0: velocity sampling + zero-velocity gate
@@ -302,7 +370,7 @@ contains
    ! Phase 2: one directional pass (x then y)
    ! ======================================================================
 
-   pure subroutine ice_pass_x(grid, metrics, ice, dt_adv, ok)
+   pure subroutine ice_pass_x(grid, metrics, ice, dt_adv, wall_w, wall_e, ok)
       !! One zonal pass: total-mass PPM + proportionate ice-flux split,
       !! the snow twin + co-located mask, PCM tracer riding (gather then
       !! cell update), the mass update (AFTER every ride reads the
@@ -311,6 +379,9 @@ contains
       type(ocean_metrics_t), intent(in) :: metrics
       type(ocean_sea_ice_t), intent(inout) :: ice
       real(wp), intent(in) :: dt_adv
+      logical, intent(in) :: wall_w, wall_e
+         !! Zero the west / east tile-edge face (a physical, non-periodic
+         !! edge); a seam face is an ordinary face.
       logical, intent(out) :: ok
       integer :: nx, ny, nghost, l
 
@@ -321,11 +392,11 @@ contains
       call ice_cat_flux_x_impl(metrics%wet_T, metrics%dy_cu, metrics%idxT, ice%u_ice, &
                                ice%mca_ice, ice%htot_work, ice%hl_x_work, ice%hr_x_work, &
                                ice%uhtot_work, ice%uh_ice, dt_adv, nghost, grid%nx_phys, &
-                               ice%ncat, nx, ny)
+                               ice%ncat, nx, ny, wall_w, wall_e)
       call ice_cat_flux_x_impl(metrics%wet_T, metrics%dy_cu, metrics%idxT, ice%u_ice, &
                                ice%mca_snow, ice%htot_work, ice%hl_x_work, ice%hr_x_work, &
                                ice%uhtot_work, ice%uh_snow, dt_adv, nghost, grid%nx_phys, &
-                               ice%ncat, nx, ny)
+                               ice%ncat, nx, ny, wall_w, wall_e)
       call ice_mask_snow_by_ice_impl(ice%uh_ice, ice%uh_snow, nx + 1, ny, ice%ncat)
 
       ! ---- Tracer riding (Phase 2c), BEFORE the mass update ----
@@ -360,13 +431,15 @@ contains
                                     grid%ny_phys, ice%ncat, nx, ny, ok)
    end subroutine ice_pass_x
 
-   pure subroutine ice_pass_y(grid, metrics, ice, dt_adv, ok)
+   pure subroutine ice_pass_y(grid, metrics, ice, dt_adv, wall_s, wall_n, ok)
       !! Meridional twin of `ice_pass_x`.  Reads the POST-x-pass masses
       !! (SIS2 `SIS_continuity.F90:170-216`).
       type(hgrid_t), intent(in) :: grid
       type(ocean_metrics_t), intent(in) :: metrics
       type(ocean_sea_ice_t), intent(inout) :: ice
       real(wp), intent(in) :: dt_adv
+      logical, intent(in) :: wall_s, wall_n
+         !! Zero the south / north tile-edge face (physical, non-periodic).
       logical, intent(out) :: ok
       integer :: nx, ny, nghost, l
 
@@ -377,11 +450,11 @@ contains
       call ice_cat_flux_y_impl(metrics%wet_T, metrics%dx_cv, metrics%idyT, ice%v_ice, &
                                ice%mca_ice, ice%htot_work, ice%hl_y_work, ice%hr_y_work, &
                                ice%vhtot_work, ice%vh_ice, dt_adv, nghost, grid%ny_phys, &
-                               ice%ncat, nx, ny)
+                               ice%ncat, nx, ny, wall_s, wall_n)
       call ice_cat_flux_y_impl(metrics%wet_T, metrics%dx_cv, metrics%idyT, ice%v_ice, &
                                ice%mca_snow, ice%htot_work, ice%hl_y_work, ice%hr_y_work, &
                                ice%vhtot_work, ice%vh_snow, dt_adv, nghost, grid%ny_phys, &
-                               ice%ncat, nx, ny)
+                               ice%ncat, nx, ny, wall_s, wall_n)
       call ice_mask_snow_by_ice_impl(ice%vh_ice, ice%vh_snow, nx, ny + 1, ice%ncat)
 
       call ice_gather_flux_y_impl(ice%vh_ice, ice%m_ice, ice%tr_flux_y_work, ice%ncat, nx, ny)
@@ -420,7 +493,7 @@ contains
 
    pure subroutine ice_cat_flux_x_impl(wet_T, dy_cu, idxT, u_ice, mca, htot_work, hl_x_work, &
                                        hr_x_work, uhtot_work, uh_out, dt_adv, nghost, nx_phys, &
-                                       ncat, nx, ny)
+                                       ncat, nx, ny, wall_w, wall_e)
       !! SIS2 `zonal_mass_flux` (`SIS_continuity.F90:1064`): PPM
       !! reconstruction of the category-SUMMED mass `htot`, ONE total
       !! face transport `uhtot` from the swept-volume parabola integral
@@ -452,6 +525,10 @@ contains
       real(wp), intent(inout) :: uhtot_work(nx + 1, ny)
       real(wp), intent(out) :: uh_out(nx + 1, ny, ncat)
       real(wp), intent(in) :: dt_adv
+      logical, intent(in) :: wall_w, wall_e
+         !! Zero face `nghost+1` / `nghost+nx_phys+1`: only on a physical,
+         !! non-periodic tile edge.  At an MPI or periodic seam the face is
+         !! an ordinary face whose donor ghosts X4 filled (F1).
 
       integer :: i, j, c
       real(wp) :: dh_m1, dh_0, dh_p1, h_left, h_right
@@ -485,15 +562,20 @@ contains
          hr_x_work(i, j) = h_left
          hl_x_work(i + 1, j) = h_right
       end do
-      ! First-order fallback within 2 cells of either array edge
-      ! (face-shaped writes, in bounds: `nx+1` is the last valid face).
+      ! First-order fallback for the edges the 5-point loop above cannot
+      ! reach (cells 1, 2, nx-1, nx; face-shaped writes, in bounds:
+      ! `nx+1` is the last valid face).  NOT `hr_x_work(3)`: cell 3 is
+      ! the loop's first cell, so its left edge is already a full PPM
+      ! value — and with `nghost = 3` it is the donor-side edge the
+      ! `u > 0` flux at the west tile-edge face `nghost+1` reads, so
+      ! overwriting it made an MPI seam face first-order where the serial
+      ! run's interior face is PPM (F2; the y twin is the same).
       do concurrent(j=1:ny)
          hl_x_work(1, j) = htot_work(1, j)
          hr_x_work(1, j) = htot_work(1, j)
          hl_x_work(2, j) = htot_work(1, j)
          hr_x_work(2, j) = htot_work(2, j)
          hl_x_work(3, j) = htot_work(2, j)
-         hr_x_work(3, j) = htot_work(2, j)
          hr_x_work(nx - 1, j) = htot_work(nx - 1, j)
          hl_x_work(nx, j) = htot_work(nx - 1, j)
          hr_x_work(nx, j) = htot_work(nx, j)
@@ -542,10 +624,17 @@ contains
       ! `continuity_zonal_flux`'s wall-zeroing rationale: a moving ocean
       ! surface layer can leave a nonzero sampled velocity at the
       ! interior physical wall even on a closed-boundary configuration.
-      do concurrent(j=1:ny)
-         uhtot_work(nghost + 1, j) = 0.0_wp
-         uhtot_work(nghost + nx_phys + 1, j) = 0.0_wp
-      end do
+      ! Only a PHYSICAL, non-periodic tile edge is a wall (F1).
+      if (wall_w) then
+         do concurrent(j=1:ny)
+            uhtot_work(nghost + 1, j) = 0.0_wp
+         end do
+      end if
+      if (wall_e) then
+         do concurrent(j=1:ny)
+            uhtot_work(nghost + nx_phys + 1, j) = 0.0_wp
+         end do
+      end if
 
       ! ---- Proportionate category split (Adcroft reciprocal) ----
       do concurrent(j=1:ny, i=1:nx + 1, c=1:ncat) local(i_htot)
@@ -571,7 +660,7 @@ contains
 
    pure subroutine ice_cat_flux_y_impl(wet_T, dx_cv, idyT, v_ice, mca, htot_work, hl_y_work, &
                                        hr_y_work, vhtot_work, vh_out, dt_adv, nghost, ny_phys, &
-                                       ncat, nx, ny)
+                                       ncat, nx, ny, wall_s, wall_n)
       !! Meridional twin of `ice_cat_flux_x_impl`.  Same face-indexed edge
       !! STORAGE + swept orientation as `continuity_meridional_flux`
       !! (`rdb_continuity.F90:1159-1202`): `hl_y_work(i,j)` == north-face
@@ -590,6 +679,9 @@ contains
       real(wp), intent(inout) :: vhtot_work(nx, ny + 1)
       real(wp), intent(out) :: vh_out(nx, ny + 1, ncat)
       real(wp), intent(in) :: dt_adv
+      logical, intent(in) :: wall_s, wall_n
+         !! Zero face `nghost+1` / `nghost+ny_phys+1`: only on a physical,
+         !! non-periodic tile edge (F1, see the x twin).
 
       integer :: i, j, c
       real(wp) :: dh_m1, dh_0, dh_p1, h_left, h_right
@@ -618,13 +710,13 @@ contains
          hr_y_work(i, j) = h_left
          hl_y_work(i, j + 1) = h_right
       end do
+      ! Edge fallback — NOT `hr_y_work(:, 3)` (F2, see the x twin).
       do concurrent(i=1:nx)
          hl_y_work(i, 1) = htot_work(i, 1)
          hr_y_work(i, 1) = htot_work(i, 1)
          hl_y_work(i, 2) = htot_work(i, 1)
          hr_y_work(i, 2) = htot_work(i, 2)
          hl_y_work(i, 3) = htot_work(i, 2)
-         hr_y_work(i, 3) = htot_work(i, 2)
          hr_y_work(i, ny - 1) = htot_work(i, ny - 1)
          hl_y_work(i, ny) = htot_work(i, ny - 1)
          hr_y_work(i, ny) = htot_work(i, ny)
@@ -662,10 +754,16 @@ contains
          vhtot_work(i, 1) = 0.0_wp
          vhtot_work(i, ny + 1) = 0.0_wp
       end do
-      do concurrent(i=1:nx)
-         vhtot_work(i, nghost + 1) = 0.0_wp
-         vhtot_work(i, nghost + ny_phys + 1) = 0.0_wp
-      end do
+      if (wall_s) then
+         do concurrent(i=1:nx)
+            vhtot_work(i, nghost + 1) = 0.0_wp
+         end do
+      end if
+      if (wall_n) then
+         do concurrent(i=1:nx)
+            vhtot_work(i, nghost + ny_phys + 1) = 0.0_wp
+         end do
+      end if
 
       do concurrent(j=1:ny + 1, i=1:nx, c=1:ncat) local(i_htot)
          if (vhtot_work(i, j) == 0.0_wp) then
