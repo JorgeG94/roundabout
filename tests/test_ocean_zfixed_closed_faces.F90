@@ -30,13 +30,14 @@
 !!     use, so "live" has one definition.  A stepped bed under a flat lid
 !!     is laid with that kernel and the mask cross-checked against the
 !!     target it came from.
-!!   * `refuses_correction_bc_pgf` / `refuses_substep_drag` /
-!!     `refuses_wave_drag` — the three barotropic paths that still weight
-!!     by the FULL column (`compute_pbce` + `compute_gtot_faces` + the
-!!     bc-PGF `du_bc` block; `compute_bt_rem`; `compute_bt_rem_wave_drag`)
-!!     are FAIL-LOUD at configure under the knob, and the SAME request
-!!     with the knob off is accepted (so the refusal is the knob's, not
-!!     the path's).
+!!   * `refuses_correction_bc_pgf` — the barotropic path that still
+!!     weights by the FULL column (`compute_pbce` + `compute_gtot_faces` +
+!!     the bc-PGF `du_bc` block) is FAIL-LOUD at configure under the knob,
+!!     and the SAME request with the knob off is accepted (so the refusal
+!!     is the knob's, not the path's).  `substep_drag` and `wave_drag`
+!!     were refused here too until `compute_bt_rem` /
+!!     `compute_bt_rem_wave_drag` were ported to the OPEN column; their
+!!     open-column depth is asserted in `test_ocean_bt_upstream_zfixed`.
 !!   * `open_staircase_stepped_bed_refused` /
 !!     `open_staircase_flat_bed_accepted` /
 !!     `closed_faces_stepped_bed_accepted` — the knob OFF over a STEPPED
@@ -83,8 +84,6 @@ contains
                   new_unittest("all_live_is_all_open", test_all_live), &
                   new_unittest("mask_matches_the_z_fixed_target", test_from_target), &
                   new_unittest("refuses_correction_bc_pgf", test_refuses_bc_pgf), &
-                  new_unittest("refuses_substep_drag", test_refuses_substep_drag), &
-                  new_unittest("refuses_wave_drag", test_refuses_wave_drag), &
                   new_unittest("bed_step_count", test_bed_step_count), &
                   new_unittest("open_staircase_stepped_bed_refused", test_open_stepped_refused), &
                   new_unittest("open_staircase_flat_bed_accepted", test_open_flat_accepted), &
@@ -345,22 +344,6 @@ contains
       call check_refusal(error, "&ocean_bt_nml correction_bc_pgf = .true. /", &
                          "correction_bc_pgf")
    end subroutine test_refuses_bc_pgf
-
-   subroutine test_refuses_substep_drag(error)
-      !! `substep_drag`: `compute_bt_rem` damps on the FULL-column depth.
-      type(error_type), allocatable, intent(out) :: error
-      call check_refusal(error, "&ocean_bt_nml substep_drag = .true. /"// &
-                         new_line("a")//'&ocean_bdrag_nml form = "linear", '// &
-                         "r = 1.0e-4, hbbl = 10.0 /", "substep_drag")
-   end subroutine test_refuses_substep_drag
-
-   subroutine test_refuses_wave_drag(error)
-      !! `wave_drag`: `compute_bt_rem_wave_drag` damps on the FULL-column
-      !! depth.
-      type(error_type), allocatable, intent(out) :: error
-      call check_refusal(error, "&ocean_bt_nml wave_drag = .true., "// &
-                         "wave_drag_r_uniform = 1.0e-3 /", "wave_drag")
-   end subroutine test_refuses_wave_drag
 
    subroutine check_refusal(error, extra, knob)
       !! Configure the closed faces on a bare state that passes every

@@ -107,6 +107,7 @@ contains
       type(hgrid_t) :: grid
       type(multilayer_state_t) :: ms
       type(barotropic_workstate_t) :: bt_work
+      type(ocean_metrics_t) :: metrics
       real(wp), parameter :: R_LINEAR = 2.5e-5_wp
       real(wp), parameter :: HBBL = 10.0_wp
       real(wp), parameter :: DT_INNER = 240.0_wp
@@ -115,10 +116,11 @@ contains
       integer :: i, j
       checks: block
          call build_state(grid, ms, bt_work, NZ)
+         call make_cartesian_metrics(metrics, grid)
          ms%h_layer(:, :, 1) = H_BED
          ms%h_layer(:, :, 2) = H_SURF
 
-         call compute_bt_rem(grid, bt_work, ms, R_LINEAR, HBBL, DT_INNER)
+         call compute_bt_rem(grid, bt_work, ms, metrics, R_LINEAR, HBBL, DT_INNER)
 
          htot = H_BED + H_SURF
          expected = htot/(htot + R_LINEAR*HBBL*DT_INNER)
@@ -132,6 +134,7 @@ contains
 
       end block checks
       call bt_work%destroy(); call ms%destroy()
+      call destroy_cartesian_metrics(metrics)
    end subroutine test_bt_rem_formula
 
    subroutine test_bt_rem_zero_drag(error)
@@ -140,16 +143,19 @@ contains
       type(hgrid_t) :: grid
       type(multilayer_state_t) :: ms
       type(barotropic_workstate_t) :: bt_work
+      type(ocean_metrics_t) :: metrics
       real(wp) :: dev
       checks: block
          call build_state(grid, ms, bt_work, NZ)
+         call make_cartesian_metrics(metrics, grid)
          ms%h_layer = 500.0_wp
-         call compute_bt_rem(grid, bt_work, ms, 0.0_wp, 10.0_wp, 240.0_wp)
+         call compute_bt_rem(grid, bt_work, ms, metrics, 0.0_wp, 10.0_wp, 240.0_wp)
          dev = maxval(abs(bt_work%bt_rem_u - 1.0_wp))
          call check(error, dev < 1.0e-14_wp, &
                     "r=0: bt_rem_u not exactly 1 everywhere")
       end block checks
       call bt_work%destroy(); call ms%destroy()
+      call destroy_cartesian_metrics(metrics)
    end subroutine test_bt_rem_zero_drag
 
    subroutine test_bt_rem_walls(error)
@@ -159,11 +165,13 @@ contains
       type(hgrid_t) :: grid
       type(multilayer_state_t) :: ms
       type(barotropic_workstate_t) :: bt_work
+      type(ocean_metrics_t) :: metrics
       integer :: nx, ny
       checks: block
          call build_state(grid, ms, bt_work, NZ)
+         call make_cartesian_metrics(metrics, grid)
          ms%h_layer = 500.0_wp
-         call compute_bt_rem(grid, bt_work, ms, 2.5e-5_wp, 10.0_wp, 240.0_wp)
+         call compute_bt_rem(grid, bt_work, ms, metrics, 2.5e-5_wp, 10.0_wp, 240.0_wp)
          nx = size(ms%h_layer, 1)
          ny = size(ms%h_layer, 2)
          call check(error, abs(bt_work%bt_rem_u(1, ny/2) - 1.0_wp) < 1.0e-14_wp, &
@@ -180,6 +188,7 @@ contains
 
       end block checks
       call bt_work%destroy(); call ms%destroy()
+      call destroy_cartesian_metrics(metrics)
    end subroutine test_bt_rem_walls
 
    subroutine test_substep_applies_bt_rem(error)
