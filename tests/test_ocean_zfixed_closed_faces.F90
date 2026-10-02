@@ -37,10 +37,22 @@
 !!     are FAIL-LOUD at configure under the knob, and the SAME request
 !!     with the knob off is accepted (so the refusal is the knob's, not
 !!     the path's).
+!!   * `open_staircase_stepped_bed_refused` /
+!!     `open_staircase_flat_bed_accepted` /
+!!     `closed_faces_stepped_bed_accepted` — the knob OFF over a STEPPED
+!!     bed (a face whose two columns' bed sits in different nominal
+!!     layers) is refused at configure through the API with a status and
+!!     a message naming the knob and the fix; a flat bed with the knob off,
+!!     and the stepped bed with the knob on, both configure.
+!!   * `bed_step_count` — the `pure` counter behind that refusal, on a
+!!     hand-built target: only owned faces, only wet faces, bed side only.
 module test_ocean_zfixed_closed_faces
+   use, intrinsic :: iso_c_binding, only: c_ptr, c_int, c_null_ptr
    use rdb_constants, only: wp, H_VANISHED
+   use rdb_ocean_api, only: rdb_ocean_create_from_string, rdb_ocean_destroy
    use rdb_ocean_vcoord, only: ocean_vcoord_closed_face_masks, &
                                ocean_vcoord_count_ledges, &
+                               ocean_vcoord_count_bed_steps, &
                                ocean_vcoord_z_fixed_target_uniform
    use rdb_ocean_vcoord, only: VCOORD_Z_FIXED
    use rdb_config, only: config_t, read_config_from_string
@@ -72,7 +84,11 @@ contains
                   new_unittest("mask_matches_the_z_fixed_target", test_from_target), &
                   new_unittest("refuses_correction_bc_pgf", test_refuses_bc_pgf), &
                   new_unittest("refuses_substep_drag", test_refuses_substep_drag), &
-                  new_unittest("refuses_wave_drag", test_refuses_wave_drag) &
+                  new_unittest("refuses_wave_drag", test_refuses_wave_drag), &
+                  new_unittest("bed_step_count", test_bed_step_count), &
+                  new_unittest("open_staircase_stepped_bed_refused", test_open_stepped_refused), &
+                  new_unittest("open_staircase_flat_bed_accepted", test_open_flat_accepted), &
+                  new_unittest("closed_faces_stepped_bed_accepted", test_closed_stepped_accepted) &
                   ]
    end subroutine collect_ocean_zfixed_closed_faces_tests
 
@@ -390,6 +406,117 @@ contains
       call check(error, ierr == OCEAN_STATUS_OK, &
                  knob//" without zfixed_closed_faces must be accepted here")
    end subroutine check_refusal
+
+   subroutine test_bed_step_count(error)
+      !! `ocean_vcoord_count_bed_steps` on a hand-built 4 x 3 target with
+      !! one ghost on each side (owned cells `i, j = 2:3` / `j = 2`):
+      !!
+      !! ```
+      !!   bed layer by column (j = 2):   i = 1   2   3   4
+      !!                                      1   1   2   2
+      !! ```
+      !!
+      !! Owned u-faces are `I = 2` (cells 1|2, same bed) and `I = 3`
+      !! (cells 2|3, a STEP) — one step.  `I = 4` (3|4) is the next
+      !! tile's face and is not counted.  A top-side filler (layer 3 dead
+      !! in column 2) is not a bed step.  Rows `j = 1, 3` are dry
+      !! (`total_h = 0`), so the owned v-faces pair with nothing.  Then a
+      !! land-masked width (`dy_cu = 0`) removes the step.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NX = 4, NY = 3, NZ = 3
+      real(wp) :: tgt(NX, NY, NZ), th(NX, NY), dy_cu(NX + 1, NY), dx_cv(NX, NY + 1)
+      integer :: n
+
+      tgt = LIVE
+      tgt(3:4, :, 1) = FILLER         ! bed one layer up in columns 3, 4
+      tgt(2, :, 3) = FILLER           ! a top-side filler: not a bed step
+      th = 0.0_wp
+      th(:, 2) = 3.0_wp*LIVE
+      dy_cu = 1.0_wp
+      dx_cv = 1.0_wp
+
+      n = ocean_vcoord_count_bed_steps(tgt, th, dy_cu, dx_cv, NX, NY, NZ, &
+                                       2, 3, 2, 2, H_VANISHED)
+      call check(error, n == 1, "one owned bed step expected")
+      if (allocated(error)) return
+
+      dy_cu(3, 2) = 0.0_wp
+      n = ocean_vcoord_count_bed_steps(tgt, th, dy_cu, dx_cv, NX, NY, NZ, &
+                                       2, 3, 2, 2, H_VANISHED)
+      call check(error, n == 0, "a land-masked (zero-width) face is not a step")
+   end subroutine test_bed_step_count
+
+   function api_nml(topo, closed) result(nml)
+      !! A small closed `z_fixed` basin: 6 layers of 100 m under
+      !! `max_depth = 600`; `topo` picks the bed.
+      character(len=*), intent(in) :: topo
+      logical, intent(in) :: closed
+      character(len=:), allocatable :: nml
+      character(len=1), parameter :: nl = new_line("a")
+      nml = "&sim_nml sim_type = 'ocean' /"//nl// &
+            "&grid_nml nx = 16, ny = 12, nghost = 2, dx = 2000.0, dy = 2000.0 /"//nl// &
+            "&time_nml t_end = 3600.0, dt_fixed = 120.0 /"//nl// &
+            "&physics_nml coriolis_f = 1.0e-4 /"//nl// &
+            "&nonhydrostatic_nml nz_layers = 6 /"//nl// &
+            "&vcoord_nml vcoord_type = 'z_fixed', zfixed_closed_faces = "// &
+            merge(".true. ", ".false.", closed)//" /"//nl// &
+            "&ocean_topo_nml "//topo//" /"//nl// &
+            "&ocean_hvisc_nml nu_h = 20.0 /"//nl// &
+            "&ocean_bt_nml auto_n_inner = .true. /"//nl// &
+            "&ocean_diag_nml enabled = .false. /"//nl// &
+            "&output_nml output_to_file = .false. /"//nl
+   end function api_nml
+
+   subroutine api_create(nml, status)
+      !! Build (and immediately destroy) an ocean through the C API.
+      character(len=*), intent(in) :: nml
+      integer(c_int), intent(out) :: status
+      type(c_ptr) :: handle
+      integer(c_int) :: st_destroy
+      handle = c_null_ptr
+      status = rdb_ocean_create_from_string(nml, len(nml, kind=c_int), handle)
+      if (status == OCEAN_STATUS_OK) st_destroy = rdb_ocean_destroy(handle)
+   end subroutine api_create
+
+   subroutine test_open_stepped_refused(error)
+      !! Seamount (600 m -> 250 m) under 100 m nominal layers: the bed
+      !! crosses three nominal interfaces, so with the knob off configure
+      !! must REFUSE with a status (not an `error stop`) and say why.
+      type(error_type), allocatable, intent(out) :: error
+      integer(c_int) :: status
+      character(len=:), allocatable :: msg
+      call error_ring_clear()
+      call api_create(api_nml("topo_config = 'seamount', max_depth = 600.0, "// &
+                              "edge_depth = 250.0, slope_scale = 8000.0", .false.), status)
+      call check(error, status == OCEAN_STATUS_ERR_SETUP, &
+                 "z_fixed + open faces over a stepped bed must be refused at configure")
+      if (allocated(error)) return
+      msg = trim(error_ring_get(0))
+      call check(error, index(msg, "zfixed_closed_faces = .false.") > 0 .and. &
+                 index(msg, "staircase") > 0 .and. &
+                 index(msg, "zfixed_closed_faces = .true.") > 0, &
+                 "the refusal must name the knob, the staircase and the fix; got: "//msg)
+   end subroutine test_open_stepped_refused
+
+   subroutine test_open_flat_accepted(error)
+      !! Flat bed: every column's bed is in layer 1, nothing to close, so
+      !! the knob off stays a legal (and untouched) configuration.
+      type(error_type), allocatable, intent(out) :: error
+      integer(c_int) :: status
+      call api_create(api_nml("topo_config = 'flat', max_depth = 600.0", .false.), status)
+      call check(error, status == OCEAN_STATUS_OK, &
+                 "z_fixed + open faces over a FLAT bed must configure")
+   end subroutine test_open_flat_accepted
+
+   subroutine test_closed_stepped_accepted(error)
+      !! The same stepped bed with the staircase faces CLOSED configures.
+      type(error_type), allocatable, intent(out) :: error
+      integer(c_int) :: status
+      call api_create(api_nml("topo_config = 'seamount', max_depth = 600.0, "// &
+                              "edge_depth = 250.0, slope_scale = 8000.0", .true.), status)
+      call check(error, status == OCEAN_STATUS_OK, &
+                 "z_fixed + CLOSED faces over a stepped bed must configure")
+   end subroutine test_closed_stepped_accepted
 
    subroutine parse_case(cfg, extra, closed)
       type(config_t), intent(out) :: cfg
