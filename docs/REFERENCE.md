@@ -118,8 +118,10 @@ Split-explicit RK2. Each outer step:
    per step: CFL truncation is a counter (`dyn%ntrunc_total`), not a
    controller.
 3. **BT correction** — distributes the barotropic `Δu` back into the
-   layers; optionally h-weighted (`correction_h_weighted`) and further
-   biased by the vdiff viscous remnant γ (`correction_visc_rem`).
+   layers uniformly (MOM6 `u_accel_bt`); optionally biased by the vdiff
+   viscous remnant γ (`correction_visc_rem`, weight `γ_k/⟨γ⟩_h`, depth
+   mean preserved).  `correction_h_weighted` is RETIRED (refused at
+   configure: energy-non-conserving, no MOM6 counterpart).
 4. **Stage 2** — under `ssp_rk2` a second, identical stage runs and the
    two stage outputs are averaged (Heun). Under the default `pred_corr`
    there is a single prognostic update: the predictor advances a

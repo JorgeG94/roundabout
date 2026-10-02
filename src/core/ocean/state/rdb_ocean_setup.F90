@@ -3404,13 +3404,6 @@ contains
       type(hgrid_t), intent(in) :: grid
       integer, intent(in) :: compute_rank
 
-      ! MOM6 frhatu — h-weighted BT-corrector Δu distribution.
-      ocean_state%dyn%bt_work%bt_correction_h_weighted = cfg%ocean%bt%correction_h_weighted
-      if (compute_rank == 0 .and. cfg%ocean%bt%correction_h_weighted) then
-         call logger%info("BT correction:    h-weighted Δu distribution "// &
-                          "(MOM6 frhatu pattern)")
-      end if
-
       ! MOM6 BT_force / eta_PF split: the depth-mean baroclinic PGF forces
       ! the barotropic substep (default on).
       ocean_state%dyn%bt_work%bt_bc_pgf_forcing = cfg%ocean%bt%bc_pgf_forcing
@@ -3443,15 +3436,15 @@ contains
                           "live ζ_bt/∇KE off, frozen copies stay in F_bt)")
       end if
 
-      ! MOM6 frhatu·visc_rem joint weight (no-op unless h-weighted is on).
+      ! visc_rem-weighted BT-corrector fold (wt = visc_rem/<visc_rem>_h).
       ! visc_rem is produced every split-path stage by vdiff_apply_momentum
       ! from the momentum tridiagonal (rdb_ocean_vdiff.F90); it is inert
       ! (≡ 1) unless &ocean_vdiff_nml implicit_drag is also on (validate_config
       ! warns in that case).
       ocean_state%dyn%bt_work%bt_correction_visc_rem = cfg%ocean%bt%correction_visc_rem
       if (compute_rank == 0 .and. cfg%ocean%bt%correction_visc_rem) then
-         call logger%info("BT correction:    h·visc_rem joint weight ON "// &
-                          "(MOM6 frhatu·visc_rem; visc_rem produced by vdiff)")
+         call logger%info("BT correction:    visc_rem/<visc_rem>_h weight ON "// &
+                          "(visc_rem produced by vdiff)")
       end if
       ! MOM6 wt_u parity for the BT FORCING assembly (PGF_BUG.md §9):
       ! friction-damped layers stop forcing the fast loop.  Requires
@@ -3761,8 +3754,8 @@ contains
       ! off its anomaly scale (every `h_neglect` face-divisor leak grows
       ! by the same factor), the UNSPLIT driver — which has no
       ! depth-mean replacement — feels a raw `g*grad(z_draft)` ~ 0.1 m/s^2,
-      ! and `&ocean_bt_nml correction_h_weighted` turns the uncancelled
-      ! depth-uniform force into a real per-layer shear.  Refused, not
+      ! and a non-uniform barotropic-correction weight turns the
+      ! uncancelled depth-uniform force into a real per-layer shear.  Refused, not
       ! auto-enabled: the namelist should say what the run does.
       !
       ! EXEMPTION, and it is a theorem rather than a courtesy: a draft

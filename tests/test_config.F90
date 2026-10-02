@@ -444,7 +444,7 @@ contains
       write (io_unit, '(a)') "&ocean_bt_nml"
       write (io_unit, '(a)') "   n_inner = 60"
       write (io_unit, '(a)') "   use_cont_type = .true."
-      write (io_unit, '(a)') "   correction_h_weighted = .true."
+      write (io_unit, '(a)') "   correction_visc_rem = .true."
       write (io_unit, '(a)') "/"
       write (io_unit, '(a)') "&ocean_pgf_nml"
       write (io_unit, '(a)') '   form = "fv_mom6"'
@@ -509,8 +509,8 @@ contains
       if (allocated(error)) return
       call check(error, cfg%ocean%bt%use_cont_type, "ocean%bt%use_cont_type should be .true.")
       if (allocated(error)) return
-      call check(error, cfg%ocean%bt%correction_h_weighted, &
-                 "ocean%bt%correction_h_weighted should be .true.")
+      call check(error, cfg%ocean%bt%correction_visc_rem, &
+                 "ocean%bt%correction_visc_rem should be .true.")
       if (allocated(error)) return
       ! pgf / bdrag scalars
       call check(error, abs(cfg%ocean%pgf%gfs_scale - 0.98_wp) < 1.0e-12_wp, &

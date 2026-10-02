@@ -1014,25 +1014,44 @@ contains
       end if
    end subroutine face_depth_mean_v
 
-   pure subroutine apply_bt_correction(bt_work, ms, dt, metrics, skip_h_rescale, use_h_weighted, &
+   pure subroutine apply_bt_correction(bt_work, ms, dt, metrics, skip_h_rescale, &
                                        grid, use_bc_pgf, use_visc_rem, scale, n_nonfin)
       !! Replace the bt mode in the per-layer face velocities with the
-      !! barotropic-substep end-step value, adding Δu = u_bt_end − u_bt_at_n −
-      !! dt·F_bt_u to every layer (same for v). Split-explicit convention
-      !! (Hallberg 2009): momentum uses the END-of-step barotropic velocity;
-      !! layer continuity earlier used the time-mean transports. Both legs of the
-      !! corrector use the same end-step anchor (mismatched anchors overshoot the
-      !! gravity-wave phase speed). Also rescales `h_layer` uniformly so the
-      !! column total matches `H_ref + η_end`. `hTr` is deliberately NOT rescaled
-      !! (would break exact tracer mass conservation; T = hTr/h drifts by
-      !! O((η_end−η*_slow)/H) per step).
+      !! barotropic-substep end-step value, adding `Δu·wt_k` to every layer,
+      !! `Δu = u_bt_end − u_bt_at_n − dt·F_bt_u` (same for v). Split-explicit
+      !! convention (Hallberg 2009): momentum uses the END-of-step barotropic
+      !! velocity; layer continuity earlier used the time-mean transports.
+      !! Both legs of the corrector use the same end-step anchor (mismatched
+      !! anchors overshoot the gravity-wave phase speed). Also rescales
+      !! `h_layer` uniformly so the column total matches `H_ref + η_end`.
+      !! `hTr` is deliberately NOT rescaled (would break exact tracer mass
+      !! conservation; T = hTr/h drifts by O((η_end−η*_slow)/H) per step).
+      !!
+      !! ### The fold weight
+      !!
+      !! `wt_k = open_k·vr_k / ⟨vr⟩_h`,  `⟨vr⟩_h = Σ_k h_o·vr_k / Σ_k h_o`,
+      !! `h_o = h_face·open`, so `Σ_k h_o·wt_k = Σ_k h_o` and the OPEN-column
+      !! depth mean moves by exactly `Δu`.  `vr_k = visc_rem(k)` with
+      !! `use_visc_rem` (MOM6 `visc_rem_u`; the drag-aware weighting),
+      !! else 1, and `open ≡ 1` unless `metrics%use_closed_faces`.  With
+      !! neither it is the uniform fold, `wt ≡ 1` — MOM6's own barotropic
+      !! acceleration, `accel_layer_u(I,j,k) = u_accel_bt(I,j)`
+      !! (`MOM_barotropic.F90`), the same increment in every layer.
+      !!
+      !! The weight does NOT carry `h`.  An earlier opt-in h-weighted form
+      !! (`wt = h_face/⟨h⟩_h`, `&ocean_bt_nml correction_h_weighted`, now
+      !! retired and refused by `validate_config`) adds, beyond the
+      !! barotropic `ΔKE`, a positive-definite source `½Δ²·H·(κ−1)`,
+      !! `κ = Σh³Σh/(Σh²)² ≥ 1`, plus a shear feedback `Δ·Σ h·u′·(wt−1)`
+      !! that the fold keeps feeding: on a stretched `z_fixed` stack
+      !! (`κ−1 ≈ 0.2`) the feedback ran 15-28x the source and grew the
+      !! 1-degree Southern Ocean and the coastal-noise box ~5-8x until
+      !! they went non-finite.  `frhatu·visc_rem` is MOM6's AVERAGING
+      !! weight (BT_force, ubt), never its distribution.
       !!
       !! `skip_h_rescale` — disable the h-rescale (Lagrangian vcoord, where slow
       !!   continuity's Σh_layer is authoritative and the ALE remap relayers).
       !!   Default `.false.`.
-      !! `use_h_weighted` — distribute Δu ∝ h_face(k)/⟨h⟩_h (⟨h⟩_h = Σh²/Σh)
-      !!   instead of uniformly; preserves depth-mean by construction. No-op for
-      !!   uniform-h columns. Default `.false.` (bit-identical).
       !! `use_bc_pgf` — add the per-layer baroclinic-PGF retro-correction
       !!   Δu_bc = -dt·((pbce(R,k)-gtot_W(R))·e_anom(R) -
       !!   (pbce(L,k)-gtot_E(L))·e_anom(L))/dx. Depth-mean zero by construction,
@@ -1055,30 +1074,23 @@ contains
          !! wants the full-column fold passes a metrics object whose
          !! `use_closed_faces` latch is `.false.` (the default).
          !!
-         !! When `metrics%use_closed_faces` is set the fold takes a THIRD
-         !! branch: OPEN-LAYER.  A CLOSED layer gets `wt = 0` and
-         !! receives nothing; the OPEN layers keep whichever distribution
-         !! `use_h_weighted` selected (`wt = 1` by default, `wt =
-         !! h_o·vr/h_bar_o` with `h_o = h_face·open` when it is on).
-         !! Either way `Σ_k h_face·open·wt = Σ_k h_face·open`, so the
-         !! OPEN-column depth mean is shifted by exactly `Δu` — which is
-         !! the same column `derive_bt_from_layers` and
-         !! `face_depth_mean_*` weight by once the knob is on.
-         !!
-         !! This replaces the spike's fold-then-mask: there `Δu` was added
-         !! uniformly to every layer and `mask_layer_velocities` removed
-         !! it again from the closed ones, so the layer depth mean fell
-         !! short of `ubt_end` by `Δu·(Σ_closed h)/(Σ_k h)` — preserved by
-         !! CANCELLATION rather than by construction, and invisible only
-         !! because those cases run near rest.  Here the closed layers
-         !! never receive the increment in the first place, so the mask
-         !! that follows is a no-op on the fold and the two systems cannot
-         !! drift apart.
+         !! When `metrics%use_closed_faces` is set a CLOSED layer gets
+         !! `wt = 0` and receives nothing, BY CONSTRUCTION — the weight
+         !! carries `open` and `⟨vr⟩_h` is the OPEN-column mean, so the
+         !! OPEN-column depth mean (the column `derive_bt_from_layers` and
+         !! `face_depth_mean_*` weight by once the knob is on) shifts by
+         !! exactly `Δu`.  This replaces the spike's fold-then-mask: there
+         !! `Δu` was added uniformly to every layer and
+         !! `mask_layer_velocities` removed it again from the closed ones,
+         !! so the layer depth mean fell short of `ubt_end` by
+         !! `Δu·(Σ_closed h)/(Σ_k h)` — preserved by CANCELLATION rather
+         !! than by construction.
       logical, intent(in), optional :: skip_h_rescale
-      logical, intent(in), optional :: use_h_weighted
       type(hgrid_t), intent(in), optional :: grid
       logical, intent(in), optional :: use_bc_pgf
       logical, intent(in), optional :: use_visc_rem
+         !! Weight the fold by `visc_rem/⟨visc_rem⟩_h` (`&ocean_bt_nml
+         !! correction_visc_rem`).  Default `.false.` ⇒ the uniform fold.
       real(wp), intent(in), optional :: scale
          !! Multiplier on the Δu correction (default 1, bit-identical).
          !! The pred_corr PREDICTOR passes `BE` so the provisional velocity
@@ -1098,14 +1110,12 @@ contains
       integer :: i, j, k, nu, nv, nx, ny, nz, nfin
       real(wp) :: delta_u, delta_v, total_h_old, total_h_new, ratio
       real(wp) :: du_scale
-      real(wp) :: h_face, sum_h, sum_h2, h_bar_h, wt, vr_k
+      real(wp) :: h_face, sum_h, sum_hvr, vr_bar, wt, vr_k
       real(wp) :: du_bc, dv_bc
-      logical :: do_rescale, do_h_weighted, do_bc_pgf, do_visc_rem, do_open
+      logical :: do_rescale, do_bc_pgf, do_visc_rem, do_open
 
       do_rescale = .true.
       if (present(skip_h_rescale)) do_rescale = .not. skip_h_rescale
-      do_h_weighted = .false.
-      if (present(use_h_weighted)) do_h_weighted = use_h_weighted
       do_bc_pgf = .false.
       if (present(use_bc_pgf)) do_bc_pgf = use_bc_pgf
       do_visc_rem = .false.
@@ -1144,34 +1154,16 @@ contains
       end if
 
       if (do_open) then
-         ! OPEN-LAYER Δu distribution (`&vcoord_nml zfixed_closed_faces`).
-         !
-         ! A CLOSED layer receives NOTHING — `wt = 0` there, by
-         ! construction, not by a mask cleaning up afterwards.  The OPEN
-         ! layers keep the distribution the configuration asked for:
-         !   * default (`use_h_weighted = .false.`): `wt = 1` on every open
-         !     layer, so the OPEN-column depth mean shifts by exactly Δu
-         !     (`Σ_k h_o·wt = Σ_k h_o` trivially);
-         !   * `use_h_weighted = .true.`: `wt = h_o·vr/h_bar_o` with
-         !     `h_o = h_face·open` and `h_bar_o = Σ h_o²·vr / Σ h_o`, which
-         !     satisfies the same identity.
-         !
-         ! The DISTRIBUTION is deliberately NOT forced to the h-weighted
-         ! form.  Forcing it was tried and measured: on
-         ! `cavity_sloping_lid_rest_zfixed` it put En at 2.1E-04 by day 1
-         ! (270x the open-uniform fold) and reached a non-finite state on
-         ! day 2, where the open-uniform fold completes 30 days at
-         ! 2.3E-06.  Under `z_fixed` a partially open face can have one
-         ! dominant open layer and several thin ones, and `h_o/h_bar_o`
-         ! then concentrates the whole barotropic increment into the thick
-         ! layer — a vertical redistribution the coordinate does not want
-         ! and the case cannot absorb.  Whether to h-weight is an
-         ! ORTHOGONAL decision and stays on its own knob.
+         ! OPEN-LAYER fold (`&vcoord_nml zfixed_closed_faces`):
+         ! `wt = open·vr/⟨vr⟩_h` over `h_o = h_face·open`.  A CLOSED layer
+         ! receives nothing.  Without visc_rem `wt = open` — written as
+         ! exactly that (not `open·1/1`) so the no-visc_rem closed-face
+         ! answer is the one this branch always gave.
          do concurrent(j=1:ny, i=1:nu) &
-            local(k, delta_u, sum_h, sum_h2, h_face, h_bar_h, wt, vr_k)
+            local(k, delta_u, sum_h, sum_hvr, h_face, vr_bar, wt, vr_k)
             delta_u = du_scale*(bt_work%bt_ubt_end(i, j) - bt_work%ubt_at_n(i, j) - dt*bt_work%F_bt_u(i, j))
             sum_h = 0.0_wp
-            sum_h2 = 0.0_wp
+            sum_hvr = 0.0_wp
             do k = 1, nz
                h_face = 0.5_wp*(ms%h_layer(max(1, i - 1), j, k) + ms%h_layer(min(nu - 1, i), j, k))
                h_face = h_face*metrics%open_u(i, j, k)
@@ -1181,21 +1173,14 @@ contains
                   vr_k = 1.0_wp
                end if
                sum_h = sum_h + h_face
-               sum_h2 = sum_h2 + h_face*h_face*vr_k
+               sum_hvr = sum_hvr + h_face*vr_k
             end do
             if (sum_h > 0.0_wp .and. ieee_is_finite(delta_u)) then
-               h_bar_h = 1.0_wp
-               if (do_h_weighted .and. sum_h2 > 0.0_wp) h_bar_h = sum_h2/sum_h
+               vr_bar = 1.0_wp
+               if (do_visc_rem .and. sum_hvr > 0.0_wp) vr_bar = sum_hvr/sum_h
                do k = 1, nz
-                  if (do_h_weighted) then
-                     h_face = 0.5_wp*(ms%h_layer(max(1, i - 1), j, k) + ms%h_layer(min(nu - 1, i), j, k))
-                     h_face = h_face*metrics%open_u(i, j, k)
-                     if (do_visc_rem) then
-                        vr_k = bt_work%visc_rem_u(i, j, k)
-                     else
-                        vr_k = 1.0_wp
-                     end if
-                     wt = h_face*vr_k/h_bar_h
+                  if (do_visc_rem) then
+                     wt = metrics%open_u(i, j, k)*bt_work%visc_rem_u(i, j, k)/vr_bar
                   else
                      wt = metrics%open_u(i, j, k)
                   end if
@@ -1204,10 +1189,10 @@ contains
             end if
          end do
          do concurrent(j=1:nv, i=1:nx) &
-            local(k, delta_v, sum_h, sum_h2, h_face, h_bar_h, wt, vr_k)
+            local(k, delta_v, sum_h, sum_hvr, h_face, vr_bar, wt, vr_k)
             delta_v = du_scale*(bt_work%bt_vbt_end(i, j) - bt_work%vbt_at_n(i, j) - dt*bt_work%F_bt_v(i, j))
             sum_h = 0.0_wp
-            sum_h2 = 0.0_wp
+            sum_hvr = 0.0_wp
             do k = 1, nz
                h_face = 0.5_wp*(ms%h_layer(i, max(1, j - 1), k) + ms%h_layer(i, min(nv - 1, j), k))
                h_face = h_face*metrics%open_v(i, j, k)
@@ -1217,21 +1202,14 @@ contains
                   vr_k = 1.0_wp
                end if
                sum_h = sum_h + h_face
-               sum_h2 = sum_h2 + h_face*h_face*vr_k
+               sum_hvr = sum_hvr + h_face*vr_k
             end do
             if (sum_h > 0.0_wp .and. ieee_is_finite(delta_v)) then
-               h_bar_h = 1.0_wp
-               if (do_h_weighted .and. sum_h2 > 0.0_wp) h_bar_h = sum_h2/sum_h
+               vr_bar = 1.0_wp
+               if (do_visc_rem .and. sum_hvr > 0.0_wp) vr_bar = sum_hvr/sum_h
                do k = 1, nz
-                  if (do_h_weighted) then
-                     h_face = 0.5_wp*(ms%h_layer(i, max(1, j - 1), k) + ms%h_layer(i, min(nv - 1, j), k))
-                     h_face = h_face*metrics%open_v(i, j, k)
-                     if (do_visc_rem) then
-                        vr_k = bt_work%visc_rem_v(i, j, k)
-                     else
-                        vr_k = 1.0_wp
-                     end if
-                     wt = h_face*vr_k/h_bar_h
+                  if (do_visc_rem) then
+                     wt = metrics%open_v(i, j, k)*bt_work%visc_rem_v(i, j, k)/vr_bar
                   else
                      wt = metrics%open_v(i, j, k)
                   end if
@@ -1239,7 +1217,7 @@ contains
                end do
             end if
          end do
-      else if (.not. do_h_weighted) then
+      else if (.not. do_visc_rem) then
          ! Uniform Δu distribution — every layer gets the same Δu.  The finite
          ! guard skips a face whose Δ is non-finite (Inf/NaN from a blown-up BT
          ! loop) so the fold never mints NaN into the layer velocity.
@@ -1256,66 +1234,57 @@ contains
             end if
          end do
       else
-         ! H-weighted Δu distribution. Per-layer weight = h_face(k)·vr_k / h_bar_h
-         ! with h_bar_h = (Σ h²·vr)/Σ h, vr_k = visc_rem(k) when do_visc_rem else
-         ! 1.0 (MOM6 wt_u = frhatu·visc_rem). Preserves the depth-mean; vr≡1
-         ! reduces bit-identically to the h-only branch.
+         ! visc_rem-weighted fold on the full column: `wt = vr/⟨vr⟩_h`.
+         ! A column with no thickness, or with `Σ h·vr = 0` (every layer
+         ! fully damped), takes the uniform increment: `wt ≡ 1` is the
+         ! only weight with the right depth mean when `⟨vr⟩_h` is
+         ! undefined.
          do concurrent(j=1:ny, i=1:nu) &
-            local(k, delta_u, sum_h, sum_h2, h_face, h_bar_h, wt, vr_k)
+            local(k, delta_u, sum_h, sum_hvr, h_face, vr_bar, wt)
             delta_u = du_scale*(bt_work%bt_ubt_end(i, j) - bt_work%ubt_at_n(i, j) - dt*bt_work%F_bt_u(i, j))
-            sum_h = 0.0_wp
-            sum_h2 = 0.0_wp
-            do k = 1, nz
-               h_face = 0.5_wp*(ms%h_layer(max(1, i - 1), j, k) + ms%h_layer(min(nu - 1, i), j, k))
-               if (do_visc_rem) then
-                  vr_k = bt_work%visc_rem_u(i, j, k)
-               else
-                  vr_k = 1.0_wp
-               end if
-               sum_h = sum_h + h_face
-               sum_h2 = sum_h2 + h_face*h_face*vr_k
-            end do
-            if (sum_h2 > 0.0_wp .and. ieee_is_finite(delta_u)) then
-               h_bar_h = sum_h2/sum_h
+            if (ieee_is_finite(delta_u)) then
+               sum_h = 0.0_wp
+               sum_hvr = 0.0_wp
                do k = 1, nz
                   h_face = 0.5_wp*(ms%h_layer(max(1, i - 1), j, k) + ms%h_layer(min(nu - 1, i), j, k))
-                  if (do_visc_rem) then
-                     vr_k = bt_work%visc_rem_u(i, j, k)
-                  else
-                     vr_k = 1.0_wp
-                  end if
-                  wt = h_face*vr_k/h_bar_h
-                  ms%u_face_x_layer(i, j, k) = ms%u_face_x_layer(i, j, k) + delta_u*wt
+                  sum_h = sum_h + h_face
+                  sum_hvr = sum_hvr + h_face*bt_work%visc_rem_u(i, j, k)
                end do
+               if (sum_h > 0.0_wp .and. sum_hvr > 0.0_wp) then
+                  vr_bar = sum_hvr/sum_h
+                  do k = 1, nz
+                     wt = bt_work%visc_rem_u(i, j, k)/vr_bar
+                     ms%u_face_x_layer(i, j, k) = ms%u_face_x_layer(i, j, k) + delta_u*wt
+                  end do
+               else
+                  do k = 1, nz
+                     ms%u_face_x_layer(i, j, k) = ms%u_face_x_layer(i, j, k) + delta_u
+                  end do
+               end if
             end if
          end do
          do concurrent(j=1:nv, i=1:nx) &
-            local(k, delta_v, sum_h, sum_h2, h_face, h_bar_h, wt, vr_k)
+            local(k, delta_v, sum_h, sum_hvr, h_face, vr_bar, wt)
             delta_v = du_scale*(bt_work%bt_vbt_end(i, j) - bt_work%vbt_at_n(i, j) - dt*bt_work%F_bt_v(i, j))
-            sum_h = 0.0_wp
-            sum_h2 = 0.0_wp
-            do k = 1, nz
-               h_face = 0.5_wp*(ms%h_layer(i, max(1, j - 1), k) + ms%h_layer(i, min(nv - 1, j), k))
-               if (do_visc_rem) then
-                  vr_k = bt_work%visc_rem_v(i, j, k)
-               else
-                  vr_k = 1.0_wp
-               end if
-               sum_h = sum_h + h_face
-               sum_h2 = sum_h2 + h_face*h_face*vr_k
-            end do
-            if (sum_h2 > 0.0_wp .and. ieee_is_finite(delta_v)) then
-               h_bar_h = sum_h2/sum_h
+            if (ieee_is_finite(delta_v)) then
+               sum_h = 0.0_wp
+               sum_hvr = 0.0_wp
                do k = 1, nz
                   h_face = 0.5_wp*(ms%h_layer(i, max(1, j - 1), k) + ms%h_layer(i, min(nv - 1, j), k))
-                  if (do_visc_rem) then
-                     vr_k = bt_work%visc_rem_v(i, j, k)
-                  else
-                     vr_k = 1.0_wp
-                  end if
-                  wt = h_face*vr_k/h_bar_h
-                  ms%v_face_y_layer(i, j, k) = ms%v_face_y_layer(i, j, k) + delta_v*wt
+                  sum_h = sum_h + h_face
+                  sum_hvr = sum_hvr + h_face*bt_work%visc_rem_v(i, j, k)
                end do
+               if (sum_h > 0.0_wp .and. sum_hvr > 0.0_wp) then
+                  vr_bar = sum_hvr/sum_h
+                  do k = 1, nz
+                     wt = bt_work%visc_rem_v(i, j, k)/vr_bar
+                     ms%v_face_y_layer(i, j, k) = ms%v_face_y_layer(i, j, k) + delta_v*wt
+                  end do
+               else
+                  do k = 1, nz
+                     ms%v_face_y_layer(i, j, k) = ms%v_face_y_layer(i, j, k) + delta_v
+                  end do
+               end if
             end if
          end do
       end if
