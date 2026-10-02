@@ -34,7 +34,7 @@ module rdb_ocean_setup
                                ocean_vcoord_k_bot_from_target, &
                                ocean_vcoord_set_z_fixed_profile, &
                                ocean_vcoord_count_ledges, &
-                               ocean_vcoord_count_bed_steps
+                               ocean_vcoord_count_bed_steps, ocean_vcoord_t
    use rdb_vcoord, only: parse_remap_method, parse_z_fixed_profile, z_fixed_nominal_dz, &
                          ZFIXED_PROFILE_UNIFORM, ZFIXED_PROFILE_INVALID, ZFIXED_DZ_OK
    use rdb_ocean_bottom_drag, only: parse_bdrag_variant
@@ -1396,18 +1396,25 @@ contains
             ! S/T are always registered on the default ocean path).
             call logger%info("Vertical coord:  rho (isopycnal, ALE remap; "// &
                              "validation-grade — needs S+T + EOS; rho_ref_p="// &
-                             to_string(cfg%rho_ref_pressure)//" Pa, light/dense="// &
-                             to_string(cfg%rho_target_light)//"/"// &
-                             to_string(cfg%rho_target_dense)//" kg/m^3)")
+                             to_string(cfg%rho_ref_pressure)//" Pa, targets "// &
+                             to_string(ocean_state%vcoord%rho_target(0))//" .. "// &
+                             to_string(ocean_state%vcoord%rho_target( &
+                                       ocean_state%vcoord%nz_ml))//" kg/m^3 ("// &
+                             trim(cfg%rho_target_profile)//"))")
          else if (ocean_state%vcoord%coord_type == VCOORD_HYCOM) then
             ! HYCOM = the RHO density-space inversion + a z* nominal-floor
             ! sweep (fixed-resolution surface band, isopycnal interior).
-            ! Reuses the same rho_target linspace + EOS as RHO; needs S+T.
+            ! Reuses the RHO rho_target + EOS; the floor is the z* nominal
+            ! profile in metres (z_fixed_profile).  Needs S+T.
             call logger%info("Vertical coord:  hycom (hybrid z*/isopycnal, ALE "// &
                              "remap; needs S+T + EOS; rho_ref_p="// &
-                             to_string(cfg%rho_ref_pressure)//" Pa, light/dense="// &
-                             to_string(cfg%rho_target_light)//"/"// &
-                             to_string(cfg%rho_target_dense)//" kg/m^3)")
+                             to_string(cfg%rho_ref_pressure)//" Pa, targets "// &
+                             to_string(ocean_state%vcoord%rho_target(0))//" .. "// &
+                             to_string(ocean_state%vcoord%rho_target( &
+                                       ocean_state%vcoord%nz_ml))//" kg/m^3 ("// &
+                             trim(cfg%rho_target_profile)//"); z* floor "// &
+                             trim(cfg%z_fixed_profile)//", top dz "// &
+                             to_string(hycom_top_dz(ocean_state%vcoord))//" m)")
          else
             call logger%info("Vertical coord:  "//trim(cfg%vcoord_type)// &
                              " (code "//to_string(ocean_state%vcoord%coord_type)// &
@@ -1610,20 +1617,49 @@ contains
       if (present(ierr)) ierr = OCEAN_STATUS_OK
    end subroutine configure_ocean_lateral
 
+   pure function hycom_top_dz(vcoord) result(dz)
+      !! Surface-layer thickness of the `hycom` z* nominal floor (m), for
+      !! the configure banner: the stretched profile's top entry, else the
+      !! uniform `z_fixed_h_ref/nz`, else 0 (the unconfigured sigma
+      !! fallback of `ocean_vcoord_rho_target_column`).
+      type(ocean_vcoord_t), intent(in) :: vcoord
+      real(wp) :: dz
+      dz = 0.0_wp
+      if (vcoord%z_fixed_use_profile) then
+         dz = vcoord%z_fixed_dz(vcoord%nz_ml)
+      else if (vcoord%z_fixed_h_ref > 0.0_wp .and. vcoord%nz_ml > 0) then
+         dz = vcoord%z_fixed_h_ref/real(vcoord%nz_ml, wp)
+      end if
+   end function hycom_top_dz
+
    subroutine configure_rho_target(cfg, rho_target, nz_ml)
-      !! Populate the isopycnal `rho_target(0:nz_ml)` interface densities as
-      !! a uniform light→dense linspace from `rho_target_light` /
-      !! `rho_target_dense` (the MOM6 `ALE_COORDINATE_CONFIG=UNIFORM`
-      !! analogue for the RHO mode; a stretched RFNC1-style profile is a
-      !! P3 follow-up).  `rho_target(0)` is the surface (lightest)
-      !! interface, `rho_target(nz_ml)` the bed (densest).  Only consulted
-      !! for VCOORD_RHO; harmless otherwise.
+      !! Populate the isopycnal `rho_target(0:nz_ml)` interface densities
+      !! for `VCOORD_RHO` / `VCOORD_HYCOM`.  `rho_target(0)` is the surface
+      !! (lightest) interface, `rho_target(nz_ml)` the bed (densest).
+      !!
+      !!   * `&vcoord_nml rho_target_profile = "uniform"` (default) — a
+      !!     uniform light→dense linspace from `rho_target_light` /
+      !!     `rho_target_dense` (MOM6 `ALE_COORDINATE_CONFIG=UNIFORM`);
+      !!   * `"list"` — the `nz_ml+1` interface densities of
+      !!     `rho_target_list`, light first (MOM6 target densities from a
+      !!     list or a file, e.g. `HYBRID:file,sigma2,dz`).
+      !!
+      !! `validate_config` has already refused a list of the wrong length
+      !! or one that is not strictly increasing.  Harmless on other
+      !! families.
       type(config_t), intent(in) :: cfg
       real(wp), intent(inout) :: rho_target(0:)
       integer, intent(in) :: nz_ml
       integer :: k
       real(wp) :: frac
 
+      if (trim(cfg%rho_target_profile) == "list" .and. &
+          count(cfg%rho_target_list > 0.0_wp) >= nz_ml + 1) then
+         do k = 0, nz_ml
+            rho_target(k) = cfg%rho_target_list(k + 1)
+         end do
+         return
+      end if
       do k = 0, nz_ml
          if (nz_ml > 0) then
             frac = real(k, wp)/real(nz_ml, wp)
@@ -2446,6 +2482,10 @@ contains
       !! `rdb_vcoord :: z_fixed_nominal_dz` (`z_fixed_h_ref` then becomes
       !! the profile's total depth).
       !!
+      !! The same tables are the z* NOMINAL FLOOR of `VCOORD_HYCOM` (MOM6
+      !! HYCOM1 floors its interfaces at the z* `coordinateResolution` its
+      !! ALE_COORDINATE_CONFIG defines), so this also runs for `hycom`.
+      !!
       !! Idempotent (it rebuilds from `cfg` each call).  Called twice: by
       !! `engine_setup` BEFORE the IC seed — the cavity `z_fixed` seed lays
       !! `h_layer` from the same target builder and must see the same
@@ -2464,7 +2504,10 @@ contains
       ocean_state%vcoord%z_fixed_h_ref = cfg%ocean%topo%max_depth
       ocean_state%vcoord%z_fixed_use_profile = .false.
       if (.not. ocean_state%vcoord%is_init) return
-      if (ocean_state%vcoord%coord_type /= VCOORD_Z_FIXED) return
+      ! Two readers of the z* nominal resolution: `z_fixed` (its levels)
+      ! and `hycom` (its z* nominal floor, MOM6 HYCOM1 coordinateResolution).
+      if (ocean_state%vcoord%coord_type /= VCOORD_Z_FIXED .and. &
+          ocean_state%vcoord%coord_type /= VCOORD_HYCOM) return
       code = parse_z_fixed_profile(cfg%z_fixed_profile)
       if (code == ZFIXED_PROFILE_UNIFORM .or. code == ZFIXED_PROFILE_INVALID) return
       nz = ocean_state%vcoord%nz_ml
@@ -2475,7 +2518,7 @@ contains
       if (ierr /= ZFIXED_DZ_OK) return
       call ocean_vcoord_set_z_fixed_profile(ocean_state%vcoord, dz)
       if (log_it .and. compute_rank == 0) then
-         call logger%info("z_fixed profile:  "//trim(cfg%z_fixed_profile)// &
+         call logger%info(trim(cfg%vcoord_type)//" z* profile:  "//trim(cfg%z_fixed_profile)// &
                           " — nominal dz "//to_string(dz(1))//" m (surface) … "// &
                           to_string(dz(nz))//" m (bed), total "// &
                           to_string(ocean_state%vcoord%z_fixed_h_ref)//" m over "// &

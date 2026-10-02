@@ -11,9 +11,20 @@
 !! the η=0 prototype) cannot see:
 !!   - hycom_surface_band_zstar — weak surface ML + stratified interior:
 !!     the top interface sits at the z* floor; floor invariant holds.
-!!   - hycom_nonuniform_dsig_flip — NON-uniform dsig (fine surface,
-!!     coarse bed): the surface layer uses the FINE dsig (catches a
+!!   - hycom_nonuniform_dsig_flip — the UNCONFIGURED-slot fallback
+!!     (`z_fixed_h_ref = 0`, the historical column-fraction floor) on a
+!!     NON-uniform dsig: the surface layer uses the FINE dsig (catches a
 !!     surface<->bed flip that uniform dsig hides).
+!!   - hycom_nonuniform_profile_flip — the same flip check on the
+!!     production floor: a stretched z* profile in METRES
+!!     (`ocean_vcoord_set_z_fixed_profile`, as `z_fixed_profile` installs).
+!!   - hycom_zstar_floor_metres_shallow_column — a 300 m column under a
+!!     600 m profile, weakly stratified: the interfaces sit at the profile
+!!     DEPTHS (10, 30, 70, 150 m), not at k/nz of the column (the sigma
+!!     floor would make every layer 50 m) — audit finding H1.
+!!   - hycom_strong_strat_density_sets — a strongly stratified column
+!!     whose isopycnal interfaces all lie below the floor: HYCOM's grid is
+!!     the pure RHO grid bit-for-bit (density sets every interface).
 !!   - hycom_free_surface_stretching — η /= 0: the z* band scales as
 !!     dsig*(H+η), NOT dsig*(H+η)^2/H (catches the stretching-factor
 !!     trap the prototype was blind to).
@@ -23,15 +34,26 @@
 !!     interior collapses.
 !!   - hycom_on_device — the full do-concurrent kernel through a device
 !!     enter_data round-trip stays finite + conservative.
+!!   - hycom_tanh_profile_engine / hycom_refuses_* — the namelist path:
+!!     `z_fixed_profile = "tanh"` and `rho_target_profile = "list"` reach
+!!     the kernel (a target list lighter than the whole column leaves the
+!!     floor binding everywhere, so the surface layer is `z_fixed_dz_top`),
+!!     and `validate_config` refuses a bad `rho_target_list` or one set on a
+!!     coordinate that never reads it.
 !!
 !! Linear EOS so layer densities are an exact closed form of (T, S):
 !! with uniform S, rho = rho0 - alpha_T*(T - T_ref).
 module test_ocean_vcoord_hycom
-   use rdb_constants, only: wp, REMAP_PPM, VCOORD_HYCOM
+   use, intrinsic :: iso_c_binding, only: c_ptr, c_int, c_null_ptr, c_f_pointer
+   use rdb_constants, only: wp, REMAP_PPM, VCOORD_HYCOM, VCOORD_RHO
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_eos, only: eos_t, eos_density_point, EOS_VARIANT_LINEAR
-   use rdb_ocean_vcoord, only: ocean_vcoord_t
+   use rdb_ocean_vcoord, only: ocean_vcoord_t, ocean_vcoord_set_z_fixed_profile
+   use rdb_ocean_api, only: rdb_ocean_create_from_string, rdb_ocean_step, &
+                            rdb_ocean_destroy, rdb_ocean_refresh_host, &
+                            rdb_ocean_get_h_layer_ptr, rdb_ocean_get_grid_info
+   use rdb_ocean_status, only: OCEAN_STATUS_OK
    use rdb_ocean_remap, only: ocean_apply_ale_remap_step
    use testdrive, only: error_type, check, new_unittest, unittest_type
    implicit none
@@ -56,7 +78,18 @@ contains
                   new_unittest("hycom_conserves", test_conserves), &
                   new_unittest("hycom_unstratified_surface_protected", &
                                test_unstratified_surface_protected), &
-                  new_unittest("hycom_on_device", test_on_device) &
+                  new_unittest("hycom_on_device", test_on_device), &
+                  new_unittest("hycom_nonuniform_profile_flip", test_nonuniform_profile_flip), &
+                  new_unittest("hycom_zstar_floor_metres_shallow_column", &
+                               test_zstar_floor_metres_shallow), &
+                  new_unittest("hycom_strong_strat_density_sets", test_strong_strat_density), &
+                  new_unittest("hycom_tanh_profile_engine", test_tanh_profile_engine), &
+                  new_unittest("hycom_refuses_rho_list_length", test_refuses_rho_list_length), &
+                  new_unittest("hycom_refuses_rho_list_not_increasing", &
+                               test_refuses_rho_list_order), &
+                  new_unittest("hycom_refuses_rho_list_on_sigma", test_refuses_rho_list_sigma), &
+                  new_unittest("hycom_refuses_rho_list_without_profile", &
+                               test_refuses_rho_list_no_profile) &
                   ]
    end subroutine collect_ocean_vcoord_hycom_tests
 
@@ -178,6 +211,9 @@ contains
 
          call vc%init(grid, nz_ml=NZ)
          vc%coord_type = VCOORD_HYCOM
+         ! Production floor: uniform z* in METRES (setup writes max_depth
+         ! here); max_depth = H, so the nominal layer is H/NZ.
+         vc%z_fixed_h_ref = H
          ! uniform dsig (1/NZ) -> z* nominal layer = H/NZ = 100 m.
          rmin = rho_lay(NZ) - 0.2_wp
          rmax = rho_lay(1) + 0.2_wp
@@ -291,6 +327,9 @@ contains
 
          call vc%init(grid, nz_ml=NZ)
          vc%coord_type = VCOORD_HYCOM
+         ! Production floor: uniform z* in METRES (setup writes max_depth
+         ! here); max_depth = H, so the nominal layer is H/NZ.
+         vc%z_fixed_h_ref = H
          ! uniform dsig = 1/NZ.
          rmin = lin_rho(12.0_wp, S_REF) - 1.0_wp
          rmax = lin_rho(12.0_wp, S_REF) + 1.0_wp
@@ -352,6 +391,9 @@ contains
 
          call vc%init(grid, nz_ml=NZ)
          vc%coord_type = VCOORD_HYCOM
+         ! Production floor: uniform z* in METRES (setup writes max_depth
+         ! here); max_depth = H, so the nominal layer is H/NZ.
+         vc%z_fixed_h_ref = H
          rmin = rho_lay(NZ) - 0.5_wp
          rmax = rho_lay(1) + 0.5_wp
          do k = 0, NZ
@@ -410,6 +452,9 @@ contains
 
          call vc%init(grid, nz_ml=NZ)
          vc%coord_type = VCOORD_HYCOM
+         ! Production floor: uniform z* in METRES (setup writes max_depth
+         ! here); max_depth = H, so the nominal layer is H/NZ.
+         vc%z_fixed_h_ref = H
          ! Targets bracketing the (uniform) column density: RHO alone would
          ! collapse every interior interface to the surface or bed.
          rho_mean = lin_rho(12.0_wp, S_REF)
@@ -469,6 +514,9 @@ contains
 
          call vc%init(grid, nz_ml=NZ)
          vc%coord_type = VCOORD_HYCOM
+         ! Production floor: uniform z* in METRES (setup writes max_depth
+         ! here); max_depth = H, so the nominal layer is H/NZ.
+         vc%z_fixed_h_ref = H
          rmin = rho_lay(NZ) - 0.2_wp
          rmax = rho_lay(1) + 0.2_wp
          do k = 0, NZ
@@ -510,5 +558,282 @@ contains
       call vc%destroy()
       call ms%destroy()
    end subroutine test_on_device
+
+   ! -----------------------------------------------------------------
+   ! 7. NON-uniform z* PROFILE in metres — surface uses the fine entry
+   ! -----------------------------------------------------------------
+   subroutine test_nonuniform_profile_flip(error)
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_vcoord_t) :: vc
+      type(eos_t) :: eos
+      integer, parameter :: NZ = 6
+      real(wp) :: h_lay(NZ), T_lay(NZ), S_lay(NZ)
+      real(wp) :: dz_td(NZ), H, rmin, rmax, hsurf
+      integer :: k
+      checks: block
+         call make_eos(eos)
+         H = 600.0_wp
+         ! Unstratified: the floor binds on every layer -> pure z* grid.
+         T_lay = 12.0_wp
+         S_lay = S_REF
+         h_lay = H/real(NZ, wp)
+         call setup_column(grid, ms, NZ, h_lay, T_lay, S_lay)
+         call vc%init(grid, nz_ml=NZ)
+         vc%coord_type = VCOORD_HYCOM
+         ! Surface-first nominal thicknesses (m): fine surface, coarse bed.
+         dz_td = [30.0_wp, 30.0_wp, 60.0_wp, 90.0_wp, 150.0_wp, 240.0_wp]
+         call ocean_vcoord_set_z_fixed_profile(vc, dz_td)
+         ! Every target lighter than the column: each interior interface
+         ! inverts to the surface and the floor alone places it.
+         rmin = lin_rho(12.0_wp, S_REF) - 5.0_wp
+         rmax = lin_rho(12.0_wp, S_REF) - 4.0_wp
+         do k = 0, NZ
+            vc%rho_target(k) = rmin + (rmax - rmin)*real(k, wp)/real(NZ, wp)
+         end do
+
+         call run_remap_host(grid, vc, ms, eos, 0.0_wp)
+
+         hsurf = ms%h_layer(1, 1, NZ)
+         call check(error, abs(hsurf - dz_td(1)) < 1.0e-6_wp, &
+                    "profile: surface layer is the FINE 30 m entry, not the 240 m bed one")
+         if (allocated(error)) exit checks
+         do k = 1, NZ
+            call check(error, abs(ms%h_layer(1, 1, k) - dz_td(NZ - k + 1)) < 1.0e-6_wp, &
+                       "profile: every layer sits on its nominal z* thickness")
+            if (allocated(error)) exit checks
+         end do
+         call check(error, abs(sum(ms%h_layer(1, 1, :)) - H) < 1.0e-8_wp, &
+                    "profile: column total conserved")
+      end block checks
+      call vc%destroy()
+      call ms%destroy()
+   end subroutine test_nonuniform_profile_flip
+
+   ! -----------------------------------------------------------------
+   ! 8. z* floor in METRES on a column shallower than the profile (H1)
+   ! -----------------------------------------------------------------
+   subroutine test_zstar_floor_metres_shallow(error)
+      !! A 300 m column under a 600 m surface-first profile
+      !! 10/20/40/80/150/300 m, weakly stratified (0.05 degC over the
+      !! column, every target far lighter than it).  The density inversion
+      !! leaves every interior interface at the surface, so the z* floor
+      !! places them: at 10, 30, 70, 150, 300 (= the bed) m — layers
+      !! 10/20/40/80/150 m and a collapsed bed layer.  The pre-fix sigma
+      !! floor (k/nz of the column) made every layer 50 m.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_vcoord_t) :: vc
+      type(eos_t) :: eos
+      integer, parameter :: NZ = 6
+      real(wp) :: h_lay(NZ), T_lay(NZ), S_lay(NZ), dz_td(NZ)
+      real(wp) :: H, rho_c, h_floor_eff
+      integer :: k
+      checks: block
+         call make_eos(eos)
+         H = 300.0_wp
+         do k = 1, NZ
+            T_lay(k) = 10.0_wp + 0.01_wp*real(k - 1, wp)   ! bed coldest
+         end do
+         S_lay = S_REF
+         h_lay = H/real(NZ, wp)
+         call setup_column(grid, ms, NZ, h_lay, T_lay, S_lay)
+         call vc%init(grid, nz_ml=NZ)
+         vc%coord_type = VCOORD_HYCOM
+         dz_td = [10.0_wp, 20.0_wp, 40.0_wp, 80.0_wp, 150.0_wp, 300.0_wp]
+         call ocean_vcoord_set_z_fixed_profile(vc, dz_td)
+         ! Every target LIGHTER than the column: the inversion puts every
+         ! interior interface at the surface and the floor sets them all.
+         rho_c = lin_rho(T_lay(NZ), S_REF)
+         do k = 0, NZ
+            vc%rho_target(k) = rho_c - 5.0_wp + 0.1_wp*real(k, wp)
+         end do
+         h_floor_eff = max(vc%zstar_h_min, 3.0e-4_wp)
+
+         call run_remap_host(grid, vc, ms, eos, 0.0_wp)
+
+         ! state k = NZ is the surface; layers NZ..3 carry dz_td(1..4).
+         do k = 1, 4
+            call check(error, abs(ms%h_layer(1, 1, NZ - k + 1) - dz_td(k)) < 1.0e-9_wp, &
+                       "shallow: interface at the z* profile DEPTH (metres), not k/nz of H")
+            if (allocated(error)) exit checks
+         end do
+         call check(error, abs(ms%h_layer(1, 1, NZ) - H/real(NZ, wp)) > 1.0_wp, &
+                    "shallow: the surface layer is NOT the sigma floor's H/nz = 50 m")
+         if (allocated(error)) exit checks
+         ! The bed layer collapsed and was inflated; the 150 m layer paid.
+         call check(error, abs(ms%h_layer(1, 1, 1) - h_floor_eff) < 1.0e-12_wp, &
+                    "shallow: the layer below the bed clamp sits at the inflation floor")
+         if (allocated(error)) exit checks
+         call check(error, abs(sum(ms%h_layer(1, 1, :)) - H) < 1.0e-9_wp, &
+                    "shallow: column total conserved")
+      end block checks
+      call vc%destroy()
+      call ms%destroy()
+   end subroutine test_zstar_floor_metres_shallow
+
+   ! -----------------------------------------------------------------
+   ! 9. strongly stratified column — density sets every interface
+   ! -----------------------------------------------------------------
+   subroutine test_strong_strat_density(error)
+      !! Linear stable stratification (2 degC per 100 m layer), targets
+      !! spanning the column, z* floor 1 m per layer: every isopycnal
+      !! interface lies far below the floor and the monotonize is a no-op
+      !! on the stable column, so HYCOM must reproduce the pure RHO grid
+      !! bit-for-bit — the floor only ever acts where density does not.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms_h, ms_r
+      type(ocean_vcoord_t) :: vc_h, vc_r
+      type(eos_t) :: eos
+      integer, parameter :: NZ = 6
+      real(wp) :: h_lay(NZ), T_lay(NZ), S_lay(NZ)
+      real(wp) :: H, rtop, rbed, rmov
+      integer :: k
+      checks: block
+         call make_eos(eos)
+         H = 600.0_wp
+         do k = 1, NZ
+            T_lay(k) = 2.0_wp + 2.0_wp*real(k - 1, wp)   ! bed coldest
+         end do
+         S_lay = S_REF
+         h_lay = H/real(NZ, wp)
+         rtop = lin_rho(T_lay(NZ), S_REF)
+         rbed = lin_rho(T_lay(1), S_REF)
+         call setup_column(grid, ms_h, NZ, h_lay, T_lay, S_lay)
+         call setup_column(grid, ms_r, NZ, h_lay, T_lay, S_lay)
+         call vc_h%init(grid, nz_ml=NZ)
+         call vc_r%init(grid, nz_ml=NZ)
+         vc_h%coord_type = VCOORD_HYCOM
+         vc_r%coord_type = VCOORD_RHO
+         vc_h%z_fixed_h_ref = real(NZ, wp)      ! 1 m nominal layers
+         do k = 0, NZ
+            ! Targets shifted off the layer densities so the interfaces
+            ! move off the layer boundaries (non-vacuous).
+            rmov = rtop + (rbed - rtop)*(real(k, wp) - 0.33_wp)/real(NZ - 1, wp)
+            vc_h%rho_target(k) = rmov
+            vc_r%rho_target(k) = rmov
+         end do
+
+         call run_remap_host(grid, vc_h, ms_h, eos, 0.0_wp)
+         call run_remap_host(grid, vc_r, ms_r, eos, 0.0_wp)
+
+         call check(error, maxval(abs(ms_r%h_layer(1, 1, :) - h_lay)) > 1.0_wp, &
+                    "strong-strat: the RHO grid moved (test is not vacuous)")
+         if (allocated(error)) exit checks
+         call check(error, all(ms_h%h_layer(1, 1, :) == ms_r%h_layer(1, 1, :)), &
+                    "strong-strat: HYCOM == RHO bit-for-bit (density sets every interface)")
+      end block checks
+      call vc_h%destroy()
+      call vc_r%destroy()
+      call ms_h%destroy()
+      call ms_r%destroy()
+   end subroutine test_strong_strat_density
+
+   ! -----------------------------------------------------------------
+   ! 10. namelist path — tanh z* floor + target list reach the kernel
+   ! -----------------------------------------------------------------
+   function engine_nml(vcoord, extra) result(txt)
+      !! Flat 600 m, 6 layers, Wright EOS (sigma-0 coordinate), salinity
+      !! stratified by the `&tracer_nml` linear-in-layer IC (no NetCDF).
+      character(len=*), intent(in) :: vcoord, extra
+      character(len=:), allocatable :: txt
+      character(len=*), parameter :: nl = new_line("a")
+      txt = '&sim_nml sim_type = "ocean" /'//nl// &
+            "&grid_nml nx = 6, ny = 4, dx = 2000.0, dy = 2000.0, nghost = 2 /"//nl// &
+            "&time_nml t_end = 86400.0, dt_fixed = 600.0 /"//nl// &
+            "&physics_nml coriolis_f = -1.409e-4 /"//nl// &
+            "&nonhydrostatic_nml nz_layers = 6 /"//nl// &
+            '&vcoord_nml vcoord_type = "'//vcoord//'", rho_ref_pressure = 0.0, '// &
+            extra//" /"//nl// &
+            '&ocean_topo_nml topo_config = "flat", max_depth = 600.0 /'//nl// &
+            '&ocean_pgf_nml form = "fv_mom6", reconstruct_for_pressure = .true. /'//nl// &
+            '&ocean_eos_nml eos = "wright" /'//nl// &
+            "&tracer_nml initial_temperature = -1.9, initial_salinity = 33.8, "// &
+            "S_init_surface = 33.8, S_init_bottom = 34.55 /"//nl// &
+            "&ocean_vmix_nml use_closure = .false., use_kpp = .false. /"//nl// &
+            "&ocean_bt_nml auto_n_inner = .true. /"//nl// &
+            "&ocean_diag_nml enabled = .false. /"//nl// &
+            "&output_nml output_to_file = .false. /"//nl
+   end function engine_nml
+
+   subroutine test_tanh_profile_engine(error)
+      !! `z_fixed_profile = "tanh"` from a 10 m surface layer and a target
+      !! LIST lighter than the whole column (sigma-0 ~1027.2-1027.9 here):
+      !! every interior interface inverts to the surface, the floor sets all
+      !! of them, so after a regrid the surface layer is 10 m (x (H+eta)/H,
+      !! eta ~ 0 at rest) — the profile reached the kernel through setup.
+      type(error_type), allocatable, intent(out) :: error
+      character(len=:), allocatable :: nml
+      type(c_ptr) :: handle, ptr
+      integer(c_int) :: status, nx_p, ny_p, nz_p, ng, nx, ny, nz, gen
+      real(wp), pointer :: h(:, :, :)
+      real(wp) :: err_top
+      character(len=120) :: msg
+      nml = engine_nml("hycom", "z_fixed_profile = 'tanh', z_fixed_dz_top = 10.0, "// &
+                       "rho_target_profile = 'list', rho_target_list = 1020.0, 1020.5, "// &
+                       "1021.0, 1021.5, 1022.0, 1022.5, 1023.0")
+      handle = c_null_ptr
+      status = rdb_ocean_create_from_string(nml, len(nml, kind=c_int), handle)
+      call check(error, status == OCEAN_STATUS_OK, "tanh+list hycom case must build")
+      if (allocated(error)) return
+      body: block
+         status = rdb_ocean_get_grid_info(handle, nx_p, ny_p, nz_p, ng)
+         status = rdb_ocean_step(handle, 3_c_int)
+         call check(error, status == OCEAN_STATUS_OK, "tanh+list hycom case must step")
+         if (allocated(error)) exit body
+         status = rdb_ocean_refresh_host(handle)
+         status = rdb_ocean_get_h_layer_ptr(handle, ptr, nx, ny, nz, gen)
+         call c_f_pointer(ptr, h, [nx, ny, nz])
+         err_top = maxval(abs(h(ng + 1:ng + nx_p, ng + 1:ng + ny_p, nz) - 10.0_wp))
+         write (msg, "(a,es10.3,a)") "surface layer is z_fixed_dz_top = 10 m (max err ", &
+            err_top, " m)"
+         call check(error, err_top < 1.0e-3_wp, trim(msg))
+      end block body
+      status = rdb_ocean_destroy(handle)
+   end subroutine test_tanh_profile_engine
+
+   subroutine expect_refused(error, vcoord, extra, what)
+      type(error_type), allocatable, intent(out) :: error
+      character(len=*), intent(in) :: vcoord, extra, what
+      character(len=:), allocatable :: nml
+      type(c_ptr) :: handle
+      integer(c_int) :: status
+      nml = engine_nml(vcoord, extra)
+      handle = c_null_ptr
+      status = rdb_ocean_create_from_string(nml, len(nml, kind=c_int), handle)
+      call check(error, status /= OCEAN_STATUS_OK, what//" built")
+      if (status == OCEAN_STATUS_OK) status = rdb_ocean_destroy(handle)
+   end subroutine expect_refused
+
+   subroutine test_refuses_rho_list_length(error)
+      type(error_type), allocatable, intent(out) :: error
+      call expect_refused(error, "hycom", "rho_target_profile = 'list', "// &
+                          "rho_target_list = 1020.0, 1021.0, 1022.0", &
+                          "a 3-entry rho_target_list for 6 layers")
+   end subroutine test_refuses_rho_list_length
+
+   subroutine test_refuses_rho_list_order(error)
+      type(error_type), allocatable, intent(out) :: error
+      call expect_refused(error, "rho", "rho_target_profile = 'list', "// &
+                          "rho_target_list = 1020.0, 1021.0, 1022.0, 1022.0, 1023.0, "// &
+                          "1024.0, 1025.0", "a non-increasing rho_target_list")
+   end subroutine test_refuses_rho_list_order
+
+   subroutine test_refuses_rho_list_sigma(error)
+      type(error_type), allocatable, intent(out) :: error
+      call expect_refused(error, "sigma", "rho_target_profile = 'list', "// &
+                          "rho_target_list = 1020.0, 1021.0, 1022.0, 1023.0, 1024.0, "// &
+                          "1025.0, 1026.0", "rho_target_profile='list' on sigma")
+   end subroutine test_refuses_rho_list_sigma
+
+   subroutine test_refuses_rho_list_no_profile(error)
+      type(error_type), allocatable, intent(out) :: error
+      call expect_refused(error, "hycom", "rho_target_list = 1020.0, 1021.0, 1022.0, "// &
+                          "1023.0, 1024.0, 1025.0, 1026.0", &
+                          "rho_target_list under rho_target_profile='uniform'")
+   end subroutine test_refuses_rho_list_no_profile
 
 end module test_ocean_vcoord_hycom
