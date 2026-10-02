@@ -89,6 +89,12 @@ module rdb_barotropic_workstate
          !! multiplication is a no-op (bit-identical).
 
       logical :: bt_correction_visc_rem = .false.
+         !! When `.true.`, `apply_bt_correction` weights the per-layer
+         !! barotropic increment by `visc_rem_*(k)/⟨visc_rem⟩_h` instead
+         !! of uniformly — biasing the Δu distribution toward layers LESS
+         !! damped by vertical viscosity, depth mean preserved
+         !! (`&ocean_bt_nml correction_visc_rem`).  Also gates the
+         !! visc_rem PRODUCER in `vmix_apply_in_stage`.
       logical :: bt_forcing_visc_rem = .false.
          !! MOM6 `wt_u` parity for the BT forcing assembly: weight the
          !! `F_bt_u/v` depth-mean (and the PGF-projection subtraction) by
@@ -99,15 +105,11 @@ module rdb_barotropic_workstate
          !! renorm_visc_rem`) — `visc_rem_u/v` forwarded into the slow
          !! continuity so `u_cor = u + du·γ_k` and the fluxes carry the
          !! same weights.
-         !! When `.true.`, the h-weighted BT corrector multiplies its
-         !! per-layer weight by `visc_rem_*(k)` — biasing the Δu
-         !! distribution toward layers LESS damped by vertical
-         !! viscosity.  Requires `bt_correction_h_weighted = .true.`.
 
       logical :: bt_correction_bc_pgf = .false.
          !! When `.true.`, `apply_bt_correction` adds the per-layer
          !! baroclinic-PGF retro-correction on top of the uniform /
-         !! h-weighted Δu.  Requires `ocean_pgf_form = "fv_mom6"` and
+         !! visc_rem-weighted Δu.  Requires `ocean_pgf_form = "fv_mom6"` and
          !! the `pbce` / `gtot_*` / `e_anom` / `eta_PF` fields filled.
 
       logical :: bt_bc_pgf_forcing = .true.
@@ -120,12 +122,6 @@ module rdb_barotropic_workstate
          !! the stage-entry η it was evaluated on is removed.  `.false.` =
          !! legacy `F_bt − ⟨PGF⟩`, which discarded the depth-mean
          !! baroclinic PGF.  See `set_fast_forcing_eta_pf`.
-
-      logical :: bt_correction_h_weighted = .false.
-         !! When `.true.`, `apply_bt_correction` distributes the
-         !! per-face Δu across layers proportional to
-         !! `h_face(k) / ⟨h⟩_h` instead of uniformly.  Default off
-         !! bit-identical.
 
       real(wp) :: g_bt = 9.81_wp
          !! Acceleration in the barotropic-substep η-gradient PGF

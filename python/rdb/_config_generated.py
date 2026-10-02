@@ -3571,15 +3571,16 @@ class OceanBt(Group):
 
     correction_h_weighted = Bool(
         'correction_h_weighted',
-        doc='h-weight the post-substep BT corrector (MOM6 frhatu)',
+        doc='RETIRED h-weighted BT-corrector fold (refused when set)',
         units='',
         required=False,
         default=False,
+        dead_on_ocean_path='RETIRED -- the h-weighted barotropic-correction fold was energy-non-conserving (a positive 0.5*D^2*H*(kappa-1) source plus shear feedback) and MOM6 has no such fold; setting it .true. is a fail-loud configure error (validate_config). Drag-aware weighting is correction_visc_rem.',
     )
 
     correction_visc_rem = Bool(
         'correction_visc_rem',
-        doc='h*visc_rem joint corrector weight (requires correction_h_weighted; visc_rem is produced by vdiff and is inert, =1, without ocean_vdiff_nml implicit_drag)',
+        doc='visc_rem/<visc_rem>_h BT-corrector weight + the visc_rem producer (visc_rem is produced by vdiff and is inert, =1, without ocean_vdiff_nml implicit_drag)',
         units='',
         required=False,
         default=False,

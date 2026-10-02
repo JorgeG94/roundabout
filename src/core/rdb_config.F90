@@ -602,13 +602,21 @@ module rdb_config
          !! When `.true.`, the BT chain uses per-face upstream-PPM
          !! column-sum thickness instead of centred `h_face`.  Default `.false.`.
       logical :: correction_h_weighted = .false.
-         !! When `.true.`, the post-substep BT corrector distributes
-         !! per-layer Δu by `h_face(k) / ⟨h⟩_h` instead of uniformly.
+         !! RETIRED (2026-10-02) — setting it `.true.` is a fail-loud
+         !! `validate_config` error.  It distributed the barotropic
+         !! increment by `h_face(k)/⟨h⟩_h`, which is not energy-conserving:
+         !! beyond the barotropic `ΔKE` it adds a positive-definite source
+         !! `½Δ²·H·(κ−1)`, `κ = Σh³Σh/(Σh²)²`, plus a shear feedback that
+         !! grew the stretched-`z_fixed` 1-degree Southern Ocean to a
+         !! non-finite state on day 16.  MOM6 has no h-weighted fold (its
+         !! barotropic acceleration is the same in every layer).  The key
+         !! stays registered only so the refusal can say why; drag-aware
+         !! weighting is `correction_visc_rem`.
       logical :: correction_visc_rem = .false.
-         !! Joint h·visc_rem weight for the BT corrector.  Requires
-         !! `correction_h_weighted = .true.` (checked in `validate_config`;
-         !! the uniform-Δu branch never reads `visc_rem`, so without it the
-         !! knob would validate and silently do nothing).  `visc_rem` (the
+         !! Weight the BT-corrector fold by `visc_rem(k)/⟨visc_rem⟩_h`
+         !! (`⟨·⟩_h` the open-column h-weighted mean, so the depth mean is
+         !! preserved exactly) instead of uniformly, and switch ON the
+         !! visc_rem producer the other `*_visc_rem` knobs read.  `visc_rem` (the
          !! bt_work%visc_rem_u/v seam) is produced by
          !! `vdiff_apply_momentum` from the SAME factorized momentum
          !! tridiagonal with RHS ≡ 1 — see `rdb_ocean_vdiff.F90`.  Its rows
@@ -5000,24 +5008,37 @@ contains
          has_error = .true.
       end if
 
-      ! `correction_visc_rem` (PR-19) only has a reader in the h-weighted
-      ! branch of apply_bt_correction — the uniform branch never touches
-      ! `visc_rem_u/v`.  Without `correction_h_weighted`, the knob would
-      ! validate, log, and silently do nothing.  Fail loud rather than
-      ! ship a no-op configuration.
-      if (cfg%ocean%bt%correction_visc_rem .and. .not. cfg%ocean%bt%correction_h_weighted) then
-         call logger%error("&ocean_bt_nml correction_visc_rem=.true. requires "// &
-                           "correction_h_weighted=.true. — the uniform-Δu BT-corrector "// &
-                           "branch never reads visc_rem, so the knob would silently "// &
-                           "do nothing")
+      ! RETIRED `correction_h_weighted`: the h-weighted barotropic-
+      ! correction fold is not energy-conserving on any column whose
+      ! (open) layers differ in thickness — which is every column of a
+      ! stretched z_fixed stack — and MOM6 has no such fold.  Refused,
+      ! never silently ignored, so a namelist that relied on it learns
+      ! that its answer changes.  See `apply_bt_correction`.
+      if (cfg%ocean%bt%correction_h_weighted) then
+         ! Pushed to the error ring as well as logged, so a C/Python
+         ! caller (and `test_ocean_bt_correction_weight`) reads the
+         ! specific reason, not only the generic validation rollup.
+         block
+            character(len=*), parameter :: msg = &
+                                           "&ocean_bt_nml correction_h_weighted is RETIRED: the h-weighted "// &
+                                           "barotropic-correction fold was energy-non-conserving (beyond the "// &
+                                           "barotropic KE change it adds a positive source 0.5*D^2*H*(kappa-1), "// &
+                                           "kappa = sum(h^3)sum(h)/sum(h^2)^2 >= 1, plus a shear feedback that grew "// &
+                                           "stretched z_fixed runs non-finite). MOM6 has no h-weighted fold; the "// &
+                                           "uniform fold is the default. For drag-aware weighting use "// &
+                                           "correction_visc_rem=.true. (with &ocean_vdiff_nml implicit_drag), else "// &
+                                           "delete the key."
+            call error_ring_push(msg)
+            call logger%error(msg)
+         end block
          has_error = .true.
       end if
       ! The vdiff operator's row sums are exactly 1 (a no-flux-top/no-flux-
       ! bottom viscous operator cannot remove a uniform acceleration)
       ! UNLESS the implicit-drag fold breaks the k=1 row sum.  So without
       ! `implicit_drag`, the remnant producer still runs but returns
-      ! gamma ≡ 1 identically, and the corrector reduces to the plain
-      ! h-weighted path.  Legal and mathematically correct — merely inert.
+      ! gamma ≡ 1 identically, and the corrector reduces to the uniform
+      ! fold.  Legal and mathematically correct — merely inert.
       ! Warn (not error): same "enabled but inert" precedent as the tidal-
       ! mixing e_uniform=0 warning.
       ! `forcing_visc_rem` reads the same visc_rem arrays the corrector
@@ -5134,7 +5155,7 @@ contains
          call logger%warning("&ocean_bt_nml correction_visc_rem=.true. but "// &
                              "&ocean_vdiff_nml implicit_drag=.false.: the vdiff operator "// &
                              "then carries no drag, so visc_rem = 1 identically and the "// &
-                             "BT corrector reduces to the plain h-weighted path")
+                             "BT corrector reduces to the uniform fold")
       end if
       if (substep_drag_ignores_bdrag_form(cfg)) then
          call logger%warning("&ocean_bt_nml substep_drag=.true. with "// &
@@ -5605,7 +5626,7 @@ contains
          ! rho_ref*g*z_draft reaches the FV_MOM6 pa(nz+1) surface BC;
          ! without it a varying draft leaves the pressure stack ~5e6 Pa
          ! off its anomaly scale, the unsplit driver feels a raw
-         ! g*grad(z_draft), and `correction_h_weighted` turns the
+         ! g*grad(z_draft), and a non-uniform BT-correction weight turns the
          ! uncancelled depth-uniform force into a real per-layer shear.
          ! REFUSED rather than auto-enabled: an answer-changing knob that
          ! a second namelist group switches on behind the user's back is
@@ -9847,11 +9868,17 @@ contains
                              "Use per-face upstream-PPM column-sum thickness in the BT chain"))
       pl => cfg%ocean%bt%correction_h_weighted
       call g%add(nml_logical("correction_h_weighted", pl, &
-                             "h-weight the post-substep BT corrector (MOM6 frhatu)"))
+                             "RETIRED h-weighted BT-corrector fold (refused when set)", &
+                             dead_on_ocean_path="RETIRED -- the h-weighted barotropic-"// &
+                             "correction fold was energy-non-conserving (a positive "// &
+                             "0.5*D^2*H*(kappa-1) source plus shear feedback) and MOM6 "// &
+                             "has no such fold; setting it .true. is a fail-loud "// &
+                             "configure error (validate_config). Drag-aware weighting "// &
+                             "is correction_visc_rem."))
       pl => cfg%ocean%bt%correction_visc_rem
       call g%add(nml_logical("correction_visc_rem", pl, &
-                             "h*visc_rem joint corrector weight (requires "// &
-                             "correction_h_weighted; visc_rem is produced by vdiff and "// &
+                             "visc_rem/<visc_rem>_h BT-corrector weight + the visc_rem "// &
+                             "producer (visc_rem is produced by vdiff and "// &
                              "is inert, =1, without ocean_vdiff_nml implicit_drag)"))
       ps => cfg%ocean%bt%split_scheme
       call g%add(nml_enum("split_scheme", ps, &

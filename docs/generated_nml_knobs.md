@@ -671,8 +671,8 @@ Split-explicit barotropic substep controls.
 | `use_cont_type` | `.false.` |  | Use the BT_cont flux-bounded closure (MOM6 USE_BT_CONT_TYPE) |
 | `cont_corr_bounds` | `.false.` |  | Use BT_cont flux limits for the eta-correction bound |
 | `upstream_h_face` | `.false.` |  | Use per-face upstream-PPM column-sum thickness in the BT chain |
-| `correction_h_weighted` | `.false.` |  | h-weight the post-substep BT corrector (MOM6 frhatu) |
-| `correction_visc_rem` | `.false.` |  | h*visc_rem joint corrector weight (requires correction_h_weighted; visc_rem is produced by vdiff and is inert, =1, without ocean_vdiff_nml implicit_drag) |
+| `correction_h_weighted` | `.false.` |  | RETIRED h-weighted BT-corrector fold (refused when set) |
+| `correction_visc_rem` | `.false.` |  | visc_rem/<visc_rem>_h BT-corrector weight + the visc_rem producer (visc_rem is produced by vdiff and is inert, =1, without ocean_vdiff_nml implicit_drag) |
 | `split_scheme` | `"pred_corr"` |  | Outer split-explicit time scheme: pred_corr (DEFAULT; MOM6 predictor-corrector, slow tendencies on the u_av/h_av step time-means, forward-backward gravity-wave pairing; lifts the internal-wave dt ceiling) or ssp_rk2 (EXPERIMENTAL; two-stage SSP average, widest envelope — the only scheme wired through eulerian_z, wet/dry and dt_tracer_advect_ratio>1 — but it spuriously grows internal gravity waves out of a stratified REST state, En 2.992E-05 vs 1.739E-09 at day 25 on resting_stratified_channel.nml; a (omega*dt)^4 noise floor, so forced viscous runs sit decades above it and quiescent or long spin-up runs do not) |
 | `pc_be` | `0.6000000000E+00` |  | pred_corr predictor fraction BE (MOM6 BE, 0.6 reference) |
 | `renorm_visc_rem` | `.false.` |  | gamma-weighted continuity transport-matching inversion (MOM6 u_cor = u + du*visc_rem; requires correction_visc_rem) |
