@@ -8,11 +8,68 @@
 !! bottom-up (k=1 bed, k=nk surface); the k-flip is confined to the Phase-B
 !! flux scatter (native k = nz+1-Ko).  Do NOT call the sweep routines with
 !! bottom-up arrays without flipping first.
+!!
+!! ### Partial-step z-level faces (`&vcoord_nml zfixed_closed_faces`)
+!!
+!! Under `z_fixed` a face column is not the whole water column: a layer that
+!! is an inert FILLER on either side (inside the bed, or inside the ice
+!! draft) is a WALL for that layer at that face (`metrics%open_u/open_v ==
+!! 0`).  Neutral diffusion pairs the two columns of a face by sweeping
+!! neutral surfaces through BOTH columns, so without a seam it pairs a layer
+!! that is closed at the face (live on the deep side, below the shallow
+!! side's bed) with live water on the other side — a tracer flux THROUGH
+!! the wall, as large as any open-face flux once the isopycnals tilt by more
+!! than a bed step — plus an `O(h_min)` one into the fillers themselves
+!! (`test_ocean_redi_zfixed`).
+!!
+!! With the knob on (`metrics%use_closed_faces`) each face is reduced to its
+!! OPEN WINDOW before anything else is done with it:
+!!
+!!     ok(k)  = open(k) .and. live(h_W(k)) .and. live(h_E(k))
+!!     kt     = the topmost ok layer
+!!     kb..kt = the contiguous run of ok layers counted down from kt
+!!
+!! (`rdb_vl_is_live`, the one vanished-layer predicate; `ok` is the set
+!! GM's open-column streamfunction uses).  Phase A builds both columns'
+!! interface T/S/P and runs the continuous sweep on the `nk = kt-kb+1`
+!! window layers ONLY, so a neutral surface can neither start nor end in a
+!! filler or a closed face-layer, and the PPM edge reconstruction never
+!! reads a filler (PCM ends at the window edges — the sweep's own
+!! `b_method = 1`).  Phase B rebuilds the tracer columns on the same window
+!! and scatters only into native layers inside it, so the flux on every
+!! closed face-layer and every filler is EXACTLY zero.
+!!
+!!   * **Pairing rules.**  Only window layers are paired, and the window is
+!!     CONTIGUOUS, so no pairing crosses a closed layer either.  The mask is
+!!     the intersection of two contiguous live ranges, so `ok` is contiguous
+!!     by construction; a gap (a layer that thinned to the marker in
+!!     mid-column) would cut the window there — the layers below it take no
+!!     Redi flux at that face — rather than be paired across.
+!!   * **Pressure frame.**  `P` is the surface-relative hydrostatic pressure
+!!     of the FULL column sliced to the window (fillers above it add their
+!!     `h_min`), so an all-open face is the original arithmetic operation
+!!     for operation.
+!!   * **Storage.**  `Ko` stays in the full TOP-DOWN frame (`Ko_win + nz -
+!!     kt`), so the Phase-B scatter `native k = nz+1-Ko` is unchanged; the
+!!     trailing `2*(nz-nk)` surfaces of a short window are inert padding
+!!     (`hEff = 0`, never read).  The window is stored per face (`uKb/uKt`,
+!!     `vKb/vKt`) because Phase B runs at later time levels than Phase A; a
+!!     window layer that is no longer live on both sides when Phase B runs
+!!     skips the whole face — both cells of the face read the same `h`, so
+!!     the skip is symmetric and content is still conserved.
+!!
+!! Content is conserved exactly as before (each sublayer flux is formed
+!! identically by both cells of the face and enters one with `+`, the other
+!! with `-`), and the down-gradient sign guard is untouched, so the flux is
+!! still down the along-neutral gradient.  Every divisor in the window is a
+!! live thickness (`> H_VANISHED`), so the port opens no new non-finite
+!! path.  Knob OFF ⇒ `kb = 1`, `kt = nz` on every face, the window IS the
+!! column and the arithmetic is the full-column form ⇒ byte-identical.
 module rdb_ocean_redi
 #ifdef LFORTRAN_PASSING
-   use rdb_constants, only: wp, H_DIV_EPS, GRAVITY, nz_stack_is_sufficient
+   use rdb_constants, only: wp, H_DIV_EPS, H_VANISHED, GRAVITY, nz_stack_is_sufficient
 #else
-   use rdb_constants, only: NZ_STACK_MAX, wp, H_DIV_EPS, GRAVITY, &
+   use rdb_constants, only: NZ_STACK_MAX, wp, H_DIV_EPS, H_VANISHED, GRAVITY, &
                             nz_stack_is_sufficient
 #endif
    use rdb_grid, only: hgrid_t
@@ -82,6 +139,12 @@ module rdb_ocean_redi
       real(wp), allocatable :: vPoL(:, :, :), vPoR(:, :, :)
       integer, allocatable :: vKoL(:, :, :), vKoR(:, :, :)
       real(wp), allocatable :: vhEff(:, :, :)
+      ! ---- Per-face OPEN WINDOW (native, bottom-up layer range) ----
+      ! `&vcoord_nml zfixed_closed_faces`: a face pairs only native layers
+      ! `K*b..K*t` (module header).  Knob off ⇒ `1..nz` on every face.
+      ! `K*t < K*b` marks a face with no open layer (inert).
+      integer, allocatable :: uKb(:, :), uKt(:, :)
+      integer, allocatable :: vKb(:, :), vKt(:, :)
 
       ! ---- Per-face neutral diffusivity KhTr (m^2/s) ----
       ! Filled each apply step from VarMix's `khtr_u`/`khtr_v` when enabled,
@@ -484,6 +547,10 @@ contains
       allocate (this%vKoL(nx, ny + 1, ns), source=1)
       allocate (this%vKoR(nx, ny + 1, ns), source=1)
       allocate (this%vhEff(nx, ny + 1, ns - 1), source=0.0_wp)
+      allocate (this%uKb(nx + 1, ny), source=1)
+      allocate (this%uKt(nx + 1, ny), source=nz)
+      allocate (this%vKb(nx, ny + 1), source=1)
+      allocate (this%vKt(nx, ny + 1), source=nz)
       allocate (this%khtr_u(nx + 1, ny), source=0.0_wp)
       allocate (this%khtr_v(nx, ny + 1), source=0.0_wp)
       allocate (this%tr_snap(nx, ny, this%nz_ml), source=0.0_wp)
@@ -503,6 +570,10 @@ contains
       if (allocated(this%vKoL)) deallocate (this%vKoL)
       if (allocated(this%vKoR)) deallocate (this%vKoR)
       if (allocated(this%vhEff)) deallocate (this%vhEff)
+      if (allocated(this%uKb)) deallocate (this%uKb)
+      if (allocated(this%uKt)) deallocate (this%uKt)
+      if (allocated(this%vKb)) deallocate (this%vKb)
+      if (allocated(this%vKt)) deallocate (this%vKt)
       if (allocated(this%khtr_u)) deallocate (this%khtr_u)
       if (allocated(this%khtr_v)) deallocate (this%khtr_v)
       if (allocated(this%tr_snap)) deallocate (this%tr_snap)
@@ -526,6 +597,7 @@ contains
       if (.not. this%is_init) return
       !$acc enter data copyin(this%uPoL, this%uPoR, this%uKoL, this%uKoR, this%uhEff)
       !$acc enter data copyin(this%vPoL, this%vPoR, this%vKoL, this%vKoR, this%vhEff)
+      !$acc enter data copyin(this%uKb, this%uKt, this%vKb, this%vKt)
       !$acc enter data copyin(this%khtr_u, this%khtr_v)
       !$acc enter data copyin(this%tr_snap)
    end subroutine ocean_redi_enter_data_impl
@@ -543,6 +615,7 @@ contains
       if (.not. this%is_init) return
       !$acc exit data delete(this%tr_snap)
       !$acc exit data delete(this%khtr_u, this%khtr_v)
+      !$acc exit data delete(this%uKb, this%uKt, this%vKb, this%vKt)
       !$acc exit data delete(this%vPoL, this%vPoR, this%vKoL, this%vKoR, this%vhEff)
       !$acc exit data delete(this%uPoL, this%uPoR, this%uKoL, this%uKoR, this%uhEff)
    end subroutine ocean_redi_exit_data_impl
@@ -576,41 +649,137 @@ contains
       nz = ms%nz_ml
       if (this%nz_ml /= nz) return
 
+      ! z-level closed faces: refresh every face's open window first.  A
+      ! SEPARATE, host-gated pass, so the coefficient kernels below never
+      ! name `open_u`/`open_v` — with the knob off those are the `(1,1,1)`
+      ! placeholders, and NVHPC present-checks an array a kernel indexes
+      ! over the kernel's LOOP range whether or not the branch is taken
+      ! ("partially present" under `mem:separate`).  Knob off ⇒ not called,
+      ! the windows keep their `1..nz` init value.  (`redi_calc_coeffs`
+      ! itself launches no `do concurrent`, so the escaping-array cost of a
+      ! gated call — CLAUDE.md — has nothing here to pessimise.)
+      if (metrics%use_closed_faces) then
+         call redi_open_windows_x(nx, ny, nz, ms%h_layer, metrics%open_u, &
+                                  this%uKb, this%uKt)
+         call redi_open_windows_y(nx, ny, nz, ms%h_layer, metrics%open_v, &
+                                  this%vKb, this%vKt)
+      end if
       call redi_calc_coeffs_x(nx, ny, nz, this%nsurf, eos, &
                               ms%h_layer, &
                               ms%tracers(ms%idx_temperature)%hTr, &
                               ms%tracers(ms%idx_salinity)%hTr, &
-                              metrics%wet_u, &
+                              metrics%wet_u, this%uKb, this%uKt, &
                               this%uPoL, this%uPoR, this%uKoL, this%uKoR, this%uhEff)
       call redi_calc_coeffs_y(nx, ny, nz, this%nsurf, eos, &
                               ms%h_layer, &
                               ms%tracers(ms%idx_temperature)%hTr, &
                               ms%tracers(ms%idx_salinity)%hTr, &
-                              metrics%wet_v, &
+                              metrics%wet_v, this%vKb, this%vKt, &
                               this%vPoL, this%vPoR, this%vKoL, this%vKoR, this%vhEff)
    end subroutine redi_calc_coeffs
 
-   pure subroutine redi_build_column(nz, h_col, thtr_col, shtr_col, eos, &
+   pure subroutine redi_open_windows_x(nx, ny, nz, h_layer, open_u, uKb, uKt)
+      !! Fill every interior u-face's OPEN WINDOW (`&vcoord_nml
+      !! zfixed_closed_faces`; module header): `ok(k) = open_u .and.` live
+      !! on both sides (`rdb_vl_is_live`), then `redi_open_window`.
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in) :: h_layer(nx, ny, nz)
+      real(wp), intent(in) :: open_u(nx + 1, ny, nz)
+         !! Per-layer 0/1 u-face open mask (`metrics%open_u`, full size).
+      integer, intent(inout) :: uKb(nx + 1, ny), uKt(nx + 1, ny)
+      integer :: i, j, k, kb, kt
+      logical :: ok(NZ_STACK_MAX)
+
+      do concurrent(j=1:ny, i=2:nx) local(k, kb, kt, ok)
+         do k = 1, nz
+            ok(k) = open_u(i, j, k) > 0.5_wp .and. &
+                    rdb_vl_is_live(h_layer(i - 1, j, k)) .and. &
+                    rdb_vl_is_live(h_layer(i, j, k))
+         end do
+         call redi_open_window(nz, ok, kb, kt)
+         uKb(i, j) = kb
+         uKt(i, j) = kt
+      end do
+   end subroutine redi_open_windows_x
+
+   pure subroutine redi_open_windows_y(nx, ny, nz, h_layer, open_v, vKb, vKt)
+      !! v-face twin of `redi_open_windows_x` (south `j-1`, north `j`).
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in) :: h_layer(nx, ny, nz)
+      real(wp), intent(in) :: open_v(nx, ny + 1, nz)
+         !! Per-layer 0/1 v-face open mask (`metrics%open_v`, full size).
+      integer, intent(inout) :: vKb(nx, ny + 1), vKt(nx, ny + 1)
+      integer :: i, j, k, kb, kt
+      logical :: ok(NZ_STACK_MAX)
+
+      do concurrent(j=2:ny, i=1:nx) local(k, kb, kt, ok)
+         do k = 1, nz
+            ok(k) = open_v(i, j, k) > 0.5_wp .and. &
+                    rdb_vl_is_live(h_layer(i, j - 1, k)) .and. &
+                    rdb_vl_is_live(h_layer(i, j, k))
+         end do
+         call redi_open_window(nz, ok, kb, kt)
+         vKb(i, j) = kb
+         vKt(i, j) = kt
+      end do
+   end subroutine redi_open_windows_y
+
+   pure subroutine redi_open_window(nz, ok, kb, kt)
+      !$acc routine seq
+      !! A face's OPEN WINDOW from its per-layer `ok` flags (`open .and.`
+      !! live on both sides; module header): `kt` the topmost `ok` layer,
+      !! `kb..kt` the contiguous `ok` run counted down from it.  No `ok`
+      !! layer ⇒ `kb = 1`, `kt = 0` (an empty window, `kt < kb`).
+      integer, intent(in) :: nz
+      logical, intent(in) :: ok(NZ_STACK_MAX)
+      integer, intent(out) :: kb, kt
+      integer :: k
+
+      kt = 0
+      do k = nz, 1, -1
+         if (ok(k)) then
+            kt = k
+            exit
+         end if
+      end do
+      kb = 1
+      if (kt > 0) then
+         kb = kt
+         do k = kt - 1, 1, -1
+            if (.not. ok(k)) exit
+            kb = k
+         end do
+      end if
+   end subroutine redi_open_window
+
+   pure subroutine redi_build_column(nz, kb, kt, h_col, thtr_col, shtr_col, eos, &
                                      Pint, Tint, Sint, dRdT, dRdS)
       !! Build one column's TOP-DOWN interface P/T/S + density derivs from the
-      !! BOTTOM-UP native column.  Layer T/S = hTr/h (floored); interface T/S =
-      !! PPM edge reconstruction on the flipped arrays; interface P =
-      !! surface-relative hydrostatic; dR/dT, dR/dS = -rho² dSV/dX at each
-      !! interface.
+      !! BOTTOM-UP native column, restricted to the face's open window
+      !! `kb..kt` (`nk = kt-kb+1` layers; the whole column `1..nz` off the
+      !! z-level closed-face path).  Layer T/S = hTr/h (floored); interface
+      !! T/S = PPM edge reconstruction on the flipped window; interface P =
+      !! surface-relative hydrostatic, seeded with the column ABOVE the
+      !! window (fillers under an ice draft; nothing — exactly 0 — when
+      !! `kt = nz`); dR/dT, dR/dS = -rho² dSV/dX at each interface.  Only
+      !! the first `nk+1` entries of the outputs are written.
       !$acc routine seq
       integer, intent(in) :: nz
+      integer, intent(in) :: kb, kt
+         !! Native (bottom-up) open window, `1 <= kb <= kt <= nz`.
       real(wp), intent(in) :: h_col(nz), thtr_col(nz), shtr_col(nz)
       type(eos_t), intent(in) :: eos
       real(wp), intent(out) :: Pint(nz + 1), Tint(nz + 1), Sint(nz + 1)
       real(wp), intent(out) :: dRdT(nz + 1), dRdS(nz + 1)
       real(wp) :: htd(NZ_STACK_MAX), ttd(NZ_STACK_MAX), std(NZ_STACK_MAX)
       real(wp) :: rho_i, dsv_dt, dsv_ds, he
-      integer :: k, kf
+      integer :: k, kf, nk
 
-      ! Flip native bottom-up -> top-down layer arrays.  Native layer k
-      ! maps to top-down layer (nz+1-k).  Layer T/S = hTr/h (floored).
-      do k = 1, nz
-         kf = nz + 1 - k
+      nk = kt - kb + 1
+      ! Flip the native bottom-up window -> top-down layer arrays.  Native
+      ! layer k maps to top-down layer (kt+1-k).  Layer T/S = hTr/h (floored).
+      do k = kb, kt
+         kf = kt + 1 - k
          he = max(h_col(k), H_DIV_EPS)
          htd(kf) = h_col(k)
          ttd(kf) = thtr_col(k)/he
@@ -618,33 +787,43 @@ contains
       end do
 
       ! PPM interface edge values (top-down) for T and S.
-      call redi_interface_scalar(nz, htd, ttd, Tint)
-      call redi_interface_scalar(nz, htd, std, Sint)
+      call redi_interface_scalar(nk, htd, ttd, Tint)
+      call redi_interface_scalar(nk, htd, std, Sint)
 
-      ! Top-down interface pressure: K=1 surface (p=0), accumulate
-      ! g*rho0*h downward.  rho0 from the EOS reference.
+      ! Top-down interface pressure: K=1 the window top — the surface (p=0)
+      ! unless layers sit above the window — accumulate g*rho0*h downward.
+      ! rho0 from the EOS reference.
       Pint(1) = 0.0_wp
-      do k = 1, nz
+      do k = nz, kt + 1, -1
+         Pint(1) = Pint(1) + GRAVITY*eos%rho0*h_col(k)
+      end do
+      do k = 1, nk
          Pint(k + 1) = Pint(k) + GRAVITY*eos%rho0*htd(k)
       end do
 
       ! Interface density derivs (locally referenced at the interface P).
-      do k = 1, nz + 1
+      do k = 1, nk + 1
          call eos_density_specvol_derivs(eos, Tint(k), Sint(k), Pint(k), rho_i, dsv_dt, dsv_ds)
          dRdT(k) = -(rho_i*rho_i)*dsv_dt
          dRdS(k) = -(rho_i*rho_i)*dsv_ds
       end do
    end subroutine redi_build_column
 
-   pure subroutine redi_face_coeffs(nz, ns, hL, tL, sL, hR, tR, sR, eos, &
+   pure subroutine redi_face_coeffs(nz, ns, kb, kt, hL, tL, sL, hR, tR, sR, eos, &
                                     PoLo, PoRo, KoLo, KoRo, hEffo)
-      !! The per-face Phase-A core: build both columns TOP-DOWN, run the
-      !! sweep, and store PoL/PoR/KoL/KoR/hEff verbatim in the top-down frame.
-      !! The k-flip is confined to the Phase-B scatter; keeping Po/Ko top-down
-      !! here lets the flux re-use the sweep's interface-edge convention with
-      !! no position arithmetic on the flipped frame.
+      !! The per-face Phase-A core: build both columns TOP-DOWN on the open
+      !! window `kb..kt` (the whole column off the closed-face path), run the
+      !! sweep on its `nk = kt-kb+1` layers, and store PoL/PoR/KoL/KoR/hEff in
+      !! the FULL top-down frame (`Ko + nz - kt`).  The k-flip is confined to
+      !! the Phase-B scatter; keeping Po/Ko top-down here lets the flux re-use
+      !! the sweep's interface-edge convention with no position arithmetic on
+      !! the flipped frame.  A short window (`nk < nz`) leaves `2*(nz-nk)`
+      !! trailing surfaces, filled as inert padding: the last surface
+      !! repeated and `hEff = 0`, which Phase B skips.
       !$acc routine seq
       integer, intent(in) :: nz, ns
+      integer, intent(in) :: kb, kt
+         !! Native (bottom-up) open window, `1 <= kb <= kt <= nz`.
       real(wp), intent(in) :: hL(nz), tL(nz), sL(nz), hR(nz), tR(nz), sR(nz)
       type(eos_t), intent(in) :: eos
       real(wp), intent(out) :: PoLo(ns), PoRo(ns), hEffo(ns - 1)
@@ -654,12 +833,15 @@ contains
       real(wp) :: Pr(NZ_STACK_MAX + 1), Tri(NZ_STACK_MAX + 1), Sri(NZ_STACK_MAX + 1)
       real(wp) :: dRdTr(NZ_STACK_MAX + 1), dRdSr(NZ_STACK_MAX + 1)
       real(wp) :: pa_to_h
-      integer :: ks
+      integer :: ks, nk, nsw, koff
 
-      call redi_build_column(nz, hL, tL, sL, eos, Pl, Tli, Sli, dRdTl, dRdSl)
-      call redi_build_column(nz, hR, tR, sR, eos, Pr, Tri, Sri, dRdTr, dRdSr)
+      nk = kt - kb + 1
+      nsw = 2*nk + 2
+      koff = nz - kt
+      call redi_build_column(nz, kb, kt, hL, tL, sL, eos, Pl, Tli, Sli, dRdTl, dRdSl)
+      call redi_build_column(nz, kb, kt, hR, tR, sR, eos, Pr, Tri, Sri, dRdTr, dRdSr)
 
-      call redi_neutral_positions_continuous(nz, Pl, Tli, Sli, dRdTl, dRdSl, &
+      call redi_neutral_positions_continuous(nk, Pl, Tli, Sli, dRdTl, dRdSl, &
                                              Pr, Tri, Sri, dRdTr, dRdSr, &
                                              PoLo, PoRo, KoLo, KoRo, hEffo)
       ! The continuous sweep computes hEff from interface-PRESSURE differences
@@ -669,30 +851,51 @@ contains
       ! neutral_diffusion lines ~588: uhEff /= H_to_pa).  Po/Ko stay TOP-DOWN;
       ! the only k-flip is the Phase-B scatter.
       pa_to_h = 1.0_wp/(GRAVITY*eos%rho0)
-      do ks = 1, ns - 1
+      do ks = 1, nsw - 1
          hEffo(ks) = hEffo(ks)*pa_to_h
+      end do
+      ! Window frame -> full top-down frame (`koff = 0` off the closed-face
+      ! path), then the inert padding of a short window.
+      if (koff /= 0) then
+         do ks = 1, nsw
+            KoLo(ks) = KoLo(ks) + koff
+            KoRo(ks) = KoRo(ks) + koff
+         end do
+      end if
+      do ks = nsw + 1, ns
+         PoLo(ks) = PoLo(nsw)
+         PoRo(ks) = PoRo(nsw)
+         KoLo(ks) = KoLo(nsw)
+         KoRo(ks) = KoRo(nsw)
+         hEffo(ks - 1) = 0.0_wp
       end do
    end subroutine redi_face_coeffs
 
    subroutine redi_calc_coeffs_x(nx, ny, nz, ns, eos, h_layer, &
-                                 t_htr, s_htr, wet_u, uPoL, uPoR, uKoL, uKoR, uhEff)
+                                 t_htr, s_htr, wet_u, uKb, uKt, &
+                                 uPoL, uPoR, uKoL, uKoR, uhEff)
       !! Flat-impl Phase-A u-face kernel.  Parallel over (i,j) interior
       !! u-faces (i=2..nx); the 2*nz+2 sweep runs serially inside each
       !! thread over a column pair (iw=i-1 west, i east).  Wall faces and
-      !! land faces leave the inert (zero/identity) coefficients.
+      !! land faces leave the inert (zero/identity) coefficients.  The
+      !! sweep runs on each face's open window `uKb..uKt` (`1..nz` off the
+      !! z-level closed-face path; module header); a face with no open
+      !! layer (`uKt < uKb`) is inert.
       integer, intent(in) :: nx, ny, nz, ns
       type(eos_t), intent(in) :: eos
       real(wp), intent(in) :: h_layer(nx, ny, nz)
       real(wp), intent(in) :: t_htr(nx, ny, nz)
       real(wp), intent(in) :: s_htr(nx, ny, nz)
       real(wp), intent(in) :: wet_u(nx + 1, ny)
+      integer, intent(in) :: uKb(nx + 1, ny), uKt(nx + 1, ny)
+         !! Per-face open window (native layers).
       real(wp), intent(out) :: uPoL(nx + 1, ny, ns)
       real(wp), intent(out) :: uPoR(nx + 1, ny, ns)
       integer, intent(out) :: uKoL(nx + 1, ny, ns)
       integer, intent(out) :: uKoR(nx + 1, ny, ns)
       real(wp), intent(out) :: uhEff(nx + 1, ny, ns - 1)
 
-      integer :: i, j, k, s
+      integer :: i, j, k, s, kb, kt
       real(wp) :: hL(NZ_STACK_MAX), tcL(NZ_STACK_MAX), scL(NZ_STACK_MAX)
       real(wp) :: hR(NZ_STACK_MAX), tcR(NZ_STACK_MAX), scR(NZ_STACK_MAX)
       real(wp) :: PoLc(2*NZ_STACK_MAX + 2), PoRc(2*NZ_STACK_MAX + 2)
@@ -700,7 +903,7 @@ contains
       real(wp) :: hEc(2*NZ_STACK_MAX + 1)
 
       do concurrent(j=1:ny, i=2:nx) &
-         local(k, s, hL, tcL, scL, hR, tcR, scR, PoLc, PoRc, KoLc, KoRc, hEc)
+         local(k, s, kb, kt, hL, tcL, scL, hR, tcR, scR, PoLc, PoRc, KoLc, KoRc, hEc)
          do s = 1, ns
             uPoL(i, j, s) = 0.0_wp
             uPoR(i, j, s) = 0.0_wp
@@ -710,7 +913,9 @@ contains
          do s = 1, ns - 1
             uhEff(i, j, s) = 0.0_wp
          end do
-         if (wet_u(i, j) > 0.0_wp) then
+         kb = uKb(i, j)
+         kt = uKt(i, j)
+         if (wet_u(i, j) > 0.0_wp .and. kt >= kb) then
             do k = 1, nz
                hL(k) = h_layer(i - 1, j, k)
                tcL(k) = t_htr(i - 1, j, k)
@@ -719,7 +924,7 @@ contains
                tcR(k) = t_htr(i, j, k)
                scR(k) = s_htr(i, j, k)
             end do
-            call redi_face_coeffs(nz, ns, hL, tcL, scL, hR, tcR, scR, eos, &
+            call redi_face_coeffs(nz, ns, kb, kt, hL, tcL, scL, hR, tcR, scR, eos, &
                                   PoLc, PoRc, KoLc, KoRc, hEc)
             do s = 1, ns
                uPoL(i, j, s) = PoLc(s)
@@ -735,22 +940,25 @@ contains
    end subroutine redi_calc_coeffs_x
 
    subroutine redi_calc_coeffs_y(nx, ny, nz, ns, eos, h_layer, &
-                                 t_htr, s_htr, wet_v, vPoL, vPoR, vKoL, vKoR, vhEff)
+                                 t_htr, s_htr, wet_v, vKb, vKt, &
+                                 vPoL, vPoR, vKoL, vKoR, vhEff)
       !! Flat-impl Phase-A v-face kernel — mirror of `_x` with v-stagger
-      !! (js=j-1 south, j north), loop j=2..ny.
+      !! (js=j-1 south, j north), loop j=2..ny, open window `vKb..vKt`.
       integer, intent(in) :: nx, ny, nz, ns
       type(eos_t), intent(in) :: eos
       real(wp), intent(in) :: h_layer(nx, ny, nz)
       real(wp), intent(in) :: t_htr(nx, ny, nz)
       real(wp), intent(in) :: s_htr(nx, ny, nz)
       real(wp), intent(in) :: wet_v(nx, ny + 1)
+      integer, intent(in) :: vKb(nx, ny + 1), vKt(nx, ny + 1)
+         !! Per-face open window (native layers).
       real(wp), intent(out) :: vPoL(nx, ny + 1, ns)
       real(wp), intent(out) :: vPoR(nx, ny + 1, ns)
       integer, intent(out) :: vKoL(nx, ny + 1, ns)
       integer, intent(out) :: vKoR(nx, ny + 1, ns)
       real(wp), intent(out) :: vhEff(nx, ny + 1, ns - 1)
 
-      integer :: i, j, k, s
+      integer :: i, j, k, s, kb, kt
       real(wp) :: hL(NZ_STACK_MAX), tcL(NZ_STACK_MAX), scL(NZ_STACK_MAX)
       real(wp) :: hR(NZ_STACK_MAX), tcR(NZ_STACK_MAX), scR(NZ_STACK_MAX)
       real(wp) :: PoLc(2*NZ_STACK_MAX + 2), PoRc(2*NZ_STACK_MAX + 2)
@@ -758,7 +966,7 @@ contains
       real(wp) :: hEc(2*NZ_STACK_MAX + 1)
 
       do concurrent(j=2:ny, i=1:nx) &
-         local(k, s, hL, tcL, scL, hR, tcR, scR, PoLc, PoRc, KoLc, KoRc, hEc)
+         local(k, s, kb, kt, hL, tcL, scL, hR, tcR, scR, PoLc, PoRc, KoLc, KoRc, hEc)
          do s = 1, ns
             vPoL(i, j, s) = 0.0_wp
             vPoR(i, j, s) = 0.0_wp
@@ -768,7 +976,9 @@ contains
          do s = 1, ns - 1
             vhEff(i, j, s) = 0.0_wp
          end do
-         if (wet_v(i, j) > 0.0_wp) then
+         kb = vKb(i, j)
+         kt = vKt(i, j)
+         if (wet_v(i, j) > 0.0_wp .and. kt >= kb) then
             do k = 1, nz
                hL(k) = h_layer(i, j - 1, k)
                tcL(k) = t_htr(i, j - 1, k)
@@ -777,7 +987,7 @@ contains
                tcR(k) = t_htr(i, j, k)
                scR(k) = s_htr(i, j, k)
             end do
-            call redi_face_coeffs(nz, ns, hL, tcL, scL, hR, tcR, scR, eos, &
+            call redi_face_coeffs(nz, ns, kb, kt, hL, tcL, scL, hR, tcR, scR, eos, &
                                   PoLc, PoRc, KoLc, KoRc, hEc)
             do s = 1, ns
                vPoL(i, j, s) = PoLc(s)
@@ -830,31 +1040,35 @@ contains
       end if
    end function redi_ppm_ave
 
-   pure subroutine redi_tracer_column(nz, h_col, htr_col, Tlay, Tint, aLe, aRe)
+   pure subroutine redi_tracer_column(kb, kt, h_col, htr_col, Tlay, Tint, aLe, aRe)
       !$acc routine seq
       !! Build one column's TOP-DOWN layer-average tracer `Tlay`, PPM
       !! interface edges `Tint`, and per-layer limited PPM left/right edges
       !! `aLe/aRe` from the bottom-up native (h, hTr) column (fixed-size
-      !! NZ_STACK_MAX copies).  Tlay = hTr/h floored.  Mirrors MOM6
-      !! interface_scalar + ppm_left_right_edge_values.
-      integer, intent(in) :: nz
+      !! NZ_STACK_MAX copies), restricted to the face's open window
+      !! `kb..kt` (`1..nz` off the z-level closed-face path) — indexed in
+      !! the WINDOW top-down frame, `1..nk`, `nk = kt-kb+1`.  Tlay = hTr/h
+      !! floored.  Mirrors MOM6 interface_scalar + ppm_left_right_edge_values.
+      integer, intent(in) :: kb, kt
+         !! Native (bottom-up) open window, `1 <= kb <= kt`.
       real(wp), intent(in) :: h_col(NZ_STACK_MAX), htr_col(NZ_STACK_MAX)
       real(wp), intent(out) :: Tlay(NZ_STACK_MAX), Tint(NZ_STACK_MAX + 1)
       real(wp), intent(out) :: aLe(NZ_STACK_MAX), aRe(NZ_STACK_MAX)
       real(wp) :: htd(NZ_STACK_MAX), tedge(NZ_STACK_MAX + 1)
       real(wp) :: he, alk, ark, tlk
-      integer :: k, kf
-      do k = 1, nz
-         kf = nz + 1 - k
+      integer :: k, kf, nk
+      nk = kt - kb + 1
+      do k = kb, kt
+         kf = kt + 1 - k
          he = max(h_col(k), H_DIV_EPS)
          htd(kf) = h_col(k)
          Tlay(kf) = htr_col(k)/he
       end do
-      call redi_interface_scalar(nz, htd, Tlay, tedge)
-      do k = 1, nz + 1
+      call redi_interface_scalar(nk, htd, Tlay, tedge)
+      do k = 1, nk + 1
          Tint(k) = tedge(k)
       end do
-      do k = 1, nz
+      do k = 1, nk
          alk = Tint(k)
          ark = Tint(k + 1)
          tlk = Tlay(k)
@@ -978,7 +1192,9 @@ contains
                                    metrics%idxCu, metrics%idyCv, metrics%areaT, &
                                    ms%h_layer, this%tr_snap, ms%tracers(it)%hTr, &
                                    this%uPoL, this%uPoR, this%uKoL, this%uKoR, this%uhEff, &
-                                   this%vPoL, this%vPoR, this%vKoL, this%vKoR, this%vhEff)
+                                   this%vPoL, this%vPoR, this%vKoL, this%vKoR, this%vhEff, &
+                                   this%uKb, this%uKt, this%vKb, this%vKt, &
+                                   metrics%use_closed_faces)
       end do
    end subroutine redi_apply_flux
 
@@ -1017,7 +1233,8 @@ contains
 
    pure subroutine redi_face_flux(nz, ns, nxc, nyc, nfa, nfb, h_layer, hTr_in, &
                                   iL, jL, iR, jR, fa, fb, &
-                                  PoL, PoR, KoL, KoR, hEff, coef, is_left, dTr)
+                                  PoL, PoR, KoL, KoR, hEff, kb, kt, use_open, &
+                                  coef, is_left, dTr)
       !$acc routine seq
       !! Accumulate ONE C-grid face's neutral-surface tracer flux into the
       !! owning cell's `dTr`.  Builds the left/right tracer columns from the
@@ -1028,35 +1245,52 @@ contains
       !! `is_left`: this cell is the LEFT (west/south) column ⇒ `+flx` into
       !! native layer `nz+1-KoL`; else the RIGHT column ⇒ `-flx` into
       !! `nz+1-KoR`.  `(iL,jL)`/`(iR,jR)` index the columns; `(fa,fb)` the faces.
+      !! `kb..kt` is the face's Phase-A open window (`1..nz` off the z-level
+      !! closed-face path): the tracer columns are reconstructed on it alone
+      !! and the full-frame `Ko` are read in the window frame (`Ko - nz +
+      !! kt`).  An empty window, or (`use_open`) one whose layers are no
+      !! longer all live on both sides, contributes nothing — both cells of
+      !! the face take the same decision from the same `h`.
       integer, intent(in) :: nz, ns, nxc, nyc, nfa, nfb
       integer, intent(in) :: iL, jL, iR, jR, fa, fb
       real(wp), intent(in) :: h_layer(nxc, nyc, nz), hTr_in(nxc, nyc, nz)
       real(wp), intent(in) :: PoL(nfa, nfb, ns), PoR(nfa, nfb, ns)
       integer, intent(in) :: KoL(nfa, nfb, ns), KoR(nfa, nfb, ns)
       real(wp), intent(in) :: hEff(nfa, nfb, ns - 1)
+      integer, intent(in) :: kb, kt
+      logical, intent(in) :: use_open
       real(wp), intent(in) :: coef
       logical, intent(in) :: is_left
       real(wp), intent(inout) :: dTr(nz)
 
-      integer :: k, ks, knat
+      integer :: k, ks, knat, nk, koff
       real(wp) :: hcL(NZ_STACK_MAX), trcL(NZ_STACK_MAX)
       real(wp) :: hcR(NZ_STACK_MAX), trcR(NZ_STACK_MAX)
       real(wp) :: TlL(NZ_STACK_MAX), TiL(NZ_STACK_MAX + 1), aLL(NZ_STACK_MAX), aRL(NZ_STACK_MAX)
       real(wp) :: TlR(NZ_STACK_MAX), TiR(NZ_STACK_MAX + 1), aLR(NZ_STACK_MAX), aRR(NZ_STACK_MAX)
       real(wp) :: dtdiff, flx
 
+      if (kt < kb) return
+      if (use_open) then
+         do k = kb, kt
+            if (.not. (rdb_vl_is_live(h_layer(iL, jL, k)) .and. &
+                       rdb_vl_is_live(h_layer(iR, jR, k)))) return
+         end do
+      end if
+      nk = kt - kb + 1
+      koff = nz - kt
       do k = 1, nz
          hcL(k) = h_layer(iL, jL, k)
          trcL(k) = hTr_in(iL, jL, k)
          hcR(k) = h_layer(iR, jR, k)
          trcR(k) = hTr_in(iR, jR, k)
       end do
-      call redi_tracer_column(nz, hcL, trcL, TlL, TiL, aLL, aRL)
-      call redi_tracer_column(nz, hcR, trcR, TlR, TiR, aLR, aRR)
+      call redi_tracer_column(kb, kt, hcL, trcL, TlL, TiL, aLL, aRL)
+      call redi_tracer_column(kb, kt, hcR, trcR, TlR, TiR, aLR, aRR)
       do ks = 1, ns - 1
          if (hEff(fa, fb, ks) /= 0.0_wp) then
-            dtdiff = redi_sublayer_dT(nz, KoL(fa, fb, ks), KoL(fa, fb, ks + 1), &
-                                      KoR(fa, fb, ks), KoR(fa, fb, ks + 1), &
+            dtdiff = redi_sublayer_dT(nk, KoL(fa, fb, ks) - koff, KoL(fa, fb, ks + 1) - koff, &
+                                      KoR(fa, fb, ks) - koff, KoR(fa, fb, ks + 1) - koff, &
                                       PoL(fa, fb, ks), PoL(fa, fb, ks + 1), &
                                       PoR(fa, fb, ks), PoR(fa, fb, ks + 1), &
                                       TlL, TiL, aLL, aRL, TlR, TiR, aLR, aRR)
@@ -1077,7 +1311,8 @@ contains
                                    khtr_u, khtr_v, dy_cu, dx_cv, &
                                    idxCu, idyCv, areaT, h_layer, hTr_in, hTr, &
                                    uPoL, uPoR, uKoL, uKoR, uhEff, &
-                                   vPoL, vPoR, vKoL, vKoR, vhEff)
+                                   vPoL, vPoR, vKoL, vKoR, vhEff, &
+                                   uKb, uKt, vKb, vKt, use_open)
       !! Flat-impl Phase-B kernel for ONE tracer.  Cell-centric double-visit
       !! (no-scatter rule on the C-grid): cell (i,j) recomputes the
       !! along-neutral flux on each of its four bounding faces and accumulates
@@ -1108,6 +1343,12 @@ contains
       real(wp), intent(in) :: vPoL(nx, ny + 1, ns), vPoR(nx, ny + 1, ns)
       integer, intent(in) :: vKoL(nx, ny + 1, ns), vKoR(nx, ny + 1, ns)
       real(wp), intent(in) :: vhEff(nx, ny + 1, ns - 1)
+      integer, intent(in) :: uKb(nx + 1, ny), uKt(nx + 1, ny)
+         !! Phase-A u-face open windows (`1..nz` off the closed-face path).
+      integer, intent(in) :: vKb(nx, ny + 1), vKt(nx, ny + 1)
+         !! Phase-A v-face open windows.
+      logical, intent(in) :: use_open
+         !! z-level closed faces active: re-check window liveness.
 
       integer :: i, j, k
       integer :: wuf_w, wuf_e, wvf_s, wvf_n
@@ -1134,24 +1375,28 @@ contains
          if (i >= 2 .and. .not. ((wall_w .and. i == wuf_w) .or. (wall_e .and. i == wuf_e))) then
             call redi_face_flux(nz, ns, nx, ny, nx + 1, ny, h_layer, hTr_in, &
                                 i - 1, j, i, j, i, j, uPoL, uPoR, uKoL, uKoR, uhEff, &
+                                uKb(i, j), uKt(i, j), use_open, &
                                 dt*khtr_u(i, j)*dy_cu(i, j)*idxCu(i, j), .false., dTr)
          end if
          ! EAST u-face (face i+1): this cell is the LEFT column.
          if (i <= nx - 1 .and. .not. ((wall_w .and. i + 1 == wuf_w) .or. (wall_e .and. i + 1 == wuf_e))) then
             call redi_face_flux(nz, ns, nx, ny, nx + 1, ny, h_layer, hTr_in, &
                                 i, j, i + 1, j, i + 1, j, uPoL, uPoR, uKoL, uKoR, uhEff, &
+                                uKb(i + 1, j), uKt(i + 1, j), use_open, &
                                 dt*khtr_u(i + 1, j)*dy_cu(i + 1, j)*idxCu(i + 1, j), .true., dTr)
          end if
          ! SOUTH v-face (face j): this cell is the RIGHT (north) column.
          if (j >= 2 .and. .not. ((wall_s .and. j == wvf_s) .or. (wall_n .and. j == wvf_n))) then
             call redi_face_flux(nz, ns, nx, ny, nx, ny + 1, h_layer, hTr_in, &
                                 i, j - 1, i, j, i, j, vPoL, vPoR, vKoL, vKoR, vhEff, &
+                                vKb(i, j), vKt(i, j), use_open, &
                                 dt*khtr_v(i, j)*dx_cv(i, j)*idyCv(i, j), .false., dTr)
          end if
          ! NORTH v-face (face j+1): this cell is the LEFT (south) column.
          if (j <= ny - 1 .and. .not. ((wall_s .and. j + 1 == wvf_s) .or. (wall_n .and. j + 1 == wvf_n))) then
             call redi_face_flux(nz, ns, nx, ny, nx, ny + 1, h_layer, hTr_in, &
                                 i, j, i, j + 1, i, j + 1, vPoL, vPoR, vKoL, vKoR, vhEff, &
+                                vKb(i, j + 1), vKt(i, j + 1), use_open, &
                                 dt*khtr_v(i, j + 1)*dx_cv(i, j + 1)*idyCv(i, j + 1), .true., dTr)
          end if
          iaij = 1.0_wp/areaT(i, j)
@@ -1177,9 +1422,15 @@ contains
                + arr_bytes(this%vKoL) &
                + arr_bytes(this%vKoR) &
                + arr_bytes(this%vhEff) &
+               + arr_bytes(this%uKb) &
+               + arr_bytes(this%uKt) &
+               + arr_bytes(this%vKb) &
+               + arr_bytes(this%vKt) &
                + arr_bytes(this%khtr_u) &
                + arr_bytes(this%khtr_v) &
                + arr_bytes(this%tr_snap)
    end function ocean_redi_bytes
+
+#include "rdb_vanished_layer.inc"
 
 end module rdb_ocean_redi
