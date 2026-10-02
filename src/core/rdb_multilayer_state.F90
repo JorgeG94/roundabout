@@ -236,6 +236,48 @@ module rdb_multilayer_state
       integer, allocatable :: k_top_v(:, :)
          !! v-face twin, shape (nx, ny+1).  Same `min` rule.
 
+      ! ---- First LIVE layer, counting UP from the bed ----
+      ! `k_bot(i,j)` is the bed-side mirror of `k_top`: the index of the
+      ! deepest layer that carries mass — the smallest `k` with
+      ! `h_layer(i,j,k) > H_VANISHED` — with a fallback of `1` when the
+      ! column has no live layer at all.  Under `vcoord_type = "z_fixed"`
+      ! the layers whose nominal geopotential range lies INSIDE the bed
+      ! are inert fillers at `zstar_h_min`, so on every column shallower
+      ! than `z_fixed_h_ref` `k = 1` is NOT the bed-adjacent layer.
+      ! Every bed-side consumer (bottom drag + its HBBL band and the
+      ! implicit-fold rate, the vdiff bed row, geothermal, the tidal-
+      ! mixing bed anchor, the MEKE bed speed, the bed-reaching shortwave
+      ! residual) reads this instead of spelling `1`.
+      !
+      ! **Fallback `1` is what makes the indirection free.**  No other
+      ! family has a STATIC bed filler: sigma / z*-lite / zsigma never
+      ! vanish a layer, and the dynamic bed pinch of `zstar_full` is not
+      ! a configure-time pattern (consumers that care keep their own
+      ! `h`-gated scan above `k_bot`), so `k_bot ≡ 1` there and every
+      ! rewritten consumer reads the same memory with the same
+      ! arithmetic.  A land column also reads `1`.
+      !
+      ! **Static, and deliberately so** — exactly `k_top`'s argument:
+      ! filled ONCE at configure (`configure_ocean_k_bot`) from the
+      ! `z_fixed` target at `eta = 0`, the same kernel and input the
+      ! closed-face mask and `k_top` use; the bed is static and `eta` is
+      ! absorbed by the first live layer at the TOP, so the bed-side
+      ! live/filler pattern does not move.  Derived from bathymetry +
+      ! the vcoord config, so it is rebuilt on every start and is NOT
+      ! restart state.  `tests/test_ocean_zfixed_k_bot.F90` pins it.
+      integer, allocatable :: k_bot(:, :)
+         !! Deepest live layer at cell centres, shape (nx, ny).
+      integer, allocatable :: k_bot_u(:, :)
+         !! u-face twin, shape (nx+1, ny).  `max` of the two bounding
+         !! columns — the mirror of `k_top_u`'s `min`: a face carries
+         !! water in layer `k` only where BOTH columns are live there
+         !! (`metrics%open_u`), so the deepest layer the FACE has is the
+         !! SHALLOWER of the two column bottoms, i.e. the larger index.
+         !! `min` would put the bottom drag and the implicit-drag fold on
+         !! a row that is a filler on one side (a closed face).
+      integer, allocatable :: k_bot_v(:, :)
+         !! v-face twin, shape (nx, ny+1).  Same `max` rule.
+
       ! ---- Land / ocean mask (surface-forcing mask) ----
       ! 2D wet-cell indicator at cell centres: 1.0 = ocean, 0.0 = land.
       ! Populated at IC time from the bathymetry threshold; consumed by
@@ -661,6 +703,12 @@ contains
       allocate (this%k_top(nx, ny), source=nz_ml)
       allocate (this%k_top_u(nx + 1, ny), source=nz_ml)
       allocate (this%k_top_v(nx, ny + 1), source=nz_ml)
+      ! Bed-side mirror, seeded at its fallback `1` — the answer on every
+      ! family without a static bed filler; `configure_ocean_k_bot`
+      ! overwrites it only under `z_fixed`.
+      allocate (this%k_bot(nx, ny), source=1)
+      allocate (this%k_bot_u(nx + 1, ny), source=1)
+      allocate (this%k_bot_v(nx, ny + 1), source=1)
 
       ! Tracer registry: salinity at index 1, temperature at index 2,
       ! ideal-age at index 3 (optional).
@@ -746,6 +794,9 @@ contains
       if (allocated(this%k_top)) deallocate (this%k_top)
       if (allocated(this%k_top_u)) deallocate (this%k_top_u)
       if (allocated(this%k_top_v)) deallocate (this%k_top_v)
+      if (allocated(this%k_bot)) deallocate (this%k_bot)
+      if (allocated(this%k_bot_u)) deallocate (this%k_bot_u)
+      if (allocated(this%k_bot_v)) deallocate (this%k_bot_v)
    end subroutine multilayer_state_destroy
 
    pure function multilayer_state_bytes(this) result(nbytes)
@@ -770,6 +821,8 @@ contains
                + arr_bytes(this%w_interface) + arr_bytes(this%wet_mask) &
                + arr_bytes(this%k_top) + arr_bytes(this%k_top_u) &
                + arr_bytes(this%k_top_v) &
+               + arr_bytes(this%k_bot) + arr_bytes(this%k_bot_u) &
+               + arr_bytes(this%k_bot_v) &
                + arr_bytes(this%mass_budget_continuity) &
                + arr_bytes(this%heat_budget_surface) + arr_bytes(this%salt_budget_surface) &
                + arr_bytes(this%heat_budget_geothermal) &
@@ -895,6 +948,7 @@ contains
       ! on the HOST at configure (before this map) and never recomputed
       ! on device, so the seeded value has to travel with the map.
       !$acc enter data copyin(this%k_top, this%k_top_u, this%k_top_v)
+      !$acc enter data copyin(this%k_bot, this%k_bot_u, this%k_bot_v)
 
       if (allocated(this%tracers)) then
          !$acc enter data copyin(this%tracers)
@@ -955,6 +1009,7 @@ contains
       !$acc&                 this%mass_budget_remap, this%heat_budget_remap, &
       !$acc&                 this%salt_budget_remap, this%wet_mask)
       !$acc exit data delete(this%k_top, this%k_top_u, this%k_top_v)
+      !$acc exit data delete(this%k_bot, this%k_bot_u, this%k_bot_v)
    end subroutine multilayer_state_exit_data_impl
 
 #include "rdb_vanished_layer.inc"

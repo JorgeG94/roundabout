@@ -1440,8 +1440,9 @@ module rdb_config
       logical :: implicit_drag = .false.
       logical :: hvel_mom6 = .false.
       real(wp) :: hbbl_visc = 10.0_wp
-         !! Fold the bottom drag into the vdiff bed (k=1) diagonal (stress
-         !! bottom-BC) instead of the explicit pre-solve add.  Mutually
+         !! Fold the bottom drag into the vdiff bed-row diagonal (stress
+         !! bottom-BC; the row is the face's first LIVE layer `k_bot_u/v`,
+         !! `k = 1` off `z_fixed`) instead of the explicit pre-solve add.  Mutually
          !! exclusive with `&ocean_bdrag_nml implicit` (split-apply) and
          !! incompatible with HBBL-distributed drag (`hbbl > 0`); both fail
          !! loud at configure.
@@ -4911,7 +4912,10 @@ contains
       ! exclusive with the legacy `&ocean_bdrag_nml implicit` split-apply
       ! path (both would damp the bed velocity ⇒ double drag), and the
       ! bed-only fold cannot represent HBBL-distributed drag (`hbbl > 0`)
-      ! — that needs a per-layer rate (follow-up PR).  Fail loud.
+      ! — that needs a per-layer rate (follow-up PR).  Fail loud.  (Not a
+      ! `k = 1` problem: the fold and the HBBL band both start at the
+      ! face's first live layer `k_bot_u/v`; what is missing is a 3-D
+      ! `lambda_bot` the vdiff interior rows can add to their diagonal.)
       if (cfg%ocean%vdiff%implicit_drag .and. cfg%ocean%bdrag%implicit) then
          call logger%error("ocean_vdiff implicit_drag is mutually exclusive with "// &
                            "ocean_bdrag implicit (split-apply): set only one")

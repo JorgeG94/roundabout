@@ -483,7 +483,8 @@ contains
       ! ---- 4. implicit drag half: E <- E/(1+sdt_damp*damp_rate). ----
       ! Resolved bed-layer eddy velocity (MOM6 drag_rate_visc); 0 when off.
       if (this%use_bbl_drag) then
-         call meke_bbl_speed2(nx, ny, nz, ms%u_face_x_layer, ms%v_face_y_layer, this%u_bbl2)
+         call meke_bbl_speed2(nx, ny, nz, ms%u_face_x_layer, ms%v_face_y_layer, &
+                              ms%k_bot_u, ms%k_bot_v, this%u_bbl2)
       end if
       call meke_drag(nx, ny, sdt_damp, this%damping, this%cdrag, this%uscale, gm%rho0, &
                      this%i_mass, this%bottom_fac2, this%u_bbl2, this%meke)
@@ -907,20 +908,26 @@ contains
       end do
    end subroutine meke_drag
 
-   pure subroutine meke_bbl_speed2(nx, ny, nz, u_face, v_face, u_bbl2)
-      !! Resolved bed-layer (k=1, bottom-up) speed² at cell centres:
+   pure subroutine meke_bbl_speed2(nx, ny, nz, u_face, v_face, k_bot_u, k_bot_v, u_bbl2)
+      !! Resolved bed-layer speed² at cell centres:
       !! `u_bbl2 = u_c² + v_c²` with `u_c = ½(u_face(i)+u_face(i+1))`,
-      !! `v_c = ½(v_face(j)+v_face(j+1))` from the BED layer.  The bottom
-      !! eddy velocity the MEKE drag law needs (MOM6 `drag_rate_visc`).
+      !! `v_c = ½(v_face(j)+v_face(j+1))`, each face read on ITS OWN bed
+      !! layer `k_bot_u/v` (the first layer live on both sides counting up;
+      !! `1` off `z_fixed` ⇒ the historical k=1 read).  Under `z_fixed` the
+      !! layers below are inert fillers whose velocity the closed-face mask
+      !! has zeroed, so a `k = 1` read reported a motionless bed.  The
+      !! bottom eddy velocity the MEKE drag law needs (MOM6 `drag_rate_visc`).
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: u_face(nx + 1, ny, nz)
       real(wp), intent(in) :: v_face(nx, ny + 1, nz)
+      integer, intent(in) :: k_bot_u(nx + 1, ny)
+      integer, intent(in) :: k_bot_v(nx, ny + 1)
       real(wp), intent(inout) :: u_bbl2(nx, ny)
       integer :: i, j
       real(wp) :: u_c, v_c
       do concurrent(j=1:ny, i=1:nx) local(u_c, v_c)
-         u_c = 0.5_wp*(u_face(i, j, 1) + u_face(i + 1, j, 1))
-         v_c = 0.5_wp*(v_face(i, j, 1) + v_face(i, j + 1, 1))
+         u_c = 0.5_wp*(u_face(i, j, k_bot_u(i, j)) + u_face(i + 1, j, k_bot_u(i + 1, j)))
+         v_c = 0.5_wp*(v_face(i, j, k_bot_v(i, j)) + v_face(i, j + 1, k_bot_v(i, j + 1)))
          u_bbl2(i, j) = u_c*u_c + v_c*v_c
       end do
    end subroutine meke_bbl_speed2

@@ -201,12 +201,13 @@ contains
          do i = ip_lo, ip_hi
             eta_min = min(eta_min, bt_work%bt_eta(i, j))
             eta_max = max(eta_max, bt_work%bt_eta(i, j))
-            ubed_max = max(ubed_max, abs(ms%u_face_x_layer(i, j, 1)), &
-                           abs(ms%u_face_x_layer(i + 1, j, 1)))
+            ! Bed = each face's first LIVE layer (`k_bot_u/v`, 1 off z_fixed).
+            ubed_max = max(ubed_max, abs(ms%u_face_x_layer(i, j, ms%k_bot_u(i, j))), &
+                           abs(ms%u_face_x_layer(i + 1, j, ms%k_bot_u(i + 1, j))))
             usurf_max = max(usurf_max, abs(ms%u_face_x_layer(i, j, nz_top)), &
                             abs(ms%u_face_x_layer(i + 1, j, nz_top)))
-            vbed_max = max(vbed_max, abs(ms%v_face_y_layer(i, j, 1)), &
-                           abs(ms%v_face_y_layer(i, j + 1, 1)))
+            vbed_max = max(vbed_max, abs(ms%v_face_y_layer(i, j, ms%k_bot_v(i, j))), &
+                           abs(ms%v_face_y_layer(i, j + 1, ms%k_bot_v(i, j + 1))))
             vsurf_max = max(vsurf_max, abs(ms%v_face_y_layer(i, j, nz_top)), &
                             abs(ms%v_face_y_layer(i, j + 1, nz_top)))
             u_cell = 0.5_wp*(bt_work%bt_ubt(i, j) + bt_work%bt_ubt(i + 1, j))

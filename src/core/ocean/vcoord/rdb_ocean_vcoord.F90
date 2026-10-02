@@ -78,6 +78,7 @@ module rdb_ocean_vcoord
    public :: ocean_vcoord_set_z_fixed_profile
    public :: ocean_vcoord_closed_face_masks
    public :: ocean_vcoord_k_top_from_target
+   public :: ocean_vcoord_k_bot_from_target
    public :: ocean_vcoord_count_ledges
    public :: VCOORD_EULERIAN_Z
    public :: VCOORD_LAGRANGIAN
@@ -1466,6 +1467,115 @@ contains
          k_top_v(i, j) = min(ka, kb)
       end do
    end subroutine ocean_vcoord_k_top_from_target
+
+   pure subroutine ocean_vcoord_k_bot_from_target(k_bot, k_bot_u, k_bot_v, &
+                                                  target_h, nx, ny, nz, h_vanished)
+      !! The shared FIRST-LIVE-LAYER index counting UP from the bed —
+      !! `multilayer_state_t%k_bot` and its two face twins.  The bed-side
+      !! mirror of `ocean_vcoord_k_top_from_target`, built from the same
+      !! layer-thickness field by the same strict `> h_vanished` test.
+      !!
+      !! ### The rule
+      !!
+      !! ```
+      !! k_bot(i,j) = the smallest k with target_h(i,j,k) > h_vanished,
+      !!              or 1 when the column has none
+      !! ```
+      !!
+      !! **The `1` fallback is what makes the indirection free**: on every
+      !! family without a static bed filler `h(:,:,1) > h_vanished` on a
+      !! wet column, so `k_bot ≡ 1` and a consumer reading `k_bot(i,j)`
+      !! instead of `1` reads the same memory.  A land column (every layer
+      !! AT the marker) also lands on `1`, and `wet_mask` zeroes it as
+      !! before.
+      !!
+      !! ### The face rule is `max`, not `min`
+      !!
+      !! `k_bot_u(I,j) = max(k_bot(I-1,j), k_bot(I,j))`.  A face carries
+      !! water in layer `k` only where BOTH abutting columns are live
+      !! there (`ocean_vcoord_closed_face_masks`), so the deepest layer
+      !! the FACE has is the SHALLOWER of the two column bottoms — the
+      !! LARGER index.  `min` would hand the bottom drag and the vdiff bed
+      !! row a layer that is a filler on one side, i.e. a closed face.
+      !! With `k_bot ≡ 1`, `max(1, 1) = 1` ⇒ bit-identical.
+      !!
+      !! Array-edge faces (`I = 1`, `I = nx+1`) take the one column they
+      !! have, as `k_top`'s do; the configure driver face-halo-exchanges
+      !! the twins afterwards so a tile seam / periodic wrap carries the
+      !! owner's value there.
+      integer, intent(in) :: nx
+         !! i-extent of the CENTRE arrays (total, incl. halos).
+      integer, intent(in) :: ny
+         !! j-extent of the CENTRE arrays (total, incl. halos).
+      integer, intent(in) :: nz
+         !! Number of layers; `k = 1` is the bed, `k = nz` the top.
+      integer, intent(out) :: k_bot(nx, ny)
+         !! Cell-centred first live layer counting up from the bed.
+      integer, intent(out) :: k_bot_u(nx + 1, ny)
+         !! u-face twin.
+      integer, intent(out) :: k_bot_v(nx, ny + 1)
+         !! v-face twin.
+      real(wp), intent(in) :: target_h(nx, ny, nz)
+         !! Layer thickness (m) the live/filler pattern is read from —
+         !! the `z_fixed` target at `eta = 0` at configure time.
+      real(wp), intent(in) :: h_vanished
+         !! Inert-filler marker (`H_VANISHED`).  LIVE iff strictly greater.
+      integer :: i, j, k, ia, ib, ka, kb
+
+      ! Each loop is SELF-CONTAINED (reads `target_h`, writes ONE output)
+      ! for the reason `ocean_vcoord_k_top_from_target` documents: under
+      ! `-stdpar=gpu` + `mem:separate` a face loop that read the centre
+      ! index a previous loop had just written saw it as write-only.
+      do concurrent(j=1:ny, i=1:nx) local(k)
+         k_bot(i, j) = 1
+         do k = 1, nz
+            if (target_h(i, j, k) > h_vanished) then
+               k_bot(i, j) = k
+               exit
+            end if
+         end do
+      end do
+
+      do concurrent(j=1:ny, i=1:nx + 1) local(k, ia, ib, ka, kb)
+         ia = max(1, i - 1)
+         ib = min(nx, i)
+         ka = 1
+         do k = 1, nz
+            if (target_h(ia, j, k) > h_vanished) then
+               ka = k
+               exit
+            end if
+         end do
+         kb = 1
+         do k = 1, nz
+            if (target_h(ib, j, k) > h_vanished) then
+               kb = k
+               exit
+            end if
+         end do
+         k_bot_u(i, j) = max(ka, kb)
+      end do
+
+      do concurrent(j=1:ny + 1, i=1:nx) local(k, ia, ib, ka, kb)
+         ia = max(1, j - 1)
+         ib = min(ny, j)
+         ka = 1
+         do k = 1, nz
+            if (target_h(i, ia, k) > h_vanished) then
+               ka = k
+               exit
+            end if
+         end do
+         kb = 1
+         do k = 1, nz
+            if (target_h(i, ib, k) > h_vanished) then
+               kb = k
+               exit
+            end if
+         end do
+         k_bot_v(i, j) = max(ka, kb)
+      end do
+   end subroutine ocean_vcoord_k_bot_from_target
 
    pure function ocean_vcoord_count_ledges(open_u, open_v, target_h, &
                                            nx, ny, nz, h_vanished) result(n_ledge)
