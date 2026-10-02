@@ -728,6 +728,31 @@ if(Python3_EXECUTABLE)
     WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
   set_tests_properties(rdb_regression_compare_selftest
                        PROPERTIES LABELS "ocean;python")
+  # The pairwise compatibility matrix: its own self-test (no model), and the
+  # `rdb --validate-only` contract it is built on (accept -> exit 0 + no output;
+  # a validate_config and an engine_setup refusal -> exit 3 + the reason).  The
+  # matrix itself is a nightly, not a ctest: tests/regression/README.md, "The
+  # pairwise compatibility matrix".
+  add_test(
+    NAME rdb_compat_matrix_selftest
+    COMMAND
+      "${Python3_EXECUTABLE}"
+      "${PROJECT_SOURCE_DIR}/tests/regression/compat_matrix.py" self-test
+      --scratch-root "${CMAKE_CURRENT_BINARY_DIR}/compat_matrix_selftest")
+  set_tests_properties(rdb_compat_matrix_selftest PROPERTIES LABELS
+                                                             "ocean;python")
+  if(TARGET ${exe_name})
+    add_test(
+      NAME rdb_validate_only
+      COMMAND
+        "${Python3_EXECUTABLE}"
+        "${PROJECT_SOURCE_DIR}/tests/regression/compat_matrix.py"
+        validate-smoke --binary $<TARGET_FILE:${exe_name}> --scratch-root
+        "${CMAKE_CURRENT_BINARY_DIR}/validate_only_smoke")
+    set_tests_properties(
+      rdb_validate_only PROPERTIES LABELS "ocean;python" ENVIRONMENT
+                                   "OMP_NUM_THREADS=1")
+  endif()
 endif()
 list(APPEND _rdb_python_candidates "python3")
 
