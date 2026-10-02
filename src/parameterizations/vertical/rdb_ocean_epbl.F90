@@ -1076,14 +1076,16 @@ contains
             this%dcolht_s%data(i, j, k) = dmass*dsv_ds_k
             ! (PR-21) Per-layer penetrating-SW TKE cost.  Absorbed heat
             ! per band (degC·m) is the two-band difference form with an
-            ! opaque bed at k=1 (identical to the deposition kernel, so
+            ! opaque bed at k = k_bot — the first LIVE layer counting up,
+            ! `1` off z_fixed; the inert bed fillers below it absorb (and
+            ! cost) nothing — (identical to the deposition kernel, so
             ! Σ_k Σ_n heat = I0·dt/(rho0·cp) exactly).  The in-layer PE
             ! cost of homogenising that exponentially-distributed heating
             ! is `Phi(h/zeta) <= 1` of the skin cost; the skin identity
             ! `rho0²·h·dsv_dt ≡ rho0·dcolht_t` makes this division-free.
             if (sw_ctke_active) then
                d_bot_sw = d_top_sw + hk
-               if (k > 1) then
+               if (k > ms%k_bot(i, j)) then
                   heat_sw1 = i0_col*sw_R*inv_rho0_cp*dt* &
                              (exp(-d_top_sw/sw_zeta1) - exp(-d_bot_sw/sw_zeta1))
                   heat_sw2 = i0_col*(1.0_wp - sw_R)*inv_rho0_cp*dt* &
@@ -1097,6 +1099,9 @@ contains
                   -0.5_wp*GRAVITY*this%rho0*this%dcolht_t%data(i, j, k)* &
                   (heat_sw1*sw_pe_cost_shape(hk/sw_zeta1) + &
                    heat_sw2*sw_pe_cost_shape(hk/sw_zeta2))
+               ! Below the opaque bed row: nothing arrives.  `k_bot ≡ 1`
+               ! off z_fixed, so this never fires there (bit-identical).
+               if (k < ms%k_bot(i, j)) this%ctke_sw%data(i, j, k) = 0.0_wp
                d_top_sw = d_bot_sw
             end if
             if (k == nz) then

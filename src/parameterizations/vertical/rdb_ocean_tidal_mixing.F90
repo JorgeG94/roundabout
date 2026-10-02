@@ -300,8 +300,17 @@ contains
       !! `do concurrent (j, i)` over owned cells; each column is a serial
       !! upward sweep k=1(bed) -> nz(surface) over fixed-size `local()`
       !! arrays (register-resident).  Bottom-up global indexing
-      !! throughout — no surface-down flip (the decay anchors at the bed,
-      !! which IS k=1).
+      !! throughout — no surface-down flip (the decay anchors at the bed).
+      !!
+      !! "The bed" is `kbed = ms%k_bot(i,j)`, the first LIVE layer counting
+      !! up (`1` off `z_fixed`, ⇒ bit-identical there).  Under `z_fixed`
+      !! the layers below it are inert fillers carrying the donor's T/S, so
+      !! anchoring at `k = 1` read `N_bot = 0` across two fillers (killing
+      !! the `e_compute` energy input on every column shallower than the
+      !! nominal stack), exempted a FILLER from deposition instead of the
+      !! bed layer, and handed the fillers a TKE share.  The sweep, the
+      !! `N_bot` sample, the bed-layer exclusion and the bed end-cap all
+      !! start at `kbed`; layers below it get no `Kd`.
       !!
       !! Pipeline per column:
       !!   gather: h (floored), per-layer T,S = hTr/h.
@@ -324,7 +333,7 @@ contains
       real(wp), intent(in) :: hS(:, :, :)  ! assumed-shape-ok: tracer registry outer-shim; thermo cadence
          !! Salinity tracer hTr (PSU*m), host-dereferenced.
 
-      integer :: i, j, k, nx, ny, nz
+      integer :: i, j, k, nx, ny, nz, kbed
       real(wp) :: e_col, h_tot, n_bot, tke_coef, h2c, e_cap
       real(wp) :: inv_int, hz, tke_bot, tke_rem, z_top, frac_top, tke_lay
       real(wp) :: dz_eff, denom, kd_lay
@@ -347,7 +356,7 @@ contains
       izeta = 1.0_wp/zeta_l
 
       do concurrent(j=1:ny, i=1:nx) &
-         local(k, e_col, h_tot, n_bot, tke_coef, h2c, e_cap, &
+         local(k, kbed, e_col, h_tot, n_bot, tke_coef, h2c, e_cap, &
                inv_int, hz, tke_bot, tke_rem, z_top, frac_top, tke_lay, &
                dz_eff, denom, kd_lay, h_col, t_col, s_col, n2_col, kd_lay_arr, &
                dbuoy_t, dbuoy_s, p_int, dsv_dt_k, dsv_ds_k, t_int, s_int)
@@ -358,7 +367,10 @@ contains
          end do
 
          if (ms%wet_mask(i, j) > 0.0_wp) then
+            kbed = ms%k_bot(i, j)
             ! ---- Gather (bottom-up; floor thickness, back out T,S) ----
+            ! `h_tot` is the LIVE column (the fillers below `kbed` are not
+            ! water the internal tide can mix).
             h_tot = 0.0_wp
             do k = 1, nz
                dz_eff = max(ms%h_layer(i, j, k), H_VANISHED)
@@ -366,7 +378,7 @@ contains
                denom = 1.0_wp/max(ms%h_layer(i, j, k), H_DIV_EPS)
                t_col(k) = hT(i, j, k)*denom
                s_col(k) = hS(i, j, k)*denom
-               h_tot = h_tot + ms%h_layer(i, j, k)
+               if (k >= kbed) h_tot = h_tot + ms%h_layer(i, j, k)
             end do
 
             ! ---- Layer-centred N^2 (St-Laurent #4: N2_lay) ----
@@ -402,11 +414,11 @@ contains
             ! factor sets E in W/m^2 (the same units as the prescribed e_in),
             ! so it lands correctly in the rho0*dz*(N^2+Omega^2) Kd divisor.
             ! N_bot = sqrt(N^2) at the bed-most interior interface
-            ! (n2_col(1), the gradient across the two deepest layers).
+            ! (n2_col(kbed), the gradient across the two deepest LIVE layers).
             if (this%e_compute) then
                h2c = min(this%h2_rough, (this%frac_rough*h_tot)**2)
                tke_coef = 0.5_wp*rho0_l*this%kappa_h2*this%kappa_itides*h2c*this%utide**2
-               n_bot = sqrt(max(n2_col(1), 0.0_wp))
+               n_bot = sqrt(max(n2_col(kbed), 0.0_wp))
                e_col = tke_coef*n_bot
                e_cap = this%e_max
                if (e_col > e_cap) e_col = e_cap
@@ -433,7 +445,10 @@ contains
             tke_bot = gamma_l*mu_l*e_col
             tke_rem = inv_int*tke_bot
             z_top = 0.0_wp
-            do k = 1, nz
+            do k = 1, kbed - 1
+               kd_lay_arr(k) = 0.0_wp   ! inert bed filler: no share of the TKE
+            end do
+            do k = kbed, nz
                z_top = z_top + h_col(k)
                frac_top = inv_int*exp(-z_top*izeta)
                tke_lay = tke_rem - tke_bot*frac_top
@@ -473,7 +488,7 @@ contains
             ! above (tke_lay/tke_rem are unchanged) — the energy invariant is
             ! asserted on the pre-deposit TKE_lay, mirroring the original
             ! surface-only exclusion.  Zero both before the 50/50 split.
-            kd_lay_arr(1) = 0.0_wp
+            kd_lay_arr(kbed) = 0.0_wp
             kd_lay_arr(nz) = 0.0_wp
 
             ! ---- Deposit per-layer Kd_add 50/50 at the two bounding
@@ -495,7 +510,7 @@ contains
             ! (BBL N^2 override): MOM6 replaces the near-bed N^2 with a
             ! roughness-height BBL average; v1 uses the raw per-layer N^2
             ! (a v1.1 refinement).
-            this%kd_int(i, j, 1) = 0.0_wp
+            this%kd_int(i, j, kbed) = 0.0_wp
             this%kd_int(i, j, nz + 1) = 0.0_wp
          end if
       end do

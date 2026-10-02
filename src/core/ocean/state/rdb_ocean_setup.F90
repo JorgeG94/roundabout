@@ -31,6 +31,7 @@ module rdb_ocean_setup
                                VCOORD_Z_FIXED, ocean_vcoord_z_fixed_target, &
                                ocean_vcoord_closed_face_masks, &
                                ocean_vcoord_k_top_from_target, &
+                               ocean_vcoord_k_bot_from_target, &
                                ocean_vcoord_set_z_fixed_profile, &
                                ocean_vcoord_count_ledges, &
                                ocean_vcoord_count_bed_steps
@@ -127,6 +128,7 @@ module rdb_ocean_setup
    public :: configure_ocean_porous
    public :: configure_ocean_closed_faces
    public :: configure_ocean_k_top
+   public :: configure_ocean_k_bot
    public :: configure_ocean_z_fixed_profile
    public :: configure_ocean_cavity
    public :: configure_ocean_cavity_melt
@@ -966,16 +968,18 @@ contains
                              " m/s  thick_min="//to_string(cfg%ocean%bdrag%bbl_thick_min)//" m")
          else
             call logger%info("Bottom drag BBL:  bed-layer only (HBBL=0)")
-            ! Bed-only mode drags layer k = 1.  On a coordinate whose bed-side
-            ! layers VANISH (z_fixed, zstar_full) k = 1 is an inert filler in
-            ! every column shallower than the deepest nominal interface, so
-            ! almost the whole domain runs with NO bottom drag — measured on
-            ! the global 1-degree case (validation_examples/ocean/global_1deg).
-            ! HBBL mode accumulates thickness from the bed up, skips the
-            ! fillers and reaches the live bottom layer.
+            ! Bed-only mode drags the face's first LIVE layer `k_bot_u/v`.
+            ! Under z_fixed that index is filled at configure
+            ! (`configure_ocean_k_bot`) and skips the static bed fillers, so
+            ! the bed-only mode reaches water there.  Under zstar_full the
+            ! bed-side layers vanish DYNAMICALLY (no static pattern, so
+            ! `k_bot ≡ 1`): k = 1 is an inert filler in every column
+            ! shallower than the deepest nominal interface and almost the
+            ! whole domain runs with NO bottom drag.  HBBL mode accumulates
+            ! thickness from the bed up, skips those fillers and reaches the
+            ! live bottom layer.
             if ((cfg%ocean%bdrag%cd > 0.0_wp .or. cfg%ocean%bdrag%r > 0.0_wp) .and. &
-                (parse_ocean_vcoord_type(cfg%vcoord_type) == VCOORD_Z_FIXED .or. &
-                 parse_ocean_vcoord_type(cfg%vcoord_type) == VCOORD_ZSTAR_FULL)) then
+                parse_ocean_vcoord_type(cfg%vcoord_type) == VCOORD_ZSTAR_FULL) then
                call logger%warning("&ocean_bdrag_nml hbbl = 0 (bed-layer-only drag) under "// &
                                    "vcoord_type = '"//trim(cfg%vcoord_type)//"': the drag "// &
                                    "acts on layer k = 1, an inert filler in every column "// &
@@ -2555,6 +2559,101 @@ contains
                           ", nz = "//to_string(nz))
       end if
    end subroutine configure_ocean_k_top
+
+   subroutine configure_ocean_k_bot(ocean_state, grid, compute_rank)
+      !! Fill `ms%k_bot` / `k_bot_u` / `k_bot_v` — the shared index of the
+      !! first LIVE layer counting UP from the bed, and the field every
+      !! bed-side consumer reads instead of spelling `1`.  The bed-side
+      !! mirror of `configure_ocean_k_top`.
+      !!
+      !! Under `vcoord_type = "z_fixed"` (with a resolved `z_fixed_h_ref`)
+      !! every column shallower than the nominal stack carries inert
+      !! FILLERS at `zstar_h_min` below its partial bed cell, so `k = 1`
+      !! is not the bed-adjacent layer: a bottom drag, an implicit-drag
+      !! diagonal, a geothermal deposit or a tidal-mixing bed anchor put
+      !! on `k = 1` lands on a layer the vdiff solve has cut out of the
+      !! column.  Unlike `k_top` this is NOT gated on a cavity — bed
+      !! fillers exist on every `z_fixed` run with topography.
+      !!
+      !! **Static.** Read ONCE from `ocean_vcoord_z_fixed_target` at
+      !! `eta = 0` — the same kernel, `bt_H_ref`, `z_top` and profile the
+      !! closed-face mask and `k_top` are built from (one definition of
+      !! "live").  The bed is static and `eta` is absorbed by the first
+      !! live layer at the TOP, so the bed-side pattern never moves.  It
+      !! is derived from bathymetry + the vcoord config, so it is rebuilt
+      !! on every start (cold or warm) and is not restart state.
+      !!
+      !! **Every other coordinate is a literal no-op**: the arrays were
+      !! allocated at `source = 1` in `multilayer_state_init`, which IS
+      !! the answer wherever nothing vanishes against the bed.
+      !!
+      !! **Seams.** The centre index is built from the ghost-filled
+      !! `bt_H_ref`, so it is seam-correct by construction; the OUTERMOST
+      !! face of each face twin cannot be evaluated locally (it needs a
+      !! cell beyond the array) and takes its one column.  A plain face
+      !! halo exchange (integer → real → integer: the halo layer moves
+      !! `real(wp)`, and an integer < 2**53 round-trips exactly) makes
+      !! that ghost face carry its owner's value on a tile seam or a
+      !! periodic wrap.  Single-rank non-periodic: a no-op.
+      !!
+      !! **Ordering.** Same as `configure_ocean_k_top`: after the cavity
+      !! draft, after `configure_ocean_bt_split` (`bt_H_ref`), after the
+      !! periodic-wrap / halo pass, BEFORE `ocean_state_enter_data` (the
+      !! host fill is what the `copyin` captures).
+      type(ocean_state_t), intent(inout) :: ocean_state
+      type(hgrid_t), intent(in) :: grid
+      integer, intent(in) :: compute_rank
+
+      integer :: nx, ny, nz, n_filler
+      real(wp) :: h_nominal, h_min
+      real(wp), allocatable :: tgt(:, :, :), eta0(:, :), fx(:, :), fy(:, :)
+
+      if (.not. ocean_state%multilayer%is_init) return
+      if (ocean_state%vcoord%coord_type /= VCOORD_Z_FIXED) return
+      if (ocean_state%vcoord%z_fixed_h_ref <= 0.0_wp) return
+      if (.not. ocean_state%dyn%bt_work%is_init) return
+      if (maxval(ocean_state%dyn%bt_work%bt_H_ref) <= 0.0_wp) return
+
+      nx = grid%nx_total
+      ny = grid%ny_total
+      nz = ocean_state%multilayer%nz_ml
+      h_nominal = ocean_state%vcoord%z_fixed_h_ref/real(nz, wp)
+      h_min = ocean_state%vcoord%zstar_h_min
+
+      allocate (tgt(nx, ny, nz), source=0.0_wp)
+      allocate (eta0(nx, ny), source=0.0_wp)
+      call ocean_vcoord_z_fixed_target(tgt, ocean_state%dyn%bt_work%bt_H_ref, &
+                                       eta0, ocean_state%vcoord%z_top, &
+                                       nx, ny, nz, h_nominal, &
+                                       ocean_state%vcoord%z_fixed_use_profile, &
+                                       ocean_state%vcoord%z_fixed_zi, &
+                                       ocean_state%vcoord%z_fixed_dz, h_min)
+      call ocean_vcoord_k_bot_from_target(ocean_state%multilayer%k_bot, &
+                                          ocean_state%multilayer%k_bot_u, &
+                                          ocean_state%multilayer%k_bot_v, &
+                                          tgt, nx, ny, nz, H_VANISHED)
+      deallocate (tgt, eta0)
+
+      if (ocean_halo_is_init()) then
+         allocate (fx(nx + 1, ny), fy(nx, ny + 1))
+         fx = real(ocean_state%multilayer%k_bot_u, wp)
+         fy = real(ocean_state%multilayer%k_bot_v, wp)
+         call ocean_halo_face_x(fx, device_resident=.false.)
+         call ocean_halo_face_y(fy, device_resident=.false.)
+         ocean_state%multilayer%k_bot_u = nint(fx)
+         ocean_state%multilayer%k_bot_v = nint(fy)
+         deallocate (fx, fy)
+      end if
+
+      n_filler = count(ocean_state%multilayer%k_bot > 1)
+      if (compute_rank == 0) then
+         call logger%info("z_fixed k_bot: "//to_string(n_filler)//"/"// &
+                          to_string(nx*ny)//" columns carry bed-side "// &
+                          "fillers (k_bot > 1); max k_bot = "// &
+                          to_string(maxval(ocean_state%multilayer%k_bot))// &
+                          ", nz = "//to_string(nz))
+      end if
+   end subroutine configure_ocean_k_bot
 
    subroutine configure_ocean_closed_faces(cfg, ocean_state, grid, compute_rank, ierr)
       !! Build the static partial-step z-level FACE-CLOSURE mask
