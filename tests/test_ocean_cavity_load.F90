@@ -119,8 +119,8 @@ module test_ocean_cavity_load
    !! decades of conditioning (which is what
    !! `test_ocean_cavity_equivalence` measures).  The configure-time
    !! refusal therefore protects the raw stack, the unsplit driver and
-   !! `&ocean_bt_nml correction_h_weighted`, not the default path's
-   !! stability.
+   !! any non-uniform barotropic-correction weight, not the default
+   !! path's stability.
    !!
    !! ### Under the MOM6 split (`&ocean_bt_nml bc_pgf_forcing`, default)
    !!
@@ -879,8 +879,8 @@ contains
       !! lose 5.4 decades of conditioning (that is what
       !! `test_ocean_cavity_equivalence` measures).  The configure-time
       !! refusal therefore protects the raw stack, the unsplit driver and
-      !! `&ocean_bt_nml correction_h_weighted`, not the default path's
-      !! stability.
+      !! any non-uniform barotropic-correction weight, not the default
+      !! path's stability.
       type(error_type), allocatable, intent(out) :: error
       type(multilayer_state_t) :: ms
       type(ocean_pressure_force_t) :: pgf_on, pgf_off

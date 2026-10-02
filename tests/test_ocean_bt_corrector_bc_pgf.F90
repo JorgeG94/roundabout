@@ -5,7 +5,7 @@
 !!
 !! The bc-PGF correction is MOM6's `btstep_layer_accel` analogue
 !! (`MOM_barotropic.F90:3720-3789`).  It adds a per-layer
-!! baroclinic-PGF retro-correction on top of the uniform / h-weighted
+!! baroclinic-PGF retro-correction on top of the uniform / visc_rem-weighted
 !! BT Δu, accounting for the η evolution during the BT substep that
 !! the slow PGF didn't see.
 !!
@@ -344,7 +344,7 @@ contains
          end do
 
          call apply_bt_correction(bt, ms, 1.0_wp, skip_h_rescale=.true., &
-                                  use_h_weighted=.true., grid=grid, &
+                                  grid=grid, &
                                   use_bc_pgf=.true., metrics=metrics)
 
          err_max = 0.0_wp

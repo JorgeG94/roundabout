@@ -4805,7 +4805,7 @@ contains
       ! here acts on the post-bt-correction per-layer (baroclinic)
       ! velocity.  PR-19 supplies the visc_rem QUANTITY (produced by
       ! vdiff_apply_momentum, consumed by apply_bt_correction's
-      ! h-weighted branch below); feeding it into F_slow / the
+      ! visc_rem-weighted fold below); feeding it into F_slow / the
       ! barotropic substep itself — the actual barotropic-coupling flip
       ! — is PR-56's territory (changes the barotropic mode, gated on
       ! the Bleck/Hallberg instability test).  For strict split-path use
@@ -4865,7 +4865,6 @@ contains
       call profiler_start("ocean_bt_correction")
       call apply_bt_correction(dyn%bt_work, ms, dt, &
                                skip_h_rescale=is_lagrangian, &
-                               use_h_weighted=dyn%bt_work%bt_correction_h_weighted, &
                                grid=grid, &
                                use_bc_pgf=dyn%bt_work%bt_correction_bc_pgf, &
                                use_visc_rem=dyn%bt_work%bt_correction_visc_rem, &

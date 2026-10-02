@@ -433,10 +433,10 @@ contains
       !! The trap-#1 defence: run the REAL producer
       !! (vdiff_apply_momentum) into bt_work%visc_rem_u/v, then feed
       !! that SAME field into the REAL consumer (apply_bt_correction,
-      !! use_h_weighted + use_visc_rem).  Assert (a) visc_rem is no
+      !! use_visc_rem).  Assert (a) visc_rem is no
       !! longer identically 1 after the producer call; (b) the bed
-      !! layer's BT-corrector Δu is strictly smaller than the h-only
-      !! path's (a barotropic acceleration no longer pushes water
+      !! layer's BT-corrector Δu is strictly smaller than the uniform
+      !! fold's (a barotropic acceleration no longer pushes water
       !! inside the frictional BBL as hard); (c) the column depth-mean
       !! Δu is unchanged to round-off (the mass-flux invariant survives
       !! the visc_rem re-weighting) in BOTH runs.
@@ -492,8 +492,8 @@ contains
                     "implicit-drag vdiff call")
          if (allocated(error)) exit checks
 
-         ! ---- Step 7 (consumer, on TWO independent states): h-only vs
-         ! h*visc_rem, using the SAME producer-filled bt%visc_rem ----
+         ! ---- Step 7 (consumer, on TWO independent states): uniform vs
+         ! visc_rem-weighted, using the SAME producer-filled bt%visc_rem ----
          ms_a%h_layer = 25.0_wp; ms_b%h_layer = 25.0_wp
          ms_a%u_face_x_layer = U0; ms_b%u_face_x_layer = U0
          ms_a%v_face_y_layer = 0.0_wp; ms_b%v_face_y_layer = 0.0_wp
@@ -504,21 +504,21 @@ contains
          bt%bt_H_ref = 100.0_wp; bt%bt_eta_end = 0.0_wp
 
          call apply_bt_correction(bt, ms_a, DT, metrics, skip_h_rescale=.true., &
-                                  use_h_weighted=.true., use_visc_rem=.false.)
+                                  use_visc_rem=.false.)
          call apply_bt_correction(bt, ms_b, DT, metrics, skip_h_rescale=.true., &
-                                  use_h_weighted=.true., use_visc_rem=.true.)
+                                  use_visc_rem=.true.)
 
          du_bed_a = ms_a%u_face_x_layer(ig, jg, 1) - U0
          du_bed_b = ms_b%u_face_x_layer(ig, jg, 1) - U0
          call check(error, du_bed_b < du_bed_a - 1.0e-8_wp, &
                     "consumer: visc_rem-weighted bed Delta-u must be smaller than the "// &
-                    "h-only path's (biased against the frictional BBL)")
+                    "uniform fold's (biased against the frictional BBL)")
          if (allocated(error)) exit checks
 
          mean_a = sum(ms_a%u_face_x_layer(ig, jg, :))/real(NZ, wp)
          mean_b = sum(ms_b%u_face_x_layer(ig, jg, :))/real(NZ, wp)
          call check(error, abs(mean_a - 1.0_wp) < 1.0e-12_wp, &
-                    "h-only run: depth-mean must equal bt_ubt_end")
+                    "uniform run: depth-mean must equal bt_ubt_end")
          if (allocated(error)) exit checks
          call check(error, abs(mean_b - 1.0_wp) < 1.0e-12_wp, &
                     "visc_rem run: depth-mean must STILL equal bt_ubt_end")

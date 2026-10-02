@@ -1,12 +1,13 @@
 """P5 D2.9 -- barotropic solver, continuity, porous barriers, wet/dry.
 
 The `&ocean_bt_nml` MOM6-parity chain (`use_cont_type`,
-`cont_corr_bounds`, `upstream_h_face`, `correction_h_weighted`,
-`correction_visc_rem`, `renorm_visc_rem`, `forcing_visc_rem`,
-`correction_bc_pgf`, `substep_zeta_ke`) is DELIBERATELY generated-layer
-only: it has documented prerequisite CHAINS that belong in the Fortran's
-own `cross_check` callback, not re-encoded in Python where they would
-drift (D2.9). Use `model.config.ocean_bt.<knob>` for those.
+`cont_corr_bounds`, `upstream_h_face`, `correction_visc_rem`,
+`renorm_visc_rem`, `forcing_visc_rem`, `correction_bc_pgf`,
+`substep_zeta_ke`) is DELIBERATELY generated-layer only: it has
+documented prerequisite CHAINS that belong in the Fortran's own
+`cross_check` callback, not re-encoded in Python where they would drift
+(D2.9). Use `model.config.ocean_bt.<knob>` for those.
+(`correction_h_weighted` is RETIRED -- refused at configure.)
 """
 
 from __future__ import annotations
