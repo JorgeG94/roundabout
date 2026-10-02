@@ -113,6 +113,7 @@ contains
       type(hgrid_t) :: grid
       type(multilayer_state_t) :: ms
       type(barotropic_workstate_t) :: bt_work
+      type(ocean_metrics_t) :: metrics
       real(wp), parameter :: h_uniform = 1000.0_wp
       real(wp), parameter :: H_total = 3.0_wp*h_uniform
 
@@ -122,7 +123,9 @@ contains
                       [h_uniform, h_uniform, h_uniform], &
                       [0.1_wp, 0.1_wp, 0.1_wp], &
                       enable_upstream=.true.)
-      call compute_h_face_upstream(grid, bt_work, ms)
+      call make_cartesian_metrics(metrics, grid)
+      call compute_h_face_upstream(grid, bt_work, ms, metrics)
+      call destroy_cartesian_metrics(metrics)
       call check(error, abs(bt_work%h_face_up_x(2, 1) - H_total) < 1.0e-10_wp, &
                  "h_face_up_x ≠ nz·h_uniform (u>0)")
       if (allocated(error)) return
@@ -142,7 +145,9 @@ contains
                       [h_uniform, h_uniform, h_uniform], &
                       [-0.1_wp, -0.1_wp, -0.1_wp], &
                       enable_upstream=.true.)
-      call compute_h_face_upstream(grid, bt_work, ms)
+      call make_cartesian_metrics(metrics, grid)
+      call compute_h_face_upstream(grid, bt_work, ms, metrics)
+      call destroy_cartesian_metrics(metrics)
       call check(error, abs(bt_work%h_face_up_x(2, 1) - H_total) < 1.0e-10_wp, &
                  "h_face_up_x ≠ nz·h_uniform (u<0)")
       call ms%destroy()
@@ -166,6 +171,7 @@ contains
       type(hgrid_t) :: grid
       type(multilayer_state_t) :: ms
       type(barotropic_workstate_t) :: bt_work
+      type(ocean_metrics_t) :: metrics
 
       ! Case A: mixed signs (bed eastward, surf westward).
       call make_setup(grid, ms, bt_work, 2, &
@@ -173,7 +179,9 @@ contains
                       [30.0_wp, 1000.0_wp], &      ! east: full
                       [0.1_wp, -0.1_wp], &         ! u_face per k
                       enable_upstream=.true.)
-      call compute_h_face_upstream(grid, bt_work, ms)
+      call make_cartesian_metrics(metrics, grid)
+      call compute_h_face_upstream(grid, bt_work, ms, metrics)
+      call destroy_cartesian_metrics(metrics)
       ! k=1 west (h=0) + k=2 east (h=1000) = 1000.
       call check(error, abs(bt_work%h_face_up_x(2, 1) - 1000.0_wp) < 1.0e-10_wp, &
                  "mixed-sign upstream pick ≠ 0 + 1000")
@@ -187,7 +195,9 @@ contains
                       [30.0_wp, 1000.0_wp], &
                       [0.1_wp, 0.1_wp], &
                       enable_upstream=.true.)
-      call compute_h_face_upstream(grid, bt_work, ms)
+      call make_cartesian_metrics(metrics, grid)
+      call compute_h_face_upstream(grid, bt_work, ms, metrics)
+      call destroy_cartesian_metrics(metrics)
       ! West column sum: 0 + 1000 = 1000.
       call check(error, abs(bt_work%h_face_up_x(2, 1) - 1000.0_wp) < 1.0e-10_wp, &
                  "all-eastward upstream pick ≠ west-column sum")
@@ -201,7 +211,9 @@ contains
                       [30.0_wp, 1000.0_wp], &
                       [-0.1_wp, -0.1_wp], &
                       enable_upstream=.true.)
-      call compute_h_face_upstream(grid, bt_work, ms)
+      call make_cartesian_metrics(metrics, grid)
+      call compute_h_face_upstream(grid, bt_work, ms, metrics)
+      call destroy_cartesian_metrics(metrics)
       ! East column sum: 30 + 1000 = 1030.
       call check(error, abs(bt_work%h_face_up_x(2, 1) - 1030.0_wp) < 1.0e-10_wp, &
                  "all-westward upstream pick ≠ east-column sum")
@@ -261,6 +273,7 @@ contains
       type(hgrid_t) :: grid
       type(multilayer_state_t) :: ms
       type(barotropic_workstate_t) :: bt_work
+      type(ocean_metrics_t) :: metrics
 
       call make_setup(grid, ms, bt_work, 2, &
                       [0.0_wp, 1000.0_wp], &
@@ -271,7 +284,9 @@ contains
                  "h_face_up_x must not be allocated when knob is off")
       if (allocated(error)) return
       ! Must not crash even with unallocated slots.
-      call compute_h_face_upstream(grid, bt_work, ms)
+      call make_cartesian_metrics(metrics, grid)
+      call compute_h_face_upstream(grid, bt_work, ms, metrics)
+      call destroy_cartesian_metrics(metrics)
       call check(error,.not. allocated(bt_work%h_face_up_x), &
                  "h_face_up_x must remain unallocated after no-op call")
       call ms%destroy()
@@ -417,7 +432,9 @@ contains
                       [30.0_wp, 1000.0_wp], &
                       [1.0e-12_wp, -1.0e-12_wp], &
                       enable_upstream=.true.)
-      call compute_h_face_upstream(grid, bt_work, ms)
+      call make_cartesian_metrics(metrics, grid)
+      call compute_h_face_upstream(grid, bt_work, ms, metrics)
+      call destroy_cartesian_metrics(metrics)
       ! Set the corrector target.  bt_ubt_at_n = 0 + dt·F_bt_u = 0
       ! ⇒ delta_bar = bt_ubt_end.
       bt_work%bt_ubt_end(2, 1) = bt_ubt_target

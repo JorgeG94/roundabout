@@ -237,15 +237,31 @@ contains
       end if
    end subroutine derive_bt_from_layers
 
-   pure subroutine compute_h_face_upstream(grid, bt_work, ms)
+   pure subroutine compute_h_face_upstream(grid, bt_work, ms, metrics)
       !! Per-face upstream column-sum thickness `h_face_up_x/y(I,j) =
       !! Σ_k h_layer(I_upstream,j,k)` used by the BT chain when
       !! `use_upstream_h_face = .true.`. First-order upwind pick by face-velocity
       !! sign (sampled at the top of the outer step). Wall faces use the single
       !! available cell. No-op when the knob is off.
+      !!
+      !! Under `&vcoord_nml zfixed_closed_faces` the sum is over the OPEN
+      !! column instead — see `metrics` and `h_face_upstream_open_impl`.
       type(hgrid_t), intent(in) :: grid
       type(barotropic_workstate_t), intent(inout) :: bt_work
       type(multilayer_state_t), intent(in) :: ms
+      type(ocean_metrics_t), intent(in) :: metrics
+         !! REQUIRED, for the reason `derive_bt_from_layers` gives: an
+         !! optional dummy that silently selects the full-column branch is
+         !! how the `pred_corr` Coriolis-reference defect shipped.
+         !!
+         !! `metrics%use_closed_faces = .false.` (the default) ⇒ the
+         !! ORIGINAL full-column loops below run, textually unchanged
+         !! (byte-identical), and neither `open_*` nor `dy_cu_bt` is
+         !! named.  `.true.` ⇒ the open-column builder
+         !! `h_face_upstream_open_impl`, whose docstring derives why the
+         !! full-column sum is not merely imprecise there but makes the
+         !! barotropic transport disagree with the renormalised layer
+         !! transports by a factor up to ~2 at a staircase face.
 
       integer :: i, j, k, nx, ny, nz, nx_face, ny_face
       real(wp) :: h_sum, h_k
@@ -257,6 +273,36 @@ contains
       nz = ms%nz_ml
       nx_face = size(bt_work%h_face_up_x, 1)
       ny_face = size(bt_work%h_face_up_y, 2)
+
+      if (metrics%use_closed_faces) then
+         ! Two calls, one per porous state: with porous OFF the
+         ! `por_face_area_*` arrays are the `(1,1,1)` placeholder and must
+         ! NOT reach the callee's explicit-shape dummy (nvfortran builds
+         ! the `do concurrent` data clause from the loop bounds, so a
+         ! placeholder aborts under `mem:separate` even when the branch
+         ! that indexes it is never taken).  The mask itself is the inert
+         ! stand-in — right shape, already mapped, `intent(in)` at both
+         ! dummies — the same device the `ocean_porous_refresh` call uses.
+         if (metrics%use_porous) then
+            call h_face_upstream_open_impl(nx, ny, nz, .true., ms%h_layer, &
+                                           ms%u_face_x_layer, ms%v_face_y_layer, &
+                                           metrics%open_u, metrics%open_v, &
+                                           metrics%por_face_area_u, &
+                                           metrics%por_face_area_v, &
+                                           metrics%dy_cu, metrics%dx_cv, &
+                                           metrics%dy_cu_bt, metrics%dx_cv_bt, &
+                                           bt_work%h_face_up_x, bt_work%h_face_up_y)
+         else
+            call h_face_upstream_open_impl(nx, ny, nz, .false., ms%h_layer, &
+                                           ms%u_face_x_layer, ms%v_face_y_layer, &
+                                           metrics%open_u, metrics%open_v, &
+                                           metrics%open_u, metrics%open_v, &
+                                           metrics%dy_cu, metrics%dx_cv, &
+                                           metrics%dy_cu_bt, metrics%dx_cv_bt, &
+                                           bt_work%h_face_up_x, bt_work%h_face_up_y)
+         end if
+         return
+      end if
 
       ! East-face: upstream pick from u_face_x_layer sign.
       do concurrent(j=1:ny, i=1:nx_face) local(k, h_sum, h_k)
@@ -294,6 +340,134 @@ contains
          bt_work%h_face_up_y(i, j) = h_sum
       end do
    end subroutine compute_h_face_upstream
+
+   pure subroutine h_face_upstream_open_impl(nx, ny, nz, use_por, h_layer, &
+                                             u_face, v_face, open_u, open_v, &
+                                             por_u, por_v, dy_cu, dx_cv, &
+                                             dy_cu_bt, dx_cv_bt, h_up_x, h_up_y)
+      !! OPEN-column upstream face thickness, for `upstream_h_face` under
+      !! `&vcoord_nml zfixed_closed_faces`.
+      !!
+      !! ### What the barotropic transport has to equal
+      !!
+      !! Everything else on the barotropic path under closed faces already
+      !! means "the OPEN column": `derive_bt_from_layers` builds `ubt` as
+      !! `Σ_k u_k·h_up,k·open_k / Σ_k h_up,k·open_k` (upstream pick under
+      !! this knob), and the renormaliser hands the fast loop's `uhbt` to
+      !! the layers with weight `dy_cu·por·open` on the upstream PPM
+      !! thickness.  For a depth-uniform open-layer velocity `u` the layers
+      !! therefore carry `dy_cu·Σ_k h_up,k·por_k·open_k·u`, and the fast
+      !! loop must transport EXACTLY that, or the renormaliser's `du` is
+      !! not zero: `u_av = r·u` with `r` = (barotropic face depth)/(open
+      !! upstream depth), and the slow tendencies of the next stage are
+      !! evaluated on a velocity the barotropic mode never had.
+      !!
+      !! ### Why the full-column sum is wrong by O(1), not by round-off
+      !!
+      !! The fast loop transports `h_face_up·ubt·dy_cu_bt`, and
+      !! `dy_cu_bt = dy_cu·φ_c` carries the CENTRED open fraction
+      !! `φ_c = Σ h_c·por·open / Σ h_c` (`closed_faces_update_bt_widths`).
+      !! The full-column upstream sum `H_up` times `φ_c` is the open depth
+      !! only when `H_up = Σ h_c` — a flat face.  At a staircase face
+      !! between a deep column `H_D` and a shallow one `H_S` (`h_c` of a
+      !! layer live on one side only is `≈ h/2`):
+      !!
+      !! ```
+      !! φ_c        = H_S / ((H_D + H_S)/2)
+      !! from deep:    r = H_D·φ_c / H_S = 2·H_D/(H_D + H_S)    -> 2
+      !! from shallow: r = H_S·φ_c / H_S = 2·H_S/(H_D + H_S)    -> 0
+      !! ```
+      !!
+      !! (prototype: `python_prototypes/bt_upstream_zfixed/`).  Measured on
+      !! the 1-degree Southern Ocean (`zfixed_audit/bt_upstream_h_face`):
+      !! barotropic velocity 2.7 m/s by step 13 against 0.84 m/s knob-off,
+      !! then the `maxvel` clamp, then NaN at step 309; with the open
+      !! column it runs the 10 days at `En 5.709E-04` against the knob-off
+      !! `5.493E-04`.
+      !!
+      !! ### What is stored
+      !!
+      !! The substep multiplies `h_face_up` by the NARROWED width
+      !! `dy_cu_bt`, which already carries `φ_c`.  Storing the open sum
+      !! `s = Σ_k h_up,k·por_k·open_k` itself would count the open fraction
+      !! twice, so the stored value is the full-column EQUIVALENT
+      !!
+      !! ```
+      !! h_face_up = s · dy_cu / dy_cu_bt     ⇒   h_face_up·dy_cu_bt = s·dy_cu
+      !! ```
+      !!
+      !! which makes the fast-loop transport the open-column upstream
+      !! transport to round-off, on BOTH substep kernels, without touching
+      !! either (the hot nonlinear kernel receives `dy_cu_bt` as its only
+      !! width).  Read against the WIDTH the substep will actually use, so
+      !! it is exact whichever step `dy_cu_bt` was refreshed at.  A face
+      !! with `dy_cu_bt = 0` (every layer closed, or land) transports
+      !! nothing whatever is stored, and stores `s` (`= 0` when every layer
+      !! is closed).
+      !!
+      !! Porous barriers (`use_por`) enter `s` the way they enter the
+      !! renormaliser's weight; `por_u`/`por_v` are never indexed when
+      !! `.false.` (the caller hands over the mask as an inert,
+      !! device-present stand-in — see `compute_h_face_upstream`).
+      integer, intent(in) :: nx, ny, nz
+      logical, intent(in) :: use_por
+      real(wp), intent(in) :: h_layer(nx, ny, nz)
+      real(wp), intent(in) :: u_face(nx + 1, ny, nz), v_face(nx, ny + 1, nz)
+      real(wp), intent(in) :: open_u(nx + 1, ny, nz), open_v(nx, ny + 1, nz)
+      real(wp), intent(in) :: por_u(nx + 1, ny, nz), por_v(nx, ny + 1, nz)
+      real(wp), intent(in) :: dy_cu(nx + 1, ny), dx_cv(nx, ny + 1)
+      real(wp), intent(in) :: dy_cu_bt(nx + 1, ny), dx_cv_bt(nx, ny + 1)
+      real(wp), intent(inout) :: h_up_x(nx + 1, ny), h_up_y(nx, ny + 1)
+
+      integer :: i, j, k
+      real(wp) :: s, h_k, w
+
+      do concurrent(j=1:ny, i=1:nx + 1) local(k, s, h_k, w)
+         s = 0.0_wp
+         do k = 1, nz
+            if (i == 1) then
+               h_k = h_layer(1, j, k)
+            else if (i == nx + 1) then
+               h_k = h_layer(nx, j, k)
+            else if (u_face(i, j, k) >= 0.0_wp) then
+               h_k = h_layer(i - 1, j, k)
+            else
+               h_k = h_layer(i, j, k)
+            end if
+            w = open_u(i, j, k)
+            if (use_por) w = w*por_u(i, j, k)
+            s = s + h_k*w
+         end do
+         if (dy_cu_bt(i, j) > 0.0_wp) then
+            h_up_x(i, j) = s*(dy_cu(i, j)/dy_cu_bt(i, j))
+         else
+            h_up_x(i, j) = s
+         end if
+      end do
+
+      do concurrent(j=1:ny + 1, i=1:nx) local(k, s, h_k, w)
+         s = 0.0_wp
+         do k = 1, nz
+            if (j == 1) then
+               h_k = h_layer(i, 1, k)
+            else if (j == ny + 1) then
+               h_k = h_layer(i, ny, k)
+            else if (v_face(i, j, k) >= 0.0_wp) then
+               h_k = h_layer(i, j - 1, k)
+            else
+               h_k = h_layer(i, j, k)
+            end if
+            w = open_v(i, j, k)
+            if (use_por) w = w*por_v(i, j, k)
+            s = s + h_k*w
+         end do
+         if (dx_cv_bt(i, j) > 0.0_wp) then
+            h_up_y(i, j) = s*(dx_cv(i, j)/dx_cv_bt(i, j))
+         else
+            h_up_y(i, j) = s
+         end if
+      end do
+   end subroutine h_face_upstream_open_impl
 
    pure subroutine sum_slow_tendencies_into_F_slow(bt_work, pgf, cor, hv, bd, ss, ms)
       !! Sum the per-kernel slow-tendency scratch buffers into a
@@ -1617,7 +1791,7 @@ contains
       end do
    end subroutine compute_e_anom
 
-   pure subroutine compute_bt_rem(grid, bt_work, ms, r_linear, hbbl, dt_inner)
+   pure subroutine compute_bt_rem(grid, bt_work, ms, metrics, r_linear, hbbl, dt_inner)
       !! Per-face multiplicative damping factor for the BT-substep velocity
       !! update (linear-drag branch):
       !!     bt_rem_face = Htot_face / (Htot_face + r·hbbl·dt_inner)
@@ -1627,6 +1801,16 @@ contains
       type(hgrid_t), intent(in) :: grid
       type(barotropic_workstate_t), intent(inout) :: bt_work
       type(multilayer_state_t), intent(in) :: ms
+      type(ocean_metrics_t), intent(in) :: metrics
+         !! REQUIRED (see `derive_bt_from_layers`).  Under
+         !! `&vcoord_nml zfixed_closed_faces` `Htot_face` is the OPEN-column
+         !! face depth `Σ_k h_face·open` — the column `ubt` is the mean of
+         !! and the one the fast loop transports on — so the bed stress
+         !! `r·hbbl·ubt` is spread over the depth that actually carries the
+         !! barotropic momentum.  The full-column depth would under-damp a
+         !! partially closed face by its closed fraction.  `.false.` (the
+         !! default) ⇒ the original loops, textually unchanged; `open_*`
+         !! is never named.
       real(wp), intent(in) :: r_linear   !! Linear drag rate at the bed (1/s)
       real(wp), intent(in) :: hbbl       !! BBL thickness over which drag acts (m)
       real(wp), intent(in) :: dt_inner   !! BT-substep dt (s)
@@ -1638,6 +1822,13 @@ contains
       ny = grid%ny_total
       nz = ms%nz_ml
       drag_dt = r_linear*hbbl*dt_inner   ! product is in metres
+
+      if (metrics%use_closed_faces) then
+         call bt_rem_open_impl(nx, ny, nz, ms%h_layer, metrics%open_u, &
+                               metrics%open_v, drag_dt, &
+                               bt_work%bt_rem_u, bt_work%bt_rem_v)
+         return
+      end if
 
       do concurrent(j=1:ny, i=2:nx) local(k, htot_face)
          htot_face = 0.0_wp
@@ -1696,7 +1887,59 @@ contains
       end do
    end subroutine reset_bt_rem
 
-   pure subroutine compute_bt_rem_wave_drag(grid, bt_work, ms, dt_inner)
+   pure subroutine bt_rem_open_impl(nx, ny, nz, h_layer, open_u, open_v, drag_dt, &
+                                    bt_rem_u, bt_rem_v)
+      !! `compute_bt_rem` under `&vcoord_nml zfixed_closed_faces`: the
+      !! same `H/(H + r·hbbl·dt_inner)` with `H = Σ_k h_face·open` (the
+      !! OPEN-column centred face depth, the weight `face_depth_mean_*`
+      !! uses).  A face whose every layer is closed has `H = 0` and keeps
+      !! `bt_rem = 1`, exactly like a dry face on the original path (it
+      !! carries no barotropic transport: `dy_cu_bt = 0` there).
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in) :: h_layer(nx, ny, nz)
+      real(wp), intent(in) :: open_u(nx + 1, ny, nz), open_v(nx, ny + 1, nz)
+      real(wp), intent(in) :: drag_dt
+         !! `r_linear·hbbl·dt_inner` (m).
+      real(wp), intent(inout) :: bt_rem_u(nx + 1, ny), bt_rem_v(nx, ny + 1)
+      integer :: i, j, k
+      real(wp) :: htot_face
+
+      do concurrent(j=1:ny, i=2:nx) local(k, htot_face)
+         htot_face = 0.0_wp
+         do k = 1, nz
+            htot_face = htot_face + &
+                        0.5_wp*(h_layer(i - 1, j, k) + h_layer(i, j, k))*open_u(i, j, k)
+         end do
+         if (htot_face > 0.0_wp) then
+            bt_rem_u(i, j) = htot_face/(htot_face + drag_dt)
+         else
+            bt_rem_u(i, j) = 1.0_wp
+         end if
+      end do
+      do concurrent(j=1:ny)
+         bt_rem_u(1, j) = 1.0_wp
+         bt_rem_u(nx + 1, j) = 1.0_wp
+      end do
+
+      do concurrent(j=2:ny, i=1:nx) local(k, htot_face)
+         htot_face = 0.0_wp
+         do k = 1, nz
+            htot_face = htot_face + &
+                        0.5_wp*(h_layer(i, j - 1, k) + h_layer(i, j, k))*open_v(i, j, k)
+         end do
+         if (htot_face > 0.0_wp) then
+            bt_rem_v(i, j) = htot_face/(htot_face + drag_dt)
+         else
+            bt_rem_v(i, j) = 1.0_wp
+         end if
+      end do
+      do concurrent(i=1:nx)
+         bt_rem_v(i, 1) = 1.0_wp
+         bt_rem_v(i, ny + 1) = 1.0_wp
+      end do
+   end subroutine bt_rem_open_impl
+
+   pure subroutine compute_bt_rem_wave_drag(grid, bt_work, ms, metrics, dt_inner)
       !! MULTIPLIES the Egbert & Ray (2001) / Jayne & St Laurent (2001)
       !! linear (Rayleigh) barotropic wave drag into `bt_rem_u/v`:
       !!     bt_rem_u *= Htot_face / (Htot_face + lwd_drag_u·dt_inner)
@@ -1709,6 +1952,13 @@ contains
       type(hgrid_t), intent(in) :: grid
       type(barotropic_workstate_t), intent(inout) :: bt_work
       type(multilayer_state_t), intent(in) :: ms
+      type(ocean_metrics_t), intent(in) :: metrics
+         !! REQUIRED.  Under `&vcoord_nml zfixed_closed_faces`
+         !! `Htot_face = Σ_k h_face·open` — the same OPEN-column depth
+         !! `compute_bt_rem` uses there, so the "identical `Htot_face`"
+         !! contract above holds on both paths: the piston velocity
+         !! `r_H` damps the column that carries `ubt`, at the rate
+         !! `r_H/H_open`.  `.false.` ⇒ the original loops, unchanged.
       real(wp), intent(in) :: dt_inner   !! BT-substep dt (s)
 
       integer :: i, j, k, nx, ny, nz
@@ -1717,6 +1967,14 @@ contains
       nx = grid%nx_total
       ny = grid%ny_total
       nz = ms%nz_ml
+
+      if (metrics%use_closed_faces) then
+         call bt_rem_wave_drag_open_impl(nx, ny, nz, ms%h_layer, metrics%open_u, &
+                                         metrics%open_v, bt_work%lwd_drag_u, &
+                                         bt_work%lwd_drag_v, dt_inner, &
+                                         bt_work%bt_rem_u, bt_work%bt_rem_v)
+         return
+      end if
 
       do concurrent(j=1:ny, i=2:nx) local(k, htot_face)
          htot_face = 0.0_wp
@@ -1740,6 +1998,44 @@ contains
          end if
       end do
    end subroutine compute_bt_rem_wave_drag
+
+   pure subroutine bt_rem_wave_drag_open_impl(nx, ny, nz, h_layer, open_u, open_v, &
+                                              lwd_u, lwd_v, dt_inner, bt_rem_u, bt_rem_v)
+      !! `compute_bt_rem_wave_drag` under `&vcoord_nml zfixed_closed_faces`:
+      !! MULTIPLIES `H/(H + r_H·dt_inner)` into `bt_rem` with the OPEN-column
+      !! face depth `H = Σ_k h_face·open` (the `bt_rem_open_impl` depth).
+      !! `H <= 0` (every layer closed) ⇒ unmodified, MOM6's guard.
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in) :: h_layer(nx, ny, nz)
+      real(wp), intent(in) :: open_u(nx + 1, ny, nz), open_v(nx, ny + 1, nz)
+      real(wp), intent(in) :: lwd_u(nx + 1, ny), lwd_v(nx, ny + 1)
+      real(wp), intent(in) :: dt_inner
+      real(wp), intent(inout) :: bt_rem_u(nx + 1, ny), bt_rem_v(nx, ny + 1)
+      integer :: i, j, k
+      real(wp) :: htot_face
+
+      do concurrent(j=1:ny, i=2:nx) local(k, htot_face)
+         htot_face = 0.0_wp
+         do k = 1, nz
+            htot_face = htot_face + &
+                        0.5_wp*(h_layer(i - 1, j, k) + h_layer(i, j, k))*open_u(i, j, k)
+         end do
+         if (htot_face > 0.0_wp) then
+            bt_rem_u(i, j) = bt_rem_u(i, j)*(htot_face/(htot_face + lwd_u(i, j)*dt_inner))
+         end if
+      end do
+
+      do concurrent(j=2:ny, i=1:nx) local(k, htot_face)
+         htot_face = 0.0_wp
+         do k = 1, nz
+            htot_face = htot_face + &
+                        0.5_wp*(h_layer(i, j - 1, k) + h_layer(i, j, k))*open_v(i, j, k)
+         end do
+         if (htot_face > 0.0_wp) then
+            bt_rem_v(i, j) = bt_rem_v(i, j)*(htot_face/(htot_face + lwd_v(i, j)*dt_inner))
+         end if
+      end do
+   end subroutine bt_rem_wave_drag_open_impl
 
    pure subroutine mask_bt_rem(grid, metrics, bt_work)
       !! Fold the static land face masks into the BT-substep damping factor

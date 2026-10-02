@@ -247,6 +247,7 @@ set(RDB_TESTS
     "test_ocean_zfixed_closed_faces|test_ocean_zfixed_closed_faces|collect_ocean_zfixed_closed_faces_tests|ocean_zfixed_closed_faces|ocean"
     "test_ocean_zfixed_bt_seiche|test_ocean_zfixed_bt_seiche|collect_ocean_zfixed_bt_seiche_tests|ocean_zfixed_bt_seiche|ocean"
     "test_ocean_zfixed_cor_ref|test_ocean_zfixed_cor_ref|collect_ocean_zfixed_cor_ref_tests|ocean_zfixed_cor_ref|ocean"
+    "test_ocean_bt_upstream_zfixed|test_ocean_bt_upstream_zfixed|collect_ocean_bt_upstream_zfixed_tests|ocean_bt_upstream_zfixed|ocean"
     "test_ocean_zfixed_stretched|test_ocean_zfixed_stretched|collect_ocean_zfixed_stretched_tests|ocean_zfixed_stretched|ocean"
     "test_vcoord_parse|test_vcoord_parse|collect_vcoord_parse_tests|vcoord_parse|ocean"
     "test_ocean_remap|test_ocean_remap|collect_ocean_remap_tests|ocean_remap|ocean"
