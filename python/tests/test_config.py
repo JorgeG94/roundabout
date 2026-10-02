@@ -20,11 +20,12 @@ from rdb._knob import RdbDeadKnobWarning
 def test_group_and_knob_counts():
     # 60 groups / 682 knobs total, i.e. exactly what `rdb_nml_json` +
     # `tools/gen_python_config.py` report for the live schema (the last
-    # 60 groups / 683 knobs total, i.e. exactly what `rdb_nml_json` +
+    # 60 groups / 685 knobs total, i.e. exactly what `rdb_nml_json` +
     # `tools/gen_python_config.py` report for the live schema (the last
-    # bump: &ocean_pgf_nml insitu_density, the FV_MOM6 in-situ density).
+    # bump: &vcoord_nml rho_target_profile + rho_target_list, the
+    # non-uniform rho/hycom target densities).
     assert N_GROUPS == 60
-    assert N_KNOBS == 683
+    assert N_KNOBS == 685
     assert "ocean_bc" in ALL_GROUPS
 
 

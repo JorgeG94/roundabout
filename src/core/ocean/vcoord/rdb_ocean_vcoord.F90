@@ -97,6 +97,20 @@ module rdb_ocean_vcoord
    real(wp), parameter :: NR_OFFSET = 1.0e-6_wp
       !! Out-of-range nudge applied only when the boundary gradient ≈ 0.
 
+   ! ---- VCOORD_HYCOM z* nominal-floor source ----
+   integer, parameter :: HYCOM_FLOOR_SIGMA = 0
+      !! Floor at `Σ dsig·(H+η)` — a column FRACTION, i.e. a sigma floor.
+      !! Only the fallback for a slot no setup path configured
+      !! (`z_fixed_h_ref <= 0`); it was the only floor before 2026-10-02,
+      !! when it set 95 % of the 1-degree Southern Ocean's interfaces and
+      !! made `hycom` terrain-following there (audit finding H1).
+   integer, parameter :: HYCOM_FLOOR_UNIFORM = 1
+      !! Floor at `Σ (z_fixed_h_ref/nz)·(H+η)/H` — uniform z* in metres
+      !! (`&vcoord_nml z_fixed_profile = "uniform"`, `max_depth/nz`).
+   integer, parameter :: HYCOM_FLOOR_PROFILE = 2
+      !! Floor at `Σ z_fixed_dz(k)·(H+η)/H` — a stretched z* resolution in
+      !! metres (`z_fixed_profile = "list" | "tanh"`).
+
    ! ---- VCOORD_Z_FIXED rigid-top partial cell ----
    real(wp), parameter :: Z_FIXED_TOP_PARTIAL_FRAC = 0.1_wp
       !! Minimum PARTIAL TOP CELL thickness, as a fraction of the nominal
@@ -1787,20 +1801,29 @@ contains
       !!        the inversion always sees a monotone column.
       !!   (4b) z* NOMINAL-FLOOR sweep after the inversion, before the
       !!        monotone/inflation: walk interior+bottom interfaces from
-      !!        the surface down, accumulating `dsig·total_h·stretching`
-      !!        (= `dsig·(H+η)`, since `stretching = (H+η)/H`) and pushing
-      !!        each interface DOWN to at least that nominal z* depth
-      !!        (clamped to the column bottom).  This is a surface-side
-      !!        minimum-depth floor: it protects the near-surface band
-      !!        from collapse (fixed z* resolution) while leaving deep
-      !!        isopycnal interfaces — already below the floor — untouched.
-      !!        CRITICAL: the accumulation factor is `total_h` (= H), not
-      !!        `H+η`; `dsig` sums to 1, so `dsig·H·stretching = dsig·(H+η)`.
-      !!        Writing `dsig·(H+η)·stretching` over-stretches by `(H+η)/H`
-      !!        — invisible at η=0, wrong with a free surface.  No
-      !!        renormalize after the floor sweep (would break the floor
-      !!        invariant `z(k) ≥ Σ_{j≤k} dsig·(H+η)`; MOM6 pins the bottom
-      !!        interface + uses the debit-thickest inflation instead).
+      !!        the surface down, accumulating the z* NOMINAL THICKNESS IN
+      !!        METRES times `stretching = (H+η)/H`, and push each interface
+      !!        DOWN to at least that depth (clamped to the column bottom).
+      !!        The nominal thicknesses are the z* coordinate resolution —
+      !!        the same `&vcoord_nml z_fixed_profile` table `z_fixed` uses
+      !!        (`z_fixed_dz` for "list"/"tanh", `max_depth/nz` for
+      !!        "uniform"), as MOM6 HYCOM1 takes its `coordinateResolution`
+      !!        from the ALE_COORDINATE_CONFIG that would define a z* grid.
+      !!        So the band is a fixed depth range in every column (a 2 m
+      !!        surface layer stays 2 m over the shelf and the abyss alike)
+      !!        and a shallow column's deeper interfaces clamp onto its bed;
+      !!        deep isopycnal interfaces already below the floor are
+      !!        untouched.  Until 2026-10-02 the increment was the column
+      !!        FRACTION `dsig·(H+η)` with `dsig ≡ 1/nz` — a sigma floor that
+      !!        set 95 % of the 1-degree Southern Ocean's interfaces (audit
+      !!        finding H1); it survives only as the fallback for a slot no
+      !!        setup path configured (`z_fixed_h_ref <= 0`).
+      !!        CRITICAL: `stretching` multiplies a nominal thickness that is
+      !!        referenced to `H` (= `total_h`), not `H+η`; scaling by
+      !!        `(H+η)` twice over-stretches by `(H+η)/H` — invisible at
+      !!        η=0, wrong with a free surface.  No renormalize after the
+      !!        floor sweep (MOM6 pins the bottom interface + uses the
+      !!        debit-thickest inflation instead).
       !! `hybrid = .false.` (the `VCOORD_RHO` path) skips BOTH deltas and
       !! is bit-identical to the P2 kernel.
       !!
@@ -1827,7 +1850,8 @@ contains
       logical, intent(in) :: hybrid
          !! `.true.` = HYCOM (apply the monotonize + z*-floor deltas);
          !! `.false.` = pure RHO (bit-identical with the P2 kernel).
-      real(wp) :: h_floor_eff
+      real(wp) :: h_floor_eff, h_nominal
+      integer :: floor_mode
 
       if (.not. this%is_init) return
       ! Inflation floor must be STRICTLY above H_VANISHED: the remap drain
@@ -1837,17 +1861,36 @@ contains
       ! on the next regrid.  Floor at 2·H_VANISHED so inflated layers always
       ! survive the drain (closes the multi-regrid mass-loss footgun).
       h_floor_eff = max(this%zstar_h_min, 2.0_wp*H_VANISHED)
+      ! HYCOM z* nominal floor: METRES from the z* coordinate resolution
+      ! (the `z_fixed` nominal profile — MOM6 HYCOM1 reads its
+      ! `coordinateResolution` from the same ALE_COORDINATE_CONFIG that
+      ! sets a z* grid), stretched by (H+η)/H.  A stretched profile
+      ! (`z_fixed_use_profile`) gives per-layer `z_fixed_dz`; otherwise the
+      ! uniform `z_fixed_h_ref/nz` (setup always writes `max_depth` there).
+      ! Only a slot nobody configured (`z_fixed_h_ref <= 0`: unit tests that
+      ! build the vcoord by hand) falls back to the historical column-
+      ! fraction floor `dsig·(H+η)`.
+      if (this%z_fixed_use_profile) then
+         floor_mode = HYCOM_FLOOR_PROFILE
+         h_nominal = 0.0_wp
+      else if (this%z_fixed_h_ref > 0.0_wp) then
+         floor_mode = HYCOM_FLOOR_UNIFORM
+         h_nominal = this%z_fixed_h_ref/real(this%nz_ml, wp)
+      else
+         floor_mode = HYCOM_FLOOR_SIGMA
+         h_nominal = 0.0_wp
+      end if
       call ocean_vcoord_rho_target(this%nx_total, this%ny_total, this%nz_ml, &
                                    this%target_h, this%remap_h_old, total_h, eta, &
-                                   T, S, this%dsig, this%rho_target, eos, &
+                                   T, S, this%dsig, this%z_fixed_dz, this%rho_target, eos, &
                                    this%rho_ref_pressure, this%zstar_h_min, &
-                                   h_floor_eff, hybrid)
+                                   h_floor_eff, hybrid, floor_mode, h_nominal)
    end subroutine ocean_vcoord_compute_target_h_rho_impl
 
    pure subroutine ocean_vcoord_rho_target(nx, ny, nz, target_h, remap_h_old, &
                                            total_h, eta, t_conc, s_conc, dsig, &
-                                           rho_target, eos, p_ref, h_min, &
-                                           h_floor_eff, hybrid)
+                                           floor_dz, rho_target, eos, p_ref, h_min, &
+                                           h_floor_eff, hybrid, floor_mode, h_nominal)
       !! Column kernel of the RHO / HYCOM regrid (algorithm: see
       !! `ocean_vcoord_compute_target_h_rho_impl`).  Flat on purpose:
       !! every array is an explicit-shape dummy and every knob a scalar
@@ -1884,7 +1927,11 @@ contains
       real(wp), intent(in) :: s_conc(nx, ny, nz)
          !! Layer-mean salinity (PSU), bottom-up.
       real(wp), intent(in) :: dsig(nz)
-         !! Nominal layer fractions, bottom-up (`dsig(nz)` = surface).
+         !! Nominal layer fractions, bottom-up (`dsig(nz)` = surface) —
+         !! the HYCOM floor only under `HYCOM_FLOOR_SIGMA`.
+      real(wp), intent(in) :: floor_dz(nz)
+         !! HYCOM z* nominal layer thicknesses (m), bottom-up
+         !! (`floor_dz(nz)` = surface) — read only under `HYCOM_FLOOR_PROFILE`.
       real(wp), intent(in) :: rho_target(0:nz)
          !! Target potential densities (kg/m³), `0` = lightest = surface.
       type(eos_t), intent(in) :: eos
@@ -1897,6 +1944,12 @@ contains
          !! Min-thickness inflation floor (m), `> H_VANISHED`.
       logical, intent(in), value :: hybrid
          !! `.true.` = HYCOM deltas; `.false.` = pure RHO.
+      integer, intent(in), value :: floor_mode
+         !! HYCOM z* floor source: `HYCOM_FLOOR_PROFILE` (`floor_dz`),
+         !! `HYCOM_FLOOR_UNIFORM` (`h_nominal`) or `HYCOM_FLOOR_SIGMA`
+         !! (`dsig·H`, the unconfigured-slot fallback).
+      real(wp), intent(in), value :: h_nominal
+         !! Uniform z* nominal thickness (m) for `HYCOM_FLOOR_UNIFORM`.
 
       integer :: i, j
 
@@ -1912,15 +1965,15 @@ contains
       do concurrent(j=1:ny, i=1:nx)
          call ocean_vcoord_rho_target_column(i, j, nx, ny, nz, target_h, remap_h_old, &
                                              total_h, eta, t_conc, s_conc, dsig, &
-                                             rho_target, eos, p_ref, h_min, &
-                                             h_floor_eff, hybrid)
+                                             floor_dz, rho_target, eos, p_ref, h_min, &
+                                             h_floor_eff, hybrid, floor_mode, h_nominal)
       end do
    end subroutine ocean_vcoord_rho_target
 
    pure subroutine ocean_vcoord_rho_target_column(i, j, nx, ny, nz, target_h, remap_h_old, &
                                                   total_h, eta, t_conc, s_conc, dsig, &
-                                                  rho_target, eos, p_ref, h_min, &
-                                                  h_floor_eff, hybrid)
+                                                  floor_dz, rho_target, eos, p_ref, h_min, &
+                                                  h_floor_eff, hybrid, floor_mode, h_nominal)
       !! One column of the RHO / HYCOM regrid (steps 0-5 of
       !! `ocean_vcoord_compute_target_h_rho_impl`) — the per-thread body of
       !! `ocean_vcoord_rho_target`.  Same module as its caller (the
@@ -1949,7 +2002,11 @@ contains
       real(wp), intent(in) :: s_conc(nx, ny, nz)
          !! Layer-mean salinity (PSU), bottom-up.
       real(wp), intent(in) :: dsig(nz)
-         !! Nominal layer fractions, bottom-up (`dsig(nz)` = surface).
+         !! Nominal layer fractions, bottom-up (`dsig(nz)` = surface) —
+         !! the HYCOM floor only under `HYCOM_FLOOR_SIGMA`.
+      real(wp), intent(in) :: floor_dz(nz)
+         !! HYCOM z* nominal layer thicknesses (m), bottom-up
+         !! (`floor_dz(nz)` = surface) — read only under `HYCOM_FLOOR_PROFILE`.
       real(wp), intent(in) :: rho_target(0:nz)
          !! Target potential densities (kg/m³), `0` = lightest = surface.
       type(eos_t), intent(in) :: eos
@@ -1962,6 +2019,12 @@ contains
          !! Min-thickness inflation floor (m), `> H_VANISHED`.
       logical, intent(in), value :: hybrid
          !! `.true.` = HYCOM deltas; `.false.` = pure RHO.
+      integer, intent(in), value :: floor_mode
+         !! HYCOM z* floor source: `HYCOM_FLOOR_PROFILE` (`floor_dz`),
+         !! `HYCOM_FLOOR_UNIFORM` (`h_nominal`) or `HYCOM_FLOOR_SIGMA`
+         !! (`dsig·H`, the unconfigured-slot fallback).
+      real(wp), intent(in), value :: h_nominal
+         !! Uniform z* nominal thickness (m) for `HYCOM_FLOOR_UNIFORM`.
 
       integer :: k, kk, nk, ns, idx_thick, src, ii
       integer :: mapping(NZ_STACK_MAX)
@@ -2073,17 +2136,22 @@ contains
       call invert_density_targets(nk, hc, rhoc, nz - 1, rtgt, z_new)
 
       ! --- step 4b (HYCOM only): z* nominal-floor sweep ---
-      ! Surface-side minimum-depth floor on the isopycnal interfaces.
-      ! Walk interfaces from the surface down, accumulating the nominal
-      ! z* depth and pushing any too-shallow interface DOWN to it
-      ! (clamped to the column bottom); deep interfaces already below the
-      ! floor are untouched.  stretching = col_extent/total_h (the
-      ! SSH-following z* stretch); the accumulation is
-      ! dsig*total_h*stretching (= dsig*col_extent), and dsig sums to 1.
-      ! dsig is stored bottom-up (dsig(nz) = surface layer); the work
-      ! layer above interface kk maps to bottom-up dsig index nz-kk+2.
-      ! The floor can break monotonicity, so re-monotonize after it.
-      ! Pure RHO (hybrid=.false.) skips this and is bit-identical.
+      ! Surface-side minimum-depth floor on the isopycnal interfaces
+      ! (MOM6 `build_hycom1_column`).  Walk interfaces from the surface
+      ! down, accumulating the nominal z* depth and pushing any
+      ! too-shallow interface DOWN to it (clamped to the column bottom);
+      ! deep interfaces already below the floor are untouched.
+      ! stretching = col_extent/total_h = (H+η)/H, the z* stretch.  The
+      ! nominal increment is a THICKNESS IN METRES — the z* coordinate
+      ! resolution (`floor_dz`, or uniform `h_nominal`) — so the band is
+      ! the same depth range in every column and a shallow column clamps
+      ! its deeper interfaces onto the bed, exactly like a z* grid.  Only
+      ! the `HYCOM_FLOOR_SIGMA` fallback accumulates the column FRACTION
+      ! `dsig·H` (a sigma floor: k/nz of every column's depth).  Both
+      ! tables are bottom-up (index nz = surface layer); the work layer
+      ! above interface kk maps to bottom-up index nz-kk+2.  The floor can
+      ! break monotonicity, so re-monotonize after it.  Pure RHO
+      ! (hybrid=.false.) skips this and is bit-identical.
       if (hybrid) then
          h_ref_col = total_h(i, j)
          if (h_ref_col > 0.0_wp) then
@@ -2093,7 +2161,14 @@ contains
          end if
          nominal_z = 0.0_wp
          do kk = 2, nz + 1
-            nominal_z = nominal_z + dsig(nz - kk + 2)*h_ref_col*stretching
+            select case (floor_mode)
+            case (HYCOM_FLOOR_PROFILE)
+               nominal_z = nominal_z + floor_dz(nz - kk + 2)*stretching
+            case (HYCOM_FLOOR_UNIFORM)
+               nominal_z = nominal_z + h_nominal*stretching
+            case default
+               nominal_z = nominal_z + dsig(nz - kk + 2)*h_ref_col*stretching
+            end select
             if (z_new(kk) < nominal_z) z_new(kk) = nominal_z
             if (z_new(kk) > col_extent) z_new(kk) = col_extent
          end do

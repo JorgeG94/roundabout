@@ -878,6 +878,29 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   `(H, η)` form the two target formulas are the same expression.
   `RHO` is validation-grade alone (weakly-stratified columns collapse);
   `HYCOM` is the production hybrid.
+- **`HYCOM`'s z\* floor is in METRES** (2026-10-02, audit finding H1; MOM6
+  HYCOM1 parity). Interface `k` is kept at least `Σ dz·(H+η)/H` deep (clamped
+  to the bed), with `dz` the z\* coordinate resolution of `&vcoord_nml
+  z_fixed_profile` — the same table `z_fixed` builds its levels from:
+  `"uniform"` = `max_depth/nz_layers` m (the default), `"list"` / `"tanh"` a
+  stretched profile (e.g. 2 m at the surface). Before, the floor was
+  `Σ dsig·(H+η)` with `dsig ≡ 1/nz` (nothing ever wrote another `dsig`): a
+  column FRACTION, i.e. a sigma floor. On the 1° Southern Ocean (WOA13 IC,
+  offline census `python_prototypes/hycom_fix/hycom_floor_census.py`) it set
+  95.4 % of all interfaces and 96 % of the interior ones (floor depth
+  200 m..bed), so `hycom` was terrain-following there and died like sigma on
+  the `rx0 = 0.99` shelf break. With the tanh floor and a WOA13 sigma-2
+  volume-quantile target list (`rho_target_profile = "list"`,
+  `rho_target_list`) the floor sets 16 % of the interior interfaces —
+  density sets the rest. With the old uniform linspace targets
+  (1033.5..1037.3) the floor still sets > 99 % of the interior: the targets,
+  not only the floor, have to fit the water masses. What it does NOT fix: a
+  shallow column's deeper interfaces now clamp onto its bed, so bed-side
+  layers collapse to the `2·H_VANISHED` inflation floor along every slope,
+  and those collapsed layers take the full PGF (no vanished-layer / closed-face
+  treatment off `z_fixed` — audit finding H2). Only an unconfigured slot
+  (`z_fixed_h_ref <= 0`, i.e. a unit test that builds the vcoord by hand) still
+  uses the column-fraction floor.
 - **Per-family status under a DISPLACED COLUMN TOP** (a rigid lid — an ice
   shelf — at `z = −z_top` instead of `z = 0`). The target builder is handed a
   column *thickness* and nothing else
