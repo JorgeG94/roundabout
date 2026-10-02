@@ -600,6 +600,7 @@ if(RDB_ENABLE_MPI)
       test_ocean_bt_cfl_mpi
       test_efp_mpi
       test_ocean_tripolar_fold_mpi
+      test_ocean_fold_exchange_mpi
       test_ocean_decomp_bitid_mpi)
   set(MPI_TEST_NPROCS_test_halo_mpi 4)
   set(MPI_TEST_NPROCS_test_halo_ocean_mpi 4)
@@ -607,6 +608,7 @@ if(RDB_ENABLE_MPI)
   set(MPI_TEST_NPROCS_test_ocean_bt_cfl_mpi 2)
   set(MPI_TEST_NPROCS_test_efp_mpi 4)
   set(MPI_TEST_NPROCS_test_ocean_tripolar_fold_mpi 2)
+  set(MPI_TEST_NPROCS_test_ocean_fold_exchange_mpi 2)
   set(MPI_TEST_NPROCS_test_ocean_decomp_bitid_mpi 2)
   # Per-test regime label (same values as the RDB_TESTS 5th field;
   # classification is by the source path of the modules each test imports).
@@ -616,6 +618,7 @@ if(RDB_ENABLE_MPI)
   set(MPI_TEST_REGIME_test_ocean_bt_cfl_mpi ocean)
   set(MPI_TEST_REGIME_test_efp_mpi core)
   set(MPI_TEST_REGIME_test_ocean_tripolar_fold_mpi ocean)
+  set(MPI_TEST_REGIME_test_ocean_fold_exchange_mpi ocean)
   set(MPI_TEST_REGIME_test_ocean_decomp_bitid_mpi ocean)
   # Writes + reads NetCDF inputs (the per-rank windowed readers).
   set(MPI_NETCDF_TESTS test_ocean_decomp_bitid_mpi)
@@ -694,6 +697,17 @@ if(RDB_ENABLE_MPI)
   set_tests_properties(
     rdb_test_ocean_tripolar_fold_mpi_1rank
     rdb_test_ocean_tripolar_fold_mpi_4rank PROPERTIES LABELS "ocean")
+  # Distributed north-fold exchange vs the serial fold kernels, bitwise.  The
+  # 2-rank leg (2x1) comes from the foreach above; add the 1-rank (px = 1: the
+  # dispatcher keeps the local kernels), 3-rank (odd px, self-mirror middle
+  # tile) and 4-rank (4x1 uneven tiles, 2x2) legs.
+  foreach(_np 1 3 4)
+    add_test(NAME rdb_test_ocean_fold_exchange_mpi_${_np}rank
+             COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${_np}
+                     $<TARGET_FILE:test_ocean_fold_exchange_mpi>)
+    set_tests_properties(rdb_test_ocean_fold_exchange_mpi_${_np}rank
+                         PROPERTIES LABELS "ocean")
+  endforeach()
   # Dycore bit-identity across decompositions: every px x py factorisation of
   # the launched rank count (2: 2x1, 1x2; 4: 4x1, 1x4, 2x2) vs the serial run,
   # every restart-registry field, owned cells bitwise.  The 2-rank leg comes
