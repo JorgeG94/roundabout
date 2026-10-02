@@ -91,6 +91,22 @@ module rdb_ice_evp
    !!       (SIS2 has no lumped mode) — see `ice_cell_concentration_impl`
    !!       in `rdb_ice_state` (shared with the tau coupler).
    !!   D6  domain edges wall-or-periodic only; no OBC, no tripolar fold.
+   !!       Multi-rank (`ice_evp_step` with a decomposed `bc`): the ice uses
+   !!       the OCEAN's decomposition and `nghost`.  `ui`/`vi` are
+   !!       halo-exchanged (`ocean_halo_face_x/_y`, D1 seam ownership) at
+   !!       the top of EVERY subcycle and after the final CFL clip; the
+   !!       local periodic wraps run only on an axis the halo does not own
+   !!       (`ocean_halo_is_decomposed_x/_y`); `mask_t` pins a ghost band to
+   !!       land only on a PHYSICAL, non-periodic edge (`bc%has_*`), so an
+   !!       MPI seam ghost follows `wet_T`.  The stresses are NOT exchanged:
+   !!       every stress kernel runs over the full local array and is
+   !!       point-local (or 4-cell around a corner) in exchanged inputs, so
+   !!       the ghost stresses are recomputed redundantly; only the
+   !!       outermost ring (one-sided corner strain) is wrong, and with
+   !!       `nghost >= 3` no physical face reads it.  The category inputs'
+   !!       ghosts (`mis`/`mice`/`ci`) are the caller's: the engine
+   !!       exchanges the category state at the end of every thermo block
+   !!       and at cold start (`ocean_halo_exchange_ice_state`).
    !!   D7  one atmospheric stress field: the ice feels the FULL wind
    !!       stress snapshot (`tau_a_x`/`tau_a_y`); no ice-specific bulk
    !!       drag law (that part is unchanged — a future ice-specific bulk
@@ -127,14 +143,17 @@ module rdb_ice_evp
    !!       massless slab to the full Nansen free-drift speed
    !!       `sqrt(tau_a/(rho_o*Cdw))`, regenerated every substep; with the
    !!       knob on, `a_fac == 0` branches `uio_c` to exactly 0 => `ui==uo`).
-   !!       PRE-EXISTING, NOT fixed by PR 62: the EVP's `a_u` is built from
-   !!       `ci_w` (masked + periodic-wrapped); the coupler's `a_u`
-   !!       (`ice_ocean_stress_flux_impl`) is built from the raw halo
-   !!       (`ice_cell_concentration_impl`, no wrap).  They agree at
-   !!       physical faces; at the first physical face of a periodic domain
-   !!       they can differ, and the budget then closes only to that
-   !!       difference there.  Lives in the coupler's gather — a future PR's
-   !!       problem, not this one's.
+   !!       Formerly PRE-EXISTING (not fixed by PR 62): the EVP's `a_u` is
+   !!       built from `ci_w` (masked + periodic-wrapped); the coupler's
+   !!       `a_u` (`ice_ocean_stress_flux_impl`) from the raw halo
+   !!       (`ice_cell_concentration_impl`), which nothing refreshed, so at
+   !!       the first physical face of a periodic domain the two could
+   !!       differ.  CLOSED by the sea-ice MPI exchanges: the category
+   !!       state's ghosts are exchanged — on one rank, wrapped — at the end
+   !!       of every thermo block and at cold start
+   !!       (`ocean_halo_exchange_ice_state`), so both gathers see the
+   !!       owner's cells there (an answer change on periodic + `dynamics`
+   !!       configurations).
    !!   D8  tau mediation is one-step-lagged (MEKE/frazil convention); a
    !!       fresh run's first outer step drives the ocean with pure wind
    !!       — literally true as of PR 63 (previously the resume fold's
@@ -168,6 +187,9 @@ module rdb_ice_evp
    use rdb_ocean_periodic, only: ocean_periodic_wrap_centre_2d, &
                                  ocean_periodic_wrap_face_x_2d, &
                                  ocean_periodic_wrap_face_y_2d
+   use rdb_ocean_boundary_types, only: ocean_bc_state_t
+   use rdb_ocean_halo, only: ocean_halo_face_x, ocean_halo_face_y, &
+                             ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y
    implicit none
    private
 
@@ -286,7 +308,7 @@ contains
    ! =====================================================================
 
    subroutine ice_evp_step(grid, metrics, f_corner, ice, ms, dt_slow, par, &
-                           periodic_x, periodic_y, dt_transport, n_trunc)
+                           bc, dt_transport, n_trunc)
       !! Gathers `mis`/`mice`/`ci` from the category state (mode-branched,
       !! mirrors PR 4b's IST->CAS dispatch), pulls the one-step-lagged
       !! ocean surface velocity, and calls `ice_evp_dynamics` on
@@ -308,7 +330,11 @@ contains
       type(multilayer_state_t), intent(in) :: ms
       real(wp), intent(in) :: dt_slow
       type(ice_evp_params_t), intent(in) :: par
-      logical, intent(in) :: periodic_x, periodic_y
+      type(ocean_bc_state_t), intent(in) :: bc
+         !! Edge policy: `periodic_x/_y` (wrap) and `has_west/_east/_south/
+         !! _north` (physical edge vs MPI seam).  A ghost band is pinned to
+         !! land only on a physical, non-periodic edge; on a decomposed axis
+         !! the halo fills it (see D6 in the module docstring).
       real(wp), intent(in), optional :: dt_transport
          !! PR 36: the dt the TRANSPORT step will actually consume
          !! (`ocean_dyn%therm_dt(dt)`), NOT this call's `dt_slow` — EVP
@@ -320,11 +346,17 @@ contains
          !! `ok` idiom — the caller (driver) logs, this module does not.
 
       integer :: nx, ny, nz
+      logical :: halo_x, halo_y
 
       if (.not. ice%is_init .or. .not. ice%dynamics) then
          if (present(n_trunc)) n_trunc = 0
          return
       end if
+
+      ! An axis split across ranks is the halo's: exchange there, and run
+      ! the local periodic wrap only on an axis it does not own.
+      halo_x = ocean_halo_is_decomposed_x()
+      halo_y = ocean_halo_is_decomposed_y()
 
       nx = grid%nx_total
       ny = grid%ny_total
@@ -342,8 +374,12 @@ contains
                             ms%u_face_x_layer(:, :, nz), ms%v_face_y_layer(:, :, nz), &
                             ice%tau_a_x, ice%tau_a_y, ice%u_ice, ice%v_ice, &
                             ice%str_d, ice%str_t, ice%str_s, ice%fxoc, ice%fyoc, &
-                            dt_slow, par, periodic_x, periodic_y, ice%evp_ws, &
-                            dt_transport, n_trunc)
+                            dt_slow, par, bc%periodic_x, bc%periodic_y, ice%evp_ws, &
+                            dt_transport, n_trunc, halo_x=halo_x, halo_y=halo_y, &
+                            land_w=bc%has_west .and. .not. bc%periodic_x, &
+                            land_e=bc%has_east .and. .not. bc%periodic_x, &
+                            land_s=bc%has_south .and. .not. bc%periodic_y, &
+                            land_n=bc%has_north .and. .not. bc%periodic_y)
    end subroutine ice_evp_step
 
    ! =====================================================================
@@ -353,7 +389,8 @@ contains
    subroutine ice_evp_dynamics(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
                                tau_ax, tau_ay, ui, vi, str_d, str_t, str_s, &
                                fxoc, fyoc, dt_slow, par, periodic_x, periodic_y, ws, &
-                               dt_transport, n_trunc)
+                               dt_transport, n_trunc, halo_x, halo_y, &
+                               land_w, land_e, land_s, land_n)
       !! One outer (slow) EVP call: `evp_sub_steps` subcycles advancing
       !! `ui`/`vi`/`str_d`/`str_t`/`str_s`, plus the subcycle-averaged
       !! ice->ocean stress `fxoc`/`fyoc`.
@@ -384,10 +421,31 @@ contains
          !! PR 36: dt TRANSPORT will use for the CFL bound. Absent => `dt_slow`.
       integer, intent(out), optional :: n_trunc
          !! PR 36: count of ice-bearing faces the final clip touched.
+      logical, intent(in), optional :: halo_x, halo_y
+         !! The x / y axis is split across ranks: exchange `ui`/`vi`
+         !! through the ocean halo and skip the local periodic wrap on that
+         !! axis.  Absent => `.false.` (single rank, the unit-test seam).
+      logical, intent(in), optional :: land_w, land_e, land_s, land_n
+         !! Pin that ghost band of `mask_t` to land (a physical,
+         !! non-periodic edge).  Absent => `.not. periodic_x` (W/E) /
+         !! `.not. periodic_y` (S/N): the single-rank wall-or-wrap policy.
       integer :: nx, ny
+      logical :: hx, hy, lw, le, ls, ln
 
       nx = grid%nx_total
       ny = grid%ny_total
+      hx = .false.
+      if (present(halo_x)) hx = halo_x
+      hy = .false.
+      if (present(halo_y)) hy = halo_y
+      lw = .not. periodic_x
+      if (present(land_w)) lw = land_w
+      le = .not. periodic_x
+      if (present(land_e)) le = land_e
+      ls = .not. periodic_y
+      if (present(land_s)) ls = land_s
+      ln = .not. periodic_y
+      if (present(land_n)) ln = land_n
 
       call ice_evp_dynamics_impl(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
                                  tau_ax, tau_ay, ui, vi, str_d, str_t, str_s, &
@@ -397,7 +455,7 @@ contains
                                  ws%del_sh_w, ws%mask_t_w, ws%mi_u_w, ws%mask_u_w, &
                                  ws%u_tmp_w, ws%mi_v_w, ws%mask_v_w, ws%a_u_w, ws%a_v_w, &
                                  ws%sh_ds_w, ws%mi_ratio_a_q_w, ws%q_w, ws%mask_q_w, &
-                                 dt_transport, n_trunc)
+                                 hx, hy, lw, le, ls, ln, dt_transport, n_trunc)
    end subroutine ice_evp_dynamics
 
    subroutine ice_evp_dynamics_impl(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
@@ -407,6 +465,7 @@ contains
                                     sh_dd_w, sh_dt_w, zeta_w, del_sh_w, mask_t_w, &
                                     mi_u_w, mask_u_w, u_tmp_w, mi_v_w, mask_v_w, a_u_w, a_v_w, &
                                     sh_ds_w, mi_ratio_a_q_w, q_w, mask_q_w, &
+                                    halo_x, halo_y, land_w, land_e, land_s, land_n, &
                                     dt_transport, n_trunc)
       !! Flat-impl core of `ice_evp_dynamics`: the EVP subcycle body with
       !! the persistent scratch passed as EXPLICIT-SHAPE dummies (memory:
@@ -450,6 +509,10 @@ contains
          !! (uninitialised device memory otherwise — never read off-gate).
       real(wp), intent(inout) :: sh_ds_w(nx + 1, ny + 1), mi_ratio_a_q_w(nx + 1, ny + 1)
       real(wp), intent(inout) :: q_w(nx + 1, ny + 1), mask_q_w(nx + 1, ny + 1)
+      logical, intent(in) :: halo_x, halo_y
+         !! Axis split across ranks (see `ice_evp_dynamics`).
+      logical, intent(in) :: land_w, land_e, land_s, land_n
+         !! Ghost band pinned to land (see `ice_evp_dynamics`).
       real(wp), intent(in), optional :: dt_transport
          !! PR 36: the dt TRANSPORT will actually consume
          !! (`ocean_dyn%therm_dt(dt)`), NOT this call's `dt_slow` — EVP
@@ -466,11 +529,17 @@ contains
       real(wp) :: cdrho, i_cdrhodt, p0_rho, m_neglect, m_neglect2, m_neglect4
       real(wp) :: dt_tr, dt_cum
       logical :: a_face_on, do_trunc_its, do_trunc_fin
+      logical :: wrap_x, wrap_y
       integer :: n_out
 
       nx_phys = grid%nx_phys
       ny_phys = grid%ny_phys
       nghost = grid%nghost
+      ! Local periodic wrap only on an axis the halo does not own (F3):
+      ! on a split axis the wrap would copy THIS tile's own interior into
+      ! a ghost band the neighbour rank owns.
+      wrap_x = periodic_x .and. .not. halo_x
+      wrap_y = periodic_y .and. .not. halo_y
 
       ! ---- Scalar precompute (hoisted before the substep loop) ----
       a_face_on = par%a_face_stress
@@ -506,16 +575,17 @@ contains
 
       ! ---- Effective masks (SIS2 mask2dT/Cu/Cv/Bu), built once ----
       call evp_build_masks_impl(metrics%wet_T, mask_t_w, mask_u_w, mask_v_w, mask_q_w, &
-                                nx_phys, ny_phys, nghost, periodic_x, periodic_y, nx, ny)
+                                nx_phys, ny_phys, nghost, wrap_x, wrap_y, &
+                                land_w, land_e, land_s, land_n, nx, ny)
 
       ! ---- Category fields into the workspace, ghost-wrapped/zeroed ----
       call evp_fill_cell_fields_impl(mask_t_w, mis, mice, ci, mis_w, mice_w, ci_w, nx, ny)
       call ocean_periodic_wrap_centre_2d(mis_w, nx, ny, nx_phys, ny_phys, nghost, &
-                                         periodic_x, periodic_y)
+                                         wrap_x, wrap_y)
       call ocean_periodic_wrap_centre_2d(mice_w, nx, ny, nx_phys, ny_phys, nghost, &
-                                         periodic_x, periodic_y)
+                                         wrap_x, wrap_y)
       call ocean_periodic_wrap_centre_2d(ci_w, nx, ny, nx_phys, ny_phys, nghost, &
-                                         periodic_x, periodic_y)
+                                         wrap_x, wrap_y)
 
       ! ---- Zero ice velocities with no mass (SIS2 :899-907) ----
       call evp_zero_massless_velocity_impl(mask_u_w, mask_v_w, mis_w, ui, vi, nx, ny)
@@ -543,11 +613,11 @@ contains
       call ice_limit_stresses(metrics%areaT, mask_t_w, pres_mice_w, mice_w, &
                               str_d, str_t, str_s, par%ec, nx, ny)
       call ocean_periodic_wrap_centre_2d(str_d, nx, ny, nx_phys, ny_phys, nghost, &
-                                         periodic_x, periodic_y)
+                                         wrap_x, wrap_y)
       call ocean_periodic_wrap_centre_2d(str_t, nx, ny, nx_phys, ny_phys, nghost, &
-                                         periodic_x, periodic_y)
+                                         wrap_x, wrap_y)
       call evp_wrap_corner_impl(str_s, nx + 1, ny + 1, nx_phys, ny_phys, nghost, &
-                                periodic_x, periodic_y)
+                                wrap_x, wrap_y)
 
       ! ---- Zero the subcycle-averaged ice->ocean stress (F1: an explicit
       ! device kernel, NOT a bare host whole-array assignment — fxoc/fyoc
@@ -565,10 +635,17 @@ contains
          ! nothing and breaks no device residency.
          dt_cum = dt_cum + dt
 
+         ! X2: seam ghosts of the ice velocity from the neighbour ranks
+         ! (two-pass, so corner ghosts are valid too), then the local wrap
+         ! on any periodic axis the halo does not own.
+         if (halo_x .or. halo_y) then
+            call ocean_halo_face_x(ui)
+            call ocean_halo_face_y(vi)
+         end if
          call ocean_periodic_wrap_face_x_2d(ui, nx + 1, ny, nx_phys, ny_phys, nghost, &
-                                            periodic_x, periodic_y)
+                                            wrap_x, wrap_y)
          call ocean_periodic_wrap_face_y_2d(vi, nx, ny + 1, nx_phys, ny_phys, nghost, &
-                                            periodic_x, periodic_y)
+                                            wrap_x, wrap_y)
 
          call evp_sh_ds_impl(metrics%dx_dyBu, metrics%dy_dxBu, metrics%idxCu, metrics%idyCv, &
                              mask_q_w, ui, vi, sh_ds_w, nx, ny)
@@ -627,11 +704,19 @@ contains
       if (do_trunc_fin) then
          call evp_truncate_final_impl(metrics%areaT, metrics%dy_cu, metrics%dx_cv, &
                                       mi_u_w, mi_v_w, ui, vi, par%cfl_trunc, dt_tr, &
-                                      m_neglect, nghost, nx_phys, ny_phys, nx, ny, n_out)
+                                      m_neglect, nghost, nx_phys, ny_phys, nx, ny, n_out, &
+                                      count_w=land_w, count_s=land_s)
+         ! X3: the clip walked physical faces only; refresh the seam
+         ! ghosts (transport reads them as donor velocities) before the
+         ! local wrap, same order as X2.
+         if (halo_x .or. halo_y) then
+            call ocean_halo_face_x(ui)
+            call ocean_halo_face_y(vi)
+         end if
          call ocean_periodic_wrap_face_x_2d(ui, nx + 1, ny, nx_phys, ny_phys, nghost, &
-                                            periodic_x, periodic_y)
+                                            wrap_x, wrap_y)
          call ocean_periodic_wrap_face_y_2d(vi, nx, ny + 1, nx_phys, ny_phys, nghost, &
-                                            periodic_x, periodic_y)
+                                            wrap_x, wrap_y)
       end if
       if (present(n_trunc)) n_trunc = n_out
 
@@ -699,18 +784,24 @@ contains
    ! =====================================================================
 
    pure subroutine evp_build_masks_impl(wet_t, mask_t, mask_u, mask_v, mask_q, &
-                                        nx_phys, ny_phys, nghost, periodic_x, periodic_y, &
-                                        nx, ny)
-      !! `mask_t`: `wet_T` inside the physical domain; ghosts = periodic
-      !! wrap or 0 (SIS2 `mask2dT` semantics — pins non-periodic ghosts
-      !! to land, matching SIS2's own domain-edge convention even when a
-      !! driver run's `wet_T` ghost happens to read 1).
+                                        nx_phys, ny_phys, nghost, wrap_x, wrap_y, &
+                                        land_w, land_e, land_s, land_n, nx, ny)
+      !! `mask_t`: `wet_T` inside the physical domain AND in every ghost
+      !! band that is not pinned; a ghost band on a physical, non-periodic
+      !! edge (`land_*`) is 0 (SIS2 `mask2dT` semantics — pins a wall
+      !! edge's ghosts to land, matching SIS2's own domain-edge convention
+      !! even when a driver run's `wet_T` ghost happens to read 1).  An MPI
+      !! seam ghost follows `wet_T`, which the ocean setup exchanged; the
+      !! local periodic wrap (`wrap_x/_y`, only on an axis the halo does
+      !! not own) then overwrites a single-rank periodic band, so on one
+      !! rank the result is the same wrap-or-0 mask as before.
       !! `mask_u(i,j) = mask_t(i-1,j)*mask_t(i,j)`, `mask_v` ditto in y,
       !! `mask_q` = product of the 4 surrounding `mask_t` (SIS2
       !! `mask2dBu`).
       integer, intent(in) :: nx_phys, ny_phys, nghost, nx, ny
       real(wp), intent(in) :: wet_t(nx, ny)
-      logical, intent(in) :: periodic_x, periodic_y
+      logical, intent(in) :: wrap_x, wrap_y
+      logical, intent(in) :: land_w, land_e, land_s, land_n
       real(wp), intent(out) :: mask_t(nx, ny)
       real(wp), intent(out) :: mask_u(nx + 1, ny)
       real(wp), intent(out) :: mask_v(nx, ny + 1)
@@ -724,14 +815,15 @@ contains
       j_hi = nghost + ny_phys
 
       do concurrent(j=1:ny, i=1:nx)
-         if (i >= i_lo .and. i <= i_hi .and. j >= j_lo .and. j <= j_hi) then
-            mask_t(i, j) = merge(1.0_wp, 0.0_wp, wet_t(i, j) > 0.5_wp)
-         else
+         if ((i < i_lo .and. land_w) .or. (i > i_hi .and. land_e) .or. &
+             (j < j_lo .and. land_s) .or. (j > j_hi .and. land_n)) then
             mask_t(i, j) = 0.0_wp
+         else
+            mask_t(i, j) = merge(1.0_wp, 0.0_wp, wet_t(i, j) > 0.5_wp)
          end if
       end do
       call ocean_periodic_wrap_centre_2d(mask_t, nx, ny, nx_phys, ny_phys, nghost, &
-                                         periodic_x, periodic_y)
+                                         wrap_x, wrap_y)
 
       do concurrent(j=1:ny, i=1:nx + 1)
          if (i == 1 .or. i == nx + 1) then
@@ -950,7 +1042,7 @@ contains
 
    pure subroutine evp_truncate_final_impl(areaT, dy_cu, dx_cv, mi_u, mi_v, ui, vi, &
                                            cfl_trunc, dt_tr, m_neglect, nghost, nx_phys, &
-                                           ny_phys, nx, ny, n_trunc)
+                                           ny_phys, nx, ny, n_trunc, count_w, count_s)
       !! PR 36: the FINAL CFL clip (SIS2 `:1443-1500`) -- `TRUNC_BACKOFF`
       !! (0.95) back-off instead of the exact bound, PLUS a count of the
       !! ice-bearing faces it touched (`mi > m_neglect`, SIS2 `:1466,1469`
@@ -972,11 +1064,28 @@ contains
       real(wp), intent(inout) :: ui(nx + 1, ny), vi(nx, ny + 1)
       real(wp), intent(in) :: cfl_trunc, dt_tr, m_neglect
       integer, intent(out) :: n_trunc
-      integer :: i, j, i_lo, i_hi, j_lo, j_hi
+      logical, intent(in), optional :: count_w, count_s
+         !! Count the WEST (`i = nghost+1`) / SOUTH (`j = nghost+1`) edge
+         !! face.  That face is clipped either way; it is COUNTED only when
+         !! this tile owns it — a physical, non-periodic edge.  Across an
+         !! MPI seam the west/south neighbour owns it (D1), and across a
+         !! periodic seam it is the same face as the east/north edge face,
+         !! so counting it there would count one face twice in the
+         !! rank-summed total.  Absent => `.true.` (count every face).
+      integer :: i, j, i_lo, i_hi, j_lo, j_hi, i_cnt, j_cnt
       real(wp) :: u_hi, u_lo, v_hi, v_lo, loc_scale
       integer :: n_acc
 
       n_acc = 0
+      ! First counted edge face: nghost+1 when this tile owns it, else +1.
+      i_cnt = nghost + 1
+      if (present(count_w)) then
+         if (.not. count_w) i_cnt = nghost + 2
+      end if
+      j_cnt = nghost + 1
+      if (present(count_s)) then
+         if (.not. count_s) j_cnt = nghost + 2
+      end if
 
       i_lo = nghost + 1
       i_hi = nghost + nx_phys + 1
@@ -991,7 +1100,7 @@ contains
             u_lo = -TRUNC_BACKOFF*loc_scale*areaT(i, j)
          end if
          if (ui(i, j) > u_hi .or. ui(i, j) < u_lo) then
-            if (mi_u(i, j) > m_neglect) n_acc = n_acc + 1
+            if (mi_u(i, j) > m_neglect .and. i >= i_cnt) n_acc = n_acc + 1
             ui(i, j) = merge(u_hi, u_lo, ui(i, j) > u_hi)
          end if
       end do
@@ -1009,7 +1118,7 @@ contains
             v_lo = -TRUNC_BACKOFF*loc_scale*areaT(i, j)
          end if
          if (vi(i, j) > v_hi .or. vi(i, j) < v_lo) then
-            if (mi_v(i, j) > m_neglect) n_acc = n_acc + 1
+            if (mi_v(i, j) > m_neglect .and. j >= j_cnt) n_acc = n_acc + 1
             vi(i, j) = merge(v_hi, v_lo, vi(i, j) > v_hi)
          end if
       end do

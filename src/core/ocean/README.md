@@ -114,7 +114,7 @@ into a god-object:
    dependency rather than calling MPI directly.  Halo exchanges
    and inter-rank reductions are dispatched via `src/comm/`, which
    has ONE implementation -- no stub twin -- and runs single-rank by
-   taking its local paths (`src/comm/README.md`).  Phase 1 will grow
+   taking its local paths (see the `!!` header of `src/comm/rdb_ocean_halo.F90`).  Phase 1 will grow
    C-grid halo entry points there (`halo_exchange_face_x_*`,
    `halo_exchange_face_y_*`, `halo_exchange_corner_*` for PV at
    corners); the kernel-side dispatch sites stay identical
