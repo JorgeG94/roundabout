@@ -261,7 +261,7 @@ contains
    ! ================================================================
 
    subroutine engine_setup(engine, cfg, ierr, compute_rank, compute_size, mpi_rank, &
-                           restart_file, t_restart, step_restart)
+                           restart_file, t_restart, step_restart, validate_only)
       !! Host-side setup: decomposition -> grid -> god state -> IC seed
       !! -> restart (optional) -> the 21 `configure_ocean_*`-family
       !! stages -> ghost wraps -> halo init -> land mask -> wave
@@ -293,8 +293,15 @@ contains
          !! Restored simulation time (0 on a cold start).
       integer, intent(out), optional :: step_restart
          !! Restored outer-step count (0 on a cold start).
+      logical, intent(in), optional :: validate_only
+         !! `rdb --validate-only`: run every configure stage (and so every
+         !! configure-time refusal) but create no output — the diag
+         !! selection is still parsed and checked, the per-rank NetCDF
+         !! stream is not opened and its directory is not created.
+         !! Default `.false.`.
 
       integer :: rank, csize, mrank
+      logical :: no_output
       character(len=512) :: restart_filename
       real(wp) :: t_restart_local
       integer :: step_restart_local
@@ -309,6 +316,8 @@ contains
       if (present(compute_size)) csize = compute_size
       mrank = rank
       if (present(mpi_rank)) mrank = mpi_rank
+      no_output = .false.
+      if (present(validate_only)) no_output = validate_only
 
       if (present(ierr)) ierr = OCEAN_STATUS_OK
       t_restart_local = 0.0_wp
@@ -585,8 +594,11 @@ contains
       ! Diag-manager: optional z-levels, default variable set, per-rank
       ! NetCDF stream. NetCDF-only (moved from driver_run_ocean's private
       ! helper of the same name).
-      engine%diag_enabled = cfg%ocean%diag%enabled
-      call engine_configure_diag(cfg, engine%state, mrank, engine%decomp, ierr=ierr)
+      ! Under validate_only the stream is never opened, so teardown must
+      ! not try to close it.
+      engine%diag_enabled = cfg%ocean%diag%enabled .and. .not. no_output
+      call engine_configure_diag(cfg, engine%state, mrank, engine%decomp, ierr=ierr, &
+                                 open_stream_file=.not. no_output)
       if (setup_failed(ierr)) return
 
       ! Surface heat/salt/p_surf/sw-penetration/restore seeding — 2D
@@ -1059,9 +1071,12 @@ contains
       if (present(ierr)) bad = (ierr /= OCEAN_STATUS_OK)
    end function setup_failed
 
-   subroutine engine_configure_diag(cfg, state, mpi_rank, decomp, ierr)
+   subroutine engine_configure_diag(cfg, state, mpi_rank, decomp, ierr, open_stream_file)
       !! Register the default diag-manager variable set and open the
       !! per-rank NetCDF stream. No-op when diagnostics are disabled.
+      !! `open_stream_file = .false.` (the `--validate-only` path) runs the
+      !! level/selection checks but creates neither the output directory
+      !! nor the stream.
       !! Moved verbatim from `driver_run_ocean`'s private
       !! `configure_ocean_diag` helper (P2.4) so the API/bench setup
       !! paths can reach it too; F5 residual — now takes optional
@@ -1073,6 +1088,8 @@ contains
       integer, intent(in) :: mpi_rank
       type(decomp_t), intent(in) :: decomp
       integer, intent(out), optional :: ierr
+      logical, intent(in), optional :: open_stream_file
+         !! Default `.true.`.
 
       if (present(ierr)) ierr = OCEAN_STATUS_OK
       if (.not. cfg%ocean%diag%enabled) return
@@ -1117,6 +1134,9 @@ contains
          call apply_diag_selection(state, trim(cfg%ocean%diag%diags), &
                                    dt_out=cfg%ocean%diag%dt_out, &
                                    default_coord=diag_vgrid_from_name(cfg%ocean%diag%vgrid))
+         if (present(open_stream_file)) then
+            if (.not. open_stream_file) return
+         end if
 
          ! P7 F1: a fresh checkout's default `output_dir = "./output"`
          ! (rdb_config.F90:2316) does not exist until something creates
