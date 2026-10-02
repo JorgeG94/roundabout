@@ -79,6 +79,7 @@ set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/boundary/rdb_ocean_sponge.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/boundary/rdb_ocean_periodic.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/boundary/rdb_ocean_fold.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/boundary/rdb_ocean_fold_plan.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/boundary/rdb_ocean_fold_apply.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/rdb_ocean_halo_state.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/rdb_ocean_ghost_poison.F90
