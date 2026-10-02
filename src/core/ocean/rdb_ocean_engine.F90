@@ -415,22 +415,14 @@ contains
             return
          end if
          ! Sea ice runs on the ocean's decomposition: the category state,
-         ! the EVP ice velocity and the blended surface stress are
-         ! halo-exchanged (`engine_step_ice`).  Two pieces are not yet:
-         ! the tripolar fold of the ice fields, and the category
-         ! transport's per-substep exchange.
+         ! the EVP ice velocity, the transport's CAS state and the blended
+         ! surface stress are halo-exchanged (`engine_step_ice`).  The ice
+         ! fields are not yet folded across a tripolar north seam.
          if (cfg%ocean%ice%enable .and. &
              ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD) then
             call fail("&ocean_ice_nml enable = .true. with north = 'tripolar_fold' is "// &
                       "single-rank ("//to_string(csize)//" ranks requested): the ice "// &
                       "fields are not folded across the north seam.  Run on 1 rank.", &
-                      ierr, OCEAN_STATUS_ERR_SETUP)
-            return
-         end if
-         if (cfg%ocean%ice%enable .and. cfg%ocean%ice%transport) then
-            call fail("&ocean_ice_nml transport = .true. is single-rank ("// &
-                      to_string(csize)//" ranks requested): the category transport "// &
-                      "carries no per-substep halo exchange yet.  Run on 1 rank.", &
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
@@ -1587,7 +1579,7 @@ contains
                                     engine%state%multilayer, &
                                     engine%state%ice, engine%state%dyn%therm_dt(dt), &
                                     cfg%ocean%ice%adv_substeps, cfg%ocean%ice%roll_factor, &
-                                    ice_ok)
+                                    ice_ok, bc=engine%state%bc)
             call profiler_stop("ice_transport")
             if (.not. ice_ok) then
                call logger%error("ice_transport_step: conservation/positivity "// &

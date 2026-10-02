@@ -58,8 +58,8 @@
 !!   * sea_ice — sea ice on the ocean's decomposition: Winton thermo +
 !!     ITD, EVP dynamics (CFL clip, `project_ci`) and the ice->ocean
 !!     stress blend in a cooled periodic channel, `dt_therm_ratio = 2`;
-!!     the category transport is off (single-rank).  Every ice registry
-!!     field is compared like the ocean's.  `run_one` calls
+!!     `sea_ice_transport` is the same with the category transport on.
+!!     Every ice registry field is compared like the ocean's.  `run_one` calls
 !!     `engine_step_ice` between the step and the finalize, as the driver
 !!     does (a no-op for every other case).
 !! All are stratified with a boundary-layer scheme on, so the tiles exchange real
@@ -132,13 +132,14 @@ program test_ocean_decomp_bitid_mpi
    integer :: rank, nprocs, n_fail, total_fail, ic
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(11) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(12) = [character(len=24) :: &
                                                 "island_basin", "periodic_channel_zstar", &
                                                 "periodic_sponge", &
                                                 "open_obc", "spherical", "obc_radiation_sponge", &
                                                 "closures", "file_readers", &
                                                 "file_readers_zstar_full", &
-                                                "file_readers_zstar", "sea_ice"]
+                                                "file_readers_zstar", "sea_ice", &
+                                                "sea_ice_transport"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -339,13 +340,15 @@ contains
                "&ocean_foxkemper_nml enable = .true., ce = 0.08 /"//NL// &
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'wall' /"//NL
-      case ("sea_ice")
+      case ("sea_ice", "sea_ice_transport")
          ! Sea ice on the ocean's decomposition (thermo + EVP dynamics +
          ! the ice->ocean stress blend; category transport off): a cold,
          ! cooled re-entrant channel over a seamount under an oblique wind,
          ! partial ice cover, `dt_therm_ratio = 2` so the EVP (every step)
          ! and thermo (every other step) cadences both run, and the CFL
-         ! clip + `project_ci` on.  `cfl_trunc = 0.01` is deliberately
+         ! clip + `project_ci` on (`sea_ice_transport`: the same with the
+         ! category transport on, 2 advective substeps, across the periodic
+         ! seam and every rank seam).  `cfl_trunc = 0.01` is deliberately
          ! tight (bound ~0.1 m/s against a ~0.17 m/s drift) so the final
          ! clip really fires: the post-clip exchange and the rank-summed
          ! truncation count are exercised on live values, not zeros.  The periodic edge
@@ -373,7 +376,9 @@ contains
                "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL// &
                "&ocean_ice_nml enable = .true., ncat = 5, nk_ice = 2, air_temp = -20.0, "// &
                "restore_lambda = 20.0, sw_down = 0.0, dynamics = .true., "// &
-               "evp_sub_steps = 30, cfl_trunc = 0.01, project_ci = .true. /"//NL// &
+               "evp_sub_steps = 30, cfl_trunc = 0.01, project_ci = .true., "// &
+               "transport = "//merge(".true. ", ".false.", label == "sea_ice_transport")// &
+               ", adv_substeps = 2 /"//NL// &
                "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.7 /"//NL// &
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'wall' /"//NL
@@ -843,11 +848,15 @@ contains
       !! the engine auto-factors and which `validate_config`'s px*py fences
       !! cannot see), so the engine-side gate is the one exercised.
       character(len=*), parameter :: NL = new_line("a")
-      character(len=64), parameter :: KNOBS(4) = [character(len=64) :: &
-                                                  "&ocean_wetdry_nml enable = .true. /", &
-                                                  "&ocean_ice_nml enable = .true., ncat = 5, transport = .true. /", &
-                                                  "&ocean_cavity_dyn_nml enable = .true. /", &
-                                                  "&ocean_bc_nml east = 'chapman' /"]
+      character(len=*), parameter :: ICE_FOLD = "&ocean_ice_nml enable = .true. /"//NL// &
+                                     "&ocean_grid_nml grid_config = 'tripolar' /"//NL// &
+                                     "&ocean_bc_nml west = 'periodic', east = 'periodic', "// &
+                                     "north = 'tripolar_fold' /"
+      character(len=160), parameter :: KNOBS(4) = [character(len=160) :: &
+                                                   "&ocean_wetdry_nml enable = .true. /", &
+                                                   ICE_FOLD, &
+                                                   "&ocean_cavity_dyn_nml enable = .true. /", &
+                                                   "&ocean_bc_nml east = 'chapman' /"]
       type(ocean_engine_t) :: engine
       type(config_t) :: cfg
       character(len=:), allocatable :: nml

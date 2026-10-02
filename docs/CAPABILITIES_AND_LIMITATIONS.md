@@ -261,7 +261,7 @@ The full operator-by-operator surface, with knobs and limits, is in the [Ocean p
 every prognostic field is bit-identical to the single-rank run on every
 supported decomposition — not a global integral that agrees to round-off.
 The gate is `tests/mpi/test_ocean_decomp_bitid_mpi` (ctest at 1, 2 and 4
-ranks: every `px x py` factorisation — 2x1, 1x2, 4x1, 2x2, 1x4 — of nine
+ranks: every `px x py` factorisation — 2x1, 1x2, 4x1, 2x2, 1x4 — of ten
 configurations under both `pred_corr` and `ssp_rk2`, 48 steps, every field
 of the restart registry plus the barotropic `eta`, compared bitwise over
 the owned cells). The configurations: a closed basin with an interior
@@ -273,7 +273,8 @@ basin, the spherical sector with the closure set (EPBL, Fox-Kemper MLE,
 GM + MEKE, Redi, kappa-shear, tidal mixing, convective adjustment,
 geothermal heating, tracer hdiff), the file-reader case below, and sea
 ice (thermo + ITD, EVP dynamics, the ice->ocean stress blend, in a
-cooled periodic channel; every ice registry field compared). It
+cooled periodic channel, without and with the category transport; every
+ice registry field compared). It
 passes on gfortran (CPU ranks) and nvfortran (one V100 per rank).
 The tripolar north fold has its own gate,
 `tests/mpi/test_ocean_tripolar_fold_mpi` (north-south splits).
@@ -307,7 +308,6 @@ with a message naming the knob; keyed on the ACTUAL rank count in
 |---|---|
 | `&ocean_cavity_dyn_nml enable` (and the melt / top-drag paths that require it) | the grounding statistics are global reductions the configure does not take; `draft_config="file"` has no windowed reader |
 | `&ocean_wetdry_nml enable` | the wet-mask / outflow-limiter halo exchange is not implemented |
-| `&ocean_ice_nml transport` (category ice/snow transport) | the per-substep category halo exchange is not wired |
 | `&ocean_ice_nml enable` with a tripolar north fold | the ice fields are not folded across the north seam |
 | `&ocean_bc_nml` `'chapman'` edges | the edge-uniform eta target is a per-rank partial mean |
 | `&ocean_vmix_nml dt_tracer_advect_ratio > 1` | the windowed drain's halo is not wired |
@@ -1392,16 +1392,18 @@ that is missing is most of the ice mass budget. Limits first:
 tiles, same `nghost`), bit-identical to one rank
 (`test_ocean_decomp_bitid_mpi`, case `sea_ice`): the category state is
 halo-exchanged at the end of every thermo block and at cold start, the
-EVP ice velocity at the top of every subcycle and after the final CFL
-clip, and the blended ice->ocean stress through the ocean's own
-surface-stress seam refresh (`rdb_ice_evp` D6,
-`ocean_halo_exchange_ice_state`). On ONE rank the same calls close a
-periodic seam, so a periodic + `dynamics` run no longer reads stale
+EVP ice velocity at the top of every subcycle and once after the loop,
+the transport's cell-averaged masses and riding tracers at the top of
+every advective substep (with the zero-velocity early exit and the
+positivity / compress abort flags made rank-uniform), and the blended
+ice->ocean stress through the ocean's own surface-stress seam refresh
+(`rdb_ice_evp` D6, `rdb_ice_transport`, `ocean_halo_exchange_ice_*`). On
+ONE rank the same calls close a periodic seam, so `transport` now runs
+with periodic edges and a periodic + `dynamics` run no longer reads stale
 category ghosts there (an answer change against older builds on such
-configurations). Still refused: `transport` on more than one rank (the
-per-substep category exchange is not wired) and with **any** periodic
-edge; the ice with `north="tripolar_fold"` on more than one rank (the ice
-fields are not folded), and `dynamics` with a tripolar fold at all;
+configurations). Still refused: the ice with `north="tripolar_fold"` on
+more than one rank (the ice fields are not folded), and `dynamics` with a
+tripolar fold at all;
 `dynamics` with any OBC/tidal/sponge/clamped/Chapman edge — there is no
 open-boundary support for ice at all.
 

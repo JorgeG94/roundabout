@@ -6863,27 +6863,10 @@ contains
                               "(the transport call fires only on the thermo cadence)")
             has_error = .true.
          end if
-         ! v1 envelope: closed/land boundaries only.  Ice ghost cells are
-         ! never wrapped, so a periodic ocean edge would silently transport
-         ! ice into/out of an unmirrored ghost band.
-         if (ocean_bc_type_from_string(cfg%ocean%bc%west) == OBC_PERIODIC .or. &
-             ocean_bc_type_from_string(cfg%ocean%bc%east) == OBC_PERIODIC .or. &
-             ocean_bc_type_from_string(cfg%ocean%bc%south) == OBC_PERIODIC .or. &
-             ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_PERIODIC) then
-            call logger%error("&ocean_ice_nml transport=.true. is incompatible with "// &
-                              "any PERIODIC &ocean_bc_nml edge (v1 envelope: closed/"// &
-                              "land boundaries only — ice ghost cells are never wrapped)")
-            has_error = .true.
-         end if
-         ! Single-rank only in v1 (mirrors the wetdry / semi_implicit
-         ! precedent above): the category face-flux workspace carries no
-         ! cross-rank halo exchange yet.
-         if (cfg%px*cfg%py > 1) then
-            call logger%error("&ocean_ice_nml transport=.true. is single-rank in v1 "// &
-                              "(px*py = 1); the per-category face-flux halo exchange "// &
-                              "is deferred to the C-grid MPI work")
-            has_error = .true.
-         end if
+         ! Periodic edges and more than one rank are both fine: the CAS
+         ! masses and riding tracers are halo-exchanged (or, on one rank,
+         ! wrapped) at the top of every advective substep, and a seam face
+         ! is never zeroed as a wall (`rdb_ice_transport`).
          if (cfg%ocean%ice%adv_substeps < 1) then
             call logger%error("&ocean_ice_nml adv_substeps must be >= 1")
             has_error = .true.
