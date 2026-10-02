@@ -47,7 +47,12 @@
 !!   * file_readers — the per-rank windowed readers (a periodic 360-degree
 !!     MOM6 supergrid, a C-order bathymetry file with land, a z-level T/S
 !!     IC), all written by rank 0 first, with the global-1-degree physics
-!!     set (z_fixed + closed faces, fv_mom6, energy Coriolis, Wright).
+!!     set (z_fixed + closed faces, fv_mom6, energy Coriolis, Wright),
+!!     plus Redi at a NON-zero `khtr` — its open-window pairing reads the
+!!     neighbour column across every seam face, so a stale ghost or a
+!!     one-sided window shows here (the `closures` case enables Redi at
+!!     the default `khtr = 0`, which builds the coefficients but applies
+!!     no flux).
 !! All are stratified with a boundary-layer scheme on, so the tiles exchange real
 !! flow and real tracer structure.  26 x 18 cells, nghost = 3: every
 !! factorisation above is uneven somewhere.
@@ -294,7 +299,8 @@ contains
          ! The three per-rank windowed readers (supergrid, bathymetry,
          ! z-level T/S IC) on files the test writes, with the global-1-degree
          ! physics set: z_fixed + closed partial-step faces, fv_mom6 PGF,
-         ! energy Coriolis, Wright EOS, periodic in x.
+         ! energy Coriolis, Wright EOS, periodic in x — plus Redi with a
+         ! real diffusivity on the closed-face open-window path.
          nml = common// &
                "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3 /"//NL// &
                "&ocean_grid_nml grid_config = 'supergrid', supergrid_file = '"//SG_FILE// &
@@ -309,6 +315,7 @@ contains
                "&ocean_coriolis_nml form = 'sadourny_energy' /"//NL// &
                "&ocean_eos_nml eos = 'wright' /"//NL// &
                "&ocean_bdrag_nml form = 'quadratic', cd = 3.0e-3, hbbl = 10.0, bg_vel = 0.1 /"//NL// &
+               "&ocean_redi_nml enable = .true., khtr = 600.0 /"//NL// &
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'wall' /"//NL
       case default
