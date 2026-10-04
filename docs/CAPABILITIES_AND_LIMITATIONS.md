@@ -898,7 +898,20 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   shallow column's deeper interfaces now clamp onto its bed, so bed-side
   layers collapse to the `2·H_VANISHED` inflation floor along every slope,
   and those collapsed layers take the full PGF (no vanished-layer / closed-face
-  treatment off `z_fixed` — audit finding H2). Only an unconfigured slot
+  treatment off `z_fixed` — audit finding H2). **So with the metres floor,
+  collapsed bed layers form along every step on `hycom`, and until the
+  vanished-layer PGF treatment (H2) lands, `hycom` on stepped topography
+  hits the open-staircase PGF defect** — the same one `z_fixed` without
+  `zfixed_closed_faces` has. Measured: `vcm_rx0_040_hycom` (tier 1, V100)
+  stays XFAIL but now aborts at outer step 23 on the remap guard with
+  `h = −15.9 m` (it aborted at step 24 with `−6.8e-5 m` under the old sigma
+  floor). The negative layer is in the SOURCE thickness the dynamics hand the
+  regrid, not in the target: at the 450 m | 1050 m step a 77 m layer faces a
+  collapsed `3e-4 m` one, the PGF there grows from `4e-14` to `880 m/s` over
+  steps 1-19, and continuity drives the layer negative. The floor sweep itself
+  never produces a sub-floor or non-conserving column (gate
+  `test_ocean_vcoord_hycom :: hycom_floor_stress_sweep`, 25 344 columns).
+  Only an unconfigured slot
   (`z_fixed_h_ref <= 0`, i.e. a unit test that builds the vcoord by hand) still
   uses the column-fraction floor.
 - **Per-family status under a DISPLACED COLUMN TOP** (a rigid lid — an ice
