@@ -157,6 +157,7 @@ program rdb_tests
    use test_ocean_vcoord_zfixed_cavity, only: ocean_vcoord_zfixed_cavity_collect => &
                                               collect_ocean_vcoord_zfixed_cavity_tests
    use test_ocean_ktop, only: ocean_ktop_collect => collect_ocean_ktop_tests
+   use test_ocean_zfixed_k_bot, only: ocean_zfixed_k_bot_collect => collect_ocean_zfixed_k_bot_tests
    use test_ocean_ktop_consumers, only: ocean_ktop_consumers_collect => &
                                         collect_ocean_ktop_consumers_tests
    use test_ocean_zfixed_closed_faces, only: ocean_zfixed_closed_faces_collect => &
@@ -347,6 +348,7 @@ program rdb_tests
                 new_testsuite("ocean_vcoord_hygiene", ocean_vcoord_hygiene_collect), &
                 new_testsuite("ocean_vcoord_zfixed_cavity", ocean_vcoord_zfixed_cavity_collect), &
                 new_testsuite("ocean_ktop", ocean_ktop_collect), &
+                new_testsuite("ocean_zfixed_k_bot", ocean_zfixed_k_bot_collect), &
                 new_testsuite("ocean_ktop_consumers", ocean_ktop_consumers_collect), &
                 new_testsuite("ocean_zfixed_closed_faces", ocean_zfixed_closed_faces_collect), &
                 new_testsuite("ocean_zfixed_bt_seiche", ocean_zfixed_bt_seiche_collect), &
