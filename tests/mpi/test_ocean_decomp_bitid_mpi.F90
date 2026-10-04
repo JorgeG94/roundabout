@@ -267,7 +267,7 @@ contains
                   "&ocean_slopes_nml enable = .true. /"//NL// &
                   "&ocean_gm_nml enable = .true. /"//NL// &
                   "&ocean_meke_nml enable = .true. /"//NL// &
-                  "&ocean_redi_nml enable = .true. /"//NL// &
+                  "&ocean_redi_nml enable = .true., khtr = 100.0 /"//NL// &
                   "&ocean_kappa_shear_nml enable = .true. /"//NL// &
                   "&ocean_tidal_mixing_nml enable = .true., e_uniform = 1.0e-3 /"//NL// &
                   "&ocean_conv_nml enable = .true. /"//NL// &

@@ -20,6 +20,7 @@ module rdb_ocean_redi
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_eos, only: eos_t, eos_density_specvol_derivs
    use rdb_ocean_boundary_types, only: ocean_bc_state_t, OBC_WALL, ocean_bc_outer_face_tag
+   use rdb_tracer, only: TRACER_BUDGET_HEAT, TRACER_BUDGET_SALT
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_mem_report, only: arr_bytes
    implicit none
@@ -924,7 +925,15 @@ contains
       type(ocean_bc_state_t), intent(in), optional :: bc
          !! Per-edge OBC tags.  No along-isopycnal flux crosses a
          !! no-normal-flow (`OBC_WALL`) physical-domain boundary face — else
-         !! Redi bleeds tracer into the ghost halo.  Absent ⇒ all edges WALL.
+         !! Redi bleeds tracer into the ghost halo.  An OPEN (tracer-open)
+         !! edge KEEPS its face flux, read against the OBC-filled ghost column
+         !! — MOM6 `neutral_diffusion` gates its faces on `G%mask2dCu`, which
+         !! `open_boundary_impose_land_mask` leaves at 1 on an open segment's
+         !! normal face (it zeroes only `OBCmaskCu` there), so neutral
+         !! diffusion exchanges tracer with the exterior; that exchange is
+         !! booked in `*_budget_hdiff` below so the closed budget stays
+         !! closed.  An MPI seam (`has_* = .false.`) is never a wall.
+         !! Absent ⇒ all edges WALL.
       integer :: nx, ny, nz, it
       integer :: nghost, nxp, nyp
       logical :: use_ext, wall_w, wall_e, wall_s, wall_n
@@ -947,10 +956,13 @@ contains
       wall_s = .true.
       wall_n = .true.
       if (present(bc)) then
-         wall_w = (ocean_bc_outer_face_tag(bc%west%bc_type) == OBC_WALL)
-         wall_e = (ocean_bc_outer_face_tag(bc%east%bc_type) == OBC_WALL)
-         wall_s = (ocean_bc_outer_face_tag(bc%south%bc_type) == OBC_WALL)
-         wall_n = (ocean_bc_outer_face_tag(bc%north%bc_type) == OBC_WALL)
+         ! `.and. has_*`: a WALL-tagged edge is a wall only on the rank that
+         ! owns it; on every other rank the face at `nghost+1` is an MPI seam
+         ! and carries the flux (mirrors `tracer_hdiff`).
+         wall_w = (ocean_bc_outer_face_tag(bc%west%bc_type) == OBC_WALL) .and. bc%has_west
+         wall_e = (ocean_bc_outer_face_tag(bc%east%bc_type) == OBC_WALL) .and. bc%has_east
+         wall_s = (ocean_bc_outer_face_tag(bc%south%bc_type) == OBC_WALL) .and. bc%has_south
+         wall_n = (ocean_bc_outer_face_tag(bc%north%bc_type) == OBC_WALL) .and. bc%has_north
       end if
 
       use_ext = present(khtr_u_ext) .and. present(khtr_v_ext)
@@ -979,8 +991,38 @@ contains
                                    ms%h_layer, this%tr_snap, ms%tracers(it)%hTr, &
                                    this%uPoL, this%uPoR, this%uKoL, this%uKoR, this%uhEff, &
                                    this%vPoL, this%vPoR, this%vKoL, this%vKoR, this%vhEff)
+         ! Closed-budget bookkeeping (salt / heat): fold the realised Redi
+         ! change into the same lateral-diffusion accumulator `tracer_hdiff`
+         ! uses.  Interior faces cancel in the interior sum, so what survives
+         ! is exactly the flux through the OPEN physical faces — the term the
+         ! console `out` column must carry.  `hTr - tr_snap` is the realised
+         ! increment and is exact (Sterbenz: the two are within a factor 2).
+         select case (ms%tracers(it)%budget_id)
+         case (TRACER_BUDGET_SALT)
+            call redi_budget_accumulate(nx, ny, nz, ms%tracers(it)%hTr, this%tr_snap, &
+                                        ms%salt_budget_hdiff)
+         case (TRACER_BUDGET_HEAT)
+            call redi_budget_accumulate(nx, ny, nz, ms%tracers(it)%hTr, this%tr_snap, &
+                                        ms%heat_budget_hdiff)
+         case default
+            ! Passive tracers carry no closed budget.
+         end select
       end do
    end subroutine redi_apply_flux
+
+   pure subroutine redi_budget_accumulate(nx, ny, nz, hTr, snap, budget)
+      !! `budget += hTr - snap` (device-side): book the realised Redi
+      !! increment of one budgeted tracer into its lateral-diffusion
+      !! budget accumulator (`ms%salt_budget_hdiff` / `heat_budget_hdiff`).
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in) :: hTr(nx, ny, nz)
+      real(wp), intent(in) :: snap(nx, ny, nz)
+      real(wp), intent(inout) :: budget(nx, ny, nz)
+      integer :: i, j, k
+      do concurrent(k=1:nz, j=1:ny, i=1:nx)
+         budget(i, j, k) = budget(i, j, k) + (hTr(i, j, k) - snap(i, j, k))
+      end do
+   end subroutine redi_budget_accumulate
 
    pure subroutine redi_snapshot(nx, ny, nz, src, dst)
       !! Device-side copy `dst = src` of a `(nx,ny,nz)` tracer field.
