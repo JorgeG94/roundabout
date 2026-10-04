@@ -74,6 +74,8 @@ program test_ocean_tripolar_fold_mpi
       real(wp), allocatable :: dxt(:, :), areat(:, :), dycu(:, :), dxcv(:, :)
       real(wp), allocatable :: dxbu(:, :), areabu(:, :), geolatbu(:, :), angle(:, :)
       real(wp), allocatable :: fcorner(:, :)
+      real(wp), allocatable :: wetm(:, :), dy_cu(:, :), dx_cv(:, :)
+         !! Stored wet mask and the land-masked face widths (plan site S2).
       integer :: io = 0
          !! Global i offset of the tile.
       integer :: jo = 0
@@ -87,6 +89,12 @@ program test_ocean_tripolar_fold_mpi
    end type snap_t
 
    integer :: rank, nprocs, n_fail, total_fail
+   character(len=16) :: variant = ""
+      !! "" = planetary f on a flat bed; "beta_drake" = beta-plane f
+      !! (non-zero beta) over the double-Drake land, whose two walls reach
+      !! the fold line at asymmetric columns (1 and nx/4 mirror to nx and
+      !! 3nx/4+1), so the north ghost rows of b / wet_mask / f differ from
+      !! any unfolded fill (plan sites S1, S2, S3).
    logical :: ok_ref_g
    type(comm_t) :: comm
 
@@ -99,6 +107,9 @@ program test_ocean_tripolar_fold_mpi
 
    call run_case("spanning", 24, 59.0_wp, 1.0_wp, 74.0_wp)
    call run_case("north_tile", 23, 47.0_wp, 1.5_wp, 76.0_wp)
+   variant = "beta_drake"
+   call run_case("beta_drake", 24, 59.0_wp, 1.0_wp, 74.0_wp)
+   variant = ""
    if (nprocs >= 2) call check_px_refused()
 
    call comm%barrier()
@@ -138,10 +149,11 @@ contains
             "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
             "&ocean_grid_nml grid_config = 'tripolar', lon_west = 0.0, "// &
             "lat_south = "//trim(adjustl(slat))//", phi_join = "//trim(adjustl(sphi))//", lon_pole = 0.0, "// &
-            "rad_earth = 6.378e6, coriolis_scheme = 'planetary' /"//NL// &
+            "rad_earth = 6.378e6, coriolis_scheme = '"//trim(cor_scheme())//"' /"//NL// &
+            physics_line()//NL// &
             "&nonhydrostatic_nml nz_layers = 3 /"//NL// &
             "&time_nml t_end = 86400.0, dt_fixed = 1800.0 /"//NL// &
-            "&ocean_topo_nml max_depth = 1000.0 /"//NL// &
+            topo_line()//NL// &
             "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
             "north = 'tripolar_fold' /"//NL// &
             "&ocean_hvisc_nml nu_h = 2000.0 /"//NL// &
@@ -149,6 +161,27 @@ contains
             "&ocean_diag_nml enabled = .false., reproducing_sums = .true. /"//NL// &
             "&output_nml output_to_file = .false. /"//NL
    end function case_nml
+
+   function cor_scheme() result(sch)
+      character(len=:), allocatable :: sch
+      sch = "planetary"
+      if (variant == "beta_drake") sch = "beta_plane"
+   end function cor_scheme
+
+   function topo_line() result(line)
+      character(len=:), allocatable :: line
+      line = "&ocean_topo_nml max_depth = 1000.0 /"
+      if (variant == "beta_drake") then
+         line = "&ocean_topo_nml topo_config = 'double_drake', max_depth = 1000.0, "// &
+                "slope_scale = 0.2, coriolis_beta = 2.0e-11 /"
+      end if
+   end function topo_line
+
+   function physics_line() result(line)
+      character(len=:), allocatable :: line
+      line = ""
+      if (variant == "beta_drake") line = "&physics_nml coriolis_f = 1.2e-4 /"
+   end function physics_line
 
    subroutine setup_engine(engine, nml, csize, crank, ierr)
       !! Parse + validate + `engine_setup` (the production configure path).
@@ -299,6 +332,9 @@ contains
          s%geolatbu = mt%geolatBu
          s%angle = mt%angle_dx
          s%fcorner = engine%state%coriolis_adv%f_corner
+         s%wetm = ms%wet_mask
+         s%dy_cu = mt%dy_cu
+         s%dx_cv = mt%dx_cv
       end associate
    end subroutine take_snapshot
 
@@ -316,13 +352,15 @@ contains
       !! never refreshed on ANY decomposed run (fold or not), so it holds
       !! whatever the previous stage left there.  Its x twin is exempt too:
       !! the OUTERMOST u column (`i = 1`, `i = nx_total+1`) of an x-split run
-      !! (px > 1; the periodic wrap link is an MPI seam as well).  The ALE
-      !! face remap (`remap_x_face_velocity`, `I = 1:nx+1`) gives an
-      !! array-edge face the adjacent cell's thickness, one-sided, AFTER the
-      !! stage-end exchange; on the tile that column is the neighbour's
-      !! interior face, on the serial run it is an interior face remapped
-      !! two-sided, and it is refreshed at the next stage entry before any
-      !! owned value reads it.
+      !! (px > 1; the periodic wrap link is an MPI seam as well).  On the tile
+      !! that column is an ARRAY-EDGE face with no cell beyond it, on the
+      !! serial run an interior face, and two one-sided writers treat it as
+      !! an edge: the ALE face remap (`remap_x_face_velocity`, `I = 1:nx+1`)
+      !! gives it the adjacent cell's thickness AFTER the stage-end exchange
+      !! (u; refreshed at the next stage entry before any owned value reads
+      !! it), and the static land mask's face product `wet_T(i-1)*wet_T(i)`
+      !! has no `i-1` there, so the masked width `dy_cu` is 0 (no stencil of
+      !! an owned point reaches that face).
       character(len=*), intent(in) :: name
       real(wp), intent(in) :: tile(:, :), whole(:, :)
       type(snap_t), intent(in) :: d
@@ -456,6 +494,10 @@ contains
       call compare_2d("angle_dx", dec_cfg%angle, ref_cfg%angle, dec_cfg, .false., bad_cfg_p, bad_cfg_g)
       call compare_2d("f_corner", dec_cfg%fcorner, ref_cfg%fcorner, dec_cfg, .true., &
                       bad_cfg_p, bad_cfg_g)
+      call compare_2d("wet_mask", dec_cfg%wetm, ref_cfg%wetm, dec_cfg, .false., bad_cfg_p, bad_cfg_g)
+      call compare_2d("dy_cu", dec_cfg%dy_cu, ref_cfg%dy_cu, dec_cfg, .false., bad_cfg_p, bad_cfg_g, &
+                      is_uface=.true.)
+      call compare_2d("dx_cv", dec_cfg%dx_cv, ref_cfg%dx_cv, dec_cfg, .true., bad_cfg_p, bad_cfg_g)
       call compare_3d("seed h", dec_cfg%h, ref_cfg%h, dec_cfg, .false., bad_cfg_p, bad_cfg_g)
       call compare_3d("seed u", dec_cfg%u, ref_cfg%u, dec_cfg, .false., bad_cfg_p, bad_cfg_g, &
                       is_uface=.true.)
