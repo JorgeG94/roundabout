@@ -1767,7 +1767,17 @@ contains
       !! (`nx_phys == nx_global` / `ny_phys == ny_global`); on a decomposed
       !! axis the seam ghosts belong to a neighbour rank and are filled by
       !! the engine's init-time halo exchange, which runs later.  The fold
-      !! is applied only on the rank that owns the north edge.  Composition
+      !! is applied only on the rank that owns the north edge, and only when
+      !! that rank holds the whole fold row: on an east-west split (px > 1)
+      !! it needs the distributed exchange, whose plan does not exist yet,
+      !! so `engine_setup` folds these fields later (with the init folds).
+      !! Every field seeded here FROM the unfolded north ghosts is repaired
+      !! before anything reads it: h_layer and the tracers by the engine's
+      !! cold-start fold, the stored wet mask by `configure_ocean_land_mask`
+      !! (an elementwise map of the water column, so folding it reproduces
+      !! the serial ghosts), the z_ref table, the PGF's bathymetry copy and
+      !! bt_H_ref by their engine-side rebuild / re-fold after the fold; the
+      !! barotropic CFL scan reads physical cells only.  Composition
       !! order matches the engine's init wrap: periodic first, so the fold
       !! reads the wrapped corner columns.
       real(wp), intent(inout) :: fld(:, :)

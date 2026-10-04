@@ -61,6 +61,8 @@ module rdb_ocean_setup
    use rdb_ocean_halo, only: ocean_halo_centre, ocean_halo_is_decomposed, &
                              ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y
    use rdb_ocean_halo_state, only: ocean_seam_refresh_surface_stress
+   use rdb_ocean_fold_apply, only: ocean_fold_wrap_eta_2d
+   use rdb_ocean_fold_exchange, only: ocean_fold_is_distributed
    use rdb_ocean_metrics, only: metrics_finalize, metrics_fill_cartesian, &
                                 metrics_fill_spherical, metrics_fill_from_supergrid, &
                                 metrics_fill_tripolar, metrics_apply_land_mask, &
@@ -329,6 +331,21 @@ contains
       if (ocean_halo_is_decomposed()) then
          call ocean_halo_centre(ocean_state%multilayer%wet_mask, device_resident=.false.)
       end if
+      ! Distributed tripolar fold (px > 1, plan site S2):
+      ! `metrics_apply_land_mask` folds its working copy with the LOCAL
+      ! kernel, which is exact only on a tile holding the whole fold row.
+      ! Fold the STORED wet mask here instead, through the owner-routed
+      ! exchange (collective over the north rank row, host mode), and tell
+      ! the land mask not to fold again.  Folding the stored mask, not a
+      ! copy, also closes the seed-time gap for it: the seed derives
+      ! `wet_mask` elementwise from the water column, whose north ghosts
+      ! the single-rank seed folded first (`seed_wrap_static_2d`) and the
+      ! px > 1 seed could not, so the stored ghosts now equal the serial
+      ! run's bit for bit (an elementwise map commutes with the fold copy).
+      if (ocean_fold_is_distributed()) then
+         call ocean_fold_wrap_eta_2d(grid, ocean_state%bc, ocean_state%multilayer%wet_mask, &
+                                     device_resident=.false.)
+      end if
 
       ! Solid-wall velocity masking (&ocean_bc_nml mask_wall_velocity):
       ! thread the per-edge WALL flags so only genuine solid walls get their
@@ -357,7 +374,7 @@ contains
                                    ocean_state%multilayer%wet_mask, grid, &
                                    ocean_state%bc%periodic_x .and. .not. ocean_halo_is_decomposed_x(), &
                                    ocean_state%bc%periodic_y .and. .not. ocean_halo_is_decomposed_y(), &
-                                   ocean_state%bc%north_fold, &
+                                   ocean_state%bc%north_fold .and. .not. ocean_fold_is_distributed(), &
                                    mask_wall_velocity=cfg%ocean%bc%mask_wall_velocity, &
                                    wall_west=(ocean_bc_outer_face_tag(ocean_state%bc%west%bc_type) == OBC_WALL &
                                               .and. ocean_state%bc%has_west), &
