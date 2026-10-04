@@ -1238,7 +1238,7 @@ contains
       !! the intermediate Laplacian `lap_u`/`lap_v` with a closed
       !! face-layer treated as a FREE-SLIP wall.
       !!
-      !! Rule (derived and checked in the `biharm_zfixed` prototype): every
+      !! Rule (gated by `tests/test_ocean_hvisc_biharm_zfixed.F90`): every
       !! face-to-face difference `(f_b - f_a)` carries the weight
       !! `open(a)*open(b)` — the neighbour's flag on the difference, the
       !! face's own on the result.  This is TEXTUALLY the gating of the
