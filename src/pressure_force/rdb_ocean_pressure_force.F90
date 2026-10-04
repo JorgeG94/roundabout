@@ -289,6 +289,13 @@ module rdb_ocean_pressure_force
          !! re-checks that the latch did not drift).  `gprime` differences
          !! interface positions directly and has no such Jacobian, so it is
          !! the one variant left N/A (the driver warns).
+         !!
+         !! `mont` needs the gate for the SAME geometric reason the FV forms
+         !! do, even though its face expression is not a two-point Jacobian:
+         !! a grounded layer sits at the bed on the shallow side and at its
+         !! flat-isopycnal height on the deep side, so the two `e_edge`
+         !! values entering the `M` recursion are hundreds of metres apart
+         !! and `M` stops being horizontally uniform at rest.
       real(wp) :: nonoverlap_vanish_tol = 2.0_wp*H_VANISHED
          !! Thickness (m) at or below which a layer counts as GROUNDED for the
          !! `skip_nonoverlap` gate: a face is zeroed only where the layer's
@@ -304,13 +311,6 @@ module rdb_ocean_pressure_force
          !! staircase, MaxCFL panic at step 178).  Set by the driver from
          !! `nonoverlap_vanish_tol_for(angstrom_h)`; the default matches
          !! `angstrom_h = 0`.
-         !!
-         !! `mont` needs the gate for the SAME geometric reason the FV forms
-         !! do, even though its face expression is not a two-point Jacobian:
-         !! a grounded layer sits at the bed on the shallow side and at its
-         !! flat-isopycnal height on the deep side, so the two `e_edge`
-         !! values entering the `M` recursion are hundreds of metres apart
-         !! and `M` stops being horizontally uniform at rest.
       logical :: mass_weight = .false.
          !! FV_MOM6 shelf-break `hWght` mass-weighting toggle. When `.true.`
          !! Pass-2's horizontal pressure integral biases the face density
