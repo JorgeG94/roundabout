@@ -51,6 +51,16 @@ program rdb
    input_file = ""
    do i_arg = 1, command_argument_count()
       call get_command_argument(i_arg, arg, arg_len, io_stat)
+      if (io_stat /= 0) then
+         ! -1: the argument is longer than `arg` (truncated); > 0: it could
+         ! not be read.  Either way the path below would be wrong, so stop
+         ! here instead of reporting a misleading "file not found".
+         if (mpi_rank == 0) then
+            call logger%error("FATAL: command-line argument longer than 256 characters, "// &
+                              "or unreadable: "//trim(arg))
+         end if
+         call comm_env_abort(2)
+      end if
       if (trim(arg) == "--validate-only") then
          validate_only = .true.
       else if (arg(1:1) == "-") then
