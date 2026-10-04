@@ -188,6 +188,7 @@ program rdb_tests
    use test_ocean_gm, only: ocean_gm_collect => collect_ocean_gm_tests
    use test_ocean_redi, only: ocean_redi_collect => collect_ocean_redi_tests
    use test_ocean_varmix, only: ocean_varmix_collect => collect_ocean_varmix_tests
+   use test_ocean_mle_zfixed, only: ocean_mle_zfixed_collect => collect_ocean_mle_zfixed_tests
    use test_ocean_meke, only: ocean_meke_collect => collect_ocean_meke_tests
    use test_ocean_meke_backscatter, only: ocean_meke_backscatter_collect => collect_ocean_meke_backscatter_tests
    use test_ocean_smag_ah, only: ocean_smag_ah_collect => collect_ocean_smag_ah_tests
@@ -370,6 +371,7 @@ program rdb_tests
                 new_testsuite("ocean_gm", ocean_gm_collect), &
                 new_testsuite("ocean_redi", ocean_redi_collect), &
                 new_testsuite("ocean_varmix", ocean_varmix_collect), &
+                new_testsuite("ocean_mle_zfixed", ocean_mle_zfixed_collect), &
                 new_testsuite("ocean_meke", ocean_meke_collect), &
                 new_testsuite("ocean_meke_backscatter", ocean_meke_backscatter_collect), &
                 new_testsuite("ocean_smag_ah", ocean_smag_ah_collect), &
