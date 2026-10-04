@@ -233,7 +233,25 @@ The full operator-by-operator surface, with knobs and limits, is in the [Ocean p
   predictor's reused viscous tendency (`hvisc_du_visc`/`dv_visc`,
   optional on read: an older checkpoint resumes with one inviscid
   predictor), and setup does not re-seed the land columns or re-derive
-  the prognostic ghosts on a warm start.
+  the prognostic ghosts on a warm start.  Sea ice included: the same
+  engine-path gate runs thermo + ITD + EVP (stresses live, CFL clip
+  firing) + the stress blend + the category transport + snowfall in a
+  periodic channel, checkpointed MID thermo window, and compares every ice
+  and ocean registry field plus the carried `tau`/`stress_mag`/`Q_heat`/
+  `Q_salt` bitwise, ghosts included, both at the resume point and after
+  the resumed steps, under both split schemes and under the
+  surface-flux component set; the cold-start ice halo exchange is skipped
+  on a warm start.  Under `&ocean_forcing_nml enable_components` the
+  ASSEMBLED `Q_heat`/`Q_salt` are carried state (rebuilt at the end of a
+  thermo step, read by the steps after it) and are checkpointed
+  (`sf_Q_heat`/`sf_Q_salt` + `sf_q_assembled`, optional on read: an older
+  checkpoint resumes with the configure seed + sea-ice fold, which differs
+  in the last bit and drops any non-ice component until the next
+  assembly); the component set is now allocated before the restart read,
+  so the cavity's `sf_heat_cavity`/`sf_salt_cavity`, which were written
+  but never restored, are restored too.  Decomposed: the sea-ice cases of
+  `test_ocean_decomp_bitid_mpi` resume from per-rank checkpoints (4x1 and
+  2x2, 2x1 on two ranks) bitwise against the straight decomposed run.
 
 ### Not yet shipped
 - MPI I/O server hand-off for the diag manager — `&output_nml use_io_server`
@@ -1299,7 +1317,12 @@ the transport's cell-averaged masses and riding tracers at the top of
 every advective substep (with the zero-velocity early exit and the
 positivity / compress abort flags made rank-uniform), and the blended
 ice->ocean stress through the ocean's own surface-stress seam refresh
-(`rdb_ice_evp` D6, `rdb_ice_transport`, `ocean_halo_exchange_ice_*`). On
+(`rdb_ice_evp` D6, `rdb_ice_transport`, `ocean_halo_exchange_ice_*`).
+Restarts round-trip bitwise through the production engine path, on one
+rank (`test_ocean_restart_engine`, ghosts included) and decomposed (the
+write/resume leg of the bit-id ice cases); the cold-start category
+exchange is never run on a warm start (the checkpoint carries the
+writer's ghosts). On
 ONE rank the same calls close a periodic seam, so `transport` now runs
 with periodic edges and a periodic + `dynamics` run no longer reads stale
 category ghosts there (an answer change against older builds on such

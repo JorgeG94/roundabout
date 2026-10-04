@@ -54,7 +54,14 @@
 !!     `sea_ice_transport` is the same with the category transport on.
 !!     Every ice registry field is compared like the ocean's.  `run_one` calls
 !!     `engine_step_ice` between the step and the finalize, as the driver
-!!     does (a no-op for every other case).
+!!     does (a no-op for every other case).  Both ice cases also carry a
+!!     WRITE/RESUME leg on the 4x1 and 2x2 layouts (2x1 on the 2-rank
+!!     launch; `check_resume_leg`):
+!!     the same decomposed run, checkpointed to per-rank restart files at
+!!     step N_CKPT (odd, so mid thermo window) and resumed through
+!!     `engine_setup`'s warm-restart path, must equal the straight
+!!     decomposed run bitwise on every registry field -- FULL local arrays,
+!!     ghosts included (a resume lands on the same decomposition).
 !! All are stratified with a boundary-layer scheme on, so the tiles exchange real
 !! flow and real tracer structure.  26 x 18 cells, nghost = 3: every
 !! factorisation above is uneven somewhere.
@@ -77,7 +84,7 @@ program test_ocean_decomp_bitid_mpi
                                engine_step, engine_step_ice, engine_step_finalize, &
                                engine_exit_data, &
                                engine_teardown
-   use rdb_ocean_state, only: ocean_state_build_restart_registry
+   use rdb_ocean_state, only: ocean_state_build_restart_registry, ocean_state_restart_write
    use rdb_ocean_restart, only: restart_registry_t
    use rdb_comm_env, only: comm_env_init, comm_env_setup_roles, comm_env_finalize, &
                            comm_env_rank, comm_env_size, comm_env_compute_comm, &
@@ -89,7 +96,7 @@ program test_ocean_decomp_bitid_mpi
 #ifndef RDB_NO_NETCDF
    use rdb_io_netcdf, only: nc_create_file, nc_close, nc_def_dim, nc_def_var_2d, &
                             nc_def_var_3d, nc_enddef, nc_put_var_2d, rdb_def_var_1d, &
-                            rdb_put_var_1d
+                            rdb_put_var_1d, output_rank_filename, ensure_directory_exists
    use netcdf, only: nf90_put_var
 #endif
    implicit none
@@ -98,6 +105,10 @@ program test_ocean_decomp_bitid_mpi
    integer, parameter :: NY_G = 18
    integer, parameter :: NG = 3
    integer, parameter :: N_STEPS = 48
+   integer, parameter :: N_CKPT = 25
+      !! Checkpoint step of the write/resume leg: odd, so with
+      !! `dt_therm_ratio = 2` it lands mid thermo window.
+   character(len=*), parameter :: RST_DIR = "bitid_resume_rst"
    real(wp), parameter :: DT = 900.0_wp
    integer, parameter :: MAXF = 128
    character(len=*), parameter :: SG_FILE = "bitid_supergrid.nc"
@@ -334,14 +345,19 @@ contains
          ! truncation count are exercised on live values, not zeros.  The periodic edge
          ! puts the ice across a wrap seam on every factorisation, the
          ! interior seams across a rank seam.  Its own tracer/thermo
-         ! groups (the common block's 4-20 degC column would melt the ice
-         ! out in a step).
+         ! groups: a column a few hundredths of a degree above the
+         ! liquidus (T_f(34) = -1.836 degC).  The basal flux hands the ice
+         ! the surface layer's whole above-freezing heat content each
+         ! window, so a warmer column (the common block's 4-20 degC, or
+         ! even -1.2 degC at the surface) melts every physical cell out at
+         ! the first thermo window and leaves the EVP, the transport and
+         ! the blend nothing to move.
          nml = "&sim_nml sim_type = 'ocean' /"//NL// &
                "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
                "&time_nml t_end = 86400.0, dt_fixed = 900.0 /"//NL// &
                "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
-               "&tracer_nml initial_temperature = -1.5, initial_salinity = 34.0, "// &
-               "T_init_surface = -1.2, T_init_bottom = -1.8 /"//NL// &
+               "&tracer_nml initial_temperature = -1.83, initial_salinity = 34.0, "// &
+               "T_init_surface = -1.82, T_init_bottom = -1.835 /"//NL// &
                "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"' /"//NL// &
                "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
                "smag_ah = .true. /"//NL// &
@@ -510,6 +526,143 @@ contains
       s%nyl = engine%grid%ny_phys
    end subroutine take_snapshot
 
+#ifndef RDB_NO_NETCDF
+   subroutine check_resume_leg(nml, straight, tag)
+      !! The write/resume leg: the same decomposed run, checkpointed at
+      !! N_CKPT to per-rank files (the driver's `<dir>/restart_rank_NNNNNN.nc`
+      !! convention, through `ocean_state_restart_write`), torn down, and
+      !! resumed through `engine_setup(restart_file=<dir>)` -- the warm
+      !! restart the driver runs -- for the remaining N_STEPS - N_CKPT
+      !! steps.  Every registry field (and the BT end-of-step eta) must
+      !! equal the STRAIGHT decomposed run's bitwise over the FULL local
+      !! array, ghosts included.  Counts into `n_fail` (rank-summed).
+      character(len=*), intent(in) :: nml, tag
+      type(snap_t), intent(in) :: straight
+      type(snap_t) :: res
+      type(ocean_engine_t), target :: engine
+      type(config_t) :: cfg
+      character(len=512) :: fname
+      integer :: ierr, step0, glob(2), nb
+      real(wp) :: t
+      logical :: ok
+
+      ok = .false.
+      nb = 0
+      if (rank == 0) call ensure_directory_exists(RST_DIR)
+      call comm%barrier()
+      fname = output_rank_filename(RST_DIR, "restart", rank)
+
+      ! ---- leg 1: N_CKPT steps, checkpoint ----
+      call read_config_from_string(nml, cfg, ierr=ierr)
+      if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
+      if (ierr == OCEAN_STATUS_OK) &
+         call engine_setup(engine, cfg, ierr, compute_rank=rank, compute_size=nprocs)
+      if (ierr == OCEAN_STATUS_OK) then
+         call engine_enter_data(engine, cfg)
+         t = 0.0_wp
+         call advance(engine, cfg, t, N_CKPT, ierr)
+         if (ierr == OCEAN_STATUS_OK) &
+            call ocean_state_restart_write(engine%state, engine%grid, engine%decomp, &
+                                           trim(fname), t, N_CKPT, ierr=ierr)
+         call engine_exit_data(engine)
+         call engine_teardown(engine)
+      end if
+      call comm%barrier()
+
+      ! ---- leg 2: warm restart from the per-rank files, finish ----
+      if (ierr == OCEAN_STATUS_OK) then
+         call read_config_from_string(nml, cfg, ierr=ierr)
+         if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
+         if (ierr == OCEAN_STATUS_OK) &
+            call engine_setup(engine, cfg, ierr, compute_rank=rank, compute_size=nprocs, &
+                              restart_file=RST_DIR, t_restart=t, step_restart=step0)
+         if (ierr == OCEAN_STATUS_OK) then
+            if (step0 == N_CKPT .and. engine%warm_restart) then
+               call engine_enter_data(engine, cfg)
+               call advance(engine, cfg, t, N_STEPS - N_CKPT, ierr)
+               if (ierr == OCEAN_STATUS_OK) then
+                  call take_snapshot(engine, res)
+                  ok = .true.
+               end if
+               call engine_exit_data(engine)
+            end if
+            call engine_teardown(engine)
+         end if
+      end if
+      call delete_file(trim(fname))
+
+      if (ok) call compare_full(res, straight, nb, tag)
+      glob = [nb, merge(0, 1, ok)]
+      call allreduce(comm, glob, op=MPI_SUM)
+      if (rank == 0) then
+         if (sum(glob) == 0) then
+            write (*, '(3a,i0,a)') "case ", tag, " write/resume: IDENTICAL (", &
+               straight%n, " fields, ghosts included)"
+         else
+            write (*, '(3a,i0,a,i0)') "FAIL ", tag, " write/resume: mismatches=", glob(1), &
+               " leg_failures=", glob(2)
+         end if
+      end if
+      if (sum(glob) > 0) n_fail = n_fail + 1
+   end subroutine check_resume_leg
+
+   subroutine advance(engine, cfg, t, nsteps, ierr)
+      !! The driver's step sequence, `nsteps` times from `t`.
+      type(ocean_engine_t), intent(inout) :: engine
+      type(config_t), intent(inout) :: cfg
+      real(wp), intent(inout) :: t
+      integer, intent(in) :: nsteps
+      integer, intent(out) :: ierr
+      integer :: n
+      ierr = OCEAN_STATUS_OK
+      do n = 1, nsteps
+         call engine_step(engine, DT, t, ierr=ierr)
+         if (ierr /= OCEAN_STATUS_OK) return
+         call engine_step_ice(engine, cfg, DT, t, ierr=ierr)
+         if (ierr /= OCEAN_STATUS_OK) return
+         call engine_step_finalize(engine, DT, t, ierr=ierr)
+         if (ierr /= OCEAN_STATUS_OK) return
+         t = t + DT
+      end do
+   end subroutine advance
+
+   subroutine compare_full(a, b, nbad, report)
+      !! Bitwise, every element of every field (ghosts included) -- the
+      !! two runs share a decomposition.
+      type(snap_t), intent(in) :: a, b
+      integer, intent(out) :: nbad
+      character(len=*), intent(in) :: report
+      integer :: e, nb
+      nbad = 0
+      if (a%n /= b%n) then
+         write (*, '(a,i0,a,i0,a,i0)') "  rank ", rank, ": field count differs ", a%n, " vs ", b%n
+         nbad = 1
+         return
+      end if
+      do e = 1, a%n
+         if (a%f(e)%tag /= b%f(e)%tag .or. any(shape(a%f(e)%a) /= shape(b%f(e)%a))) then
+            nbad = nbad + 1
+            cycle
+         end if
+         nb = count(transfer(a%f(e)%a, 0_int64, size(a%f(e)%a)) /= &
+                    transfer(b%f(e)%a, 0_int64, size(b%f(e)%a)))
+         if (nb > 0) write (*, '(a,i0,5a,i0)') "  rank ", rank, " ", report, &
+            " write/resume ", trim(a%f(e)%tag), ": mismatches=", nb
+         nbad = nbad + nb
+      end do
+   end subroutine compare_full
+
+   subroutine delete_file(fname)
+      character(len=*), intent(in) :: fname
+      integer :: u, ios
+      logical :: exists
+      inquire (file=fname, exist=exists)
+      if (.not. exists) return
+      open (newunit=u, file=fname, status="old", iostat=ios)
+      if (ios == 0) close (u, status="delete")
+   end subroutine delete_file
+#endif
+
    subroutine compare(dec, ref, nbad, nfin, report)
       !! Bitwise comparison of each field's owned window.  A face array is
       !! one wider than the cell array along its stagger; its owned window
@@ -611,6 +764,14 @@ contains
          else
             call compare(dec, ref, nbad, nfin, trim(tag))
             glob = [nbad, nfin, 0]
+#ifndef RDB_NO_NETCDF
+            if ((label == "sea_ice" .or. label == "sea_ice_transport") .and. &
+                (nprocs/px == 1 .or. px == nprocs/px) .and. nprocs > 1) then
+               ! 4x1 and 2x2 at np = 4 (and 2x1 at np = 2).
+               call check_resume_leg(case_nml(label, scheme, px, nprocs/px), dec, &
+                                     trim(tag))
+            end if
+#endif
             if (nbud < size(buds)) then
                nbud = nbud + 1
                buds(nbud) = dec%bud
