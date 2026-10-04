@@ -10,6 +10,15 @@ or the cell FAILS.  Two classes of row:
   reason, an owner, and the v0.1.0 tracker item
   (`python_prototypes/design/v010_blockers.md`) that will close it.
 
+Three kinds of row: `refused` (a configure-time refusal, `rdb
+--validate-only`), `runtime` (an accepted cell that fails a check: CRASH,
+NONFINITE, BUDGET, ENERGY, DECOMP, RESTART, CROSS_BACKEND -- the outcome of
+each check, see `compat_matrix.OUTCOME_CHECK`), and `multirank` (a cell
+that runs on one rank but whose DECOMP leg the model refuses at configure: a
+single-rank feature).  A runtime row is judged only when a check it expects
+ran, so a DECOMP gap neither explains nor XPASSes on a run without the MPI
+leg.
+
 A KNOWN_GAP row is an XFAIL: when the gap is fixed the cell passes, the row
 turns XPASS, and an XPASS FAILS the suite until the row is deleted.  The list
 can only shrink.
@@ -19,8 +28,8 @@ the model's own defaults), never off the axis value names -- so a row still
 matches when a value is renamed or a second axis value turns the same knob
 on.  A `refused` row must also name the refusal: its `message` regex has to
 match the line the model logged, so a cell refused for a DIFFERENT reason is
-still a failure.  A `runtime` row lists the outcomes it expects (CRASH,
-NONFINITE, BUDGET).
+still a failure.  A `runtime` row lists the outcomes it expects (any of
+`OUTCOMES`).
 
 Adding a row: run the matrix, read the FAIL, decide whether it is physics or a
 gap, and give it the narrowest `when` that explains it.  Never widen a row to
@@ -95,6 +104,9 @@ FEATURES = {
     "meke": ("MEKE", lambda n: bool(_g(n, "ocean_meke_nml", "enable", False))),
     "varmix": ("VarMix", lambda n: bool(_g(n, "ocean_varmix_nml", "enable", False))),
     "mle": ("Fox-Kemper MLE", lambda n: bool(_g(n, "ocean_foxkemper_nml", "enable", False))),
+    "mle_mld_filter": ("MLE running-mean MLD filter",
+                       lambda n: bool(_g(n, "ocean_foxkemper_nml", "enable", False))
+                       and float(_g(n, "ocean_foxkemper_nml", "mld_decay_time", 0.0)) > 0.0),
     # tracers
     "ideal_age": ("ideal age", lambda n: bool(_g(n, "ocean_tracers_nml", "enable_ideal_age", False))),
     "pseudo_salt": ("pseudo-salt", lambda n: bool(_g(n, "ocean_tracers_nml", "enable_pseudo_salt", False))),
@@ -138,13 +150,18 @@ def features(nml):
     return {name: bool(fn(nml)) for name, (_, fn) in FEATURES.items()}
 
 
+OUTCOMES = frozenset(("CRASH", "NONFINITE", "BUDGET", "ENERGY", "DECOMP", "RESTART",
+                      "CROSS_BACKEND"))
+
+
 class Row(object):
     """One expected failure.  See the module docstring."""
 
     def __init__(self, rid, cls, kind, when, reason, message=None, expect=(),
-                 unless=(), owner="-", link="-", scope="cell", witness=None):
+                 unless=(), owner="-", link="-", scope="cell", witness=None, backend=None):
         assert cls in ("PHYSICAL", "KNOWN_GAP"), cls
-        assert kind in ("refused", "runtime"), kind
+        assert kind in ("refused", "runtime", "multirank"), kind
+        assert set(expect) <= OUTCOMES, "{}: unknown outcome(s) {}".format(rid, set(expect) - OUTCOMES)
         assert scope in ("cell", "any"), scope
         assert kind == "runtime" or scope == "cell", rid + ": a refusal is deterministic"
         assert (scope == "any") == (witness is not None), \
@@ -165,6 +182,12 @@ class Row(object):
         #         Other matching cells may pass or fail (XFAIL) freely.
         self.scope = scope
         self.witness = dict(witness) if witness else None
+        # A backend-specific gap ("gpu" matches every gpu-* --backend): the
+        # row is invisible to a run on any other backend.
+        self.backend = backend
+
+    def on(self, backend):
+        return self.backend is None or str(backend).startswith(self.backend)
 
     def matches(self, feats):
         return all(feats[f] for f in self.when) and not any(feats[f] for f in self.unless)
@@ -174,14 +197,20 @@ class Row(object):
 
 
 def _gap(rid, kind, when, reason, item, message=None, expect=(), unless=(), owner="orchestrator",
-         scope="cell", witness=None):
+         scope="cell", witness=None, backend=None):
     return Row(rid, "KNOWN_GAP", kind, when, reason, message=message, expect=expect,
                unless=unless, owner=owner, link="{}: {}".format(V010, item), scope=scope,
-               witness=witness)
+               witness=witness, backend=backend)
 
 
 def _phys(rid, when, reason, message, unless=()):
     return Row(rid, "PHYSICAL", "refused", when, reason, message=message, unless=unless)
+
+
+def _single_rank(rid, when, reason, item, message, unless=()):
+    """A feature the model runs on ONE rank only and refuses, at configure,
+    on more (the DECOMP leg's refusal).  Should work decomposed: a gap."""
+    return _gap(rid, "multirank", when, reason, item, message=message, unless=unless)
 
 
 # The remap precondition guard (`remap_check_preconditions`, ON in every
@@ -302,8 +331,10 @@ ROWS = [
          "z_fixed WITHOUT closed faces takes the full staircase PGF at every step face: "
          "En ~30x the closed-face run in 24 steps and, in some combinations, a negative "
          "thickness the remap guard stops.  Decided: refuse it (bed steps) now.",
-         "item 11 (fix/zfixed-require-closed-faces)", expect=("CRASH", "NONFINITE"),
-         message=r"remap preconditions at step|nan-catch|I1' tripwire", scope="any",
+         "item 11 (fix/zfixed-require-closed-faces)",
+         expect=("CRASH", "NONFINITE", "ENERGY", "CROSS_BACKEND"),
+         message=r"remap preconditions at step|nan-catch|I1' tripwire|"
+                 r"PASS-population reference|En grew|norm .* > band", scope="any",
          # measured 2026-10-02: a negative thickness at step 20
          witness={"vcoord": "z_fixed_open", "vmix_extra": "conv", "vmix_bg": "bryan_lewis",
                   "lateral": "stress_tensor", "eddy": "gm_varmix_resscaled",
@@ -323,7 +354,196 @@ ROWS = [
          "budget's boundary term or it is a real leak.",
          "NOT TRACKED (found by this matrix, 2026-10-02)", expect=("BUDGET",),
          message=r"^Salt residual"),
+
+    # ===================================================================
+    # KNOWN_GAP -- the legs (phase 3, 2026-10-04): RESTART, DECOMP.
+    # ===================================================================
+    _gap("restart_visc_rem", "runtime", ("visc_rem",),
+         "The visc_rem BT corrector does not resume bit-exact: `visc_rem_precompute` builds "
+         "its remnant matrix from the previous stage's `vmix%kv` ('one stage stale'), which "
+         "the restart registry does not carry, so the first resumed step weights F_bt "
+         "differently and every prognostic drifts (1e-11 relative by step 24).",
+         "NOT TRACKED (found by this matrix, 2026-10-04)", expect=("RESTART",),
+         message=r"differ after a warm restart"),
+    _gap("restart_meke_gm_src_lag", "runtime", ("meke",),
+         "MEKE does not resume bit-exact: `meke_step` reads `gm%gm_src` from the PREVIOUS "
+         "thermo step (a one-step lag) and that source is not in the restart registry, so the "
+         "first resumed step sources MEKE from a cold GM work (meke differs by ~3 % at step "
+         "24; the prognostics follow once MEKE feeds GM / the backscatter).",
+         "NOT TRACKED (found by this matrix, 2026-10-04)", expect=("RESTART",),
+         message=r"after a warm restart at step \d+: .*\bmeke: "),
+    _gap("restart_mle_mld_filter", "runtime", ("mle_mld_filter",),
+         "Fox-Kemper MLE with mld_decay_time > 0 does not resume bit-exact: its running-mean "
+         "`mld_filtered` is persistent state but not in the restart registry, so a resume "
+         "re-seeds it from the instantaneous MLD and the restratification flux changes.",
+         "NOT TRACKED (found by this matrix, 2026-10-04)", expect=("RESTART",),
+         message=r"differ after a warm restart"),
+    _gap("decomp_redi_seam", "runtime", ("redi",),
+         "Redi is not decomposition-invariant: every owned value of h / u / v / T / S differs "
+         "from the 1-rank run (1e-8 relative after 24 steps) on 2x2 and 4x1 -- the "
+         "pre-existing 'Redi treats an MPI seam as a wall' bug that item 2's branch fixes.",
+         "item 2 (feat/redi-zfixed-closed-faces fixes the Redi MPI seam-as-wall bug)",
+         expect=("DECOMP",), message=r"\dx\d: \d+ field mismatch", unless=("cavity",)),
+    _gap("decomp_weno_pv", "runtime", ("pv_weno",),
+         "The WENO PV face interpolation is not decomposition-invariant: last-bit differences "
+         "in h / u / v / rho in every owned cell on 2x2 and 4x1 (sadourny + weno7 on z*: "
+         "max|diff|/max|field| 4e-11 after 24 steps) in SOME combinations.  Unchanged by "
+         "-ffp-contract=off, so not the FMA / remainder-loop class `carried_tendency` "
+         "documents.",
+         "NOT TRACKED (found by this matrix, 2026-10-04)", expect=("DECOMP",),
+         message=r"\dx\d: \d+ field mismatch", scope="any",
+         # minimised 2026-10-04 from c019 (greedy, every other axis at base)
+         witness={"vcoord": "zstar", "coriolis": "sadourny", "pv_adv": "weno7"}),
+    _gap("decomp_eulerian_z_ssp_rk2", "runtime", ("vc_eulerian_z", "ssp_rk2"),
+         "eulerian_z under ssp_rk2 (its legacy per-stage vertical-advection + h-rescale path) "
+         "is not decomposition-invariant in some combinations: last-bit differences in every "
+         "owned cell on 2x2 and 4x1 with visc_rem, or with EPBL + MLE.  Unchanged by "
+         "-ffp-contract=off.",
+         "NOT TRACKED (found by this matrix, 2026-10-04)", expect=("DECOMP",),
+         message=r"\dx\d: \d+ field mismatch", scope="any",
+         # minimised 2026-10-04 from c045 (greedy, every other axis at base)
+         witness={"vcoord": "eulerian_z", "split": "ssp_rk2", "bt": "visc_rem"}),
+
+    # ===================================================================
+    # KNOWN_GAP -- the GPU leg (nvfortran cc70) only.
+    # ===================================================================
+    _gap("gpu_tripolar", "runtime", ("tripolar",),
+         "The tripolar fold on the GPU build does not run the CPU model: 3 of 10 tripolar "
+         "cells stop in steps 1-3 on every run (remap precondition guard, 'console stats: "
+         "NaN') where gfortran runs clean, and the others are NON-DETERMINISTIC -- the same "
+         "binary and cell ended within 6e-11 of gfortran on one run and 1e-3 off, with "
+         "hvisc_du_visc ~4e26 in OWNED faces, on another: a device race or an uninitialised "
+         "device read on the fold / bipolar-cap path.",
+         "NOT TRACKED (found by this matrix, 2026-10-04)",
+         expect=("CRASH", "NONFINITE", "CROSS_BACKEND"),
+         message=r"remap preconditions at step|NaN detected|nan-catch|norm .* > band",
+         scope="any", backend="gpu",
+         # c007 of the 2026-10-04 array: crashed at step 1 on both GPU runs
+         witness={"bt": "substep_drag", "coriolis": "sadourny_energy", "eddy": "gm_redi_meke",
+                  "eos": "wright", "forcing": "warm_sw", "geometry": "tripolar",
+                  "lateral": "nu_4", "pgf": "fv_mom6_ppm", "pv_adv": "centered",
+                  "split": "ssp_rk2", "tracers": "pseudo_salt", "vcoord": "zstar",
+                  "vmix_bg": "bryan_lewis", "vmix_bl": "kpp", "vmix_extra": "kappa_shear"}),
+    _gap("gpu_eulerian_z_epbl_mle_drift", "runtime", ("vc_eulerian_z", "ssp_rk2", "epbl", "mle"),
+         "eulerian_z + ssp_rk2 + EPBL + MLE ends 2e-7 (field norm) away from gfortran in 24 "
+         "steps, 3000x the PASS population's spread: the same combination is not "
+         "decomposition-invariant either (decomp_eulerian_z_ssp_rk2), so an order-sensitive "
+         "operation amplified through the EPBL / MLE thresholds.",
+         "NOT TRACKED (found by this matrix, 2026-10-04)", expect=("CROSS_BACKEND",),
+         message=r"norm .* > band", scope="any", backend="gpu",
+         # c049 of the 2026-10-04 array, as generated (not minimised: GPU-only)
+         witness={"vcoord": "eulerian_z", "split": "ssp_rk2", "vmix_bl": "epbl",
+                  "vmix_extra": "kappa_shear", "vmix_bg": "bryan_lewis",
+                  "lateral": "meke_backscatter", "eddy": "mle", "tracers": "pseudo_salt",
+                  "pgf": "mont", "eos": "linear", "coriolis": "sadourny", "pv_adv": "weno5",
+                  "bt": "wave_drag", "geometry": "obc", "grid": "spherical"}),
+
+    # ===================================================================
+    # KNOWN_GAP -- single-rank features: the DECOMP leg's configure-time
+    # refusal on more than one rank.
+    # ===================================================================
+    _single_rank("cavity_single_rank", ("cavity",),
+                 "The ice-shelf cavity is single-rank in v1: the grounding statistics are "
+                 "global reductions its configure does not take.",
+                 "'Single-rank-only features to lift: ... cavity'",
+                 message=r"&ocean_cavity_dyn_nml enable=\.true\. is single-rank in v1"),
+    _single_rank("tripolar_fold_px1", ("tripolar",),
+                 "The tripolar north fold is single-rank IN X (px = 1); 2x2 and 4x1 are refused "
+                 "and the leg falls back to the 1x2 north-south split, which must be bitwise.",
+                 "distributed tripolar fold (docs/plans/tripolar_fold_px_gt_1.md, PRs 1-7)",
+                 message=r"Tripolar north fold with px = \d+ > 1"),
 ]
+
+
+# ---------------------------------------------------------------------------
+# The per-PR slice: axis value -> the source paths that implement it.
+#
+# `compat_matrix.py run --diff-base REF` (or `--changed-files`) runs only the
+# cells holding a value whose paths the diff touches.  A changed Fortran
+# source NO value claims is shared code (the dynamical core, the continuity,
+# the engine, the configuration) and runs the full matrix -- so a path
+# missing here costs time, never coverage.  Globs are fnmatch patterns over
+# repo-relative paths.  A value shared by all of an axis (the remap driver
+# under every coordinate) touches every cell, which is the honest answer.
+# ---------------------------------------------------------------------------
+_P = "src/parameterizations/"
+_VCOORD_ALL = ["src/core/ocean/vcoord/*", "src/ALE/*",
+               "src/shared_module_utilities/rdb_vanished_layer.inc"]
+_SPLIT = ["src/core/ocean/dynamics/split_rk2/*", "src/core/ocean/kernels/barotropic/*",
+          "src/core/rdb_barotropic_workstate.F90"]
+_VMIX = [_P + "vertical/rdb_ocean_vmix.F90", _P + "vertical/rdb_ocean_vdiff.F90"]
+_HVISC = [_P + "lateral/rdb_ocean_horizontal_viscosity.F90"]
+_PGF = ["src/pressure_force/rdb_ocean_pressure_force.F90"]
+_EOS = ["src/equation_of_state/*", "src/core/ocean/state/rdb_ocean_eos_compute.F90"]
+_COR = ["src/core/ocean/kernels/coriolis_adv/*",
+        "src/shared_module_utilities/rdb_rel_vort_corner.inc"]
+_SLOPES = [_P + "lateral/rdb_ocean_isopycnal_slopes.F90", _P + "lateral/rdb_ocean_lateral_mix.F90"]
+_GMP = [_P + "lateral/rdb_ocean_gm.F90"] + _SLOPES
+_MEKEP = [_P + "lateral/rdb_ocean_meke.F90"]
+_VARMIXP = [_P + "lateral/rdb_ocean_varmix.F90", _P + "vertical/rdb_ocean_wave_speed.F90"]
+_REDIP = [_P + "lateral/rdb_ocean_redi.F90"] + _SLOPES
+
+VALUE_PATHS = {}
+for _v in ("sigma", "zstar", "zstar_full", "zstar_sigma", "z_fixed_cf", "z_fixed_open", "hycom",
+           "rho", "eulerian_z", "lagrangian", "zsigma"):
+    VALUE_PATHS[("vcoord", _v)] = list(_VCOORD_ALL)
+VALUE_PATHS[("vcoord", "z_fixed_cf")] += ["src/core/ocean/state/rdb_ocean_metrics.F90"]
+for _v in ("pred_corr", "ssp_rk2"):
+    VALUE_PATHS[("split", _v)] = list(_SPLIT)
+VALUE_PATHS.update({
+    ("vmix_bl", "kpp"): list(_VMIX),
+    ("vmix_bl", "pp81"): list(_VMIX),
+    ("vmix_bl", "epbl"): _VMIX + [_P + "vertical/rdb_ocean_epbl.F90"],
+    ("vmix_extra", "kappa_shear"): [_P + "vertical/rdb_ocean_kappa_shear.F90"],
+    ("vmix_extra", "kappa_shear_vertex"): [_P + "vertical/rdb_ocean_kappa_shear.F90"],
+    ("vmix_extra", "tidal"): [_P + "vertical/rdb_ocean_tidal_mixing.F90"],
+    ("vmix_extra", "conv"): list(_VMIX),
+    ("vmix_extra", "ddiff"): list(_VMIX),
+    ("vmix_bg", "scalar"): list(_VMIX),
+    ("vmix_bg", "bryan_lewis"): list(_VMIX),
+    ("vmix_bg", "henyey"): list(_VMIX),
+    ("lateral", "meke_backscatter"): _HVISC + _MEKEP + _GMP,
+    ("eddy", "gm"): list(_GMP),
+    ("eddy", "gm_meke"): _GMP + _MEKEP + _VARMIXP,
+    ("eddy", "redi"): list(_REDIP),
+    ("eddy", "gm_redi_meke"): _GMP + _REDIP + _MEKEP + _VARMIXP,
+    ("eddy", "gm_varmix_resscaled"): _GMP + _VARMIXP,
+    ("eddy", "mle"): [_P + "lateral/rdb_ocean_mle.F90", _P + "vertical/rdb_ocean_epbl.F90"],
+    ("tracers", "ts"): ["src/core/rdb_tracer.F90"],
+    ("tracers", "ideal_age"): ["src/core/rdb_tracer.F90", "src/tracer/rdb_ocean_ideal_age.F90"],
+    ("tracers", "pseudo_salt"): ["src/core/rdb_tracer.F90", "src/tracer/rdb_ocean_pseudo_salt.F90"],
+    ("pgf", "mont"): list(_PGF),
+    ("pgf", "fv_mom6"): list(_PGF),
+    ("pgf", "fv_mom6_plm"): _PGF + ["src/pressure_force/rdb_ocean_pgf_reconstruct.F90"],
+    ("pgf", "fv_mom6_ppm"): _PGF + ["src/pressure_force/rdb_ocean_pgf_reconstruct.F90"],
+    ("eos", "wright"): list(_EOS),
+    ("eos", "roquet"): _EOS + ["src/shared_module_utilities/rdb_roquet_spv.inc"],
+    ("eos", "linear"): list(_EOS),
+    ("geometry", "channel"): ["src/core/ocean/boundary/rdb_ocean_periodic.F90",
+                              "src/core/ocean/boundary/rdb_ocean_sponge.F90"],
+    ("geometry", "obc"): ["src/core/ocean/boundary/rdb_ocean_obc*.F90",
+                          "src/core/ocean/boundary/rdb_ocean_boundary_data.F90"],
+    ("geometry", "tripolar"): ["src/core/ocean/boundary/rdb_ocean_fold*.F90",
+                               "src/core/ocean/state/rdb_ocean_bipolar.F90"],
+    ("geometry", "cavity"): ["src/core/ocean/state/rdb_ocean_cavity.F90",
+                             _P + "vertical/rdb_ocean_cavity_*.F90",
+                             _P + "vertical/rdb_ocean_top_drag.F90"],
+    ("forcing", "cool"): [_P + "vertical/rdb_ocean_surface_flux.F90"],
+    ("forcing", "warm_sw"): [_P + "vertical/rdb_ocean_surface_flux.F90"],
+})
+for _v in ("const_nu_h", "smagorinsky", "leith", "leith_biharm", "nu_4", "stress_tensor", "kh_aniso"):
+    VALUE_PATHS[("lateral", _v)] = list(_HVISC)
+for _v in ("sadourny", "sadourny_energy", "sadourny_hk"):
+    VALUE_PATHS[("coriolis", _v)] = list(_COR)
+for _v in ("centered", "weno3", "weno5", "weno7"):
+    VALUE_PATHS[("pv_adv", _v)] = list(_COR)
+for _v in ("default", "correction_bc_pgf", "substep_drag", "wave_drag", "visc_rem"):
+    VALUE_PATHS[("bt", _v)] = list(_SPLIT)
+VALUE_PATHS[("bt", "visc_rem")] += [_P + "vertical/rdb_ocean_vdiff.F90"]
+VALUE_PATHS[("bt", "substep_drag")] += [_P + "vertical/rdb_ocean_bottom_drag.F90"]
+
+# Paths that are the matrix itself: any change runs everything.
+ALWAYS_FULL = ["tests/regression/compat_*.py", "app/main.F90", "src/driver/*"]
 
 
 # ---------------------------------------------------------------------------
@@ -399,15 +619,57 @@ def _t_witnesses(cm):
         if not r.matches(features(cm.merged_namelist(cell))):
             bad.append(r.rid + ": witness does not match the row")
             continue
-        rec = {"axes": cell, "class": "PASS", "rows": []}
-        if (r.rid, "PASS") not in cm.row_xpasses([rec]):
-            bad.append(r.rid + ": a passing witness is not a row XPASS")
-        rec = {"axes": cell, "class": "XFAIL", "rows": [r.rid]}
-        if any(rid == r.rid for rid, _ in cm.row_xpasses([rec])):
-            bad.append(r.rid + ": a failing witness is a row XPASS")
+        saved = cm.BACKEND[0]
+        try:
+            # judged on the row's own backend; invisible on any other
+            cm.BACKEND[0] = (r.backend + "-selftest") if r.backend else saved
+            rec = {"axes": cell, "class": "PASS", "rows": []}
+            if (r.rid, "PASS") not in cm.row_xpasses([rec]):
+                bad.append(r.rid + ": a passing witness is not a row XPASS")
+            rec = {"axes": cell, "class": "XFAIL", "rows": [r.rid]}
+            if any(rid == r.rid for rid, _ in cm.row_xpasses([rec])):
+                bad.append(r.rid + ": a failing witness is a row XPASS")
+            if r.backend:
+                cm.BACKEND[0] = "other-backend"
+                rec = {"axes": cell, "class": "PASS", "rows": []}
+                if any(rid == r.rid for rid, _ in cm.row_xpasses([rec])):
+                    bad.append(r.rid + ": a backend row judged on another backend")
+        finally:
+            cm.BACKEND[0] = saved
     return not bad, "scope='any' witnesses are real, matching, and XPASS when they pass {}".format(bad)
 
 
+def _t_legs_contract(cm):
+    """A leg row (RESTART) is judged only when its leg ran; a multirank row
+    turns a skipped DECOMP into a PASS and a DECOMP that ran into an XPASS."""
+    global ROWS
+    saved = ROWS
+    try:
+        ROWS = [_gap("t_rst", "runtime", ("closed_faces",), "t", 0, expect=("RESTART",),
+                     message=r"^synthetic restart"),
+                _single_rank("t_mr", ("closed_faces",), "t", 0, message=r"^synthetic single")]
+        cell = dict(cm.BASE_CELL)
+        nml = cm.merged_namelist(cell)
+        acc = {"status": "accepted", "rc": 0, "stage": None, "messages": []}
+        ok = {"outcome": "PASS", "detail": ""}
+        legs = cm.PHASE_A + ("restart", "decomp")
+        got = [cm.classify(cell, nml, acc, ok)[0],                       # restart not run
+               cm.classify(cell, nml, acc, {"outcome": "RESTART", "detail": "synthetic restart"},
+                           ran=legs, decomp={"status": "skipped", "rows": ["t_mr"]})[0],
+               cm.classify(cell, nml, acc, ok, ran=legs,
+                           decomp={"status": "skipped", "rows": ["t_mr"]})[0],
+               cm.classify(cell, nml, acc, ok, ran=cm.PHASE_A + ("decomp",),
+                           decomp={"status": "skipped", "rows": ["t_mr"]})[0],
+               cm.classify(cell, nml, acc, ok, ran=cm.PHASE_A + ("decomp",),
+                           decomp={"status": "accepted", "rows": []})[0]]
+        want = ["PASS", "XFAIL", "XPASS", "PASS", "XPASS"]
+        return got == want, ("leg rows (not run / xfail / xpass) and multirank rows "
+                             "(skipped / decomposes) {}".format(got))
+    finally:
+        ROWS = saved
+
+
 SELF_TESTS = [("unexplained", _t_unexplained), ("validate_crash", _t_validate_crash),
+              ("legs_contract", _t_legs_contract),
               ("runtime_unexpected", _t_runtime_unexpected), ("rows_contract", _t_rows_contract),
               ("witnesses", _t_witnesses)]

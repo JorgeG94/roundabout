@@ -1,0 +1,141 @@
+# The pairwise compatibility matrix (tests/regression/README.md, "The
+# pairwise compatibility matrix"): every configuration `validate_config`
+# accepts must run clean on a small realistic domain, with every PAIR of
+# closures / coordinates / edges met at least once.
+#
+# What runs here -- the CPU and MPI legs, on a hosted runner:
+#   checks 1-3  REFUSED / CRASH / BUDGET      (the covering array itself)
+#   ENERGY      En against the PASS-population bound
+#   RESTART     24 straight == 12 + checkpoint + warm restart + 12, bitwise
+#   DECOMP      1 rank == 2x2 == 4x1 on the restart registry, owned cells, bitwise
+# ONE build serves all of them: the MPI build (gfortran + OpenMPI); run
+# without mpirun it is the 1-rank binary, and its checkpoint is the DECOMP
+# reference.
+#
+# What does NOT run here: the GPU leg (CROSS_BACKEND, nvfortran on a V100).
+# A hosted runner has no GPU.  It runs nightly on the GPU box through
+# `tests/regression/compat_nightly.sh`, which runs these same legs first and
+# then the GPU one against their report -- see the README, "Nightly".
+#
+# Cadences:
+#   * pull_request  -- the per-PR SLICE: only the cells holding an axis value
+#     whose source paths the PR touches (`compat_expect.VALUE_PATHS`; a
+#     touched shared source runs everything, a docs-only PR nothing);
+#   * nightly       -- the full pairwise set, every CPU/MPI leg;
+#   * weekly        -- the t = 3 slice (vcoord x eddy x vertical mixing in
+#     full, `--design t3`);
+#   * workflow_dispatch -- either design by hand, on any branch.
+# No `branches:` filter on pull_request, for the reason pre-commit.yml gives.
+name: compatibility matrix
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      design:
+        description: "pairwise (nightly set) or t3 (weekly slice)"
+        required: false
+        default: pairwise
+  schedule:
+    - cron: "41 15 * * *"   # nightly: the full pairwise set
+    - cron: "11 17 * * 6"   # weekly (Saturday): the t = 3 slice
+
+concurrency:
+  group: compat-matrix-${{ github.ref }}-${{ github.event.schedule || github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  matrix:
+    name: ${{ github.event.schedule == '11 17 * * 6' && 't=3 slice' || (github.event_name == 'pull_request' && 'per-PR slice' || 'pairwise') }} (gfortran + OpenMPI)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash -el {0}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0     # the per-PR slice diffs against the base branch
+
+      # The mpi.yml provisioning, gfortran leg: compiler + OpenMPI + netcdf-c
+      # from conda (the C library ships `nccopy`, which the RESTART and
+      # DECOMP legs read the NetCDF-4 checkpoints through).
+      - name: Set up compiler and MPI
+        uses: gha3mi/setup-fortran-conda@latest
+        with:
+          compiler: gfortran
+          compiler-version: "15"
+          mpi: openmpi
+          extra-packages: libnetcdf
+          checkout-repo: false
+
+      - name: Install a recent CMake
+        run: pip install --upgrade "cmake>=4.0"
+
+      - name: Build netcdf-fortran
+        run: |
+          tools/build_netcdf_fortran.sh \
+            --fc gfortran \
+            --netcdf-c "$CONDA_PREFIX" \
+            --prefix "$HOME/netcdff"
+          echo "RDB_NETCDFF=$HOME/netcdff" >> "$GITHUB_ENV"
+
+      - name: Report the toolchain
+        run: |
+          gfortran --version | head -1
+          mpirun --version | head -1
+          command -v nccopy
+          nproc
+
+      - name: Configure
+        run: |
+          cmake -B build -S . \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_Fortran_COMPILER=gfortran \
+                -DCMAKE_PREFIX_PATH="$RDB_NETCDFF;$CONDA_PREFIX" \
+                -DRDB_EXTRA_FORTRAN_FLAGS=-march=x86-64-v3 \
+                -DRDB_ENABLE_MPI=ON \
+                -DRDB_ENABLE_NETCDF=ON \
+                -DRDB_ENABLE_GPU=OFF \
+                -DRDB_ENABLE_TESTING=OFF
+
+      - name: Build
+        run: cmake --build build --parallel --target rdb
+
+      # Who tests the test (no model): the generator, the classifier, the
+      # synthetic checkpoints through the DECOMP / RESTART comparators, the
+      # energy bound, the cross-backend band and the slice mapping.
+      - name: Self-test
+        run: python3 tests/regression/compat_matrix.py self-test
+
+      - name: Run the matrix
+        env:
+          OMP_NUM_THREADS: "1"
+          OMPI_MCA_rmaps_base_oversubscribe: "1"
+          PRTE_MCA_rmaps_default_mapping_policy: ":oversubscribe"
+        run: |
+          args="--design pairwise"
+          if [ "${{ github.event.schedule }}" = "11 17 * * 6" ]; then
+            args="--design t3"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            args="--design ${{ github.event.inputs.design || 'pairwise' }}"
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            args="--design pairwise --diff-base origin/${{ github.base_ref }}"
+          fi
+          python3 tests/regression/compat_matrix.py run $args \
+            --build-dir build --mpi-build-dir build \
+            --jobs "$(nproc)" --mpi-jobs 1 --backend cpu-gfortran \
+            --out tmp_local_artifacts/compat_matrix.json
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compat-matrix-${{ github.event.schedule == '11 17 * * 6' && 't3' || 'pairwise' }}
+          path: |
+            tmp_local_artifacts/compat_matrix.json
+            tmp_local_artifacts/compat_matrix/**/run.log
+          retention-days: 14
+          if-no-files-found: warn

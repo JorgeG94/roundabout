@@ -1507,8 +1507,37 @@ Per cell, in order, stopping at the first failure:
    `|Error| <= 1e-9` (the `stability_manifest.BUDGET_OPEN` band — every cell
    carries a surface flux).
 
-Classes: `PASS`, `REFUSED_PHYSICAL`, `REFUSED_GAP`, `XFAIL`, `XPASS`, `FAIL`.
-The suite exits non-zero on any `FAIL` or `XPASS`.
+Checks 1-3 DECIDE the covering array (the fixed point forbids tuples from
+their verdicts only). A cell that passes them then runs the LEGS
+(`compat_legs.py`), in this order, stopping at the first failure — they
+annotate a cell and never change which cells exist, so the cell list is the
+same on every backend and with any subset of legs:
+
+4. **ENERGY** — En at step 24 against the PASS population of the cell's
+   geometry, and its growth over steps 16-24 (see *The energy bound*).
+5. **DECOMP** — the 1-rank checkpoint against 2x2 and 4x1 MPI runs: every
+   restart-registry field, OWNED cells (a staggered field owns both edge
+   faces, so a seam face is checked on both ranks), BITWISE. The exemptions
+   are read from `tests/mpi/test_ocean_decomp_bitid_mpi.F90`'s
+   `carried_tendency` — one list, one reason, two consumers. A decomposition
+   the model refuses at configure is explained by a `multirank` row (a
+   single-rank feature); when both are refused the leg tries 1x2 (the
+   tripolar fold is single-rank in x only).
+6. **RESTART** — 12 steps + checkpoint, then `rdb` with `restart_file` (the
+   production engine path) for 12 more, against the straight 24-step run's
+   checkpoint: every field, ghosts included, bitwise.
+7. **CROSS_BACKEND** — the GPU leg only, against the CPU report (see *The
+   cross-backend band*).
+
+The checkpoints are NetCDF-4; the legs read them through `nccopy -k '64-bit
+offset'` (netcdf-c ships it) and a stdlib classic-format parser, and compare
+the raw IEEE bytes.
+
+Classes: `PASS`, `REFUSED_PHYSICAL`, `REFUSED_GAP`, `XFAIL`, `XPASS`, `FAIL`
+(and `SLICE_SKIPPED` in a per-PR slice). The suite exits non-zero on any
+`FAIL` or `XPASS`. A runtime row is judged only when a check it expects ran
+(a DECOMP row neither explains nor XPASSes a run without the MPI leg), and a
+row with `backend="gpu"` exists only for a `--backend gpu-*` run.
 
 `compat_expect.py` holds the rows. Each matches on FEATURES read off the cell's
 merged namelist (with the model's defaults), never on axis value names, AND on
@@ -1531,23 +1560,36 @@ fails for a DIFFERENT reason is still a FAIL.
 ## Running it
 
 ```bash
-# (gfortran / NetCDF toolchain loaded in this shell)
+# (gfortran / NetCDF toolchain loaded in this shell; `nccopy` on PATH for the legs)
 python3 tests/regression/compat_matrix.py list            # the axes + the cell list, no model
-python3 tests/regression/compat_matrix.py run --build-dir build_gfortran --jobs 4 \
-        --out tmp_local_artifacts/compat/last.json [--previous <last nightly>.json]
+# checks 1-3 + ENERGY + RESTART; + DECOMP with an MPI build
+python3 tests/regression/compat_matrix.py run --build-dir build_gfortran \
+        [--mpi-build-dir build_gfortran_mpi] --jobs 4 \
+        --out tmp_local_artifacts/compat/cpu.json [--previous <last nightly>.json]
+# the GPU leg: the SAME cells, + CROSS_BACKEND against the CPU report
+python3 tests/regression/compat_matrix.py run --build-dir build_cc70 --backend gpu-nvfortran-cc70 \
+        --cells-from tmp_local_artifacts/compat/cpu.json --reference tmp_local_artifacts/compat/cpu.json \
+        --legs energy,cross_backend --out tmp_local_artifacts/compat/gpu.json
+# both legs, as the nightly runs them (README "Nightly")
+tests/regression/compat_nightly.sh --cpu-env ./gcc_env.sh --mpi-build build_gfortran_mpi \
+        --gpu-env ./nvhpc_env.sh --gpu-build build_cc70
+# the weekly t = 3 slice; the per-PR slice
+python3 tests/regression/compat_matrix.py run --design t3 ...
+python3 tests/regression/compat_matrix.py run --diff-base origin/main ...   # or --changed-files F
 python3 tests/regression/compat_matrix.py self-test       # no model; ctest rdb_compat_matrix_selftest
 ```
 
-The report prints the class counts, every FAIL / XPASS with its cell and the
-chksum attribution, every KNOWN_GAP row with its owner and how many cells hit
-it, and (with `--previous`) the class diff against the last run. The JSON
-record carries one entry per cell: `axes`, `role` (`cover` / `witness` /
-`pinned`), `class`, `rows`, and a `checks` map with a slot for each of
-`validate`, `run`, `budget`, `decomp`, `restart`, `cross_backend` — the last
-three are `not_run` until their legs land, and `run.metrics` (final En / Mass /
-Salt / Temp, peak MaxCFL, worst budget residuals) is what the cross-backend
-band and the decomposition / restart legs will compare. Scratch lives in
-`tmp_local_artifacts/compat_matrix/` and is removed on a green run.
+The report prints the class counts, the per-leg status counts, every FAIL /
+XPASS with its cell and the chksum attribution, every KNOWN_GAP row with its
+owner and how many cells hit it, and (with `--previous`) the class diff
+against the last run. The JSON record carries one entry per cell: `axes`,
+`role` (`cover` / `witness` / `pinned`), `class`, `rows`, and a `checks` map
+with a slot for each of `validate`, `run`, `budget`, `energy`, `decomp`,
+`restart`, `cross_backend` (status, detail, wall seconds); `run.metrics`
+carries the per-step console series and the full-precision field norms of
+the final checkpoint the other backend's CROSS_BACKEND leg compares against.
+The report also records the leg constants it was judged with. Scratch lives
+in `tmp_local_artifacts/compat_matrix/` and is removed on a green run.
 
 **Cost (measured 2026-10-02, gfortran, a shared 4-core box under load ~8-18):**
 the fixed point converges in 7 iterations and evaluates 406 cells — the final
@@ -1576,13 +1618,133 @@ against `nz x H_VANISHED` = 1.5e-3 m, a NEW site of the same land-column class.
 Today's table: **76 PASS, 10 REFUSED_PHYSICAL, 37 REFUSED_GAP, 8 XFAIL, 0 XPASS,
 0 FAIL.**
 
-## Not done yet (next phase)
+## The energy bound (ENERGY)
 
-Checks 4-6 — `DECOMP` (1 vs 2x2 vs 4x1 bitwise on the restart registry, with
-the `test_ocean_decomp_bitid_mpi` exemptions), `RESTART` (12 + restart + 12 vs
-24 through the engine path) and `CROSS_BACKEND` (the GPU cell finite +
-budget-closed and inside the gfortran/nvfortran En / MaxCFL band, modelled on
-`global_1deg/check_against_reference.py`) — the nightly workflow, the weekly
-t = 3 (vcoord x eddy x vertical mixing) slice, and the per-PR slice (closure →
-source paths). The record format already carries their slots; `tripolar` and
-`cavity` are the single-rank geometry rows the MPI leg skips.
+z_fixed WITHOUT closed faces passed checks 1-3 at 5-61x the kinetic energy
+of every other coordinate: nothing that integrates finite, closed budgets
+looks at whether the flow is plausible. Every cell starts from rest under the
+same 0.1 Pa wind, so its En at step 24 is set by the wind and the GEOMETRY,
+and the closures move it by about a factor of two. Measured (gfortran,
+2026-10-04, the 69 cells passing checks 1-3 outside `z_fixed_open`):
+
+| geometry | n | median En(24) (m2/s2) | min / median | max / median | z_fixed_open cells |
+|---|---|---|---|---|---|
+| closed | 11 | 6.9e-3 | 0.56 | 1.54 | 5.4x |
+| channel | 22 | 7.9e-3 | 0.51 | 1.39 | 1.0x, 1.3x, 1.3x, 22x |
+| obc | 12 | 7.6e-3 | 0.58 | 1.41 | 16x |
+| tripolar | 8 | 1.7e-4 | 0.74 | 1.59 | 1.3x, 61x |
+| cavity | 16 | 9.5e-3 | 0.73 | 1.02 | 1.1x |
+
+The bound (`compat_legs.EN_REF` = the medians, `ENERGY_RATIO_MAX` = **2.5**):
+En(24) <= 2.5 x the geometry's median — 1.6x headroom over the widest PASS
+cell — plus `GROWTH_MAX` = **3.0** on En(24)/En(16) (a spin-up from rest
+grows like t^2 at most, 2.25; the PASS population tops out at 1.8; an
+instability that sets in late accelerates past it). It is per geometry
+because the tripolar ring (15 x 1 degree at 59-70 N) holds 40x less energy
+than the basins. On the weekly t = 3 slice it separated exactly: 49 ENERGY
+failures, all 49 on `z_fixed_open`, all explained by `zfixed_open_steps`, and
+none of the other 204 cells that ran the leg tripped it. A closure change that moves
+the population by more than its spread re-measures `EN_REF` (the report
+prints every cell's ratio).
+
+## The cross-backend band (CROSS_BACKEND)
+
+Modelled on `validation_examples/ocean/global_1deg/check_against_reference.py`
+(a relative energy band that widens with time; budgets in the round-off
+envelope) with the constants from the data: gfortran 15.1 (CPU) against
+nvfortran 26.5 (`-gpu=cc70`, one V100), the SAME cells (`--cells-from`), 63
+passing checks 1-3 on both (2026-10-04).
+
+* **Field norms** — the real test. The L2 and max norm of every
+  restart-registry field of the final checkpoint, owned cells, full
+  precision: `|gpu - cpu| / |cpu| <= 1e-10 + 4e-11 n` (**1.06e-9** at n = 24).
+  Measured: median 1e-13; PASS-population maximum **5.7e-11** (the
+  kappa-shear `kd_int` max-norm; EPBL `kd_int` 1.9e-11; everything else
+  <= 1e-11) — 18x headroom. The out-of-band cells sat at 1.6e-7 .. 4e26.
+* **Console En / MaxCFL** every step: `1e-3 + 1e-4 n` (MaxCFL 2x). A coarse
+  guard — the console prints 4 digits — and every passing cell agreed to the
+  last printed digit on every step.
+* **Budgets** — the GPU run's own residuals inside `1e-13 + 1e-14 n`
+  (3.4e-13 at n = 24). Measured worst: Mass 1.7e-15, Heat 2.1e-15, Salt
+  7.9e-16 (CPU: 1.6e-15, 1.8e-15, 7.9e-16).
+
+Bitwise is not the contract across toolchains; the band is. A cell the CPU
+fails at checks 1-3 and the GPU passes is itself a CROSS_BACKEND failure.
+GPU-only gaps are rows with `backend="gpu"`, invisible to a CPU run.
+
+## Nightly and weekly
+
+`.github/workflows/compat-matrix.yml` (hosted runner, no GPU): the MPI build
+(gfortran 15 + OpenMPI from conda, which also ships `nccopy`) serves every
+CPU leg — run without `mpirun` it is the 1-rank binary, and its checkpoint is
+the DECOMP reference. Nightly: the full pairwise set, checks 1-3 + ENERGY +
+RESTART + DECOMP. Weekly (Saturday): the t = 3 slice. Pull requests: the
+per-PR slice.
+
+The GPU leg has no hosted runner. `tests/regression/compat_nightly.sh` runs
+the CPU legs and then the GPU leg against their report on the GPU box (it
+picks the least-loaded device and re-runs a device OOM alone):
+
+```bash
+tests/regression/compat_nightly.sh --cpu-env ./gcc_env.sh --cpu-build build_gfortran_mpi \
+    --mpi-build build_gfortran_mpi --gpu-env ./nvhpc_env.sh --gpu-build build_cc70 [--t3]
+```
+
+## The weekly t = 3 slice and the per-PR slice
+
+`--design t3` runs the known-dangerous triple in FULL: vertical coordinate
+(11) x eddy parameterisation (7) x vertical mixing (8: KPP, EPBL, PP81 alone,
+and KPP + kappa-shear / kappa-shear-vertex / tidal / convective / double
+diffusion), every other axis at `BASE_CELL` — 616 cells. Nothing is
+forbidden; every refusal is classified as usual.
+
+`--diff-base REF` (or `--changed-files F`) maps the diff to axis values
+through `compat_expect.VALUE_PATHS` (value -> source globs) and RUNS only the
+cells holding a touched value; the others are validated (the covering array
+is still the full fixed point) and reported `SLICE_SKIPPED`. A changed
+Fortran source no value claims is shared code and runs everything; a diff
+that touches no model source runs nothing; a change to the matrix itself, the
+driver or `app/main.F90` runs everything. The self-test fails when a
+`VALUE_PATHS` glob matches no file, so a rename cannot silently empty a
+slice. Example: a diff touching `rdb_ocean_mle.F90` runs 16 cells (eddy=mle)
+in 33 s.
+
+## Cost (measured 2026-10-04, a shared 4-core box under load 8-13, one V100)
+
+| leg | design | cells | wall | serial sums |
+|---|---|---|---|---|
+| CPU, checks 1-3 (fixed point) | pairwise | 408 evaluated, 130 kept | 68 s | validate 25 s, run 194 s |
+| CPU, RESTART | pairwise | 50 | (in the legs' wall) | 35 s |
+| MPI, DECOMP (2x2 + 4x1, 1 decomposed run at a time) | pairwise | 74 | (in the legs' wall) | 735 s |
+| **CPU + MPI total** | pairwise | | **262 s** | |
+| GPU, checks 1-3 + ENERGY + CROSS_BACKEND, 4 jobs on one V100 | pairwise | 133 | **195 s** | run 613 s |
+| CPU + MPI, all legs | t = 3 | 616 | **545 s** | decomp 1817 s |
+
+The nightly fits its budget (one V100-hour) 18x over; the GPU t = 3 slice
+(616 cells at the same ~1.5 s / cell / 4 jobs) is ~4 min more when wanted.
+
+## Findings of the legs (2026-10-04)
+
+Every one is a `KNOWN_GAP` row now, so the committed table is green (CPU +
+MPI: 9 PASS, 10 REFUSED_PHYSICAL, 37 REFUSED_GAP, 77 XFAIL; GPU: 63 PASS, 23
+XFAIL; t = 3: 104 PASS, 216 REFUSED_GAP, 296 XFAIL; 0 FAIL, 0 XPASS):
+
+| row | leg | diagnosis |
+|---|---|---|
+| `restart_visc_rem` | RESTART | `visc_rem_precompute` builds its remnant from the previous stage's `vmix%kv`, which the restart registry does not carry: the first resumed step weights F_bt differently |
+| `restart_meke_gm_src_lag` | RESTART | MEKE reads the PREVIOUS thermo step's `gm%gm_src`; not checkpointed, so MEKE resumes from a cold source (3 % off at step 24) |
+| `restart_mle_mld_filter` | RESTART | MLE's running-mean `mld_filtered` (mld_decay_time > 0) is persistent state outside the registry |
+| `decomp_redi_seam` | DECOMP | Redi differs from 1 rank in every owned cell (1e-4 .. 1e-2 of the field max after 24 steps): the Redi seam-as-wall bug item 2's branch fixes |
+| `decomp_weno_pv` | DECOMP | WENO PV interpolation: last-bit differences in all owned cells on 2x2 / 4x1 in some combinations (minimised: sadourny + weno7 on z*); unchanged by `-ffp-contract=off` |
+| `decomp_eulerian_z_ssp_rk2` | DECOMP | eulerian_z + ssp_rk2: same, with visc_rem or EPBL + MLE (minimised); unchanged by `-ffp-contract=off` |
+| `cavity_single_rank`, `tripolar_fold_px1` | DECOMP (multirank) | the configure refusals on > 1 rank; the tripolar cells then run 1x2, bitwise unless Redi or WENO PV is on |
+| `gpu_tripolar` | GPU | 3 of 10 tripolar cells stop in steps 1-3 on the GPU only, and the rest are non-deterministic run to run (6e-11 vs 1e-3, `hvisc_du_visc` ~4e26 in owned faces): a device race or uninitialised device read on the fold path |
+| `gpu_eulerian_z_epbl_mle_drift` | GPU | eulerian_z + ssp_rk2 + EPBL + MLE ends 1.6e-7 from gfortran, 3000x the population spread (the same combination is decomposition-sensitive) |
+| `zfixed_open_steps` (extended) | ENERGY | the open-staircase PGF: 49 of 49 accepted z_fixed_open cells in the t = 3 slice fail the bound |
+
+Instrument findings, fixed in the runner (not the model): the GPU's
+exit-time `Warning: ieee_* is signaling` line read as a refusal reason; 4
+concurrent GPU cells with kappa-shear can exhaust a V100 at kernel launch
+(the per-thread stack), so a device OOM is re-run alone; ghost cells hold
+unset values on the device build, so the field norms are taken over OWNED
+cells, as the DECOMP leg compares.
