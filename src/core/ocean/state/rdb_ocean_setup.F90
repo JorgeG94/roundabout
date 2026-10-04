@@ -1645,16 +1645,20 @@ contains
       !!     list or a file, e.g. `HYBRID:file,sigma2,dz`).
       !!
       !! `validate_config` has already refused a list of the wrong length
-      !! or one that is not strictly increasing.  Harmless on other
-      !! families.
+      !! or one that is not strictly increasing; a short list reaching here
+      !! is an `error stop`.  Harmless on other families.
       type(config_t), intent(in) :: cfg
       real(wp), intent(inout) :: rho_target(0:)
       integer, intent(in) :: nz_ml
       integer :: k
       real(wp) :: frac
 
-      if (trim(cfg%rho_target_profile) == "list" .and. &
-          count(cfg%rho_target_list > 0.0_wp) >= nz_ml + 1) then
+      if (trim(cfg%rho_target_profile) == "list") then
+         ! validate_config refuses a short list; reaching here with one is
+         ! a bug, so stop rather than fall back to the linspace.
+         if (count(cfg%rho_target_list > 0.0_wp) < nz_ml + 1) then
+            error stop "configure_rho_target: rho_target_list shorter than nz_ml+1"
+         end if
          do k = 0, nz_ml
             rho_target(k) = cfg%rho_target_list(k + 1)
          end do

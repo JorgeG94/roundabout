@@ -18,8 +18,6 @@ from rdb._knob import RdbDeadKnobWarning
 
 
 def test_group_and_knob_counts():
-    # 60 groups / 682 knobs total, i.e. exactly what `rdb_nml_json` +
-    # `tools/gen_python_config.py` report for the live schema (the last
     # 60 groups / 685 knobs total, i.e. exactly what `rdb_nml_json` +
     # `tools/gen_python_config.py` report for the live schema (the last
     # bump: &vcoord_nml rho_target_profile + rho_target_list, the
