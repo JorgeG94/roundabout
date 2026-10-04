@@ -4851,7 +4851,7 @@ class OceanIsopycnal(Group):
 
     pgf_skip_nonoverlap = Bool(
         'pgf_skip_nonoverlap',
-        doc="Zero the face PGF where a grounded layer's z-extents do not overlap across the face (VCOORD_LAGRANGIAN only, mont / fv_lite / fv_wright / fv_mom6; default ON — kills the spurious at-rest grounded-layer pressure gradient)",
+        doc="Zero the face PGF where a grounded layer's z-extents do not overlap across the face AND the layer is at the floor (<= 2*max(angstrom_h, H_VANISHED)) on one side (VCOORD_LAGRANGIAN only, mont / fv_lite / fv_wright / fv_mom6; default ON — kills the spurious at-rest grounded-layer pressure gradient)",
         units='',
         required=False,
         default=True,

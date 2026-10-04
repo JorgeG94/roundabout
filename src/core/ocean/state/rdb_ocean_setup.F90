@@ -21,7 +21,8 @@ module rdb_ocean_setup
    use rdb_ocean_state, only: ocean_state_t, ocean_state_seed_land_cells, &
                               pgf_nonoverlap_gate_on
    use rdb_ocean_pressure_force, only: OPGF_VARIANT_GPRIME, OPGF_VARIANT_FV_MOM6, &
-                                       OPGF_VARIANT_FV_WRIGHT, parse_opgf_variant
+                                       OPGF_VARIANT_FV_WRIGHT, parse_opgf_variant, &
+                                       nonoverlap_vanish_tol_for
    use rdb_eos, only: parse_eos_variant, eos_validate, &
                       EOS_VARIANT_ROQUET_SPV, &
                       parse_tfreeze_set, eos_apply_tfreeze_set, &
@@ -3529,10 +3530,16 @@ contains
       end if
       ocean_state%pressure_force%skip_nonoverlap = &
          pgf_nonoverlap_gate_on(cfg, ocean_state%pressure_force%variant)
+      ! Grounded = non-overlapping AND vanished on one side: the gate never
+      ! zeroes the PGF of a layer that is massive in both columns.
+      ocean_state%pressure_force%nonoverlap_vanish_tol = &
+         nonoverlap_vanish_tol_for(cfg%ocean%isopycnal%angstrom_h)
       if (ocean_state%pressure_force%skip_nonoverlap) then
          if (compute_rank == 0) then
             call logger%info("Isopycnal PGF:    pgf_skip_nonoverlap = ON "// &
-                             "(grounded-layer face PGF zeroed where layers do not overlap)")
+                             "(grounded-layer face PGF zeroed where layers do not overlap "// &
+                             "and one side is <= "// &
+                             to_string(ocean_state%pressure_force%nonoverlap_vanish_tol)//" m)")
          end if
       else if (parse_ocean_vcoord_type(cfg%vcoord_type) == VCOORD_LAGRANGIAN .and. &
                cfg%ocean%isopycnal%pgf_skip_nonoverlap .and. &

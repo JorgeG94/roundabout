@@ -1335,7 +1335,11 @@ was never a thin-layer bookkeeping artefact.
 PGF wherever the layer's z-extents in
 the two abutting columns do not overlap — exactly where the layer has wedged
 out against the bed and there is no common depth to difference the pressure
-across. Overlapping layers are untouched, so every other vertical coordinate is
+across. (Since 2026-10-04 it also requires the layer to sit at the floor,
+`<= 2·max(angstrom_h, H_VANISHED)`, on one side: non-overlap alone also
+matched a sigma-seeded stack over a staircase, whose layers are massive on both
+sides, and zeroing those grew `En` to the CFL panic — `seamount_conservative_floor`
+is bit-identical under the narrowed gate.) Overlapping layers are untouched, so every other vertical coordinate is
 bit-identical and a wedged-out layer can still be re-wetted by continuity's own
 upwind flux and by the barotropic correction.
 
