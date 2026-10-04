@@ -60,6 +60,7 @@ module rdb_ocean_pressure_force
    public :: ocean_pressure_force_apply
    public :: parse_opgf_variant
    public :: gprime_nz_is_supported
+   public :: nonoverlap_vanish_tol_for
    public :: wright_pcm_dpa_intz
    public :: wright_pcm_dpa_face
    public :: roquet_pcm_dpa_intz
@@ -288,6 +289,21 @@ module rdb_ocean_pressure_force
          !! re-checks that the latch did not drift).  `gprime` differences
          !! interface positions directly and has no such Jacobian, so it is
          !! the one variant left N/A (the driver warns).
+      real(wp) :: nonoverlap_vanish_tol = 2.0_wp*H_VANISHED
+         !! Thickness (m) at or below which a layer counts as GROUNDED for the
+         !! `skip_nonoverlap` gate: a face is zeroed only where the layer's
+         !! z-extents do not overlap AND the layer is this thin on at least
+         !! one side.  Non-overlap alone is not grounding — a layer that is
+         !! MASSIVE on both sides but sits at different depths (a
+         !! sigma-seeded stack over a bathymetric step, where a 10 m layer at
+         !! 90-100 m faces a 25 m layer at 225-250 m) is a steep coordinate
+         !! surface the FV forms are built for, exactly as under
+         !! `vcoord_type="sigma"`.  Zeroing its PGF while continuity keeps
+         !! moving its mass across the face breaks the PGF-work / PE
+         !! exchange and grows energy without bound (the compat-matrix
+         !! staircase, MaxCFL panic at step 178).  Set by the driver from
+         !! `nonoverlap_vanish_tol_for(angstrom_h)`; the default matches
+         !! `angstrom_h = 0`.
          !!
          !! `mont` needs the gate for the SAME geometric reason the FV forms
          !! do, even though its face expression is not a two-point Jacobian:
@@ -448,6 +464,22 @@ module rdb_ocean_pressure_force
    end type ocean_pressure_force_t
 
 contains
+
+   pure function nonoverlap_vanish_tol_for(angstrom_h) result(tol)
+      !! The grounded-layer gate's "vanished on one side" threshold,
+      !! `2·max(angstrom_h, H_VANISHED)`: a layer within a factor two of the
+      !! floor it can rest on.  The factor is the margin that keeps every
+      !! floor the Lagrangian path parks a grounded layer on inside the band
+      !! — the `uniform_z` seed's `max(angstrom_h, 2·H_VANISHED)` collapse,
+      !! the conservative-floor borrow's `angstrom_h` (to round-off), and the
+      !! positive-definite continuity's `[angstrom_h, angstrom_h + H_VANISHED]`
+      !! at-floor band — while staying orders of magnitude below any layer
+      !! that carries real mass.
+      real(wp), intent(in) :: angstrom_h
+         !! `&ocean_isopycnal_nml angstrom_h` (m); 0 when the floor is off.
+      real(wp) :: tol
+      tol = 2.0_wp*max(angstrom_h, H_VANISHED)
+   end function nonoverlap_vanish_tol_for
 
    pure function gprime_nz_is_supported(variant, nz) result(ok)
       !! `.true.` unless `variant == OPGF_VARIANT_GPRIME` with `nz /= 2`
@@ -707,6 +739,7 @@ contains
       real(wp) :: p_centre_below, p_centre_above
       real(wp) :: rho_face, z_correction, z_running
       real(wp) :: h_l, h_r, e_l, e_r, z_eff, drho_star
+      real(wp) :: vtol
 
       nx = grid%nx_total
       ny = grid%ny_total
@@ -1017,6 +1050,14 @@ contains
       ! hundreds of metres apart, so the `M` recursion stops producing a
       ! horizontally uniform potential at rest and the residual reappears.
       !
+      ! GROUNDED, not merely non-overlapping: the face is zeroed only where
+      ! the layer is also vanished (`<= nonoverlap_vanish_tol`) on at least
+      ! one side.  A layer massive on BOTH sides that merely sits at different
+      ! depths (a sigma-seeded stack over a step) carries real mass flux
+      ! across the face; its FV PGF is the ordinary steep-coordinate one
+      ! (`vcoord_type="sigma"` runs the same geometry), and zeroing it breaks
+      ! the PGF-work / PE exchange — see `nonoverlap_vanish_tol`.
+      !
       ! A separate guarded pass on purpose: when the gate is off (every vcoord
       ! but LAGRANGIAN) not one extra load is issued ⇒ bit-identical.
       ! Reads `z_centre`, so the driver only ever sets the flag for the four
@@ -1024,20 +1065,25 @@ contains
       ! FV_WRIGHT, and FV_MOM6 — where `z_centre` is allocated + filled for
       ! this gate alone).
       if (pgf%skip_nonoverlap) then
+         vtol = pgf%nonoverlap_vanish_tol
          do concurrent(k=1:nz, j=1:ny, i=2:nx)
-            if (min(pgf%z_centre%data(i - 1, j, k) + 0.5_wp*ms%h_layer(i - 1, j, k), &
-                    pgf%z_centre%data(i, j, k) + 0.5_wp*ms%h_layer(i, j, k)) <= &
-                max(pgf%z_centre%data(i - 1, j, k) - 0.5_wp*ms%h_layer(i - 1, j, k), &
-                    pgf%z_centre%data(i, j, k) - 0.5_wp*ms%h_layer(i, j, k))) then
-               pgf%dpdx_face%data(i, j, k) = 0.0_wp
+            if (min(ms%h_layer(i - 1, j, k), ms%h_layer(i, j, k)) <= vtol) then
+               if (min(pgf%z_centre%data(i - 1, j, k) + 0.5_wp*ms%h_layer(i - 1, j, k), &
+                       pgf%z_centre%data(i, j, k) + 0.5_wp*ms%h_layer(i, j, k)) <= &
+                   max(pgf%z_centre%data(i - 1, j, k) - 0.5_wp*ms%h_layer(i - 1, j, k), &
+                       pgf%z_centre%data(i, j, k) - 0.5_wp*ms%h_layer(i, j, k))) then
+                  pgf%dpdx_face%data(i, j, k) = 0.0_wp
+               end if
             end if
          end do
          do concurrent(k=1:nz, j=2:ny, i=1:nx)
-            if (min(pgf%z_centre%data(i, j - 1, k) + 0.5_wp*ms%h_layer(i, j - 1, k), &
-                    pgf%z_centre%data(i, j, k) + 0.5_wp*ms%h_layer(i, j, k)) <= &
-                max(pgf%z_centre%data(i, j - 1, k) - 0.5_wp*ms%h_layer(i, j - 1, k), &
-                    pgf%z_centre%data(i, j, k) - 0.5_wp*ms%h_layer(i, j, k))) then
-               pgf%dpdy_face%data(i, j, k) = 0.0_wp
+            if (min(ms%h_layer(i, j - 1, k), ms%h_layer(i, j, k)) <= vtol) then
+               if (min(pgf%z_centre%data(i, j - 1, k) + 0.5_wp*ms%h_layer(i, j - 1, k), &
+                       pgf%z_centre%data(i, j, k) + 0.5_wp*ms%h_layer(i, j, k)) <= &
+                   max(pgf%z_centre%data(i, j - 1, k) - 0.5_wp*ms%h_layer(i, j - 1, k), &
+                       pgf%z_centre%data(i, j, k) - 0.5_wp*ms%h_layer(i, j, k))) then
+                  pgf%dpdy_face%data(i, j, k) = 0.0_wp
+               end if
             end if
          end do
       end if

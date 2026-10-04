@@ -51,6 +51,10 @@
 !!   * `gate_preserves_a_real_density_gradient` — the gate must not eat physics:
 !!     a genuine horizontal density contrast in fully overlapping layers still
 !!     produces the same PGF with the gate on.
+!!   * `gate_spares_massive_nonoverlapping_layers` — non-overlap is not
+!!     grounding: a sigma-shaped stack over a bathymetric step puts massive
+!!     layers in disjoint z-intervals, and the gate (which also requires the
+!!     layer to be at the floor on one side) must leave them bit-identical.
 module test_ocean_pgf_grounded
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp, GRAVITY
@@ -60,7 +64,8 @@ module test_ocean_pgf_grounded
    use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
    use rdb_ocean_pressure_force, only: ocean_pressure_force_t, &
                                        ocean_pressure_force_compute, &
-                                       OPGF_VARIANT_FV_LITE, OPGF_VARIANT_FV_MOM6
+                                       OPGF_VARIANT_FV_LITE, OPGF_VARIANT_FV_MOM6, &
+                                       nonoverlap_vanish_tol_for
    implicit none
    private
 
@@ -88,7 +93,11 @@ contains
                                test_grounded_rest_fv_mom6), &
                   new_unittest("fv_mom6_gate_is_inert_on_aligned_columns", test_gate_inert_fv_mom6), &
                   new_unittest("fv_mom6_gate_preserves_a_real_density_gradient", &
-                               test_keeps_gradient_fv_mom6) &
+                               test_keeps_gradient_fv_mom6), &
+                  new_unittest("gate_spares_massive_nonoverlapping_layers", &
+                               test_spares_massive_fv_lite), &
+                  new_unittest("fv_mom6_gate_spares_massive_nonoverlapping_layers", &
+                               test_spares_massive_fv_mom6) &
                   ]
    end subroutine collect_ocean_pgf_grounded_tests
 
@@ -226,6 +235,9 @@ contains
          pgf_open%variant = variant
          pgf_gated%variant = variant
          pgf_gated%skip_nonoverlap = .true.
+         ! What `configure_ocean_pgf` sets from `&ocean_isopycnal_nml
+         ! angstrom_h`: the collapsed layers sit on this floor.
+         pgf_gated%nonoverlap_vanish_tol = nonoverlap_vanish_tol_for(ANGSTROM_H)
 
          call build_grounded_state(ms, grid, bed_shallow=100.0_wp)
          call set_b_from_column(ms, pgf_open)
@@ -400,5 +412,113 @@ contains
       call pgf_open%destroy()
       call ms%destroy()
    end subroutine test_keeps_gradient
+
+   subroutine test_spares_massive_fv_lite(error)
+      type(error_type), allocatable, intent(out) :: error
+      call test_spares_massive(error, OPGF_VARIANT_FV_LITE)
+   end subroutine test_spares_massive_fv_lite
+
+   subroutine test_spares_massive_fv_mom6(error)
+      type(error_type), allocatable, intent(out) :: error
+      call test_spares_massive(error, OPGF_VARIANT_FV_MOM6)
+   end subroutine test_spares_massive_fv_mom6
+
+   subroutine test_spares_massive(error, variant)
+      !! Non-overlap is not grounding.  A SIGMA-shaped stack over a 100 m ->
+      !! 250 m step (the default `thickness_config` under
+      !! `vcoord_type="lagrangian"`): every layer is massive on both sides
+      !! (10 m vs 25 m), yet seven of the eight layers occupy disjoint
+      !! z-intervals across the step face.  That is a steep coordinate surface,
+      !! which the FV forms are built to difference — the same face under
+      !! `vcoord_type="sigma"` — so the gate must leave every face BITWISE
+      !! untouched.  Before the gate required a vanished side it zeroed those
+      !! seven layers, and on the compat-matrix staircase the run grew without
+      !! bound (`test_ocean_lagrangian_staircase`).
+      !!
+      !! Guarded against vacuity twice: the setup must actually present
+      !! non-overlapping layers at the step face, and the ungated PGF there
+      !! must be non-zero (so "unchanged" is not "zero = zero").
+      type(error_type), allocatable, intent(out) :: error
+      integer, intent(in) :: variant
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_pressure_force_t) :: pgf_open, pgf_gated
+      real(wp), allocatable :: dpdx_open(:, :, :)
+      integer :: i, j, k, nx, ny, i_step, n_disjoint
+      real(wp) :: depth, z_bot_l, z_bot_r, max_step_face
+      real(wp), parameter :: SHALLOW = 100.0_wp, DEEP = 250.0_wp
+      checks: block
+
+         call grid%init(24, 6, NGHOST, 8000.0_wp, 8000.0_wp)
+         ms%nz_ml = NZ
+         call ms%init(grid)
+         call pgf_open%init(grid, nz_ml=NZ)
+         call pgf_gated%init(grid, nz_ml=NZ)
+         pgf_open%variant = variant
+         pgf_gated%variant = variant
+         pgf_gated%skip_nonoverlap = .true.
+         pgf_gated%nonoverlap_vanish_tol = nonoverlap_vanish_tol_for(ANGSTROM_H)
+         nx = grid%nx_total
+         ny = grid%ny_total
+         i_step = nx/2 + 1     ! first deep column; the step face is i_step
+
+         do j = 1, ny
+            do i = 1, nx
+               depth = merge(DEEP, SHALLOW, i >= i_step)
+               do k = 1, NZ
+                  ms%h_layer(i, j, k) = depth/real(NZ, wp)
+               end do
+            end do
+         end do
+         ! A z-stratified ocean sampled at each sigma layer's centre (the
+         ! layers are NOT isopycnals, exactly as the sigma seed leaves them)
+         ! plus a real cross-step front, denser to the east, so the step face
+         ! carries a genuine PGF under every variant.
+         do j = 1, ny
+            do i = 1, nx
+               depth = merge(DEEP, SHALLOW, i >= i_step)
+               do k = 1, NZ
+                  ms%rho_layer(i, j, k) = RHO_LIGHTEST + RHO_RANGE* &
+                                          (depth*(1.0_wp - (real(k, wp) - 0.5_wp)/real(NZ, wp)))/DEEP + &
+                                          0.5_wp*real(i - 1, wp)/real(nx - 1, wp)
+               end do
+            end do
+         end do
+
+         ! Non-vacuity 1: count the layers whose extents are disjoint at the
+         ! step face (bottom-up stack from each bed).
+         n_disjoint = 0
+         do k = 1, NZ
+            z_bot_l = -SHALLOW + real(k - 1, wp)*SHALLOW/real(NZ, wp)
+            z_bot_r = -DEEP + real(k - 1, wp)*DEEP/real(NZ, wp)
+            if (min(z_bot_l + SHALLOW/real(NZ, wp), z_bot_r + DEEP/real(NZ, wp)) <= &
+                max(z_bot_l, z_bot_r)) n_disjoint = n_disjoint + 1
+         end do
+         call check(error, n_disjoint >= NZ/2, &
+                    "the step does not separate the layers — the test is vacuous")
+         if (allocated(error)) exit checks
+
+         call set_b_from_column(ms, pgf_open)
+         call set_b_from_column(ms, pgf_gated)
+
+         call run_pgf(ms, pgf_open, 8000.0_wp)
+         allocate (dpdx_open, source=pgf_open%dpdx_face%data)
+         max_step_face = maxval(abs(dpdx_open(i_step, :, :)))
+
+         call run_pgf(ms, pgf_gated, 8000.0_wp)
+
+         ! Non-vacuity 2: the face carries a PGF for the gate to (not) eat.
+         call check(error, max_step_face > 1.0e-6_wp, &
+                    "no PGF at the step face — 'unchanged' would mean nothing")
+         if (allocated(error)) exit checks
+         call check(error, all(pgf_gated%dpdx_face%data == dpdx_open), &
+                    "the gate zeroed a layer that is massive on both sides of the step")
+
+      end block checks
+      if (allocated(dpdx_open)) deallocate (dpdx_open)
+      call pgf_gated%destroy()
+      call pgf_open%destroy()
+      call ms%destroy()
+   end subroutine test_spares_massive
 
 end module test_ocean_pgf_grounded
