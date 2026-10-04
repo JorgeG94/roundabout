@@ -15,14 +15,14 @@
 !!   2. runs every DECOMPOSED case of the launched rank count on the same
 !!      namelist: the north-south split (px = 1, py = nprocs) and the
 !!      east-west splits through the distributed fold exchange (2x1; 3x1;
-!!      4x1 and 2x2), the latter via `engine_setup`'s TEST-ONLY
-!!      `allow_distributed_fold` until the px > 1 refusal is lifted;
+!!      4x1 and 2x2);
 !!   3. compares, BITWISE, each rank's whole storage window (ghost rows and
 !!      columns included) of h, u, v, every tracer hTr (S, T) and the BT
 !!      end-of-step eta against the matching window of the reference, plus
 !!      the tripolar metrics at configure time (the generator gate);
-!!   4. on np >= 2, asserts that px = 2 WITHOUT the bypass is still REFUSED
-!!      at configure time.
+!!   4. on np >= 2, asserts that an east-west split is ACCEPTED at
+!!      configure, and that one whose tiles are narrower than nghost+1
+!!      columns is REFUSED (the tile-width rule).
 !!
 !! Two grids:
 !!   * "spanning": ny = 24 from 59N at 1 deg, phi_join = 74 — the bipolar
@@ -110,7 +110,7 @@ program test_ocean_tripolar_fold_mpi
    variant = "beta_drake"
    call run_case("beta_drake", 24, 59.0_wp, 1.0_wp, 74.0_wp)
    variant = ""
-   if (nprocs >= 2) call check_px_refused()
+   if (nprocs >= 2) call check_px_fences()
 
    call comm%barrier()
    total_fail = n_fail
@@ -144,8 +144,8 @@ contains
       write (spx, '(i0)') px
       write (spy, '(i0)') py
       nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-            "&grid_nml nx = 32, ny = "//trim(sny)//", nghost = 3, "// &
-            "dx = 11.25, dy = "//trim(adjustl(sdlat))//" /"//NL// &
+            "&grid_nml "//trim(grid_x())//", ny = "//trim(sny)//", nghost = 3, "// &
+            "dy = "//trim(adjustl(sdlat))//" /"//NL// &
             "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
             "&ocean_grid_nml grid_config = 'tripolar', lon_west = 0.0, "// &
             "lat_south = "//trim(adjustl(slat))//", phi_join = "//trim(adjustl(sphi))//", lon_pole = 0.0, "// &
@@ -161,6 +161,14 @@ contains
             "&ocean_diag_nml enabled = .false., reproducing_sums = .true. /"//NL// &
             "&output_nml output_to_file = .false. /"//NL
    end function case_nml
+
+   function grid_x() result(gx)
+      !! x extent: 32 columns of 11.25 deg; "narrow" = 6 columns of 60 deg
+      !! (2 ranks in x give tiles of 3 < nghost+1 columns).
+      character(len=:), allocatable :: gx
+      gx = "nx = 32, dx = 11.25"
+      if (variant == "narrow") gx = "nx = 6, dx = 60.0"
+   end function grid_x
 
    function cor_scheme() result(sch)
       character(len=:), allocatable :: sch
@@ -197,12 +205,10 @@ contains
       call engine_setup(engine, cfg, ierr, compute_rank=crank, compute_size=csize)
    end subroutine setup_engine
 
-   subroutine run_one(nml, csize, crank, snap_cfg, snap_end, ok, allow_dfold)
+   subroutine run_one(nml, csize, crank, snap_cfg, snap_end, ok)
       !! Configure, seed the structure, step N_STEPS, snapshot to host.
       character(len=*), intent(in) :: nml
       integer, intent(in) :: csize, crank
-      logical, intent(in), optional :: allow_dfold
-         !! Pass engine_setup's test-only `allow_distributed_fold` (px > 1).
       type(snap_t), intent(out) :: snap_cfg, snap_end
       logical, intent(out) :: ok
       type(ocean_engine_t) :: engine
@@ -215,8 +221,7 @@ contains
       if (ierr /= OCEAN_STATUS_OK) return
       call validate_config(cfg, ierr)
       if (ierr /= OCEAN_STATUS_OK) return
-      call engine_setup(engine, cfg, ierr, compute_rank=crank, compute_size=csize, &
-                        allow_distributed_fold=allow_dfold)
+      call engine_setup(engine, cfg, ierr, compute_rank=crank, compute_size=csize)
       if (ierr /= OCEAN_STATUS_OK) return
 
       call seed_structure(engine)
@@ -423,8 +428,8 @@ contains
    subroutine run_case(label, ny, lat_south, dlat, phi_join)
       !! The serial reference once, then every decomposition of the
       !! launched rank count: the north-south split (px = 1, py = nprocs)
-      !! and the east-west splits through the distributed fold (engine_setup's
-      !! test-only `allow_distributed_fold`): np 2 -> 2x1; np 3 -> 3x1;
+      !! and the east-west splits through the distributed fold exchange:
+      !! np 2 -> 2x1; np 3 -> 3x1;
       !! np 4 -> 4x1, 2x2.
       character(len=*), intent(in) :: label
       integer, intent(in) :: ny
@@ -470,7 +475,7 @@ contains
       integer :: it, bad_cfg_p, bad_cfg_g, bad_p, bad_g, glob(4), nok
 
       call run_one(case_nml(ny, lat_south, dlat, phi_join, px, py), nprocs, rank, dec_cfg, &
-                   dec_end, ok_dec, allow_dfold=(px > 1))
+                   dec_end, ok_dec)
       nok = merge(0, 1, ok_dec)
       call allreduce(comm, nok, op=MPI_SUM)
       if (nok > 0) then
@@ -529,21 +534,34 @@ contains
       end if
    end subroutine run_decomposed
 
-   subroutine check_px_refused()
-      !! An east-west split of the fold row must fail loud at configure.
+   subroutine check_px_fences()
+      !! The configure-time fences of an east-west split of the fold row:
+      !! px = 2 is ACCEPTED (the distributed fold exchange), and tiles
+      !! narrower than nghost+1 columns are REFUSED (the tile-width rule).
       type(ocean_engine_t) :: engine
       integer :: ierr
       if (mod(nprocs, 2) /= 0) return
       call setup_engine(engine, case_nml(24, 59.0_wp, 1.0_wp, 74.0_wp, 2, nprocs/2), nprocs, rank, ierr)
-      if (ierr == OCEAN_STATUS_OK) then
-         write (*, '(a,i0,a)') "FAIL px_refused: rank ", rank, &
-            " px = 2 with the tripolar fold was ACCEPTED (must be refused)"
+      if (ierr /= OCEAN_STATUS_OK) then
+         write (*, '(a,i0,a)') "FAIL px_accepted: rank ", rank, &
+            " px = 2 with the tripolar fold was REFUSED (the fold exchange supports it)"
          n_fail = n_fail + 1
       else if (rank == 0) then
-         write (*, '(a)') "case px_refused: px = 2 tripolar fold refused at configure (ok)"
+         write (*, '(a)') "case px_accepted: px = 2 tripolar fold accepted at configure (ok)"
       end if
       call engine_teardown(engine)
-   end subroutine check_px_refused
+      variant = "narrow"
+      call setup_engine(engine, case_nml(24, 59.0_wp, 1.0_wp, 74.0_wp, 2, nprocs/2), nprocs, rank, ierr)
+      variant = ""
+      if (ierr == OCEAN_STATUS_OK) then
+         write (*, '(a,i0,a)') "FAIL width_refused: rank ", rank, &
+            " a 3-column fold tile (nghost = 3) was ACCEPTED (must be refused)"
+         n_fail = n_fail + 1
+      else if (rank == 0) then
+         write (*, '(a)') "case width_refused: 3-column tiles refused at configure (ok)"
+      end if
+      call engine_teardown(engine)
+   end subroutine check_px_fences
 
 end program test_ocean_tripolar_fold_mpi
 #else

@@ -266,8 +266,7 @@ contains
    ! ================================================================
 
    subroutine engine_setup(engine, cfg, ierr, compute_rank, compute_size, mpi_rank, &
-                           restart_file, t_restart, step_restart, validate_only, &
-                           allow_distributed_fold)
+                           restart_file, t_restart, step_restart, validate_only)
       !! Host-side setup: decomposition -> grid -> god state -> IC seed
       !! -> restart (optional) -> the 21 `configure_ocean_*`-family
       !! stages -> ghost wraps -> halo init -> land mask -> wave
@@ -305,12 +304,6 @@ contains
          !! selection is still parsed and checked, the per-rank NetCDF
          !! stream is not opened and its directory is not created.
          !! Default `.false.`.
-      logical, intent(in), optional :: allow_distributed_fold
-         !! TEST-ONLY bypass of the tripolar `px > 1` refusal (plan
-         !! `tripolar_fold_px_gt_1` decision 10), so the distributed-fold
-         !! sites can be exercised while the barotropic fast loop still folds
-         !! locally.  NOT a namelist knob; removed when the refusal is lifted.
-         !! Default `.false.`.
 
       integer :: rank, csize, mrank
       logical :: no_output
@@ -323,7 +316,7 @@ contains
       logical :: bt_excluded
       character(len=:), allocatable :: bt_excl_reason
       integer :: bt_halo_req, bt_halo_res
-      logical :: allow_dfold, dist_fold
+      logical :: dist_fold
 
       rank = 0
       if (present(compute_rank)) rank = compute_rank
@@ -333,9 +326,6 @@ contains
       if (present(mpi_rank)) mrank = mpi_rank
       no_output = .false.
       if (present(validate_only)) no_output = validate_only
-
-      allow_dfold = .false.
-      if (present(allow_distributed_fold)) allow_dfold = allow_distributed_fold
 
       if (present(ierr)) ierr = OCEAN_STATUS_OK
       t_restart_local = 0.0_wp
@@ -351,9 +341,12 @@ contains
       ! Process grid left unset (the `&mpi_nml` default px = py = 1) on more
       ! than one rank: choose it here, BEFORE the px*py check below (which
       ! used to reject it, leaving `decomp_init_from_config`'s own
-      ! auto-factor unreachable on the ocean path).  The tripolar fold is
-      ! single-rank in x, so a folded grid is split north-south; any other
-      ! grid gets the perimeter-minimising factorisation.
+      ! auto-factor unreachable on the ocean path).  A folded grid is split
+      ! north-south by default (px = 1: the fold stays local, no fold
+      ! exchange; plan `tripolar_fold_px_gt_1` decision 9 — an east-west
+      ! split is supported but explicit, `&mpi_nml px > 1`, until its cost
+      ! is measured at scale); any other grid gets the perimeter-minimising
+      ! factorisation.
       if (csize > 1 .and. cfg%px == 1 .and. cfg%py == 1) then
          if (ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD) then
             cfg%px = 1
@@ -372,20 +365,22 @@ contains
          return
       end if
       if (csize > 1) then
-         ! D6: the tripolar north fold is applied LOCALLY by the rank that
-         ! owns the north edge (`bc%north_fold` is rank-local), which is only
-         ! correct when that rank holds the WHOLE fold row: a fold point
-         ! (i, nj+d) mirrors (ni+1-i, nj+1-d), which sits on another rank
-         ! as soon as the row is split in x.  North-south splits (px = 1,
-         ! any py) are supported; an east-west split needs the distributed
-         ! fold exchange (hero-run Phase A), which does not exist yet.
+         ! Tripolar north fold, east-west split (px > 1): the fold point
+         ! (i, nj+d) mirrors (ni+1-i, nj+1-d), on another rank of the north
+         ! row, so the fold runs through the owner-routed exchange of
+         ! `rdb_ocean_fold_exchange` (plan `tripolar_fold_px_gt_1`).  Tile
+         ! WIDTH rule, symmetric with the height rule below (plan decision
+         ! 11): refuse tiles narrower than nghost+1 columns.  The exchange
+         ! itself routes any width; the rule keeps every tile wider than its
+         ! own ghost band, as the halo's seam stencils assume.  The narrowest
+         ! tile is nx/px (the remainder goes to the first columns), so the
+         ! check is rank-invariant and every rank fails together.
          if (ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD .and. &
-             cfg%px > 1 .and. .not. allow_dfold) then
+             cfg%px > 1 .and. cfg%nx/cfg%px < cfg%nghost + 1) then
             call fail("Tripolar north fold with px = "//to_string(cfg%px)// &
-                      " > 1: the fold is single-rank-in-x — the north rank row "// &
-                      "must hold the whole fold row. The distributed fold exchange "// &
-                      "(east-west split, deferred D6) is not implemented; use px = 1 "// &
-                      "(north-south splits, any py, are supported).", &
+                      ": tiles of nx/px = "//to_string(cfg%nx/cfg%px)// &
+                      " columns are narrower than nghost+1 = "// &
+                      to_string(cfg%nghost + 1)//"; reduce px.", &
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
