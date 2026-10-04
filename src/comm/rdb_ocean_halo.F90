@@ -69,6 +69,8 @@
 !!   TAG_OC_E_TO_W = 12  (rank's westward send; peer receives as "from east")
 !!   TAG_OC_S_TO_N = 13  (rank's northward send)
 !!   TAG_OC_N_TO_S = 14  (rank's southward send)
+!!   (15 is taken by the distributed north fold, `rdb_ocean_fold_exchange`
+!!   `TAG_OC_FOLD`; pick a new tag above it.)
 !!
 !!   2-rank periodic disambiguation (px=2):
 !!     rank 0 and rank 1 are each other's east AND west periodic wrap partners.
