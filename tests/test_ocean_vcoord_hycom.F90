@@ -40,12 +40,16 @@
 !!     floor binding everywhere, so the surface layer is `z_fixed_dz_top`),
 !!     and `validate_config` refuses a bad `rho_target_list` or one set on a
 !!     coordinate that never reads it.
+!!   - hycom_floor_stress_sweep — 25 344 columns (depth vs z* profile
+!!     depth, eta, stratification, target placement, collapsed sources,
+!!     three floor sources, both families): no target layer below the
+!!     inflation floor, column sum conserved to 1e-12 relative.
 !!
 !! Linear EOS so layer densities are an exact closed form of (T, S):
 !! with uniform S, rho = rho0 - alpha_T*(T - T_ref).
 module test_ocean_vcoord_hycom
    use, intrinsic :: iso_c_binding, only: c_ptr, c_int, c_null_ptr, c_f_pointer
-   use rdb_constants, only: wp, REMAP_PPM, VCOORD_HYCOM, VCOORD_RHO
+   use rdb_constants, only: wp, REMAP_PPM, VCOORD_HYCOM, VCOORD_RHO, H_VANISHED
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_eos, only: eos_t, eos_density_point, EOS_VARIANT_LINEAR
@@ -89,7 +93,8 @@ contains
                                test_refuses_rho_list_order), &
                   new_unittest("hycom_refuses_rho_list_on_sigma", test_refuses_rho_list_sigma), &
                   new_unittest("hycom_refuses_rho_list_without_profile", &
-                               test_refuses_rho_list_no_profile) &
+                               test_refuses_rho_list_no_profile), &
+                  new_unittest("hycom_floor_stress_sweep", test_floor_stress_sweep) &
                   ]
    end subroutine collect_ocean_vcoord_hycom_tests
 
@@ -835,5 +840,150 @@ contains
                           "1023.0, 1024.0, 1025.0, 1026.0", &
                           "rho_target_list under rho_target_profile='uniform'")
    end subroutine test_refuses_rho_list_no_profile
+
+   ! -----------------------------------------------------------------
+   ! 11. floor stress sweep — no configuration goes below the floor
+   ! -----------------------------------------------------------------
+   subroutine test_floor_stress_sweep(error)
+      !! Sweep the RHO/HYCOM target builder over every shape that could
+      !! defeat the z* floor sweep + inflation: column depth against the
+      !! profile depth (just below / at / just above `nz·floor` and the
+      !! profile's interface depths, up to deeper than the profile), eta
+      !! of 0 / +-0.5 / +3 (scaled to the column), uniform / stable /
+      !! unstable / two-layer columns, targets lighter than / bracketing /
+      !! denser than / inside the column, uniform / bed-collapsed /
+      !! surface-collapsed source layers; uniform-metres, stretched and
+      !! unconfigured floors; both families.  Every target layer must be at
+      !! or above the inflation floor (or the column left at h_old — the
+      !! too-thin guard) and the column sum conserved to 1e-12 relative.
+      !! 25 344 columns; the target builder alone, no remap.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NZ = 15
+      type(hgrid_t) :: grid
+      type(ocean_vcoord_t) :: vc
+      type(eos_t) :: eos
+      real(wp), allocatable :: eta(:, :)
+      real(wp) :: hs(22), etas(4), dz(NZ), hsrc(NZ), t_col(NZ)
+      real(wp) :: f, tot, hmin, rlo, rhi, hc, e
+      integer :: ih, ie, it, ip, ig, k, nbad, ncase, prof, coord
+      character(len=240) :: first_bad
+      hs = [0.003_wp, 0.0045_wp, 0.006_wp, 1.0_wp, 4.0_wp, 9.99_wp, 10.0_wp, 10.01_wp, &
+            30.0_wp, 70.0_wp, 100.0_wp, 149.9_wp, 150.0_wp, 300.0_wp, 449.0_wp, 450.0_wp, &
+            451.0_wp, 600.0_wp, 900.0_wp, 1049.0_wp, 1050.0_wp, 2000.0_wp]
+      etas = [0.0_wp, 0.5_wp, -0.5_wp, 3.0_wp]
+      eos%variant = EOS_VARIANT_LINEAR
+      eos%rho0 = 1027.51_wp
+      eos%alpha_T = 3.8356948e-2_wp
+      eos%beta_S = 8.0587609e-1_wp
+      eos%T_ref = -1.0_wp
+      eos%S_ref = 34.2_wp
+      eos%is_init = .true.
+      call grid%init(1, 1, 0, 1.0_wp, 1.0_wp)
+      allocate (eta(grid%nx_total, grid%ny_total))
+      nbad = 0
+      ncase = 0
+      first_bad = ""
+      do coord = 1, 2
+         do prof = 1, 3
+            call vc%init(grid, nz_ml=NZ)
+            vc%coord_type = merge(VCOORD_HYCOM, VCOORD_RHO, coord == 1)
+            vc%zstar_h_min = 1.0e-4_wp
+            select case (prof)
+            case (1)      ! uniform metres: 70 m layers over 1050 m
+               vc%z_fixed_h_ref = 1050.0_wp
+            case (2)      ! stretched: 2 m x 1.35**k, surface first
+               do k = 1, NZ
+                  dz(k) = 2.0_wp*1.35_wp**(k - 1)
+               end do
+               call ocean_vcoord_set_z_fixed_profile(vc, dz)
+            case default  ! unconfigured column-fraction fallback
+               vc%z_fixed_h_ref = 0.0_wp
+            end select
+            f = max(vc%zstar_h_min, 2.0_wp*H_VANISHED)
+            do ih = 1, size(hs)
+               do ie = 1, size(etas)
+                  do it = 1, 4
+                     do ip = 1, 4
+                        do ig = 1, 3
+                           hc = hs(ih)
+                           e = etas(ie)*min(1.0_wp, hc)
+                           if (hc + e <= 0.0_wp) cycle
+                           select case (ig)
+                           case (1)
+                              hsrc = (hc + e)/real(NZ, wp)
+                           case (2)      ! bed-collapsed (state k=1 = bed)
+                              hsrc = 3.0e-4_wp
+                              hsrc(NZ) = max(hc + e - real(NZ - 1, wp)*3.0e-4_wp, 3.0e-4_wp)
+                           case default  ! surface-collapsed
+                              hsrc = 3.0e-4_wp
+                              hsrc(1) = max(hc + e - real(NZ - 1, wp)*3.0e-4_wp, 3.0e-4_wp)
+                           end select
+                           do k = 1, NZ
+                              select case (it)
+                              case (1)
+                                 t_col(k) = -1.9_wp
+                              case (2)
+                                 t_col(k) = -1.9_wp + 0.2_wp*real(k - 1, wp)
+                              case (3)
+                                 t_col(k) = 1.0_wp - 0.2_wp*real(k - 1, wp)
+                              case default
+                                 t_col(k) = merge(-1.9_wp, 1.0_wp, k <= NZ/2)
+                              end select
+                           end do
+                           select case (ip)
+                           case (1)
+                              rlo = 1020.0_wp
+                              rhi = 1021.0_wp
+                           case (2)
+                              rlo = 1027.3_wp
+                              rhi = 1027.8_wp
+                           case (3)
+                              rlo = 1035.0_wp
+                              rhi = 1036.0_wp
+                           case default
+                              rlo = 1027.55_wp
+                              rhi = 1027.62_wp
+                           end select
+                           do k = 0, NZ
+                              vc%rho_target(k) = rlo + (rhi - rlo)*real(k, wp)/real(NZ, wp)
+                           end do
+                           do k = 1, NZ
+                              vc%remap_h_old(:, :, k) = hsrc(k)
+                              vc%remap_conc_t(:, :, k) = t_col(k)
+                           end do
+                           vc%remap_conc_s = 34.2_wp
+                           tot = sum(hsrc)
+                           eta = e
+                           vc%remap_h_ref = tot - e
+                           call vc%compute_target_h_rho(vc%remap_h_ref, eta, vc%remap_conc_t, &
+                                                        vc%remap_conc_s, eos, &
+                                                        hybrid=(coord == 1))
+                           ncase = ncase + 1
+                           hmin = minval(vc%target_h(1, 1, :))
+                           if ((hmin < f*(1.0_wp - 1.0e-12_wp) .and. &
+                                any(vc%target_h(1, 1, :) /= hsrc)) .or. &
+                               abs(sum(vc%target_h(1, 1, :)) - tot) > &
+                               1.0e-12_wp*max(tot, 1.0_wp)) then
+                              nbad = nbad + 1
+                              if (nbad == 1) then
+                                 write (first_bad, '(a,i0,a,i0,a,es10.3,a,es10.3,3(a,i0),a,es11.3,a,es11.3)') &
+                                    "family ", coord, " profile ", prof, " H ", hc, " eta ", e, &
+                                    " T ", it, " targets ", ip, " source ", ig, " hmin ", hmin, &
+                                    " dsum ", sum(vc%target_h(1, 1, :)) - tot
+                              end if
+                           end if
+                        end do
+                     end do
+                  end do
+               end do
+            end do
+            call vc%destroy()
+         end do
+      end do
+      call check(error, ncase > 20000, "sweep: the case grid ran (non-vacuous)")
+      if (allocated(error)) return
+      call check(error, nbad == 0, "sweep: a target layer went below the floor or the "// &
+                 "column sum moved; first: "//trim(first_bad))
+   end subroutine test_floor_stress_sweep
 
 end module test_ocean_vcoord_hycom
