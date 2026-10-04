@@ -220,7 +220,9 @@ contains
       !! fold-row projection) and h_av (T) — the stage-entry site that
       !! mirrors the prognostic fold for the Coriolis / viscosity inputs.
       !! Call after their periodic wrap.  No-op when not folding or when
-      !! the means are not allocated (ssp_rk2).
+      !! the means are not allocated (ssp_rk2).  Device-only: unlike the
+      !! other dispatchers it takes no `device_resident` flag, because its
+      !! production caller (`run_stage_split`) always runs on the mapped state.
       type(hgrid_t), intent(in) :: grid
       type(ocean_bc_state_t), intent(in) :: bc
       type(multilayer_state_t), intent(inout) :: ms
