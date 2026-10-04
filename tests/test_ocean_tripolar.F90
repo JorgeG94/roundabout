@@ -74,6 +74,9 @@ module test_ocean_tripolar
    real(wp), parameter :: REARTH = 6.378e6_wp
    real(wp), parameter :: PHI_JOIN = 65.0_wp, LON_POLE = 0.0_wp
    real(wp), parameter :: H_TOTAL = 4000.0_wp
+   real(wp), parameter :: G_BT = 9.81_wp
+      !! Barotropic gravity `seed_rest` gives the fast loop; `cap_energy`'s
+      !! PE must use the same g (not `rdb_constants::GRAVITY`, 9.80665).
 
 contains
 
@@ -249,7 +252,7 @@ contains
       ms%tracers(ms%idx_salinity)%hTr = 35.0_wp*(H_TOTAL/real(NZ, wp))
       ms%tracers(ms%idx_temperature)%hTr = 10.0_wp*(H_TOTAL/real(NZ, wp))
       dyn%bt_work%bt_H_ref = H_TOTAL
-      dyn%bt_work%g_bt = 9.81_wp
+      dyn%bt_work%g_bt = G_BT
    end subroutine seed_rest
 
    ! -----------------------------------------------------------------
@@ -1315,7 +1318,7 @@ contains
       do j = ng + 1, ng + grid%ny_phys
          do i = ng + 1, ng + grid%nx_phys
             eta = sum(ms%h_layer(i, j, :)) - H_TOTAL
-            e = e + 0.5_wp*9.81_wp*metrics%areaT(i, j)*eta**2
+            e = e + 0.5_wp*G_BT*metrics%areaT(i, j)*eta**2
             do k = 1, NZ
                e = e + 0.25_wp*metrics%areaCu(i, j)*(ms%h_layer(i - 1, j, k) + &
                                                      ms%h_layer(i, j, k))*ms%u_face_x_layer(i, j, k)**2
