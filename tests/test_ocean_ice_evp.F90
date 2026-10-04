@@ -110,11 +110,13 @@ contains
       type(error_type), allocatable, intent(out) :: error
       integer, parameter :: NY = 15
       integer :: nx, nbad
+      character(len=96) :: first_bad
       real(wp), allocatable :: wet(:, :), mask_t(:, :), mask_u(:, :), mask_v(:, :)
       real(wp), allocatable :: mask_q(:, :), area(:, :), fq(:, :), mis(:, :)
       real(wp), allocatable :: q(:, :), mira(:, :)
 
       nbad = 0
+      first_bad = ""
       do nx = 16, 23
          allocate (wet(nx, NY), source=1.0_wp)
          allocate (mask_t(nx, NY), source=0.0_wp)
@@ -138,15 +140,15 @@ contains
              any(q(nx + 1, :) /= 0.0_wp) .or. any(mira(nx + 1, :) /= 0.0_wp) .or. &
              any(q(:, NY + 1) /= 0.0_wp) .or. any(mira(:, NY + 1) /= 0.0_wp)) then
             nbad = nbad + 1
-            write (*, '(a,i0)') "  masks_edge_vector_width: wrong array-edge corner at nx = ", nx
+            if (len_trim(first_bad) == 0) write (first_bad, '(a,i0)') "array-edge corner at nx = ", nx
          end if
          if (any(mask_q(2:nx, 2:NY) /= 1.0_wp)) then
             nbad = nbad + 1
-            write (*, '(a,i0)') "  masks_edge_vector_width: wrong interior corner at nx = ", nx
+            if (len_trim(first_bad) == 0) write (first_bad, '(a,i0)') "interior corner at nx = ", nx
          end if
          deallocate (wet, mask_t, mask_u, mask_v, mask_q, area, mis, fq, q, mira)
       end do
-      call check(error, nbad == 0, "EVP corner masks wrong at the array edge (see log)")
+      call check(error, nbad == 0, "EVP corner masks wrong; first: "//trim(first_bad))
    end subroutine test_masks_edge_vector_width
 
    ! =====================================================================
