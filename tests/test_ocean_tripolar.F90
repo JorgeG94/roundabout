@@ -627,8 +627,9 @@ contains
    ! tan(pi/2) ~ 1.6e16, and before the generator snapped pole-column
    ! nodes the partner column's nodes landed ~1e-9 m apart -- a face
    ! 1e-15 of its cell, 1/areaCu ~ 1e9, ~1e3 m/s barotropic velocity and
-   ! a -4.5e4 m layer at step 1 (the compatibility matrix's coarse cap,
-   ! row 1 below; the 1-degree global grid, row 4, has the same defect).
+   ! a -4.5e4 m layer at step 1 (the compatibility matrix's coarse
+   ! tripolar cap, case 1 of the table below; the 1-degree global grid,
+   ! case 4 of the table, has the same defect).
    ! So: every T cell has positive, near-rectangular area, and every
    ! face width / Cu / Bu area is either exactly 0 or a sane fraction of
    ! its cell.  Rows: (ni, nj, dlat, lat_south, phi_join, lon_pole).
