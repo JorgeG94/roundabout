@@ -69,9 +69,13 @@
 !!     `engine_setup`'s warm-restart path, must equal the straight
 !!     decomposed run bitwise on every registry field -- FULL local arrays,
 !!     ghosts included (a resume lands on the same decomposition).
+!!   * tripolar — the analytic tripolar cap closed by the north fold, under a
+!!     constant wind, with the double-Drake land reaching the fold line; its
+!!     x splits (2x1, 4x1 = 8/8/7/7, 2x2) fold through the distributed fold
+!!     exchange, its 1xN splits through the local kernels.
 !! All are stratified with a boundary-layer scheme on, so the tiles exchange real
-!! flow and real tracer structure.  26 x 18 cells, nghost = 3: every
-!! factorisation above is uneven somewhere.
+!! flow and real tracer structure.  26 x 18 cells (tripolar: 30 x 24),
+!! nghost = 3: every factorisation above is uneven somewhere.
 !!
 !! The barotropic march-in (`&ocean_bt_nml bt_halo > 0`) is NOT covered: it
 !! is opt-in precisely because it is not bit-identical to the serial run over
@@ -143,14 +147,14 @@ program test_ocean_decomp_bitid_mpi
    integer :: rank, nprocs, n_fail, total_fail, ic
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(12) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(13) = [character(len=24) :: &
                                                 "island_basin", "periodic_channel_zstar", &
                                                 "periodic_sponge", &
                                                 "open_obc", "spherical", "obc_radiation_sponge", &
                                                 "closures", "file_readers", &
                                                 "file_readers_zstar_full", &
                                                 "file_readers_zstar", "sea_ice", &
-                                                "sea_ice_transport"]
+                                                "sea_ice_transport", "tripolar"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -274,6 +278,26 @@ contains
                "&ocean_bc_nml west = 'tidal', east = 'open', south = 'wall', north = 'wall', "// &
                "west_n_tidal = 1, west_tidal_amp = 0.5, west_tidal_phase = 0.0, "// &
                "west_tidal_omega = 1.4051890e-4 /"//NL
+      case ("tripolar")
+         ! Analytic tripolar cap (59N-83N, phi_join 74N) closed by the north
+         ! fold, periodic in x, under a constant wind, with the double-Drake
+         ! land walls reaching the fold line at asymmetric columns (1 and
+         ! nx/4 mirror to nx and 3nx/4+1).  Its own x extent, nx = 30 at
+         ! 12 deg (360/26 is inexact): every split of the launched rank
+         ! count runs, so 2x1 and 4x1 (8/8/7/7 — uneven) and 2x2 fold
+         ! through the distributed fold exchange, 1xN through the local
+         ! kernels.  `compare` is size-agnostic.
+         nml = common// &
+               "&grid_nml nx = 30, ny = 24, nghost = 3, dx = 12.0, dy = 1.0 /"//NL// &
+               "&ocean_grid_nml grid_config = 'tripolar', lon_west = 0.0, lat_south = 59.0, "// &
+               "phi_join = 74.0, lon_pole = 0.0, rad_earth = 6.378e6, "// &
+               "coriolis_scheme = 'planetary' /"//NL// &
+               "&physics_nml wind_stress_x = 0.05 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'double_drake', max_depth = 1000.0, "// &
+               "slope_scale = 0.2 /"//NL// &
+               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+               "north = 'tripolar_fold' /"//NL
       case ("spherical", "closures")
          ! Lon-lat sector, spoon basin, Wright EOS.  "closures" adds the
          ! lateral and vertical parameterisation set on top (EPBL instead of

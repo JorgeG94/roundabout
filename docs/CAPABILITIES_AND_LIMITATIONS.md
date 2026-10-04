@@ -43,7 +43,7 @@ This is a **sub-cycled fast mode, not a semi-implicit free surface**. Roundabout
 
 ## Solver core
 
-**Structured Arakawa C-grid, hydrostatic, Boussinesq.** Layer thickness is prognostic (continuity-PPM transport, no Poisson constraint); momentum is vector-invariant with a Sadourny PV-flux Coriolis-advection operator and a finite-volume pressure gradient; the vertical coordinate is ALE (advance Lagrangian, remap conservatively). Horizontal grids: `cartesian`, `spherical`, `supergrid` (MOM6 mosaic), `tripolar` (Murray 1996 cap + single-rank north fold).
+**Structured Arakawa C-grid, hydrostatic, Boussinesq.** Layer thickness is prognostic (continuity-PPM transport, no Poisson constraint); momentum is vector-invariant with a Sadourny PV-flux Coriolis-advection operator and a finite-volume pressure gradient; the vertical coordinate is ALE (advance Lagrangian, remap conservatively). Horizontal grids: `cartesian`, `spherical`, `supergrid` (MOM6 mosaic), `tripolar` (Murray 1996 cap + north fold, local on one rank row or distributed across an east-west split).
 
 The full operator-by-operator surface, with knobs and limits, is in the [Ocean path](#ocean-path-sim_typeocean) section below.
 
@@ -289,17 +289,23 @@ Flather open-boundary basin on zstar_sigma, a spherical sector (planetary
 f, Wright EOS), an Orlanski + reservoir / clamped / west-sponge open
 basin, the spherical sector with the closure set (EPBL, Fox-Kemper MLE,
 GM + MEKE, Redi, kappa-shear, tidal mixing, convective adjustment,
-geothermal heating, tracer hdiff), the file-reader case below, and sea
+geothermal heating, tracer hdiff), the file-reader case below, a
+tripolar cap (wind, double-Drake land reaching the fold line) whose 2x1,
+4x1 and 2x2 splits fold through the distributed fold exchange, and sea
 ice (thermo + ITD, EVP dynamics, the ice->ocean stress blend, in a
 cooled periodic channel, without and with the category transport; every
 ice registry field compared). It
 passes on gfortran (CPU ranks) and nvfortran (one V100 per rank).
 The tripolar north fold has its own gate,
-`tests/mpi/test_ocean_tripolar_fold_mpi` (north-south splits).
+`tests/mpi/test_ocean_tripolar_fold_mpi` (every split of 1-4 ranks, north-
+south and east-west, whole storage windows incl. ghosts, three grids —
+one beta-plane with land at the fold).
 
 - **Process grid.** `&mpi_nml px/py` left at the default `1 x 1` on more
   than one rank is chosen by the engine: north-south (`px = 1, py = N`)
-  under a tripolar fold, the perimeter-minimising factorisation otherwise.
+  under a tripolar fold (no fold exchange; an east-west split is supported
+  but must be asked for explicitly with `px > 1`), the
+  perimeter-minimising factorisation otherwise.
   An explicit `px*py` that does not match the rank count is refused.
 - **File inputs are read per rank.** The supergrid (mosaic), bathymetry and
   z-level T/S IC readers read the file's whole-grid variables through
@@ -329,7 +335,7 @@ with a message naming the knob; keyed on the ACTUAL rank count in
 | `&ocean_ice_nml enable` with a tripolar north fold | the ice fields are not folded across the north seam |
 | `&ocean_bc_nml` `'chapman'` edges | the edge-uniform eta target is a per-rank partial mean |
 | `&ocean_vmix_nml dt_tracer_advect_ratio > 1` | the windowed drain's halo is not wired |
-| tripolar fold with `px > 1`, or a north tile shorter than `nghost + 1` rows | the fold is applied by the rank holding the whole fold row; the distributed (east-west) fold exchange does not exist |
+| tripolar fold with a north tile shorter than `nghost + 1` rows (`ny/py`), or tiles narrower than `nghost + 1` columns (`nx/px`, when `px > 1`) | the fold mirrors `nghost` rows below the fold line from the north tile itself; the width rule keeps every tile wider than its own ghost band |
 | in-memory geometry injection (the API's staged bathymetry / supergrid arrays) | they describe the whole grid, not a tile (the file readers are windowed) |
 | `nghost < 3` | the PPM stencil degrades to first order at a seam face (`ocean_halo_init`) |
 | an explicit `&ocean_bt_nml bt_halo` wider than the smallest tile | the wide ghost ring must fit inside the tile |
@@ -346,8 +352,7 @@ documented, the only such paths found):
   edge (alone, or with Orlanski-open and clamped edges) and every other
   combination tested are exact.
 
-**Not yet**: the distributed tripolar fold (`px > 1` on the global grid),
-resuming a restart on a different rank count, a parallel (collective) NetCDF
+**Not yet**: resuming a restart on a different rank count, a parallel (collective) NetCDF
 writer (diagnostics and restarts are per-rank files, merged offline by
 `tools/merge_output.py`).
 
@@ -1104,7 +1109,7 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
 - **Horizontal grids** (`&ocean_grid_nml grid_config`): `cartesian`
   (default), `spherical` lon-lat sector, `supergrid` (MOM6 mosaic
   reader), and **`tripolar`** — Murray (1996) bipolar Arctic cap above
-  `phi_join` + lon-lat below, closed by a single-rank **north fold**
+  `phi_join` + lon-lat below, closed by a **north fold**
   (`north="tripolar_fold"`, requires periodic west/east). The fold
   reverses-i + sign-flips vector normals + antisymmetrically projects
   the duplicated fold-line row — for roundabout's SOUTH-face v /
@@ -1138,16 +1143,28 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   m²/s² by day 30 on the compat-matrix tripolar domain (sigma), 3.2e-3
   after — matching an off-node `lon_pole` (3.2e-3); `ssp_rk2` there
   went 4.7e-3 → 3.2e-3.
-  **Decomposition:** north-south splits (`px = 1`, any `py`) are supported
-  and bit-identical to the single-rank run (`rdb_test_ocean_tripolar_fold_mpi`,
-  1/2/4 ranks — h, u, v, S, T, η and the configure-time metrics, ghost rows
-  included). Only the rank that owns the north edge folds
-  (`bc%north_fold` is rank-local); every other rank's north ghosts are an
-  MPI seam. The analytic `tripolar` generator cuts each tile out of the
-  whole grid (a transient global-size metric set per rank at configure).
-  **East-west splits (`px > 1`) are refused at configure** — the fold row
-  must be whole on one rank until the distributed fold exchange exists —
-  as is a tile shorter than `nghost + 1` rows (`ny/py`).  The `supergrid`
+  **Decomposition:** every split is supported and bit-identical to the
+  single-rank run (`rdb_test_ocean_tripolar_fold_mpi`, 1/2/3/4 ranks — h, u,
+  v, S, T, η, the wet mask and the configure-time metrics, ghost rows and
+  columns included; `rdb_test_ocean_decomp_bitid_mpi`'s `tripolar` case,
+  every restart field). Only the north rank row folds (`bc%north_fold` is
+  rank-local); every other rank's north ghosts are an MPI seam. On a
+  north-south split (`px = 1`, the auto-factor default) the north rank
+  holds the whole fold row and folds locally. On an east-west split
+  (`px > 1`, explicit `&mpi_nml px`) the fold runs through an owner-routed
+  exchange over the north rank row (`rdb_ocean_fold_plan` +
+  `rdb_ocean_fold_exchange`): every north-ghost and fold-line value is sent
+  by the rank that OWNS its mirror point, the sign is applied on receipt,
+  and the fold-line projection stays a copy of the east-half value — so no
+  arithmetic has to agree across ranks. Cost: in the barotropic fast loop
+  it adds two small exchanges per substep (η + ubt after the mid-substep u
+  exchange, vbt before the time-mean accumulators), about as much as the
+  existing per-substep halo group on a latency-bound (sub-OM4_025) V100
+  case; the baroclinic sites add one grouped exchange each. The analytic
+  `tripolar` generator cuts each tile out of the whole grid (a transient
+  global-size metric set per rank at configure). Refused at configure: a
+  north tile shorter than `nghost + 1` rows (`ny/py`) and, under `px > 1`,
+  a tile narrower than `nghost + 1` columns (`nx/px`).  The `supergrid`
   (mosaic) reader is windowed per rank (see *MPI (domain decomposition)*),
   so the MOM6 OM_1deg grid runs split north-south too.
   The `supergrid` reader applies the SAME ghost-metric topology as the

@@ -16,15 +16,15 @@ module rdb_ocean_fold
    !! the rank-local `bc%north_fold` (tag `.and.` `has_north`); on the other
    !! ranks the north ghosts are an MPI seam the halo exchange fills.  An
    !! east-west split (`px > 1`) needs the mirror of column `i`, column
-   !! `ni+1-i`, from another rank: the state-level dispatchers of
-   !! `rdb_ocean_fold_apply` route that case through the owner-routed
-   !! exchange of `rdb_ocean_fold_exchange` instead of these kernels.  It is
-   !! still refused at configure until the remaining setup-time fold sites
-   !! are ported (the barotropic fast loop's inline folds are skipped on
-   !! that path in favour of two exchanges per substep — see
-   !! `barotropic_substep`).  The fold also reads the `nghost` rows below
-   !! the fold line, so the north tile must be at least `nghost+1` rows
-   !! tall (also refused at configure otherwise).
+   !! `ni+1-i`, from another rank: every fold site routes that case
+   !! through the owner-routed exchange of `rdb_ocean_fold_exchange`
+   !! instead of these kernels — the state-level dispatchers of
+   !! `rdb_ocean_fold_apply`, the barotropic fast loop (two exchanges per
+   !! substep instead of its inline folds, see `barotropic_substep`) and the
+   !! setup-time folds (`engine_setup`, `configure_ocean_land_mask`).  The
+   !! fold also reads the `nghost` rows below the fold line, so the north
+   !! tile must be at least `nghost+1` rows tall, and under `px > 1` every
+   !! tile at least `nghost+1` columns wide (both refused at configure).
    !!
    !! ## Roundabout staggering (the load-bearing input to every map below)
    !!

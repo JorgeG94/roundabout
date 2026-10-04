@@ -1,15 +1,15 @@
 !! Distributed tripolar fold (`px > 1`) at the baroclinic / continuity /
 !! stress seam sites, on a real decomposed engine state, vs the serial run.
 !!
-!! The barotropic fast loop still folds locally (plan PR 4), so a
-!! `px > 1` run cannot be stepped bit-identically yet, and the unsplit
-!! driver (`n_inner = 0`) is no substitute: it never exchanges a halo nor
-!! folds (it is not a decomposed or tripolar configuration at all).  So
-!! this is a COMPONENT test, through the production entry points, of every
-!! site wired so far.  On each launch (np 2, 3, 4) and each factorisation
-!! with px > 1 (2x1; 3x1; 4x1 = 8/8/7/7 and 2x2), the binary runs the same
-!! sequence twice — SERIAL reference (px = py = 1, every rank) and
-!! DECOMPOSED (via `engine_setup`'s test-only `allow_distributed_fold`) —
+!! A COMPONENT test, through the production entry points, of every
+!! baroclinic / continuity / stress fold site in isolation, each on a
+!! field whose fold-line row is deliberately NOT projected, so a site that
+!! skipped its fold or its projection fails here even if a stepped run
+!! would mask it (stepped bit-identity: test_ocean_tripolar_fold_mpi and
+!! test_ocean_decomp_bitid_mpi).  On each launch (np 2, 3, 4) and each
+!! factorisation with px > 1 (2x1; 3x1; 4x1 = 8/8/7/7 and 2x2), the binary
+!! runs the same sequence twice — SERIAL reference (px = py = 1, every
+!! rank) and DECOMPOSED —
 !! snapshots every compared field after every operation, and compares each
 !! rank's WHOLE storage window (ghost rows and columns) of the decomposed
 !! run bitwise against the matching window of the reference:
@@ -277,9 +277,8 @@ contains
    ! One run: the whole operation sequence, snapshotted
    ! ----------------------------------------------------------------
 
-   subroutine run_one(px, py, csize, crank, allow, r, ok)
+   subroutine run_one(px, py, csize, crank, r, ok)
       integer, intent(in) :: px, py, csize, crank
-      logical, intent(in) :: allow
       type(run_t), intent(out) :: r
       logical, intent(out) :: ok
       type(ocean_engine_t) :: e
@@ -291,8 +290,7 @@ contains
       if (ierr /= OCEAN_STATUS_OK) return
       call validate_config(cfg, ierr)
       if (ierr /= OCEAN_STATUS_OK) return
-      call engine_setup(e, cfg, ierr, compute_rank=crank, compute_size=csize, &
-                        allow_distributed_fold=allow)
+      call engine_setup(e, cfg, ierr, compute_rank=crank, compute_size=csize)
       if (ierr /= OCEAN_STATUS_OK) return
       r%io = e%grid%i_offset_global
       r%jo = e%grid%j_offset_global
@@ -398,8 +396,8 @@ contains
       character(len=24) :: lbl
 
       write (lbl, '(i0,a,i0)') px, "x", py
-      call run_one(1, 1, 1, 0, .false., ref, ok_ref)
-      call run_one(px, py, nprocs, rank, .true., dec, ok_dec)
+      call run_one(1, 1, 1, 0, ref, ok_ref)
+      call run_one(px, py, nprocs, rank, dec, ok_dec)
       if (.not. (ok_ref .and. ok_dec)) then
          write (*, '(3a,i0,a,l1,a,l1)') "FAIL ", trim(lbl), ": rank ", rank, &
             " setup failed: ref ok=", ok_ref, " decomposed ok=", ok_dec
