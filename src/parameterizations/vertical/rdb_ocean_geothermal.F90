@@ -119,7 +119,7 @@ contains
    pure subroutine apply_geothermal_src_impl(hTr, budget, wet_mask, h_layer, k_bot, src, nz, h_min)
       !! Stamp `src * wet_mask(i,j)` onto the lowest *massive* layer of
       !! a tracer's hTr array (first `k` with `h_layer > h_min`,
-      !! scanning `k = 1..nz` from the bed up), mirror into the matching
+      !! scanning `k = k_bot(i,j)..nz` from the first live layer up), mirror into the matching
       !! budget contributor.  Flat-impl over plain allocatables — the
       !! outer subroutine reaches `ms%tracers(idx)%hTr` on the host
       !! before calling this.
@@ -130,7 +130,7 @@ contains
       real(wp), intent(inout) :: budget(:, :, :)  ! assumed-shape-ok: tracer registry outer-shim; thermo cadence
       real(wp), intent(in)    :: wet_mask(:, :)  ! assumed-shape-ok: tracer registry outer-shim; thermo cadence
       real(wp), intent(in)    :: h_layer(:, :, :)  ! assumed-shape-ok: tracer registry outer-shim; thermo cadence
-      integer, intent(in)     :: k_bot(:, :)  ! assumed-shape-ok: tracer registry outer-shim; thermo cadence
+      integer, intent(in)     :: k_bot(:, :)  ! assumed-shape-ok: shaped like wet_mask (same caller); thermo cadence
       real(wp), intent(in)    :: src
       integer, intent(in)    :: nz
       real(wp), intent(in)    :: h_min

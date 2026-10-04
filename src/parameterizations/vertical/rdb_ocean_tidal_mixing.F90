@@ -479,8 +479,9 @@ contains
             ! interior only (top-down do k=nz-1,2,-1).  In MOM6 top-down
             ! indexing layer 1 is the surface and layer nz the bottom; in
             ! Roundabout bottom-up k=nz is the surface and k=1 the bed, so we
-            ! zero kd_lay_arr at BOTH ends.  The bed layer (k=1) is owned by
-            ! the BBL drag; the surface layer (k=nz) is the mixed layer,
+            ! zero kd_lay_arr at BOTH ends.  The bed layer (`kbed`: k=1, or
+            ! the first LIVE layer `k_bot` under z_fixed) is owned by the BBL
+            ! drag; the surface layer (k=nz) is the mixed layer,
             ! owned downstream by EPBL/KPP, and additionally has no overlying
             ! layer so its kernel N^2 is 0 (its Omega^2-only inflated Kd would
             ! over-mix interface K=nz on shallow energetic columns).  Zeroing
@@ -501,10 +502,11 @@ contains
                this%kd_int(i, j, k) = this%kd_int(i, j, k) + 0.5_wp*kd_lay_arr(k)
                this%kd_int(i, j, k + 1) = this%kd_int(i, j, k + 1) + 0.5_wp*kd_lay_arr(k)
             end do
-            ! D1 (cont.): zero the bed (K=1) and surface (K=nz+1) interface
+            ! D1 (cont.): zero the bed (K=kbed) and surface (K=nz+1) interface
             ! end-caps — `vmix_assemble` / EPBL / BBL own them.  With BOTH
-            ! the bed LAYER (k=1) and surface LAYER (k=nz) now excluded above,
-            ! interface K=2 receives nothing from k=1 (only k=2's bed half)
+            ! the bed LAYER (k=kbed) and surface LAYER (k=nz) now excluded
+            ! above, interface K=kbed+1 receives nothing from k=kbed (only
+            ! k=kbed+1's bed half)
             ! and interface K=nz nothing from k=nz (only k=nz-1's top half) —
             ! the full MOM6 endpoint exclusion.  DIVERGENCE D4
             ! (BBL N^2 override): MOM6 replaces the near-bed N^2 with a
