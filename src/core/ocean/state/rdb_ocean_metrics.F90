@@ -2136,7 +2136,8 @@ contains
       real(wp), parameter :: POLE_SNAP_DEG = 1.0e-9_wp
          !! A node column within this many degrees of a cap pole meridian
          !! IS the pole column (its pseudo-longitude only misses the pole
-         !! by the round-off of `lon_west + (m-1)*dlam`).
+         !! by the round-off of `lon_west + (m-1)*dlam`, ~1e-14 deg while
+         !! that sum stays O(360); the tolerance is absolute, not relative).
 
       lon0 = lon_west + real(m - 1, wp)*dlam
       lat0 = lat_south + real(n - 1, wp)*dlat_sg
