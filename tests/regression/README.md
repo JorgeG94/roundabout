@@ -747,12 +747,12 @@ day or the abort mode, never the verdict.
 | `lid_flat` (0) | refused | refused | ok | ok | refused | refused | ok | refused | refused | refused |
 | `lid_slope` (0.0138) | refused | refused | ok | ok | refused | refused | 1.5e-04 | refused | refused | refused |
 | `seamount_gentle` (0.03) | ok | 2.8e-04 / 2.7e-04 | ok | ok | ok | ok | 1.2e-05 | ✗ d21 / ✗ d19 | ✗ d19 / ✗ d28 | refused |
-| `seamount_steep` (0.078) | ✗ d4 | ✗ d18 / ✗ d15 | ok | ok | ok | ok | 1.2e-04 | ✗ d7 | ✗ d6 | refused |
-| `rx0_010` (0.1) | ✗ d12 | 7.5e-04 | 2.1e-12 / 1.9e-12 | 2.1e-12 / 1.9e-12 | ok | ok | 8.1e-08 | ✗ d4 / ✗ d3 | ✗ d9 | refused |
-| `rx0_020` (0.2) | ✗ d6 / ✗ d7 | ✗ d23 | 7.4e-04 / 7.2e-04 | 7.4e-04 / 7.2e-04 | 9.6e-04 / 9.7e-04 | 6.3e-05 / 6.8e-05 | 3.0e-07 | ✗ d1 | ✗ d1 | refused |
-| `rx0_040` (0.4) | ✗ d5 / ✗ d4 | ✗ d11 | 3.7e-03 / 3.4e-01 | 3.7e-03 / 3.4e-01 | 5.5e-03 / 1.7e-02 | 3.0e-04 / 3.2e-04 | 1.8e-08 | ✗ d0 | ✗ d1 / ✗ d0 | refused |
-| `rx0_060` (0.6) | ✗ d4 | ✗ d7 | 3.1e-07 / 1.6e-07 | 3.1e-07 / 1.6e-07 | 3.5e-07 / 5.3e-07 | 2.6e-09 / 1.8e-08 | 2.3e-07 | ✗ d0 | ✗ d0 | refused |
-| `rx0_080` (0.8) | ✗ d5 | ✗ d4 | ✗ d17 | ✗ d17 | ✗ d17 | ✗ d14 / ✗ d13 | ok | ✗ d0 | ✗ d0 | refused |
+| `seamount_steep` (0.078) | ok | ✗ d18 / ✗ d15 | ok | ok | ok | ok | 1.2e-04 | ✗ d7 | ✗ d6 | refused |
+| `rx0_010` (0.1) | ok | 7.5e-04 | 2.1e-12 / 1.9e-12 | 2.1e-12 / 1.9e-12 | ok | ok | 8.1e-08 | ✗ d4 / ✗ d3 | ✗ d9 | refused |
+| `rx0_020` (0.2) | ok | ✗ d23 | 7.4e-04 / 7.2e-04 | 7.4e-04 / 7.2e-04 | 9.6e-04 / 9.7e-04 | 6.3e-05 / 6.8e-05 | 3.0e-07 | ✗ d1 | ✗ d1 | refused |
+| `rx0_040` (0.4) | ok | ✗ d11 | 3.7e-03 / 3.4e-01 | 3.7e-03 / 3.4e-01 | 5.5e-03 / 1.7e-02 | 3.0e-04 / 3.2e-04 | 1.8e-08 | ✗ d0 | ✗ d1 / ✗ d0 | refused |
+| `rx0_060` (0.6) | ok | ✗ d7 | 3.1e-07 / 1.6e-07 | 3.1e-07 / 1.6e-07 | 3.5e-07 / 5.3e-07 | 2.6e-09 / 1.8e-08 | 2.3e-07 | ✗ d0 | ✗ d0 | refused |
+| `rx0_080` (0.8) | ok | ✗ d4 | ✗ d17 | ✗ d17 | ✗ d17 | ✗ d14 / ✗ d13 | ok | ✗ d0 | ✗ d0 | refused |
 
 ### viscous leg
 
@@ -763,12 +763,12 @@ day or the abort mode, never the verdict.
 | `lid_flat` (0) | - | - | ok | ok | - | - | ok | - | - |
 | `lid_slope` (0.0138) | - | - | ok | ok | - | - | 5.3e-06 | - | - |
 | `seamount_gentle` (0.03) | ok | ok | ok | ok | ok | ok | 1.2e-07 | ✗ d0 | ✗ d0 |
-| `seamount_steep` (0.078) | ✗ d16 | ok | ok | ok | ok | ok | 8.0e-08 | ✗ d0 | ✗ d0 |
-| `rx0_010` (0.1) | 1.2e-09 / 4.7e-09 | ok | ok | ok | ok | ok | ok | ✗ d0 | ✗ d0 |
-| `rx0_020` (0.2) | ✗ d15 | ok | ok | ok | ok | ok | 1.4e-08 | ✗ d0 | ✗ d0 |
-| `rx0_040` (0.4) | ✗ d9 | ok | ok | ok | ok | ok | 2.4e-10 | ✗ d0 | ✗ d0 |
-| `rx0_060` (0.6) | ✗ d7 | ok | ok | ok | ok | ok | 1.2e-08 | ✗ d0 | ✗ d0 |
-| `rx0_080` (0.8) | ✗ d7 | ok | ok | ok | ok | ok | 7.5e-09 | ✗ d0 | ✗ d0 |
+| `seamount_steep` (0.078) | ok | ok | ok | ok | ok | ok | 8.0e-08 | ✗ d0 | ✗ d0 |
+| `rx0_010` (0.1) | ok | ok | ok | ok | ok | ok | ok | ✗ d0 | ✗ d0 |
+| `rx0_020` (0.2) | ok | ok | ok | ok | ok | ok | 1.4e-08 | ✗ d0 | ✗ d0 |
+| `rx0_040` (0.4) | ok | ok | ok | ok | ok | ok | 2.4e-10 | ✗ d0 | ✗ d0 |
+| `rx0_060` (0.6) | ok | ok | ok | ok | ok | ok | 1.2e-08 | ✗ d0 | ✗ d0 |
+| `rx0_080` (0.8) | ok | ok | ok | ok | ok | ok | 7.5e-09 | ✗ d0 | ✗ d0 |
 
 The EOS and stratification controls (not in the grids above): `slope × sigma
 × wright` passes both legs on both toolchains (inviscid En 7.9e-23, viscous
@@ -784,11 +784,14 @@ at step 0 in the viscous leg (FINDING A). The `N² = 0` controls:
 through the slower barotropic residual the forensics measured.
 
 **Counts, tier 1** (identical on both toolchains, against the re-pinned
-markers): inviscid **33 PASS / 82 XFAIL** (23 of them the by-design refusals)
-/ 0 FAIL / 0 XPASS; viscous **58 PASS / 32 XFAIL** / 0 FAIL / 0 XPASS (was
-41 / 49 with I1′ alone: the 17 FINDING B cells now pass on both toolchains).
+markers): inviscid **38 PASS / 77 XFAIL** (23 of them the by-design refusals)
+/ 0 FAIL / 0 XPASS; viscous **61 PASS / 29 XFAIL** / 0 FAIL / 0 XPASS (was
+41 / 49 with I1′ alone: the 17 FINDING B cells now pass on both toolchains;
+33/82 and 58/32 before the 2026-10-04 lagrangian re-pin retired 5 + 3
+lagrangian markers).
 **Tier 2** (the CI slice, 3.33 days, 120 rows with the `__ssp_rk2` twins):
-**90 PASS / 30 XFAIL** / 0 FAIL / 0 XPASS on both toolchains.
+**92 PASS / 28 XFAIL** / 0 FAIL / 0 XPASS on both toolchains (90 / 30 before
+the lagrangian re-pin: `rx0_060 × lagrangian` and its twin).
 
 **How to read it.**
 
@@ -820,7 +823,13 @@ markers): inviscid **33 PASS / 82 XFAIL** (23 of them the by-design refusals)
    defaults) — while its
    inviscid leg is the worst geometric family on a slope (1.1e-03).
 6. **`lagrangian`** inherits the sigma-shaped initial column and never
-   regrids; over a step it collapses a layer in both legs.
+   regrids — and rests on EVERY geometry in both legs (re-pinned
+   2026-10-04, lagrangian column only, both toolchains). Its old failures
+   over a step (`✗ d4`–`d16` from rx0 0.078 up) were not layer collapse:
+   the grounded-layer PGF gate (`&ocean_isopycnal_nml pgf_skip_nonoverlap`)
+   zeroed the PGF of layers that are massive on BOTH sides of the step but
+   sit in disjoint z-intervals, which a sigma-shaped stack over a step
+   always has. The gate now also requires a vanished side.
 
 ## The rx0 ENVELOPES — what v0.1.0 claims
 
@@ -840,7 +849,7 @@ measured geometries are rx0 = 0, 0.0071 (slope), 0.0138 (sloping lid), 0.030
 | `zstar_sigma` | **rx0 ≤ 0.8** (top of the ladder) | none measured | 0.1 | ≤ 0.6 |
 | `zstar_full` | **rx0 ≤ 0.8** (top of the ladder) | none measured | 0.1 | ≤ 0.6 |
 | `eulerian_z` (ssp_rk2) | **rx0 ≤ 0.8** (top of the ladder) | none measured | flat only | ≤ 0.03, and 0.1 |
-| `lagrangian` | **rx0 ≤ 0.03** | seamount_steep (collapse) | 0.03 | ≤ 0.03 |
+| `lagrangian` | **rx0 ≤ 0.8** (top of the ladder) | none measured | 0.8 | every geometry |
 | `z_fixed` (closed faces) | **flat only** | slope (salinity overshoot) | flat only | every geometry |
 | `rho`, `hycom` | **flat only** | slope (FINDING A) | flat only | ≤ 0.0071 |
 
