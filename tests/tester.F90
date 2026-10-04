@@ -43,6 +43,7 @@ program rdb_tests
    use test_ocean_pgf, only: ocean_pgf_collect => collect_ocean_pgf_tests
    use test_ocean_pgf_fv, only: ocean_pgf_fv_collect => collect_ocean_pgf_fv_tests
    use test_ocean_pgf_grounded, only: ocean_pgf_grounded_collect => collect_ocean_pgf_grounded_tests
+   use test_ocean_lagrangian_staircase, only: ocean_lagrangian_staircase_collect => collect_ocean_lagrangian_staircase_tests
    use test_ocean_pgf_fv_mom6, only: ocean_pgf_fv_mom6_collect => collect_ocean_pgf_fv_mom6_tests
    use test_ocean_pgf_reconstruct, only: ocean_pgf_reconstruct_collect => &
                                          collect_ocean_pgf_reconstruct_tests
@@ -285,6 +286,7 @@ program rdb_tests
                 new_testsuite("ocean_tracer_weno", ocean_tracer_weno_collect), &
                 new_testsuite("ocean_pgf_fv", ocean_pgf_fv_collect), &
                 new_testsuite("ocean_pgf_grounded", ocean_pgf_grounded_collect), &
+                new_testsuite("ocean_lagrangian_staircase", ocean_lagrangian_staircase_collect), &
                 new_testsuite("ocean_pgf_fv_mom6", ocean_pgf_fv_mom6_collect), &
                 new_testsuite("ocean_pgf_reconstruct", ocean_pgf_reconstruct_collect), &
                 new_testsuite("ocean_pgf_insitu", ocean_pgf_insitu_collect), &
