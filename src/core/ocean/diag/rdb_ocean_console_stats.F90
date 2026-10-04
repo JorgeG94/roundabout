@@ -41,6 +41,10 @@ module rdb_ocean_console_stats
    public :: ocean_budget_stage_weight
    public :: ocean_heat_src_sum, ocean_salt_src_sum
    public :: ocean_frazil_heat_src
+   public :: efp_decompose_impl
+      !! Production export, not a test hook: `rdb_ocean_dyn` accumulates the
+      !! console mass `out` in EFP bins with it inside a device kernel, so
+      !! it must not sit under `RDB_ENABLE_TESTING`.
 
    real(wp), parameter :: RK2_STAGE_WEIGHT = 0.5_wp
       !! RK2 stage weight: all per-cell budget accumulators (surface,
@@ -59,7 +63,6 @@ module rdb_ocean_console_stats
    public :: compute_ice_totals
       !! Public only for the unit-test suite (`test_ocean_ice_diags`), which
       !! pins this console-side gather copy against the fills' copy.
-   public :: efp_decompose_impl
    public :: compute_total_h_efp, compute_total_tracer_efp
    public :: compute_total_ke_efp, compute_ice_totals_efp
    public :: compute_total_h, compute_total_tracer, compute_total_ke
