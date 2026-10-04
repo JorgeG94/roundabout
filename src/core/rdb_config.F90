@@ -3517,7 +3517,7 @@ module rdb_config
          !! HEAVY only in the sense that it adds two device reductions per
          !! tracer per step; the healthy path does no H←D copy.  Default
          !! `.false.`.  Turn it ON for any configuration whose coordinate
-         !! actually vanishes layers (`z_fixed`, `zstar_full`, wet/dry) —
+         !! actually vanishes layers (`z_fixed`, `zstar`, `zstar_full`, wet/dry) —
          !! the stability suite does.  Inert on a family with no fillers.
          !!
          !! See `src/core/ocean/README.md`, "The vanished-layer content
@@ -3547,17 +3547,22 @@ module rdb_config
          !!
          !! Default `.false.` ⇒ the mask arrays stay at their `(1,1,1)`
          !! placeholder, no kernel branch is taken, byte-identical.
-         !! Accepted on `z_fixed` and `zstar_full` — the two GEOMETRIC
-         !! families whose bed-side fillers sit at fixed reference depths
-         !! (under `zstar_full`: every layer below a column's partial cell
+         !! Accepted on `z_fixed`, `zstar` (MOM6 z*) and `zstar_full` —
+         !! the three GEOMETRIC families whose bed-side fillers sit at
+         !! fixed reference depths (under `zstar`: the `z_fixed` fillers,
+         !! decided at `η = 0` and exactly static under the dilation;
+         !! under `zstar_full`: every layer below a column's partial cell
          !! when the column is shallower than the `zstar_h_surf_target`
-         !! fine zone; the mask is built from the `ZSTAR_FULL` target at
-         !! `η = 0`, and the IC is then seeded on that target).  Refused on
-         !! every other coordinate, and without fillers to close
-         !! (`z_fixed` without a resolved `z_fixed_h_ref`; `zstar_full`
-         !! with `zstar_h_surf_target <= 0`).  The name is historical.
+         !! fine zone).  The mask is built from the coordinate's target at
+         !! `η = 0`, and under `zstar` / `zstar_full` the IC is then seeded
+         !! on that target.  Refused on every other coordinate, and without
+         !! fillers to close (`z_fixed` / `zstar` without a resolved
+         !! `z_fixed_h_ref`; `zstar_full` with `zstar_h_surf_target <= 0`).
+         !! The name is historical.
       character(len=16) :: z_fixed_profile = "uniform"
-         !! Nominal layer-thickness profile of `vcoord_type = "z_fixed"`:
+         !! Nominal layer-thickness profile of `vcoord_type = "z_fixed"`
+         !! and of `vcoord_type = "zstar"` (MOM6 z*, which dilates this
+         !! same nominal profile per column by `(H + η)/H`):
          !! `"uniform"` (default — `max_depth/nz_layers` everywhere,
          !! byte-identical), `"list"` (the thicknesses in `z_fixed_dz`,
          !! surface first) or `"tanh"` (a hyperbolic-tangent stretching
@@ -3573,9 +3578,10 @@ module rdb_config
          !! `ALE_COORDINATE_CONFIG` / `HYBRID:` defines): interface `k` is
          !! kept at least `Σ dz·(H+η)/H` deep.  "uniform" there means
          !! `max_depth/nz_layers` METRES, not `1/nz_layers` of the column.
-         !! The `z_fixed_*` names are kept for both readers rather than
-         !! introducing a parallel table that could disagree.  Refused on
-         !! any other coordinate.
+         !! The `z_fixed_*` names are kept for every reader rather than
+         !! introducing a parallel table that could disagree.  `vcoord_type =
+         !! "zstar"` (MOM6 z*) reads it as its nominal levels as well.  Refused
+         !! on any other coordinate.
       real(wp) :: z_fixed_dz(MAX_Z_FIXED_DZ) = -1.0_wp
          !! `z_fixed_profile = "list"`: nominal layer thicknesses (m),
          !! SURFACE FIRST (MOM6 `ALE_COORDINATE_CONFIG = "PARAM:..."` /
@@ -4481,10 +4487,10 @@ contains
 
          ! Stretched z* nominal profile.  Default "uniform" ⇒ no check
          ! fires and nothing downstream changes.  Anything else must be on
-         ! a family that reads it — `z_fixed` (its levels) or `hycom` (its
-         ! z* nominal floor); silently ignoring it would be the bug — and
-         ! must build: list length = nz_layers, tanh parameters in range
-         ! and leaving room to stretch.
+         ! a family that reads it — `z_fixed` (its levels), `zstar` (MOM6 z*
+         ! levels) or `hycom` (its z* nominal floor); silently ignoring it
+         ! would be the bug — and must build: list length = nz_layers, tanh
+         ! parameters in range and leaving room to stretch.
          block
             integer :: zf_code, zf_ierr
             real(wp), allocatable :: zf_dz(:)
@@ -4496,10 +4502,11 @@ contains
                has_error = .true.
             else if (zf_code /= ZFIXED_PROFILE_UNIFORM) then
                if (parse_vcoord_type(cfg%vcoord_type, VCOORD_EULERIAN_Z) /= VCOORD_Z_FIXED .and. &
+                   parse_vcoord_type(cfg%vcoord_type, VCOORD_EULERIAN_Z) /= VCOORD_ZSTAR .and. &
                    parse_vcoord_type(cfg%vcoord_type, VCOORD_EULERIAN_Z) /= VCOORD_HYCOM) then
                   call logger%error("&vcoord_nml z_fixed_profile = '"// &
                                     trim(cfg%z_fixed_profile)//"' is only read by "// &
-                                    "vcoord_type = 'z_fixed' or 'hycom' (got '"// &
+                                    "vcoord_type = 'z_fixed', 'zstar' or 'hycom' (got '"// &
                                     trim(cfg%vcoord_type)//"'); it would be silently ignored")
                   has_error = .true.
                else if (cfg%nz_layers >= 1) then
@@ -5784,9 +5791,19 @@ contains
             cav_vcoord_code = parse_vcoord_type(cfg%vcoord_type, &
                                                 default_code=VCOORD_EULERIAN_Z)
             if (.not. (cav_vcoord_code == VCOORD_SIGMA .or. &
-                       cav_vcoord_code == VCOORD_ZSTAR .or. &
                        cav_vcoord_code == VCOORD_Z_FIXED)) then
                select case (cav_vcoord_code)
+               case (VCOORD_ZSTAR)
+                  cav_reason = "'zstar' is MOM6 z*: the fixed z_fixed nominal "// &
+                               "profile dilated by (H + eta)/H from the FREE "// &
+                               "SURFACE.  It has no rigid-top branch (MOM6's "// &
+                               "build_zstar_column z_rigid_top path is not "// &
+                               "ported), so under a draft its fine near-surface "// &
+                               "levels would hang from the ice base; it was "// &
+                               "'sigma' under another name until the z* slice, "// &
+                               "and is refused under a cavity until that branch "// &
+                               "lands.  Use 'z_fixed' (the z-like family taught "// &
+                               "the ice base) or 'sigma'"
                case (VCOORD_LAGRANGIAN)
                   cav_reason = "'lagrangian' is geometrically datum-FREE (the target "// &
                                "IS the live h_layer and the remap is a no-op), so the "// &
@@ -5829,10 +5846,10 @@ contains
                                "draft-FOLLOWING and must not be quoted as z-like"
                end select
                call logger%error("&ocean_cavity_dyn_nml enable=.true. accepts "// &
-                                 "vcoord_type='sigma', 'zstar' (zstar-lite) or "// &
-                                 "'z_fixed' ONLY — the two families that rescale the "// &
-                                 "live column and so follow the ice base for free, "// &
-                                 "plus the one that has been TAUGHT the ice base "// &
+                                 "vcoord_type='sigma' or 'z_fixed' ONLY — the family "// &
+                                 "that rescales the live column and so follows the "// &
+                                 "ice base for free, plus the one that has been "// &
+                                 "TAUGHT the ice base "// &
                                  "(z_fixed reads vcoord%z_top, keeps its nominal "// &
                                  "interface depths geopotential, and vanishes the "// &
                                  "layers that outcrop into the ice).  Got '"// &
@@ -6650,24 +6667,30 @@ contains
                               "(hysteresis band; equal thresholds flip-flop the front)")
             has_error = .true.
          end if
-         ! v1 vertical-coordinate restriction: sigma / zstar-lite only.  On
-         ! sigma the layer partition scales all layers to zero TOGETHER as
-         ! D -> 0, so a dry column is just "all layers vanished" (a state the
+         ! v1 vertical-coordinate restriction: sigma only.  On sigma the
+         ! layer partition scales all layers to zero TOGETHER as D -> 0, so
+         ! a dry column is just "all layers vanished" (a state the
          ! H_VANISHED gates already handle).  ZSTAR_FULL bed layers pinch
          ! independently of the surface — the argument fails and the
          ! documented 1-2%/cycle intertidal salt leak would compound.
+         ! 'zstar' was accepted while it was sigma under another name; as
+         ! MOM6 z* it carries zstar_h_min bed fillers (below H_VANISHED)
+         ! where the wet/dry seed and floor assume an emerged column of
+         ! nz*2*H_VANISHED, and its dilation is floored at a dry column —
+         ! unvalidated, so refused.
          ! Parse (not string-compare): the vcoord string has aliases
          ! ("z-star", "SIGMA", ...); same ocean default as rdb_ocean_vcoord.
          block
             integer :: wd_vcoord_code
             wd_vcoord_code = parse_vcoord_type(cfg%vcoord_type, &
                                                default_code=VCOORD_EULERIAN_Z)
-            if (.not. (wd_vcoord_code == VCOORD_SIGMA .or. &
-                       wd_vcoord_code == VCOORD_ZSTAR)) then
+            if (.not. (wd_vcoord_code == VCOORD_SIGMA)) then
                call logger%error("&ocean_wetdry_nml enable=.true. supports "// &
-                                 "vcoord_type='sigma' or 'zstar' (zstar-lite) only — "// &
-                                 "got '"//trim(cfg%vcoord_type)//"' (ZSTAR_FULL bed "// &
-                                 "layers pinch independently; other coords unvalidated)")
+                                 "vcoord_type='sigma' only — got '"// &
+                                 trim(cfg%vcoord_type)//"' (ZSTAR_FULL bed layers "// &
+                                 "pinch independently; 'zstar' is MOM6 z* with bed "// &
+                                 "fillers below the wet/dry emerged-column floor; "// &
+                                 "other coords unvalidated)")
                has_error = .true.
             end if
          end block
@@ -8259,14 +8282,14 @@ contains
                              "concentration (debug/validation)"))
       pl => cfg%zfixed_closed_faces
       call g%add(nml_logical("zfixed_closed_faces", pl, &
-                             "z_fixed / zstar_full partial steps: close every face whose "// &
+                             "z_fixed / zstar / zstar_full partial steps: close every face whose "// &
                              "layer is an inert filler on either side (z-level wall, "// &
                              "free-slip)"))
       ps => cfg%z_fixed_profile
       call g%add(nml_enum("z_fixed_profile", ps, &
-                          "z_fixed levels / hycom z* floor nominal layer-thickness "// &
-                          "profile: uniform (max_depth/nz), list (z_fixed_dz) or "// &
-                          "tanh stretching", &
+                          "z_fixed / zstar levels / hycom z* floor nominal "// &
+                          "layer-thickness profile: uniform (max_depth/nz), list "// &
+                          "(z_fixed_dz) or tanh stretching", &
                           allowed=[character(len=7) :: "uniform", "list", "tanh"]))
       pra => cfg%z_fixed_dz
       call g%add(nml_real_array("z_fixed_dz", pra, &
@@ -8835,7 +8858,7 @@ contains
       pl => cfg%ocean%cavity_dyn%enable
       call g%add(nml_logical("enable", pl, &
                              "Master switch (single-rank, split solver, "// &
-                             "fv_mom6 PGF, sigma/zstar only)"))
+                             "fv_mom6 PGF, sigma/z_fixed only)"))
       ps => cfg%ocean%cavity_dyn%draft_config
       call g%add(nml_enum("draft_config", ps, &
                           "Draft source: analytic shape, or 'file' (static 2-D "// &

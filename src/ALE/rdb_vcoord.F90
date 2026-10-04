@@ -637,7 +637,8 @@ contains
       !! is decided by the coordinate family, not by the value:
       !!
       !!  * `VCOORD_HMIN_INERT` — the GEOMETRIC families (`VCOORD_ZSTAR_FULL`,
-      !!    `VCOORD_Z_FIXED`).  Here `zstar_h_min` is the thickness handed to
+      !!    `VCOORD_Z_FIXED`, and `VCOORD_ZSTAR` — MOM6 z*, whose bed fillers
+      !!    are `z_fixed`'s).  Here `zstar_h_min` is the thickness handed to
       !!    filler layers that lie BELOW the local bed (or above the column
       !!    top).  They hold no water; the floor exists ONLY so `target_h` is
       !!    never exactly zero and the h-dividing kernels cannot 1/0 (see
@@ -665,7 +666,7 @@ contains
       integer, intent(in) :: coord_type
          !! `VCOORD_*` code (from `parse_vcoord_type`).
       select case (coord_type)
-      case (VCOORD_ZSTAR_FULL, VCOORD_Z_FIXED)
+      case (VCOORD_ZSTAR_FULL, VCOORD_Z_FIXED, VCOORD_ZSTAR)
          role = VCOORD_HMIN_INERT
       case (VCOORD_RHO, VCOORD_HYCOM)
          role = VCOORD_HMIN_KEEPALIVE

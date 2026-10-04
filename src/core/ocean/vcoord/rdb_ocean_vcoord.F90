@@ -15,7 +15,8 @@ module rdb_ocean_vcoord
    !!     per the current `coord_type`.  Working bodies:
    !!       VCOORD_EULERIAN_Z  — H · dsig(k)  (η ignored)
    !!       VCOORD_SIGMA       — (H + η) · dsig(k)
-   !!       VCOORD_ZSTAR       — same formula in the barotropic limit
+   !!       VCOORD_ZSTAR       — MOM6 z*: the z_fixed nominal profile
+   !!                            dilated by (H + η)/H over bed fillers
    !!       VCOORD_ZSIGMA      — smoothstep blend(sigma, fixed z-levels)
    !!       VCOORD_ZSTAR_SIGMA — smoothstep blend(sigma, z*-lite)
    !!       VCOORD_ZSTAR_FULL  — per-column z_ref + vanishing-layer floors
@@ -75,6 +76,7 @@ module rdb_ocean_vcoord
    public :: invert_density_targets
    public :: ocean_vcoord_z_fixed_target
    public :: ocean_vcoord_z_fixed_target_uniform
+   public :: ocean_vcoord_zstar_target
    public :: ocean_vcoord_set_z_fixed_profile
    public :: ocean_vcoord_closed_face_masks
    public :: ocean_vcoord_eta0_target
@@ -178,8 +180,9 @@ module rdb_ocean_vcoord
          !! Selected vertical-coordinate variant.
 
       ! ---- Per-layer fractional thickness ----
-      ! Sums to 1.0 across the column.  For `VCOORD_SIGMA` and
-      ! `VCOORD_ZSTAR` this is the target σ stencil:
+      ! Sums to 1.0 across the column.  For `VCOORD_SIGMA` this is the
+      ! target σ stencil (and `VCOORD_Z_FIXED` / `VCOORD_ZSTAR` fall back
+      ! to it when no nominal profile was resolved, `z_fixed_h_ref = 0`):
       !   target_h(i,j,k) = (H(i,j) + eta(i,j)) * dsig(k)
       ! For `VCOORD_ZSTAR_FULL` dsig is a fallback used when the per-
       ! column `z_ref` table is not populated.
@@ -195,7 +198,8 @@ module rdb_ocean_vcoord
       ! with absolute depths when those cases are activated.
       real(wp), allocatable :: z_ref_global(:)
          !! Global reference z-interfaces (m, positive-down), shape
-         !! `0:nz_ml`.  Used by ZSIGMA / ZSTAR_SIGMA / ZSTAR.
+         !! `0:nz_ml`.  Used by ZSIGMA / ZSTAR_SIGMA (NOT by ZSTAR, whose
+         !! nominal profile is the `z_fixed` one, `z_fixed_zi`).
 
       ! ---- Per-column target thickness ----
       ! Recomputed every outer step from (H, eta) per the coord_type
@@ -318,7 +322,9 @@ module rdb_ocean_vcoord
          !! potential density that defines the `VCOORD_RHO` coordinate.
          !! A rdb convention (not MOM6-inherited).
       real(wp) :: z_fixed_h_ref = 0.0_wp
-         !! Total reference depth (m) for `VCOORD_Z_FIXED`.  Layer
+         !! Total reference depth (m) for `VCOORD_Z_FIXED` and
+         !! `VCOORD_ZSTAR` (the MOM6 z* nominal profile is the `z_fixed`
+         !! one, dilated per column — `ocean_vcoord_zstar_target`).  Layer
          !! interfaces sit at `z = k · h_ref / nz_ml` from the surface,
          !! same as MOM6's `COORD_CONFIG = "gprime"` with `MAXIMUM_DEPTH
          !! = h_ref`.  Driver writes from `cfg%ocean%topo%max_depth` at init.
@@ -330,8 +336,8 @@ module rdb_ocean_vcoord
          !! interfaces come from `z_fixed_zi` instead of `h_ref/nz`.
       logical :: z_fixed_use_profile = .false.
          !! `&vcoord_nml z_fixed_profile /= "uniform"`: the `VCOORD_Z_FIXED`
-         !! nominal interfaces come from `z_fixed_zi` / `z_fixed_dz` (set by
-         !! `ocean_vcoord_set_z_fixed_profile`) rather than from the uniform
+         !! (and `VCOORD_ZSTAR`) nominal interfaces come from `z_fixed_zi` /
+         !! `z_fixed_dz` (set by `ocean_vcoord_set_z_fixed_profile`) rather than from the uniform
          !! `z_fixed_h_ref/nz_ml`.  Scalar, rides `copyin(this)`.  Default
          !! `.false.` ⇒ the uniform arithmetic, byte-identical.
       real(wp), allocatable :: z_fixed_zi(:)
@@ -424,9 +430,9 @@ module rdb_ocean_vcoord
          !! `.false.` ⇒ no scan, no cost.
       logical :: zfixed_closed_faces = .false.
          !! `&vcoord_nml zfixed_closed_faces` — partial-step z-level face
-         !! closure.  Meaningful on the two GEOMETRIC families that
-         !! vanish bed-side layers, `VCOORD_Z_FIXED` and
-         !! `VCOORD_ZSTAR_FULL`, where a layer whose reference range lies
+         !! closure.  Meaningful on the three GEOMETRIC families that
+         !! vanish bed-side layers, `VCOORD_Z_FIXED`, `VCOORD_ZSTAR` (MOM6
+         !! z*) and `VCOORD_ZSTAR_FULL`, where a layer whose reference range lies
          !! inside the bed (or, under `z_fixed`, the ice draft) is an
          !! inert FILLER; a velocity face at which that layer is a filler
          !! on EITHER side is a z-level WALL, not a thin passage (Adcroft,
@@ -484,7 +490,7 @@ contains
       ! Default reference z-interfaces: uniform 0..1 normalised.  The
       ! ZSIGMA / ZSTAR_SIGMA branches that consume this expect absolute
       ! metre values from the namelist parser; the normalised default
-      ! is only useful for VCOORD_SIGMA / VCOORD_ZSTAR (which ignore it)
+      ! is only useful for VCOORD_SIGMA (which ignores it)
       ! and for unit tests that pre-populate before running.
       allocate (this%z_ref_global(0:nz_local))
       do k = 0, nz_local
@@ -765,9 +771,9 @@ contains
       !!   VCOORD_SIGMA      — `target_h(:,:,k) = (H + η) · dsig(k)`.
       !!     Pure terrain-following.
       !!
-      !!   VCOORD_ZSTAR      — same formula as SIGMA in this barotropic
-      !!     limit; distinction (z-anchored dsig) surfaces with a
-      !!     non-uniform stencil.
+      !!   VCOORD_ZSTAR      — MOM6 z* (`ocean_vcoord_zstar_target`): the
+      !!     `z_fixed` nominal profile dilated per column by the free-surface
+      !!     stretching, over a partial bed cell and inert bed fillers.
       !!
       !!   VCOORD_ZSIGMA / VCOORD_ZSTAR_SIGMA — smoothstep blends, see
       !!     module head comment.
@@ -847,6 +853,29 @@ contains
                                             this%zsigma_blend_width, this%zstar_h_min)
          return
       end if
+      if (this%coord_type == VCOORD_ZSTAR) then
+         ! MOM6 z*: the `z_fixed` nominal profile (uniform `z_fixed_h_ref/nz`
+         ! or the stretched `z_fixed_zi` table) dilated by the column's
+         ! free-surface stretching.  Same `z_fixed_h_ref = 0` fallback as
+         ! `z_fixed` (uniform sigma) for a slot no profile was resolved on.
+         h_nominal = 0.0_wp
+         if (this%z_fixed_h_ref > 0.0_wp) then
+            h_nominal = this%z_fixed_h_ref/real(this%nz_ml, wp)
+         end if
+         if (this%z_fixed_use_profile .or. h_nominal > 0.0_wp) then
+            call ocean_vcoord_zstar_target(this%target_h, total_h, eta, &
+                                           this%nx_total, this%ny_total, this%nz_ml, &
+                                           h_nominal, this%z_fixed_use_profile, &
+                                           this%z_fixed_zi, this%zstar_h_min)
+            return
+         end if
+         call ocean_vcoord_geometric_target(VCOORD_SIGMA, this%nx_total, this%ny_total, &
+                                            this%nz_ml, this%target_h, total_h, eta, &
+                                            this%dsig, this%z_ref_global, this%z_ref, &
+                                            this%zsigma_depth_transition, &
+                                            this%zsigma_blend_width, this%zstar_h_min)
+         return
+      end if
       call ocean_vcoord_geometric_target(this%coord_type, this%nx_total, this%ny_total, &
                                          this%nz_ml, this%target_h, total_h, eta, &
                                          this%dsig, this%z_ref_global, this%z_ref, &
@@ -858,7 +887,7 @@ contains
                                                  total_h, eta, dsig, z_ref_global, &
                                                  z_ref, zsigma_depth_transition, &
                                                  zsigma_blend_width, zstar_h_min)
-      !! Geometric target-grid kernels (EULERIAN_Z, SIGMA/ZSTAR, ZSIGMA,
+      !! Geometric target-grid kernels (EULERIAN_Z, SIGMA, ZSIGMA,
       !! ZSTAR_SIGMA, ZSTAR_FULL; formulae documented on
       !! `ocean_vcoord_compute_target_h_impl`).  Flat on purpose — every
       !! array an explicit-shape dummy, every knob a scalar dummy — so no
@@ -866,8 +895,8 @@ contains
       !! `do concurrent` (see `ocean_vcoord_rho_target` for the GPU fault
       !! that shape caused there).
       integer, intent(in), value :: coord_type
-         !! `VCOORD_*` family (not LAGRANGIAN / Z_FIXED: the dispatcher
-         !! owns those).
+         !! `VCOORD_*` family (not LAGRANGIAN / Z_FIXED / ZSTAR: the
+         !! dispatcher owns those).
       integer, intent(in), value :: nx
          !! i-extent of every horizontal array (total, incl. halos).
       integer, intent(in), value :: ny
@@ -904,7 +933,7 @@ contains
             target_h(i, j, k) = total_h(i, j)*dsig(k)
          end do
 
-      case (VCOORD_SIGMA, VCOORD_ZSTAR)
+      case (VCOORD_SIGMA)
          do concurrent(k=1:nz, j=1:ny, i=1:nx)
             column_total = total_h(i, j) + eta(i, j)
             target_h(i, j, k) = column_total*dsig(k)
@@ -1264,6 +1293,153 @@ contains
       end do
    end subroutine ocean_vcoord_z_fixed_target
 
+   pure subroutine ocean_vcoord_zstar_target(target_h, total_h, eta, nx, ny, nz, &
+                                             h_nominal, use_profile, zi, h_min)
+      !! `VCOORD_ZSTAR` target grid — MOM6 z* (`REGRIDDING_COORDINATE_MODE
+      !! = "Z*"`, `build_zstar_column`, MOM6 `src/ALE/coord_zlike.F90`
+      !! lines 65-146): the FIXED nominal z profile of `z_fixed`
+      !! (`&vcoord_nml z_fixed_profile` uniform / list / tanh — the same
+      !! `z_fixed_zi` table, not a parallel one) DILATED per column by the
+      !! free-surface stretching, over a partial bed cell and inert bed
+      !! fillers.
+      !!
+      !! ### MOM6
+      !!
+      !! Without a rigid top MOM6 sets `stretching = (H+η)/H`
+      !! (coord_zlike.F90:109), lays the interfaces top-down from the free
+      !! surface at `z_k = η − stretching·Z_k` (`Z_k` the nominal depth,
+      !! l.130-134), pins the bottom interface at `−H` and clamps upward so
+      !! no layer is thinner than `min_thickness` (l.138-143).  The height
+      !! of nominal interface `k` above the bed is therefore
+      !! `stretching·(H − Z_k)`: a layer lies below the bed iff its nominal
+      !! top `Z_k ≥ H`, WHATEVER `η` is (`stretching > 0`).  The live/filler
+      !! pattern is exactly static in `η`, of either sign.
+      !!
+      !! ### This kernel
+      !!
+      !! Two passes per column, both the `z_fixed` bed walk
+      !! (`ocean_vcoord_z_fixed_target` with `z_top = 0`):
+      !!
+      !!   1. at `η = 0`, count the bed fillers `n_f` — the layers whose
+      !!      nominal top is at or below the bed less the partial-cell
+      !!      floor (`Z_FIXED_BED_PARTIAL_MIN`), exactly `z_fixed`'s rule;
+      !!   2. lay the column again from `H + η`: layers `k <= n_f` at
+      !!      `h_min`, every live interface at the DILATED nominal depth
+      !!      `s·Z_k` below the free surface, with
+      !!      `s = (H + η − n_f·h_min)/(H − n_f·h_min)`.
+      !!
+      !! `s` is MOM6's `stretching` with the filler stack taken out of the
+      !! dilation (MOM6 dilates all of `H` and then clamps the fillers back
+      !! to `min_thickness`, which leaves `(s−1)·n_f·h_min` in the partial
+      !! cell — under 1 mm per metre of `η` on the 1-degree Southern Ocean,
+      !! `python_prototypes/mom6_zstar/mom6_zstar.py`).  Consequences:
+      !!
+      !!   * the liveness of every layer is decided at `η = 0`, so the
+      !!     pattern is static BY CONSTRUCTION and the static face mask
+      !!     (`zfixed_closed_faces`) applies with every consumer unchanged;
+      !!   * every live layer, the partial bed cell included, is its
+      !!     `η = 0` thickness times `s` (to round-off) — the dilation keeps
+      !!     ratios, so a partial cell (`p0 > Z_FIXED_BED_PARTIAL_MIN` at
+      !!     `η = 0` by construction) stays above `H_VANISHED` for every
+      !!     `s > H_VANISHED/p0`, i.e. for every `η` that does not all but
+      !!     dry the column;
+      !!   * at `η = 0`, `s == 1` exactly (numerator and denominator are the
+      !!     same expression), `s·Z_k == Z_k`, and the walk is `z_fixed`'s
+      !!     operation for operation: the `η = 0` z* target IS the `η = 0`
+      !!     `z_fixed` target, bit for bit.
+      !!
+      !! `Σ_k target_h = H + η` by construction (each step assigns what it
+      !! takes from `z_below`, and the surface layer closes the column).
+      !! A degenerate column (`H − n_f·h_min <= h_min`: land, or thinner
+      !! than its filler stack) is laid with `s = 1`, `z_fixed`'s own
+      !! degenerate overshoot.  `s` is floored at 0: a column drained past
+      !! its fillers is a dry column, which this coordinate does not
+      !! support (`validate_config` refuses it with wet/dry).
+      integer, intent(in) :: nx
+         !! i-extent of every array (total, incl. halos).
+      integer, intent(in) :: ny
+         !! j-extent of every array (total, incl. halos).
+      integer, intent(in) :: nz
+         !! Number of layers; `k = 1` is the bed, `k = nz` the surface.
+      real(wp), intent(out) :: target_h(nx, ny, nz)
+         !! Target layer thickness (m), bottom-up.
+      real(wp), intent(in) :: total_h(nx, ny)
+         !! Column reference thickness `H` (m) — `Σ h_layer − η`.
+      real(wp), intent(in) :: eta(nx, ny)
+         !! Free-surface anomaly `η` (m).
+      real(wp), intent(in) :: h_nominal
+         !! Uniform nominal spacing `z_fixed_h_ref/nz` (m).  Unused when
+         !! `use_profile`.
+      logical, intent(in) :: use_profile
+         !! Take the nominal interfaces from `zi`.
+      real(wp), intent(in) :: zi(0:nz)
+         !! Nominal interface depths (m), bottom-up, `zi(k)` = top of layer
+         !! `k`, `zi(nz) = 0`.  Read only when `use_profile`.
+      real(wp), intent(in) :: h_min
+         !! Inert-filler thickness (`zstar_h_min`, `<= H_VANISHED`).
+      integer :: i, j, k, n_f
+      real(wp) :: z_below_loc, z_nom_loc, z_above_loc, stretch_loc, l0_loc
+      real(wp) :: bed_partial_min
+      logical :: walking_loc
+
+      bed_partial_min = max(h_min, Z_FIXED_BED_PARTIAL_MIN)
+      do concurrent(j=1:ny, i=1:nx) &
+         local(k, n_f, z_below_loc, z_nom_loc, z_above_loc, stretch_loc, l0_loc, &
+               walking_loc)
+         ! Pass 1 — the eta = 0 bed fillers (z_fixed's bed rule, z_top = 0).
+         n_f = 0
+         z_below_loc = total_h(i, j)
+         walking_loc = .true.
+         do k = 1, nz - 1
+            if (walking_loc) then
+               if (use_profile) then
+                  z_nom_loc = zi(k)
+               else
+                  z_nom_loc = real(nz - k, wp)*h_nominal
+               end if
+               if (z_nom_loc >= z_below_loc - bed_partial_min) then
+                  n_f = n_f + 1
+                  z_below_loc = z_below_loc - h_min
+               else
+                  walking_loc = .false.
+               end if
+            end if
+         end do
+         ! The dilation of the live column.
+         l0_loc = total_h(i, j) - real(n_f, wp)*h_min
+         if (l0_loc > h_min) then
+            stretch_loc = max(((total_h(i, j) + eta(i, j)) - real(n_f, wp)*h_min)/l0_loc, &
+                              0.0_wp)
+         else
+            stretch_loc = 1.0_wp
+         end if
+         ! Pass 2 — the z_fixed walk on the dilated nominal interfaces.
+         z_below_loc = total_h(i, j) + eta(i, j)
+         do k = 1, nz
+            if (k <= n_f) then
+               target_h(i, j, k) = h_min
+               z_below_loc = z_below_loc - h_min
+            else if (k == nz) then
+               ! The surface layer closes the column (z_fixed's top rule).
+               if (0.0_wp > z_below_loc - h_min) then
+                  target_h(i, j, k) = h_min
+               else
+                  target_h(i, j, k) = z_below_loc
+               end if
+            else
+               if (use_profile) then
+                  z_nom_loc = zi(k)
+               else
+                  z_nom_loc = real(nz - k, wp)*h_nominal
+               end if
+               z_above_loc = stretch_loc*z_nom_loc
+               target_h(i, j, k) = z_below_loc - z_above_loc
+               z_below_loc = z_above_loc
+            end if
+         end do
+      end do
+   end subroutine ocean_vcoord_zstar_target
+
    pure subroutine ocean_vcoord_eta0_target(vc, target_h, total_h, nx, ny, nz)
       !! The target layer thickness at `eta = 0` of a GEOMETRIC family
       !! that vanishes layers — the ONE definition of "live" that the
@@ -1280,6 +1456,11 @@ contains
       !!   `compute_target_h` dispatches to every regrid, walking the
       !!   per-column `z_ref` table `build_zref_full` laid from the
       !!   bathymetry.  The caller must have built that table first.
+      !! * `VCOORD_ZSTAR` — `ocean_vcoord_zstar_target`, the kernel the
+      !!   regrid dispatches to, at `eta = 0` (where it is the `z_fixed`
+      !!   target with `z_top = 0`, bit for bit).  Its live/filler pattern
+      !!   is decided at `eta = 0` inside the kernel, so it is EXACTLY the
+      !!   pattern of every later regrid, of either sign of `eta`.
       !!
       !! Any other family leaves `target_h` untouched (the caller refuses
       !! it before getting here).  Configure / seed time only: the host
@@ -1314,6 +1495,11 @@ contains
                                             total_h, eta0, vc%dsig, vc%z_ref_global, &
                                             vc%z_ref, vc%zsigma_depth_transition, &
                                             vc%zsigma_blend_width, vc%zstar_h_min)
+      case (VCOORD_ZSTAR)
+         h_nominal = vc%z_fixed_h_ref/real(nz, wp)
+         call ocean_vcoord_zstar_target(target_h, total_h, eta0, nx, ny, nz, h_nominal, &
+                                        vc%z_fixed_use_profile, vc%z_fixed_zi, &
+                                        vc%zstar_h_min)
       case default
       end select
       deallocate (eta0)

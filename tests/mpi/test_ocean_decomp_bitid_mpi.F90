@@ -52,7 +52,9 @@
 !!     neighbour column across every seam face, so a stale ghost or a
 !!     one-sided window shows here (the `closures` case enables Redi at
 !!     the default `khtr = 0`, which builds the coefficients but applies
-!!     no flux).
+!!     no flux); with two coordinate twins on the same files:
+!!     `file_readers_zstar_full` and `file_readers_zstar` (MOM6 z* + closed
+!!     faces — the z_fixed staircase dilated per column every regrid);
 !! All are stratified with a boundary-layer scheme on, so the tiles exchange real
 !! flow and real tracer structure.  26 x 18 cells, nghost = 3: every
 !! factorisation above is uneven somewhere.
@@ -122,12 +124,13 @@ program test_ocean_decomp_bitid_mpi
    integer :: rank, nprocs, n_fail, total_fail, ic
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(9) = [character(len=24) :: &
-                                               "island_basin", "periodic_channel_zstar", &
-                                               "periodic_sponge", &
-                                               "open_obc", "spherical", "obc_radiation_sponge", &
-                                               "closures", "file_readers", &
-                                               "file_readers_zstar_full"]
+   character(len=24), parameter :: CASES(10) = [character(len=24) :: &
+                                                "island_basin", "periodic_channel_zstar", &
+                                                "periodic_sponge", &
+                                                "open_obc", "spherical", "obc_radiation_sponge", &
+                                                "closures", "file_readers", &
+                                                "file_readers_zstar_full", &
+                                                "file_readers_zstar"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -143,7 +146,8 @@ program test_ocean_decomp_bitid_mpi
    do ic = 1, size(CASES)
 #ifdef RDB_NO_NETCDF
       if (trim(CASES(ic)) == "file_readers" .or. &
-          trim(CASES(ic)) == "file_readers_zstar_full") cycle
+          trim(CASES(ic)) == "file_readers_zstar_full" .or. &
+          trim(CASES(ic)) == "file_readers_zstar") cycle
 #endif
       call run_case(trim(CASES(ic)), trim(SCHEMES(1)))
       call run_case(trim(CASES(ic)), trim(SCHEMES(2)))
@@ -297,7 +301,7 @@ contains
                "sponge_strength = 1.0e-4, sponge_relax_tracers = .true., "// &
                "radiation_scheme = 'orlanski', res_lscale_out = 20000.0, "// &
                "res_lscale_in = 20000.0 /"//NL
-      case ("file_readers", "file_readers_zstar_full")
+      case ("file_readers", "file_readers_zstar_full", "file_readers_zstar")
          ! The three per-rank windowed readers (supergrid, bathymetry,
          ! z-level T/S IC) on files the test writes, with the global-1-degree
          ! physics set: z_fixed + closed partial-step faces, fv_mom6 PGF,
@@ -343,8 +347,15 @@ contains
       else if (label == "file_readers_zstar_full") then
          nml = nml//"&vcoord_nml vcoord_type = 'zstar_full', zstar_h_surf_target = 1500.0, "// &
                "zfixed_closed_faces = .true., check_vanished_content = .true. /"//NL
+      else if (label == "file_readers_zstar") then
+         ! MOM6 z*: the z_fixed staircase (the same fillers, the same mask)
+         ! with every live layer dilated by the column's (H + eta)/H each
+         ! regrid, and the IC seeded on the eta = 0 target.
+         nml = nml//"&vcoord_nml vcoord_type = 'zstar', zfixed_closed_faces = .true., "// &
+               "check_vanished_content = .true. /"//NL
       end if
-      if (label /= "file_readers" .and. label /= "file_readers_zstar_full") then
+      if (label /= "file_readers" .and. label /= "file_readers_zstar_full" .and. &
+          label /= "file_readers_zstar") then
          nml = nml//"&output_nml output_to_file = .false. /"//NL
       end if
    end function case_nml

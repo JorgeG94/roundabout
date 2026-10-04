@@ -224,8 +224,10 @@ contains
    end subroutine test_target_h_sigma
 
    subroutine test_target_h_zstar_eta(error)
-      !! VCOORD_ZSTAR: the η-perturbation must show up — a pure-η
-      !! difference at fixed H gives a target_h difference of η·dsig(k).
+      !! VCOORD_ZSTAR (MOM6 z*): the eta-perturbation DILATES the column —
+      !! at fixed H every live layer scales by (H + eta)/H.  H = 700 m on an
+      !! 800 m uniform nominal profile, so the bed layer is a 100 m partial
+      !! cell and the dilation must carry it in proportion too.
       type(error_type), allocatable, intent(out) :: error
       type(ocean_vcoord_t) :: vc
       type(hgrid_t) :: grid
@@ -239,10 +241,11 @@ contains
       call grid%init(NX, NY, 1, 1.0_wp, 1.0_wp)
       call vc%init(grid, nz_ml=NZ)
       vc%coord_type = VCOORD_ZSTAR
+      vc%z_fixed_h_ref = 800.0_wp
       nx_tot = grid%nx_total
       ny_tot = grid%ny_total
 
-      total_h = 800.0_wp
+      total_h = 700.0_wp
       eta_a = 0.0_wp
       eta_b = 3.0_wp
 
@@ -252,16 +255,19 @@ contains
 
       max_err = 0.0_wp
       do k = 1, NZ
-         expected = 3.0_wp*vc%dsig(k)
          do j = 1, ny_tot
             do i = 1, nx_tot
-               max_err = max(max_err, abs((vc%target_h(i, j, k) - target_a(i, j, k)) - expected))
+               expected = target_a(i, j, k)*(703.0_wp/700.0_wp)
+               max_err = max(max_err, abs(vc%target_h(i, j, k) - expected))
             end do
          end do
       end do
 
+      call check(error, abs(target_a(2, 2, 1) - 100.0_wp) < 1.0e-10_wp, &
+                 "VCOORD_ZSTAR: the 700 m column must end in a 100 m partial bed cell")
+      if (allocated(error)) return
       call check(error, max_err < 1.0e-10_wp, &
-                 "VCOORD_ZSTAR target_h shift per layer should equal Δη · dsig(k)")
+                 "VCOORD_ZSTAR target_h must scale by (H + eta)/H per layer")
       deallocate (target_a)
       call vc%destroy()
    end subroutine test_target_h_zstar_eta
