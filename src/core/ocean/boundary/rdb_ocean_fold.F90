@@ -20,9 +20,9 @@ module rdb_ocean_fold
    !! `rdb_ocean_fold_apply` route that case through the owner-routed
    !! exchange of `rdb_ocean_fold_exchange` instead of these kernels.  It is
    !! still refused at configure until every fold site (the barotropic fast
-   !! loop's inline folds included) is ported.  The fold also reads the `nghost` rows below the
-   !! fold line, so the north tile must be at least `nghost+1` rows tall
-   !! (also refused at configure otherwise).
+   !! loop's inline folds included) is ported.  The fold also reads the
+   !! `nghost` rows below the fold line, so the north tile must be at least
+   !! `nghost+1` rows tall (also refused at configure otherwise).
    !!
    !! ## Roundabout staggering (the load-bearing input to every map below)
    !!
