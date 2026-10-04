@@ -60,6 +60,10 @@ module rdb_barotropic_substep
    use rdb_ocean_halo_counters, only: oh_count_bt_u_mid, &
                                       oh_count_suppress_on, oh_count_suppress_off
    use rdb_profiler, only: profiler_start, profiler_stop
+   use rdb_ocean_fold_exchange, only: ocean_fold_is_distributed, ocean_fold_begin, &
+                                      ocean_fold_pack, ocean_fold_exchange, &
+                                      ocean_fold_unpack, ocean_fold_end, &
+                                      ocean_fold_north_v_face, FOLD_STAG_T, FOLD_STAG_U
    implicit none
    private
 
@@ -458,6 +462,12 @@ contains
       logical :: do_fold
          !! Tripolar north-fold flag cached from bc%north_fold.  Gates the
          !! inline fold DC loops in the fast loop; .false. ⇒ bit-identical.
+      logical :: dist_fold
+         !! `do_fold` on an east-west split north row (`px > 1`): the inline
+         !! fold loops are skipped and the owner-routed exchange
+         !! (`rdb_ocean_fold_exchange`) folds instead, at two points per
+         !! substep — η + ubt after the mid-substep u exchange (`bt_mid`),
+         !! vbt after Pass 2c, before the time-mean accumulators (`bt_late`).
       integer :: nf_isum, nf_jsum_c, nf_jsum_v, nf_jfold, nf_jlo_c, nf_p, nf_pm
          !! Cached fold index constants (centre/v-face/u-face maps).
       integer :: i_w_face, i_e_face, j_s_face, j_n_face
@@ -588,6 +598,7 @@ contains
       per_x_tag = .false.
       per_y_tag = .false.
       do_fold = .false.
+      dist_fold = .false.
       ! Fold index constants (storage maps, Appendix A).
       nf_isum = 2*grid%nghost + grid%nx_phys + 1      ! centre/v i-map sum
       nf_jsum_c = 2*grid%nghost + 2*grid%ny_phys + 1   ! T/u j-halo sum
@@ -621,6 +632,7 @@ contains
          per_x = bc%periodic_x .and. .not. ocean_halo_is_decomposed_x()
          per_y = bc%periodic_y .and. .not. ocean_halo_is_decomposed_y()
          do_fold = bc%north_fold
+         dist_fold = do_fold .and. ocean_fold_is_distributed()
          ! Physical-edge flags: .false. at an MPI seam (halo fills it);
          ! .true. at a physical domain edge (wall/BC closure applies).
          has_w = bc%has_west
@@ -1099,7 +1111,11 @@ contains
          ! η wrap (Appendix A: fold reads cyclically-wrapped corner columns).
          ! Fills the north halo rows from the reflected interior; the on-line
          ! T row is strictly below the seam (pure halo image), so no on-row op.
-         if (do_fold) then
+         ! px > 1 (`dist_fold`): deferred to the `bt_mid` exchange after
+         ! Pass 2b — Pass 2b reads η only on its own row (d_eta = η(i,j) −
+         ! η(i−1,j)), so no owned value depends on an η north ghost before
+         ! then; Pass 2c's fold-row v update is the first reader.
+         if (do_fold .and. .not. dist_fold) then
             do concurrent(j=nf_jlo_c:ny, i=1:nx)
                bt_eta(i, j) = bt_eta(nf_isum - i, nf_jsum_c - j)
             end do
@@ -1397,7 +1413,7 @@ contains
          ! Tripolar north-fold of ubt (u-face Cu, NEGATE — true vector).
          ! u i-map is the symmetric f' = ni+2-f; reads the already periodic-x
          ! wrapped faces.  Halo rows only (u points lie strictly below the seam).
-         if (do_fold) then
+         if (do_fold .and. .not. dist_fold) then
             do concurrent(j=nf_jlo_c:ny, i=1:nx + 1)
                bt_ubt(i, j) = -bt_ubt(nf_isum + 1 - i, nf_jsum_c - j)
             end do
@@ -1428,6 +1444,22 @@ contains
             call oh_count_suppress_on()
             call ocean_halo_face_x(bt_ubt)
             call oh_count_suppress_off()
+            call profiler_stop("ocean_comms_bt")
+         end if
+         ! `bt_mid` (px > 1): the η fold (B1) and the ubt fold (B2) as one
+         ! owner-routed group, after the mid-substep u exchange (which
+         ! drained async(1) — `ocean_halo_is_decomposed()` holds whenever
+         ! px > 1) and before Pass 2c, whose fold-line v update reads both
+         ! the η and the ubt north ghost rows.
+         if (dist_fold) then
+            call profiler_start("ocean_comms_bt")
+            call ocean_fold_begin(2*grid%nghost)
+            call ocean_fold_pack(bt_eta, nx, ny, FOLD_STAG_T)
+            call ocean_fold_pack(bt_ubt, nx + 1, ny, FOLD_STAG_U)
+            call ocean_fold_exchange()
+            call ocean_fold_unpack(bt_eta, nx, ny, FOLD_STAG_T, .false.)
+            call ocean_fold_unpack(bt_ubt, nx + 1, ny, FOLD_STAG_U, .true.)
+            call ocean_fold_end()
             call profiler_stop("ocean_comms_bt")
          end if
          !$acc kernels async(1) &
@@ -1626,7 +1658,7 @@ contains
          ! SOUTH-face storage); the substep updated it as an interior face
          ! (the north BC dispatch above skips OBC_TRIPOLAR_FOLD).  Same
          ! periodic-aware projection as `fold_north_v_face` (rdb_ocean_fold).
-         if (do_fold) then
+         if (do_fold .and. .not. dist_fold) then
             do concurrent(j=nf_jfold + 1:ny + 1, i=1:nx)
                bt_vbt(i, j) = -bt_vbt(nf_isum - i, nf_jsum_v - j)
             end do
@@ -1641,6 +1673,27 @@ contains
             end do
          end if
 
+         !$acc end kernels
+         ! `bt_late` (px > 1): the vbt fold + fold-line projection (B3) as
+         ! an owner-routed exchange, BEFORE the accumulators, so they sum
+         ! the projected fold-line v exactly as the serial run does.  The
+         ! region is split here on every run (async(1) is one in-order
+         ! queue, so the split changes no result).
+         if (dist_fold) then
+            call profiler_start("ocean_comms_bt")
+            !$acc wait(1)
+            call ocean_fold_north_v_face(bt_vbt, nx, ny + 1, grid%nx_phys, grid%ny_phys, &
+                                         grid%nghost)
+            call profiler_stop("ocean_comms_bt")
+         end if
+         !$acc kernels async(1) &
+         !$acc   present(force_u, force_v, bt_eta, bt_H_ref, bt_eta_new, &
+         !$acc           bt_ke_centre, eta_sum, bt_eta_end, bt_ubt, bt_ubt_prev, &
+         !$acc           bt_rem_u, ubt_sum, uhbt_sum, bt_uhbt, bt_ubt_end, &
+         !$acc           bt_vbt, bt_vbt_prev, bt_rem_v, vbt_sum, vhbt_sum, &
+         !$acc           bt_vhbt, bt_vbt_end, bt_zeta_corner, f_corner, &
+         !$acc           area_cu, area_cv, dx_cu, dx_cv, dy_cu, dy_cv, &
+         !$acc           iarea_bu, iarea_t, idx_cu, idy_cv)
          ! Time-mean accumulators — three disjoint, independent writes
          ! fused over the staggered union (η centres, u/v faces) with
          ! per-array index guards; one launch instead of three.

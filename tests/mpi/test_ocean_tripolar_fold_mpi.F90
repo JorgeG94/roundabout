@@ -1,24 +1,28 @@
-!! Tripolar north fold under a NORTH-SOUTH split: 1-rank vs py-rank
-!! bit-identity through the production engine.
+!! Tripolar north fold under MPI: 1-rank vs decomposed bit-identity through
+!! the production engine.
 !!
-!! The fold is applied locally by the rank that owns the north edge
-!! (`bc%north_fold` is rank-local).  Before that gate existed, every rank
-!! of a px = 1, py > 1 run folded its OWN north ghosts — overwriting, with a
-!! mirror of its own tile, the rows the MPI exchange had just filled — and
-!! the analytic tripolar generator built every tile as a whole globe of the
-!! tile's size.  Neither failed loud; the answers were simply wrong.
+!! The fold is applied by the ranks that own the north edge (`bc%north_fold`
+!! is rank-local).  Before that gate existed, every rank of a px = 1, py > 1
+!! run folded its OWN north ghosts — overwriting, with a mirror of its own
+!! tile, the rows the MPI exchange had just filled — and the analytic
+!! tripolar generator built every tile as a whole globe of the tile's size.
+!! Neither failed loud; the answers were simply wrong.
 !!
-!! On EACH launch (ctest runs np = 1, 2, 4) the binary:
+!! On EACH launch (ctest runs np = 1, 2, 3, 4) the binary:
 !!   1. runs the SERIAL reference (px = py = 1, compute_size = 1) on every
 !!      rank — deterministic, no collective that could differ — through
 !!      `engine_setup` -> seeded structure -> `engine_step` x N_STEPS;
-!!   2. runs the DECOMPOSED case (px = 1, py = nprocs) on the same namelist;
+!!   2. runs every DECOMPOSED case of the launched rank count on the same
+!!      namelist: the north-south split (px = 1, py = nprocs) and the
+!!      east-west splits through the distributed fold exchange (2x1; 3x1;
+!!      4x1 and 2x2), the latter via `engine_setup`'s TEST-ONLY
+!!      `allow_distributed_fold` until the px > 1 refusal is lifted;
 !!   3. compares, BITWISE, each rank's whole storage window (ghost rows and
 !!      columns included) of h, u, v, every tracer hTr (S, T) and the BT
 !!      end-of-step eta against the matching window of the reference, plus
 !!      the tripolar metrics at configure time (the generator gate);
-!!   4. on np >= 2, asserts that px = 2 (an east-west split of the fold
-!!      row) is REFUSED at configure time.
+!!   4. on np >= 2, asserts that px = 2 WITHOUT the bypass is still REFUSED
+!!      at configure time.
 !!
 !! Two grids:
 !!   * "spanning": ny = 24 from 59N at 1 deg, phi_join = 74 — the bipolar
@@ -61,7 +65,6 @@ program test_ocean_tripolar_fold_mpi
    integer, parameter :: NZ = 3
    integer, parameter :: N_STEPS = 24
    real(wp), parameter :: DT = 1800.0_wp
-   real(wp), parameter :: PI_ = 3.14159265358979323846_wp
 
    type :: snap_t
       !! Host copy of one run's fields (whole local storage).
@@ -71,9 +74,18 @@ program test_ocean_tripolar_fold_mpi
       real(wp), allocatable :: dxt(:, :), areat(:, :), dycu(:, :), dxcv(:, :)
       real(wp), allocatable :: dxbu(:, :), areabu(:, :), geolatbu(:, :), angle(:, :)
       real(wp), allocatable :: fcorner(:, :)
+      integer :: io = 0
+         !! Global i offset of the tile.
+      integer :: jo = 0
+         !! Global j offset of the tile.
+      logical :: has_south = .true.
+      logical :: has_north = .true.
+      integer :: px = 1
+         !! Tiles along x of the run that produced the snapshot.
    end type snap_t
 
    integer :: rank, nprocs, n_fail, total_fail
+   logical :: ok_ref_g
    type(comm_t) :: comm
 
    call comm_env_init()
@@ -150,10 +162,12 @@ contains
       call engine_setup(engine, cfg, ierr, compute_rank=crank, compute_size=csize)
    end subroutine setup_engine
 
-   subroutine run_one(nml, csize, crank, snap_cfg, snap_end, ok)
+   subroutine run_one(nml, csize, crank, snap_cfg, snap_end, ok, allow_dfold)
       !! Configure, seed the structure, step N_STEPS, snapshot to host.
       character(len=*), intent(in) :: nml
       integer, intent(in) :: csize, crank
+      logical, intent(in), optional :: allow_dfold
+         !! Pass engine_setup's test-only `allow_distributed_fold` (px > 1).
       type(snap_t), intent(out) :: snap_cfg, snap_end
       logical, intent(out) :: ok
       type(ocean_engine_t) :: engine
@@ -166,7 +180,8 @@ contains
       if (ierr /= OCEAN_STATUS_OK) return
       call validate_config(cfg, ierr)
       if (ierr /= OCEAN_STATUS_OK) return
-      call engine_setup(engine, cfg, ierr, compute_rank=crank, compute_size=csize)
+      call engine_setup(engine, cfg, ierr, compute_rank=crank, compute_size=csize, &
+                        allow_distributed_fold=allow_dfold)
       if (ierr /= OCEAN_STATUS_OK) return
 
       call seed_structure(engine)
@@ -192,10 +207,15 @@ contains
    subroutine seed_structure(engine)
       !! A structured, decomposition-invariant anomaly (functions of the
       !! GLOBAL indices only) in u, v and every tracer, reaching the fold row;
-      !! then the ghosts are refilled the way `engine_setup` does it.
+      !! then the ghosts are refilled the way `engine_setup` does it.  Exact
+      !! rational values, NOT transcendentals: a vectorised libm `sin`/`cos`
+      !! (gfortran -O3 -march=native -> libmvec) differs from the scalar one
+      !! in the last bit, and which cells take which path depends on the
+      !! tile's row length — a seed artifact that differs by decomposition.
+      !! u uses the REDUCED face index, so face NX_G+1 equals face 1 bitwise
+      !! (the periodic-seam invariant every decomposition relies on).
       type(ocean_engine_t), intent(inout) :: engine
       integer :: i, j, k, it, ng, nxl, nyl, io, jo, ig, jg
-      real(wp) :: x, y
 
       ng = engine%grid%nghost
       nxl = engine%grid%nx_phys
@@ -206,11 +226,9 @@ contains
          do k = 1, NZ
             do j = ng + 1, ng + nyl
                do i = ng + 1, ng + nxl + 1
-                  ig = i - ng + io
+                  ig = modulo(i - ng + io - 1, NX_G) + 1
                   jg = j - ng + jo
-                  x = 2.0_wp*PI_*real(ig - 1, wp)/real(NX_G, wp)
-                  y = real(jg, wp)
-                  ms%u_face_x_layer(i, j, k) = 0.05_wp*sin(x + 0.3_wp*y)*real(k, wp)/NZ
+                  ms%u_face_x_layer(i, j, k) = real(modulo(5*ig + 3*jg + k, 13) - 6, wp)/128.0_wp
                end do
             end do
             ! v: every local south face plus the tile's north face — on the
@@ -219,9 +237,7 @@ contains
                do i = ng + 1, ng + nxl
                   ig = i - ng + io
                   jg = j - ng + jo
-                  x = 2.0_wp*PI_*(real(ig, wp) - 0.5_wp)/real(NX_G, wp)
-                  y = real(jg, wp)
-                  ms%v_face_y_layer(i, j, k) = 0.04_wp*cos(2.0_wp*x - 0.2_wp*y + real(k, wp))
+                  ms%v_face_y_layer(i, j, k) = real(modulo(7*ig + 2*jg + 3*k, 11) - 5, wp)/256.0_wp
                end do
             end do
             do it = 1, size(ms%tracers)
@@ -229,16 +245,16 @@ contains
                   do i = ng + 1, ng + nxl
                      ig = i - ng + io
                      jg = j - ng + jo
-                     x = 2.0_wp*PI_*(real(ig, wp) - 0.5_wp)/real(NX_G, wp)
-                     y = real(jg, wp)
                      ms%tracers(it)%hTr(i, j, k) = ms%tracers(it)%hTr(i, j, k)* &
-                                                   (1.0_wp + 0.002_wp*sin(3.0_wp*x)*cos(0.4_wp*y))
+                                                   (1.0_wp + real(modulo(3*ig + jg + it, 7) - 3, wp)/1024.0_wp)
                   end do
                end do
             end do
          end do
          call ocean_halo_exchange_ml_state(ms, device_resident=.false.)
-         call ocean_fold_wrap_state(engine%grid, engine%state%bc, ms)
+         ! Host-only state (before `engine_enter_data`): the distributed
+         ! path's pack/unpack must run on the host copies.
+         call ocean_fold_wrap_state(engine%grid, engine%state%bc, ms, device_resident=.false.)
       end associate
    end subroutine seed_structure
 
@@ -249,6 +265,11 @@ contains
       logical, intent(in) :: after_steps
       integer :: it, nt
 
+      s%io = engine%grid%i_offset_global
+      s%jo = engine%grid%j_offset_global
+      s%has_south = engine%decomp%has_south
+      s%has_north = engine%decomp%has_north
+      s%px = engine%decomp%px
       associate (ms => engine%state%multilayer, mt => engine%state%metrics)
          if (after_steps) then
             !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
@@ -278,37 +299,54 @@ contains
       end associate
    end subroutine take_snapshot
 
-   subroutine compare_2d(name, tile, whole, jo, ng, nyl, is_vface, nbad_phys, nbad_ghost)
+   subroutine compare_2d(name, tile, whole, d, is_vface, nbad_phys, nbad_ghost, is_uface)
       !! Bitwise tile-vs-reference-window comparison.  The window is
-      !! `whole(i, j + jo)`; a mismatch is counted as PHYSICAL when it lies
-      !! in the tile's own rows (for a v array, its south faces plus its
+      !! `whole(i + io, j + jo)`; a mismatch is counted as PHYSICAL when it
+      !! lies in the tile's own rows (for a v array, its south faces plus its
       !! north face — on the north tile, the fold row), otherwise as a GHOST
       !! mismatch.  BOTH fail the test.  One row is exempt: the OUTERMOST v
-      !! row beyond an MPI seam (`j = 1` above a south seam, `j = ny_total+1`
-      !! below a north seam).  The face-y halo exchanges `nghost` rows, and a
-      !! south-face v array has `nghost + 1` rows past the last owned face on
-      !! the north side and `nghost` + the array-edge row on the south side:
-      !! that one row is outside every stencil and is never refreshed on ANY
-      !! decomposed run (fold or not), so it holds whatever the previous
-      !! stage left there.
+      !! row beyond an MPI y seam (`j = 1` above a south seam,
+      !! `j = ny_total+1` below a north seam).  The face-y halo exchanges
+      !! `nghost` rows, and a south-face v array has `nghost + 1` rows past
+      !! the last owned face on the north side and `nghost` + the array-edge
+      !! row on the south side: that one row is outside every stencil and is
+      !! never refreshed on ANY decomposed run (fold or not), so it holds
+      !! whatever the previous stage left there.  Its x twin is exempt too:
+      !! the OUTERMOST u column (`i = 1`, `i = nx_total+1`) of an x-split run
+      !! (px > 1; the periodic wrap link is an MPI seam as well).  The ALE
+      !! face remap (`remap_x_face_velocity`, `I = 1:nx+1`) gives an
+      !! array-edge face the adjacent cell's thickness, one-sided, AFTER the
+      !! stage-end exchange; on the tile that column is the neighbour's
+      !! interior face, on the serial run it is an interior face remapped
+      !! two-sided, and it is refreshed at the next stage entry before any
+      !! owned value reads it.
       character(len=*), intent(in) :: name
       real(wp), intent(in) :: tile(:, :), whole(:, :)
-      integer, intent(in) :: jo, ng, nyl
+      type(snap_t), intent(in) :: d
+         !! The decomposed snapshot (tile offsets and edge flags).
       logical, intent(in) :: is_vface
       integer, intent(inout) :: nbad_phys, nbad_ghost
-      integer :: i, j, jhi, nb_p, nb_g
-      logical :: phys
+      logical, intent(in), optional :: is_uface
+         !! A u (x-face) array: apply the outermost-column exemption.
+      integer :: i, j, jhi, nb_p, nb_g, ng, nyl
+      logical :: phys, uface
 
+      uface = .false.
+      if (present(is_uface)) uface = is_uface
+      ng = 3
+      nyl = size(tile, 2) - 2*ng
+      if (is_vface) nyl = nyl - 1
       jhi = ng + nyl
       if (is_vface) jhi = jhi + 1
       nb_p = 0
       nb_g = 0
       do j = 1, size(tile, 2)
          phys = (j >= ng + 1 .and. j <= jhi)
-         if (is_vface .and. j == 1 .and. rank > 0) cycle
-         if (is_vface .and. j == size(tile, 2) .and. rank < nprocs - 1) cycle
+         if (is_vface .and. j == 1 .and. .not. d%has_south) cycle
+         if (is_vface .and. j == size(tile, 2) .and. .not. d%has_north) cycle
          do i = 1, size(tile, 1)
-            if (transfer(tile(i, j), 0_int64) /= transfer(whole(i, j + jo), 0_int64)) then
+            if (uface .and. d%px > 1 .and. (i == 1 .or. i == size(tile, 1))) cycle
+            if (transfer(tile(i, j), 0_int64) /= transfer(whole(i + d%io, j + d%jo), 0_int64)) then
                if (phys) then
                   nb_p = nb_p + 1
                else
@@ -325,83 +363,39 @@ contains
       nbad_ghost = nbad_ghost + nb_g
    end subroutine compare_2d
 
-   subroutine compare_3d(name, tile, whole, jo, ng, nyl, is_vface, nbad_phys, nbad_ghost)
+   subroutine compare_3d(name, tile, whole, d, is_vface, nbad_phys, nbad_ghost, is_uface)
       character(len=*), intent(in) :: name
       real(wp), intent(in) :: tile(:, :, :), whole(:, :, :)
-      integer, intent(in) :: jo, ng, nyl
+      type(snap_t), intent(in) :: d
       logical, intent(in) :: is_vface
       integer, intent(inout) :: nbad_phys, nbad_ghost
+      logical, intent(in), optional :: is_uface
       integer :: k
       character(len=64) :: lbl
       do k = 1, size(tile, 3)
          write (lbl, '(a,a,i0)') name, " k=", k
-         call compare_2d(trim(lbl), tile(:, :, k), whole(:, :, k), jo, ng, nyl, is_vface, &
-                         nbad_phys, nbad_ghost)
+         call compare_2d(trim(lbl), tile(:, :, k), whole(:, :, k), d, is_vface, &
+                         nbad_phys, nbad_ghost, is_uface)
       end do
    end subroutine compare_3d
 
    subroutine run_case(label, ny, lat_south, dlat, phi_join)
+      !! The serial reference once, then every decomposition of the
+      !! launched rank count: the north-south split (px = 1, py = nprocs)
+      !! and the east-west splits through the distributed fold (engine_setup's
+      !! test-only `allow_distributed_fold`): np 2 -> 2x1; np 3 -> 3x1;
+      !! np 4 -> 4x1, 2x2.
       character(len=*), intent(in) :: label
       integer, intent(in) :: ny
       real(wp), intent(in) :: lat_south, dlat, phi_join
-      type(snap_t) :: ref_cfg, ref_end, dec_cfg, dec_end
-      logical :: ok_ref, ok_dec
-      integer :: ng, nyl, jo, it, bad_cfg_p, bad_cfg_g, bad_p, bad_g, base_ny, rem_ny, glob(4)
+      type(snap_t) :: ref_cfg, ref_end
 
-      ! ---- 1. serial reference (every rank, px = py = 1, compute_size = 1) ----
-      call run_one(case_nml(ny, lat_south, dlat, phi_join, 1, 1), 1, 0, ref_cfg, ref_end, ok_ref)
-      ! ---- 2. north-south split over every launched rank ----
-      call run_one(case_nml(ny, lat_south, dlat, phi_join, 1, nprocs), nprocs, rank, dec_cfg, dec_end, ok_dec)
-
-      if (.not. (ok_ref .and. ok_dec)) then
-         write (*, '(3a,i0,a,l1,a,l1)') "FAIL ", label, ": rank ", rank, &
-            " setup/step failed: ref ok=", ok_ref, " decomposed ok=", ok_dec
+      call run_one(case_nml(ny, lat_south, dlat, phi_join, 1, 1), 1, 0, ref_cfg, ref_end, ok_ref_g)
+      if (.not. ok_ref_g) then
+         write (*, '(3a,i0)') "FAIL ", label, ": the serial reference failed on rank ", rank
          n_fail = n_fail + 1
          return
       end if
-
-      ! This rank's tile rows (decomp_init: the remainder goes to the first rows).
-      ng = 3
-      base_ny = ny/nprocs
-      rem_ny = mod(ny, nprocs)
-      if (rank < rem_ny) then
-         nyl = base_ny + 1
-         jo = rank*(base_ny + 1)
-      else
-         nyl = base_ny
-         jo = rem_ny*(base_ny + 1) + (rank - rem_ny)*base_ny
-      end if
-
-      ! ---- 3a. configure-time generator gate (metrics + seeded state) ----
-      bad_cfg_p = 0
-      bad_cfg_g = 0
-      call compare_2d("dxT", dec_cfg%dxt, ref_cfg%dxt, jo, ng, nyl, .false., bad_cfg_p, bad_cfg_g)
-      call compare_2d("areaT", dec_cfg%areat, ref_cfg%areat, jo, ng, nyl, .false., bad_cfg_p, bad_cfg_g)
-      call compare_2d("dyCu", dec_cfg%dycu, ref_cfg%dycu, jo, ng, nyl, .false., bad_cfg_p, bad_cfg_g)
-      call compare_2d("dxCv", dec_cfg%dxcv, ref_cfg%dxcv, jo, ng, nyl, .true., bad_cfg_p, bad_cfg_g)
-      call compare_2d("dxBu", dec_cfg%dxbu, ref_cfg%dxbu, jo, ng, nyl, .true., bad_cfg_p, bad_cfg_g)
-      call compare_2d("areaBu", dec_cfg%areabu, ref_cfg%areabu, jo, ng, nyl, .true., bad_cfg_p, bad_cfg_g)
-      call compare_2d("geolatBu", dec_cfg%geolatbu, ref_cfg%geolatbu, jo, ng, nyl, .true., &
-                      bad_cfg_p, bad_cfg_g)
-      call compare_2d("angle_dx", dec_cfg%angle, ref_cfg%angle, jo, ng, nyl, .false., bad_cfg_p, bad_cfg_g)
-      call compare_2d("f_corner", dec_cfg%fcorner, ref_cfg%fcorner, jo, ng, nyl, .true., &
-                      bad_cfg_p, bad_cfg_g)
-      call compare_3d("seed h", dec_cfg%h, ref_cfg%h, jo, ng, nyl, .false., bad_cfg_p, bad_cfg_g)
-      call compare_3d("seed u", dec_cfg%u, ref_cfg%u, jo, ng, nyl, .false., bad_cfg_p, bad_cfg_g)
-      call compare_3d("seed v", dec_cfg%v, ref_cfg%v, jo, ng, nyl, .true., bad_cfg_p, bad_cfg_g)
-
-      ! ---- 3b. after N_STEPS: the prognostic fields ----
-      bad_p = 0
-      bad_g = 0
-      call compare_3d("h", dec_end%h, ref_end%h, jo, ng, nyl, .false., bad_p, bad_g)
-      call compare_3d("u", dec_end%u, ref_end%u, jo, ng, nyl, .false., bad_p, bad_g)
-      call compare_3d("v", dec_end%v, ref_end%v, jo, ng, nyl, .true., bad_p, bad_g)
-      do it = 1, size(ref_end%tr, 4)
-         call compare_3d("hTr", dec_end%tr(:, :, :, it), ref_end%tr(:, :, :, it), jo, ng, nyl, &
-                         .false., bad_p, bad_g)
-      end do
-      call compare_2d("eta", dec_end%eta, ref_end%eta, jo, ng, nyl, .false., bad_p, bad_g)
-
       ! Teeth: a non-finite reference would compare equal to a non-finite
       ! decomposed run.  Require the serial trajectory to stay finite.
       if (.not. (all(ieee_is_finite(ref_end%h)) .and. all(ieee_is_finite(ref_end%v)) .and. &
@@ -409,23 +403,86 @@ contains
          write (*, '(3a,i0)') "FAIL ", label, ": the serial reference went non-finite on rank ", rank
          n_fail = n_fail + 1
       end if
+      if (rank == 0) then
+         write (*, '(a,a,a,es23.15,a,es23.15)') "case ", label, ": ref sum(h)=", &
+            sum(ref_end%h(4:3 + NX_G, 4:3 + ny, :)), "  sum(v^2)=", &
+            sum(ref_end%v(4:3 + NX_G, 4:3 + ny + 1, :)**2)
+      end if
+
+      if (nprocs == 1) then
+         call run_decomposed(label, ny, lat_south, dlat, phi_join, 1, 1, ref_cfg, ref_end)
+         return
+      end if
+      call run_decomposed(label, ny, lat_south, dlat, phi_join, 1, nprocs, ref_cfg, ref_end)
+      call run_decomposed(label, ny, lat_south, dlat, phi_join, nprocs, 1, ref_cfg, ref_end)
+      if (nprocs == 4) call run_decomposed(label, ny, lat_south, dlat, phi_join, 2, 2, &
+                                           ref_cfg, ref_end)
+   end subroutine run_case
+
+   subroutine run_decomposed(label, ny, lat_south, dlat, phi_join, px, py, ref_cfg, ref_end)
+      character(len=*), intent(in) :: label
+      integer, intent(in) :: ny, px, py
+      real(wp), intent(in) :: lat_south, dlat, phi_join
+      type(snap_t), intent(in) :: ref_cfg, ref_end
+      type(snap_t) :: dec_cfg, dec_end
+      logical :: ok_dec
+      integer :: it, bad_cfg_p, bad_cfg_g, bad_p, bad_g, glob(4), nok
+
+      call run_one(case_nml(ny, lat_south, dlat, phi_join, px, py), nprocs, rank, dec_cfg, &
+                   dec_end, ok_dec, allow_dfold=(px > 1))
+      nok = merge(0, 1, ok_dec)
+      call allreduce(comm, nok, op=MPI_SUM)
+      if (nok > 0) then
+         if (.not. ok_dec) write (*, '(3a,i0,a,i0,a,i0)') "FAIL ", label, ": rank ", rank, &
+            " decomposed setup/step failed at px=", px, " py=", py
+         n_fail = n_fail + 1
+         return
+      end if
+
+      ! ---- configure-time generator gate (metrics + seeded state) ----
+      bad_cfg_p = 0
+      bad_cfg_g = 0
+      call compare_2d("dxT", dec_cfg%dxt, ref_cfg%dxt, dec_cfg, .false., bad_cfg_p, bad_cfg_g)
+      call compare_2d("areaT", dec_cfg%areat, ref_cfg%areat, dec_cfg, .false., bad_cfg_p, bad_cfg_g)
+      call compare_2d("dyCu", dec_cfg%dycu, ref_cfg%dycu, dec_cfg, .false., bad_cfg_p, bad_cfg_g)
+      call compare_2d("dxCv", dec_cfg%dxcv, ref_cfg%dxcv, dec_cfg, .true., bad_cfg_p, bad_cfg_g)
+      call compare_2d("dxBu", dec_cfg%dxbu, ref_cfg%dxbu, dec_cfg, .true., bad_cfg_p, bad_cfg_g)
+      call compare_2d("areaBu", dec_cfg%areabu, ref_cfg%areabu, dec_cfg, .true., bad_cfg_p, bad_cfg_g)
+      call compare_2d("geolatBu", dec_cfg%geolatbu, ref_cfg%geolatbu, dec_cfg, .true., &
+                      bad_cfg_p, bad_cfg_g)
+      call compare_2d("angle_dx", dec_cfg%angle, ref_cfg%angle, dec_cfg, .false., bad_cfg_p, bad_cfg_g)
+      call compare_2d("f_corner", dec_cfg%fcorner, ref_cfg%fcorner, dec_cfg, .true., &
+                      bad_cfg_p, bad_cfg_g)
+      call compare_3d("seed h", dec_cfg%h, ref_cfg%h, dec_cfg, .false., bad_cfg_p, bad_cfg_g)
+      call compare_3d("seed u", dec_cfg%u, ref_cfg%u, dec_cfg, .false., bad_cfg_p, bad_cfg_g, &
+                      is_uface=.true.)
+      call compare_3d("seed v", dec_cfg%v, ref_cfg%v, dec_cfg, .true., bad_cfg_p, bad_cfg_g)
+
+      ! ---- after N_STEPS: the prognostic fields ----
+      bad_p = 0
+      bad_g = 0
+      call compare_3d("h", dec_end%h, ref_end%h, dec_end, .false., bad_p, bad_g)
+      call compare_3d("u", dec_end%u, ref_end%u, dec_end, .false., bad_p, bad_g, is_uface=.true.)
+      call compare_3d("v", dec_end%v, ref_end%v, dec_end, .true., bad_p, bad_g)
+      do it = 1, size(ref_end%tr, 4)
+         call compare_3d("hTr", dec_end%tr(:, :, :, it), ref_end%tr(:, :, :, it), dec_end, &
+                         .false., bad_p, bad_g)
+      end do
+      call compare_2d("eta", dec_end%eta, ref_end%eta, dec_end, .false., bad_p, bad_g)
 
       glob = [bad_cfg_p, bad_cfg_g, bad_p, bad_g]
       call allreduce(comm, glob, op=MPI_SUM)
       if (rank == 0) then
-         write (*, '(a,a,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0)') "case ", label, ": ny=", ny, &
-            " py=", nprocs, "  configure mismatches phys/ghost=", glob(1), "/", glob(2), &
+         write (*, '(a,a,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0)') "case ", label, ": ny=", ny, &
+            " px=", px, " py=", py, "  configure mismatches phys/ghost=", glob(1), "/", glob(2), &
             "  after ", N_STEPS, " steps phys/ghost=", glob(3), "/", glob(4)
-         write (*, '(a,a,a,es23.15,a,es23.15)') "case ", label, ": ref sum(h)=", &
-            sum(ref_end%h(ng + 1:ng + NX_G, ng + 1:ng + ny, :)), "  sum(v^2)=", &
-            sum(ref_end%v(ng + 1:ng + NX_G, ng + 1:ng + ny + 1, :)**2)
       end if
       if (sum(glob) > 0) then
-         if (rank == 0) write (*, '(3a)') "FAIL ", label, &
-            ": the north-south split is not bit-identical to the serial run"
+         if (rank == 0) write (*, '(3a,i0,a,i0)') "FAIL ", label, &
+            ": not bit-identical to the serial run at px=", px, " py=", py
          n_fail = n_fail + 1
       end if
-   end subroutine run_case
+   end subroutine run_decomposed
 
    subroutine check_px_refused()
       !! An east-west split of the fold row must fail loud at configure.

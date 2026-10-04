@@ -697,8 +697,13 @@ if(RDB_ENABLE_MPI)
   add_test(NAME rdb_test_ocean_tripolar_fold_mpi_4rank
            COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4
                    $<TARGET_FILE:test_ocean_tripolar_fold_mpi>)
+  # 3-rank leg: odd px (3x1) through the distributed fold exchange.
+  add_test(NAME rdb_test_ocean_tripolar_fold_mpi_3rank
+           COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 3
+                   $<TARGET_FILE:test_ocean_tripolar_fold_mpi>)
   set_tests_properties(
     rdb_test_ocean_tripolar_fold_mpi_1rank
+    rdb_test_ocean_tripolar_fold_mpi_3rank
     rdb_test_ocean_tripolar_fold_mpi_4rank PROPERTIES LABELS "ocean")
   # Distributed north-fold exchange vs the serial fold kernels, bitwise.  The
   # 2-rank leg (2x1) comes from the foreach above; add the 1-rank (px = 1: the
