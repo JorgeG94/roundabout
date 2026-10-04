@@ -100,6 +100,8 @@ GROWTH_MAX = 3.0
 # ===========================================================================
 # NetCDF: the classic format, read raw (bitwise comparison)
 # ===========================================================================
+# Scalar bookkeeping variables in a checkpoint: never compared as fields.
+_META_VARS = ("time", "n_steps", "outer_step_count")
 _NC_SIZES = {1: 1, 2: 1, 3: 2, 4: 4, 5: 4, 6: 8}
 _HDF5_MAGIC = b"\x89HDF\r\n\x1a\n"
 
@@ -323,8 +325,6 @@ def decomp_exempt_tags(path=DECOMP_TEST):
     return tuple(tags)
 
 
-_META_VARS = ("time", "n_steps", "outer_step_count")
-
 def compare_decomp(ref_path, rank_paths, scratch, exempt):
     """Each rank's OWNED window of every array field against the matching
     window of the 1-rank checkpoint, bitwise; a staggered face array owns
@@ -399,6 +399,10 @@ def energy_check(series, geometry):
     en = {s: e for s, e, _ in series if e is not None}
     if not en:
         return False, "no En series"
+    if geometry not in EN_REF:
+        raise RuntimeError("compat_legs.EN_REF has no energy reference for geometry {!r}: "
+                           "measure the PASS-population median En(24) for it and add it to "
+                           "EN_REF".format(geometry))
     ref = EN_REF[geometry]
     last = max(en)
     e_last = en[last]
