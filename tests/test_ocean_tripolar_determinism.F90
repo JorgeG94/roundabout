@@ -134,11 +134,18 @@ contains
       t = 0.0_wp
       do n = 1, N_STEPS
          call engine_step(engine, DT, t, ierr=ierr)
-         if (ierr /= OCEAN_STATUS_OK) return
+         if (ierr /= OCEAN_STATUS_OK) exit
          call engine_step_finalize(engine, DT, t, ierr=ierr)
-         if (ierr /= OCEAN_STATUS_OK) return
+         if (ierr /= OCEAN_STATUS_OK) exit
          t = t + DT
       end do
+      if (ierr /= OCEAN_STATUS_OK) then
+         ! Unmap and tear down on the failure path too, so a failed
+         ! step leaves no device mappings behind for the next run.
+         call engine_exit_data(engine)
+         call engine_teardown(engine)
+         return
+      end if
 
       ! The restart registry is the checkpoint's field set: pull each
       ! device-mapped entry down by its COMPONENT pointer (never an
@@ -166,6 +173,11 @@ contains
             n_nonfinite = n_nonfinite + count(.not. ieee_is_finite(snaps(e)%a))
          end associate
       end do
+      ! Explicit pull: the registry loop above already refreshes these
+      ! (`ml_u_face_x_layer` / `ml_v_face_y_layer` alias them), but the
+      ! bound must not depend on that aliasing on the mem:separate build.
+      !$acc update self(engine%state%multilayer%u_face_x_layer, &
+      !$acc&            engine%state%multilayer%v_face_y_layer)
       max_u = max(maxval(abs(engine%state%multilayer%u_face_x_layer)), &
                   maxval(abs(engine%state%multilayer%v_face_y_layer)))
       call reg%clear()
