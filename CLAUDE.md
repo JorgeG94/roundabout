@@ -256,14 +256,15 @@ Most new-physics knobs default off ⇒ bit-identical (KPP + ALE-remap are the on
 (default, bit-identity), `spherical` lon-lat sector, `supergrid`
 (MOM6 mosaic reader), and `tripolar` — Murray (1996) bipolar Arctic
 cap above `phi_join` + ordinary lon-lat below, closed by a north fold
-(`north="tripolar_fold"`, requires periodic west/east) that is
-single-rank IN X: north-south splits (`px = 1`, any `py`) run
-bit-identical to one rank — only the north-edge rank folds
-(`bc%north_fold` is rank-local) — while `px > 1` is refused at configure
-until the distributed fold exchange lands.
+(`north="tripolar_fold"`, requires periodic west/east) that runs
+bit-identical to one rank on every split: only the north rank row folds
+(`bc%north_fold` is rank-local), locally when it holds the whole fold row
+(`px = 1`, the auto-factor default) and through the owner-routed
+distributed fold exchange (`rdb_ocean_fold_plan` + `rdb_ocean_fold_exchange`)
+when the row is split east-west (`px > 1`, explicit).
 Kernels consume full 2D metric arrays only (`ocean_metrics_t` slot);
-the fold exchange (`rdb_ocean_fold` + `rdb_ocean_fold_apply`)
-reverses-i and sign-flips vector normals, projecting the
+the fold (`rdb_ocean_fold` kernels, dispatched on px by
+`rdb_ocean_fold_apply`) reverses-i and sign-flips vector normals, projecting the
 duplicated-DOF fold-line row antisymmetric -- storage row `ng+nj+1`, because
 roundabout's `v` sits on the SOUTH face of its cell and corners at the SW
 (MOM6's north-face rule is one row off here; see `rdb_ocean_fold` header).
@@ -295,8 +296,7 @@ phase-speed radiation + file-backed boundary-data backends (Flather +
 zero-gradient anomaly and the constant backend ship today), MPI
 per-feature multi-rank support for the
 single-rank closures (wet/dry, sea ice, the ice-shelf cavity, Chapman
-edges, the tripolar fold split east-west (`px > 1`; north-south splits
-ship), windowed tracer-advect drain), restarts across a rank-count change,
+edges, windowed tracer-advect drain), restarts across a rank-count change,
 a bit-identical barotropic march-in — the C-grid MPI halo itself ships,
 bit-identical to one rank.
 
@@ -339,11 +339,11 @@ See the "Boundaries" bullet of the Ocean dyn-core section — `&ocean_bc_nml` se
 
 Halo coverage: `rdb_ocean_halo` + `ocean_halo_exchange_ml_state`. Tracer halo uses the outer-shim + flat-impl pattern.
 
-Tripolar fold under MPI: every seam site runs exchange → periodic wrap → fold, and the fold is applied only by the rank that owns the north edge (`bc%north_fold` = tag `.and.` `has_north`, re-derived in `ocean_bc_state_set_edges`), which with `px = 1` holds the whole fold row, so the local fold kernels are exact. `px > 1` needs a distributed fold exchange (the mirror point `(ni+1-i, nj+1-d)` lives on another rank) and is refused at configure.
+Tripolar fold under MPI: every seam site runs exchange → periodic wrap → fold, and the fold is applied only by the north rank row (`bc%north_fold` = tag `.and.` `has_north`, re-derived in `ocean_bc_state_set_edges`). With `px = 1` that rank holds the whole fold row and the local fold kernels are exact. With `px > 1` the mirror point `(ni+1-i, nj+1-d)` lives on another rank, so the `rdb_ocean_fold_apply` dispatchers (and the barotropic fast loop, at two points per substep) route the fold through `rdb_ocean_fold_exchange`: OWNER-routed (each value comes from the rank that owns the mirror point, never a halo copy, so no x exchange has to precede it), sign applied on receipt, fold-line projection a copy of the east half, collective over the north rank row. Init-time folds of static geometry and of the cold-start prognostics run after the halo init on that path (the plan is built there); a warm restart never re-folds checkpointed ghosts. Refused: tiles shorter than `nghost+1` rows or (under `px > 1`) narrower than `nghost+1` columns.
 
-**A decomposed run IS the serial run — bitwise.** `tests/mpi/test_ocean_decomp_bitid_mpi` (ctest at 1/2/4 ranks) compares every restart-registry field, owned cells, bitwise, on every `px x py` factorisation (2x1, 1x2, 4x1, 2x2, 1x4) of seven configurations x both split schemes (walls + island, periodic z* + porous, tidal/Flather OBC, spherical, Orlanski/clamped/sponge OBC, the closure set, and the windowed file readers). Any mismatch is a bug. The recurring bug class it finds: a pass that writes a tile's PHYSICAL span only (an OBC fill, a sponge, a wall re-close) or keys a closure on the global edge TAG without `has_*` — at an MPI seam the neighbour's ghost copy goes stale or the seam is treated as a wall. Gate new edge/ghost writers on `has_*`, and refresh seam ghosts (collective, gated on rank-uniform tags) after any physical-span-only writer that something reads before the next exchange. `&mpi_nml px/py` unset on N ranks is auto-factored (north-south under a tripolar fold). The supergrid, bathymetry and z-level IC readers are windowed per rank (start/count). The console uses the EFP reproducing sums by default (`&ocean_diag_nml reproducing_sums`), so it prints the same digits on any rank count. The barotropic march-in (`&ocean_bt_nml bt_halo > 0`) is OPT-IN — AUTO resolves to 0 — because it is not bit-identical over variable bathymetry / with OBCs.
+**A decomposed run IS the serial run — bitwise.** `tests/mpi/test_ocean_decomp_bitid_mpi` (ctest at 1/2/4 ranks) compares every restart-registry field, owned cells, bitwise, on every `px x py` factorisation (2x1, 1x2, 4x1, 2x2, 1x4) of nine configurations x both split schemes (walls + island, periodic z* + porous, the periodic sponge, tidal/Flather OBC, spherical, Orlanski/clamped/sponge OBC, the closure set, the windowed file readers, and a tripolar cap whose x splits run the distributed fold). Any mismatch is a bug. The recurring bug class it finds: a pass that writes a tile's PHYSICAL span only (an OBC fill, a sponge, a wall re-close) or keys a closure on the global edge TAG without `has_*` — at an MPI seam the neighbour's ghost copy goes stale or the seam is treated as a wall. Gate new edge/ghost writers on `has_*`, and refresh seam ghosts (collective, gated on rank-uniform tags) after any physical-span-only writer that something reads before the next exchange. `&mpi_nml px/py` unset on N ranks is auto-factored (north-south under a tripolar fold). The supergrid, bathymetry and z-level IC readers are windowed per rank (start/count). The console uses the EFP reproducing sums by default (`&ocean_diag_nml reproducing_sums`), so it prints the same digits on any rank count. The barotropic march-in (`&ocean_bt_nml bt_halo > 0`) is OPT-IN — AUTO resolves to 0 — because it is not bit-identical over variable bathymetry / with OBCs.
 
-**Single-rank features fail loud at configure on >1 rank** (in `engine_setup`, keyed on the actual rank count): ice-shelf cavity, wet/dry, sea ice, Chapman OBC edges, `dt_tracer_advect_ratio > 1`, the tripolar fold with `px > 1` (or a north tile shorter than `nghost+1`), in-memory (staged) geometry injection, `nghost < 3`, an explicit `bt_halo` wider than the smallest tile. Restarts resume on the same decomposition only. Full list + the known non-bit-identical paths: `docs/CAPABILITIES_AND_LIMITATIONS.md`, *MPI (domain decomposition)*.
+**Single-rank features fail loud at configure on >1 rank** (in `engine_setup`, keyed on the actual rank count): ice-shelf cavity, wet/dry, sea ice, Chapman OBC edges, `dt_tracer_advect_ratio > 1`, a tripolar tile shorter than `nghost+1` rows (or, with `px > 1`, narrower than `nghost+1` columns), in-memory (staged) geometry injection, `nghost < 3`, an explicit `bt_halo` wider than the smallest tile. Restarts resume on the same decomposition only. Full list + the known non-bit-identical paths: `docs/CAPABILITIES_AND_LIMITATIONS.md`, *MPI (domain decomposition)*.
 
 ### I/O
 
