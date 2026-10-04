@@ -263,7 +263,7 @@ contains
    ! ================================================================
 
    subroutine engine_setup(engine, cfg, ierr, compute_rank, compute_size, mpi_rank, &
-                           restart_file, t_restart, step_restart)
+                           restart_file, t_restart, step_restart, allow_distributed_fold)
       !! Host-side setup: decomposition -> grid -> god state -> IC seed
       !! -> restart (optional) -> the 21 `configure_ocean_*`-family
       !! stages -> ghost wraps -> halo init -> land mask -> wave
@@ -295,6 +295,12 @@ contains
          !! Restored simulation time (0 on a cold start).
       integer, intent(out), optional :: step_restart
          !! Restored outer-step count (0 on a cold start).
+      logical, intent(in), optional :: allow_distributed_fold
+         !! TEST-ONLY bypass of the tripolar `px > 1` refusal (plan
+         !! `tripolar_fold_px_gt_1` decision 10), so the distributed-fold
+         !! sites can be exercised while the barotropic fast loop still folds
+         !! locally.  NOT a namelist knob; removed when the refusal is lifted.
+         !! Default `.false.`.
 
       integer :: rank, csize, mrank
       character(len=512) :: restart_filename
@@ -304,6 +310,7 @@ contains
       logical :: bt_excluded
       character(len=:), allocatable :: bt_excl_reason
       integer :: bt_halo_req, bt_halo_res
+      logical :: allow_dfold, dist_fold
 
       rank = 0
       if (present(compute_rank)) rank = compute_rank
@@ -311,6 +318,9 @@ contains
       if (present(compute_size)) csize = compute_size
       mrank = rank
       if (present(mpi_rank)) mrank = mpi_rank
+
+      allow_dfold = .false.
+      if (present(allow_distributed_fold)) allow_dfold = allow_distributed_fold
 
       if (present(ierr)) ierr = OCEAN_STATUS_OK
       t_restart_local = 0.0_wp
@@ -355,7 +365,7 @@ contains
          ! any py) are supported; an east-west split needs the distributed
          ! fold exchange (hero-run Phase A), which does not exist yet.
          if (ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD .and. &
-             cfg%px > 1) then
+             cfg%px > 1 .and. .not. allow_dfold) then
             call fail("Tripolar north fold with px = "//to_string(cfg%px)// &
                       " > 1: the fold is single-rank-in-x — the north rank row "// &
                       "must hold the whole fold row. The distributed fold exchange "// &
@@ -830,6 +840,13 @@ contains
       ! tags are configured, wrap bathymetry + multilayer state ghost
       ! cells so all kernels see correct periodic seam values on the
       ! first step. Run on the HOST here (before enter_data).
+      !
+      ! Distributed fold (`px > 1`, this rank folds the north edge): the
+      ! folds below need the routing plan, which `ocean_fold_exchange_init`
+      ! builds further down, so on that path they are SKIPPED here and run
+      ! after the host halo pass instead (same fields, same cold-start-only
+      ! rule for the prognostics).  `px = 1` is untouched.
+      dist_fold = engine%state%bc%north_fold .and. engine%decomp%px > 1
       if (engine%state%bc%periodic_x .or. engine%state%bc%periodic_y .or. &
           engine%state%bc%north_fold) then
          call ocean_periodic_wrap_centre_2d( &
@@ -850,8 +867,10 @@ contains
          if (.not. did_restart) then
             call ocean_periodic_wrap_state(engine%grid, engine%state%bc, engine%state%multilayer)
          end if
-         call ocean_fold_wrap_eta_2d(engine%grid, engine%state%bc, engine%state%barotropic%b)
-         if (.not. did_restart) then
+         if (.not. dist_fold) then
+            call ocean_fold_wrap_eta_2d(engine%grid, engine%state%bc, engine%state%barotropic%b)
+         end if
+         if (.not. did_restart .and. .not. dist_fold) then
             call ocean_fold_wrap_state(engine%grid, engine%state%bc, engine%state%multilayer)
          end if
          ! The ice draft is bathymetry-class static geometry, so it takes
@@ -868,15 +887,15 @@ contains
                engine%grid%nx_total, engine%grid%ny_total, &
                engine%grid%nx_phys, engine%grid%ny_phys, engine%grid%nghost, &
                engine%state%bc%periodic_x, engine%state%bc%periodic_y)
-            call ocean_fold_wrap_eta_2d(engine%grid, engine%state%bc, &
-                                        engine%state%metrics%z_draft)
+            if (.not. dist_fold) call ocean_fold_wrap_eta_2d(engine%grid, engine%state%bc, &
+                                                             engine%state%metrics%z_draft)
             call ocean_periodic_wrap_centre_2d( &
                engine%state%metrics%cover_frac, &
                engine%grid%nx_total, engine%grid%ny_total, &
                engine%grid%nx_phys, engine%grid%ny_phys, engine%grid%nghost, &
                engine%state%bc%periodic_x, engine%state%bc%periodic_y)
-            call ocean_fold_wrap_eta_2d(engine%grid, engine%state%bc, &
-                                        engine%state%metrics%cover_frac)
+            if (.not. dist_fold) call ocean_fold_wrap_eta_2d(engine%grid, engine%state%bc, &
+                                                             engine%state%metrics%cover_frac)
          end if
          ! bt_H_ref was snapshotted from the UNWRAPPED b inside
          ! configure_ocean_bt_split (above) — re-wrap it too.
@@ -886,8 +905,8 @@ contains
                engine%grid%nx_total, engine%grid%ny_total, &
                engine%grid%nx_phys, engine%grid%ny_phys, engine%grid%nghost, &
                engine%state%bc%periodic_x, engine%state%bc%periodic_y)
-            call ocean_fold_wrap_eta_2d(engine%grid, engine%state%bc, &
-                                        engine%state%dyn%bt_work%bt_H_ref)
+            if (.not. dist_fold) call ocean_fold_wrap_eta_2d(engine%grid, engine%state%bc, &
+                                                             engine%state%dyn%bt_work%bt_H_ref)
          end if
       end if
 
@@ -929,6 +948,33 @@ contains
       end if
       if (cfg%ocean%bt%n_inner >= 1) then
          call ocean_halo_centre(engine%state%dyn%bt_work%bt_H_ref, device_resident=.false.)
+      end if
+
+      ! The deferred init-time folds of the distributed (`px > 1`) path —
+      ! exchange → periodic wrap → fold, as at every step-time seam site;
+      ! host mode, before the device map.  Collective over the north rank
+      ! row (every rank of it has `dist_fold` set).  The fold is
+      ! owner-routed, so it reads only owned points and writes every column
+      ! of the north ghost rows: its place after the halo cannot change a
+      ! bit.  Prognostics on a cold start only (a checkpoint carries the
+      ! writer's ghosts, see the wrap above); static geometry either way.
+      if (dist_fold) then
+         call ocean_fold_wrap_eta_2d(engine%grid, engine%state%bc, engine%state%barotropic%b, &
+                                     device_resident=.false.)
+         if (.not. did_restart) then
+            call ocean_fold_wrap_state(engine%grid, engine%state%bc, engine%state%multilayer, &
+                                       device_resident=.false.)
+         end if
+         if (engine%state%metrics%use_cavity) then
+            call ocean_fold_wrap_eta_2d(engine%grid, engine%state%bc, &
+                                        engine%state%metrics%z_draft, device_resident=.false.)
+            call ocean_fold_wrap_eta_2d(engine%grid, engine%state%bc, &
+                                        engine%state%metrics%cover_frac, device_resident=.false.)
+         end if
+         if (cfg%ocean%bt%n_inner >= 1) then
+            call ocean_fold_wrap_eta_2d(engine%grid, engine%state%bc, &
+                                        engine%state%dyn%bt_work%bt_H_ref, device_resident=.false.)
+         end if
       end if
 
       ! The PGF keeps its OWN copy of the bathymetry (FV-MOM6 and gprime

@@ -32,6 +32,7 @@ module rdb_continuity
                                  ocean_periodic_wrap_face_y_3d
    use rdb_ocean_fold_apply, only: ocean_fold_wrap_centre_3d_state
    use rdb_ocean_fold, only: fold_north_centre, fold_north_u_face, fold_north_v_face
+   use rdb_ocean_fold_exchange, only: ocean_fold_north_v_face
    use rdb_ocean_mle, only: ocean_mle_t, mle_fold_x, mle_fold_y
    use rdb_ocean_gm, only: ocean_gm_t, gm_fold_x, gm_fold_y
    use rdb_ocean_halo, only: ocean_halo_centre, &
@@ -2774,10 +2775,12 @@ contains
       ! (and refill the rows above it) before it touches h / hTr / the
       ! accumulated transport, so the cross-fold exchange telescopes: what
       ! leaves cell (i,nj) through its north face is exactly what enters
-      ! cell (ni+1-i,nj).  No-op when not folding.
+      ! cell (ni+1-i,nj).  No-op when not folding.  px > 1: no halo
+      ! precedes this point, so the owner-routed exchange is what makes it
+      ! exact (every value comes from the rank that owns the mirror face).
       if (present(bc)) then
-         if (bc%north_fold) call fold_north_v_face(ms%mass_flux_y_layer, nx, ny + 1, nz, &
-                                                   nx_phys, ny_phys, nghost)
+         if (bc%north_fold) call ocean_fold_north_v_face(ms%mass_flux_y_layer, nx, ny + 1, nz, &
+                                                         nx_phys, ny_phys, nghost)
       end if
       if (mode == TR_MODE_ACCUMULATE) then
          call accumulate_flux_y(nx, ny + 1, nz, dt, ms%mass_flux_y_layer, this%vhtr)
