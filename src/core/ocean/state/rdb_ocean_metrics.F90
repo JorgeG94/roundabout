@@ -2132,7 +2132,11 @@ contains
       real(wp), intent(in) :: lon_west, lat_south, dlam, dlat_sg
       real(wp), intent(in) :: phi_join, lat_top, lon_pole
       real(wp), intent(out) :: lat, lon
-      real(wp) :: lon0, lat0, lam, s
+      real(wp) :: lon0, lat0, lam, s, dpole
+      real(wp), parameter :: POLE_SNAP_DEG = 1.0e-9_wp
+         !! A node column within this many degrees of a cap pole meridian
+         !! IS the pole column (its pseudo-longitude only misses the pole
+         !! by the round-off of `lon_west + (m-1)*dlam`).
 
       lon0 = lon_west + real(m - 1, wp)*dlam
       lat0 = lat_south + real(n - 1, wp)*dlat_sg
@@ -2142,6 +2146,30 @@ contains
          ! longitude UNWRAPPED so geography matches metrics_fill_spherical
          ! exactly below the join (lon = lon_west + (m-1)*dlam).
          lat = lat0
+         lon = lon0
+         return
+      end if
+
+      ! A cap node on a POLE column.  Every cap node of the column through
+      ! a pole maps onto that pole (the bipolar coordinate's singular
+      ! point), so its along-j segments -- the pole-column Cu face, and the
+      ! dyBu of its corners -- are zero length and the face is closed.
+      ! That must be EXACTLY zero: the map reaches the first pole through
+      ! `tan(0) = 0` (exact) but the partner pole only through
+      ! `tan(pi/2) ~ 1.6e16` (finite), so the partner column's nodes land a
+      ! round-off distance (~1e-9 m) apart.  The resulting 1e-9 m face and
+      ! ~1e-3 m^2 Cu/Bu areas pass every `/= 0` guard (`adcroft_recip`),
+      ! so 1/areaCu, 1/areaBu ~ 1e9 -- the BT velocity through the face
+      ! reaches ~1e3 m/s and the viscosity ~1e19 in the first step
+      ! (coarse caps, and the 1-degree global grid with an aligned pole,
+      ! both hit it; which rows do is round-off luck).  So place every cap
+      ! node of a pole column on the pole itself, bit-identically: on the
+      ! join ring at the column's own (unwrapped) lon-lat longitude --
+      ! exactly the node the lon-lat ladder puts there when the join is a
+      ! node row, so the segment from the ring is zero too.
+      dpole = modulo(lon0 - lon_pole, 180.0_wp)
+      if (dpole <= POLE_SNAP_DEG .or. 180.0_wp - dpole <= POLE_SNAP_DEG) then
+         lat = phi_join
          lon = lon0
       else
          ! Cap: pseudo-longitude is the i-coordinate's geographic lon; row
