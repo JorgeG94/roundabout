@@ -2616,7 +2616,7 @@ contains
       integer :: n_closed_u, n_closed_v, n_open_u, n_open_v, n_ledge
       real(wp) :: h_face, sum_all, sum_open
       real(wp), allocatable :: tgt(:, :, :)
-      character(len=10) :: vcoord_label
+      character(len=16) :: vcoord_label
 
       if (present(ierr)) ierr = OCEAN_STATUS_OK
       if (.not. cfg%zfixed_closed_faces) return
