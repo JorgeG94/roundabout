@@ -417,24 +417,26 @@ contains
 
    subroutine test_sigma_stiffness_vcoord_gate(error)
       !! The check must run for every coordinate whose interfaces follow
-      !! the topography and for no other. `VCOORD_ZSTAR` is IN because on
-      !! the ocean path it shares the `VCOORD_SIGMA` branch of
-      !! `ocean_vcoord_compute_target_h`.
+      !! the topography and for no other. `VCOORD_ZSTAR` is OUT: it is
+      !! MOM6 z* (a dilated fixed z profile over bed fillers), no longer
+      !! the `VCOORD_SIGMA` branch under another name.
       type(error_type), allocatable, intent(out) :: error
       integer :: k
-      integer :: following(4), flat(4)
+      integer :: following(3), flat(5)
 
-      following = [VCOORD_SIGMA, VCOORD_ZSTAR, VCOORD_ZSIGMA, VCOORD_ZSTAR_SIGMA]
-      flat = [VCOORD_LAGRANGIAN, VCOORD_EULERIAN_Z, VCOORD_Z_FIXED, VCOORD_RHO]
+      following = [VCOORD_SIGMA, VCOORD_ZSIGMA, VCOORD_ZSTAR_SIGMA]
+      flat = [VCOORD_LAGRANGIAN, VCOORD_EULERIAN_Z, VCOORD_Z_FIXED, VCOORD_RHO, &
+              VCOORD_ZSTAR]
 
-      do k = 1, 4
+      do k = 1, 3
          call check(error, ocean_vcoord_is_terrain_following(following(k)), &
-                    "sigma / zstar / zsigma / zstar_sigma are terrain-following")
+                    "sigma / zsigma / zstar_sigma are terrain-following")
          if (allocated(error)) return
       end do
-      do k = 1, 4
+      do k = 1, 5
          call check(error,.not. ocean_vcoord_is_terrain_following(flat(k)), &
-                    "lagrangian / eulerian_z / z_fixed / rho do not follow the topography")
+                    "lagrangian / eulerian_z / z_fixed / rho / zstar do not follow "// &
+                    "the topography")
          if (allocated(error)) return
       end do
    end subroutine test_sigma_stiffness_vcoord_gate

@@ -37,7 +37,7 @@ module rdb_ocean_stability_audit
    !! `docs/CLOSURE_MATRIX.md` / `rdb_ocean_horizontal_viscosity.F90`
    !! module header for `bound_kh` / `stress_tensor` semantics).
    use rdb_constants, only: wp, PI, VCOORD_SIGMA, VCOORD_ZSIGMA, &
-                            VCOORD_ZSTAR, VCOORD_ZSTAR_SIGMA
+                            VCOORD_ZSTAR_SIGMA
    use rdb_config, only: config_t
    use rdb_grid, only: hgrid_t
    use rdb_vcoord, only: parse_vcoord_type
@@ -192,11 +192,12 @@ contains
       !! Does this `VCOORD_*` code put the layer interfaces on surfaces
       !! that follow the bottom (and, under an ice shelf, the ice base)?
       !!
-      !! `VCOORD_ZSTAR` is in the set because on the ocean path it SHARES
-      !! the `VCOORD_SIGMA` branch of `ocean_vcoord_compute_target_h`
-      !! (`case (VCOORD_SIGMA, VCOORD_ZSTAR)`) — in the barotropic
-      !! `(H, eta)` form the two target formulas are identical, so it
-      !! carries exactly the same truncation. `VCOORD_ZSIGMA` and
+      !! `VCOORD_ZSTAR` is NOT in the set: it is MOM6 z*
+      !! (`ocean_vcoord_zstar_target`), a fixed nominal z profile dilated
+      !! by `(H + eta)/H` over bed fillers, so its interfaces are
+      !! geopotential to `O(eta/H)` and do not tilt with the topography.
+      !! (Until the z* slice it shared the `VCOORD_SIGMA` branch and was
+      !! in the set.) `VCOORD_ZSIGMA` and
       !! `VCOORD_ZSTAR_SIGMA` blend TO sigma in shallow water, which is
       !! where the stiff faces are, so they are in too. The fixed-z,
       !! Lagrangian and density families are not: their interfaces do not
@@ -204,7 +205,7 @@ contains
       integer, intent(in) :: code
          !! A `VCOORD_*` code from `parse_vcoord_type`.
       logical :: tf
-      tf = (code == VCOORD_SIGMA .or. code == VCOORD_ZSTAR .or. &
+      tf = (code == VCOORD_SIGMA .or. &
             code == VCOORD_ZSIGMA .or. code == VCOORD_ZSTAR_SIGMA)
    end function ocean_vcoord_is_terrain_following
 

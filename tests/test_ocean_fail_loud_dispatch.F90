@@ -234,8 +234,8 @@ contains
       call check(error, vcoord_h_min_role(VCOORD_SIGMA) == VCOORD_HMIN_UNUSED, &
                  "sigma never reads zstar_h_min")
       if (allocated(error)) return
-      call check(error, vcoord_h_min_role(VCOORD_ZSTAR) == VCOORD_HMIN_UNUSED, &
-                 "zstar-lite never reads zstar_h_min")
+      call check(error, vcoord_h_min_role(VCOORD_ZSTAR) == VCOORD_HMIN_INERT, &
+                 "zstar (MOM6 z*) floors the z_fixed bed fillers -> INERT role")
    end subroutine test_vcoord_h_min_role_split
 
    subroutine test_vcoord_h_min_coherence(error)

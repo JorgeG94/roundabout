@@ -14,7 +14,7 @@ module rdb_ocean_setup
 #else
    use rdb_constants, only: wp, GRAVITY, LAND_DEPTH_THRESHOLD, NZ_STACK_MAX
 #endif
-   use rdb_constants, only: H_VANISHED, VCOORD_ZSTAR_FULL
+   use rdb_constants, only: H_VANISHED, VCOORD_ZSTAR_FULL, VCOORD_ZSTAR
    use rdb_config, only: config_t
    use rdb_grid, only: hgrid_t
    use rdb_decomp, only: decomp_t
@@ -962,7 +962,7 @@ contains
          else
             call logger%info("Bottom drag BBL:  bed-layer only (HBBL=0)")
             ! Bed-only mode drags layer k = 1.  On a coordinate whose bed-side
-            ! layers VANISH (z_fixed, zstar_full) k = 1 is an inert filler in
+            ! layers VANISH (z_fixed, zstar, zstar_full) k = 1 is an inert filler in
             ! every column shallower than the deepest nominal interface, so
             ! almost the whole domain runs with NO bottom drag — measured on
             ! the global 1-degree case (validation_examples/ocean/global_1deg).
@@ -970,6 +970,7 @@ contains
             ! fillers and reaches the live bottom layer.
             if ((cfg%ocean%bdrag%cd > 0.0_wp .or. cfg%ocean%bdrag%r > 0.0_wp) .and. &
                 (parse_ocean_vcoord_type(cfg%vcoord_type) == VCOORD_Z_FIXED .or. &
+                 parse_ocean_vcoord_type(cfg%vcoord_type) == VCOORD_ZSTAR .or. &
                  parse_ocean_vcoord_type(cfg%vcoord_type) == VCOORD_ZSTAR_FULL)) then
                call logger%warning("&ocean_bdrag_nml hbbl = 0 (bed-layer-only drag) under "// &
                                    "vcoord_type = '"//trim(cfg%vcoord_type)//"': the drag "// &
@@ -2429,7 +2430,9 @@ contains
    end subroutine configure_ocean_wave_drag
 
    subroutine configure_ocean_z_fixed_profile(cfg, ocean_state, compute_rank, log_it)
-      !! Resolve the `VCOORD_Z_FIXED` nominal layering onto the vcoord slot:
+      !! Resolve the `VCOORD_Z_FIXED` nominal layering onto the vcoord slot —
+      !! and the `VCOORD_ZSTAR` one, which is the same nominal profile
+      !! (MOM6 z* dilates it per column; `ocean_vcoord_zstar_target`):
       !! `z_fixed_h_ref = &ocean_topo_nml max_depth` (the uniform
       !! `max_depth/nz` spacing — the default, byte-identical), or, under
       !! `&vcoord_nml z_fixed_profile = "list" | "tanh"`, the stretched
@@ -2455,7 +2458,8 @@ contains
       ocean_state%vcoord%z_fixed_h_ref = cfg%ocean%topo%max_depth
       ocean_state%vcoord%z_fixed_use_profile = .false.
       if (.not. ocean_state%vcoord%is_init) return
-      if (ocean_state%vcoord%coord_type /= VCOORD_Z_FIXED) return
+      if (ocean_state%vcoord%coord_type /= VCOORD_Z_FIXED .and. &
+          ocean_state%vcoord%coord_type /= VCOORD_ZSTAR) return
       code = parse_z_fixed_profile(cfg%z_fixed_profile)
       if (code == ZFIXED_PROFILE_UNIFORM .or. code == ZFIXED_PROFILE_INVALID) return
       nz = ocean_state%vcoord%nz_ml
@@ -2466,7 +2470,7 @@ contains
       if (ierr /= ZFIXED_DZ_OK) return
       call ocean_vcoord_set_z_fixed_profile(ocean_state%vcoord, dz)
       if (log_it .and. compute_rank == 0) then
-         call logger%info("z_fixed profile:  "//trim(cfg%z_fixed_profile)// &
+         call logger%info(trim(cfg%vcoord_type)//" profile:  "//trim(cfg%z_fixed_profile)// &
                           " — nominal dz "//to_string(dz(1))//" m (surface) … "// &
                           to_string(dz(nz))//" m (bed), total "// &
                           to_string(ocean_state%vcoord%z_fixed_h_ref)//" m over "// &
@@ -2590,6 +2594,13 @@ contains
       !! only; the terrain-following coarse zone's open faces keep the
       !! sigma PGF error.
       !!
+      !! **`zstar` (MOM6 z*).**  `ocean_vcoord_zstar_target` dilates the
+      !! `z_fixed` nominal profile by the column's free-surface stretching
+      !! and decides every layer's liveness at `η = 0`, so its pattern is
+      !! EXACTLY static for `η` of either sign (MOM6 `build_zstar_column`:
+      !! the dilation keeps the ratios) and its `η = 0` target is the
+      !! `z_fixed` one bit for bit — the same mask, every consumer reused.
+      !!
       !! It also seeds the barotropic face widths `dy_cu_bt`/`dx_cv_bt`
       !! with the OPEN-depth fraction of the face, so the barotropic
       !! solve is not blind to the closed layers.  That seed is refreshed
@@ -2627,22 +2638,24 @@ contains
          return
       end if
       if (ocean_state%vcoord%coord_type /= VCOORD_Z_FIXED .and. &
+          ocean_state%vcoord%coord_type /= VCOORD_ZSTAR .and. &
           ocean_state%vcoord%coord_type /= VCOORD_ZSTAR_FULL) then
          call fail("&vcoord_nml zfixed_closed_faces is only defined for "// &
-                   "vcoord_type='z_fixed' and 'zstar_full': the live/filler "// &
-                   "staircase it closes is made by a GEOMETRIC coordinate "// &
-                   "that vanishes bed-side layers at fixed reference depths. "// &
-                   "On sigma / zstar / zstar_sigma every layer is live on "// &
+                   "vcoord_type='z_fixed', 'zstar' and 'zstar_full': the "// &
+                   "live/filler staircase it closes is made by a GEOMETRIC "// &
+                   "coordinate that vanishes bed-side layers at fixed "// &
+                   "reference depths. On sigma / zstar_sigma every layer is live on "// &
                    "every wet face, and rho / hycom vanish layers by DENSITY, "// &
                    "so their pattern is not static", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
-      if (ocean_state%vcoord%coord_type == VCOORD_Z_FIXED .and. &
+      if ((ocean_state%vcoord%coord_type == VCOORD_Z_FIXED .or. &
+           ocean_state%vcoord%coord_type == VCOORD_ZSTAR) .and. &
           ocean_state%vcoord%z_fixed_h_ref <= 0.0_wp) then
          call fail("&vcoord_nml zfixed_closed_faces needs a resolved "// &
                    "z_fixed_h_ref (set &ocean_topo_nml max_depth): without "// &
-                   "it the z_fixed target degenerates to uniform sigma, "// &
+                   "it the z_fixed / zstar target degenerates to uniform sigma, "// &
                    "there are no fillers, and the mask would close nothing", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
@@ -2754,11 +2767,12 @@ contains
       nz = ocean_state%multilayer%nz_ml
       vcoord_label = "z_fixed"
       if (ocean_state%vcoord%coord_type == VCOORD_ZSTAR_FULL) vcoord_label = "zstar_full"
+      if (ocean_state%vcoord%coord_type == VCOORD_ZSTAR) vcoord_label = "zstar"
 
       call metrics_closed_faces_alloc(ocean_state%metrics, grid, nz)
 
-      ! The eta = 0 target of the running coordinate — `z_fixed` or
-      ! `zstar_full` — through the SAME kernel the ALE regrid dispatches
+      ! The eta = 0 target of the running coordinate — `z_fixed`, `zstar`
+      ! or `zstar_full` — through the SAME kernel the ALE regrid dispatches
       ! to, so "live" has one definition.  Under `zstar_full` it walks the
       ! per-column `z_ref` table the engine rebuilt from the
       ! halo-exchanged bathymetry just before the static-geometry pass.

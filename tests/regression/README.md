@@ -802,7 +802,9 @@ markers): inviscid **33 PASS / 82 XFAIL** (23 of them the by-design refusals)
    the CFL wall — the mode MOM6 shares. The VISCOUS leg rests on every rung
    (FINDING B, fixed by the 2026-09-22 defaults).
 2. **`sigma` ≡ `zstar`** to every printed digit, in both legs, on both
-   toolchains; `zstar_sigma` now differs from them on the ladder (it is the
+   toolchains (as it had to be: until 2026-10 `zstar` WAS the sigma branch;
+   it is now MOM6 z\* with closed faces and this record no longer describes
+   it — the `zstar` rows await a re-pin); `zstar_sigma` now differs from them on the ladder (it is the
    only place its z* branch engages).
 3. **`z_fixed` is clean only without fillers** (`flat`, `lid_flat`). Wherever
    layers vanish it used to leak salt and heat at 1e-7 … 1e-6 relative; the
@@ -836,7 +838,7 @@ measured geometries are rx0 = 0, 0.0071 (slope), 0.0138 (sloping lid), 0.030
 
 | family | viscous envelope (gate) | first viscous failure | inviscid: all-assertions pass up to | inviscid: completes 30 d at |
 |---|---|---|---|---|
-| `sigma`, `zstar` | **rx0 ≤ 0.8** (top of the ladder) | none measured | 0.078 | ≤ 0.6 |
+| `sigma`, `zstar` (measured while `zstar` was the sigma branch — re-pin pending) | **rx0 ≤ 0.8** (top of the ladder) | none measured | 0.078 | ≤ 0.6 |
 | `zstar_sigma` | **rx0 ≤ 0.8** (top of the ladder) | none measured | 0.1 | ≤ 0.6 |
 | `zstar_full` | **rx0 ≤ 0.8** (top of the ladder) | none measured | 0.1 | ≤ 0.6 |
 | `eulerian_z` (ssp_rk2) | **rx0 ≤ 0.8** (top of the ladder) | none measured | flat only | ≤ 0.03, and 0.1 |

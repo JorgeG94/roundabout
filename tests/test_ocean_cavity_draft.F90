@@ -808,7 +808,7 @@ contains
       if (allocated(error)) return
 
       ! --- vertical-coordinate envelope ---
-      ! EVERY family outside the {sigma, zstar} accept set, so no refusal
+      ! EVERY family outside this envelope's {sigma} accept set, so no refusal
       ! can go un-named again: the message used to enumerate six families
       ! and refuse eight.  The rows below are the whole complement of the
       ! whitelist; `parse_vcoord_type`'s own test pins that the list of
@@ -849,8 +849,11 @@ contains
       call expect_valid(error, nml_case(on, vcoord="&vcoord_nml vcoord_type = "// &
                                         "'sigma' /"), "vcoord sigma (accepted)")
       if (allocated(error)) return
-      call expect_valid(error, nml_case(on, vcoord="&vcoord_nml vcoord_type = "// &
-                                        "'zstar' /"), "vcoord zstar-lite (accepted)")
+      ! 'zstar' WAS accepted while it was sigma under another name.  As
+      ! MOM6 z* it dilates its fixed nominal profile from the free surface
+      ! and has no rigid-top branch, so it is refused until that lands.
+      call expect_invalid(error, nml_case(on, vcoord="&vcoord_nml vcoord_type = "// &
+                                          "'zstar' /"), "vcoord zstar (MOM6 z*, no rigid top)")
       if (allocated(error)) return
       call expect_invalid(error, nml_case(on, vcoord="&vcoord_nml vcoord_type = "// &
                                           "'sigma', thickness_config = 'uniform_z' /"), &

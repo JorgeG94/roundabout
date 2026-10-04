@@ -39,8 +39,11 @@ class ZSigma:
 
 
 class ZStar:
-    """``ZStar(remap="ppm")`` -> `"zstar"`. z*-lite: one global
-    `z_ref`."""
+    """``ZStar(remap="ppm")`` -> `"zstar"`. MOM6 z*: the `z_fixed`
+    nominal profile (`&vcoord_nml z_fixed_profile`, uniform by default)
+    dilated per column by `(H + eta)/H` over partial bed cells and inert
+    bed fillers. Pair with `zfixed_closed_faces` on sloping topography.
+    Refused under an ice-shelf cavity and with wet/dry."""
 
     def __init__(self, remap="ppm"):
         self.remap = remap
@@ -77,7 +80,8 @@ class ZStarFull:
     `RdbDeadKnobWarning` documenting exactly this.
 
     CAVEAT: intertidal domains leak 1-2% salt/cycle under this
-    coordinate; prefer `Sigma`/`ZStar` there.
+    coordinate; prefer `Sigma` there. Slated for retirement in favour of
+    `ZStar` (MOM6 z*).
 
     CAVEAT: `h_min` must stay at or below `H_VANISHED = 1.5e-4` m. On
     this family it is the anti-zero thickness of filler layers that are
