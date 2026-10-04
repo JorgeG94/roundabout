@@ -94,6 +94,7 @@ contains
       type(error_type), allocatable, intent(out) :: error
       type(fold_plan_t) :: plan
       integer :: status
+      logical :: freed
 
       call fold_plan_build(plan, 3, 4, 3, 0, status)       ! px > ni
       call check(error, status == FOLD_PLAN_ERR_ARGS, "px > ni must be refused")
@@ -108,9 +109,8 @@ contains
       call check(error, status == FOLD_PLAN_OK, "a valid plan must build")
       if (allocated(error)) return
       call plan%destroy()
-      call check(error, .not. allocated(plan%send_col) .and. &
-                 .not. allocated(plan%peer_rx) .and. plan%npeer == 0, &
-                 "destroy must free the plan's lists")
+      freed = .not. (allocated(plan%send_col) .or. allocated(plan%peer_rx))
+      call check(error, freed .and. plan%npeer == 0, "destroy must free the plan's lists")
       if (allocated(error)) return
       call plan%destroy()   ! idempotent on an empty plan
    end subroutine test_bad_args
