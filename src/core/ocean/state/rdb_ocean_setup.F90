@@ -3958,8 +3958,8 @@ contains
       ! by the same factor), the UNSPLIT driver — which has no
       ! depth-mean replacement — feels a raw `g*grad(z_draft)` ~ 0.1 m/s^2,
       ! and a non-uniform barotropic-correction weight turns the
-      ! uncancelled depth-uniform force into a real per-layer shear.  Refused, not
-      ! auto-enabled: the namelist should say what the run does.
+      ! uncancelled depth-uniform force into a real per-layer shear.
+      ! Refused, not auto-enabled: the namelist should say what the run does.
       !
       ! EXEMPTION, and it is a theorem rather than a courtesy: a draft
       ! that is UNIFORM over the whole array has a load with no gradient,
