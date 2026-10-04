@@ -1535,6 +1535,11 @@ contains
       end if
 
       ng = h%grid%nghost
+      ! Single-rank by construction: the API builds its engine through
+      ! `engine_setup` with no compute rank/size (one rank, px = py = 1), so
+      ! the local periodic wrap and the fold below hold the whole grid (the
+      ! fold dispatcher takes its local-kernel branch).  Audited for the
+      ! distributed fold (plan site A1): no px > 1 path reaches this.
       wrap_seam = h%state%bc%periodic_x .or. h%state%bc%periodic_y .or. h%state%bc%north_fold
 
       associate (b => h%state%barotropic%b)
