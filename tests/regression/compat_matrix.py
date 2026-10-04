@@ -64,6 +64,7 @@ Stdlib only -- never `pip install` anything for this.
 """
 
 import argparse
+import fnmatch
 import hashlib
 import itertools
 import json
@@ -85,6 +86,7 @@ sys.path.insert(0, THIS_DIR)
 sys.path.insert(0, os.path.join(REPO_ROOT, "tools"))
 
 import compat_expect  # noqa: E402
+import compat_legs  # noqa: E402
 
 DEFAULT_SCRATCH = os.path.join(REPO_ROOT, "tmp_local_artifacts", "compat_matrix")
 SEED = 20261002
@@ -146,7 +148,7 @@ def ts_profile(j, z):
 # The format is a fixed big-endian header followed by the data; see the
 # NetCDF "Classic Format Specification".  Stdlib only, by repo rule.
 # ---------------------------------------------------------------------------
-_NC_DIMENSION, _NC_VARIABLE, _NC_DOUBLE = 0x0A, 0x0B, 6
+_NC_DIMENSION, _NC_VARIABLE, _NC_ATTRIBUTE, _NC_INT, _NC_DOUBLE = 0x0A, 0x0B, 0x0C, 4, 6
 
 
 def _nc_name(name):
@@ -154,15 +156,21 @@ def _nc_name(name):
     return struct.pack(">i", len(raw)) + raw + b"\0" * ((4 - len(raw) % 4) % 4)
 
 
-def write_netcdf_classic(path, dims, variables):
+def write_netcdf_classic(path, dims, variables, gatts=()):
     """Write `variables` [(name, (dimname, ...), flat C-order values)] over
-    `dims` [(name, length)] as a CDF-1 file of doubles (no attributes)."""
+    `dims` [(name, length)] as a CDF-1 file of doubles, with optional global
+    integer attributes `gatts` [(name, int)] (no variable attributes)."""
     dim_index = {name: k for k, (name, _) in enumerate(dims)}
     head = b"CDF\x01" + struct.pack(">i", 0)
     head += struct.pack(">ii", _NC_DIMENSION, len(dims))
     for name, length in dims:
         head += _nc_name(name) + struct.pack(">i", length)
-    head += struct.pack(">ii", 0, 0)                      # no global attributes
+    if gatts:
+        head += struct.pack(">ii", _NC_ATTRIBUTE, len(gatts))
+        for name, val in gatts:
+            head += _nc_name(name) + struct.pack(">iii", _NC_INT, 1, int(val))
+    else:
+        head += struct.pack(">ii", 0, 0)                  # no global attributes
     var_hdr_len = 8
     for name, vdims, _ in variables:
         var_hdr_len += len(_nc_name(name)) + 4 + 4 * len(vdims) + 8 + 4 + 4 + 4
@@ -714,17 +722,33 @@ _CRASH_RE = re.compile(r"error stop|segmentation fault|floating point exception|
                        r"program received signal|\baborted\b", re.IGNORECASE)
 _NOISE_RE = re.compile(r"^\s*$|^\[gpu-bind\]|^VALIDATE-ONLY:|^ERROR STOP 3\s*$|"
                        r"^Configuration validation failed|^Note: The following "
-                       r"floating-point|^IEEE_")
+                       r"floating-point|^IEEE_|"
+                       # nvfortran's exit-time FP-flag report (gfortran's is the Note above)
+                       r"^Warning: ieee_\w+ is signaling")
 
 # Budget tolerance: every cell carries a surface flux (and two of the three
 # geometries an open or relaxed edge), so the model's OWN residuals are held
 # to the open/forced band `stability_manifest.BUDGET_OPEN` uses.
 BUDGET_TOL = {"Mass": 1.0e-9, "Salt": 1.0e-9, "Heat": 1.0e-9}
 
-# The checks a record carries, in the order the plan runs them.  Phase 2
-# fills 1-3; 4-6 stay "not_run" until their legs land (the record format is
-# fixed now so they slot in without a schema change).
-CHECKS = ("validate", "run", "budget", "decomp", "restart", "cross_backend")
+# The checks a record carries, in the order they run.  validate / run /
+# budget (checks 1-3) decide the covering array; the LEGS after them
+# (`compat_legs`) only annotate a cell that passed those three, so the cell
+# list is the same on every backend and with any subset of legs.
+CHECKS = ("validate", "run", "budget", "energy", "decomp", "restart", "cross_backend")
+PHASE_A = ("validate", "run", "budget")
+LEGS = ("energy", "decomp", "restart", "cross_backend")
+# The failure outcome of each check (a runtime row's `expect` names these).
+OUTCOME_CHECK = {"CRASH": "run", "NONFINITE": "run", "BUDGET": "budget", "ENERGY": "energy",
+                 "DECOMP": "decomp", "RESTART": "restart", "CROSS_BACKEND": "cross_backend"}
+
+# A run that writes ONE checkpoint, at its clean end (the cadence never
+# fires inside 24 steps): what the RESTART and DECOMP legs compare.
+_NEVER = 1.0e12
+CHECKPOINT_PATCH = {"output_nml": {"restart_interval": _NEVER}}
+RESTART_AT = N_STEPS // 2
+DECOMPS = ((2, 2), (4, 1))
+DECOMP_FALLBACK = (1, 2)      # when every one of DECOMPS is refused
 
 
 def _f(tok):
@@ -782,6 +806,72 @@ def _run(binary, args, cwd, timeout):
         out = (exc.stdout or b"").decode("utf-8", "replace")
         err = (exc.stderr or b"").decode("utf-8", "replace")
     return rc, out, err, time.time() - t0
+
+
+_OOM_RE = re.compile(r"CUDA_ERROR_OUT_OF_MEMORY|out of memory", re.IGNORECASE)
+
+
+class _DeviceGate(object):
+    """Shared / exclusive access to the device: every run holds it shared;
+    the re-run of a run that hit a device OOM holds it EXCLUSIVE, so it runs
+    alone (the kappa-shear column kernels reserve a large per-thread local
+    stack at launch, and 4 concurrent cells can exhaust a 32 GB V100)."""
+
+    def __init__(self):
+        self._c = threading.Condition()
+        self._shared, self._excl, self._waiting = 0, False, 0
+
+    def shared(self):
+        gate = self
+
+        class _S(object):
+            def __enter__(self):
+                with gate._c:
+                    while gate._excl or gate._waiting:
+                        gate._c.wait()
+                    gate._shared += 1
+
+            def __exit__(self, *a):
+                with gate._c:
+                    gate._shared -= 1
+                    gate._c.notify_all()
+        return _S()
+
+    def exclusive(self):
+        gate = self
+
+        class _X(object):
+            def __enter__(self):
+                with gate._c:
+                    gate._waiting += 1
+                    while gate._excl or gate._shared:
+                        gate._c.wait()
+                    gate._waiting -= 1
+                    gate._excl = True
+
+            def __exit__(self, *a):
+                with gate._c:
+                    gate._excl = False
+                    gate._c.notify_all()
+        return _X()
+
+
+_GATE = _DeviceGate()
+
+
+def _run_retry_oom(binary, args, cwd, timeout, tries=3):
+    """`_run`, re-run ALONE when the device ran out of memory: the GPU is
+    shared with the other jobs of this matrix (and with other users), and an
+    OOM at a kernel launch says nothing about the cell."""
+    with _GATE.shared():
+        rc, out, err, wall = _run(binary, args, cwd, timeout)
+    for _ in range(tries - 1):
+        if rc == 0 or not _OOM_RE.search(out + err):
+            break
+        with _GATE.exclusive():
+            rc, out, err, w2 = _run(binary, args, cwd, timeout)
+        wall += w2
+    return rc, out, err, wall
 
 
 def validate_cell(binary, cell, cid, root, timeout=60):
@@ -931,12 +1021,20 @@ def run_metrics(p):
     return {"step": last.get("step"), "En": _j(last.get("En")), "Mass": _j(last.get("Mass")),
             "Salt": _j(last.get("Salt")), "Temp": _j(last.get("Temp")),
             "MaxCFL_max": _j(max(cfl)) if cfl else None,
-            "budget_worst": {k: _j(v) for k, v in sorted(worst.items())}}
+            "budget_worst": {k: _j(v) for k, v in sorted(worst.items())},
+            # the per-step console series the ENERGY and CROSS_BACKEND legs read
+            "series": [[s["step"], _j(s.get("En")), _j(s.get("MaxCFL"))] for s in p["stats"]]}
 
 
-def run_cell(binary, cell, cid, root, timeout=300, attribute=True):
-    path = prepare_cell_dir(cell, cid, root)
-    rc, out, err, wall = _run(binary, [os.path.basename(path)], os.path.dirname(path), timeout)
+def run_cell(binary, cell, cid, root, timeout=300, attribute=True, checkpoint=False):
+    """Checks 2-3.  With `checkpoint`, the run also writes its end-of-run
+    restart file (`restart_rank_000000.nc` in the cell directory) -- the
+    straight-through reference of the RESTART leg and, on the MPI binary,
+    the 1-rank reference of the DECOMP leg."""
+    path = prepare_cell_dir(cell, cid, root,
+                            nml_patch=CHECKPOINT_PATCH if checkpoint else None)
+    rc, out, err, wall = _run_retry_oom(binary, [os.path.basename(path)], os.path.dirname(path),
+                                        timeout)
     with open(os.path.join(os.path.dirname(path), "run.log"), "w") as fh:
         fh.write(out + err)
     p = parse_run(out + "\n" + err)
@@ -945,6 +1043,13 @@ def run_cell(binary, cell, cid, root, timeout=300, attribute=True):
         outcome, detail = "CRASH", "timeout after {} s".format(timeout)
     res = {"outcome": outcome, "detail": detail, "rc": rc, "wall_s": round(wall, 2),
            "steps": p["total_steps"], "metrics": run_metrics(p)}
+    ck = os.path.join(os.path.dirname(path), "restart_rank_000000.nc")
+    if checkpoint and outcome == "PASS" and os.path.isfile(ck):
+        try:
+            res["metrics"]["field_norms"] = compat_legs.field_norms(
+                ck, os.path.join(os.path.dirname(path), "nc"))
+        except Exception as exc:   # no nccopy: the cross-backend leg reports it
+            res["metrics"]["field_norms_error"] = str(exc)[:200]
     if outcome in ("CRASH", "NONFINITE") and attribute and first:
         try:
             res["attribution"] = chksum_attribution(binary, cell, cid, root, first, timeout)
@@ -956,10 +1061,26 @@ def run_cell(binary, cell, cid, root, timeout=300, attribute=True):
 # ===========================================================================
 # 5. Classification against compat_expect
 # ===========================================================================
-def classify(cell, nml, val, run):
+# The backend this process judges (`run --backend`): backend-specific rows
+# (`Row.backend`) apply only to it.  A one-element list so cmd_run can set it.
+BACKEND = ["cpu-gfortran"]
+
+
+def evaluable(row, ran):
+    """A runtime row can be judged only if a check it expects to fail ran:
+    a DECOMP gap says nothing on a run without the MPI leg."""
+    return any(OUTCOME_CHECK[o] in ran for o in row.expect)
+
+
+def classify(cell, nml, val, run, ran=PHASE_A, decomp=None):
     """The record's verdict.  Returns (cls, rows, note).
 
     cls: PASS | REFUSED_PHYSICAL | REFUSED_GAP | XFAIL | XPASS | FAIL
+
+    `ran`: the checks that were run (rows expecting only other checks'
+    outcomes are neither explained nor XPASSed).  `decomp`: the DECOMP leg's
+    verdict on the multi-rank refusals ({"status": "accepted" | "skipped",
+    "rows": [...]}) -- a `multirank` row whose cell decomposes is an XPASS.
     """
     feats = compat_expect.features(nml)
     refuse_rows = [r for r in compat_expect.ROWS if r.kind == "refused" and r.matches(feats)]
@@ -986,19 +1107,29 @@ def classify(cell, nml, val, run):
     if refuse_rows:
         return "XPASS", refuse_rows, "accepted, but row(s) {} say it is refused: delete them".format(
             ", ".join(r.rid for r in refuse_rows))
-    run_rows = [r for r in compat_expect.ROWS if r.kind == "runtime" and r.matches(feats)]
+    run_rows = [r for r in compat_expect.ROWS if r.kind == "runtime" and r.matches(feats)
+                and evaluable(r, ran) and r.on(BACKEND[0])]
     if run is None:
         return "FAIL", [], "accepted but not run"
     if run["outcome"] == "PASS":
         strict = [r for r in run_rows if r.scope == "cell"]
+        mr_rows = [r for r in compat_expect.ROWS if r.kind == "multirank" and r.matches(feats)]
+        if decomp is not None and decomp["status"] == "accepted":
+            strict += mr_rows
         if strict:
             return "XPASS", strict, "passes, but row(s) {} say it fails: delete them".format(
                 ", ".join(r.rid for r in strict))
+        if decomp is not None and decomp["status"] == "skipped":
+            used = [r for r in mr_rows if r.rid in decomp["rows"]]
+            return "PASS", used, "{} [decomp skipped: single-rank ({})]".format(
+                run["detail"], ", ".join(decomp["rows"]))
         return "PASS", [], run["detail"]
     # A row explains a failure only if the OUTCOME and its SIGNATURE (the
     # crash text / budget line) both match -- a different crash on a cell a
     # row covers is still a FAIL.
     hit = [r for r in run_rows if run["outcome"] in r.expect and r.explains(run["detail"])]
+    if hit and decomp is not None and decomp["status"] == "skipped":
+        hit += [r for r in compat_expect.ROWS if r.rid in decomp["rows"]]
     if hit:
         return "XFAIL", hit, "{}: {}".format(run["outcome"], run["detail"])
     return "FAIL", [], "{}: {}".format(run["outcome"], run["detail"])
@@ -1009,14 +1140,14 @@ def witness_cell(row):
     return dict(BASE_CELL, **row.witness)
 
 
-def row_xpasses(records):
+def row_xpasses(records, ran=CHECKS):
     """Row-level XPASS for `scope="any"` rows: the gap bites only in some
     combinations, so the row pins a witness cell that must fail with its
     signature on every run; a witness that passes (or fails for another
     reason) means the row is stale.  Returns [(rid, witness class)]."""
     out = []
     for row in compat_expect.ROWS:
-        if row.scope != "any":
+        if row.scope != "any" or not evaluable(row, ran) or not row.on(BACKEND[0]):
             continue
         key = cell_key(witness_cell(row))
         rec = [r for r in records if cell_key(r["axes"]) == key]
@@ -1098,17 +1229,230 @@ def _pmap(fn, items, jobs):
         return list(ex.map(fn, items))
 
 
-def evaluate_cell(binary, cell, root, timeout, attribute):
+def evaluate_cell(binary, cell, root, timeout, attribute, checkpoint=False, in_slice=None):
     """Checks 1-3 on one cell -> (val, run, cls, rows, note).  Scratch lives
     in root/<hash>; a refused cell is never run."""
     cid = "h" + cell_hash(cell)
     val = validate_cell(binary, cell, cid, os.path.join(root, "validate"))
+    if val["status"] == "accepted" and in_slice is not None and not in_slice(cell):
+        return val, None, "SLICE_SKIPPED", [], "accepted; outside the per-PR slice, not run"
     run = None
     if val["status"] == "accepted":
         run = run_cell(binary, cell, cid, os.path.join(root, "run"), timeout=timeout,
-                       attribute=attribute)
+                       attribute=attribute, checkpoint=checkpoint)
     cls, rows, note = classify(cell, merged_namelist(cell), val, run)
     return val, run, cls, rows, note
+
+
+# ---------------------------------------------------------------------------
+# 6b. The legs: energy, decomp, restart, cross_backend (compat_legs)
+# ---------------------------------------------------------------------------
+class LegContext(object):
+    """What the legs need: binaries, the MPI launcher, the reference
+    backend's records, the scratch root, and which legs to run."""
+
+    def __init__(self, binary, root, legs, timeout=300, mpi_binary=None, mpirun="mpirun",
+                 mpi_slots=1, reference=None):
+        self.binary, self.root, self.legs, self.timeout = binary, root, tuple(legs), timeout
+        self.mpi_binary, self.mpirun = mpi_binary, mpirun
+        self.reference = reference or {}
+        self.mpi_gate = threading.Semaphore(max(1, mpi_slots))
+        self.exempt = compat_legs.decomp_exempt_tags() if "decomp" in self.legs else ()
+
+    @property
+    def checkpoint(self):
+        # Every leg run writes the end-of-run checkpoint: the RESTART leg's
+        # straight-through reference, the DECOMP leg's 1-rank reference (on
+        # the MPI binary), and the field norms the CROSS_BACKEND leg of the
+        # OTHER backend compares against this report.
+        return bool(self.legs)
+
+
+# The launcher's own epilogue when a rank exits non-zero (OpenMPI/PRRTE,
+# HPC-X, MPICH): never a refusal reason.
+_MPIRUN_NOISE_RE = re.compile(
+    r"Error termination|prterun|mpirun|^\s*-{3,}|Primary job|^\s*process|errorcode|"
+    r"MPI_ABORT|^\s*NOTE:|You may|exiting|thus causing|The first process|terminated|"
+    r"^\s*(Node|Process name|Exit code|Local host|PID)\s*:|non-zero (exit|status)|"
+    r"^\s*(Proc|Errorcode):|BAD TERMINATION|YOUR APPLICATION", re.IGNORECASE)
+
+
+def _mpi_run(ctx, nproc, args, cwd):
+    env = dict(os.environ, OMP_NUM_THREADS="1", OMPI_MCA_rmaps_base_oversubscribe="1",
+               PRTE_MCA_rmaps_default_mapping_policy=":oversubscribe")
+    cmd = [ctx.mpirun, "-np", str(nproc), ctx.mpi_binary] + args
+    t0 = time.time()
+    with ctx.mpi_gate:
+        try:
+            p = subprocess.run(cmd, cwd=cwd, env=env, stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE, timeout=ctx.timeout)
+            rc, out = p.returncode, (p.stdout + p.stderr).decode("utf-8", "replace")
+        except subprocess.TimeoutExpired as exc:
+            rc, out = "timeout", ((exc.stdout or b"") + (exc.stderr or b"")).decode(
+                "utf-8", "replace")
+    return rc, out, time.time() - t0
+
+
+def _tail(text, n=3):
+    keep = [ln.strip() for ln in text.splitlines() if ln.strip() and not _NOISE_RE.search(ln)]
+    return " | ".join(keep[-n:])[:400]
+
+
+def restart_leg(ctx, cell, cid, main_dir):
+    """Check 5: 12 steps + checkpoint, a warm restart through the production
+    engine (`rdb` with `restart_file`), 12 more; the final checkpoint must
+    equal the straight 24-step run's, every field bitwise, ghosts included.
+    -> (ok, detail)."""
+    root = os.path.join(ctx.root, "restart")
+    first = os.path.dirname(prepare_cell_dir(cell, cid + "_r12", root, nml_patch=_merge(
+        CHECKPOINT_PATCH, {"time_nml": {"t_end": RESTART_AT * DT}}),
+        header_extra="restart leg: steps 1..{} + checkpoint".format(RESTART_AT)))
+    rc, out, err, _ = _run_retry_oom(ctx.binary, ["cell.nml"], first, ctx.timeout)
+    ck = os.path.join(first, "restart_rank_000000.nc")
+    if rc != 0 or not os.path.isfile(ck):
+        return False, "the {}-step run failed (rc {}): {}".format(RESTART_AT, rc, _tail(out + err))
+    second = os.path.dirname(prepare_cell_dir(cell, cid + "_resume", root, nml_patch=_merge(
+        CHECKPOINT_PATCH, {"output_nml": {"restart_file": ck}}),
+        header_extra="restart leg: warm restart at step {} -> {}".format(RESTART_AT, N_STEPS)))
+    rc, out, err, _ = _run_retry_oom(ctx.binary, ["cell.nml"], second, ctx.timeout)
+    ck2 = os.path.join(second, "restart_rank_000000.nc")
+    if rc != 0 or not os.path.isfile(ck2):
+        return False, "the warm restart failed (rc {}): {}".format(rc, _tail(out + err))
+    diffs = compat_legs.compare_full(os.path.join(main_dir, "restart_rank_000000.nc"), ck2,
+                                     os.path.join(root, cid + "_nc"))
+    if diffs:
+        return False, "{} field(s) differ after a warm restart at step {}: {}".format(
+            len(diffs), RESTART_AT, "; ".join(diffs[:4]))
+    return True, "{} + restart + {} == {} straight, bitwise".format(
+        RESTART_AT, N_STEPS - RESTART_AT, N_STEPS)
+
+
+def decomp_leg(ctx, cell, cid, main_dir):
+    """Check 4: the 1-rank run against each of DECOMPS, owned cells of every
+    restart-registry field bitwise (`compat_legs.compare_decomp`).  A
+    decomposition the model REFUSES at configure is classified against the
+    `multirank` rows.  -> (status, detail, rows): status PASS | FAIL |
+    skipped (every decomposition refused, every reason explained) | refused
+    (a refusal no row explains)."""
+    root = os.path.join(ctx.root, "decomp")
+    if os.path.realpath(ctx.mpi_binary) == os.path.realpath(ctx.binary):
+        ref = os.path.join(main_dir, "restart_rank_000000.nc")
+    else:
+        d = os.path.dirname(prepare_cell_dir(cell, cid + "_1x1", root, nml_patch=CHECKPOINT_PATCH,
+                                             header_extra="decomp leg: 1-rank reference"))
+        rc, out, _ = _mpi_run(ctx, 1, ["cell.nml"], d)
+        ref = os.path.join(d, "restart_rank_000000.nc")
+        if rc != 0 or not os.path.isfile(ref):
+            return "FAIL", "the 1-rank MPI reference failed (rc {}): {}".format(rc, _tail(out)), []
+    feats = compat_expect.features(merged_namelist(cell))
+    mr_rows = [r for r in compat_expect.ROWS if r.kind == "multirank" and r.matches(feats)]
+    done, refused, unexplained, used, bad = [], [], [], [], []
+    plan = list(DECOMPS)
+    k = 0
+    while k < len(plan):
+        px, py = plan[k]
+        k += 1
+        tag = "{}x{}".format(px, py)
+        patch = _merge(CHECKPOINT_PATCH, {"mpi_nml": {"px": px, "py": py}})
+        d = os.path.dirname(prepare_cell_dir(
+            cell, "{}_{}".format(cid, tag), root,
+            nml_patch=_merge(patch, {"logging_nml": {"log_level": "error"}}),
+            header_extra="decomp leg: {} ranks".format(tag)))
+        rc, out, _ = _mpi_run(ctx, px * py, ["--validate-only", "cell.nml"], d)
+        if rc != 0:
+            msgs = [ln.strip() for ln in out.splitlines() if ln.strip()
+                    and not _NOISE_RE.search(ln.strip()) and not ln.strip().startswith(("#", "at "))
+                    and not _MPIRUN_NOISE_RE.search(ln)]
+            msgs = list(dict.fromkeys(msgs))       # every rank logs the same reason
+            refused.append(tag)
+            # Every primary decomposition refused (a feature single-rank in
+            # x, like the tripolar fold): try the north-south split once.
+            if k == len(DECOMPS) and len(refused) == len(DECOMPS):
+                plan.append(DECOMP_FALLBACK)
+            for m in msgs:
+                hit = [r for r in mr_rows if r.explains(m)]
+                if hit:
+                    used.extend(r.rid for r in hit if r.rid not in used)
+                else:
+                    unexplained.append("{}: {}".format(tag, m))
+            if not msgs:
+                unexplained.append("{}: refused (rc {}) with no reason".format(tag, rc))
+            continue
+        rc, out, _ = _mpi_run(ctx, px * py, ["cell.nml"], d)
+        files = [os.path.join(d, "restart_rank_{:06d}.nc".format(r)) for r in range(px * py)]
+        if rc != 0 or not all(os.path.isfile(f) for f in files):
+            bad.append("{}: the decomposed run failed (rc {}): {}".format(tag, rc, _tail(out)))
+            continue
+        diffs, nf, worst = compat_legs.compare_decomp(ref, files, os.path.join(root, cid + "_nc"),
+                                                      ctx.exempt)
+        if diffs:
+            # (The size is reported, not judged: a round-off reordering
+            # amplifies through the threshold-switching closures -- EPBL,
+            # MLE, KPP depth -- to 1e-4 in 24 steps, as large as a stale
+            # seam ghost, so magnitude cannot tell the two apart.)
+            bad.append("{}: {} field mismatch(es) (worst max|diff|/max|field| {:.1e}): "
+                       "{}".format(tag, len(diffs), worst, "; ".join(diffs[:3])))
+        else:
+            done.append("{} ({} fields)".format(tag, nf))
+    if unexplained:
+        return "refused", "unexplained multi-rank refusal: " + " | ".join(unexplained[:3]), used
+    if bad:
+        return "FAIL", "; ".join(bad), used
+    if not done:
+        return "skipped", "every decomposition refused ({})".format(", ".join(refused)), used
+    return "PASS", "1 rank == {} bitwise{}".format(
+        ", ".join(done), " ({} refused: {})".format(", ".join(refused), ", ".join(used))
+        if refused else ""), used
+
+
+def cross_backend_leg(ctx, cell, run):
+    """Check 6 against the reference backend's record of the same cell."""
+    ref = ctx.reference.get(cell_hash(cell))
+    if ref is None:
+        return None, "no reference record for this cell"
+    # The reference must have passed checks 1-3 (its own DECOMP / RESTART
+    # gaps say nothing about this backend's numbers).
+    if ref["checks"]["run"].get("status") != "PASS" or \
+            ref["checks"]["budget"].get("status") != "PASS" or \
+            ref["checks"]["run"].get("metrics") is None:
+        return False, "the reference backend fails this cell at checks 1-3 ({}), here it " \
+                      "passes".format(ref.get("note", "")[:160])
+    ok, detail, _ = compat_legs.cross_backend_check(run["metrics"], ref["checks"]["run"]["metrics"])
+    return ok, detail
+
+
+def run_legs(ctx, cell, run):
+    """The legs on a cell that passed checks 1-3, in CHECKS order, stopping
+    at the first failure.  -> (outcome, detail, {check: record}, decomp)."""
+    cid = "h" + cell_hash(cell)
+    main_dir = os.path.join(ctx.root, "run", cid)
+    recs, decomp = {}, None
+    outcome, detail = "PASS", run["detail"]
+    for leg in LEGS:
+        if leg not in ctx.legs:
+            continue
+        t0 = time.time()
+        if leg == "energy":
+            ok, d = compat_legs.energy_check(run["metrics"].get("series", []), cell["geometry"])
+            st = "PASS" if ok else "ENERGY"
+        elif leg == "restart":
+            ok, d = restart_leg(ctx, cell, cid, main_dir)
+            st = "PASS" if ok else "RESTART"
+        elif leg == "decomp":
+            st, d, rows = decomp_leg(ctx, cell, cid, main_dir)
+            # "accepted": every decomposition ran (a multirank row on this
+            # cell is then stale); "skipped": some were refused, explained.
+            decomp = {"status": "skipped" if (rows or st == "skipped") else
+                      ("accepted" if st in ("PASS", "FAIL") else st), "rows": rows}
+            st = {"FAIL": "DECOMP", "refused": "DECOMP"}.get(st, st)
+        else:
+            ok, d = cross_backend_leg(ctx, cell, run)
+            st = "not_run" if ok is None else ("PASS" if ok else "CROSS_BACKEND")
+        recs[leg] = {"status": st, "detail": d, "wall_s": round(time.time() - t0, 2)}
+        if st not in ("PASS", "skipped", "not_run"):
+            outcome, detail = st, d
+            break
+    return outcome, detail, recs, decomp
 
 
 def _forbids(cls, rows):
@@ -1121,7 +1465,8 @@ def _forbids(cls, rows):
     return cls == "XFAIL" and all(r.scope == "cell" for r in rows)
 
 
-def build_matrix(binary, root, jobs, seed=SEED, timeout=300, attribute=True, max_iter=40):
+def build_matrix(binary, root, jobs, seed=SEED, timeout=300, attribute=True, max_iter=40,
+                 checkpoint=False, in_slice=None):
     """The fixed point the plan prescribes: generate -> evaluate -> forbid the
     tuple behind every expected refusal and every deterministic XFAIL ->
     regenerate, until no new tuple appears.  The pairs a forbidden tuple
@@ -1129,7 +1474,10 @@ def build_matrix(binary, root, jobs, seed=SEED, timeout=300, attribute=True, max
 
     Returns (final cells, results by cell key, forbidden tuples, iterations,
     uncoverable pairs, witness cells -- one per forbidden tuple, the cell
-    that produced it, kept in the report so the gap is still proved)."""
+    that produced it, kept in the report so the gap is still proved).
+
+    `in_slice` (the per-PR slice): an accepted cell it rejects is validated
+    but not run (class SLICE_SKIPPED); refusals still shape the array."""
     results, forbidden, witness = {}, set(), {}
     it = 0
     while True:
@@ -1138,7 +1486,8 @@ def build_matrix(binary, root, jobs, seed=SEED, timeout=300, attribute=True, max
         todo = [c for c in cells if cell_key(c) not in results]
 
         def _e(c):
-            return cell_key(c), evaluate_cell(binary, c, root, timeout, attribute)
+            return cell_key(c), evaluate_cell(binary, c, root, timeout, attribute,
+                                              checkpoint=checkpoint, in_slice=in_slice)
 
         for k, res in _pmap(_e, todo, jobs):
             results[k] = res
@@ -1162,7 +1511,7 @@ def build_matrix(binary, root, jobs, seed=SEED, timeout=300, attribute=True, max
     return cells, results, sorted(forbidden), it, unc, [witness[t] for t in sorted(witness)]
 
 
-def make_record(cid, cell, val, run, cls, rows, note, backend, role):
+def make_record(cid, cell, val, run, cls, rows, note, backend, role, legs=None):
     nml = merged_namelist(cell)
     checks = {c: {"status": "not_run"} for c in CHECKS}
     checks["validate"] = {"status": val["status"], "stage": val["stage"],
@@ -1178,48 +1527,191 @@ def make_record(cid, cell, val, run, cls, rows, note, backend, role):
         if run["outcome"] in ("PASS", "BUDGET"):
             checks["budget"] = {"status": run["outcome"], "detail": run["detail"]}
         feats = compat_expect.features(nml)
-        matching = [r.rid for r in compat_expect.ROWS if r.kind == "runtime" and r.matches(feats)]
+        matching = [r.rid for r in compat_expect.ROWS if r.kind in ("runtime", "multirank")
+                    and r.matches(feats)]
+    for leg, rec in (legs or {}).items():
+        checks[leg] = rec
     return {"id": cid, "hash": cell_hash(cell), "role": role, "axes": dict(cell),
             "backend": backend, "ranks": "1", "class": cls, "rows": [r.rid for r in rows],
             "note": note, "matching_rows": matching, "checks": checks}
 
 
+# The weekly t = 3 slice: the known-dangerous triple, in full.  Vertical
+# mixing is ONE axis here (a boundary layer alone, or KPP plus one interior
+# closure); the other axes stay at BASE_CELL.
+T3_VMIX = (("kpp", "none"), ("epbl", "none"), ("pp81", "none"), ("kpp", "kappa_shear"),
+           ("kpp", "kappa_shear_vertex"), ("kpp", "tidal"), ("kpp", "conv"), ("kpp", "ddiff"))
+
+
+def t3_cells():
+    cells = []
+    for v in VALUE_NAMES["vcoord"]:
+        for e in VALUE_NAMES["eddy"]:
+            for bl, ex in T3_VMIX:
+                c = dict(BASE_CELL, vcoord=v, eddy=e, vmix_bl=bl, vmix_extra=ex)
+                try:
+                    merged_namelist(c)
+                except BuilderConflict:
+                    continue
+                cells.append(c)
+    return cells
+
+
+def resolve_legs(args, mpi_binary, reference):
+    if args.legs == "auto":
+        legs = ["energy", "restart"]
+        if mpi_binary:
+            legs.append("decomp")
+        if reference:
+            legs.append("cross_backend")
+    elif args.legs in ("", "none"):
+        legs = []
+    else:
+        legs = [x.strip() for x in args.legs.split(",") if x.strip()]
+        bad = [x for x in legs if x not in LEGS]
+        if bad:
+            raise SystemExit("--legs: unknown leg(s) {} (have {})".format(bad, ", ".join(LEGS)))
+        if "decomp" in legs and not mpi_binary:
+            raise SystemExit("--legs decomp needs --mpi-build-dir / --mpi-binary")
+        if "cross_backend" in legs and not reference:
+            raise SystemExit("--legs cross_backend needs --reference")
+    return [x for x in LEGS if x in legs]
+
+
+def load_reference(path):
+    """{cell hash: record} of a previous run on the reference backend."""
+    if not path:
+        return None
+    with open(path) as fh:
+        rep = json.load(fh)
+    return {r["hash"]: r for r in rep["cells"]}
+
+
+def changed_files(args):
+    if args.changed_files:
+        with open(args.changed_files) as fh:
+            return [ln.strip() for ln in fh if ln.strip()]
+    p = subprocess.run(["git", "-C", REPO_ROOT, "diff", "--name-only", args.diff_base + "...HEAD"],
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if p.returncode != 0:
+        raise SystemExit("git diff {}...HEAD failed: {}".format(
+            args.diff_base, p.stderr.decode("utf-8", "replace")))
+    return [ln.strip() for ln in p.stdout.decode().splitlines() if ln.strip()]
+
+
+def resolve_slice(args):
+    """-> (in_slice predicate, description); (None, ...) is the full set and
+    (False, reason) a diff that touches no model source."""
+    if not (args.diff_base or args.changed_files):
+        return None, "full"
+    files = changed_files(args)
+    mode, what = compat_legs.touched_values(files, compat_expect.VALUE_PATHS,
+                                            compat_expect.ALWAYS_FULL)
+    if mode == "full":
+        return None, "full ({})".format(what)
+    if mode == "none":
+        return False, what
+    hits = sorted(what)
+
+    def in_slice(cell):
+        return any(cell[a] == v for a, v in hits)
+    return in_slice, "slice: cells holding {}".format(
+        ", ".join("{}={}".format(a, v) for a, v in hits))
+
+
 def cmd_run(args):
+    BACKEND[0] = args.backend
     binary = find_binary(args.build_dir, args.binary)
+    mpi_binary = (find_binary(args.mpi_build_dir, args.mpi_binary)
+                  if (args.mpi_build_dir or args.mpi_binary) else None)
+    reference = load_reference(args.reference)
+    legs = resolve_legs(args, mpi_binary, reference)
+    in_slice, slice_desc = resolve_slice(args)
+    if in_slice is False:
+        print("compat matrix: nothing to run -- {}".format(slice_desc))
+        return 0
     root = os.path.abspath(args.scratch_root)
     if os.path.isdir(root):
         shutil.rmtree(root)
     os.makedirs(root, exist_ok=True)
+    ctx = LegContext(binary, root, legs, timeout=args.timeout, mpi_binary=mpi_binary,
+                     mpirun=args.mpirun, mpi_slots=args.mpi_jobs, reference=reference)
     t0 = time.time()
-    _log("compat matrix: binary {}\n  axes: {}".format(binary, ", ".join(
-        "{}({})".format(a, len(VALUE_NAMES[a])) for a in AXIS_NAMES)))
-    cells, results, forbidden, iters, unc, witnesses = build_matrix(
-        binary, root, args.jobs, args.seed, timeout=args.timeout,
-        attribute=not args.no_attribution)
-    wall = time.time() - t0
-    pinned = [witness_cell(r) for r in compat_expect.ROWS if r.scope == "any"]
-    todo = [c for c in pinned if cell_key(c) not in results]
-    for k, res in _pmap(lambda c: (cell_key(c), evaluate_cell(
-            binary, c, root, args.timeout, not args.no_attribution)), todo, args.jobs):
-        results[k] = res
-    wall = time.time() - t0
-    records, seen = [], set()
+    _log("compat matrix: binary {}{}\n  design {}, {}; legs: {}\n  axes: {}".format(
+        binary, " (MPI: {})".format(mpi_binary) if mpi_binary else "", args.design, slice_desc,
+        ", ".join(legs) or "none", ", ".join(
+            "{}({})".format(a, len(VALUE_NAMES[a])) for a in AXIS_NAMES)))
+
+    def _eval(c):
+        return cell_key(c), evaluate_cell(binary, c, root, args.timeout, not args.no_attribution,
+                                          checkpoint=ctx.checkpoint)
+    if args.cells_from:
+        # Replay another backend's cell list (the GPU leg): the same cells,
+        # in the same roles, without re-deriving the covering array.
+        with open(args.cells_from) as fh:
+            src = json.load(fh)
+        bucket = {"cover": [], "witness": [], "pinned": []}
+        for r in src["cells"]:
+            bucket[r["role"]].append(dict(r["axes"]))
+        cells, witnesses, pinned = bucket["cover"], bucket["witness"], bucket["pinned"]
+        results = dict(_pmap(_eval, cells + witnesses + pinned, args.jobs))
+        forbidden = [tuple(map(tuple, t)) for t in src.get("forbidden", [])]
+        unc = [tuple(map(tuple, u)) for u in src.get("uncoverable", [])]
+        iters = 0
+    elif args.design == "t3":
+        cells = t3_cells()
+        results = dict(_pmap(_eval, cells, args.jobs))
+        forbidden, iters, unc, witnesses, pinned = [], 1, [], [], []
+    else:
+        cells, results, forbidden, iters, unc, witnesses = build_matrix(
+            binary, root, args.jobs, args.seed, timeout=args.timeout,
+            attribute=not args.no_attribution, checkpoint=ctx.checkpoint, in_slice=in_slice)
+        pinned = [witness_cell(r) for r in compat_expect.ROWS if r.scope == "any"]
+        if in_slice is not None:
+            pinned = [c for c in pinned if in_slice(c)]
+        for k, res in _pmap(_eval, [c for c in pinned if cell_key(c) not in results], args.jobs):
+            results[k] = res
+    wall_a = time.time() - t0
+    groups, seen = [], set()
     for role, group, prefix in (("cover", cells, "c"), ("witness", witnesses, "w"),
                                 ("pinned", pinned, "p")):
         for k, c in enumerate(group):
             if cell_key(c) in seen:
                 continue
             seen.add(cell_key(c))
-            val, run, cls, rows, note = results[cell_key(c)]
-            records.append(make_record("{}{:03d}".format(prefix, k), c, val, run, cls, rows,
-                                       note, args.backend, role))
+            groups.append(("{}{:03d}".format(prefix, k), c, role))
+    # The legs, on every cell that passed checks 1-3.
+    todo = [c for _, c, _ in groups if results[cell_key(c)][2] == "PASS"] if legs else []
+    _log("  checks 1-3: {} cells in {:.1f} s; legs on {} passing cell(s)".format(
+        len(groups), wall_a, len(todo)))
+    leg_out = dict(_pmap(lambda c: (cell_key(c), run_legs(ctx, c, results[cell_key(c)][1])),
+                         todo, args.jobs))
+    wall = time.time() - t0
+    ran = PHASE_A + tuple(legs)
+    records = []
+    for cid, c, role in groups:
+        val, run, cls, rows, note = results[cell_key(c)]
+        recs = None
+        if cell_key(c) in leg_out:
+            outcome, detail, recs, decomp = leg_out[cell_key(c)]
+            cls, rows, note = classify(c, merged_namelist(c), val,
+                                       dict(run, outcome=outcome, detail=detail), ran=ran,
+                                       decomp=decomp)
+        records.append(make_record(cid, c, val, run, cls, rows, note, args.backend, role, recs))
     summary = summarise(records, forbidden, unc, iters, results, wall)
-    summary["row_xpass"] = row_xpasses(records)
-    report = {"schema": 1, "seed": args.seed, "binary": binary, "backend": args.backend,
+    summary["wall_checks_1_3_s"] = round(wall_a, 1)
+    summary["wall_legs_s"] = round(wall - wall_a, 1)
+    summary["legs"] = list(legs)
+    summary["design"] = args.design
+    summary["slice"] = slice_desc
+    summary["row_xpass"] = (row_xpasses(records, ran)
+                            if args.design == "pairwise" and in_slice is None else [])
+    report = {"schema": 2, "seed": args.seed, "binary": binary, "backend": args.backend,
+              "mpi_binary": mpi_binary, "reference": args.reference,
               "axes": {a: VALUE_NAMES[a] for a in AXIS_NAMES},
               "forbidden": [list(map(list, t)) for t in forbidden],
               "uncoverable": [list(map(list, u)) for u in unc],
-              "summary": summary, "cells": records}
+              "constants": leg_constants(), "summary": summary, "cells": records}
     if args.out:
         os.makedirs(os.path.dirname(os.path.abspath(args.out)) or ".", exist_ok=True)
         with open(args.out, "w") as fh:
@@ -1232,12 +1724,29 @@ def cmd_run(args):
     return 1 if bad else 0
 
 
+def leg_constants():
+    """The band / bound constants this run was judged with (in the report)."""
+    names = ("EN_BAND_FLOOR", "EN_BAND_RATE", "CFL_FACTOR", "FIELD_BAND_FLOOR", "FIELD_BAND_RATE",
+             "BUDGET_RO_FLOOR", "BUDGET_RO_RATE",
+             "EN_REF", "ENERGY_RATIO_MAX", "GROWTH_WINDOW", "GROWTH_MAX")
+    return {n: getattr(compat_legs, n) for n in names}
+
+
 def summarise(records, forbidden, unc, iters, results, wall):
     counts = {}
     for r in records:
         counts[r["class"]] = counts.get(r["class"], 0) + 1
     v_sum = sum(res[0]["wall_s"] for res in results.values())
     r_sum = sum(res[1]["wall_s"] for res in results.values() if res[1] is not None)
+    leg_walls, leg_status = {}, {}
+    for r in records:
+        for leg in LEGS:
+            ch = r["checks"].get(leg, {})
+            if ch.get("status", "not_run") == "not_run":
+                continue
+            leg_walls[leg] = leg_walls.get(leg, 0.0) + ch.get("wall_s", 0.0)
+            st = leg_status.setdefault(leg, {})
+            st[ch["status"]] = st.get(ch["status"], 0) + 1
     return {"counts": counts, "cells": len(records),
             "cover_cells": sum(1 for r in records if r["role"] == "cover"),
             "witness_cells": sum(1 for r in records if r["role"] == "witness"),
@@ -1246,19 +1755,33 @@ def summarise(records, forbidden, unc, iters, results, wall):
             "forbidden_tuples": len(forbidden), "uncoverable_pairs": len(unc),
             "iterations": iters, "wall_total_s": round(wall, 1),
             "cpu_validate_s_serial_sum": round(v_sum, 1),
-            "cpu_run_s_serial_sum": round(r_sum, 1)}
+            "cpu_run_s_serial_sum": round(r_sum, 1),
+            "leg_s_serial_sum": {k: round(v, 1) for k, v in sorted(leg_walls.items())},
+            "leg_status": leg_status}
+
+
+CLASS_ORDER = ("PASS", "REFUSED_PHYSICAL", "REFUSED_GAP", "XFAIL", "XPASS", "FAIL",
+               "SLICE_SKIPPED")
 
 
 def print_report(report, previous=None):
     s = report["summary"]
-    print("\n=== compat matrix: {} covering cells + {} witnesses ({} run); {} forbidden "
-          "tuples after {} iterations ({} cells evaluated)".format(
-              s["cover_cells"], s["witness_cells"], s["run_cells"], s["forbidden_tuples"],
-              s["iterations"], s["evaluated_cells"]))
-    print("    wall {} s; serial CPU sums: validate {} s, run {} s".format(
-        s["wall_total_s"], s["cpu_validate_s_serial_sum"], s["cpu_run_s_serial_sum"]))
-    for k in ("PASS", "REFUSED_PHYSICAL", "REFUSED_GAP", "XFAIL", "XPASS", "FAIL"):
+    print("\n=== compat matrix ({}, {}): {} covering cells + {} witnesses ({} run); {} "
+          "forbidden tuples after {} iterations ({} cells evaluated)".format(
+              s.get("design", "pairwise"), s.get("slice", "full"), s["cover_cells"],
+              s["witness_cells"], s["run_cells"], s["forbidden_tuples"], s["iterations"],
+              s["evaluated_cells"]))
+    print("    wall {} s (checks 1-3 {} s, legs {} s); serial sums: validate {} s, run {} s{}".format(
+        s["wall_total_s"], s.get("wall_checks_1_3_s", "-"), s.get("wall_legs_s", "-"),
+        s["cpu_validate_s_serial_sum"], s["cpu_run_s_serial_sum"],
+        "".join(", {} {} s".format(k, v) for k, v in s.get("leg_s_serial_sum", {}).items())))
+    for k in CLASS_ORDER:
+        if k == "SLICE_SKIPPED" and not s["counts"].get(k):
+            continue
         print("    {:17s} {}".format(k, s["counts"].get(k, 0)))
+    for leg, st in sorted(s.get("leg_status", {}).items()):
+        print("    leg {:13s} {}".format(leg, "  ".join("{} {}".format(k, v)
+                                                         for k, v in sorted(st.items()))))
     for rid, cls in s.get("row_xpass", []):
         print("    ROW XPASS         {}: its pinned witness is {}, not the row's XFAIL -- "
               "delete or re-pin the row".format(rid, cls))
@@ -1284,7 +1807,7 @@ def print_report(report, previous=None):
     for row in compat_expect.ROWS:
         if row.cls != "KNOWN_GAP":
             continue
-        print("  {:28s} {:3d} cell(s)  owner {:12s} {}".format(
+        print("  {:30s} {:3d} cell(s)  owner {:12s} {}".format(
             row.rid, used.get(row.rid, 0), row.owner, row.link))
     unused = [row.rid for row in compat_expect.ROWS if row.rid not in used]
     if unused:
@@ -1466,6 +1989,21 @@ def cmd_self_test(args):
     for name, fn in compat_expect.SELF_TESTS:
         ok, what = fn(sys.modules[__name__])
         _check(ok, "compat_expect: " + what, fails)
+    # The legs: synthetic checkpoints through the decomposition / restart
+    # comparators, the energy bound, the cross-backend band, the slice.
+    for ok, what in compat_legs.self_tests(sys.modules[__name__], os.path.join(d, "legs")):
+        _check(ok, "compat_legs: " + what, fails)
+    bad_vals = [k for k in compat_expect.VALUE_PATHS if k[1] not in VALUE_NAMES.get(k[0], ())]
+    _check(not bad_vals, "every VALUE_PATHS key is a real axis value {}".format(bad_vals), fails)
+    globs = [g for gl in compat_expect.VALUE_PATHS.values() for g in gl]
+    dead = [g for g in sorted(set(globs)) if not any(
+        fnmatch.fnmatch(os.path.relpath(os.path.join(dp, f), REPO_ROOT), g)
+        for dp, _, fs in os.walk(os.path.join(REPO_ROOT, "src")) for f in fs)]
+    _check(not dead, "every VALUE_PATHS glob matches a source file {}".format(dead), fails)
+    sl = [c for c in t3_cells()]
+    _check(len(sl) == len(VALUE_NAMES["vcoord"]) * len(VALUE_NAMES["eddy"]) * len(T3_VMIX),
+           "the weekly t = 3 slice is the full vcoord x eddy x vertical-mixing product "
+           "({} cells)".format(len(sl)), fails)
     rid_dupes = [r.rid for r in compat_expect.ROWS
                  if sum(1 for x in compat_expect.ROWS if x.rid == r.rid) > 1]
     _check(not rid_dupes, "row ids are unique {}".format(sorted(set(rid_dupes))), fails)
@@ -1554,6 +2092,27 @@ def main(argv=None):
     p.add_argument("--previous", default=None, help="last report, for a class diff")
     p.add_argument("--backend", default="cpu-gfortran")
     p.add_argument("--keep-scratch", action="store_true")
+    p.add_argument("--design", choices=("pairwise", "t3"), default="pairwise",
+                   help="pairwise: the t = 2 covering array (nightly); t3: vcoord x eddy x "
+                        "vertical mixing in full (weekly)")
+    p.add_argument("--cells-from", default=None,
+                   help="replay the cell list of another backend's JSON report instead of "
+                        "deriving the covering array (the GPU leg: --cells-from cpu.json)")
+    p.add_argument("--legs", default="auto",
+                   help="comma list of {} or 'none'; auto = energy + restart, + decomp with an "
+                        "MPI binary, + cross_backend with --reference".format(", ".join(LEGS)))
+    p.add_argument("--mpi-build-dir", default=None, help="MPI build for the DECOMP leg")
+    p.add_argument("--mpi-binary", default=None)
+    p.add_argument("--mpirun", default="mpirun")
+    p.add_argument("--mpi-jobs", type=int, default=1,
+                   help="decomposed runs (4 ranks each) allowed at once")
+    p.add_argument("--reference", default=None,
+                   help="the reference backend's JSON report: enables CROSS_BACKEND")
+    p.add_argument("--diff-base", default=None,
+                   help="per-PR slice: run only cells holding an axis value whose source "
+                        "paths `git diff BASE...HEAD` touches")
+    p.add_argument("--changed-files", default=None,
+                   help="per-PR slice from a file listing changed paths (one per line)")
     p.set_defaults(fn=cmd_run)
     p = sub.add_parser("domain", help="every vcoord x geometry x grid on the base closures")
     common(p, "domain")
