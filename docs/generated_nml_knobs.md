@@ -900,7 +900,7 @@ Lagrangian grounding-stability controls.
 | `angstrom_h` | `0.0000000000E+00` | m | Minimum-thickness floor on the Lagrangian continuity h-update (MOM6 Angstrom_H analogue) |
 | `reset_vanished_u` | `.false.` |  | Zero face velocity when layer vanished on both adjacent cells |
 | `cfl_ignore_vanished` | `.false.` |  | Exclude vanished layers from MaxCFL / panic / CFL truncation |
-| `pgf_skip_nonoverlap` | `.true.` |  | Zero the face PGF where a grounded layer's z-extents do not overlap across the face (VCOORD_LAGRANGIAN only, mont / fv_lite / fv_wright / fv_mom6; default ON — kills the spurious at-rest grounded-layer pressure gradient) |
+| `pgf_skip_nonoverlap` | `.true.` |  | Zero the face PGF where a grounded layer's z-extents do not overlap across the face AND the layer is at the floor (<= 2*max(angstrom_h, H_VANISHED)) on one side (VCOORD_LAGRANGIAN only, mont / fv_lite / fv_wright / fv_mom6; default ON — kills the spurious at-rest grounded-layer pressure gradient) |
 | `conservative_floor` | `.false.` |  | Conservative min-thickness borrow (replaces the injecting angstrom_h floor) |
 | `check_h_positive` | `.false.` |  | DEBUG: abort on the first negative h_layer, naming the stage + (i,j,k) |
 

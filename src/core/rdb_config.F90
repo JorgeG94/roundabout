@@ -2489,9 +2489,16 @@ module rdb_config
          !! `seamount_conservative_floor` quiescent case reached 6.7 cm/s).
          !!
          !! When `.true.` the face PGF is ZEROED wherever the layer's z-extents
-         !! in the two abutting columns do not overlap — i.e. exactly where the
-         !! layer has wedged out against the bed and there is no common depth to
-         !! difference the pressure across.  Overlapping (physically shared)
+         !! in the two abutting columns do not overlap AND the layer is at the
+         !! floor on at least one side (`<= 2·max(angstrom_h, H_VANISHED)`,
+         !! `nonoverlap_vanish_tol_for`) — i.e. exactly where the layer has
+         !! wedged out against the bed and there is no common depth to
+         !! difference the pressure across.  Non-overlap ALONE is not grounding:
+         !! a sigma-seeded stack over a bathymetric step puts layers that are
+         !! massive on both sides in disjoint z-intervals, and zeroing their PGF
+         !! while continuity keeps moving their mass breaks the PGF-work / PE
+         !! exchange (the compat-matrix staircase grew to the CFL panic at step
+         !! 178; `test_ocean_lagrangian_staircase`).  Overlapping (physically shared)
          !! layers are untouched, so the isopycnal interior is unchanged; a
          !! wedged-out layer can still be re-wetted by continuity's own upwind
          !! flux and by the barotropic correction.  Set `.false.` to recover the
@@ -10495,7 +10502,9 @@ contains
       pl => cfg%ocean%isopycnal%pgf_skip_nonoverlap
       call g%add(nml_logical("pgf_skip_nonoverlap", pl, &
                              "Zero the face PGF where a grounded layer's z-extents do not "// &
-                             "overlap across the face (VCOORD_LAGRANGIAN only, mont / "// &
+                             "overlap across the face AND the layer is at the floor "// &
+                             "(<= 2*max(angstrom_h, H_VANISHED)) on one side "// &
+                             "(VCOORD_LAGRANGIAN only, mont / "// &
                              "fv_lite / fv_wright / fv_mom6; default ON — kills the spurious "// &
                              "at-rest grounded-layer pressure gradient)"))
       pl => cfg%ocean%isopycnal%conservative_floor
