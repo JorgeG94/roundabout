@@ -139,6 +139,8 @@ module rdb_ocean_fold_plan
          !! 1-based position within its (peer, family) list, flat.
       integer, allocatable :: recv_cls(:)
          !! Fold-row class of each receive entry (`FOLD_ROW_*`), flat.
+   contains
+      procedure :: destroy => fold_plan_destroy
    end type fold_plan_t
 
 contains
@@ -148,8 +150,16 @@ contains
       !! `decomp_init` split (remainder to the WEST tiles), restated here so
       !! the plan stays pure and dependency-free (cross-checked against
       !! `decomp_init` by the unit test).
-      integer, intent(in) :: ni, px, rx
-      integer, intent(out) :: a, w
+      integer, intent(in) :: ni
+         !! Global physical width of the fold row (cells).
+      integer, intent(in) :: px
+         !! Tiles along the fold row.
+      integer, intent(in) :: rx
+         !! Tile x-coordinate (0-based, `0..px-1`).
+      integer, intent(out) :: a
+         !! First global cell of the tile (1-based).
+      integer, intent(out) :: w
+         !! Tile width (cells).
 
       integer :: base, rem
 
@@ -167,8 +177,14 @@ contains
    pure function fold_tile_owner(ni, px, c) result(rx)
       !! Tile holding global cell `c` (1..ni), closed form of the
       !! `decomp_init` split.
-      integer, intent(in) :: ni, px, c
+      integer, intent(in) :: ni
+         !! Global physical width of the fold row (cells).
+      integer, intent(in) :: px
+         !! Tiles along the fold row.
+      integer, intent(in) :: c
+         !! Global cell index (1-based, `1..ni`).
       integer :: rx
+         !! Owning tile x-coordinate (0-based).
 
       integer :: base, rem
 
@@ -185,6 +201,7 @@ contains
       !! Column family of a stagger (`FOLD_FAM_T` for T/v, `FOLD_FAM_U` for
       !! u/corner).
       integer, intent(in) :: stagger
+         !! `FOLD_STAG_*` stagger.
 
       if (stagger == FOLD_STAG_U .or. stagger == FOLD_STAG_CORNER) then
          fam = FOLD_FAM_U
@@ -197,7 +214,10 @@ contains
       !! Rows a stagger moves per column: `ng` (T, u) or `ng+1` (v, corner:
       !! the fold-line row is always sent, the receiver uses it only where
       !! `recv_cls == FOLD_ROW_WEST`).
-      integer, intent(in) :: stagger, ng
+      integer, intent(in) :: stagger
+         !! `FOLD_STAG_*` stagger.
+      integer, intent(in) :: ng
+         !! Ghost width.
 
       if (stagger == FOLD_STAG_V .or. stagger == FOLD_STAG_CORNER) then
          nrow = ng + 1
@@ -213,8 +233,18 @@ contains
       !!   * T, u:  r = d = 1..ng:   src ng+nyl+1-d, dst ng+nyl+d.
       !!   * v, corner: r = d+1, d = 0..ng: src ng+nyl+1-d, dst ng+nyl+1+d
       !!     (d = 0 is the fold-line row, src = dst = ng+nyl+1).
-      integer, intent(in) :: stagger, ng, nyl, r
-      integer, intent(out) :: src_row, dst_row
+      integer, intent(in) :: stagger
+         !! `FOLD_STAG_*` stagger.
+      integer, intent(in) :: ng
+         !! Ghost width.
+      integer, intent(in) :: nyl
+         !! Physical rows of the north-row tile.
+      integer, intent(in) :: r
+         !! Message row (1-based, `1..fold_stagger_nrows(stagger, ng)`).
+      integer, intent(out) :: src_row
+         !! Local storage row the sender reads.
+      integer, intent(out) :: dst_row
+         !! Local storage row the receiver writes.
 
       integer :: d
 
@@ -235,9 +265,24 @@ contains
       !! local storage column `src(i)` to read, and the fold-row class
       !! `cls(i)`.  `ncol` = `w+2ng` (T) or `w+2ng+1` (U); the arrays must
       !! hold at least that many entries.
-      integer, intent(in) :: ni, px, ng, fam, rx
+      integer, intent(in) :: ni
+         !! Global physical width of the fold row (cells).
+      integer, intent(in) :: px
+         !! Tiles along the fold row.
+      integer, intent(in) :: ng
+         !! Ghost width.
+      integer, intent(in) :: fam
+         !! Column family (`FOLD_FAM_T` or `FOLD_FAM_U`).
+      integer, intent(in) :: rx
+         !! Receiving tile x-coordinate (0-based).
       integer, intent(out) :: ncol
-      integer, intent(out) :: own(:), src(:), cls(:)
+         !! Destination columns filled (`w+2ng` for T, `w+2ng+1` for U).
+      integer, intent(out) :: own(:)
+         !! Owning tile x-coordinate (0-based) of each column's mirror.
+      integer, intent(out) :: src(:)
+         !! Owner's local storage column to read (1-based, ghosts included).
+      integer, intent(out) :: cls(:)
+         !! Fold-row class of each column (`FOLD_ROW_*`).
 
       integer :: a, w, a_o, w_o, i, g, c, m, p, pm
 
@@ -404,5 +449,32 @@ contains
          end do
       end do
    end subroutine fold_plan_build
+
+   pure subroutine fold_plan_destroy(this)
+      !! Free the plan's lists and reset it to the empty default.  Safe on
+      !! a plan that was never built.
+      class(fold_plan_t), intent(inout) :: this
+      if (allocated(this%peer_rx)) deallocate (this%peer_rx)
+      if (allocated(this%send_n)) deallocate (this%send_n)
+      if (allocated(this%send_start)) deallocate (this%send_start)
+      if (allocated(this%recv_n)) deallocate (this%recv_n)
+      if (allocated(this%recv_start)) deallocate (this%recv_start)
+      if (allocated(this%send_col)) deallocate (this%send_col)
+      if (allocated(this%send_peer)) deallocate (this%send_peer)
+      if (allocated(this%send_e)) deallocate (this%send_e)
+      if (allocated(this%recv_col)) deallocate (this%recv_col)
+      if (allocated(this%recv_peer)) deallocate (this%recv_peer)
+      if (allocated(this%recv_e)) deallocate (this%recv_e)
+      if (allocated(this%recv_cls)) deallocate (this%recv_cls)
+      this%ni = 0
+      this%px = 0
+      this%ng = 0
+      this%rx = -1
+      this%npeer = 0
+      this%self_peer = 0
+      this%nmax = 0
+      this%nsend = 0
+      this%nrecv = 0
+   end subroutine fold_plan_destroy
 
 end module rdb_ocean_fold_plan
