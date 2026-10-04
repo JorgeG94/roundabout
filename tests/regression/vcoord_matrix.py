@@ -230,8 +230,9 @@ LEGS = {
                 "stress_tensor": True},
 }
 # `stress_tensor` is refused under `&vcoord_nml zfixed_closed_faces`, so the
-# z_fixed cells of the viscous leg carry the scalar velocity Laplacian.
-SCALAR_LAPLACIAN_FAMILIES = ("z_fixed",)
+# z_fixed and zstar cells of the viscous leg carry the scalar velocity
+# Laplacian.
+SCALAR_LAPLACIAN_FAMILIES = ("z_fixed", "zstar")
 
 # --- the stratification, laid FLAT IN GEOPOTENTIAL z -----------------------
 # S falls linearly from 33.8 PSU at z = 0 to 34.55 PSU at z = -1000 m, with T
@@ -279,10 +280,14 @@ FAMILIES = [
      "terrain-following. The reference leg: every sigma PGF-error result in "
      "the literature (Haney 1991; Beckmann & Haidvogel 1993; Mellor, Ezer & "
      "Oey 1994) is a statement about this row."),
-    ("zstar", "zstar", "run", None, "",
-     "z*-lite. On the ocean path it SHARES the sigma branch "
-     "(`case (VCOORD_SIGMA, VCOORD_ZSTAR)`), so a row that differs from the "
-     "sigma row is a defect in one of them, not a coordinate difference."),
+    ("zstar", "zstar", "run", None, "   zfixed_closed_faces = .true.",
+     "MOM6 z* (`ocean_vcoord_zstar_target`): the z_fixed nominal profile "
+     "(max_depth/nz) DILATED per column by (H + eta)/H, with z_fixed's "
+     "partial bed cells and inert fillers decided at eta = 0 -- so its "
+     "eta = 0 target is z_fixed's bit for bit and its live/filler pattern "
+     "is exactly static. Runs with `zfixed_closed_faces` for the same "
+     "reason z_fixed does. (Until the z* slice this row was the sigma "
+     "branch under another name.)"),
     ("zstar_sigma", "zstar_sigma", "run", None, "",
      "sigma in shallow water, z*-lite in deep -- consuming `z_ref_global` "
      "FRACTIONALLY, so it is immune to the ZSIGMA units defect. With the "
@@ -330,9 +335,10 @@ FAMILIES = [
 
 # Families the CAVITY (`&ocean_cavity_dyn_nml enable`) accepts.  Everything
 # else is refused fail-loud by `validate_config`, each with its own reason --
-# the two that rescale the live column and so follow the ice base for free,
-# plus the one that has been TAUGHT the ice base.
-CAVITY_ACCEPTED = ("sigma", "zstar", "z_fixed")
+# the one that rescales the live column and so follows the ice base for free,
+# plus the one that has been TAUGHT the ice base.  `zstar` left the set when
+# it became MOM6 z* (no rigid-top branch yet).
+CAVITY_ACCEPTED = ("sigma", "z_fixed")
 
 # --- the geometries ---------------------------------------------------------
 # `bar` names the `en_rest_max` constant; `de` is the worst per-face depth
@@ -603,7 +609,10 @@ except ImportError:          # bootstrapping a first measurement
     ENVELOPES, MEASURED_PROVENANCE = {}, "(none)"
     MEASURED = MEASURED_TWIN = {"inviscid": {}, "viscous": {}}
 
-TERRAIN_FOLLOWING = ("sigma", "zstar", "zstar_sigma", "zstar_full")
+TERRAIN_FOLLOWING = ("sigma", "zstar_sigma", "zstar_full")
+# The z-level staircase families: their failing cells carry the z_fixed
+# staircase reasons (MOM6 z* lays exactly z_fixed's staircase at eta = 0).
+Z_STAIRCASE = ("z_fixed", "zstar")
 
 
 def reason_for(leg, key, rec):
@@ -619,7 +628,7 @@ def reason_for(leg, key, rec):
     out = []
     if "unstrat" in parts:
         return ["unstrat_control"]
-    if fam == "z_fixed":
+    if fam in Z_STAIRCASE:
         if a & {"conserve:Salt", "conserve:Heat"}:
             out.append("z_fixed_leak")
         elif "lid_slope" in parts:
@@ -1044,8 +1053,8 @@ def _refusal_reason(pid, prob, fam, is_cavity):
     if is_cavity and fam_id not in CAVITY_ACCEPTED:
         return ("REFUSED BY DESIGN, and this row asserts the refusal. "
                 "`&ocean_cavity_dyn_nml enable=.true.` accepts "
-                "vcoord_type='sigma', 'zstar' or 'z_fixed' only -- the two "
-                "families that rescale the live column and so follow the ice "
+                "vcoord_type='sigma' or 'z_fixed' only -- the family "
+                "that rescales the live column and so follows the ice "
                 "base for free, plus the one that has been TAUGHT it "
                 "(z_fixed reads vcoord%z_top). '{}' is refused; "
                 "`validate_config` prints the per-family reason. If this row "

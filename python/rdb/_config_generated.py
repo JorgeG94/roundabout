@@ -352,7 +352,7 @@ class Vcoord(Group):
 
     zfixed_closed_faces = Bool(
         'zfixed_closed_faces',
-        doc='z_fixed / zstar_full partial steps: close every face whose layer is an inert filler on either side (z-level wall, free-slip)',
+        doc='z_fixed / zstar / zstar_full partial steps: close every face whose layer is an inert filler on either side (z-level wall, free-slip)',
         units='',
         required=False,
         default=False,
@@ -360,7 +360,7 @@ class Vcoord(Group):
 
     z_fixed_profile = Enum(
         'z_fixed_profile',
-        doc='z_fixed levels / hycom z* floor nominal layer-thickness profile: uniform (max_depth/nz), list (z_fixed_dz) or tanh stretching',
+        doc='z_fixed / zstar levels / hycom z* floor nominal layer-thickness profile: uniform (max_depth/nz), list (z_fixed_dz) or tanh stretching',
         units='',
         required=False,
         default='uniform',
@@ -1918,7 +1918,7 @@ class OceanCavityDyn(Group):
 
     enable = Bool(
         'enable',
-        doc='Master switch (single-rank, split solver, fv_mom6 PGF, sigma/zstar only)',
+        doc='Master switch (single-rank, split solver, fv_mom6 PGF, sigma/z_fixed only)',
         units='',
         required=False,
         default=False,

@@ -38,8 +38,9 @@
 !!                         that: a flickering layer is positive at every
 !!                         sample and conserves at every sample.
 !!
-!! **The thin-column envelope, which P2/P3 are SCOPED to.**  The two families
-!! that lay inert fillers (`VCOORD_ZSTAR_FULL`, `VCOORD_Z_FIXED`) give every
+!! **The thin-column envelope, which P2/P3 are SCOPED to.**  The families
+!! that lay inert fillers (`VCOORD_ZSTAR_FULL`, `VCOORD_Z_FIXED`, and
+!! `VCOORD_ZSTAR` — MOM6 z*, `Z_FIXED`'s fillers dilated) give every
 !! layer a floor of `zstar_h_min`, so a column with `H + η < nz·zstar_h_min`
 !! cannot hold its own stack: the floor wins and the target column MINTS
 !! thickness.  Measured here, and pinned in
@@ -125,11 +126,13 @@ module test_ocean_vcoord_invariants
    character(len=12), parameter :: FAM_NAME(N_FAM) = [character(len=12) :: &
                                                       "EULERIAN_Z", "SIGMA", "ZSTAR", "ZSTAR_SIGMA", &
                                                       "ZSTAR_FULL", "Z_FIXED", "ZSIGMA"]
-   logical, parameter :: FAM_FILLS(N_FAM) = [.false., .false., .false., .false., &
+   logical, parameter :: FAM_FILLS(N_FAM) = [.false., .false., .true., .false., &
                                              .true., .true., .false.]
-      !! Does the family lay `zstar_h_min` fillers?  Only these two have a
-      !! thin-column envelope (see the header), so only these two are scoped
-      !! out of P2/P3 below `nz·zstar_h_min`.
+      !! Does the family lay `zstar_h_min` fillers?  Only these three have a
+      !! thin-column envelope (see the header), so only these three are
+      !! scoped out of P2/P3 below `nz·zstar_h_min`.  `ZSTAR` is MOM6 z*:
+      !! the `Z_FIXED` bed walk at `eta = 0`, dilated, so it inherits
+      !! `Z_FIXED`'s degenerate overshoot.
 
    integer, parameter :: N_BED = 5
    real(wp), parameter :: BED(N_BED) = [3.0e-4_wp, 1.0_wp, 50.0_wp, &

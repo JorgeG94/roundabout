@@ -8,7 +8,8 @@ module rdb_ocean_state
    !! requires wiring it into both.
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_constants, only: wp, LAND_DEPTH_THRESHOLD, GRAVITY, H_VANISHED, H_DIV_EPS, &
-                            DEG2RAD, TWO_PI, VCOORD_Z_FIXED, VCOORD_ZSTAR_FULL
+                            DEG2RAD, TWO_PI, VCOORD_Z_FIXED, VCOORD_ZSTAR_FULL, &
+                            VCOORD_ZSTAR
    use rdb_grid, only: hgrid_t
    use pic_logger, only: logger => global_logger
    use rdb_error_ring, only: fail
@@ -1130,10 +1131,10 @@ contains
 
       integer :: nz_ml, idx_S, idx_T, i, j, k, nx, ny, local_ierr
       logical :: per_x, per_y, north_fold
-      logical :: seeded_on_zstar_full_target
-         !! The FOURTH `h_layer` seed branch (`zstar_full` under
-         !! `zfixed_closed_faces`) was taken ⇒ establish I1′ after the
-         !! tracer IC.
+      logical :: seeded_on_eta0_target
+         !! The FOURTH or FIFTH `h_layer` seed branch (`zstar_full` under
+         !! `zfixed_closed_faces`; MOM6 `zstar` under the knob or zinit) was
+         !! taken ⇒ establish I1′ after the tracer IC.
       real(wp), allocatable :: water(:, :)
          !! Reference water-column thickness the IC seeds work on:
          !! `b − z_draft` under an ice shelf, a byte copy of `b`
@@ -1463,7 +1464,17 @@ contains
       ! which the mask's live/filler pattern is the IC's.  Knob-gated, so
       ! every existing `zstar_full` namelist keeps its sigma-style seed
       ! byte for byte.
-      seeded_on_zstar_full_target = .false.
+      !
+      ! FIFTH BRANCH — `VCOORD_ZSTAR` (MOM6 z*) under `zfixed_closed_faces`
+      ! OR `&ocean_zinit_nml`.  The same reasons as the fourth (the mask's
+      ! pattern is the `η = 0` target's) and the third (a z-level IC is
+      ! exact only at the running coordinate's own layer centres; a
+      ! `target_source = "ic"` sponge snapshots what is seeded), on the
+      ! `η = 0` z* target, which is the `z_fixed` one with `z_top = 0`.  A
+      ! per-layer-index `&tracer_nml` IC without the knob keeps the
+      ! sigma-style seed and is moved onto z* by the first regrid, as on
+      ! `z_fixed`.  z* is refused under a cavity, so `eta_trim ≡ 0` here.
+      seeded_on_eta0_target = .false.
       if (trim(cfg%thickness_config) == "uniform_z") then
          call seed_h_layer_uniform_z_impl(state%multilayer%h_layer, &
                                           water, nz_ml, &
@@ -1516,7 +1527,15 @@ contains
          call state%vcoord%build_zref_full(state%barotropic%b)
          call ocean_vcoord_eta0_target(state%vcoord, state%multilayer%h_layer, &
                                        water, nx, ny, nz_ml)
-         seeded_on_zstar_full_target = .true.
+         seeded_on_eta0_target = .true.
+      else if ((cfg%zfixed_closed_faces .or. cfg%ocean%zinit%enable) .and. &
+               state%vcoord%is_init .and. &
+               state%vcoord%coord_type == VCOORD_ZSTAR .and. &
+               parse_ocean_vcoord_type(cfg%vcoord_type) == VCOORD_ZSTAR .and. &
+               state%vcoord%z_fixed_h_ref > 0.0_wp) then
+         call ocean_vcoord_eta0_target(state%vcoord, state%multilayer%h_layer, &
+                                       water, nx, ny, nz_ml)
+         seeded_on_eta0_target = .true.
       else
          call seed_h_layer_uniform_impl(state%multilayer%h_layer, &
                                         h_col, nz_ml, &
@@ -1712,8 +1731,8 @@ contains
 #endif
       end if
 
-      ! The on-target `zstar_full` seed (`zfixed_closed_faces`, FOURTH
-      ! BRANCH above) laid inert `zstar_h_min` fillers, and every IC writer
+      ! The on-target `zstar_full` / `zstar` seed (FOURTH / FIFTH BRANCH
+      ! above) laid inert `zstar_h_min` fillers, and every IC writer
       ! since (`&tracer_nml` per layer index, the zinit overlay at the
       ! filler's own depth) gave them a concentration that is not their
       ! donor's.  Establish invariant I1′ NOW, with the one definition (host
@@ -1725,7 +1744,7 @@ contains
       ! two hours on `test_ocean_zstar_full_closed_faces`' resting
       ! staircase).  Column-conservative.  Before the pseudo-salt seed, so
       ! that copies the settled S.
-      if (seeded_on_zstar_full_target) then
+      if (seeded_on_eta0_target) then
          call state%multilayer%enforce_vanished_content_host(nx, ny)
       end if
 

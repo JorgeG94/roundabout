@@ -535,6 +535,9 @@ contains
          call init_all(grid, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, eos, dyn, vc, &
                        f_c=1.0_wp, h_per_layer=H_BASE)
          vc%coord_type = VCOORD_ZSTAR
+         ! MOM6 z*: a uniform nominal profile over the reference column, so
+         ! the regrid dilates it by (H + eta)/H (`ocean_vcoord_zstar_target`).
+         vc%z_fixed_h_ref = real(NZ, wp)*H_BASE
          nx = grid%nx_total
          ny = grid%ny_total
 
@@ -648,6 +651,9 @@ contains
          call init_all(grid, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, eos, dyn, vc, &
                        f_c=1.0_wp, h_per_layer=H_BASE)
          vc%coord_type = VCOORD_ZSTAR
+         ! MOM6 z*: a uniform nominal profile over the reference column, so
+         ! the regrid dilates it by (H + eta)/H (`ocean_vcoord_zstar_target`).
+         vc%z_fixed_h_ref = real(NZ, wp)*H_BASE
          nx = grid%nx_total
          ny = grid%ny_total
 

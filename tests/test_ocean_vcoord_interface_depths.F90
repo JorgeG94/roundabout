@@ -50,8 +50,11 @@
 !! remaining defect is pinned and loud.
 !!
 !! Families covered — every branch of `ocean_vcoord_compute_target_h`:
-!! LAGRANGIAN (no target), EULERIAN_Z, SIGMA, ZSTAR (shares the SIGMA
-!! branch), ZSIGMA, ZSTAR_SIGMA, ZSTAR_FULL, Z_FIXED.  The two
+!! LAGRANGIAN (no target), EULERIAN_Z, SIGMA, ZSTAR (MOM6 z*: the
+!! z_fixed nominal profile dilated by (H + eta)/H — its eta = 0 target is
+!! z_fixed's bit for bit, and its pattern is static under eta of either
+!! sign; refused under a cavity, so no lid case), ZSIGMA, ZSTAR_SIGMA,
+!! ZSTAR_FULL, Z_FIXED.  The two
 !! density-space families (`VCOORD_RHO`, `VCOORD_HYCOM`) come in through
 !! the sibling `compute_target_h_rho` wrapper and place their interfaces
 !! on prescribed potential densities, not at geometric depths — their
@@ -68,7 +71,8 @@ module test_ocean_vcoord_interface_depths
                             VCOORD_ZSTAR_FULL, VCOORD_ZSTAR_SIGMA, &
                             VCOORD_Z_FIXED
    use rdb_grid, only: hgrid_t
-   use rdb_ocean_vcoord, only: ocean_vcoord_t, VCOORD_EULERIAN_Z, VCOORD_LAGRANGIAN
+   use rdb_ocean_vcoord, only: ocean_vcoord_t, VCOORD_EULERIAN_Z, VCOORD_LAGRANGIAN, &
+                               ocean_vcoord_set_z_fixed_profile
    use testdrive, only: error_type, check, new_unittest, unittest_type
    implicit none
    private
@@ -108,7 +112,8 @@ contains
                   new_unittest("eulerian_z_under_a_lid_divides_live_column", test_eulerian_lid), &
                   new_unittest("sigma_open_ocean_depths", test_sigma_open), &
                   new_unittest("sigma_under_a_lid_divides_live_column", test_sigma_lid), &
-                  new_unittest("zstar_lite_depths_match_sigma", test_zstar_lite), &
+                  new_unittest("zstar_eta0_is_z_fixed", test_zstar_open), &
+                  new_unittest("zstar_dilates_profile_static_pattern", test_zstar_dilation), &
                   new_unittest("zstar_sigma_open_ocean_depths", test_zstar_sigma_open), &
                   new_unittest("zstar_sigma_under_a_lid_divides_live_column", test_zstar_sigma_lid), &
                   new_unittest("documents_zsigma_dimensionless_zref_collapse", test_zsigma_collapse), &
@@ -433,41 +438,168 @@ contains
       call vc%destroy()
    end subroutine test_sigma_lid
 
-   subroutine test_zstar_lite(error)
-      !! `VCOORD_ZSTAR` shares the SIGMA branch on the ocean path, so its
-      !! interface depths must be BIT-IDENTICAL to sigma's in every one of
-      !! the three geometries.  Pinning that here keeps the "z*-lite is
-      !! sigma in this (H, η) form" claim in `CLAUDE.md` honest.
+   pure subroutine zstar_depths(bed_depth, eta_loc, n_f, h_min, zi, e_want)
+      !! Analytic interfaces of `VCOORD_ZSTAR` (MOM6 z*): the bottom `n_f`
+      !! layers are fillers stacked on the bed, every live interface sits
+      !! at the nominal depth `Z_K` DILATED by the stretching,
+      !!
+      !!   e(K) = eta − s·Z_K,   s = (H + eta − n_f·h_min)/(H − n_f·h_min)
+      !!
+      !! (MOM6 `build_zstar_column`: `z_k = eta − stretching·Z_k`, with the
+      !! filler stack taken out of the dilation; with no fillers `s` is
+      !! MOM6's `(H + eta)/H` exactly).
+      real(wp), intent(in) :: bed_depth, eta_loc, h_min
+      integer, intent(in) :: n_f
+      real(wp), intent(in) :: zi(0:NZ)
+         !! Nominal interface depths, bottom-up (`zi(NZ) = 0`).
+      real(wp), intent(out) :: e_want(0:NZ)
+      integer :: k
+      real(wp) :: s
+      s = (bed_depth + eta_loc - real(n_f, wp)*h_min)/(bed_depth - real(n_f, wp)*h_min)
+      do k = 0, NZ
+         if (k <= n_f) then
+            e_want(k) = -bed_depth + real(k, wp)*h_min
+         else
+            e_want(k) = eta_loc - s*zi(k)
+         end if
+      end do
+   end subroutine zstar_depths
+
+   subroutine test_zstar_open(error)
+      !! `VCOORD_ZSTAR` is MOM6 z* (`ocean_vcoord_zstar_target`): the
+      !! `z_fixed` nominal profile DILATED by the column's free-surface
+      !! stretching.  At `eta = 0` it IS the `z_fixed` target — asserted
+      !! BIT-for-bit (`==`) on the flat and the sloping bed, which is what
+      !! lets the closed-face mask and the seed share one definition of
+      !! "live" — and on the flat bed the interfaces sit on exact multiples
+      !! of `h_nominal`.
       type(error_type), allocatable, intent(out) :: error
-      type(ocean_vcoord_t) :: vc_s, vc_z
-      type(hgrid_t) :: grid_s, grid_z
+      type(ocean_vcoord_t) :: vc, vz
+      type(hgrid_t) :: grid, gz
       real(wp) :: total_h(NX + 2, NY + 2), eta(NX + 2, NY + 2)
-      integer :: i
+      real(wp) :: e_got(0:NZ), e_want(0:NZ)
+      integer :: i, k
       checks: block
-         call make_slot(vc_s, grid_s, VCOORD_SIGMA)
-         call make_slot(vc_z, grid_z, VCOORD_ZSTAR)
-         eta = 0.75_wp
-         do i = 1, grid_s%nx_total
+         call make_slot(vc, grid, VCOORD_ZSTAR)
+         call make_slot(vz, gz, VCOORD_Z_FIXED)
+         eta = 0.0_wp
+         total_h = B_FLAT
+         call vc%compute_target_h(total_h(1:grid%nx_total, 1:grid%ny_total), &
+                                  eta(1:grid%nx_total, 1:grid%ny_total))
+         call column_depths(vc%target_h(2, 2, :), B_FLAT, e_got)
+         do k = 0, NZ
+            e_want(k) = -real(NZ - k, wp)*H_NOMINAL
+         end do
+         call check_depths(error, "ZSTAR flat bed", e_got, e_want, TOL_EXACT)
+         if (allocated(error)) exit checks
+         do i = 1, grid%nx_total
             total_h(i, :) = B_SLOPE(i)
          end do
-         call vc_s%compute_target_h(total_h(1:grid_s%nx_total, 1:grid_s%ny_total), &
-                                    eta(1:grid_s%nx_total, 1:grid_s%ny_total))
-         call vc_z%compute_target_h(total_h(1:grid_z%nx_total, 1:grid_z%ny_total), &
-                                    eta(1:grid_z%nx_total, 1:grid_z%ny_total))
-         call check(error, all(vc_s%target_h == vc_z%target_h), &
-                    "ZSTAR-lite must be bit-identical to SIGMA (sloping bed)")
+         call vc%compute_target_h(total_h(1:grid%nx_total, 1:grid%ny_total), &
+                                  eta(1:grid%nx_total, 1:grid%ny_total))
+         call vz%compute_target_h(total_h(1:gz%nx_total, 1:gz%ny_total), &
+                                  eta(1:gz%nx_total, 1:gz%ny_total))
+         call check(error, all(vc%target_h == vz%target_h), &
+                    "ZSTAR at eta = 0 must be the Z_FIXED target bit for bit")
          if (allocated(error)) exit checks
-         total_h = B_FLAT - Z_TOP_LID
-         call vc_s%compute_target_h(total_h(1:grid_s%nx_total, 1:grid_s%ny_total), &
-                                    eta(1:grid_s%nx_total, 1:grid_s%ny_total))
-         call vc_z%compute_target_h(total_h(1:grid_z%nx_total, 1:grid_z%ny_total), &
-                                    eta(1:grid_z%nx_total, 1:grid_z%ny_total))
-         call check(error, all(vc_s%target_h == vc_z%target_h), &
-                    "ZSTAR-lite must be bit-identical to SIGMA (under a lid)")
+         do i = 1, grid%nx_total
+            call column_depths(vc%target_h(i, 2, :), B_SLOPE(i), e_got)
+            call z_fixed_depths_from_column_top(B_SLOPE(i), B_SLOPE(i), e_want)
+            call check_depths(error, "ZSTAR sloping bed eta = 0", e_got, e_want, TOL_FILLER)
+            if (allocated(error)) exit checks
+         end do
       end block checks
-      call vc_s%destroy()
-      call vc_z%destroy()
-   end subroutine test_zstar_lite
+      call vc%destroy()
+      call vz%destroy()
+   end subroutine test_zstar_open
+
+   subroutine test_zstar_dilation(error)
+      !! The z* placement under a free-surface displacement of EITHER sign:
+      !! every live interface is the nominal profile x `(H + eta)/H` (MOM6
+      !! `build_zstar_column`), on a flat bed (no fillers: MOM6's stretching
+      !! exactly), on the sloping bed (fillers, partial bed cells) and on a
+      !! column 2 mm deeper than a nominal level, whose partial bed cell is
+      !! 1.2 mm thick at `eta = 0`.  Both the uniform and a STRETCHED nominal
+      !! profile (`ocean_vcoord_set_z_fixed_profile`, the same table
+      !! `z_fixed` reads).  And the live/filler pattern (`h > H_VANISHED`)
+      !! must be the `eta = 0` pattern for every `eta`: the dilation keeps
+      !! the ratios, so nothing flips, the 1.2 mm partial cell included.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp), parameter :: ETAS(6) = [-5.0_wp, -0.75_wp, -1.0e-3_wp, 1.0e-3_wp, &
+                                        0.75_wp, 5.0_wp]
+      real(wp), parameter :: B_THIN = 100.002_wp
+      real(wp), parameter :: DZ_STRETCH(NZ) = [10.0_wp, 20.0_wp, 30.0_wp, 50.0_wp, &
+                                               80.0_wp, 110.0_wp, 140.0_wp, 160.0_wp, &
+                                               190.0_wp, 210.0_wp]
+         !! Surface first; sums to 1000 m.
+      type(ocean_vcoord_t) :: vc
+      type(hgrid_t) :: grid
+      real(wp) :: total_h(NX + 2, NY + 2), eta(NX + 2, NY + 2), bed(NX + 2)
+      real(wp) :: e_got(0:NZ), e_want(0:NZ), zi(0:NZ)
+      logical :: live0(NX + 2, NZ)
+      integer :: i, k, ie, n_f, iprof
+      character(len=8) :: tag
+      checks: block
+         do iprof = 1, 2
+            call make_slot(vc, grid, VCOORD_ZSTAR)
+            if (iprof == 2) call ocean_vcoord_set_z_fixed_profile(vc, DZ_STRETCH)
+            tag = merge("uniform ", "stretch ", iprof == 1)
+            do k = 0, NZ
+               if (iprof == 1) then
+                  zi(k) = real(NZ - k, wp)*H_NOMINAL
+               else
+                  zi(k) = vc%z_fixed_zi(k)
+               end if
+            end do
+            bed = [B_FLAT, B_SLOPE(2), B_SLOPE(3), B_THIN]
+            do i = 1, grid%nx_total
+               total_h(i, :) = bed(i)
+            end do
+            eta = 0.0_wp
+            call vc%compute_target_h(total_h(1:grid%nx_total, 1:grid%ny_total), &
+                                     eta(1:grid%nx_total, 1:grid%ny_total))
+            live0 = vc%target_h(:, 2, :) > H_VANISHED
+            ! Uniform: 8 fillers under a 1.2 mm partial cell; stretched: 6
+            ! fillers under a 40 m partial cell (nominal top at 60 m).
+            call check(error, count(.not. live0(4, :)) == merge(8, 6, iprof == 1), &
+                       "ZSTAR "//trim(tag)//": the 100.002 m column must carry its "// &
+                       "bed fillers below its partial cell")
+            if (allocated(error)) exit checks
+            do ie = 1, size(ETAS)
+               eta = ETAS(ie)
+               call vc%compute_target_h(total_h(1:grid%nx_total, 1:grid%ny_total), &
+                                        eta(1:grid%nx_total, 1:grid%ny_total))
+               do i = 1, grid%nx_total
+                  n_f = count(.not. live0(i, :))
+                  call column_depths(vc%target_h(i, 2, :), bed(i), e_got)
+                  call zstar_depths(bed(i), ETAS(ie), n_f, vc%zstar_h_min, zi, e_want)
+                  call check_depths(error, "ZSTAR "//trim(tag)//" dilated", e_got, e_want, &
+                                    1.0e-9_wp*bed(i))
+                  if (allocated(error)) exit checks
+                  call check(error, all((vc%target_h(i, 2, :) > H_VANISHED) .eqv. &
+                                        live0(i, :)), &
+                             "ZSTAR "//trim(tag)//": the live/filler pattern moved with eta")
+                  if (allocated(error)) exit checks
+                  call check(error, abs(sum(vc%target_h(i, 2, :)) - (bed(i) + ETAS(ie))) &
+                             <= 1.0e-12_wp*bed(i), &
+                             "ZSTAR "//trim(tag)//": sum(target_h) must be H + eta")
+                  if (allocated(error)) exit checks
+               end do
+               ! No fillers on the flat column: the stretching is MOM6's
+               ! (H + eta)/H itself.
+               call column_depths(vc%target_h(1, 2, :), B_FLAT, e_got)
+               do k = 0, NZ
+                  e_want(k) = ETAS(ie) - (B_FLAT + ETAS(ie))/B_FLAT*zi(k)
+               end do
+               call check_depths(error, "ZSTAR "//trim(tag)//" flat = profile*(H+eta)/H", &
+                                 e_got, e_want, TOL_EXACT)
+               if (allocated(error)) exit checks
+            end do
+            call vc%destroy()
+         end do
+      end block checks
+      if (vc%is_init) call vc%destroy()
+   end subroutine test_zstar_dilation
 
    ! ------------------------------------------------------------------
    ! ZSTAR_SIGMA — fractional rescale of the global reference table
