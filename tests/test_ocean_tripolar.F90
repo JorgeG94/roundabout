@@ -80,7 +80,8 @@ contains
                                test_cross_fold_conservation_pc), &
                   new_unittest("tripolar_cross_fold_conservation_ssp_rk2", &
                                test_cross_fold_conservation_ssp), &
-                  new_unittest("tripolar_rest_topography", test_rest_topography) &
+                  new_unittest("tripolar_rest_topography", test_rest_topography), &
+                  new_unittest("tripolar_pole_columns_exact", test_pole_columns_exact) &
                   ]
    end subroutine collect_ocean_tripolar_tests
 
@@ -615,6 +616,89 @@ contains
                     "check message on failure)")
       end block checks
    end subroutine test_near_pole_metrics
+
+   ! -----------------------------------------------------------------
+   ! T10: no near-degenerate face, corner or cell, at any resolution.
+   ! Every cap node on a pole column (pseudo-longitude = lon_pole or
+   ! lon_pole+180) maps onto that pole, so the pole-column Cu face and
+   ! the pole corners have zero along-j length.  They must be EXACTLY
+   ! zero (a closed face / a zero-area corner that `adcroft_recip` turns
+   ! into 0): the bipolar map reaches the partner pole only through
+   ! tan(pi/2) ~ 1.6e16, and before the generator snapped pole-column
+   ! nodes the partner column's nodes landed ~1e-9 m apart -- a face
+   ! 1e-15 of its cell, 1/areaCu ~ 1e9, ~1e3 m/s barotropic velocity and
+   ! a -4.5e4 m layer at step 1 (the compatibility matrix's coarse cap,
+   ! row 1 below; the 1-degree global grid, row 4, has the same defect).
+   ! So: every T cell has positive, near-rectangular area, and every
+   ! face width / Cu / Bu area is either exactly 0 or a sane fraction of
+   ! its cell.  Rows: (ni, nj, dlat, lat_south, phi_join, lon_pole).
+   subroutine test_pole_columns_exact(error)
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NCASE = 6
+      integer, parameter :: NI(NCASE) = [24, 24, 32, 360, 36, 24]
+      integer, parameter :: NJ(NCASE) = [16, 16, 20, 210, 20, 16]
+      real(wp), parameter :: DLATC(NCASE) = [7.0_wp, 1.0_wp, 1.5_wp, 1.0_wp, 9.0_wp, 7.0_wp]
+      real(wp), parameter :: LATS(NCASE) = [-40.0_wp, 59.0_wp, 47.0_wp, -78.0_wp, &
+                                            -80.0_wp, -40.0_wp]
+      real(wp), parameter :: PHIJ(NCASE) = [60.0_wp, 70.0_wp, 65.0_wp, 65.0_wp, 60.0_wp, 60.0_wp]
+      real(wp), parameter :: LONP(NCASE) = [0.0_wp, 0.0_wp, 0.0_wp, 80.0_wp, 0.0_wp, 100.0_wp]
+      real(wp), parameter :: FACE_MIN = 0.1_wp
+         !! A nonzero face width below this fraction of its cell's span
+         !! (or a nonzero Cu/Bu area below it times the cell area) is a
+         !! sliver no kernel can divide by.  Healthy caps sit above 0.3.
+      type(hgrid_t) :: grid
+      type(ocean_metrics_t) :: m
+      integer :: c, i, j, ng, ni_c, nj_c, ii, jj
+      real(wp) :: r
+      character(len=:), allocatable :: what
+
+      do c = 1, NCASE
+         ni_c = NI(c)
+         nj_c = NJ(c)
+         call grid%init(ni_c, nj_c, NGHOST, 360.0_wp/real(ni_c, wp), DLATC(c))
+         call m%init(grid)
+         call metrics_fill_tripolar(m, grid, 0.0_wp, LATS(c), 360.0_wp/real(ni_c, wp), &
+                                    DLATC(c), REARTH, PHIJ(c), LONP(c))
+         call metrics_finalize(m)
+         ng = grid%nghost
+         what = ""
+         do j = ng + 1, ng + nj_c
+            do i = ng + 1, ng + ni_c
+               ii = i - ng
+               jj = j - ng
+               if (.not. (m%areaT(i, j) > 0.0_wp .and. m%dxT(i, j) > 0.0_wp &
+                          .and. m%dyT(i, j) > 0.0_wp)) then
+                  what = "non-positive T metric"
+               else
+                  r = m%areaT(i, j)/(m%dxT(i, j)*m%dyT(i, j))
+                  if (r < 0.5_wp .or. r > 2.0_wp) what = "areaT/(dxT*dyT) out of [0.5,2]"
+               end if
+               ! West face of T(i,j) against the narrower of its two cells.
+               r = m%dy_cu(i, j)/min(m%dyT(i, j), m%dyT(i - 1, j))
+               if (r > 0.0_wp .and. r < FACE_MIN) what = "sliver Cu face (dy_cu)"
+               r = m%areaCu(i, j)/min(m%areaT(i, j), m%areaT(i - 1, j))
+               if (r > 0.0_wp .and. r < FACE_MIN) what = "sliver areaCu"
+               ! South face (j > 1: the south-edge row is an extrapolated copy).
+               if (jj > 1) then
+                  r = m%dx_cv(i, j)/min(m%dxT(i, j), m%dxT(i, j - 1))
+                  if (r > 0.0_wp .and. r < FACE_MIN) what = "sliver Cv face (dx_cv)"
+                  r = m%areaBu(i, j)/min(m%areaT(i, j), m%areaT(i - 1, j), &
+                                         m%areaT(i, j - 1), m%areaT(i - 1, j - 1))
+                  if (r > 0.0_wp .and. r < FACE_MIN) what = "sliver areaBu"
+               end if
+               if (len(what) > 0) exit
+            end do
+            if (len(what) > 0) exit
+         end do
+         call m%destroy()
+         call check(error, len(what) == 0, &
+                    "T10 case "//to_string(c)//" (ni="//to_string(ni_c)//" dlat="// &
+                    to_string(DLATC(c))//" lat_south="//to_string(LATS(c))//" phi_join="// &
+                    to_string(PHIJ(c))//" lon_pole="//to_string(LONP(c))//"): "//what// &
+                    " at physical (i,j) = ("//to_string(ii)//","//to_string(jj)//")")
+         if (allocated(error)) return
+      end do
+   end subroutine test_pole_columns_exact
 
    ! -----------------------------------------------------------------
    ! T6: near-pole quiescent gate — a resting basin including the cap
