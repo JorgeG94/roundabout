@@ -1029,13 +1029,17 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   pseudo-longitude 360 was the sliver where gfortran's was exact, so
   every compat-matrix tripolar cell failed on the GPU build only
   (`rdb_test_ocean_tripolar_determinism` runs that geometry twice: bounded,
-  and bitwise identical ghosts included). Known limitation: a WET node-aligned pole under
-  `pred_corr` grows energy near the partner pole that `ssp_rk2`, an
-  off-node `lon_pole`, and the same ring under a north wall do not
-  (compat-matrix tripolar domain, sigma: En 0.66 vs 4.7e-3 m²/s² by
-  day 30); not yet diagnosed. Put `lon_pole` off the node columns
-  (measured clean) or the poles over land (OM4's practice; not measured
-  here).
+  and bitwise identical ghosts included). A zero-width face is CLOSED by the land-mask pass
+  (`wet_u = 0` wherever `dy_cu = 0`, likewise `wet_v`/`dx_cv`) even
+  though both of its cells are wet, so a WET node-aligned pole is
+  supported under both split schemes
+  (`tripolar_zero_width_faces_closed`,
+  `tripolar_wet_pole_pred_corr_no_growth`). Before, the open pole face
+  kept a prognostic velocity whose `pred_corr` time mean was never
+  updated, and the fast-loop Coriolis reference read it frozen: En 0.66
+  m²/s² by day 30 on the compat-matrix tripolar domain (sigma), 3.2e-3
+  after — matching an off-node `lon_pole` (3.2e-3); `ssp_rk2` there
+  went 4.7e-3 → 3.2e-3.
   **Decomposition:** north-south splits (`px = 1`, any `py`) are supported
   and bit-identical to the single-rank run (`rdb_test_ocean_tripolar_fold_mpi`,
   1/2/4 ranks — h, u, v, S, T, η and the configure-time metrics, ghost rows
