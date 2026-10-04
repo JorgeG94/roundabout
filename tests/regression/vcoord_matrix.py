@@ -542,9 +542,12 @@ XFAIL_REASONS = {
         "average, and six decades above sigma's level.",
     "lagrangian":
         "`lagrangian` inherits the sigma-shaped initial thickness and then "
-        "never regrids: over a step the layers deform until one collapses "
-        "and the run goes non-finite. Expected of a pure isopycnal "
-        "coordinate carrying a geometric rest state.",
+        "never regrids. Its rest-state failures over a step (every rx0 rung "
+        "from 0.2, seamount_steep) were NOT layer collapse: the grounded-"
+        "layer PGF gate zeroed the PGF of layers massive on both sides of "
+        "the step, and the gate requires a vanished side since 2026-10-04 "
+        "(every lagrangian cell passes on both toolchains). A new marker "
+        "here is a new defect, not this one.",
     "finding_visc_pred_corr":
         "FINDING B (viscous leg) -- NOT expected, NOT hidden. With the "
         "MOM6-comparable Laplacian viscosity (nu_h = 160 m2/s, either "
