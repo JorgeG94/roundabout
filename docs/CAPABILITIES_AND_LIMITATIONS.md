@@ -977,7 +977,7 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   | `zstar` (MOM6 z\*, closed faces) | **not yet re-pinned** — the row measured `sigma` under another name until 2026-10; it now runs the `z_fixed` staircase dilated per column, with closed faces | — | re-measure (`vcoord_matrix_pin.py`) |
   | `zstar_sigma`, `zstar_full` | **rx0 ≤ 0.8** (top of the measured ladder) | 0.1 | nothing measured (was 0.1, FINDING B) |
   | `eulerian_z` (pins `ssp_rk2`) | **rx0 ≤ 0.8** (top of the measured ladder) | flat only | nothing measured (was 0.6) |
-  | `lagrangian` | **rx0 ≤ 0.03** | 0.03 | layer collapse (never regrids) |
+  | `lagrangian` | **rx0 ≤ 0.8** (top of the measured ladder) | 0.8 | nothing measured (was 0.03: the grounded-layer PGF gate zeroed massive non-overlapping layers over a step; it requires a vanished side since 2026-10-04) |
   | `z_fixed` (closed faces) | **flat only** | flat only | salinity overshoot at the regrid (`tracer:no-new-extrema`) wherever layers vanish; the salt/heat leak is fixed (I1′, budgets at round-off in every cell) |
   | `rho`, `hycom` | **flat only** | flat only | FINDING A (viscous), the rest-state mode (inviscid) |
 
