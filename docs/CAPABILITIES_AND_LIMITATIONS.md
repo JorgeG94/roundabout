@@ -1024,7 +1024,12 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   (a closed face, `iareaBu = 0`) — never a round-off sliver
   (`tripolar_pole_columns_exact`; before, the partner pole's ~1e-9 m
   face drove ~1e3 m/s at step 1 on coarse caps and on the 1-degree
-  global grid). Known limitation: a WET node-aligned pole under
+  global grid). WHICH pole column landed exactly was libm luck: under
+  nvfortran `-fast` the `lon_pole = 0` column's periodic image at
+  pseudo-longitude 360 was the sliver where gfortran's was exact, so
+  every compat-matrix tripolar cell failed on the GPU build only
+  (`rdb_test_ocean_tripolar_determinism` runs that geometry twice: bounded,
+  and bitwise identical ghosts included). Known limitation: a WET node-aligned pole under
   `pred_corr` grows energy near the partner pole that `ssp_rk2`, an
   off-node `lon_pole`, and the same ring under a north wall do not
   (compat-matrix tripolar domain, sigma: En 0.66 vs 4.7e-3 m²/s² by

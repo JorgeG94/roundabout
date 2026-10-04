@@ -292,6 +292,7 @@ set(RDB_TESTS
     "test_ocean_periodic_seam_file|test_ocean_periodic_seam_file|collect_ocean_periodic_seam_file_tests|ocean_periodic_seam_file|ocean"
     "test_ocean_fold|test_ocean_fold|collect_ocean_fold_tests|ocean_fold|ocean"
     "test_ocean_tripolar|test_ocean_tripolar|collect_ocean_tripolar_tests|ocean_tripolar|ocean"
+    "test_ocean_tripolar_determinism|test_ocean_tripolar_determinism|collect_ocean_tripolar_determinism_tests|ocean_tripolar_determinism|ocean"
     "test_ocean_stability_audit|test_ocean_stability_audit|collect_ocean_stability_audit_tests|ocean_stability_audit|ocean"
     "test_ocean_obc_baroclinic|test_ocean_obc_baroclinic|collect_ocean_obc_baroclinic_tests|ocean_obc_baroclinic|ocean"
     "test_ocean_obc_eta_ghost|test_ocean_obc_eta_ghost|collect_ocean_obc_eta_ghost_tests|ocean_obc_eta_ghost|ocean"
