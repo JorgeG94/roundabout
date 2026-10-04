@@ -1543,9 +1543,20 @@ subtract a source — a conservative run with a surface heat flux then reported
 the heat the flux legitimately added as a ~5e-5 "leak" (four shipped
 `acc_channel` namelists; now ~3e-14).
 
+Redi neutral diffusion with an OPEN edge is instrumented too, since
+2026-10-02. The neutral flux crosses the open face against the OBC-filled ghost
+column, as it does in MOM6 (`neutral_diffusion` gates its faces on
+`G%mask2dCu`, which an open segment's normal face keeps at 1).
+`redi_apply_flux` books its realised increment into `*_budget_hdiff`, so the
+exchange lands in `out` and the residual closes to round-off. Before that, the
+console fell back to raw drift whenever Redi met an open edge. Raw drift
+reported the advective boundary exchange itself as a ~4e-5 "leak" in 24 steps,
+even with `khtr = 0`. The compatibility matrix found it (`redi_obc_salt_budget`).
+
 ### Known limitations (fall back to raw drift)
 
-- **Redi + open boundary** (`&ocean_redi_nml enable = .true.` with any open-edge BC): the neutral-diffusion flux exits through the open boundary without being counted in `out`; reverts to raw drift.
+None at present. The `horiz_adv_budget_valid` gate in `ocean_budget_is_active`
+remains for the next un-instrumented transport path.
 
 ---
 

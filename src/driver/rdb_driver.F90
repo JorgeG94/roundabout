@@ -16,7 +16,6 @@ module rdb_driver
    use rdb_constants, only: wp
    use rdb_config, only: config_t
    use rdb_ocean_state, only: ocean_state_restart_write, ocean_state_restart_read
-   use rdb_ocean_boundary_types, only: ocean_bc_has_tracer_open_edge
    use rdb_ocean_dyn, only: ocean_dyn_flush_tracer_window, SPLIT_SCHEME_PRED_CORR
    ! P2.4: the setup/step/teardown sequence itself (21 configure_ocean_*-family
    ! stages, device placement, the dyn-core advance) lives in ONE shared engine
@@ -343,8 +342,6 @@ contains
             call ocean_console_stats_report(console_stats, grid, ocean_state%metrics, &
                                             ocean_state%multilayer, &
                                             t_current, cfg%dt_fixed, n_steps, &
-                                            redi_with_open_edge=(ocean_state%redi%enable .and. &
-                                                                 ocean_bc_has_tracer_open_edge(ocean_state%bc)), &
                                             cfl_vanish_tol=cfl_vtol, &
                                             heat_budget_frazil=ocean_state%ice%heat_budget_frazil, &
                                             ice_part_size=ocean_state%ice%part_size, &
@@ -360,8 +357,6 @@ contains
             call ocean_console_stats_report(console_stats, grid, ocean_state%metrics, &
                                             ocean_state%multilayer, &
                                             t_current, cfg%dt_fixed, n_steps, &
-                                            redi_with_open_edge=(ocean_state%redi%enable .and. &
-                                                                 ocean_bc_has_tracer_open_edge(ocean_state%bc)), &
                                             heat_budget_frazil=ocean_state%ice%heat_budget_frazil, &
                                             ice_part_size=ocean_state%ice%part_size, &
                                             ice_m_ice=ocean_state%ice%m_ice, &
@@ -446,8 +441,6 @@ contains
                   call ocean_console_stats_report(console_stats, grid, ocean_state%metrics, &
                                                   ocean_state%multilayer, &
                                                   t_current, dt, n_steps, &
-                                                  redi_with_open_edge=(ocean_state%redi%enable .and. &
-                                                                       ocean_bc_has_tracer_open_edge(ocean_state%bc)), &
                                                   cfl_vanish_tol=cfl_vtol, &
                                                   heat_budget_frazil=ocean_state%ice%heat_budget_frazil, &
                                                   ice_part_size=ocean_state%ice%part_size, &
@@ -463,8 +456,6 @@ contains
                   call ocean_console_stats_report(console_stats, grid, ocean_state%metrics, &
                                                   ocean_state%multilayer, &
                                                   t_current, dt, n_steps, &
-                                                  redi_with_open_edge=(ocean_state%redi%enable .and. &
-                                                                       ocean_bc_has_tracer_open_edge(ocean_state%bc)), &
                                                   heat_budget_frazil=ocean_state%ice%heat_budget_frazil, &
                                                   ice_part_size=ocean_state%ice%part_size, &
                                                   ice_m_ice=ocean_state%ice%m_ice, &
@@ -524,8 +515,6 @@ contains
                   call ocean_console_stats_report(console_stats, grid, ocean_state%metrics, &
                                                   ocean_state%multilayer, &
                                                   t_current, dt, n_steps, &
-                                                  redi_with_open_edge=(ocean_state%redi%enable .and. &
-                                                                       ocean_bc_has_tracer_open_edge(ocean_state%bc)), &
                                                   cfl_vanish_tol=cfl_vtol, &
                                                   heat_budget_frazil=ocean_state%ice%heat_budget_frazil, &
                                                   ice_part_size=ocean_state%ice%part_size, &
@@ -541,8 +530,6 @@ contains
                   call ocean_console_stats_report(console_stats, grid, ocean_state%metrics, &
                                                   ocean_state%multilayer, &
                                                   t_current, dt, n_steps, &
-                                                  redi_with_open_edge=(ocean_state%redi%enable .and. &
-                                                                       ocean_bc_has_tracer_open_edge(ocean_state%bc)), &
                                                   heat_budget_frazil=ocean_state%ice%heat_budget_frazil, &
                                                   ice_part_size=ocean_state%ice%part_size, &
                                                   ice_m_ice=ocean_state%ice%m_ice, &

@@ -215,8 +215,7 @@ contains
       src = frazil_sum*RHO_WATER
    end function ocean_frazil_heat_src
 
-   pure function ocean_budget_is_active(tracer_idx, horiz_adv_budget_valid, &
-                                        redi_with_open_edge) result(active)
+   pure function ocean_budget_is_active(tracer_idx, horiz_adv_budget_valid) result(active)
       !! Whether a tracer's closed budget (`out`/`src` residual) should be
       !! reported.  `.true.` iff the tracer is registered (`tracer_idx > 0`)
       !! AND the horizontal-advection accumulator is complete AND no
@@ -240,10 +239,12 @@ contains
       !! passes this argument.  The dummy is kept for the next
       !! un-instrumented transport path (and for the fall-back unit test).
       !!
-      !! `redi_with_open_edge = .true.` (optional, default `.false.`): Redi
-      !! neutral-diffusion is enabled together with at least one OPEN boundary.
-      !! The Redi flux crosses the open edge without being mirrored into the
-      !! `out` accumulator.  Falls back to raw drift.
+      !! Redi + an OPEN boundary USED to be another fall-back
+      !! (`redi_with_open_edge`): the neutral flux through the open face was
+      !! not in the `out` accumulator, so the console printed raw drift — the
+      !! advective boundary exchange itself, ~4e-5 in 24 steps — as the
+      !! "residual".  `redi_apply_flux` now books its realised increment into
+      !! `*_budget_hdiff`, so the gate is gone and the budget closes.
       !!
       !! PR-23 (real sponge) note: this gate used to carry a
       !! `sponge_relax_tracers` fall-back — the legacy band sponge's tracer
@@ -261,19 +262,12 @@ contains
       !! reporter and the fallback unit test both call it.
       integer, intent(in) :: tracer_idx
       logical, intent(in) :: horiz_adv_budget_valid
-      logical, intent(in), optional :: redi_with_open_edge
-         !! When `.true.` the Redi flux crosses an open boundary without
-         !! accounting; fall back to raw drift (v1 limitation).
       logical :: active
-      logical :: redi_gate
-      redi_gate = .false.
-      if (present(redi_with_open_edge)) redi_gate = redi_with_open_edge
-      active = (tracer_idx > 0) .and. horiz_adv_budget_valid .and. .not. redi_gate
+      active = (tracer_idx > 0) .and. horiz_adv_budget_valid
    end function ocean_budget_is_active
 
    subroutine ocean_console_stats_report(this, grid, metrics, ms, t, dt, step, &
                                          horiz_adv_budget_valid, &
-                                         redi_with_open_edge, &
                                          cfl_vanish_tol, heat_budget_frazil, &
                                          ice_part_size, ice_m_ice, ice_ncat, &
                                          compute_rank, reproducing_sums, &
@@ -291,8 +285,8 @@ contains
       !! Reductions run on device; tracer registry indirection is dereferenced
       !! on the host shim before each flat-impl helper.
       !!
-      !! Optional `horiz_adv_budget_valid` / `redi_with_open_edge`:
-      !! salt/heat closed-budget fall-back gates (see
+      !! Optional `horiz_adv_budget_valid`:
+      !! salt/heat closed-budget fall-back gate (see
       !! `ocean_budget_is_active`).  Absent ⇒ budget active / gate off.
       !! (PR-23 removed the `sponge_relax_tracers` fall-back — both sponge
       !! paths' tracer relaxation are now instrumented into
@@ -311,9 +305,6 @@ contains
       logical, intent(in), optional :: horiz_adv_budget_valid
          !! When `.false.` the horizontal-advection accumulator is incomplete
          !! (windowed path); revert to raw drift for salt/heat.
-      logical, intent(in), optional :: redi_with_open_edge
-         !! When `.true.` fall back to raw drift (Redi flux at open edge not
-         !! captured in the `out` accumulator).
       real(wp), intent(in), optional :: cfl_vanish_tol
          !! When present: vanish-gated MaxCFL (Phase 3). Absent ⇒ un-gated.
       real(wp), intent(in), optional :: heat_budget_frazil(:, :, :)
@@ -377,7 +368,7 @@ contains
       real(wp) :: total_mass, total_ke, total_heat, total_salt
       real(wp) :: mean_S, mean_T, mean_age
       real(wp) :: tmp
-      logical :: hav, redi_gate
+      logical :: hav
       type(conservation_budget_t) :: bud
       real(wp) :: b_salt_surf, b_salt_adv, b_salt_hdiff, b_salt_sponge
       real(wp) :: b_heat_surf, b_heat_geo, b_heat_adv, b_heat_hdiff, b_heat_sponge
@@ -587,8 +578,6 @@ contains
       ! ---- (d) closed salt/heat/mass budget — allreduced for multi-rank ---
       hav = .true.
       if (present(horiz_adv_budget_valid)) hav = horiz_adv_budget_valid
-      redi_gate = .false.
-      if (present(redi_with_open_edge)) redi_gate = redi_with_open_edge
 
       ! Mass out: cumulative open-boundary volume out (scalar accumulator).
       ! `g_mass_out` is already globally combined above on the EFP branch
@@ -617,8 +606,7 @@ contains
       ! relax_tracers=.true.` OR the legacy `sponge_relax_tracers=.true.`.
       bud_w = RK2_STAGE_WEIGHT
       if (present(budget_stage_weight)) bud_w = budget_stage_weight
-      if (ocean_budget_is_active(ms%idx_salinity, hav, &
-                                 redi_with_open_edge=redi_gate)) then
+      if (ocean_budget_is_active(ms%idx_salinity, hav)) then
          if (use_efp) then
             ! Order-invariant budget terms too, so the `out` / `src` columns
             ! print the same digits on every rank count (they used to stay
@@ -652,8 +640,7 @@ contains
          bud%salt_out = ocean_budget_out(b_salt_adv, b_salt_hdiff, stage_weight=bud_w)
          bud%salt_active = .true.
       end if
-      if (ocean_budget_is_active(ms%idx_temperature, hav, &
-                                 redi_with_open_edge=redi_gate)) then
+      if (ocean_budget_is_active(ms%idx_temperature, hav)) then
          ! Sea-ice frazil source (PR 1) — full weight, see
          ! `ocean_frazil_heat_src`.  Absent / ice-off ⇒ adds 0.
          b_heat_frazil = 0.0_wp
