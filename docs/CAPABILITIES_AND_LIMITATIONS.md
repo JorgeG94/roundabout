@@ -1018,6 +1018,19 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   updates its `vbt` and corner vorticity like an interior face. Metric +
   `f_corner` ghosts are folded once at configure. Kernels read full 2D
   metric arrays only.
+  **Cap poles:** when `lon_pole` (or `lon_pole + 180`) falls on a node
+  column, every cap node of that column is placed exactly on the pole,
+  so the pole-column Cu face and the pole corners are EXACTLY zero
+  (a closed face, `iareaBu = 0`) — never a round-off sliver
+  (`tripolar_pole_columns_exact`; before, the partner pole's ~1e-9 m
+  face drove ~1e3 m/s at step 1 on coarse caps and on the 1-degree
+  global grid). Known limitation: a WET node-aligned pole under
+  `pred_corr` grows energy near the partner pole that `ssp_rk2`, an
+  off-node `lon_pole`, and the same ring under a north wall do not
+  (compat-matrix tripolar domain, sigma: En 0.66 vs 4.7e-3 m²/s² by
+  day 30); not yet diagnosed. Put `lon_pole` off the node columns
+  (measured clean) or the poles over land (OM4's practice; not measured
+  here).
   **Decomposition:** north-south splits (`px = 1`, any `py`) are supported
   and bit-identical to the single-rank run (`rdb_test_ocean_tripolar_fold_mpi`,
   1/2/4 ranks — h, u, v, S, T, η and the configure-time metrics, ghost rows
