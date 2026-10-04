@@ -297,7 +297,11 @@ contains
       !!
       !! For a domain with no land (`wet_mask≡1`, the flat-bottom /
       !! analytical path) every mask is 1.0 and the metric multiply is a
-      !! literal no-op ⇒ bit-identical to a no-mask build.
+      !! literal no-op ⇒ bit-identical to a no-mask build — except that a
+      !! face of ZERO width (`dy_cu`/`dx_cv = 0`, a node-aligned tripolar
+      !! cap's pole columns) is closed even between wet cells.  This call
+      !! is the only place that closure happens, so every geometry path
+      !! must run it.
       type(config_t), intent(in) :: cfg
       type(ocean_state_t), intent(inout) :: ocean_state
       type(hgrid_t), intent(in) :: grid
