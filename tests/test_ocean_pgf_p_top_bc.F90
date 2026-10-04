@@ -104,6 +104,8 @@ contains
                   new_unittest("knob_off_ignores_p_top", test_knob_off), &
                   new_unittest("pa_sign_and_monotone", test_pa_sign), &
                   new_unittest("validate_config_p_top_in_bc", test_validate_config), &
+                  new_unittest("validate_config_correction_bc_pgf", &
+                               test_validate_bc_pgf), &
                   new_unittest("p_top_producer_is_psurf_or_cavity", test_p_top_producer) &
                   ]
    end subroutine collect_ocean_pgf_p_top_bc_tests
@@ -622,6 +624,62 @@ contains
                     "the default p_top_in_bc=.false. must validate for any form")
       end block checks
    end subroutine test_validate_config
+
+   subroutine test_validate_bc_pgf(error)
+      !! `&ocean_bt_nml correction_bc_pgf` needs the FV_MOM6 interface stack
+      !! `pgf%e_face` (`compute_pbce`).  It used to be accepted at configure
+      !! with any form and `error stop` inside step 1; found by the pairwise
+      !! compatibility matrix (row `bc_pgf_needs_fv_mom6`).  Now every other
+      !! form is refused by `validate_config` and FV_MOM6 is accepted.
+      type(error_type), allocatable, intent(out) :: error
+      character(len=*), parameter :: FORMS(4) = [character(len=9) :: &
+                                                 "mont", "fv_lite", "fv_wright", "gprime"]
+      type(config_t) :: cfg
+      integer :: ierr, n
+
+      call parse_bc_pgf(cfg, "fv_mom6", .true.)
+      ierr = -999
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, &
+                 "correction_bc_pgf with form='fv_mom6' must be accepted")
+      if (allocated(error)) return
+
+      do n = 1, size(FORMS)
+         call parse_bc_pgf(cfg, trim(FORMS(n)), .true.)
+         ierr = -999
+         call validate_config(cfg, ierr=ierr)
+         call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
+                    "correction_bc_pgf with form='"//trim(FORMS(n))// &
+                    "' must be refused by validate_config (no pgf%e_face)")
+         if (allocated(error)) return
+      end do
+
+      ! Default off must still validate under the default (Montgomery) form.
+      call parse_bc_pgf(cfg, "mont", .false.)
+      ierr = -999
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, &
+                 "correction_bc_pgf=.false. must validate under form='mont'")
+   end subroutine test_validate_bc_pgf
+
+   subroutine parse_bc_pgf(cfg, form, on)
+      !! `parse_case`'s base domain with the PGF form and the bc-PGF knob
+      !! set in ONE `&ocean_bt_nml` group (gprime needs nz = 2).
+      type(config_t), intent(out) :: cfg
+      character(len=*), intent(in) :: form
+      logical, intent(in) :: on
+      character(len=:), allocatable :: nml
+      character(len=1) :: snz
+      snz = merge("2", "3", form == "gprime")
+      nml = '&sim_nml sim_type = "ocean" /'//new_line("a")// &
+            "&grid_nml nx = 8, ny = 8, dx = 2000.0, dy = 2000.0 /"//new_line("a")// &
+            "&nonhydrostatic_nml nz_layers = "//snz//" /"//new_line("a")// &
+            "&time_nml t_end = 3600.0, dt_fixed = 300.0 /"//new_line("a")// &
+            "&ocean_bt_nml n_inner = 8, correction_bc_pgf = "// &
+            merge(".true. ", ".false.", on)//" /"//new_line("a")// &
+            '&ocean_pgf_nml form = "'//form//'" /'//new_line("a")
+      call read_config_from_string(nml, cfg)
+   end subroutine parse_bc_pgf
 
    subroutine test_p_top_producer(error)
       !! WHO WRITES `ms%p_top` — the predicate behind the `p_top_in_bc`

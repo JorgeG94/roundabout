@@ -4046,7 +4046,8 @@ contains
                                   parse_pv_adv_scheme, pv_adv_scheme_is_implemented, &
                                   pv_adv_required_nghost
       use rdb_ocean_bottom_drag, only: parse_bdrag_variant, bdrag_variant_is_implemented
-      use rdb_ocean_pressure_force, only: parse_opgf_variant, gprime_nz_is_supported
+      use rdb_ocean_pressure_force, only: parse_opgf_variant, gprime_nz_is_supported, &
+                                          OPGF_VARIANT_FV_MOM6
       use rdb_ocean_tidal_mixing, only: tidal_mixing_is_inert
       use rdb_ocean_pseudo_salt, only: pseudo_salt_conflicts_restore, &
                                        pseudo_salt_conflicts_ice, &
@@ -5022,6 +5023,25 @@ contains
          call logger%error("&ocean_bt_nml forcing_visc_rem=.true. requires "// &
                            "correction_visc_rem=.true. — that knob is the visc_rem "// &
                            "producer; without it the weights are identically 1")
+         has_error = .true.
+      end if
+      ! The bc-PGF retro-correction (MOM6 btstep_layer_accel) builds its
+      ! per-layer `pbce` from the FV_MOM6 interface-height stack
+      ! `pgf%e_face`, which no other form fills.  It used to be ACCEPTED here
+      ! and `error stop` inside step 1 (`compute_pbce`); refuse it at
+      ! configure, naming the same requirement.  Not generalised: the
+      ! MONT / FV_LITE / FV_WRIGHT forms are surface-relative (they carry no
+      ! free-surface term, `g_pf = 0`), so the response `pbce = dp_k/deta`
+      ! the correction redistributes is not the one their PGF sees, and
+      ! GPRIME runs the fast loop at the reduced `g_FS`.
+      if (cfg%ocean%bt%correction_bc_pgf .and. &
+          parse_opgf_variant(cfg%ocean%pgf%form) /= OPGF_VARIANT_FV_MOM6) then
+         call logger%error("&ocean_bt_nml correction_bc_pgf=.true. requires "// &
+                           "&ocean_pgf_nml form='fv_mom6' (got '"// &
+                           trim(adjustl(cfg%ocean%pgf%form))//"'). compute_pbce "// &
+                           "builds the per-layer pressure response from the FV_MOM6 "// &
+                           "interface-height stack (pgf%e_face), which no other PGF "// &
+                           "form fills.")
          has_error = .true.
       end if
       ! pred_corr (SPEC S4) envelope: any ALE / Lagrangian-within-step
@@ -9859,7 +9879,8 @@ contains
                              "force the fast loop (requires correction_visc_rem)"))
       pl => cfg%ocean%bt%correction_bc_pgf
       call g%add(nml_logical("correction_bc_pgf", pl, &
-                             "Per-layer baroclinic-PGF retro-correction for the eta change"))
+                             "Per-layer baroclinic-PGF retro-correction for the eta change "// &
+                             "(requires &ocean_pgf_nml form='fv_mom6')"))
       pl => cfg%ocean%bt%bc_pgf_forcing
       call g%add(nml_logical("bc_pgf_forcing", pl, &
                              "Force the BT substep with the depth mean of the full slow layer "// &

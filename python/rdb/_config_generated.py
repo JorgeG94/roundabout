@@ -3624,7 +3624,7 @@ class OceanBt(Group):
 
     correction_bc_pgf = Bool(
         'correction_bc_pgf',
-        doc='Per-layer baroclinic-PGF retro-correction for the eta change',
+        doc="Per-layer baroclinic-PGF retro-correction for the eta change (requires &ocean_pgf_nml form='fv_mom6')",
         units='',
         required=False,
         default=False,
