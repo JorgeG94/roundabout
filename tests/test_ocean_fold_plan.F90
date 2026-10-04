@@ -106,6 +106,13 @@ contains
       if (allocated(error)) return
       call fold_plan_build(plan, 30, 4, 3, 3, status)
       call check(error, status == FOLD_PLAN_OK, "a valid plan must build")
+      if (allocated(error)) return
+      call plan%destroy()
+      call check(error, .not. allocated(plan%send_col) .and. &
+                 .not. allocated(plan%peer_rx) .and. plan%npeer == 0, &
+                 "destroy must free the plan's lists")
+      if (allocated(error)) return
+      call plan%destroy()   ! idempotent on an empty plan
    end subroutine test_bad_args
 
    ! Every (sender, receiver) list pair agrees, every destination column is
