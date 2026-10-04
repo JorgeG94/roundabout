@@ -601,6 +601,7 @@ if(RDB_ENABLE_MPI)
       test_efp_mpi
       test_ocean_tripolar_fold_mpi
       test_ocean_fold_exchange_mpi
+      test_ocean_fold_sites_mpi
       test_ocean_decomp_bitid_mpi)
   set(MPI_TEST_NPROCS_test_halo_mpi 4)
   set(MPI_TEST_NPROCS_test_halo_ocean_mpi 4)
@@ -609,6 +610,7 @@ if(RDB_ENABLE_MPI)
   set(MPI_TEST_NPROCS_test_efp_mpi 4)
   set(MPI_TEST_NPROCS_test_ocean_tripolar_fold_mpi 2)
   set(MPI_TEST_NPROCS_test_ocean_fold_exchange_mpi 2)
+  set(MPI_TEST_NPROCS_test_ocean_fold_sites_mpi 2)
   set(MPI_TEST_NPROCS_test_ocean_decomp_bitid_mpi 2)
   # Per-test regime label (same values as the RDB_TESTS 5th field;
   # classification is by the source path of the modules each test imports).
@@ -619,6 +621,7 @@ if(RDB_ENABLE_MPI)
   set(MPI_TEST_REGIME_test_efp_mpi core)
   set(MPI_TEST_REGIME_test_ocean_tripolar_fold_mpi ocean)
   set(MPI_TEST_REGIME_test_ocean_fold_exchange_mpi ocean)
+  set(MPI_TEST_REGIME_test_ocean_fold_sites_mpi ocean)
   set(MPI_TEST_REGIME_test_ocean_decomp_bitid_mpi ocean)
   # Writes + reads NetCDF inputs (the per-rank windowed readers).
   set(MPI_NETCDF_TESTS test_ocean_decomp_bitid_mpi)
@@ -706,6 +709,17 @@ if(RDB_ENABLE_MPI)
              COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${_np}
                      $<TARGET_FILE:test_ocean_fold_exchange_mpi>)
     set_tests_properties(rdb_test_ocean_fold_exchange_mpi_${_np}rank
+                         PROPERTIES LABELS "ocean")
+  endforeach()
+  # The distributed fold at the baroclinic / continuity / stress seam sites, on
+  # a decomposed engine state vs the serial run (engine_setup's test-only
+  # allow_distributed_fold).  2-rank leg (2x1) from the foreach above; add 3x1
+  # and the 4-rank 4x1 (8/8/7/7) + 2x2 legs.
+  foreach(_np 3 4)
+    add_test(NAME rdb_test_ocean_fold_sites_mpi_${_np}rank
+             COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${_np}
+                     $<TARGET_FILE:test_ocean_fold_sites_mpi>)
+    set_tests_properties(rdb_test_ocean_fold_sites_mpi_${_np}rank
                          PROPERTIES LABELS "ocean")
   endforeach()
   # Dycore bit-identity across decompositions: every px x py factorisation of

@@ -25,7 +25,7 @@ module rdb_ocean_halo_state
    use rdb_ocean_boundary_types, only: ocean_bc_state_t
    use rdb_ocean_periodic, only: ocean_periodic_wrap_face_x_2d, &
                                  ocean_periodic_wrap_face_y_2d
-   use rdb_ocean_fold, only: fold_north_u_face, fold_north_v_face
+   use rdb_ocean_fold_apply, only: ocean_fold_wrap_stress
    use rdb_ocean_surface_stress, only: ocean_surface_stress_t, &
                                        ocean_surface_stress_set_derived
    use rdb_ice_state, only: ocean_sea_ice_t
@@ -157,12 +157,9 @@ contains
       ! Tripolar north fold.  `tau_x`/`tau_y` are TRUE VECTOR components,
       ! so the sign-flipping u/v-face variants are the correct ones (the
       ! scalar-copy duplicates in `rdb_ocean_metrics` exist precisely
-      ! because those are NOT vectors).  Fold requires px == 1, which the
-      ! driver already fences (D6).
-      if (bc%north_fold) then
-         call fold_north_u_face(ss%tau_x, nxt + 1, nyt, nxp, nyp, ng)
-         call fold_north_v_face(ss%tau_y, nxt, nyt + 1, nxp, nyp, ng)
-      end if
+      ! because those are NOT vectors).  px = 1: the local kernels; px > 1:
+      ! one owner-routed exchange group (`ocean_fold_wrap_stress`).
+      if (bc%north_fold) call ocean_fold_wrap_stress(grid, bc, ss%tau_x, ss%tau_y, device_resident)
 
       call ocean_surface_stress_set_derived(grid, ss)
    end subroutine ocean_seam_refresh_surface_stress
