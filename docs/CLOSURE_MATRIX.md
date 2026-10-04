@@ -663,19 +663,19 @@ initialised, mapped, or stepped ⇒ byte-identical. **A high-quality sea-ice
 dynamical core and column model, not yet a sea-ice model**: the rows below
 that carry a knob are landed and independently tested; the rows marked `—`
 are absences documented on purpose (see `docs/CAPABILITIES_AND_LIMITATIONS.md`
-§"Sea ice" for the physical consequence of each). Envelope: the whole slot is
-fail-loud single-rank (`enable=.true.` alone already requires `px*py=1`,
-`rdb_config.F90` — not just `transport`/`dynamics`, which carry their own
-identical guards on top); `transport` additionally forbids any periodic edge;
-`dynamics` (EVP) allows wall/periodic edges only, no tripolar fold, no
-OBC/tidal/sponge/clamped/Chapman edge. The authoritative knob set lives in the
+§"Sea ice" for the physical consequence of each). Envelope: the slot runs on
+the ocean decomposition, bit-identical to one rank (`test_ocean_decomp_bitid_mpi`
+`sea_ice` / `sea_ice_transport`), except under a tripolar fold on more than one
+rank (fail-loud at configure until the distributed fold lands); `transport`
+runs across periodic edges and MPI seams; `dynamics` (EVP) allows wall/periodic
+edges only, no tripolar fold, no OBC/tidal/sponge/clamped/Chapman edge. The authoritative knob set lives in the
 `ocean_ice_config_t` / `&ocean_ice_nml` block of `src/core/rdb_config.F90`.
 
 | Capability | ocean | Test |
 |---|---|---|
 | Winton (2000) two-layer column thermodynamics + enthalpy | `&ocean_ice_nml enable` (`nk_ice=2` Winton two-layer) | `test_ocean_ice_column`, `test_ocean_ice_enthalpy` |
 | Multi-category ITD (thickness-space category restore) | `enable` + `ncat>1` | `test_ocean_ice_itd` |
-| Category ice/snow transport + `compress_ice` (category-summed PPM) | `transport` (needs `ncat>1` + non-periodic edges; `adv_substeps` advective sub-iterations) | `test_ocean_ice_transport` |
+| Category ice/snow transport + `compress_ice` (category-summed PPM) | `transport` (needs `ncat>1`; periodic edges and MPI seams OK; `adv_substeps` advective sub-iterations) | `test_ocean_ice_transport` |
 | C-grid EVP dynamics (elastic-viscous-plastic momentum) | `dynamics` (`evp_sub_steps`; `p0`/`c0`/`ec`/`cdw`/`rho_ocean` strength+drag; `del_sh_min_scale`; `tdamp`; `a_face_stress` momentum-conserving wind+drag weighting; `cfl_trunc`/`cfl_trunc_dyn_its` transport-CFL velocity ceiling; `project_ci` in-loop concentration projection) | `test_ocean_ice_evp` |
 | Ridging / rafting | **`—` (not available)** — `compress_ice` is **area compaction** = SIS2's own `DO_RIDGING=.false.` fallback, not a participation/redistribution scheme; convergent-regime ITD (and the EVP strength that reads it) is biased. SIS2's own ridging option is an Icepack wrapper (`ice_ridge.F90`), default off | — |
 | Snowfall source (`m_snow` accumulation; PR 26) | `&ocean_ice_nml snowfall` (requires `enable` + `&ocean_thermo_nml enable_thermodynamics`) | `test_ocean_ice_snowfall` |
@@ -687,8 +687,8 @@ OBC/tidal/sponge/clamped/Chapman edge. The authoritative knob set lives in the
 | Ice → ocean coupling | `enable` — salt ✓ closed (virtual); heat ✓ closed (incl. transmitted shortwave `sw_thru`, PR 31 — `ice_ocean_sw_flux` delivers it to `q_sw`/`Q_heat`); momentum ✗ **not conserved at fractional cover** (D7); freshwater/mass ✗ **not coupled at all** — ice carries no weight (no dynamic sea-surface loading) | `test_ocean_ice_coupling`, `test_ocean_ice_driver_column` |
 | Ice initial condition (analytic seeding: seeds a live pack before the first step — no frazil growth required; mass binned into the ITD via `ice%mh_lim`, `enth_ice`/`enth_snow` set from `t_ice`/`s_ice` via the exact `ice_enth_from_ts` inversion) | `&ocean_ice_ic_nml conc_config` = `"zero"` (default, no-op) / `"uniform"` (scalar `h_ice`/`conc`/`h_snow`/`t_ice`/`s_ice`) / `"latitudes"` (SIS2 polar-cap 0/1 step off `geolatT`, needs a non-cartesian grid). v1 analytic-only — file-backed ICs deferred to PR-14 | `test_ocean_ice_init` |
 
-Notes: `transport` is fenced against periodic edges (fail-loud at configure);
-EVP `dynamics` is not — it runs under wall or periodic edges. With
+Notes: `transport` and EVP `dynamics` both run under wall or periodic edges
+and across MPI seams. With
 `dynamics=.false.` ice velocity falls back to the ocean-surface-layer sampler;
 with it on, `rdb_ice_evp` writes `ice%u_ice`/`v_ice` from the momentum solve.
 `tdamp < 0` is the SIS2 special case `|tdamp|·dt_slow` for the elastic damping

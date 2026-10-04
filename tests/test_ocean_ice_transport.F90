@@ -1111,13 +1111,6 @@ contains
                                NG3, NXP, NC1, NXT, NYT, .false., .false.)
       !$acc update self(uh_a, uh_b)
 
-      call check(error, uh_a(NG3 + 1, JM, 1) > 0.0_wp, &
-                 "seam_face_ppm: x seam-face flux must be positive (u > 0, mass > 0)")
-      if (allocated(error)) return
-      call check(error, uh_a(NG3 + 1, JM, 1) == uh_b(NG3 + 1 + S, JM, 1), &
-                 "seam_face_ppm: x seam-face flux must equal the interior PPM flux bitwise")
-      if (allocated(error)) return
-
       ! Meridional twin: the same column along j.
       do j = 1, NYT
          do i = 1, NXT
@@ -1133,6 +1126,16 @@ contains
       !$acc update self(vh_a, vh_b)
       !$acc exit data delete(wet, idx, idy, dycu, dxcv, uf, vf, mca_a, mca_b, htot, hlx, hrx, &
       !$acc&                 uht, hly, hry, vht, uh_a, uh_b, vh_a, vh_b)
+
+      ! Checks only after the exit data: an early return above it would leave
+      ! these arrays mapped for the rest of the suite (uh_* are already on the
+      ! host via the update self after the x pass).
+      call check(error, uh_a(NG3 + 1, JM, 1) > 0.0_wp, &
+                 "seam_face_ppm: x seam-face flux must be positive (u > 0, mass > 0)")
+      if (allocated(error)) return
+      call check(error, uh_a(NG3 + 1, JM, 1) == uh_b(NG3 + 1 + S, JM, 1), &
+                 "seam_face_ppm: x seam-face flux must equal the interior PPM flux bitwise")
+      if (allocated(error)) return
 
       call check(error, vh_a(IM, NG3 + 1, 1) > 0.0_wp, &
                  "seam_face_ppm: y seam-face flux must be positive (v > 0, mass > 0)")
