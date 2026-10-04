@@ -280,10 +280,15 @@ module rdb_ocean_metrics
          !! T-cells are wet.  `mass_flux_x(i,j)` is the west face of cell
          !! `(i,j)` (continuity divergence reads `flux(i+1)-flux(i)`), so
          !! the `i-1`/`i` pairing matches `dy_cu`'s stagger exactly.
-         !! All-wet domain ⇒ `wet_u≡1` ⇒ masking is a literal no-op.
+         !! A face of ZERO width (`dy_cu = 0`, the tripolar cap's
+         !! node-aligned pole columns) is closed too, wet neighbours or
+         !! not — see `metrics_apply_land_mask`.
+         !! All-wet domain without such faces ⇒ `wet_u≡1` ⇒ masking is a
+         !! literal no-op.
       real(wp), allocatable :: wet_v(:, :)
          !! v-face (Cv) open mask, `(nx,ny+1)`.  `wet_v(i,j) =
-         !! wet_T(i,j-1)*wet_T(i,j)`.
+         !! wet_T(i,j-1)*wet_T(i,j)`, and 0 on a zero-width face
+         !! (`dx_cv = 0`).
       real(wp), allocatable :: wet_q(:, :)
          !! Corner (Bu) open mask, `(nx+1,ny+1)`.  Free-slip product of
          !! the 4 surrounding T-cells: `wet_q(i,j) =
@@ -760,7 +765,8 @@ contains
       !! the constant-extrapolated `wet_mask` from the bathymetry fill.
       !!
       !! Masks: `wet_u(i,j) = wet_T(i-1,j)*wet_T(i,j)` (Cu),
-      !! `wet_v(i,j) = wet_T(i,j-1)*wet_T(i,j)` (Cv),
+      !! `wet_v(i,j) = wet_T(i,j-1)*wet_T(i,j)` (Cv), each forced to 0 on
+      !! a face of zero width (`dy_cu`/`dx_cv = 0`, see below),
       !! `wet_q(i,j) = product of the 4 T-cells around corner (i,j)` (Bu,
       !! free-slip).  Zeroed metrics (the EXACT 6 — spec §14 C3):
       !!   `dy_cu, idxCu, dxCu` at `wet_u==0`;
@@ -882,10 +888,35 @@ contains
       ! nghost+1 are bathymetry-masked (wet_T product below), not edge-
       ! position-masked, so no has_west/has_east gate is needed here
       ! (O0 verified: seam face wet_T product = 1*1 = 1, mask stays open).
+      !
+      ! A face of ZERO width is a wall whatever its neighbours are.  The
+      ! tripolar cap's node-aligned pole columns (`tripolar_node_latlon`
+      ! places every cap node of a pole column on the pole) have
+      ! `dy_cu = 0` between two WET cells: no transport, zero `areaCu`
+      ! (no kinetic energy), zero circulation weight at the pole corners
+      ! (`iareaBu = 0`).  Left open, its velocity is still a prognostic:
+      ! the free-surface gradient across the pole drives it, the
+      ! barotropic fast loop's Coriolis couples it to the neighbouring
+      ! v faces with a plain 1/4 weight, and under `pred_corr` its time
+      ! mean `u_av` is never written (the renormaliser's `u_cor` skips a
+      ! face with `sum h*dy_cu = 0`), so `set_cor_ref_velocity` subtracted
+      ! a frozen reference while the fast loop integrated the live one.
+      ! Measured on the compatibility matrix's tripolar domain (wind +
+      ! cooling, 30 d): `En` 0.66 m2/s2 and saturating (pred_corr) vs
+      ! 3.2e-3 with the face closed; `ssp_rk2` 4.7e-3 -> 3.2e-3.  Closing
+      ! it here makes it a coast to every consumer at once (the six face
+      ! metrics below, `mask_layer_velocities`, the `u_av` seed mask, the
+      ! barotropic `mask_bt_rem`).  `<= 0` rather than `== 0`: a metric
+      ! length is never negative, so this only names the exact zero.
+      ! Bit-identical wherever every zero-width face already touches land:
+      ! every generator but a node-aligned tripolar cap has none, and the
+      ! OM4 1-degree supergrid's 231 (its pole columns) all sit next to a
+      ! land cell of `bathy_om1deg.nc` (global_1deg: day-10 En unchanged).
       do j = 1, ny
          this%wet_u(1, j) = 0.0_wp      ! west outer wall (no T-cell i=0)
          do i = 2, nx
             this%wet_u(i, j) = wm(i - 1, j)*wm(i, j)
+            if (this%dy_cu(i, j) <= 0.0_wp) this%wet_u(i, j) = 0.0_wp
          end do
          this%wet_u(nx + 1, j) = 0.0_wp  ! east outer wall (no T-cell nx+1)
       end do
@@ -894,6 +925,7 @@ contains
          this%wet_v(i, 1) = 0.0_wp
          do j = 2, ny
             this%wet_v(i, j) = wm(i, j - 1)*wm(i, j)
+            if (this%dx_cv(i, j) <= 0.0_wp) this%wet_v(i, j) = 0.0_wp
          end do
          this%wet_v(i, ny + 1) = 0.0_wp
       end do

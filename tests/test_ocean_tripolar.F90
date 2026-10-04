@@ -20,9 +20,18 @@
 !!      exactly, and the north ghosts are exact fold images (finding B1).
 !!   T9 rest over topography + a land island straddling the fold, with a
 !!      flat density interface: stays at rest.
+!!   T10 no near-degenerate face, corner or cell at the cap poles.
+!!   T11 every zero-width face (the cap pole columns) is CLOSED by the
+!!      land mask, though both of its T cells are wet.
+!!   T12 a wet node-aligned pole under pred_corr: an unforced, inviscid
+!!      bump next to the partner pole must not gain energy, and the
+!!      velocity, its time mean and the barotropic velocity on every
+!!      zero-width face stay exactly zero.
+!!   T13 the energy-form Coriolis term is energy-neutral on the cap,
+!!      pole corners (areaBu = 0, so iareaBu = 0) included.
 module test_ocean_tripolar
    use testdrive, only: new_unittest, unittest_type, error_type, check
-   use rdb_constants, only: wp, PI
+   use rdb_constants, only: wp, PI, OMEGA_EARTH
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t, metrics_fill_tripolar, metrics_finalize, &
@@ -33,7 +42,8 @@ module test_ocean_tripolar
                                  destroy_cartesian_metrics
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_continuity, only: continuity_t
-   use rdb_coriolis_adv, only: coriolis_adv_t
+   use rdb_coriolis_adv, only: coriolis_adv_t, PV_VARIANT_SADOURNY_ENERGY, &
+                               coriolis_adv_compute_tendencies_sadourny_energy
    use rdb_eos, only: eos_t
    use rdb_ocean_pressure_force, only: ocean_pressure_force_t
    use rdb_ocean_horizontal_viscosity, only: ocean_horizontal_viscosity_t
@@ -81,7 +91,12 @@ contains
                   new_unittest("tripolar_cross_fold_conservation_ssp_rk2", &
                                test_cross_fold_conservation_ssp), &
                   new_unittest("tripolar_rest_topography", test_rest_topography), &
-                  new_unittest("tripolar_pole_columns_exact", test_pole_columns_exact) &
+                  new_unittest("tripolar_pole_columns_exact", test_pole_columns_exact), &
+                  new_unittest("tripolar_zero_width_faces_closed", test_zero_width_faces_closed), &
+                  new_unittest("tripolar_wet_pole_pred_corr_no_growth", &
+                               test_wet_pole_pred_corr_no_growth), &
+                  new_unittest("tripolar_pole_coriolis_energy_neutral", &
+                               test_pole_coriolis_energy_neutral) &
                   ]
    end subroutine collect_ocean_tripolar_tests
 
@@ -1065,6 +1080,367 @@ contains
                     "T9: the flat interface must stay flat, max|dh_top| = "//to_string(dh_top))
       end block checks
    end subroutine test_rest_topography
+
+   ! -----------------------------------------------------------------
+   ! Shared by T11-T13: tripolar metrics with the PRODUCTION land-mask
+   ! pass applied to an all-wet ocean (periodic in x, folded north), so
+   ! the zero-width pole-column faces see the same face masks a configured
+   ! run does.  Host edit, then the device map.
+   ! -----------------------------------------------------------------
+   subroutine make_open_tripolar(metrics, grid, lon_w, lat_s, dlon_c, dlat_c, phi_j, lon_p)
+      type(ocean_metrics_t), intent(inout) :: metrics
+      type(hgrid_t), intent(in) :: grid
+      real(wp), intent(in) :: lon_w, lat_s, dlon_c, dlat_c, phi_j, lon_p
+      real(wp), allocatable :: wet(:, :)
+      call metrics%init(grid)
+      call metrics_fill_tripolar(metrics, grid, lon_w, lat_s, dlon_c, dlat_c, &
+                                 REARTH, phi_j, lon_p)
+      call metrics_finalize(metrics)
+      allocate (wet(grid%nx_total, grid%ny_total), source=1.0_wp)
+      call metrics_apply_land_mask(metrics, wet, grid, periodic_x=.true., &
+                                   periodic_y=.false., north_fold=.true.)
+      !$acc enter data copyin(metrics)
+      call metrics%enter_data()
+   end subroutine make_open_tripolar
+
+   ! -----------------------------------------------------------------
+   ! T11: a zero-width face is a CLOSED face.
+   ! -----------------------------------------------------------------
+   ! When a cap pole sits on a node column, the pole-column Cu face of every
+   ! cap row has zero length (T10) although BOTH of its T cells are wet.
+   ! Such a face carries no transport, has zero area (no kinetic energy)
+   ! and no circulation weight (`iareaBu = 0` at the pole corners) -- but
+   ! an OPEN mask leaves it a prognostic velocity that the pressure
+   ! gradient and the barotropic fast loop still drive.  Under `pred_corr`
+   ! its time mean `u_av` is never written (the transport renormaliser's
+   ! `u_cor` skips a face with `sum h*dy_cu = 0`), so the fast-loop
+   ! Coriolis reference read a frozen value while the live fast loop read
+   ! the drifting one: the wet-pole growth of T12.  The land-mask pass
+   ! must therefore close it -- wet_u = 0, idxCu = 0 -- exactly as it
+   ! closes a coast.  Rows: (ni, nj, dlat, lat_south, phi_join, lon_pole);
+   ! row 1 is the compatibility matrix's tripolar geometry, row 2 the
+   ! module grid, row 3 the coarse cap, row 4 an off-node pole (no
+   ! zero-width face at all: the mask must stay open everywhere).
+   subroutine test_zero_width_faces_closed(error)
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NCASE = 4
+      integer, parameter :: NI(NCASE) = [24, NXP, 24, 24]
+      integer, parameter :: NJ(NCASE) = [16, NYP, 16, 16]
+      real(wp), parameter :: DLATC(NCASE) = [1.0_wp, DLAT, 7.0_wp, 1.0_wp]
+      real(wp), parameter :: LATS(NCASE) = [59.0_wp, LAT_S, -40.0_wp, 59.0_wp]
+      real(wp), parameter :: PHIJ(NCASE) = [70.0_wp, PHI_JOIN, 60.0_wp, 70.0_wp]
+      real(wp), parameter :: LONP(NCASE) = [0.0_wp, LON_POLE, 0.0_wp, 100.0_wp]
+      integer, parameter :: NZERO_MIN(NCASE) = [1, 1, 1, 0]
+      type(hgrid_t) :: grid
+      type(ocean_metrics_t) :: m
+      integer :: c, i, j, ng, nzero, nbad, ni_c, nj_c
+
+      do c = 1, NCASE
+         ni_c = NI(c)
+         nj_c = NJ(c)
+         call grid%init(ni_c, nj_c, NGHOST, 360.0_wp/real(ni_c, wp), DLATC(c))
+         call make_open_tripolar(m, grid, 0.0_wp, LATS(c), 360.0_wp/real(ni_c, wp), &
+                                 DLATC(c), PHIJ(c), LONP(c))
+         ng = grid%nghost
+         nzero = 0
+         nbad = 0
+         ! Physical faces only: the array's outer ring is closed by
+         ! construction.  `dyCu`/`dxCv` are the UNMASKED lengths.
+         do j = ng + 1, ng + nj_c
+            do i = ng + 1, ng + ni_c + 1
+               if (m%dyCu(i, j) == 0.0_wp) then
+                  nzero = nzero + 1
+                  if (m%wet_u(i, j) /= 0.0_wp .or. m%idxCu(i, j) /= 0.0_wp) nbad = nbad + 1
+               else if (m%wet_u(i, j) /= 1.0_wp) then
+                  nbad = nbad + 1
+               end if
+            end do
+         end do
+         do j = ng + 2, ng + nj_c
+            do i = ng + 1, ng + ni_c
+               if (m%dxCv(i, j) == 0.0_wp) then
+                  nzero = nzero + 1
+                  if (m%wet_v(i, j) /= 0.0_wp .or. m%idyCv(i, j) /= 0.0_wp) nbad = nbad + 1
+               else if (m%wet_v(i, j) /= 1.0_wp) then
+                  nbad = nbad + 1
+               end if
+            end do
+         end do
+         call destroy_cartesian_metrics(m)
+         call check(error, nbad == 0 .and. nzero >= NZERO_MIN(c) .and. &
+                    (NZERO_MIN(c) > 0 .or. nzero == 0), &
+                    "T11 case "//to_string(c)//" (lon_pole="//to_string(LONP(c))//"): "// &
+                    to_string(nzero)//" zero-width faces, "//to_string(nbad)// &
+                    " with the wrong mask (a zero-width face must be closed, every "// &
+                    "other face of an all-wet ocean open)")
+         if (allocated(error)) return
+      end do
+   end subroutine test_zero_width_faces_closed
+
+   ! -----------------------------------------------------------------
+   ! T12: a WET node-aligned pole under pred_corr does not gain energy.
+   ! -----------------------------------------------------------------
+   ! The module grid (32 x 20, cap above 65 N, lon_pole = 0 ⇒ the poles
+   ! sit on node columns 0 and 16), all wet, uniform density, inviscid,
+   ! undrag'd, unforced, planetary f.  A 2 m surface bump next to the
+   ! PARTNER pole radiates gravity waves and adjusts geostrophically; with
+   ! no energy source `KE + PE` can only fall.  Before the zero-width faces
+   ! were closed (T11) the pole-column u — driven by the free-surface
+   ! gradient across the pole, never touched by the renormaliser — left a
+   ! frozen `u_av` under the fast-loop Coriolis reference while the fast
+   ! loop integrated the live one.  Measured on this case (gfortran, the
+   ! 2000 steps below, ~14 days): KE+PE ratio 2.163 before (still
+   ! growing), 0.379 after; T11 fails before as well (15 open zero-width
+   ! faces on the matrix geometry).
+   ! On the compatibility matrix's tripolar domain (24 x 16, 15 x 1 deg
+   ! from 59 N, cap above 70 N, wind + cooling, 30 days) the same defect
+   ! took `En` to 0.66 m2/s2 (2.9e-2 at day 10) against 3.2e-3 after.
+   subroutine test_wet_pole_pred_corr_no_growth(error)
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_metrics_t) :: metrics
+      type(multilayer_state_t) :: ms
+      type(continuity_t) :: ct
+      type(coriolis_adv_t) :: cor
+      type(ocean_pressure_force_t) :: pgf
+      type(ocean_horizontal_viscosity_t) :: hv
+      type(ocean_bottom_drag_t) :: bd
+      type(ocean_surface_stress_t) :: ss
+      type(ocean_vertical_advection_t) :: va
+      type(ocean_hdiff_tracer_t) :: hd
+      type(ocean_vdiff_t) :: vd
+      type(ocean_vmix_t) :: vmix
+      type(eos_t) :: eos
+      type(ocean_dyn_t) :: dyn
+      type(ocean_bc_state_t) :: bc
+      integer, parameter :: NSTEP = 2000
+      real(wp), parameter :: GROWTH_BAR = 1.0_wp
+         !! Unforced, inviscid, no drag: the only admissible energy change is
+         !! a loss (outer-scheme damping); the forward-backward substep's
+         !! modified-energy wobble is O(omega*dt_inner) ~ 1e-2 here.  Not a
+         !! tuned threshold -- never widen it to make this pass.
+      integer :: step, i, j, k, ng, ni, nj
+      real(wp) :: r2, x0, y0, hl, e0, e1, ratio, zero_face
+
+      checks: block
+         call make_grid(grid)
+         call make_bc_fold(bc, grid)
+         call init_all(grid, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, eos, dyn)
+         dyn%split_scheme = SPLIT_SCHEME_PRED_CORR
+         cor%pv_variant = PV_VARIANT_SADOURNY_ENERGY
+         call make_open_tripolar(metrics, grid, LON_W, LAT_S, DLON, DLAT, PHI_JOIN, LON_POLE)
+         ! Planetary f at the corners (host, before map_in copies it).
+         do j = 1, size(cor%f_corner, 2)
+            do i = 1, size(cor%f_corner, 1)
+               cor%f_corner(i, j) = 2.0_wp*OMEGA_EARTH*sin(metrics%geolatBu(i, j)*PI/180.0_wp)
+            end do
+         end do
+         call seed_rest(grid, ms, dyn)
+         ng = grid%nghost
+         ni = grid%nx_phys
+         nj = grid%ny_phys
+         hl = H_TOTAL/real(NZ, wp)
+         ! Bump two rows into the cap, centred on the partner pole column
+         ! (node x = ni/2; the join is node row (PHI_JOIN - LAT_S)/DLAT).
+         x0 = 0.5_wp*real(ni, wp)
+         y0 = (PHI_JOIN - LAT_S)/DLAT + 2.0_wp
+         do j = 1, ng + nj
+            do i = 1, grid%nx_total
+               r2 = ((modulo(real(i - ng, wp) - 0.5_wp, real(ni, wp)) - x0)**2 + &
+                     (real(j - ng, wp) - 0.5_wp - y0)**2)/4.0_wp
+               ms%h_layer(i, j, NZ) = hl + 2.0_wp*exp(-r2)
+               do k = 1, NZ
+                  ms%tracers(ms%idx_salinity)%hTr(i, j, k) = 35.0_wp*ms%h_layer(i, j, k)
+                  ms%tracers(ms%idx_temperature)%hTr(i, j, k) = 10.0_wp*ms%h_layer(i, j, k)
+               end do
+            end do
+         end do
+         call fold_north_centre(ms%h_layer, grid%nx_total, grid%ny_total, NZ, ni, nj, ng)
+         call fold_north_centre(ms%tracers(ms%idx_salinity)%hTr, grid%nx_total, &
+                                grid%ny_total, NZ, ni, nj, ng)
+         call fold_north_centre(ms%tracers(ms%idx_temperature)%hTr, grid%nx_total, &
+                                grid%ny_total, NZ, ni, nj, ng)
+         e0 = cap_energy(ms, metrics, grid)
+         call map_in(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+
+         do step = 1, NSTEP
+            call ocean_dyn_step_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, &
+                                      bd, ss, va, hd, vd, vmix, ms, 600.0_wp, 20, bc=bc)
+         end do
+
+         !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
+         !$acc update self(ms%u_av_layer, dyn%bt_work%bt_ubt)
+         e1 = cap_energy(ms, metrics, grid)
+         ratio = huge(1.0_wp)
+         if (ieee_is_finite(e1) .and. e0 > 0.0_wp) ratio = e1/e0
+         ! Every zero-width physical u face: layer u, its time mean and
+         ! the barotropic u must be EXACTLY zero (a product with wet_u = 0).
+         zero_face = 0.0_wp
+         do j = ng + 1, ng + nj
+            do i = ng + 1, ng + ni + 1
+               if (metrics%dyCu(i, j) /= 0.0_wp) cycle
+               zero_face = max(zero_face, abs(dyn%bt_work%bt_ubt(i, j)), &
+                               maxval(abs(ms%u_face_x_layer(i, j, :))), &
+                               maxval(abs(ms%u_av_layer(i, j, :))))
+            end do
+         end do
+
+         call map_out(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+         call destroy_cartesian_metrics(metrics)
+         call destroy_all(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, eos, dyn)
+         call ocean_bc_state_destroy(bc)
+
+         call check(error, ratio <= GROWTH_BAR, &
+                    "T12: unforced inviscid bump at a wet node-aligned pole under "// &
+                    "pred_corr gained energy, (KE+PE)_end/(KE+PE)_0 = "//to_string(ratio)// &
+                    " (> "//to_string(GROWTH_BAR)//"); suspect an open zero-width face")
+         if (allocated(error)) exit checks
+         call check(error, zero_face == 0.0_wp, &
+                    "T12: velocity on a zero-width (pole-column) face = "// &
+                    to_string(zero_face)//"; it must be exactly 0")
+      end block checks
+   end subroutine test_wet_pole_pred_corr_no_growth
+
+   function cap_energy(ms, metrics, grid) result(e)
+      !! Physical-domain `KE + PE` per unit density (host copy):
+      !! `Σ areaT·g·η²/2 + Σ_k Σ_faces area·h_face·u²/2`, η = Σ_k h − H_TOTAL.
+      type(multilayer_state_t), intent(in) :: ms
+      type(ocean_metrics_t), intent(in) :: metrics
+      type(hgrid_t), intent(in) :: grid
+      real(wp) :: e
+      integer :: i, j, k, ng
+      real(wp) :: eta
+      ng = grid%nghost
+      e = 0.0_wp
+      do j = ng + 1, ng + grid%ny_phys
+         do i = ng + 1, ng + grid%nx_phys
+            eta = sum(ms%h_layer(i, j, :)) - H_TOTAL
+            e = e + 0.5_wp*9.81_wp*metrics%areaT(i, j)*eta**2
+            do k = 1, NZ
+               e = e + 0.25_wp*metrics%areaCu(i, j)*(ms%h_layer(i - 1, j, k) + &
+                                                     ms%h_layer(i, j, k))*ms%u_face_x_layer(i, j, k)**2
+               e = e + 0.25_wp*metrics%areaCv(i, j)*(ms%h_layer(i, j - 1, k) + &
+                                                     ms%h_layer(i, j, k))*ms%v_face_y_layer(i, j, k)**2
+            end do
+         end do
+      end do
+   end function cap_energy
+
+   ! -----------------------------------------------------------------
+   ! T13: the energy-form Coriolis term is energy-neutral at the poles.
+   ! -----------------------------------------------------------------
+   ! The pole corners have areaBu = 0 (iareaBu = 0: no relative vorticity
+   ! there, q = f/h).  The SADOURNY75_ENERGY transport form must still do
+   ! no work: with the f-part of the tendency isolated (the same kernel
+   ! with f and with f = 0; the KE gradient and the relative vorticity
+   ! cancel in the difference), Σ uh·dxCu·CAu + Σ vh·dyCv·CAv vanishes to
+   ! round-off for an ARBITRARY velocity and thickness field on the cap.
+   ! (This held before the T11 fix as well -- a zero-width face carries
+   ! uh = 0 -- so the slow Coriolis term was never the energy source of
+   ! the wet-pole growth; it guards the pole corners going forward.)
+   subroutine test_pole_coriolis_energy_neutral(error)
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_metrics_t) :: metrics
+      type(multilayer_state_t) :: ms
+      type(coriolis_adv_t) :: cor
+      real(wp), allocatable :: cau(:, :, :), cav(:, :, :)
+      real(wp), allocatable :: fsave(:, :)
+      integer :: i, j, k, nx, ny
+      real(wp) :: work, scale, term
+
+      call make_grid(grid)
+      call make_open_tripolar(metrics, grid, LON_W, LAT_S, DLON, DLAT, PHI_JOIN, LON_POLE)
+      nx = grid%nx_total
+      ny = grid%ny_total
+      ms%nz_ml = NZ
+      call ms%init(grid)
+      call cor%init(grid, nz_ml=NZ)
+      cor%pv_variant = PV_VARIANT_SADOURNY_ENERGY
+      allocate (fsave(nx + 1, ny + 1))
+      do j = 1, ny + 1
+         do i = 1, nx + 1
+            fsave(i, j) = 2.0_wp*OMEGA_EARTH*sin(metrics%geolatBu(i, j)*PI/180.0_wp)
+         end do
+      end do
+      cor%f_corner = fsave
+      ! Smooth-but-arbitrary thickness; velocities on every face strictly
+      ! inside the array (the outer ring zero, so the array edges hold no
+      ! transport the stencil cannot pair off).
+      ms%u_face_x_layer = 0.0_wp
+      ms%v_face_y_layer = 0.0_wp
+      do k = 1, NZ
+         do j = 1, ny
+            do i = 1, nx
+               ms%h_layer(i, j, k) = 1000.0_wp + 300.0_wp*sin(0.7_wp*i + 1.3_wp*j + k) + &
+                                     150.0_wp*cos(1.9_wp*i - 0.4_wp*j)
+            end do
+         end do
+         do j = 2, ny - 1
+            do i = 2, nx
+               ms%u_face_x_layer(i, j, k) = 0.3_wp*sin(1.1_wp*i + 2.3_wp*j + 0.5_wp*k)
+            end do
+         end do
+         do j = 2, ny
+            do i = 2, nx - 1
+               ms%v_face_y_layer(i, j, k) = 0.3_wp*cos(0.9_wp*i - 1.7_wp*j + 0.3_wp*k)
+            end do
+         end do
+      end do
+      !$acc enter data copyin(ms)
+      call ms%enter_data()
+      !$acc enter data copyin(cor)
+      call cor%enter_data()
+
+      call coriolis_adv_compute_tendencies_sadourny_energy(grid, metrics, cor, ms, &
+                                                           ms%u_face_x_layer, &
+                                                           ms%v_face_y_layer, ms%h_layer)
+      !$acc update self(cor%pv_flux_x%data, cor%pv_flux_y%data)
+      cau = cor%pv_flux_x%data
+      cav = cor%pv_flux_y%data
+      cor%f_corner = 0.0_wp
+      !$acc update device(cor%f_corner)
+      call coriolis_adv_compute_tendencies_sadourny_energy(grid, metrics, cor, ms, &
+                                                           ms%u_face_x_layer, &
+                                                           ms%v_face_y_layer, ms%h_layer)
+      !$acc update self(cor%pv_flux_x%data, cor%pv_flux_y%data)
+      !$acc update self(cor%mass_flux_u%data, cor%mass_flux_v%data)
+      cau = cau - cor%pv_flux_x%data
+      cav = cav - cor%pv_flux_y%data
+
+      work = 0.0_wp
+      scale = 0.0_wp
+      do k = 1, NZ
+         do j = 1, ny
+            do i = 1, nx + 1
+               term = cor%mass_flux_u%data(i, j, k)*metrics%dxCu(i, j)*cau(i, j, k)
+               work = work + term
+               scale = scale + abs(term)
+            end do
+         end do
+         do j = 1, ny + 1
+            do i = 1, nx
+               term = cor%mass_flux_v%data(i, j, k)*metrics%dyCv(i, j)*cav(i, j, k)
+               work = work + term
+               scale = scale + abs(term)
+            end do
+         end do
+      end do
+
+      call cor%exit_data()
+      !$acc exit data delete(cor)
+      call ms%exit_data()
+      !$acc exit data delete(ms)
+      call cor%destroy()
+      call ms%destroy()
+      call destroy_cartesian_metrics(metrics)
+
+      call check(error, scale > 0.0_wp, "T13: the Coriolis work terms are all zero")
+      if (allocated(error)) return
+      call check(error, abs(work) <= 1.0e-13_wp*scale, &
+                 "T13: energy-form Coriolis does net work on the cap: Σ = "// &
+                 to_string(work)//" vs Σ|.| = "//to_string(scale))
+   end subroutine test_pole_coriolis_energy_neutral
 
    function weighted_interior_sum(fld, area, grid) result(s)
       !! Σ_interior Σ_k fld·area (host copy).
