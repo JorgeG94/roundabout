@@ -99,7 +99,7 @@ module rdb_ocean_engine
                              ocean_halo_bt_group_2d_wide
    use rdb_ocean_halo_state, only: ocean_halo_exchange_ml_state
    use rdb_ocean_fold_exchange, only: ocean_fold_exchange_init, ocean_fold_exchange_reserve, &
-                                      ocean_fold_exchange_destroy
+                                      ocean_fold_exchange_destroy, ocean_fold_north_corner
    use rdb_ocean_periodic, only: ocean_periodic_wrap_state, ocean_periodic_wrap_centre_2d
    use rdb_ocean_fold_apply, only: ocean_fold_wrap_state, ocean_fold_wrap_eta_2d
    use rdb_ocean_boundary_data, only: ocean_boundary_data_constant_t
@@ -950,6 +950,30 @@ contains
          call ocean_halo_centre(engine%state%dyn%bt_work%bt_H_ref, device_resident=.false.)
       end if
 
+      ! px > 1 tripolar: refresh the static corner Coriolis array's x ghosts
+      ! from their OWNERS before it is folded.  The analytic generator
+      ! evaluates `2*omega*sin(geolatBu)` over the whole local array, and
+      ! gfortran -O3 -march=native vectorises that loop through libmvec:
+      ! the scalar remainder lanes differ from the vector lanes by an ulp,
+      ! and which columns are remainder depends on the TILE width.  The tail
+      ! lands in the ghost columns (owned f is unaffected), but those ghosts
+      ! then differed from the serial run, whose ghosts are periodic copies
+      ! of computed interior values.  A corner array is face-type in x and,
+      ! row-for-row, the same as a centre array in y (corner row j is the SW
+      ! corner of T row j), so the face-x primitive over rows 1..ny_total is
+      ! the correct exchange; the north-most row (ny_total+1) is a fold row
+      ! on the north tile and beyond every stencil elsewhere.  Collective
+      ! over every rank (rank-uniform condition), host mode.
+      if (engine%decomp%px > 1 .and. &
+          ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD) then
+         block
+            real(wp), allocatable :: f_rows(:, :)
+            f_rows = engine%state%coriolis_adv%f_corner(:, 1:engine%grid%ny_total)
+            call ocean_halo_face_x(f_rows, device_resident=.false.)
+            engine%state%coriolis_adv%f_corner(:, 1:engine%grid%ny_total) = f_rows
+         end block
+      end if
+
       ! The deferred init-time folds of the distributed (`px > 1`) path —
       ! exchange → periodic wrap → fold, as at every step-time seam site;
       ! host mode, before the device map.  Collective over the north rank
@@ -975,6 +999,19 @@ contains
             call ocean_fold_wrap_eta_2d(engine%grid, engine%state%bc, &
                                         engine%state%dyn%bt_work%bt_H_ref, device_resident=.false.)
          end if
+         ! The static corner Coriolis array (plan site S3): on px = 1
+         ! `fill_f_corner_seam_ghosts` (configure_ocean_forcing) folds it —
+         ! including the fold-line row projection, which is what makes the
+         ! two copies of a fold-line vertex carry the same f bitwise even for
+         ! planetary f.  It returns early on px > 1 (its x ghosts come from
+         ! the generator's global geography), so the fold — a scalar COPY,
+         ! planetary or beta-plane alike — is done here, now that the plan
+         ! exists.  Nothing reads f_corner's north ghosts or fold row before
+         ! this point (the BT CFL and the stability audit do not use it).
+         call ocean_fold_north_corner(engine%state%coriolis_adv%f_corner, &
+                                      engine%grid%nx_total + 1, engine%grid%ny_total + 1, &
+                                      engine%grid%nx_phys, engine%grid%ny_phys, &
+                                      engine%grid%nghost, .false., device_resident=.false.)
       end if
 
       ! The PGF keeps its OWN copy of the bathymetry (FV-MOM6 and gprime

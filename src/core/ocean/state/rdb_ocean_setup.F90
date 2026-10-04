@@ -784,7 +784,9 @@ contains
       integer :: ng, ni, i, j
       ng = grid%nghost
       ni = grid%nx_phys
-      if (grid%nx_phys /= grid%nx_global) return   ! px > 1 is refused at preflight
+      ! px > 1: x ghosts come from the generator; the fold runs later, in
+      ! engine_setup, through the distributed exchange (needs its plan).
+      if (grid%nx_phys /= grid%nx_global) return
       ! Periodic-x ghost columns (corner/Bu face-type: physical i=ng+1..ng+ni+1).
       do j = 1, size(f_corner, 2)
          do i = 1, ng
