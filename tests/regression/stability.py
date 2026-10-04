@@ -1951,7 +1951,9 @@ def self_test():
     # 71 shipped namelists + the 2 Ocean0 E6 tier-1 variants (section Q,
     # 73 non-matrix base cases) + the generated vertical-coordinate matrix: 115
     # INVISCID cells (every family x geometry, the refusals, the N^2 = 0
-    # controls, the Wright leg) and 90 VISCOUS cells (the runnable ones).
+    # controls, the Wright leg) and 88 VISCOUS cells (the runnable ones;
+    # 90 until zstar left CAVITY_ACCEPTED, which turned its two cavity
+    # cells into refusal rows -- a refusal has no viscous twin).
     # The tripwire is on the TOTAL so that a matrix cell silently
     # disappearing (a template token renamed, a family dropped from the
     # FAMILIES list) fails here rather than reporting a smaller green table.
@@ -1961,7 +1963,7 @@ def self_test():
     check("manifest covers 71 shipped namelists + 2 E6 variants + the "
           "vcoord matrix ({} base cases, {} matrix cells = {} inviscid + {} viscous, {} at "
           "tier 2)".format(len(base), len(vcm), len(inv), len(vis), n2),
-          len(base) - len(vcm) == 73 and len(inv) == 115 and len(vis) == 90)
+          len(base) - len(vcm) == 73 and len(inv) == 115 and len(vis) == 88)
     # The two legs must differ in the dissipation and in NOTHING else: a
     # viscous namelist is its inviscid twin with the hvisc/bdrag groups
     # changed. Checked on the emitted files, which are what actually runs.
