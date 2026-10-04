@@ -24,7 +24,6 @@ module rdb_ocean_boundary_types
    public :: ocean_bc_state_set_edges
    public :: ocean_bc_state_set_topology
    public :: ocean_bc_type_from_string
-   public :: ocean_bc_has_tracer_open_edge
    public :: ocean_bc_outer_face_tag
    public :: ocean_bc_validate_periodic
    public :: ocean_bc_validate_fold
@@ -702,21 +701,6 @@ contains
       end select
    end function ocean_bc_type_from_string
 
-   pure logical function ocean_bc_has_tracer_open_edge(bc) result(res)
-      !! `.true.` if ANY outer edge is a tracer-open boundary — the set
-      !! (OPEN / TIDAL / CHAPMAN / CLAMPED / NESTED) across which a lateral
-      !! tracer flux (e.g. Redi neutral diffusion) can leave the domain
-      !! without being mirrored into the console `out` budget.  Used to fall
-      !! the closed Salt/Heat `Error` back to raw drift.  Reads the PARSED
-      !! per-edge `bc_type` (not the raw config string), so it is robust to
-      !! tag case and covers every open-type edge, not just literal "open".
-      type(ocean_bc_state_t), intent(in) :: bc
-      res = edge_is_tracer_open(bc%west%bc_type) &
-            .or. edge_is_tracer_open(bc%east%bc_type) &
-            .or. edge_is_tracer_open(bc%south%bc_type) &
-            .or. edge_is_tracer_open(bc%north%bc_type)
-   end function ocean_bc_has_tracer_open_edge
-
    pure integer function ocean_bc_outer_face_tag(bc_type) result(tag)
       !! The tag an edge's OUTER FACE behaves as for the no-normal-flow
       !! closures (mass-flux zeroing in the continuity, the `uhbt`/`vhbt`
@@ -736,14 +720,6 @@ contains
       tag = bc_type
       if (bc_type == OBC_SPONGE) tag = OBC_WALL
    end function ocean_bc_outer_face_tag
-
-   pure logical function edge_is_tracer_open(bc_type) result(res)
-      !! One-edge tracer-open test (module-internal helper).
-      integer, intent(in) :: bc_type
-      res = (bc_type == OBC_OPEN .or. bc_type == OBC_TIDAL &
-             .or. bc_type == OBC_CHAPMAN .or. bc_type == OBC_CLAMPED &
-             .or. bc_type == OBC_NESTED)
-   end function edge_is_tracer_open
 
    pure function obc_match_constituent(omega) result(ic)
       !! Resolve an OBC edge constituent's angular frequency `omega` (rad/s)
