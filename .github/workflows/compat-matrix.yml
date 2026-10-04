@@ -40,6 +40,11 @@ on:
     - cron: "41 15 * * *"   # nightly: the full pairwise set
     - cron: "11 17 * * 6"   # weekly (Saturday): the t = 3 slice
 
+# Read-only token: the job builds, runs and uploads an artifact; it never
+# writes to the repository.
+permissions:
+  contents: read
+
 concurrency:
   group: compat-matrix-${{ github.ref }}-${{ github.event.schedule || github.event_name }}
   cancel-in-progress: true
@@ -115,16 +120,25 @@ jobs:
           OMP_NUM_THREADS: "1"
           OMPI_MCA_rmaps_base_oversubscribe: "1"
           PRTE_MCA_rmaps_default_mapping_policy: ":oversubscribe"
+          # Event values go through env, never straight into the script
+          # text (a dispatch input is free text).
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SCHEDULE: ${{ github.event.schedule }}
+          DISPATCH_DESIGN: ${{ github.event.inputs.design }}
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          args="--design pairwise"
-          if [ "${{ github.event.schedule }}" = "11 17 * * 6" ]; then
-            args="--design t3"
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            args="--design ${{ github.event.inputs.design || 'pairwise' }}"
-          elif [ "${{ github.event_name }}" = "pull_request" ]; then
-            args="--design pairwise --diff-base origin/${{ github.base_ref }}"
+          args=(--design pairwise)
+          if [ "$EVENT_SCHEDULE" = "11 17 * * 6" ]; then
+            args=(--design t3)
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            case "${DISPATCH_DESIGN:-pairwise}" in
+              pairwise|t3) args=(--design "${DISPATCH_DESIGN:-pairwise}") ;;
+              *) echo "unknown design '$DISPATCH_DESIGN' (pairwise or t3)" >&2; exit 2 ;;
+            esac
+          elif [ "$EVENT_NAME" = "pull_request" ]; then
+            args=(--design pairwise --diff-base "origin/$BASE_REF")
           fi
-          python3 tests/regression/compat_matrix.py run $args \
+          python3 tests/regression/compat_matrix.py run "${args[@]}" \
             --build-dir build --mpi-build-dir build \
             --jobs "$(nproc)" --mpi-jobs 1 --backend cpu-gfortran \
             --out tmp_local_artifacts/compat_matrix.json
