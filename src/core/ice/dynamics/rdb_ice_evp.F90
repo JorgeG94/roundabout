@@ -199,6 +199,11 @@ module rdb_ice_evp
    public :: ice_evp_step
    public :: ice_evp_mi_ratio_point
    public :: evp_truncate_final_impl
+   ! Test seams: `test_ocean_ice_evp` (masks_edge_vector_width) calls the
+   ! mask and corner-coefficient kernels directly; not an API for model
+   ! code.
+   public :: evp_build_masks_impl
+   public :: evp_q_and_mi_ratio_impl
 
    real(wp), parameter :: M_NEGLECT_FACTOR = 1.0e-30_wp
       !! SIS2 `H_subroundoff` (:757) — `m_neglect = ICE_RHO_ICE*1e-30`.
@@ -840,16 +845,33 @@ contains
             mask_v(i, j) = mask_t(i, j - 1)*mask_t(i, j)
          end if
       end do
-      do concurrent(j=1:ny + 1, i=1:nx + 1) local(mt_sw, mt_se, mt_nw, mt_ne)
-         if (i == 1 .or. i == nx + 1 .or. j == 1 .or. j == ny + 1) then
-            mask_q(i, j) = 0.0_wp
-         else
-            mt_sw = mask_t(i - 1, j - 1)
-            mt_se = mask_t(i, j - 1)
-            mt_nw = mask_t(i - 1, j)
-            mt_ne = mask_t(i, j)
-            mask_q(i, j) = mt_sw*mt_se*mt_nw*mt_ne
-         end if
+      ! Interior corners, then the array edge (land) in loops of its own.
+      ! NOT one loop with a four-way `i == 1 .or. i == nx+1 .or. j == 1
+      ! .or. j == ny+1` guard: nvfortran 26.5's CPU vectoriser (-O2 and up)
+      ! miscompiles that guard whenever nx+1 is a multiple of the vector
+      ! width (AVX2: nx = 3 mod 4) -- the last vector chunk takes the
+      ! interior branch at i = nx+1, so the edge column got
+      ! mask_t(nx+1, j) = the next row's first cell, and at j = ny a read
+      ! past the end of the array (uninitialised memory: the outermost
+      ! ghost corner of the EVP stresses then differed run to run, which
+      ! the restart round trip caught on a 2x2 decomposition, 19-cell
+      ! tiles).  Same split in `evp_q_and_mi_ratio_impl`,
+      ! `ice_limit_stresses` and `evp_str_s_relax_impl`.  Bit-identical
+      ! wherever the compiler was right.
+      do concurrent(j=2:ny, i=2:nx) local(mt_sw, mt_se, mt_nw, mt_ne)
+         mt_sw = mask_t(i - 1, j - 1)
+         mt_se = mask_t(i, j - 1)
+         mt_nw = mask_t(i - 1, j)
+         mt_ne = mask_t(i, j)
+         mask_q(i, j) = mt_sw*mt_se*mt_nw*mt_ne
+      end do
+      do concurrent(i=1:nx + 1)
+         mask_q(i, 1) = 0.0_wp
+         mask_q(i, ny + 1) = 0.0_wp
+      end do
+      do concurrent(j=2:ny)
+         mask_q(1, j) = 0.0_wp
+         mask_q(nx + 1, j) = 0.0_wp
       end do
    end subroutine evp_build_masks_impl
 
@@ -1189,37 +1211,46 @@ contains
       real(wp) :: m_sw, m_se, m_nw, m_ne
       real(wp) :: mt_sw, mt_se, mt_nw, mt_ne
 
-      do concurrent(jc=1:ny + 1, ic=1:nx + 1) &
+      ! Interior corners, then the array edge in its own loops -- see
+      ! `evp_build_masks_impl` (nvfortran CPU vectoriser, four-way guard).
+      do concurrent(ic=1:nx + 1)
+         q(ic, 1) = 0.0_wp
+         mi_ratio_a_q(ic, 1) = 0.0_wp
+         q(ic, ny + 1) = 0.0_wp
+         mi_ratio_a_q(ic, ny + 1) = 0.0_wp
+      end do
+      do concurrent(jc=2:ny)
+         q(1, jc) = 0.0_wp
+         mi_ratio_a_q(1, jc) = 0.0_wp
+         q(nx + 1, jc) = 0.0_wp
+         mi_ratio_a_q(nx + 1, jc) = 0.0_wp
+      end do
+      do concurrent(jc=2:ny, ic=2:nx) &
          local(tot_area, mass_sum, a_sw, a_se, a_nw, a_ne, m_sw, m_se, m_nw, m_ne, &
                mt_sw, mt_se, mt_nw, mt_ne)
-         if (ic == 1 .or. ic == nx + 1 .or. jc == 1 .or. jc == ny + 1) then
-            q(ic, jc) = 0.0_wp
-            mi_ratio_a_q(ic, jc) = 0.0_wp
-         else
-            a_sw = areaT(ic - 1, jc - 1)
-            a_se = areaT(ic, jc - 1)
-            a_nw = areaT(ic - 1, jc)
-            a_ne = areaT(ic, jc)
-            m_sw = mis(ic - 1, jc - 1)
-            m_se = mis(ic, jc - 1)
-            m_nw = mis(ic - 1, jc)
-            m_ne = mis(ic, jc)
-            mt_sw = mask_t(ic - 1, jc - 1)
-            mt_se = mask_t(ic, jc - 1)
-            mt_nw = mask_t(ic - 1, jc)
-            mt_ne = mask_t(ic, jc)
+         a_sw = areaT(ic - 1, jc - 1)
+         a_se = areaT(ic, jc - 1)
+         a_nw = areaT(ic - 1, jc)
+         a_ne = areaT(ic, jc)
+         m_sw = mis(ic - 1, jc - 1)
+         m_se = mis(ic, jc - 1)
+         m_nw = mis(ic - 1, jc)
+         m_ne = mis(ic, jc)
+         mt_sw = mask_t(ic - 1, jc - 1)
+         mt_se = mask_t(ic, jc - 1)
+         mt_nw = mask_t(ic - 1, jc)
+         mt_ne = mask_t(ic, jc)
 
-            tot_area = (a_sw + a_ne) + (a_nw + a_se)
-            mass_sum = (a_sw*m_sw + a_ne*m_ne) + (a_nw*m_nw + a_se*m_se)
-            q(ic, jc) = f_corner(ic, jc)*tot_area/(mass_sum + tot_area*m_neglect)
+         tot_area = (a_sw + a_ne) + (a_nw + a_se)
+         mass_sum = (a_sw*m_sw + a_ne*m_ne) + (a_nw*m_nw + a_se*m_se)
+         q(ic, jc) = f_corner(ic, jc)*tot_area/(mass_sum + tot_area*m_neglect)
 
-            mi_ratio_a_q(ic, jc) = ice_evp_mi_ratio_point( &
-                                   m_sw, m_se, m_nw, m_ne, &
-                                   mask_u(ic, jc - 1), mask_u(ic, jc), &
-                                   mask_v(ic - 1, jc), mask_v(ic, jc), &
-                                   mask_q(ic, jc), a_sw, a_se, a_nw, a_ne, &
-                                   mt_sw, mt_se, mt_nw, mt_ne, m_neglect2, m_neglect4)
-         end if
+         mi_ratio_a_q(ic, jc) = ice_evp_mi_ratio_point( &
+                                m_sw, m_se, m_nw, m_ne, &
+                                mask_u(ic, jc - 1), mask_u(ic, jc), &
+                                mask_v(ic - 1, jc), mask_v(ic, jc), &
+                                mask_q(ic, jc), a_sw, a_se, a_nw, a_ne, &
+                                mt_sw, mt_se, mt_nw, mt_ne, m_neglect2, m_neglect4)
       end do
    end subroutine evp_q_and_mi_ratio_impl
 
@@ -1257,32 +1288,30 @@ contains
          if (ec*str_t(i, j) < -lim_2*pressure) str_t(i, j) = -i_2ec*pressure
       end do
 
-      do concurrent(jc=1:ny + 1, ic=1:nx + 1) local(sum_area, pres_avg)
-         if (ic == 1 .or. ic == nx + 1 .or. jc == 1 .or. jc == ny + 1) then
-            ! Array-edge corner: no 4th neighbour exists; leave str_s
-            ! untouched (these are always ghost/land corners under the
-            ! periodic-or-wall ghost policy — never read by the momentum
-            ! solve at a physical interior face).
-            continue
-         else
-            sum_area = (mask_t(ic - 1, jc - 1)*areaT(ic - 1, jc - 1) + &
-                        mask_t(ic, jc)*areaT(ic, jc)) + &
-                       (mask_t(ic - 1, jc)*areaT(ic - 1, jc) + &
-                        mask_t(ic, jc - 1)*areaT(ic, jc - 1))
-            pres_avg = 0.0_wp
-            if (sum_area > 0.0_wp) then
-               pres_avg = ((mask_t(ic - 1, jc - 1)*areaT(ic - 1, jc - 1)* &
-                            (pres_mice(ic - 1, jc - 1)*mice(ic - 1, jc - 1)) + &
-                            mask_t(ic, jc)*areaT(ic, jc)* &
-                            (pres_mice(ic, jc)*mice(ic, jc))) + &
-                           (mask_t(ic - 1, jc)*areaT(ic - 1, jc)* &
-                            (pres_mice(ic - 1, jc)*mice(ic - 1, jc)) + &
-                            mask_t(ic, jc - 1)*areaT(ic, jc - 1)* &
-                            (pres_mice(ic, jc - 1)*mice(ic, jc - 1))))/sum_area
-            end if
-            if (ec*str_s(ic, jc) > lim_2*pres_avg) str_s(ic, jc) = i_2ec*pres_avg
-            if (ec*str_s(ic, jc) < -lim_2*pres_avg) str_s(ic, jc) = -i_2ec*pres_avg
+      ! Interior corners only.  An array-edge corner has no 4th neighbour;
+      ! str_s is left untouched there (always a ghost/land corner under
+      ! the periodic-or-wall ghost policy, never read by the momentum solve
+      ! at a physical interior face).  The loop range, not an in-loop
+      ! guard, excludes it -- see `evp_build_masks_impl` (nvfortran CPU
+      ! vectoriser, four-way guard).
+      do concurrent(jc=2:ny, ic=2:nx) local(sum_area, pres_avg)
+         sum_area = (mask_t(ic - 1, jc - 1)*areaT(ic - 1, jc - 1) + &
+                     mask_t(ic, jc)*areaT(ic, jc)) + &
+                    (mask_t(ic - 1, jc)*areaT(ic - 1, jc) + &
+                     mask_t(ic, jc - 1)*areaT(ic, jc - 1))
+         pres_avg = 0.0_wp
+         if (sum_area > 0.0_wp) then
+            pres_avg = ((mask_t(ic - 1, jc - 1)*areaT(ic - 1, jc - 1)* &
+                         (pres_mice(ic - 1, jc - 1)*mice(ic - 1, jc - 1)) + &
+                         mask_t(ic, jc)*areaT(ic, jc)* &
+                         (pres_mice(ic, jc)*mice(ic, jc))) + &
+                        (mask_t(ic - 1, jc)*areaT(ic - 1, jc)* &
+                         (pres_mice(ic - 1, jc)*mice(ic - 1, jc)) + &
+                         mask_t(ic, jc - 1)*areaT(ic, jc - 1)* &
+                         (pres_mice(ic, jc - 1)*mice(ic, jc - 1))))/sum_area
          end if
+         if (ec*str_s(ic, jc) > lim_2*pres_avg) str_s(ic, jc) = i_2ec*pres_avg
+         if (ec*str_s(ic, jc) < -lim_2*pres_avg) str_s(ic, jc) = -i_2ec*pres_avg
       end do
    end subroutine ice_limit_stresses
 
@@ -1448,27 +1477,25 @@ contains
       real(wp) :: zeta_sw, zeta_se, zeta_nw, zeta_ne, a_sw, a_se, a_nw, a_ne
       real(wp) :: weighted_zeta
 
-      do concurrent(jc=1:ny + 1, ic=1:nx + 1) &
+      ! Interior corners only.  At an array-edge corner zeta/areaT have no
+      ! defined 4th neighbour; these are ghost/land corners under the
+      ! ghost policy, never read by a physical-interior momentum face, and
+      ! str_s is left untouched there.  The loop range, not an in-loop
+      ! guard, excludes them -- see `evp_build_masks_impl` (nvfortran CPU
+      ! vectoriser, four-way guard).
+      do concurrent(jc=2:ny, ic=2:nx) &
          local(zeta_sw, zeta_se, zeta_nw, zeta_ne, a_sw, a_se, a_nw, a_ne, weighted_zeta)
-         if (ic == 1 .or. ic == nx + 1 .or. jc == 1 .or. jc == ny + 1) then
-            ! Array-edge corner: zeta/areaT have no defined 4th neighbour;
-            ! these are ghost/land corners under the ghost policy and are
-            ! never read by a physical-interior momentum face. Leave
-            ! str_s untouched.
-            continue
-         else
-            zeta_sw = zeta(ic - 1, jc - 1)
-            zeta_se = zeta(ic, jc - 1)
-            zeta_nw = zeta(ic - 1, jc)
-            zeta_ne = zeta(ic, jc)
-            a_sw = areaT(ic - 1, jc - 1)
-            a_se = areaT(ic, jc - 1)
-            a_nw = areaT(ic - 1, jc)
-            a_ne = areaT(ic, jc)
-            weighted_zeta = ((a_sw*zeta_sw + a_ne*zeta_ne) + (a_se*zeta_se + a_nw*zeta_nw))
-            str_s(ic, jc) = i_1pdt_t*(str_s(ic, jc) + (i_ec2*dt_2tdamp)* &
-                                      (weighted_zeta*mi_ratio_a_q(ic, jc)*sh_ds(ic, jc)))
-         end if
+         zeta_sw = zeta(ic - 1, jc - 1)
+         zeta_se = zeta(ic, jc - 1)
+         zeta_nw = zeta(ic - 1, jc)
+         zeta_ne = zeta(ic, jc)
+         a_sw = areaT(ic - 1, jc - 1)
+         a_se = areaT(ic, jc - 1)
+         a_nw = areaT(ic - 1, jc)
+         a_ne = areaT(ic, jc)
+         weighted_zeta = ((a_sw*zeta_sw + a_ne*zeta_ne) + (a_se*zeta_se + a_nw*zeta_nw))
+         str_s(ic, jc) = i_1pdt_t*(str_s(ic, jc) + (i_ec2*dt_2tdamp)* &
+                                   (weighted_zeta*mi_ratio_a_q(ic, jc)*sh_ds(ic, jc)))
       end do
    end subroutine evp_str_s_relax_impl
 
