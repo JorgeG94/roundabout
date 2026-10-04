@@ -309,6 +309,8 @@ contains
       real(wp) :: t_restart_local
       integer :: step_restart_local
       logical :: did_restart
+      logical :: resume_q
+      real(wp), allocatable :: q_heat_resume(:, :), q_salt_resume(:, :)
       logical :: bt_excluded
       character(len=:), allocatable :: bt_excl_reason
       integer :: bt_halo_req, bt_halo_res
@@ -565,6 +567,14 @@ contains
       ! registry walk). Default off => no-op, byte-identical.
       call configure_ocean_wetdry(cfg, engine%state, engine%grid, rank)
 
+      ! The surface-flux component set is allocated BEFORE the restart read:
+      ! the registry walk only sees the components (`sf_heat_cavity`/
+      ! `sf_salt_cavity`) and the carried assembly (`sf_Q_heat`/`sf_Q_salt`)
+      ! once they exist -- allocated after the read they were written but
+      ! never restored.
+      call engine%state%surface_flux%set_components(engine%grid, &
+                                                    cfg%ocean%forcing%enable_components)
+
       ! Warm restart (optional — absent/blank restart_file => cold start,
       ! matching the API/bench callers today). NetCDF-only: filename
       ! resolution needs `output_rank_filename`.
@@ -611,14 +621,25 @@ contains
 
       ! Surface heat/salt/p_surf/sw-penetration/restore seeding — 2D
       ! fields device-mapped by ocean_state_enter_data; re-seeded on
-      ! resume (configure-time static, not in the restart registry).
-      call engine%state%surface_flux%set_components(engine%grid, &
-                                                    cfg%ocean%forcing%enable_components)
+      ! resume (configure-time static, not in the restart registry) --
+      ! except the ASSEMBLED Q_heat/Q_salt under the component set, which
+      ! are carried state (`ocean_state_build_restart_registry`): when the
+      ! checkpoint holds an assembly, the seed below must not replace it.
       if (rank == 0 .and. cfg%ocean%forcing%enable_components) then
          call logger%info("Forcing components: ON")
       end if
+      resume_q = did_restart .and. engine%state%surface_flux%use_components .and. &
+                 engine%state%surface_flux%q_assembled > 0.5_wp
+      if (resume_q) then
+         q_heat_resume = engine%state%surface_flux%Q_heat
+         q_salt_resume = engine%state%surface_flux%Q_salt
+      end if
       call engine%state%surface_flux%set_surface_flux_const( &
          cfg%ocean%thermo%q_heat, cfg%ocean%thermo%q_salt)
+      if (resume_q) then
+         engine%state%surface_flux%Q_heat = q_heat_resume
+         engine%state%surface_flux%Q_salt = q_salt_resume
+      end if
       call engine%state%surface_flux%set_p_surf_const( &
          cfg%ocean%psurf%p_surf_const)
       ! E3 top-of-column IN-SITU EOS pressure: seed `ms%p_top` from the
@@ -667,14 +688,17 @@ contains
 
       ! Sea-ice: resume-fold the restart-carried brine/heat/shortwave
       ! contributions back into the just-reseeded Q_salt/Q_heat (cold
-      ! start: exact +0.0).
+      ! start: exact +0.0).  Not when a carried assembly was resumed above:
+      ! it already holds them (summed in the assembler's order).
       if (engine%state%ice%enable) then
-         engine%state%surface_flux%Q_salt = engine%state%surface_flux%Q_salt &
-                                            + engine%state%ice%salt_flux_diag
+         if (.not. resume_q) then
+            engine%state%surface_flux%Q_salt = engine%state%surface_flux%Q_salt &
+                                               + engine%state%ice%salt_flux_diag
+            engine%state%surface_flux%Q_heat = engine%state%surface_flux%Q_heat &
+                                               + engine%state%ice%heat_flux_diag &
+                                               + engine%state%ice%sw_thru_diag
+         end if
          engine%state%surface_flux%has_salt = .true.
-         engine%state%surface_flux%Q_heat = engine%state%surface_flux%Q_heat &
-                                            + engine%state%ice%heat_flux_diag &
-                                            + engine%state%ice%sw_thru_diag
          engine%state%surface_flux%has_heat = .true.
          if (engine%state%surface_flux%use_components) then
             engine%state%surface_flux%has_q_sw = .true.
