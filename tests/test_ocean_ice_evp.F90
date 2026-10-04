@@ -24,7 +24,8 @@ module test_ocean_ice_evp
    use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
    use rdb_ice_column, only: ICE_RHO_ICE
    use rdb_ice_evp, only: ice_evp_dynamics, ice_evp_params_t, ice_evp_mi_ratio_point, &
-                          evp_truncate_final_impl
+                          evp_truncate_final_impl, evp_build_masks_impl, &
+                          evp_q_and_mi_ratio_impl
    use rdb_ice_state, only: ocean_sea_ice_t, evp_workspace_t
    use rdb_ice_ocean_coupler, only: ice_ocean_stress_flux, ice_ocean_stress_resume_apply, &
                                     ice_ocean_stress_cleanup
@@ -89,9 +90,64 @@ contains
                   new_unittest("project_ci_stiffens_convergence", &
                                test_project_ci_stiffens_convergence), &
                   new_unittest("project_ci_extreme_divergence_finite", &
-                               test_project_ci_extreme_divergence_finite) &
+                               test_project_ci_extreme_divergence_finite), &
+                  new_unittest("masks_edge_vector_width", test_masks_edge_vector_width) &
                   ]
    end subroutine collect_ocean_ice_evp_tests
+
+   subroutine test_masks_edge_vector_width(error)
+      !! The array-edge corners of `mask_q`, `q` and `mi_ratio_a_q` are
+      !! land (0) on every tile width.  Regression for an nvfortran 26.5
+      !! CPU-vectoriser miscompile: with the edge excluded by a four-way
+      !! in-loop guard, a tile whose nx+1 is a multiple of the vector width
+      !! (nx = 19 here) took the interior branch at the last corner column,
+      !! read past the row (past the array on the last row) and stored a
+      !! non-zero mask there.  All-wet, all-ice field, so a wrong edge reads
+      !! 1 (or garbage), never 0.  Widths 16..23 cover every remainder.
+      !! The arrays are mapped around the calls (mem:separate; inert on a
+      !! host build) so the offload build runs the same check on the
+      !! device.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NY = 15
+      integer :: nx, nbad
+      real(wp), allocatable :: wet(:, :), mask_t(:, :), mask_u(:, :), mask_v(:, :)
+      real(wp), allocatable :: mask_q(:, :), area(:, :), fq(:, :), mis(:, :)
+      real(wp), allocatable :: q(:, :), mira(:, :)
+
+      nbad = 0
+      do nx = 16, 23
+         allocate (wet(nx, NY), source=1.0_wp)
+         allocate (mask_t(nx, NY), source=0.0_wp)
+         allocate (mask_u(nx + 1, NY), source=0.0_wp)
+         allocate (mask_v(nx, NY + 1), source=0.0_wp)
+         allocate (mask_q(nx + 1, NY + 1), source=-7.0_wp)
+         allocate (area(nx, NY), source=1.0e8_wp)
+         allocate (mis(nx, NY), source=900.0_wp)
+         allocate (fq(nx + 1, NY + 1), source=1.0e-4_wp)
+         allocate (q(nx + 1, NY + 1), source=-7.0_wp)
+         allocate (mira(nx + 1, NY + 1), source=-7.0_wp)
+         !$acc enter data copyin(wet, mask_t, mask_u, mask_v, mask_q, area, mis, fq, q, mira)
+         call evp_build_masks_impl(wet, mask_t, mask_u, mask_v, mask_q, nx - 6, NY - 6, 3, &
+                                   .false., .false., .false., .false., .false., .false., nx, NY)
+         call evp_q_and_mi_ratio_impl(area, fq, mask_t, mask_u, mask_v, mask_q, mis, &
+                                      1.0e-10_wp, 1.0e-20_wp, 1.0e-40_wp, q, mira, nx, NY)
+         !$acc update self(mask_q, q, mira)
+         !$acc exit data delete(wet, mask_t, mask_u, mask_v, mask_q, area, mis, fq, q, mira)
+         if (any(mask_q(1, :) /= 0.0_wp) .or. any(mask_q(nx + 1, :) /= 0.0_wp) .or. &
+             any(mask_q(:, 1) /= 0.0_wp) .or. any(mask_q(:, NY + 1) /= 0.0_wp) .or. &
+             any(q(nx + 1, :) /= 0.0_wp) .or. any(mira(nx + 1, :) /= 0.0_wp) .or. &
+             any(q(:, NY + 1) /= 0.0_wp) .or. any(mira(:, NY + 1) /= 0.0_wp)) then
+            nbad = nbad + 1
+            write (*, '(a,i0)') "  masks_edge_vector_width: wrong array-edge corner at nx = ", nx
+         end if
+         if (any(mask_q(2:nx, 2:NY) /= 1.0_wp)) then
+            nbad = nbad + 1
+            write (*, '(a,i0)') "  masks_edge_vector_width: wrong interior corner at nx = ", nx
+         end if
+         deallocate (wet, mask_t, mask_u, mask_v, mask_q, area, mis, fq, q, mira)
+      end do
+      call check(error, nbad == 0, "EVP corner masks wrong at the array edge (see log)")
+   end subroutine test_masks_edge_vector_width
 
    ! =====================================================================
    ! Shared params builder
