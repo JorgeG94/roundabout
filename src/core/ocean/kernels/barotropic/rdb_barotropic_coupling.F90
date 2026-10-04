@@ -1478,7 +1478,9 @@ contains
       !!        pbce(:,:,k) = pbce(:,:,k+1) + g_prime_K·(e_top_of_k − e_bed)/H
       !! Uniform-density column ⇒ pbce−gtot ≡ 0 ⇒ bc-PGF correction a no-op.
       !! Reads `pgf%e_face`; requires `pgf%variant == OPGF_VARIANT_FV_MOM6`
-      !! (error_stop otherwise — other variants don't fill e_face).
+      !! (other variants don't fill e_face).  `validate_config` and
+      !! `configure_ocean_pgf` refuse `correction_bc_pgf` with any other
+      !! form, so the `error stop` below is a backstop for direct callers.
       type(hgrid_t), intent(in) :: grid
       type(barotropic_workstate_t), intent(inout) :: bt_work
       type(ocean_pressure_force_t), intent(in) :: pgf

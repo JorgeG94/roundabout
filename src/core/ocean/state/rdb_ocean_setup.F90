@@ -3339,6 +3339,18 @@ contains
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
+      ! The bc-PGF retro-correction reads `pgf%e_face`, which only FV_MOM6
+      ! fills.  Mirrors the `validate_config` refusal so an in-memory /
+      ! API caller fails at configure, not with an `error stop` in step 1.
+      if (cfg%ocean%bt%correction_bc_pgf .and. &
+          ocean_state%pressure_force%variant /= OPGF_VARIANT_FV_MOM6) then
+         call fail("configure_ocean_pgf: &ocean_bt_nml correction_bc_pgf=.true. "// &
+                   "requires form='fv_mom6'. compute_pbce builds the per-layer "// &
+                   "pressure response from the FV_MOM6 interface-height stack "// &
+                   "(pgf%e_face), which no other PGF form fills.", &
+                   ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
       ! In-layer T/S reconstruction wires into the FV_MOM6 layer-integrated
       ! form only (it carries e_face / pa / intz_dpa).  Fail loud if the
       ! knob is on with any other PGF form.
