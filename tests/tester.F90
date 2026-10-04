@@ -181,6 +181,7 @@ program rdb_tests
                                                        collect_ocean_budget_periodic_sponge_serial_tests
    use test_ocean_dyn_multilayer, only: ocean_dyn_multilayer_collect => collect_ocean_dyn_multilayer_tests
    use test_ocean_hvisc, only: ocean_hvisc_collect => collect_ocean_hvisc_tests
+   use test_ocean_hvisc_biharm_zfixed, only: ocean_hvisc_biharm_zfixed_collect => collect_ocean_hvisc_biharm_zfixed_tests
    use test_ocean_hvisc_resoln, only: ocean_hvisc_resoln_collect => collect_ocean_hvisc_resoln_tests
    use test_ocean_leith, only: ocean_leith_collect => collect_ocean_leith_tests
    use test_ocean_isopycnal_slopes, only: ocean_isopycnal_slopes_collect => &
@@ -364,6 +365,7 @@ program rdb_tests
                               ocean_budget_periodic_sponge_serial_collect), &
                 new_testsuite("ocean_dyn_multilayer", ocean_dyn_multilayer_collect), &
                 new_testsuite("ocean_hvisc", ocean_hvisc_collect), &
+                new_testsuite("ocean_hvisc_biharm_zfixed", ocean_hvisc_biharm_zfixed_collect), &
                 new_testsuite("ocean_hvisc_resoln", ocean_hvisc_resoln_collect), &
                 new_testsuite("ocean_leith", ocean_leith_collect), &
                 new_testsuite("ocean_isopycnal_slopes", ocean_isopycnal_slopes_collect), &
