@@ -187,6 +187,7 @@ program rdb_tests
    use test_ocean_leith, only: ocean_leith_collect => collect_ocean_leith_tests
    use test_ocean_isopycnal_slopes, only: ocean_isopycnal_slopes_collect => &
                                           collect_ocean_isopycnal_slopes_tests
+   use test_ocean_slopes_datum, only: ocean_slopes_datum_collect => collect_ocean_slopes_datum_tests
    use test_ocean_gm, only: ocean_gm_collect => collect_ocean_gm_tests
    use test_ocean_gm_zfixed, only: ocean_gm_zfixed_collect => collect_ocean_gm_zfixed_tests
    use test_ocean_redi, only: ocean_redi_collect => collect_ocean_redi_tests
@@ -374,6 +375,7 @@ program rdb_tests
                 new_testsuite("ocean_hvisc_resoln", ocean_hvisc_resoln_collect), &
                 new_testsuite("ocean_leith", ocean_leith_collect), &
                 new_testsuite("ocean_isopycnal_slopes", ocean_isopycnal_slopes_collect), &
+                new_testsuite("ocean_slopes_datum", ocean_slopes_datum_collect), &
                 new_testsuite("ocean_gm", ocean_gm_collect), &
                 new_testsuite("ocean_gm_zfixed", ocean_gm_zfixed_collect), &
                 new_testsuite("ocean_redi", ocean_redi_collect), &
