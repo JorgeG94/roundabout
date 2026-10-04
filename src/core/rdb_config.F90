@@ -6877,10 +6877,10 @@ contains
       ! `dynamics=.true.` requests `ice_evp_step` every outer step; the v1
       ! envelope excludes configurations the kernel does not (yet) handle —
       ! fail loud rather than silently produce a wrong/unstable answer.
-      ! Unlike transport, EVP DOES allow periodic edges (the ghost-wrap
-      ! machinery in `rdb_ice_evp` mirrors the ocean's own periodic-wrap
-      ! contract), so this is a separate (looser on periodicity, otherwise
-      ! similar) envelope, not a re-use of the transport block above.
+      ! EVP allows periodic edges (the ghost-wrap machinery in `rdb_ice_evp`
+      ! mirrors the ocean's own periodic-wrap contract, as transport now
+      ! does too); its edge envelope is its own, not a re-use of the
+      ! transport block above.
       ! Multi-rank: the ice velocity is halo-exchanged every subcycle.
       if (cfg%ocean%ice%dynamics) then
          if (.not. cfg%ocean%ice%enable) then

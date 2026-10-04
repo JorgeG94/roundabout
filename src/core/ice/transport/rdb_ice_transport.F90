@@ -134,7 +134,10 @@ module rdb_ice_transport
    public :: ice_transport_step
    public :: ice_transport_compress_cell
    public :: ice_cat_flux_x_impl
+      !! Public only so `test_ocean_ice_transport` (`seam_face_is_interior_ppm`)
+      !! can call the flux kernel directly; not an API for model code.
    public :: ice_cat_flux_y_impl
+      !! Public for the same test (the meridional twin).
    public :: H_NEGLECT_ICE_TRANSPORT
    public :: MASS_NEGLECT_ICE_TRANSPORT
 
