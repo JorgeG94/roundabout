@@ -1956,30 +1956,17 @@ contains
       !!     update-self walk).
       !!
       !! Deliberately EXCLUDED:
-      !!   sf%Q_heat / sf%Q_salt — DERIVED VIEWS (PR-12), not raw state.
-      !!     With the surface-flux component set off (default), they are
-      !!     re-seeded from `&ocean_thermo_nml q_heat / q_salt` (or the
-      !!     Area-A3/A4 fill path) on every resume, same as before PR-12.
-      !!     With the component set on, `ocean_surface_flux_assemble`
-      !!     REBUILDS them every thermo step from `Q_heat_const` /
-      !!     `Q_salt_const` plus the component fields — they fall under
-      !!     the SAME derived-field exclusion rule as `w_interface` /
-      !!     `mass_flux_*` below ("diagnosed each stage from the
-      !!     prognostics before first use"), just diagnosed from the
-      !!     component fields instead.  Registering a derived field
-      !!     creates the classic file-vs-namelist ambiguity on resume
-      !!     (does a checkpointed `Q_heat` win over an edited namelist
-      !!     scalar?) — the correct fix is NOT to register `Q_heat`/
-      !!     `Q_salt` but to require that a time-varying COMPONENT
-      !!     register ITSELF: any filler (a future reader, the ice
-      !!     coupler's `salt_flux`/`heat_added`, ...) that makes a
-      !!     component time-varying MUST register it via
-      !!     `registry_register_2d(tag, arr, ng, nx, ny, optional=.true.,
-      !!     device_mapped=.true.)` from this subroutine.  In v1 no
-      !!     component is time-varying on its own (the ice coupler's
-      !!     restart-exact refill source is `ice_salt_flux_diag` /
-      !!     `ice_heat_flux_diag`, registered below), so nothing
-      !!     additional is registered here yet.
+      !!   sf%Q_heat / sf%Q_salt with the surface-flux component set OFF
+      !!     (default) — configure-static: re-seeded from `&ocean_thermo_nml
+      !!     q_heat / q_salt` on every resume, and the sea-ice couplers'
+      !!     contributions are folded back in from the registered
+      !!     `ice_salt_flux_diag` / `ice_heat_flux_diag` / `ice_sw_thru_diag`
+      !!     (`engine_setup`), exactly the sums the couplers form.  With the
+      !!     component set ON they ARE registered (`sf_Q_heat`/`sf_Q_salt`,
+      !!     see below): `ocean_surface_flux_assemble` rebuilds them at the
+      !!     END of each thermo step, and every step until the next one
+      !!     reads that assembly -- carried state, with SST-dependent terms
+      !!     no configure-time re-assembly could reproduce.
       !!   RK saves (h_layer0, hTr0, *_layer0) + bt accumulators
       !!     (bt_eta/ubt/...) — step-internal scratch, re-zeroed at the
       !!     top of every outer step (restart is step-aligned).
@@ -2239,6 +2226,29 @@ contains
          call reg%register_2d("sf_salt_cavity", state%surface_flux%salt_cavity, 0, &
                               size(state%surface_flux%salt_cavity, 1), &
                               size(state%surface_flux%salt_cavity, 2), optional=.true.)
+      end if
+
+      ! --- Assembled net surface fluxes under the component set.  With
+      !     `use_components` the assembler derives Q_heat/Q_salt at the END
+      !     of each thermo step and the following steps read them, so they
+      !     are carried state (an end-of-window checkpoint is read by the
+      !     very next step); `sf_q_assembled` says the arrays hold an
+      !     assembly (engine_setup then resumes them instead of the
+      !     configure seed + ice fold, which sum the same terms in a
+      !     different order and miss every non-ice component).  Optional:
+      !     an older checkpoint resumes with the seed + fold as before.
+      !     `set_components` runs BEFORE the restart read in engine_setup,
+      !     so these (and sf_heat_cavity/sf_salt_cavity above) exist when
+      !     the read walks the registry. ---
+      if (state%surface_flux%use_components) then
+         call reg%register_2d("sf_Q_heat", state%surface_flux%Q_heat, 0, &
+                              size(state%surface_flux%Q_heat, 1), &
+                              size(state%surface_flux%Q_heat, 2), optional=.true.)
+         call reg%register_2d("sf_Q_salt", state%surface_flux%Q_salt, 0, &
+                              size(state%surface_flux%Q_salt, 1), &
+                              size(state%surface_flux%Q_salt, 2), optional=.true.)
+         call reg%register_scalar("sf_q_assembled", state%surface_flux%q_assembled, &
+                                  optional=.true.)
       end if
 
       ! --- Sea-ice PR 5: C-grid EVP dynamics prognostics.  u_ice/v_ice

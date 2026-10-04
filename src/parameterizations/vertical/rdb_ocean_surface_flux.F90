@@ -221,6 +221,17 @@ module rdb_ocean_surface_flux
          !! are filled exactly as today — bit-identical.  `.true.`:
          !! allocates the component set (`set_components`) and the
          !! assembler rebuilds `Q_heat`/`Q_salt` every thermo step.
+      real(wp) :: q_assembled = 0.0_wp
+         !! Host latch, 1 once `ocean_surface_flux_assemble` has derived
+         !! `Q_heat`/`Q_salt` from the component set.  From then on the
+         !! two arrays are CARRIED state: the assembler runs at the END of
+         !! a thermo step and the steps up to the next one read what it
+         !! left (SST-dependent terms included), so with `use_components`
+         !! they are checkpointed, and this latch tells a warm restart
+         !! that the checkpointed arrays are an assembly to resume from
+         !! (0 => an older checkpoint or none yet: the configure-time
+         !! seed stands).  A real, not a logical, because the restart
+         !! registry carries real scalars.
       logical :: has_mass_flux = .false.
          !! Host-side latch — set by a filler after writing ANY of
          !! `evap`/`lprec`/`fprec`/`vprec`/`lrunoff`/`frunoff`/
@@ -381,12 +392,14 @@ contains
       ny = grid%ny_total
       allocate (this%Q_heat(nx, ny), source=0.0_wp)
       allocate (this%Q_salt(nx, ny), source=0.0_wp)
+      this%q_assembled = 0.0_wp
       this%is_init = .true.
    end subroutine ocean_surfflux_init
 
    subroutine ocean_surfflux_destroy(this)
       class(ocean_surface_flux_t), intent(inout) :: this
       this%is_init = .false.
+      this%q_assembled = 0.0_wp
       if (allocated(this%Q_heat)) deallocate (this%Q_heat)
       if (allocated(this%Q_salt)) deallocate (this%Q_salt)
       call ocean_surfflux_dealloc_components(this)
@@ -1501,6 +1514,7 @@ contains
             sf%evap, sf%salt_flux, sf%salt_cavity, &
             ms%tracers(idx_T)%hTr, ms%h_layer, ms%wet_mask, cover_frac, &
             sf%Q_heat_const, sf%Q_salt_const, sf%cp, sf%h_min, nz, nx, ny)
+         sf%q_assembled = 1.0_wp
          return
       end if
 
@@ -1512,6 +1526,7 @@ contains
          sf%evap, sf%salt_flux, sf%salt_cavity, &
          ms%tracers(idx_T)%hTr, ms%h_layer, ms%wet_mask, &
          sf%Q_heat_const, sf%Q_salt_const, sf%cp, sf%h_min, nz, nx, ny)
+      sf%q_assembled = 1.0_wp
    end subroutine ocean_surface_flux_assemble
 
    pure subroutine ocean_surfflux_assemble_impl(heat_content_massin, heat_content_massout, &
