@@ -225,6 +225,17 @@ ROWS = [
           "The WENO PV face interpolation is MOM6's WENOVI family, which is itself an "
           "enstrophy-form Coriolis scheme; it has no energy-form or HK counterpart.",
           r"pv_adv_scheme='weno\d' is only wired into form='sadourny'", unless=("cor_sadourny",)),
+    _phys("bc_pgf_needs_fv_mom6", ("bt_bc_pgf", "pgf_mont"),
+          "correction_bc_pgf's compute_pbce builds the per-layer pressure response from the "
+          "FV_MOM6 interface-height stack (pgf%e_face), which no other PGF form fills; the "
+          "surface-relative forms carry no free-surface term (fix/bc-pgf-needs-fv-mom6).",
+          r"correction_bc_pgf=\.true\. requires &ocean_pgf_nml form='fv_mom6'"),
+    _phys("zfixed_open_steps", ("open_steps",),
+          "z_fixed WITHOUT closed faces over a stepped bed pairs a live layer with a bed "
+          "filler at every step face, and the staircase pressure gradient drives flow from "
+          "rest; refused at configure (fix/zfixed-require-closed-faces).",
+          r"zfixed_closed_faces = \.false\. is refused with vcoord_type='z_fixed' over a "
+          r"stepped bed"),
     _phys("henyey_needs_latitude", ("henyey", "cartesian"),
           "The Henyey background is a latitude factor; a Cartesian grid has no latitude "
           "(geolatT = 0 would make every column equatorial).",
@@ -249,13 +260,6 @@ ROWS = [
          "NOT TRACKED (B5 reads epbl%mld)",
          message=r"ocean_foxkemper_nml: enable=\.true\. requires ocean_epbl_nml enable=\.true\.",
          unless=("epbl",)),
-] + [
-    _gap("closed_faces_" + f, "refused", ("closed_faces", f),
-         "GM / Redi / MLE fold their face fluxes from a 2-D wet gate after the per-layer "
-         "closed-face mask: the transports would leak through a closed face.",
-         "item {} (feat/{}-zfixed-closed-faces)".format(item, f),
-         message=r"zfixed_closed_faces does not yet compose with GM / Redi / MLE")
-    for f, item in (("gm", 1), ("redi", 2), ("mle", 3))
 ] + [
     _gap("closed_faces_nu_4", "refused", ("closed_faces", "nu_4"),
          "The free-slip closure of a closed face exists for the harmonic velocity-Laplacian "
@@ -327,33 +331,6 @@ ROWS = [
          "precondition guard stops at step 1.  Same land-column class as C3; new site.",
          "item C3 (NEW site: the zstar_full target builder)", expect=("CRASH",),
          message=_PRECOND_STEP1),
-    _gap("zfixed_open_steps", "runtime", ("open_steps",),
-         "z_fixed WITHOUT closed faces takes the full staircase PGF at every step face: "
-         "En ~30x the closed-face run in 24 steps and, in some combinations, a negative "
-         "thickness the remap guard stops.  Decided: refuse it (bed steps) now.",
-         "item 11 (fix/zfixed-require-closed-faces)",
-         expect=("CRASH", "NONFINITE", "ENERGY", "CROSS_BACKEND"),
-         message=r"remap preconditions at step|nan-catch|I1' tripwire|"
-                 r"PASS-population reference|En grew|norm .* > band", scope="any",
-         # measured 2026-10-02: a negative thickness at step 20
-         witness={"vcoord": "z_fixed_open", "vmix_extra": "conv", "vmix_bg": "bryan_lewis",
-                  "lateral": "stress_tensor", "eddy": "gm_varmix_resscaled",
-                  "tracers": "pseudo_salt", "pgf": "fv_mom6_ppm", "eos": "linear",
-                  "coriolis": "sadourny", "pv_adv": "weno7", "bt": "substep_drag",
-                  "grid": "spherical"}),
-    _gap("bc_pgf_needs_fv_mom6", "runtime", ("bt_bc_pgf", "pgf_mont"),
-         "correction_bc_pgf reads pgf%e_face, which only the fv_mom6 PGF fills -- but the "
-         "combination is ACCEPTED at configure and `error stop`s inside step 1 "
-         "(compute_pbce).  The fix is a validate_config refusal.",
-         "NOT TRACKED (found by this matrix, 2026-10-02)", expect=("CRASH",),
-         message=r"compute_pbce: requires ocean_pgf_form = 'fv_mom6'"),
-    _gap("redi_obc_salt_budget", "runtime", ("redi", "obc_open"),
-         "Redi with a Flather open edge: the model's own salt budget misses ~4e-5 of the "
-         "salt content in 24 steps (every such cell; Redi on walls / a periodic channel "
-         "closes to 1e-15).  Either the neutral flux through the open face is not in the "
-         "budget's boundary term or it is a real leak.",
-         "NOT TRACKED (found by this matrix, 2026-10-02)", expect=("BUDGET",),
-         message=r"^Salt residual"),
 
     # ===================================================================
     # KNOWN_GAP -- the legs (phase 3, 2026-10-04): RESTART, DECOMP.
@@ -378,12 +355,6 @@ ROWS = [
          "re-seeds it from the instantaneous MLD and the restratification flux changes.",
          "NOT TRACKED (found by this matrix, 2026-10-04)", expect=("RESTART",),
          message=r"differ after a warm restart"),
-    _gap("decomp_redi_seam", "runtime", ("redi",),
-         "Redi is not decomposition-invariant: every owned value of h / u / v / T / S differs "
-         "from the 1-rank run (1e-8 relative after 24 steps) on 2x2 and 4x1 -- the "
-         "pre-existing 'Redi treats an MPI seam as a wall' bug that item 2's branch fixes.",
-         "item 2 (feat/redi-zfixed-closed-faces fixes the Redi MPI seam-as-wall bug)",
-         expect=("DECOMP",), message=r"\dx\d: \d+ field mismatch", unless=("cavity",)),
     _gap("decomp_weno_pv", "runtime", ("pv_weno",),
          "The WENO PV face interpolation is not decomposition-invariant: last-bit differences "
          "in h / u / v / rho in every owned cell on 2x2 and 4x1 (sadourny + weno7 on z*: "
