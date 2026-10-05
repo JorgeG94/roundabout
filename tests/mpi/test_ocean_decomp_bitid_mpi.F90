@@ -823,13 +823,15 @@ contains
       !! difference of fluxes, so the reordering survives cancellation.
       !! Measured on nvfortran 26.5 CPU + HPC-X, 4x1 and 2x2: up to a
       !! relative 3e-15 at the faces at and beside a tile seam; the GPU
-      !! build has no remainder loop and is bitwise.  The difference never
-      !! reaches the prognostics: the tendency is ~1e-11, dt times its
-      !! last bits is far below one ULP of `u`, and every prognostic field
-      !! compared here stays BITWISE -- which is also what would catch a
-      !! real decomposition bug in the viscosity, since this tendency is
-      !! applied to `u`/`v` every step.  Restarts resume on the same
-      !! decomposition and restore these arrays verbatim.
+      !! build has no remainder loop and is bitwise.  It CAN reach the
+      !! prognostics: under z* + visc_rem (`visc_rem_zstar`) the FMA
+      !! difference drifted eta 1e-8 in 24 steps on 4x1, so the CPU build
+      !! compiles the hvisc module `-Mnofma` (cmake/compiler_flags.cmake).
+      !! That leaves a 1-ULP residual in the tendency at seam faces, which
+      !! stays below one ULP of `u`: every prognostic field compared here
+      !! is BITWISE, and that is what catches a real decomposition bug in
+      !! the viscosity.  Restarts resume on the same decomposition and
+      !! restore these arrays verbatim.
       character(len=*), intent(in) :: tag
       carried_tendency = trim(tag) == "hvisc_du_visc" .or. trim(tag) == "hvisc_dv_visc"
    end function carried_tendency
