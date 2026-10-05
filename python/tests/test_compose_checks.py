@@ -86,28 +86,21 @@ def test_meke_without_gm_raises():
         _compose.compose(grid=_cart_grid(), closures=[MEKE()])
 
 
-def test_implicit_vertical_friction_bbl_glue_missing_all_three():
+def test_implicit_vertical_friction_bbl_glue_needs_harmonic_thickness():
     with pytest.raises(rdb.ConfigConflictError,
-                        match="harmonic_thickness.*drag.*LinearDrag|"
-                              "THREE prerequisites"):
+                        match="harmonic_thickness=True"):
         _compose.compose(
             grid=_cart_grid(),
             closures=[ImplicitVerticalFriction(bbl_glue=True)])
 
 
-def test_implicit_vertical_friction_bbl_glue_missing_linear_drag_only():
-    with pytest.raises(rdb.ConfigConflictError, match="LinearDrag"):
-        _compose.compose(
-            grid=_cart_grid(),
-            closures=[ImplicitVerticalFriction(
-                bbl_glue=True, harmonic_thickness=True, drag=True)])
-
-
 def test_implicit_vertical_friction_bbl_glue_satisfied():
+    # Any bottom drag composes with the glue now (quadratic or linear,
+    # folded or not): the per-face MOM6 BBL takes its law from it.
     composed = _compose.compose(
         grid=_cart_grid(),
         closures=[ImplicitVerticalFriction(
-            bbl_glue=True, harmonic_thickness=True, drag=True),
+            bbl_glue=True, harmonic_thickness=True),
             LinearDrag(r=1e-4)])
     text = composed.config.to_namelist()
     assert "bbl_glue = .true." in text

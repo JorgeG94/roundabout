@@ -6,9 +6,8 @@ is required (an array bathymetry, or any periodic/fold edge).
 This is the ONE place cross-object compose-time checks live (D2.7/D2.8):
 KPP xor EPBL, Bryan-Lewis xor Henyey, Henyey needs a non-cartesian grid,
 MEKE backscatter needs a non-zero biharmonic backstop,
-`ImplicitVerticalFriction(bbl_glue=True)`'s three-prerequisite chain
-(two knobs on itself, one on a `LinearDrag` object elsewhere in the same
-`closures=[...]` list) -- plus a few smaller ones (SphericalCoriolis /
+`ImplicitVerticalFriction(bbl_glue=True)` needing
+`harmonic_thickness=True` -- plus a few smaller ones (SphericalCoriolis /
 EquilibriumTide / HenyeyBackground need a non-cartesian grid;
 AtmosphericPressure needs SurfaceFluxComponents; BaroclinicJetIC needs
 nz=2; a grid's flat-bottom `extent=(.., Lz)` conflicts with an explicit
@@ -125,20 +124,12 @@ def _compose_closures(closures, config, grid):
     for f in ivf:
         if not f.bbl_glue:
             continue
-        missing = []
         if not f.harmonic_thickness:
-            missing.append("harmonic_thickness=True (-> hvel_mom6)")
-        if not f.drag:
-            missing.append("drag=True (-> implicit_drag)")
-        if not any(isinstance(c, C.LinearDrag) for c in closures):
-            missing.append("a LinearDrag(...) bottom-drag object in the "
-                            "same closures=[...] list (bbl_glue requires "
-                            "a LINEAR bottom drag)")
-        if missing:
             raise ConfigConflictError(
-                "ImplicitVerticalFriction(bbl_glue=True) needs THREE "
-                "prerequisites (harmonic_thickness + drag + a linear "
-                "bottom drag); missing: " + "; ".join(missing))
+                "ImplicitVerticalFriction(bbl_glue=True) needs "
+                "harmonic_thickness=True (-> hvel_mom6): the MOM6 BBL glue "
+                "reads the height-above-bed stack only that face-thickness "
+                "build accumulates")
 
     for c in closures:
         c.apply(config)
