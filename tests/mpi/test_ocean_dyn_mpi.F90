@@ -1229,7 +1229,7 @@ contains
       integer(int64) :: expect_c2d, expect_fx2d, expect_fy2d
       integer(int64) :: expect_msgs
       integer(int64) :: expect_fx3d, expect_fy3d, pc_per_stage, pc_isends_per_step
-      integer(int64) :: pc_refresh_per_stage
+      integer(int64) :: pc_refresh_per_stage, visc_rem_per_stage
       integer :: bh
 
       bh = 0
@@ -1259,16 +1259,36 @@ contains
       pc_refresh_per_stage = 0_int64
       if (is_pc) pc_refresh_per_stage = 2_int64
 
+      ! PR-2 (bt-rem-from-av-rem): `visc_rem_precompute`'s halo refresh
+      ! (`visc_rem_halo_refresh`) is UNCONDITIONAL (MOM6 `pass_visc_rem`,
+      ! MOM_dynamics_split_RK2.F90:494 -- no consumer gate there either).
+      ! Under `is_pc` (this test's split_scheme), `visc_rem_precompute`
+      ! already runs once per stage regardless of any BT-rem consumer
+      ! flag (the `.or. is_pc` arm of its call-site gate), so the refresh
+      ! fires with EXACTLY the same `is_pc .and. decomposed` gating as
+      ! the u_av/v_av seam fill above -- one face_x_3d (visc_rem_u) + one
+      ! face_y_3d (visc_rem_v) per stage, no centre_3d twin (visc_rem has
+      ! no h_av-like scalar). Root-cause note: before this fix PR-1 gated
+      ! the refresh on a BT-rem consumer flag to make this exact canary
+      ! pass; the gate was a workaround, not a fix -- the counts below
+      ! were CORRECT (measured face_x_3d/face_y_3d exactly double, msgs
+      ! exactly +4*N_STEPS wall / +8*N_STEPS periodic, with mass/KE/
+      ! salt/heat agreement unchanged to round-off in every leg), so the
+      ! bug was this stale formula, not the exchange.
+      visc_rem_per_stage = pc_per_stage
+
       expect_ml = int(3*2*N_STEPS, int64)
       expect_c3d = (3_int64 + pc_per_stage + pc_refresh_per_stage)*2_int64*int(N_STEPS, int64)
-      expect_fx3d = pc_per_stage*2_int64*int(N_STEPS, int64)
-      expect_fy3d = pc_per_stage*2_int64*int(N_STEPS, int64)
+      expect_fx3d = (pc_per_stage + visc_rem_per_stage)*2_int64*int(N_STEPS, int64)
+      expect_fy3d = (pc_per_stage + visc_rem_per_stage)*2_int64*int(N_STEPS, int64)
 
       ! Isends the step-0b block adds per DIRECTION per step: one primitive
       ! each (u_av, v_av, h_av) x 2 stages.  A face_y array still posts its
       ! x-seam columns, so all three count on an x-decomposition.  Multiplied
-      ! by n_x_dirs alongside the base term below.
-      pc_isends_per_step = pc_per_stage*3_int64*2_int64 + pc_refresh_per_stage*2_int64
+      ! by n_x_dirs alongside the base term below.  visc_rem_u/v add 2 more
+      ! face primitives (no centre) under the same pc_per_stage gating.
+      pc_isends_per_step = pc_per_stage*3_int64*2_int64 + visc_rem_per_stage*2_int64*2_int64 &
+                           + pc_refresh_per_stage*2_int64
 
       if (bh > 0) then
          ! Wide-halo march-in schedule (num_cycles = bh/2 = 2 for bh=4,
