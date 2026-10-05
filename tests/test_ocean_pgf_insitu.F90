@@ -24,6 +24,19 @@
 !! 3. linear_eos_bit_identical — the knob is inert for the linear EOS
 !!    (in-situ and potential density coincide): on and off agree to the
 !!    bit.
+!! 4. open_step_filler_faces_{pcm,plm,ppm} — the same resting partial-step
+!!    columns, but the bed fillers hold their I1′ content (`h·c_live`, the
+!!    partial bed cell's T/S) and EVERY face is read, including a live layer
+!!    facing a filler: under `zstar` (closed faces off) those faces are OPEN
+!!    and their PGF drives the flow.  Two gates.  (a) A vanished layer's
+!!    sub-marker thickness must not change the answer: fillers of 1e-4 m
+!!    and 1e-7 m give the same PGF to a relative 1e-4.  (b) At rest the
+!!    acceleration on a live|filler face stays below 5e-6 m/s² — the
+!!    slanted-path FV truncation of a smooth stratification.  Fails before
+!!    the fix: the kernels read a filler's T/S as `hTr/max(h, H_VANISHED)`
+!!    (2/3 of the truth at 1e-4 m, 1/1500 at 1e-7 m) and the cross-face
+!!    Boole integral and the PLM/PPM stencil carried that over the live
+!!    layer's thickness — the open-step `zstar`/`z_fixed` blow-up.
 module test_ocean_pgf_insitu
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp, GRAVITY
@@ -35,6 +48,7 @@ module test_ocean_pgf_insitu
    use rdb_ocean_pressure_force, only: ocean_pressure_force_t, &
                                        ocean_pressure_force_compute, &
                                        OPGF_VARIANT_FV_MOM6
+   use rdb_ocean_pgf_reconstruct, only: PGF_RECON_PLM, PGF_RECON_PPM
    implicit none
    private
 
@@ -55,7 +69,10 @@ contains
       testsuite = [ &
                   new_unittest("thermobaric_face_matches_insitu_oracle", test_thermobaric), &
                   new_unittest("rest_partial_steps_zero_pgf", test_rest_partial_steps), &
-                  new_unittest("linear_eos_bit_identical", test_linear_bitident) &
+                  new_unittest("linear_eos_bit_identical", test_linear_bitident), &
+                  new_unittest("open_step_filler_faces_pcm", test_open_step_pcm), &
+                  new_unittest("open_step_filler_faces_plm", test_open_step_plm), &
+                  new_unittest("open_step_filler_faces_ppm", test_open_step_ppm) &
                   ]
    end subroutine collect_ocean_pgf_insitu_tests
 
@@ -375,5 +392,150 @@ contains
       call pgf_off%destroy()
       call ms%destroy()
    end subroutine test_linear_bitident
+
+   subroutine seed_open_steps_i1prime(ms, eos, nz, hlay, depth, b, h_fill)
+      !! `seed_zlevel_steps` with the bed fillers (thickness `h_fill`)
+      !! holding their I1′ content: `h_fill·c_live`, `c_live` the T/S of the
+      !! nearest live layer above (the partial bed cell) — what
+      !! `enforce_vanished_content` leaves on every z-like column.
+      type(multilayer_state_t), intent(inout) :: ms
+      type(eos_t), intent(in) :: eos
+      integer, intent(in) :: nz
+      real(wp), intent(in) :: hlay
+      real(wp), intent(in) :: depth(:)
+      real(wp), intent(inout) :: b(:, :)
+      real(wp), intent(in) :: h_fill
+      integer :: i, j, k, kk
+      real(wp) :: z_top, tk, sk, hk, t_live, s_live
+      do j = 1, size(ms%h_layer, 2)
+         do i = 1, size(ms%h_layer, 1)
+            b(i, j) = 0.0_wp
+            t_live = 0.0_wp
+            s_live = 0.0_wp
+            do k = nz, 1, -1
+               kk = nz - k
+               z_top = real(kk, wp)*hlay
+               hk = min(hlay, max(depth(i) - z_top, 0.0_wp))
+               if (hk > 0.0_wp) then
+                  tk = 2.0_wp + 16.0_wp*exp(-(z_top + 0.5_wp*hlay)/700.0_wp)
+                  sk = 34.6_wp + 0.5_wp*exp(-(z_top + 0.5_wp*hlay)/900.0_wp)
+                  t_live = tk
+                  s_live = sk
+               else
+                  hk = h_fill
+                  tk = t_live
+                  sk = s_live
+               end if
+               ms%h_layer(i, j, k) = hk
+               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = tk*hk
+               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = sk*hk
+               ms%rho_layer(i, j, k) = eos_density_point(eos, tk, sk, 0.0_wp)
+               b(i, j) = b(i, j) + hk
+            end do
+         end do
+      end do
+   end subroutine seed_open_steps_i1prime
+
+   subroutine test_open_step_pcm(error)
+      type(error_type), allocatable, intent(out) :: error
+      call check_open_step(error, .false., PGF_RECON_PLM, "pcm")
+   end subroutine test_open_step_pcm
+
+   subroutine test_open_step_plm(error)
+      type(error_type), allocatable, intent(out) :: error
+      call check_open_step(error, .true., PGF_RECON_PLM, "plm")
+   end subroutine test_open_step_plm
+
+   subroutine test_open_step_ppm(error)
+      type(error_type), allocatable, intent(out) :: error
+      call check_open_step(error, .true., PGF_RECON_PPM, "ppm")
+   end subroutine test_open_step_ppm
+
+   subroutine check_open_step(error, recon, scheme, tag)
+      !! Gates (a) and (b) of test 4 (module header) for one T/S profile
+      !! inside the layer: PCM in-situ, or the PLM / PPM reconstruction.
+      type(error_type), allocatable, intent(out) :: error
+      logical, intent(in) :: recon
+      integer, intent(in) :: scheme
+      character(len=*), intent(in) :: tag
+      integer, parameter :: NZ = 16
+      real(wp), parameter :: HLAY = 250.0_wp
+      real(wp), parameter :: H_FILLS(2) = [1.0e-4_wp, 1.0e-7_wp]
+      real(wp), parameter :: REL_TOL = 1.0e-4_wp
+         !! (a): the filler thickness moves the face geometry by `h_fill`
+         !! against a `HLAY` layer.  Measured 4.5e-7 relative (PCM, PLM and
+         !! PPM alike); before the fix 0.67 — the floored read is
+         !! `h_fill/H_VANISHED` of the true T/S.
+      real(wp), parameter :: ACC_MAX = 5.0e-6_wp
+         !! (b): measured 1.36e-6 m/s^2 (PCM) / 1.37e-6 (PLM, PPM) on the 52
+         !! live|filler faces — the FV slanted-path truncation between a
+         !! live layer and the bed it faces, ~1.2 mm/s per 900 s step, NOT
+         !! zero (the aligned partial-cell faces of test 2 are, to 1e-10);
+         !! before the fix 2.87e-3 at 1e-4 m fillers, 2100x larger.
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_pressure_force_t) :: pgf
+      type(eos_t) :: eos
+      real(wp), allocatable :: b(:, :), depth(:), pfu(:, :, :, :)
+      real(wp) :: dmax, amax, scale_f
+      integer :: i, j, k, nx, ny, ifill, nfaces
+      logical :: live_l, live_r
+      character(len=160) :: msg
+      checks: block
+         call grid%init(NXP, NYP, NGHOST, DX, DX)
+         ms%nz_ml = NZ
+         call ms%init(grid)
+         call make_wright(eos)
+         nx = grid%nx_total
+         ny = grid%ny_total
+         allocate (b(nx, ny), source=0.0_wp)
+         allocate (depth(nx))
+         allocate (pfu(nx + 1, ny, NZ, 2), source=0.0_wp)
+         do i = 1, nx
+            depth(i) = 2600.0_wp + 137.0_wp*real(mod(7*i, 10), wp)
+         end do
+         do ifill = 1, 2
+            call seed_open_steps_i1prime(ms, eos, NZ, HLAY, depth, b, H_FILLS(ifill))
+            call make_pgf(pgf, grid, NZ, b, .true., .false.)
+            pgf%reconstruct_for_pressure = recon
+            pgf%recon_scheme = scheme
+            call run_pgf(grid, ms, pgf, eos)
+            pfu(:, :, :, ifill) = pgf%dpdx_face%data
+            call pgf%destroy()
+         end do
+         ! Only the live|filler faces: the open-step faces closed faces
+         ! would mask, and the ones test 2 skips.
+         dmax = 0.0_wp
+         amax = 0.0_wp
+         scale_f = 0.0_wp
+         nfaces = 0
+         do k = 1, NZ
+            do j = NGHOST + 1, NGHOST + NYP
+               do i = NGHOST + 2, NGHOST + NXP
+                  live_l = ms%h_layer(i - 1, j, k) > 1.0e-3_wp
+                  live_r = ms%h_layer(i, j, k) > 1.0e-3_wp
+                  if (live_l .neqv. live_r) then
+                     nfaces = nfaces + 1
+                     dmax = max(dmax, abs(pfu(i, j, k, 1) - pfu(i, j, k, 2)))
+                     scale_f = max(scale_f, abs(pfu(i, j, k, 1)), abs(pfu(i, j, k, 2)))
+                     amax = max(amax, abs(pfu(i, j, k, 1)), abs(pfu(i, j, k, 2)))
+                  end if
+               end do
+            end do
+         end do
+         write (msg, '(a,i0,a,es10.3,a,es10.3,a,es10.3)') &
+            tag//": ", nfaces, " live|filler faces; max|PFu| ", amax, &
+            "  max|dPFu(h_fill)| ", dmax, "  rel ", dmax/max(scale_f, tiny(1.0_wp))
+         call check(error, nfaces > 0, "open steps "//trim(msg)//": no live|filler face to test")
+         if (allocated(error)) exit checks
+         call check(error, dmax <= REL_TOL*scale_f, &
+                    "open steps "//trim(msg)//": the PGF depends on the filler thickness")
+         if (allocated(error)) exit checks
+         call check(error, amax <= ACC_MAX, &
+                    "open steps "//trim(msg)//": spurious at-rest PGF on a live|filler face")
+      end block checks
+      if (allocated(b)) deallocate (b)
+      call ms%destroy()
+   end subroutine check_open_step
 
 end module test_ocean_pgf_insitu
