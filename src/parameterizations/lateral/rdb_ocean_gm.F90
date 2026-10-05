@@ -34,6 +34,14 @@ module rdb_ocean_gm
    !!     uhtot  = uhtot + uhD(k)
    !! so `Sum_k uhD = 0` (closes at the bed) — mass/tracer conservative.
    !!
+   !! Bottom-blocking (MOM6, MOM_thickness_diffuse.F90:1097-1114) acts on the
+   !! UNLIMITED streamfunction first: no transport from a donor layer that
+   !! lies entirely below the receiving column's bed, and a share scaled by
+   !! the fraction above it for a donor layer that straddles it
+   !! (`gm_block_below_bed`).  On an open z-level step this is what keeps GM
+   !! from pouring deep water through the step into the fillers below the
+   !! shallow column's bed.
+   !!
    !! Three limiters, in order: (1) safe-streamfunction blend toward a
    !! column-spread return flow where slope > slope_max; (2) mass-
    !! availability rsum bound (the conservation guard keeping each layer
@@ -325,7 +333,7 @@ contains
                                  metrics%dy_cu, metrics%dx_cv, metrics%idxCu, &
                                  metrics%idyCv, metrics%idyCu, metrics%idxCv, &
                                  metrics%areaT, metrics%wet_u, metrics%wet_v, &
-                                 ms%h_layer, slopes%slope_x, slopes%slope_y, &
+                                 ms%h_layer, slopes%bathy, slopes%slope_x, slopes%slope_y, &
                                  slopes%n2_u, slopes%n2_v, khth_ext_u, khth_ext_v, &
                                  metrics%open_u, metrics%open_v, &
                                  this%khth_u, this%khth_v, &
@@ -336,7 +344,7 @@ contains
                                  metrics%dy_cu, metrics%dx_cv, metrics%idxCu, &
                                  metrics%idyCv, metrics%idyCu, metrics%idxCv, &
                                  metrics%areaT, metrics%wet_u, metrics%wet_v, &
-                                 ms%h_layer, slopes%slope_x, slopes%slope_y, &
+                                 ms%h_layer, slopes%bathy, slopes%slope_x, slopes%slope_y, &
                                  slopes%n2_u, slopes%n2_v, this%khth_u, this%khth_v, &
                                  metrics%open_u, metrics%open_v, &
                                  this%khth_u, this%khth_v, &
@@ -348,7 +356,7 @@ contains
                               metrics%dy_cu, metrics%dx_cv, metrics%idxCu, &
                               metrics%idyCv, metrics%idyCu, metrics%idxCv, &
                               metrics%areaT, metrics%wet_u, metrics%wet_v, &
-                              ms%h_layer, slopes%slope_x, slopes%slope_y, &
+                              ms%h_layer, slopes%bathy, slopes%slope_x, slopes%slope_y, &
                               slopes%n2_u, slopes%n2_v, khth_ext_u, khth_ext_v, &
                               slopes%slope_x, slopes%slope_y, &
                               this%khth_u, this%khth_v, &
@@ -359,7 +367,7 @@ contains
                               metrics%dy_cu, metrics%dx_cv, metrics%idxCu, &
                               metrics%idyCv, metrics%idyCu, metrics%idxCv, &
                               metrics%areaT, metrics%wet_u, metrics%wet_v, &
-                              ms%h_layer, slopes%slope_x, slopes%slope_y, &
+                              ms%h_layer, slopes%bathy, slopes%slope_x, slopes%slope_y, &
                               slopes%n2_u, slopes%n2_v, this%khth_u, this%khth_v, &
                               slopes%slope_x, slopes%slope_y, &
                               this%khth_u, this%khth_v, &
@@ -370,7 +378,7 @@ contains
    subroutine gm_compute_impl(nx, ny, nz, dt, khth, khth_max_cfl, slope_max, &
                               rho0, use_ext, use_open, dy_cu, dx_cv, idxCu, &
                               idyCv, idyCu, idxCv, areaT, wet_u, wet_v, h_layer, &
-                              slope_x, slope_y, &
+                              bathy, slope_x, slope_y, &
                               n2_u, n2_v, khth_ext_u, khth_ext_v, open_u, open_v, &
                               khth_u, khth_v, uhD, vhD, gm_src)
       !! Flat-impl GM kernel.  Passes: CFL-clamp the 2D face KhTh, the
@@ -393,6 +401,9 @@ contains
       real(wp), intent(in) :: wet_u(nx + 1, ny)
       real(wp), intent(in) :: wet_v(nx, ny + 1)
       real(wp), intent(in) :: h_layer(nx, ny, nz)
+      real(wp), intent(in) :: bathy(nx, ny)
+         !! Bed depth `D` (m, positive down; `slopes%bathy`): the bed of each
+         !! column is at `z = −D` for the bottom-blocking limiter.
       real(wp), intent(in) :: slope_x(nx + 1, ny, nz + 1)
       real(wp), intent(in) :: slope_y(nx, ny + 1, nz + 1)
       real(wp), intent(in) :: n2_u(nx + 1, ny, nz + 1)
@@ -429,7 +440,7 @@ contains
          uhD(nx + 1, j, k) = 0.0_wp
       end do
       call gm_column_x(nx, ny, nz, i_smax2, i4dt, use_open, &
-                       dy_cu, areaT, h_layer, slope_x, khth_u, open_u, uhD)
+                       dy_cu, areaT, h_layer, bathy, slope_x, khth_u, open_u, uhD)
 
       ! ---- 3. v-face bolus transport (mirror).
       do concurrent(k=1:nz, i=1:nx)
@@ -437,7 +448,7 @@ contains
          vhD(i, ny + 1, k) = 0.0_wp
       end do
       call gm_column_y(nx, ny, nz, i_smax2, i4dt, use_open, &
-                       dx_cv, areaT, h_layer, slope_y, khth_v, open_v, vhD)
+                       dx_cv, areaT, h_layer, bathy, slope_y, khth_v, open_v, vhD)
 
       ! ---- 4. gm_src PE release (cell centres).
       call gm_pe_release(nx, ny, nz, slope_max, rho0, h_layer, &
@@ -509,7 +520,7 @@ contains
    end function gm_h_frac
 
    pure subroutine gm_column_x(nx, ny, nz, i_smax2, i4dt, use_open, &
-                               dy_cu, areaT, h_layer, slope_x, khth_u, open_u, uhD)
+                               dy_cu, areaT, h_layer, bathy, slope_x, khth_u, open_u, uhD)
       !! u-face GM streamfunction + bolus-transport column recurrence.
       !! Interior u-face (i=2..nx) pairs columns iw=i-1 (west) and i (east).
       !! Bottom-up sweep: interior interfaces Kr=2 (bed-most) -> nz
@@ -554,6 +565,7 @@ contains
       real(wp), intent(in) :: dy_cu(nx + 1, ny)
       real(wp), intent(in) :: areaT(nx, ny)
       real(wp), intent(in) :: h_layer(nx, ny, nz)
+      real(wp), intent(in) :: bathy(nx, ny)
       real(wp), intent(in) :: slope_x(nx + 1, ny, nz + 1)
       real(wp), intent(in) :: khth_u(nx + 1, ny)
       logical, intent(in) :: use_open
@@ -563,15 +575,24 @@ contains
       integer :: i, j, k, iw, ka, kb, ktop
       real(wp) :: havL(NZ_STACK_MAX), havR(NZ_STACK_MAX)
       real(wp) :: rsumL(NZ_STACK_MAX + 1), rsumR(NZ_STACK_MAX + 1)
+      real(wp) :: eL(NZ_STACK_MAX + 1), eR(NZ_STACK_MAX + 1)
       logical :: ok(NZ_STACK_MAX)
       real(wp) :: uhtot, slope, s2r, sfn_unlim, sfn_safe, sfn_est, sfn_in_h
       real(wp) :: h_frac_d, uhd_k, kh
 
       do concurrent(j=1:ny, i=2:nx) &
-         local(k, iw, ka, kb, ktop, havL, havR, rsumL, rsumR, ok, uhtot, slope, &
+         local(k, iw, ka, kb, ktop, havL, havR, rsumL, rsumR, eL, eR, ok, uhtot, slope, &
                s2r, sfn_unlim, sfn_safe, sfn_est, sfn_in_h, h_frac_d, uhd_k, kh)
          iw = i - 1
          kh = khth_u(i, j)
+         ! Interface heights (bed-up from z = -D) of the two columns, for
+         ! the bottom-blocking limiter (`gm_block_below_bed`).
+         eL(1) = -bathy(iw, j)
+         eR(1) = -bathy(i, j)
+         do k = 1, nz
+            eL(k + 1) = eL(k) + h_layer(iw, j, k)
+            eR(k + 1) = eR(k) + h_layer(i, j, k)
+         end do
 
          ! The face's OPEN column (all-true without closed faces).
          do k = 1, nz
@@ -626,7 +647,8 @@ contains
             ! limiters below (they launder NaN into a bound, CLAUDE.md).
             if (.not. ieee_is_finite(slope)) slope = 0.0_wp
             s2r = slope*slope*i_smax2
-            sfn_unlim = -(kh*dy_cu(i, j))*slope
+            sfn_unlim = gm_block_below_bed(-(kh*dy_cu(i, j))*slope, &
+                                           eL(k), eL(k - 1), eR(1), eR(k), eR(k - 1), eL(1))
             if (uhtot <= 0.0_wp) then
                h_frac_d = gm_h_frac(havL(kb), rsumL(kb))
             else
@@ -647,7 +669,7 @@ contains
    end subroutine gm_column_x
 
    pure subroutine gm_column_y(nx, ny, nz, i_smax2, i4dt, use_open, &
-                               dx_cv, areaT, h_layer, slope_y, khth_v, open_v, vhD)
+                               dx_cv, areaT, h_layer, bathy, slope_y, khth_v, open_v, vhD)
       !! v-face GM column recurrence — mirror of `gm_column_x` with the
       !! v-stagger.  Interior v-face (j=2..ny) pairs columns js=j-1 (south)
       !! and j (north).  See `gm_column_x` for the open-column (`use_open`)
@@ -657,6 +679,7 @@ contains
       real(wp), intent(in) :: dx_cv(nx, ny + 1)
       real(wp), intent(in) :: areaT(nx, ny)
       real(wp), intent(in) :: h_layer(nx, ny, nz)
+      real(wp), intent(in) :: bathy(nx, ny)
       real(wp), intent(in) :: slope_y(nx, ny + 1, nz + 1)
       real(wp), intent(in) :: khth_v(nx, ny + 1)
       logical, intent(in) :: use_open
@@ -666,15 +689,22 @@ contains
       integer :: i, j, k, js, ka, kb, ktop
       real(wp) :: havS(NZ_STACK_MAX), havN(NZ_STACK_MAX)
       real(wp) :: rsumS(NZ_STACK_MAX + 1), rsumN(NZ_STACK_MAX + 1)
+      real(wp) :: eS(NZ_STACK_MAX + 1), eN(NZ_STACK_MAX + 1)
       logical :: ok(NZ_STACK_MAX)
       real(wp) :: vhtot, slope, s2r, sfn_unlim, sfn_safe, sfn_est, sfn_in_h
       real(wp) :: h_frac_d, vhd_k, kh
 
       do concurrent(j=2:ny, i=1:nx) &
-         local(k, js, ka, kb, ktop, havS, havN, rsumS, rsumN, ok, vhtot, slope, &
+         local(k, js, ka, kb, ktop, havS, havN, rsumS, rsumN, eS, eN, ok, vhtot, slope, &
                s2r, sfn_unlim, sfn_safe, sfn_est, sfn_in_h, h_frac_d, vhd_k, kh)
          js = j - 1
          kh = khth_v(i, j)
+         eS(1) = -bathy(i, js)
+         eN(1) = -bathy(i, j)
+         do k = 1, nz
+            eS(k + 1) = eS(k) + h_layer(i, js, k)
+            eN(k + 1) = eN(k) + h_layer(i, j, k)
+         end do
 
          do k = 1, nz
             ok(k) = .true.
@@ -720,7 +750,8 @@ contains
             slope = slope_y(i, j, k)
             if (.not. ieee_is_finite(slope)) slope = 0.0_wp
             s2r = slope*slope*i_smax2
-            sfn_unlim = -(kh*dx_cv(i, j))*slope
+            sfn_unlim = gm_block_below_bed(-(kh*dx_cv(i, j))*slope, &
+                                           eS(k), eS(k - 1), eN(1), eN(k), eN(k - 1), eS(1))
             if (vhtot <= 0.0_wp) then
                h_frac_d = gm_h_frac(havS(kb), rsumS(kb))
             else
@@ -736,6 +767,44 @@ contains
          if (ktop > 0) vhD(i, j, ktop) = -vhtot
       end do
    end subroutine gm_column_y
+
+   pure function gm_block_below_bed(sfn, e_top_l, e_bot_l, bed_r, e_top_r, e_bot_r, bed_l) &
+      result(sfn_b)
+      !$acc routine seq
+      !! MOM6 bottom-blocking ("Avoid moving dense water upslope from below the
+      !! level of the bottom on the receiving side",
+      !! MOM_thickness_diffuse.F90:1097-1114).  `sfn` is the unlimited
+      !! streamfunction at an interface: the transport of everything BELOW
+      !! it, `> 0` from L to R.  Its donor layer is the one just below the
+      !! interface on the donor side (`[e_bot, e_top]`).
+      !!
+      !!   * donor layer entirely below the RECEIVING column's bed
+      !!     (`e_top < bed`): zero — GM may not push water into the rock (on
+      !!     an open z-level step, into the fillers below the shallow column's
+      !!     bed, which the remap then hands to its bottom live layer: a
+      !!     transport THROUGH the step);
+      !!   * donor layer straddling that bed: scaled by the fraction of the
+      !!     donor layer above it.
+      !!
+      !! Bottom-up heights (m, +up): `e_top_*`/`e_bot_*` the top/bottom of the
+      !! donor layer on each side, `bed_*` each column's bed `−D`.
+      real(wp), intent(in) :: sfn, e_top_l, e_bot_l, bed_r, e_top_r, e_bot_r, bed_l
+      real(wp) :: sfn_b
+      sfn_b = sfn
+      if (sfn > 0.0_wp) then
+         if (e_top_l < bed_r) then
+            sfn_b = 0.0_wp
+         else if (bed_r > e_bot_l) then
+            sfn_b = sfn*((e_top_l - bed_r)/((e_top_l - e_bot_l) + H_DIV_EPS))
+         end if
+      else
+         if (e_top_r < bed_l) then
+            sfn_b = 0.0_wp
+         else if (bed_l > e_bot_r) then
+            sfn_b = sfn*((e_top_r - bed_l)/((e_top_r - e_bot_r) + H_DIV_EPS))
+         end if
+      end if
+   end function gm_block_below_bed
 
    pure function gm_clamp_slope(s, smax) result(sc)
       !$acc routine seq
