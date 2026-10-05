@@ -1429,9 +1429,8 @@ module rdb_config
    end type ocean_vmix_config_t
    type :: ocean_vdiff_config_t
       !! Backward-Euler vertical-friction solver knobs (`&ocean_vdiff_nml`).
-      !! Both default `.false.` ⇒ the vdiff tridiagonal is built exactly as
-      !! today and the explicit wind-stress / bottom-drag applies stay live
-      !! ⇒ bit-identical to prior production.
+      !! The implicit folds default `.false.` (explicit wind-stress apply);
+      !! MOM6's face treatment (`hvel_mom6` + `bbl_glue`) defaults ON.
       logical :: implicit_stress = .false.
          !! Fold the surface wind stress into the vdiff surface (k=nz) RHS
          !! row (Neumann top-BC) instead of the explicit pre-solve add.
@@ -1453,11 +1452,13 @@ module rdb_config
          !! without `bbl_glue`, incompatible with HBBL-distributed drag
          !! (`hbbl > 0`); both fail loud at configure.  Under `bbl_glue`
          !! the glue's piston replaces the fold.
-      logical :: hvel_mom6 = .false.
+      logical :: hvel_mom6 = .true.
          !! MOM6 momentum face thickness `hvel` for the vertical-friction
          !! solve (`vertvisc_coef`), with MOM6's arithmetic `h_shear` and
          !! the height-above-bed stack the BBL glue reads; the branch is
-         !! `hvel_harmonic`.  `.false.` ⇒ the historical arithmetic `h_u`.
+         !! `hvel_harmonic`.  DEFAULT ON (2026-10, with `bbl_glue`: MOM6's
+         !! face treatment everywhere).  `.false.` ⇒ the historical
+         !! arithmetic `h_u` / `face_thick` pair.
       real(wp) :: hbbl_visc = 10.0_wp
          !! MOM6 `HBBL` (m) for the `hvel_mom6` botfn blend without the
          !! BBL glue (under the glue each face's `bbl_thick` normalises the
@@ -1488,8 +1489,9 @@ module rdb_config
          !! below the shallower bed of a step sits inside the BBL.  `.true.`:
          !! the harmonic branch (harmonic thickness, upwind-arithmetic blend
          !! gated by `hvel_upwind`) — the historical `hvel_mom6`.
-      logical :: bbl_glue = .false.
-         !! MOM6 `BOTTOMDRAGLAW`: the bottom drag lives in the vertical
+      logical :: bbl_glue = .true.
+         !! DEFAULT ON (2026-10; `.false.` restores the explicit / folded
+         !! bed drag).  MOM6 `BOTTOMDRAGLAW`: the bottom drag lives in the vertical
          !! viscosity.  MOM6 `set_viscous_BBL` computes, per face and once
          !! per outer step, the BBL viscosity `kv_bbl = sqrt(CDRAG)·u*·
          !! bbl_thick` (`u*` from the HBBL-mean speed under the quadratic

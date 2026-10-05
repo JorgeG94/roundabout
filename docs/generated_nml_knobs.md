@@ -875,10 +875,10 @@ Backward-Euler vertical-friction solver knobs.
 | `accel_visc_rem` | `.false.` |  | MOM6 parity: attenuate the slow explicit accelerations by the per-layer viscous remnant (u = u0 + visc_rem*(u-u0) after the applies); requires ocean_bt_nml correction_visc_rem |
 | `implicit_drag` | `.false.` |  | Fold bottom drag into the vdiff bed (k=1) diagonal |
 | `implicit_top_drag` | `.false.` |  | Fold the ice-shelf top drag into the vdiff surface (k=nz) diagonal, masking the wind RHS under cover |
-| `hvel_mom6` | `.false.` |  | MOM6 HARMONIC_VISC parity: harmonic momentum face thickness with the near-bed upwind blend, and arithmetic h_shear. Suppresses grounded-sliver momentum as MOM6 does |
+| `hvel_mom6` | `.true.` |  | MOM6 HARMONIC_VISC parity: harmonic momentum face thickness with the near-bed upwind blend, and arithmetic h_shear. Suppresses grounded-sliver momentum as MOM6 does |
 | `hvel_harmonic` | `.false.` |  | MOM6 HARMONIC_VISC for the hvel_mom6 face thickness: .false. = MOM6 default (arithmetic + z_clear near-bed harmonic blend), .true. = harmonic + near-bed upwind-arithmetic blend |
 | `hbbl_visc` | `0.1000000000E+02` | m | Bottom-layer scale for the hvel_mom6 botfn blend without the BBL glue, and the glue's HBBL when ocean_bdrag hbbl = 0 (MOM6 HBBL) |
-| `bbl_glue` | `.false.` |  | MOM6 BOTTOMDRAGLAW: per-face set_viscous_BBL kv_bbl/bbl_thick from the ocean_bdrag law (quadratic or linear); kv_bbl botfn glue at near-bed interfaces + piston bed row replace the bed drag apply. Requires hvel_mom6 |
+| `bbl_glue` | `.true.` |  | MOM6 BOTTOMDRAGLAW: per-face set_viscous_BBL kv_bbl/bbl_thick from the ocean_bdrag law (quadratic or linear); kv_bbl botfn glue at near-bed interfaces + piston bed row replace the bed drag apply. Requires hvel_mom6 |
 | `bbl_piston` | `0.3000000000E-03` | m/s | Historical constant BBL piston u* (hand-built slots only; a configured glue takes its drag from ocean_bdrag) |
 | `hvel_upwind` | `.true.` |  | Near-bed upwind blend in the hvel_mom6 thickness build (.false. = pure harmonic; the u-sign blend flip-flops on roundoff at rest and collapses the BBL glue, PGF_BUG.md par.9.8) |
 

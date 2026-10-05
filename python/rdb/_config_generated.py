@@ -4736,7 +4736,7 @@ class OceanVdiff(Group):
         doc='MOM6 HARMONIC_VISC parity: harmonic momentum face thickness with the near-bed upwind blend, and arithmetic h_shear. Suppresses grounded-sliver momentum as MOM6 does',
         units='',
         required=False,
-        default=False,
+        default=True,
     )
 
     hvel_harmonic = Bool(
@@ -4760,7 +4760,7 @@ class OceanVdiff(Group):
         doc='MOM6 BOTTOMDRAGLAW: per-face set_viscous_BBL kv_bbl/bbl_thick from the ocean_bdrag law (quadratic or linear); kv_bbl botfn glue at near-bed interfaces + piston bed row replace the bed drag apply. Requires hvel_mom6',
         units='',
         required=False,
-        default=False,
+        default=True,
     )
 
     bbl_piston = Real(

@@ -314,9 +314,13 @@ ROWS = [
          "Pure isopycnal (rho) stops within 2-12 steps on the matrix domains: the remap "
          "precondition guard, or the console CFL panic.  Before the land-column fix (item C3) "
          "the same cells stopped at step 1; with it they run further and die later "
-         "(CLAUDE.md: rho is validation-grade alone, weakly stratified columns collapse).",
-         "NOT TRACKED (found by this matrix, 2026-10-05)", expect=("CRASH",),
-         message=r"remap preconditions at step \d+|console stats: CFL > panic threshold",
+         "(CLAUDE.md: rho is validation-grade alone, weakly stratified columns collapse).  "
+         "On the tripolar ring the same collapse can show as energy instead: with the "
+         "2026-10-05 BBL-glue default a cell that stopped on the remap guard at step 9 runs "
+         "24 steps at 1.7e4 x EN_REF[tripolar].",
+         "NOT TRACKED (found by this matrix, 2026-10-05)", expect=("CRASH", "ENERGY"),
+         message=r"remap preconditions at step \d+|console stats: CFL > panic threshold|"
+                 r"x the tripolar PASS-population reference",
          scope="any",
          # c045 of the 2026-10-05 train run (as generated, not minimised)
          witness={"vcoord": "rho", "split": "pred_corr", "vmix_bl": "epbl",
@@ -324,33 +328,6 @@ ROWS = [
                   "eddy": "mle", "tracers": "pseudo_salt", "pgf": "fv_mom6_plm", "eos": "linear",
                   "coriolis": "sadourny", "pv_adv": "weno7", "bt": "correction_bc_pgf",
                   "geometry": "closed", "grid": "spherical", "forcing": "cool"}),
-    _gap("zstar_open_steps_stress_tensor", "runtime", ("vc_zstar", "stress_tensor"),
-         "zstar's open stepped bed (closed faces off: a live layer faces a 1e-4 m filler) "
-         "with the MOM6 stress-tensor viscosity drives a layer negative and stops on the remap "
-         "guard at step 2-3.  The corner shear stress is weighted by the ARITHMETIC 4-cell "
-         "mean h_q (`hvisc_compute_stress`, Phase 2) while the divergence divides by the face "
-         "thickness, so on a filler face beside a live corner the explicit viscous step is "
-         "amplified by h_q/h_u ~ 1e5.  MOM6 forms hq as the harmonic-type mean of the four "
-         "face thicknesses (MOM_hor_visc.F90 `hq = 2*h2uq*h2vq/(...)`), small whenever one "
-         "face is vanished; substituting it runs this witness clean (En 6.46e-3 against the "
-         "sigma twin's 6.73e-3).  The same operator defect is the vcoord matrix's FINDING A "
-         "(thin density-space layers driven negative); the port changes every stress_tensor "
-         "answer, so it is its own PR.",
-         "NOT TRACKED (found by this matrix, 2026-10-04; vcoord matrix FINDING A)",
-         expect=("CRASH",), message=r"remap preconditions at step \d+", scope="any",
-         # minimised 2026-10-04 from c011 (greedy; every other axis at base)
-         witness={"vcoord": "zstar", "lateral": "stress_tensor"}),
-    _gap("hycom_runtime_crash", "runtime", ("vc_hycom",),
-         "hycom with an open boundary stops at step 4 (remap precondition guard + nan-catch) "
-         "now that the land-column crash (item C3) no longer stops it at step 1.",
-         "NOT TRACKED (found by this matrix, 2026-10-05)", expect=("CRASH",),
-         message=r"remap preconditions at step \d+", scope="any",
-         # c002 of the 2026-10-05 train run (as generated, not minimised)
-         witness={"vcoord": "hycom", "split": "pred_corr", "vmix_bl": "epbl",
-                  "vmix_extra": "none", "vmix_bg": "henyey", "lateral": "kh_aniso",
-                  "eddy": "mle", "tracers": "ts", "pgf": "fv_mom6", "eos": "roquet",
-                  "coriolis": "sadourny_hk", "pv_adv": "centered", "bt": "substep_drag",
-                  "geometry": "obc", "grid": "spherical", "forcing": "warm_sw"}),
     _gap("hycom_decomp_run_fails", "runtime", ("vc_hycom",),
          "A hycom cell that runs clean on one rank fails outright decomposed (2x2 and 4x1, "
          "rc 1): the decomposed run itself, not a bitwise mismatch.",
@@ -410,12 +387,15 @@ ROWS = [
     _gap("decomp_eulerian_z_ssp_rk2", "runtime", ("vc_eulerian_z", "ssp_rk2"),
          "eulerian_z under ssp_rk2 (its legacy per-stage vertical-advection + h-rescale path) "
          "is not decomposition-invariant in some combinations: last-bit differences in every "
-         "owned cell on 2x2 and 4x1 with visc_rem, or with EPBL + MLE.  Unchanged by "
-         "-ffp-contract=off.",
+         "owned cell on 2x2 and 4x1 with EPBL + MLE (and, before the 2026-10-05 BBL-glue "
+         "default, with visc_rem: that witness now decomposes bitwise and fails the restart "
+         "leg instead, restart_visc_rem).  Unchanged by -ffp-contract=off.",
          "NOT TRACKED (found by this matrix, 2026-10-04)", expect=("DECOMP",),
          message=r"\dx\d: \d+ field mismatch", scope="any",
-         # minimised 2026-10-04 from c045 (greedy, every other axis at base)
-         witness={"vcoord": "eulerian_z", "split": "ssp_rk2", "bt": "visc_rem"}),
+         # re-pinned 2026-10-05 (the EPBL + MLE combination the row names; every other
+         # axis at base): 2x2 epbl_kd_int mismatch 2.7e-11
+         witness={"vcoord": "eulerian_z", "split": "ssp_rk2", "vmix_bl": "epbl",
+                  "eddy": "mle"}),
 
     # ===================================================================
     # KNOWN_GAP -- the GPU leg (nvfortran cc70) only.
