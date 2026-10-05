@@ -269,14 +269,6 @@ ROWS = [
          "compute_pbce / compute_gtot_faces / the bc-PGF block weight by the FULL column.",
          "item 9 (queued)",
          message=r"zfixed_closed_faces does not yet compose with &ocean_bt_nml correction_bc_pgf"),
-    _gap("closed_faces_substep_drag", "refused", ("closed_faces", "substep_drag"),
-         "compute_bt_rem damps from the FULL-column face depth.",
-         "item 5 (fix/bt-upstream-h-face-closed-faces ports it)",
-         message=r"zfixed_closed_faces does not yet compose with &ocean_bt_nml substep_drag"),
-    _gap("closed_faces_wave_drag", "refused", ("closed_faces", "wave_drag"),
-         "compute_bt_rem_wave_drag damps from the FULL-column face depth.",
-         "item 5 (fix/bt-upstream-h-face-closed-faces ports it)",
-         message=r"zfixed_closed_faces does not yet compose with &ocean_bt_nml wave_drag"),
 
     # ----- under an ice-shelf cavity (single-rank row) -------------------
     _gap("cavity_vcoord", "refused", ("cavity",),
