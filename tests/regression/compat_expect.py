@@ -71,6 +71,12 @@ FEATURES = {
     "vc_eulerian_z": ("eulerian z (H*dsig)", lambda n: _vtype(n) == "eulerian_z"),
     "vc_lagrangian": ("pure Lagrangian", lambda n: _vtype(n) == "lagrangian"),
     "vc_zsigma": ("smoothstep sigma->z", lambda n: _vtype(n) == "zsigma"),
+    "vc_zlike_open": ("a z-like / hybrid stack with open steps (zstar, hycom)",
+                      lambda n: _vtype(n) in ("zstar", "hycom")),
+    "vc_terrain_following": ("a terrain-following stack (sigma, zstar_sigma, eulerian_z, "
+                             "lagrangian from its sigma IC)",
+                             lambda n: _vtype(n) in ("sigma", "zstar_sigma", "eulerian_z",
+                                                     "lagrangian")),
     # outer split
     "pred_corr": ("predictor-corrector split",
                   lambda n: _g(n, "ocean_bt_nml", "split_scheme", "pred_corr") == "pred_corr"),
@@ -139,6 +145,8 @@ FEATURES = {
     "walls_only": ("closed basin", lambda n: all(e == "wall" for e in _edges(n))),
     "tripolar": ("tripolar fold", lambda n: _edges(n)[3] == "tripolar_fold"),
     "cavity": ("ice-shelf cavity", lambda n: bool(_g(n, "ocean_cavity_dyn_nml", "enable", False))),
+    "cliff": ("10 m shelf beside 2000 m (rx0 ~ 0.99)",
+              lambda n: _g(n, "output_nml", "bathymetry_file", "") == "compat_bathy_cliff.nc"),
     "cartesian": ("Cartesian grid", lambda n: _g(n, "ocean_grid_nml", "grid_config", "cartesian") == "cartesian"),
     "spherical": ("spherical sector", lambda n: _g(n, "ocean_grid_nml", "grid_config", "cartesian") == "spherical"),
     "sw_pen": ("penetrating shortwave", lambda n: float(_g(n, "ocean_thermo_nml", "sw_pen_frac", 0.0)) > 0.0),
@@ -328,6 +336,75 @@ ROWS = [
                   "eddy": "mle", "tracers": "pseudo_salt", "pgf": "fv_mom6_plm", "eos": "linear",
                   "coriolis": "sadourny", "pv_adv": "weno7", "bt": "correction_bc_pgf",
                   "geometry": "closed", "grid": "spherical", "forcing": "cool"}),
+    _gap("zlike_cliff_linear_eos_filler_rho", "runtime", ("vc_zlike_open", "cliff", "eos_linear"),
+         "zstar / hycom over the cliff with the LINEAR EOS: 3x EN_REF[cliff] against 1.2x with "
+         "Wright or Roquet.  The linear EOS gives a vanished layer the reference density "
+         "(`eos_linear_impl`: h <= H_VANISHED -> T_ref/S_ref, i.e. rho_0), and the layer-mean "
+         "PGF paths (mont, fv_mom6 PCM) read that `rho_layer` across every live|filler face of "
+         "the cliff; the in-situ Wright/Roquet branch reads the filler's I1' donor T/S instead "
+         "(FV-MOM6 Pass C, 2026-10-04) and the PPM reconstruction halves it.  The BBL glue "
+         "absorbs most of it (old defaults: CFL panic).  Fix: the donor concentration in the "
+         "linear EOS (or in the layer-mean PGF), an answer change of its own.",
+         "NOT TRACKED (found by this matrix's cliff geometry, 2026-10-05)",
+         expect=("ENERGY",), message=r"x the cliff PASS-population reference", scope="any",
+         # minimised 2026-10-05 from c000 (leave-one-out; every other axis at base):
+         # En(24) 2.43e-2 = 3.1x EN_REF[cliff]; the same cell on the closed geometry 8.8e-3
+         witness={"vcoord": "hycom", "geometry": "cliff", "eos": "linear",
+                  "coriolis": "sadourny"}),
+    _gap("terrain_following_cliff_pgf", "runtime", ("vc_terrain_following", "cliff"),
+         "A terrain-following stack over the cliff (rx0 ~ 0.99) carries the classic "
+         "sigma-coordinate PGF error through the WHOLE column, not just at live|filler faces "
+         "inside the bottom boundary layer: the MOM6 BBL glue (bbl_glue + hvel_mom6, default "
+         "since 2026-10) absorbs the z-like families' cliff error (zstar 4.7x -> 1.2x its "
+         "closed-geometry En, hycom 5.4x -> 1.1x) but can only reach the bottom layers here. "
+         "Base closures pass (sigma 1.2x, lagrangian 1.25x, eulerian_z 1.2x); kappa-shear "
+         "turns the interior PGF shear into mixing and energy (sigma 4.5x, lagrangian 11x "
+         "EN_REF[cliff]), and the linear EOS's larger density contrast roughly doubles it.  "
+         "MOM6 has no absorber for this either (its glue is BBL-only); the remedy is a "
+         "z-like or hybrid coordinate on such bathymetry, or smoothing to rx0 <~ 0.2.  Where "
+         "the growth thins a layer past zero first the cell stops on the remap guard instead "
+         "(zstar_sigma + double diffusion + GM/MEKE + visc_rem: 6e-2 by step 23).",
+         "NOT TRACKED (found by this matrix's cliff geometry, 2026-10-05)",
+         expect=("ENERGY", "CRASH"),
+         message=r"x the cliff PASS-population reference|remap preconditions at step \d+",
+         scope="any",
+         # minimised 2026-10-05 from c032 (leave-one-out): lagrangian + kappa-shear on
+         # the cliff, every other axis at base -- En(24) 8.55e-2 = 11x EN_REF[cliff]
+         # (the same cell on the closed geometry: 6.72e-3)
+         witness={"vcoord": "lagrangian", "geometry": "cliff", "vmix_extra": "kappa_shear"}),
+    _gap("zstar_open_steps_stress_tensor", "runtime", ("vc_zstar", "stress_tensor"),
+         "zstar's open steps (closed faces off: a live layer faces a 1e-4 m filler) "
+         "with the MOM6 stress-tensor viscosity drives a layer negative and stops on the remap "
+         "guard at step 2-3.  The corner shear stress is weighted by the ARITHMETIC 4-cell "
+         "mean h_q (`hvisc_compute_stress`, Phase 2) while the divergence divides by the face "
+         "thickness, so on a filler face beside a live corner the explicit viscous step is "
+         "amplified by h_q/h_u ~ 1e5.  MOM6 forms hq as the harmonic-type mean of the four "
+         "face thicknesses (MOM_hor_visc.F90 `hq = 2*h2uq*h2vq/(...)`), small whenever one "
+         "face is vanished.  The same operator defect is the vcoord matrix's FINDING A "
+         "(thin density-space layers driven negative); the port changes every stress_tensor "
+         "answer, so it is its own PR.  Since the MOM6 BBL glue became the default "
+         "(2026-10-05) the staircase witness runs clean (the glue couples the filler faces); "
+         "the cliff under ssp_rk2 still crashes at step 3.",
+         "NOT TRACKED (found by this matrix, 2026-10-04; vcoord matrix FINDING A)",
+         expect=("CRASH",), message=r"remap preconditions at step \d+", scope="any",
+         # re-pinned 2026-10-05 (leave-one-out from c010): the staircase witness
+         # {zstar, stress_tensor} passes under the BBL glue default; this one stops at
+         # step 3 (its staircase twin and its pred_corr twin both run 24 steps)
+         witness={"vcoord": "zstar", "lateral": "stress_tensor", "geometry": "cliff",
+                  "split": "ssp_rk2"}),
+    _gap("hycom_runtime_crash", "runtime", ("vc_hycom",),
+         "hycom stops on the remap precondition guard within a few steps in some "
+         "compositions.  The first witness (an open boundary + kh_aniso + MLE, step 4) runs "
+         "24 steps since the MOM6 BBL glue became the default (2026-10-05).  The cliff with "
+         "MEKE backscatter + Fox-Kemper MLE still stops at step 5 (step 4 before the glue): "
+         "both lateral terms are needed (leave-one-out), the staircase twin runs clean, the "
+         "zstar twin runs clean -- a thin hycom layer on the 10 m shelf is driven negative by "
+         "a lateral transport the vertical glue cannot reach.  Not diagnosed further.",
+         "NOT TRACKED (found by this matrix, 2026-10-05)", expect=("CRASH",),
+         message=r"remap preconditions at step \d+", scope="any",
+         # re-pinned 2026-10-05, minimised from c070 (leave-one-out)
+         witness={"vcoord": "hycom", "geometry": "cliff", "lateral": "meke_backscatter",
+                  "eddy": "mle", "vmix_bl": "epbl"}),
     _gap("hycom_decomp_run_fails", "runtime", ("vc_hycom",),
          "A hycom cell that runs clean on one rank fails outright decomposed (2x2 and 4x1, "
          "rc 1): the decomposed run itself, not a bitwise mismatch.",
@@ -384,6 +461,16 @@ ROWS = [
          message=r"the decomposed run failed", scope="any",
          # minimised 2026-10-04 from c015 (greedy over the decomposed run)
          witness={"vcoord": "zstar", "split": "ssp_rk2", "eddy": "gm"}),
+    _gap("decomp_hycom_visc_rem", "runtime", ("vc_hycom", "visc_rem"),
+         "hycom with the visc_rem barotropic corrector is not decomposition-invariant: "
+         "2x2 differs from one rank in every owned cell (ml_h_av_layer first, max|diff|/"
+         "max|field| ~1e-5 after 24 steps) on the base closures.  Not the BBL glue: the "
+         "same witness with &ocean_vdiff_nml hvel_mom6 = bbl_glue = .false. differs too "
+         "(2.6e-5); z_fixed with closed faces in its place decomposes bitwise.",
+         "NOT TRACKED (found by this matrix's cliff cover, 2026-10-05)", expect=("DECOMP",),
+         message=r"\dx\d: \d+ field mismatch", scope="any",
+         # minimised 2026-10-05 from c075 (every other axis at base)
+         witness={"vcoord": "hycom", "bt": "visc_rem"}),
     _gap("decomp_eulerian_z_ssp_rk2", "runtime", ("vc_eulerian_z", "ssp_rk2"),
          "eulerian_z under ssp_rk2 (its legacy per-stage vertical-advection + h-rescale path) "
          "is not decomposition-invariant in some combinations: last-bit differences in every "

@@ -1433,7 +1433,9 @@ go through a stdlib classic-NetCDF writer — nothing to install):
   north sponge band), `obc` (a Flather open east edge), and the single-rank
   rows `tripolar` (the analytic tripolar generator: 15 x 1 degree from 59 N,
   bipolar cap above 70 N, north fold, px = 1) and `cavity` (a flat 200 m ice
-  draft over the deep northern third);
+  draft over the deep northern third); and `cliff` (walls + island, but the
+  staircase replaced by a 10 m shelf dropping straight to 2000 m, rx0 ~ 0.99 —
+  the 1-degree Southern Ocean's coastal cliffs; its own bathymetry file);
 * `grid`: Cartesian, or a 0.25 x 0.18 degree spherical sector at 40 N.
 
 `compat_matrix.py domain` proves the domain on every vertical coordinate x
@@ -1468,7 +1470,7 @@ forbidden tuple, and it re-seats any pair a higher-arity constraint knocked
 out of a row. Unconstrained, the 16 axes give **89 cells** (the floor is
 11 x 8 = 88).
 
-The axes (v1, 71 values):
+The axes (v1, 72 values):
 
 | axis | n | values |
 |---|---|---|
@@ -1485,7 +1487,7 @@ The axes (v1, 71 values):
 | `coriolis` | 3 | sadourny, sadourny_energy, sadourny_hk |
 | `pv_adv` | 4 | centered, weno3, weno5, weno7 |
 | `bt` | 5 | default, correction_bc_pgf, substep_drag, wave_drag, visc_rem |
-| `geometry` | 5 | closed, channel, obc, tripolar, cavity |
+| `geometry` | 6 | closed, channel, obc, tripolar, cavity, cliff |
 | `grid` | 2 | cartesian, spherical |
 | `forcing` | 2 | cool, warm_sw |
 
@@ -1649,6 +1651,17 @@ and the closures move it by about a factor of two. Measured (gfortran,
 | obc | 12 | 7.6e-3 | 0.58 | 1.41 | 16x |
 | tripolar | 8 | 1.7e-4 | 0.74 | 1.59 | 1.3x, 61x |
 | cavity | 16 | 9.5e-3 | 0.73 | 1.02 | 1.1x |
+| cliff | 28 | 7.8e-3 | 0.61 | 1.15 | refused |
+
+The cliff row (2026-10-05) is measured on the `domain` sweep (every
+coordinate x both splits x both grids, base closures, with MOM6's BBL glue
+the default), because the pairwise cover puts only a handful of cells on it.
+Before the glue the same sweep read zstar 4.7x, hycom 5.4x, sigma 4.4x and
+lagrangian 14.9x their closed-geometry En, and eulerian_z crashed; with it
+every family sits at 1.0-1.3x. Two cliff residuals are rows:
+`terrain_following_cliff_pgf` (sigma-like stacks with kappa-shear or the
+linear EOS) and `zlike_cliff_linear_eos_filler_rho` (zstar / hycom with the
+linear EOS).
 
 The bound (`compat_legs.EN_REF` = the medians, `ENERGY_RATIO_MAX` = **2.5**):
 En(24) <= 2.5 x the geometry's median — 1.6x headroom over the widest PASS

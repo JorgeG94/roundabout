@@ -108,6 +108,14 @@ BETA = 2.0e-11
 # (the configure audit WARNS above rx0 = 0.2; it never refuses).
 STAIRCASE = (100.0, 100.0, 250.0, 250.0, 500.0, 800.0, 1200.0, 1600.0)
 SHELF_OFFSET_I = range(8, 16)   # the shelf is one row wider here: x-facing steps
+# The CLIFF geometry (`geometry = cliff`): the same plan, but a CLIFF_SHELF
+# metre shelf for CLIFF_ROWS rows that drops straight to MAX_DEPTH -- the
+# 10 m coastal cell beside a 1600-3400 m one of the 1-degree Southern Ocean
+# (rx0 ~ 0.99).  On a z-like coordinate every face layer below the shelf's
+# bed is a live|filler face whose FV PGF integrates across ~2 km; MOM6
+# absorbs that error in its bottom-boundary-layer viscous coupling.
+CLIFF_SHELF = 10.0
+CLIFF_ROWS = 4
 ISLAND = (range(10, 13), range(9, 11))   # (i, j), 0-based, land
 
 # The tilted front: T, S on z-levels (positive-down metres).
@@ -118,15 +126,19 @@ FRONT_TILT = 40.0            # metres of northward displacement per metre depth
 FRONT_WIDTH = 50.0e3
 
 
-def bathymetry():
-    """Depth (m, positive down, 0 = land) as rows [j][i], j = 0 the south."""
+def bathymetry(cliff=False):
+    """Depth (m, positive down, 0 = land) as rows [j][i], j = 0 the south.
+    `cliff`: the CLIFF_SHELF shelf dropping straight to MAX_DEPTH."""
     b = []
     for j in range(NY):
         row = []
         for i in range(NX):
             js = j - (1 if i in SHELF_OFFSET_I else 0)
-            d = STAIRCASE[js] if 0 <= js < len(STAIRCASE) else (
-                STAIRCASE[0] if js < 0 else MAX_DEPTH)
+            if cliff:
+                d = CLIFF_SHELF if js < CLIFF_ROWS else MAX_DEPTH
+            else:
+                d = STAIRCASE[js] if 0 <= js < len(STAIRCASE) else (
+                    STAIRCASE[0] if js < 0 else MAX_DEPTH)
             if i in ISLAND[0] and j in ISLAND[1]:
                 d = 0.0
             row.append(d)
@@ -196,14 +208,17 @@ def write_netcdf_classic(path, dims, variables, gatts=()):
 
 
 BATHY_FILE = "compat_bathy.nc"
+BATHY_CLIFF_FILE = "compat_bathy_cliff.nc"
 TS_FILE = "compat_ts.nc"
 
 
 def write_domain_inputs(directory):
     """Write the bathymetry and the z-level T/S the namelists point at."""
-    b = bathymetry()
-    write_netcdf_classic(os.path.join(directory, BATHY_FILE), [("y", NY), ("x", NX)],
-                         [("b", ("y", "x"), [b[j][i] for j in range(NY) for i in range(NX)])])
+    for path, cliff in ((BATHY_FILE, False), (BATHY_CLIFF_FILE, True)):
+        b = bathymetry(cliff)
+        write_netcdf_classic(os.path.join(directory, path), [("y", NY), ("x", NX)],
+                             [("b", ("y", "x"),
+                               [b[j][i] for j in range(NY) for i in range(NX)])])
     temp, salt = [], []
     for z in Z_SRC:
         for j in range(NY):
@@ -430,6 +445,9 @@ AXES = [
                                              # nothing under this 1800 m cavity grounds.
                                              "h_min_cavity": 2.0 * MAX_DEPTH / NZ},
                     "ocean_pgf_nml": {"p_top_in_bc": True}}),
+        # Walls all round, the island, and a CLIFF instead of the staircase:
+        # a 10 m shelf beside 2000 m (rx0 ~ 0.99, see CLIFF_SHELF).
+        ("cliff", {"output_nml": {"bathymetry_file": BATHY_CLIFF_FILE}}),
     ]),
     ("grid", [
         ("cartesian", {}),
@@ -1984,6 +2002,10 @@ def cmd_self_test(args):
     b = bathymetry()
     _check(sum(1 for r in b for x in r if x == 0.0) == 6 and min(min(r) for r in b if min(r) > 0)
            == STAIRCASE[0], "the domain has the island and the shelf", fails)
+    bc = bathymetry(cliff=True)
+    _check(sorted({x for r in bc for x in r}) == [0.0, CLIFF_SHELF, MAX_DEPTH],
+           "the cliff domain: island, a {} m shelf, {} m beside it".format(CLIFF_SHELF, MAX_DEPTH),
+           fails)
     # Every T/S column is statically stable (dT/dz dominates the front).
     unstable = 0
     for j in range(NY):
@@ -2071,7 +2093,8 @@ def cmd_validate_smoke(args):
     rc, out, err, _ = _run(binary, ["--validate-only", "cell.nml"], d2, 60)
     _check(rc == 3 and "REFUSED by engine_setup" in out and "nu_h" in out,
            "engine_setup (configure-stage) refusal -> rc 3, reason logged (rc {})".format(rc), fails)
-    _check(not any(n.endswith(".nc") and n not in (BATHY_FILE, TS_FILE) for n in os.listdir(d2)),
+    _check(not any(n.endswith(".nc") and n not in (BATHY_FILE, BATHY_CLIFF_FILE, TS_FILE)
+                   for n in os.listdir(d2)),
            "a refused validation writes no output file", fails)
     print("{} failure(s)".format(len(fails)))
     if not fails:
