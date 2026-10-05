@@ -4871,9 +4871,10 @@ contains
                               "must be 'centered', 'weno3', 'weno5' or 'weno7'")
             has_error = .true.
          end if
-         ! weno5/weno7 stencil radius (3/4) needs a wider halo — mirror the
-         ! tracer-WENO ladder's per-rung nghost gate (fail-loud, not a silent
-         ! near-boundary order collapse over the whole domain).
+         ! weno5/weno7 (stencil radius 3/4) need a halo of radius + 1 = 4/5
+         ! (at radius alone a decomposed run is not bit-identical to one rank;
+         ! see `pv_adv_required_nghost`) — fail-loud, mirroring the
+         ! tracer-WENO ladder's per-rung nghost gate.
          if (cfg%nghost < pv_adv_required_nghost( &
              parse_pv_adv_scheme(cfg%ocean%coriolis%pv_adv_scheme))) then
             call logger%error("&ocean_coriolis_nml pv_adv_scheme='"// &
@@ -9532,7 +9533,7 @@ contains
       ps => cfg%ocean%coriolis%pv_adv_scheme
       call g%add(nml_enum("pv_adv_scheme", ps, &
                           "PV face interpolation (Sadourny path): centered (default) "// &
-                          "or weno3/weno5/weno7 (WENO-Z); weno5/weno7 need nghost>=3/4", &
+                          "or weno3/weno5/weno7 (WENO-Z); weno5/weno7 need nghost>=4/5", &
                           allowed=[character(len=8) :: "centered", "weno3", &
                                    "weno5", "weno7"]))
       pl => cfg%ocean%coriolis%use_state_fluxes

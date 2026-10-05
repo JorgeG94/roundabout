@@ -566,9 +566,9 @@ contains
 
       call check(error, required_halo() == 2, "baseline (nothing selected) is 2")
       if (allocated(error)) return
-      call check(error, required_halo(pv_adv_scheme="weno5") >= 3, "pv_adv weno5 >= 3")
+      call check(error, required_halo(pv_adv_scheme="weno5") >= 4, "pv_adv weno5 >= 4")
       if (allocated(error)) return
-      call check(error, required_halo(pv_adv_scheme="weno7") >= 4, "pv_adv weno7 >= 4")
+      call check(error, required_halo(pv_adv_scheme="weno7") >= 5, "pv_adv weno7 >= 5")
       if (allocated(error)) return
       call check(error, required_halo(tracer_recon="weno5") >= 3, "tracer weno5 >= 3")
       if (allocated(error)) return

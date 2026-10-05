@@ -1878,8 +1878,8 @@ contains
       if (allocated(error)) return
       call check(error, pv_adv_required_nghost(PV_ADV_CENTERED) == 2 .and. &
                  pv_adv_required_nghost(PV_ADV_WENO3) == 2 .and. &
-                 pv_adv_required_nghost(PV_ADV_WENO5) == 3 .and. &
-                 pv_adv_required_nghost(PV_ADV_WENO7) == 4, &
+                 pv_adv_required_nghost(PV_ADV_WENO5) == 4 .and. &
+                 pv_adv_required_nghost(PV_ADV_WENO7) == 5, &
                  "pv_adv_required_nghost wrong")
    end subroutine test_weno3_parse
 

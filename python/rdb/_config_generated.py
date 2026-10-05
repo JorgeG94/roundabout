@@ -2802,7 +2802,7 @@ class OceanCoriolis(Group):
 
     pv_adv_scheme = Enum(
         'pv_adv_scheme',
-        doc='PV face interpolation (Sadourny path): centered (default) or weno3/weno5/weno7 (WENO-Z); weno5/weno7 need nghost>=3/4',
+        doc='PV face interpolation (Sadourny path): centered (default) or weno3/weno5/weno7 (WENO-Z); weno5/weno7 need nghost>=4/5',
         units='',
         required=False,
         default='centered',

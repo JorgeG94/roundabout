@@ -60,9 +60,10 @@ R5  AVAILABLE POTENTIAL ENERGY. a case with uniform density cannot make
     APE comes from. (`acc_channel` as shipped has none -- it never would have
     produced eddies however long it ran.)
 
-R6  NGHOST vs SCHEME.           weno5 -> nghost >= 3, weno7 -> nghost >= 4,
-    periodic-x -> nghost >= 3. A downscale must not quietly drop nghost to
-    save cells.
+R6  NGHOST vs SCHEME.           tracer weno5 -> nghost >= 3, weno7 -> 4;
+    PV-advection pv_weno5 -> 4, pv_weno7 -> 5 (stencil radius + 1, see
+    `pv_adv_required_nghost`); periodic-x -> nghost >= 3. A downscale must
+    not quietly drop nghost to save cells.
 
 R7  ROSSBY / DOMAIN ASPECT.     L_domain / Rd >= DOMAIN_RD (8 by default) for
     an eddying case -- the box must hold several eddies, or the twin measures
@@ -89,7 +90,10 @@ DOMAIN_RD = 8.0             # R7: minimum deformation radii across the domain
 
 # nghost floors keyed by the scheme knob that demands them (R6).
 NGHOST_FLOOR = {
+    # tracer reconstruction (`tracer_recon_required_nghost`)
     "weno5": 3, "weno7": 4, "weno3": 2,
+    # PV face interpolation (`pv_adv_required_nghost`): stencil radius + 1
+    "pv_weno3": 2, "pv_weno5": 4, "pv_weno7": 5,
     "periodic": 3,
 }
 
