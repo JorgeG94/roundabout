@@ -15,14 +15,16 @@
 !!                             operator (`continuity_gm_apply`).
 !!  4. gm_slope_limiter      — S >> slope_max ⇒ bounded Psi, h >= H_VANISHED.
 !!  5. gm_gm_src_sign        — gm_src >= 0 (PE release) for a stable column.
-!!  6. gm_sequential_partial_cell — the 1-degree Southern Ocean failure: an
-!!                             8.6 cm partial bed cell next to fillers under a
+!!  6. gm_sequential_partial_cell — an 8.6 cm partial bed cell under a
 !!                             dome, drained at the cap on all four faces.
 !!                             GM computed from the thickness the dynamics
 !!                             LEFT keeps it >= H_VANISHED and conserves
 !!                             volume + T/S content; the same transport
 !!                             computed from the stage-ENTRY thickness (the
-!!                             old fold) takes it negative.
+!!                             old fold) takes it negative.  With FILLERS in
+!!                             the neighbours (the 1-degree Southern Ocean
+!!                             step) MOM6's bottom-blocking keeps GM from
+!!                             draining it below their bed at all.
 module test_ocean_gm
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp, GRAVITY, H_VANISHED
@@ -553,25 +555,33 @@ contains
    end subroutine test_wall_no_leak
 
    ! ------------------------------------------------------------------
-   ! Test 6: the sequential operator cannot take a partial cell negative
+   ! Test 6: the sequential operator cannot take a partial cell negative;
+   ! the bottom-blocking limiter keeps GM out of the fillers below a
+   ! shallower neighbour's bed
    ! ------------------------------------------------------------------
    subroutine test_sequential_partial_cell(error)
-      !! The 1-degree Southern Ocean failure, reduced to one column (z* open
-      !! steps, nothing closed).  The centre column's bed layer is an 8.6 cm
-      !! PARTIAL cell; in its four neighbours the same layer is an inert
-      !! filler (1e-4 m).  The stored isopycnals are DOMED over the centre,
-      !! so GM drains its deep water outward on all four faces — at the
-      !! availability cap `A·(h − H_VANISHED)/(4·dt)` with this slope.  The
-      !! dynamics of the step has already taken 60 % of the partial cell.
+      !! A column whose bed layer is an 8.6 cm PARTIAL cell (z* open steps,
+      !! nothing closed) under stored isopycnals DOMED over it, so GM drains
+      !! its deep water outward on all four faces.  The dynamics of the step
+      !! has already taken 60 % of the partial cell.
       !!
+      !! (a) DEEPER neighbours (their bed layer is a full live layer): GM
+      !!     drains the partial cell at the availability cap
+      !!     `A·(h − H_VANISHED)/(4·dt)` on every face.
       !!   * FOLDED (the pre-2026-10 path): the transport computed from the
       !!     stage-ENTRY thickness (8.6 cm) and applied to what the dynamics
-      !!     left (3.44 cm) — the cap bounds the wrong `h`, and the cell goes
+      !!     left (3.44 cm) — the cap bounds the wrong `h` and the cell goes
       !!     NEGATIVE.  Asserted, as the witness that the case bites.
-      !!   * SEQUENTIAL (now): the transport computed from the thickness the
-      !!     dynamics left — the cap bounds what is there, the cell ends at
-      !!     >= H_VANISHED, every layer stays >= min(its h, H_VANISHED), and
-      !!     total volume and T/S content are conserved to round-off.
+      !!   * SEQUENTIAL (now): computed from the thickness the dynamics left —
+      !!     the cell ends at >= H_VANISHED, every layer stays >=
+      !!     min(h, H_VANISHED), and volume and T/S content are conserved to
+      !!     round-off.
+      !! (b) SHALLOWER neighbours holding a FILLER in that layer (the 1-degree
+      !!     Southern Ocean geometry): the partial cell lies below their bed,
+      !!     so MOM6's bottom-blocking (`gm_block_below_bed`) scales the
+      !!     streamfunction by the fraction of it above their bed (1e-4 m of
+      !!     8.6 cm) — GM does not pour water through the step into the
+      !!     fillers (unblocked, every face carried the full cap).
       type(error_type), allocatable, intent(out) :: error
       type(hgrid_t) :: grid
       type(multilayer_state_t) :: ms
@@ -584,7 +594,7 @@ contains
       real(wp), parameter :: PARTIAL = 0.086_wp, FILL = 1.0e-4_wp, KEEP = 0.4_wp
       real(wp), parameter :: SLOPE0 = 5.0e-3_wp
       real(wp), allocatable :: h_left(:, :, :), h_entry(:, :, :)
-      real(wp) :: vol0, vol, t0s, ts, s0s, ss, h_fold, h_seq, cap, gain
+      real(wp) :: vol0, vol, t0s, ts, s0s, ss, h_fold, h_seq, cap, gain, worst_out
       integer :: i, j, k, ic, jc, ni, nj, it_t, it_s
       logical :: floor_ok
       checks: block
@@ -601,26 +611,7 @@ contains
          jc = NGHOST + (NY + 1)/2
          it_t = ms%idx_temperature
          it_s = ms%idx_salinity
-
-         ! Stage-ENTRY thickness: uniform 1000 m layers, the centre bed layer
-         ! an 8.6 cm partial cell, its four neighbours' bed layer a filler.
-         allocate (h_entry(ni, nj, NZ))
-         h_entry = HL
-         h_entry(ic - 1, jc, 1) = FILL
-         h_entry(ic + 1, jc, 1) = FILL
-         h_entry(ic, jc - 1, 1) = FILL
-         h_entry(ic, jc + 1, 1) = FILL
-         h_entry(ic, jc, 1) = PARTIAL
-         ! What the dynamics LEFT: 60 % of the partial cell moved into the
-         ! four neighbouring fillers.
-         allocate (h_left(ni, nj, NZ))
-         h_left = h_entry
-         gain = (1.0_wp - KEEP)*PARTIAL/4.0_wp
-         h_left(ic, jc, 1) = KEEP*PARTIAL
-         h_left(ic - 1, jc, 1) = FILL + gain
-         h_left(ic + 1, jc, 1) = FILL + gain
-         h_left(ic, jc - 1, 1) = FILL + gain
-         h_left(ic, jc + 1, 1) = FILL + gain
+         cap = DX*DX*(PARTIAL - H_VANISHED)/(4.0_wp*DT)
 
          ! Domed stored slopes: + west/south of the centre, - east/north;
          ! zero at the bed (K=1) and the surface (K=NZ+1).
@@ -641,12 +632,27 @@ contains
             end do
          end do
 
-         ! ---- FOLDED: transport from the stage-entry h, applied to h_left.
+         ! ---- (a) deeper neighbours.  Stage-ENTRY thickness: uniform 1000 m
+         ! layers, the centre's bed layer an 8.6 cm partial cell.
+         allocate (h_entry(ni, nj, NZ))
+         h_entry = HL
+         h_entry(ic, jc, 1) = PARTIAL
+         ! What the dynamics LEFT: 60 % of the partial cell moved into the
+         ! four neighbours' bed layers.
+         allocate (h_left(ni, nj, NZ))
+         h_left = h_entry
+         gain = (1.0_wp - KEEP)*PARTIAL/4.0_wp
+         h_left(ic, jc, 1) = KEEP*PARTIAL
+         h_left(ic - 1, jc, 1) = HL + gain
+         h_left(ic + 1, jc, 1) = HL + gain
+         h_left(ic, jc - 1, 1) = HL + gain
+         h_left(ic, jc + 1, 1) = HL + gain
+
+         ! FOLDED: transport from the stage-entry h, applied to h_left.
          call fill_layers(ms, h_entry, ni, nj, NZ)
          call map_in_ct(ms, sl, gm, ct)
          call gm_compute_transports(grid, metrics, gm, sl, ms, DT)
          !$acc update self(gm%uhD)
-         cap = DX*DX*(PARTIAL - H_VANISHED)/(4.0_wp*DT)
          call check(error, abs(gm%uhD(ic + 1, jc, 1) - cap) <= 1.0e-12_wp*cap .and. &
                     abs(-gm%uhD(ic, jc, 1) - cap) <= 1.0e-12_wp*cap, &
                     "the dome must drain the partial cell AT the cap (case strength)")
@@ -661,7 +667,7 @@ contains
                     "witness: the stage-entry (folded) transport drives the partial cell negative")
          if (allocated(error)) exit checks
 
-         ! ---- SEQUENTIAL: transport from the thickness the dynamics left.
+         ! SEQUENTIAL: transport from the thickness the dynamics left.
          call fill_layers(ms, h_left, ni, nj, NZ)
          vol0 = sum_phys_h(ms, 1, ni, 1, nj, NZ)
          t0s = sum_phys_tr(ms, it_t, 1, ni, 1, nj, NZ)
@@ -687,7 +693,7 @@ contains
          call check(error, h_seq >= H_VANISHED*(1.0_wp - 1.0e-12_wp), &
                     "sequential GM must leave the partial cell >= H_VANISHED")
          if (allocated(error)) exit checks
-         call check(error, h_seq < KEEP*PARTIAL, &
+         call check(error, h_seq < 0.5_wp*KEEP*PARTIAL, &
                     "sequential GM must still drain the partial cell (non-trivial)")
          if (allocated(error)) exit checks
          call check(error, floor_ok, &
@@ -701,6 +707,27 @@ contains
          if (allocated(error)) exit checks
          call check(error, abs(ss - s0s) <= 1.0e-13_wp*abs(s0s), &
                     "sequential GM must conserve salinity content")
+         if (allocated(error)) exit checks
+
+         ! ---- (b) shallower neighbours holding a filler in the partial
+         ! cell's layer: the partial cell sits below their bed.
+         h_entry(ic - 1, jc, 1) = FILL
+         h_entry(ic + 1, jc, 1) = FILL
+         h_entry(ic, jc - 1, 1) = FILL
+         h_entry(ic, jc + 1, 1) = FILL
+         call fill_layers(ms, h_entry, ni, nj, NZ)
+         call map_in_ct(ms, sl, gm, ct)
+         call gm_compute_transports(grid, metrics, gm, sl, ms, DT)
+         call map_out_ct(ms, sl, gm, ct)
+         worst_out = max(gm%uhD(ic + 1, jc, 1), -gm%uhD(ic, jc, 1), &
+                         gm%vhD(ic, jc + 1, 1), -gm%vhD(ic, jc, 1))
+         ! Blocking scales the unlimited streamfunction KhTh·dy·S by the
+         ! fraction of the donor layer above the receiver's bed; unblocked,
+         ! the same face would carry the full cap.
+         call check(error, worst_out <= (KHTH*DX*SLOPE0)*(FILL/PARTIAL)*(1.0_wp + 1.0e-9_wp) &
+                    .and. worst_out < 0.25_wp*cap, &
+                    "bottom-blocking: GM must not drain the partial cell into the "// &
+                    "fillers below the shallower neighbours' bed")
       end block checks
       call ct%destroy()
       call gm%destroy()

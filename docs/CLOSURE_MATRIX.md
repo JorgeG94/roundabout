@@ -180,8 +180,20 @@ and the VarMix KhTh the operator reads between thermo refreshes).  The slope /
 VarMix / MEKE refresh runs at THERMO cadence at the top of the step; the
 operator itself runs every outer step (MOM6: every dynamics step — the fold
 applied GM on thermo steps only, i.e. at `1/dt_therm_ratio` strength).
-Deferred: bottom-blocking, FGNV/EBT/int_slope, refreshing the slopes on the
-post-dynamics `h` (MOM6 recomputes them there).  Default off ⇒ bit-identical.
+**Bottom-blocking** (MOM6 "avoid moving dense water upslope from below the
+level of the bottom on the receiving side", MOM_thickness_diffuse.F90:1097-1114;
+`gm_block_below_bed`): the unlimited streamfunction at an interface is zeroed
+when its donor layer lies entirely below the RECEIVING column's bed (`−D`), and
+scaled by the fraction of the donor layer above that bed when it straddles it.
+Without it, GM poured deep water through every open z\* step into the fillers
+below the shallow column's bed, which the remap handed to its bottom live layer:
+on the 1° Southern Ocean (open steps, `hvel_mom6 + bbl_glue`, linear piston
+drag) that was the whole GM-attributable energy excess — En at day 10
+`1.24e-3` folded / `1.46e-3` sequential without blocking / `6.93e-4` with it,
+against `7.10e-4` with GM off and `5.60e-4` with closed faces (unchanged by
+either change: `5.61e-4`).  Deferred: FGNV/EBT/int_slope, refreshing the slopes
+on the post-dynamics `h` (MOM6 recomputes them there).  Default off ⇒
+bit-identical.
 **Partial-step z-level faces** (`&vcoord_nml zfixed_closed_faces`): GM builds
 its overturning on each face's OPEN column — the layers open at that face
 (`open_u/open_v`) and live on both sides.  A layer outside it gets zero
