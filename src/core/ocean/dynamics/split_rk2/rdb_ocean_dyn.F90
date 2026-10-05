@@ -3689,10 +3689,10 @@ contains
       !!      with the same `dt` — so the per-face availability cap
       !!      `A·(h − H_VANISHED)/(4·dt)` bounds what is actually there
       !!      (MOM_thickness_diffuse.F90:896-906, applied at :639-641);
-      !!   3. the h / tracer ghosts are refreshed (exchange, periodic wrap,
-      !!      fold), as after the resolved continuity;
-      !!   4. `eulerian_z` only: the bolus divergence is cancelled per layer by
-      !!      the vertical advection, exactly as the resolved one is.
+      !!   3. `eulerian_z` only: the bolus divergence is cancelled per layer by
+      !!      the vertical advection, exactly as the resolved one is;
+      !!   4. the h / tracer ghosts are refreshed (exchange, periodic wrap,
+      !!      fold), as after the resolved continuity.
       !!
       !! Until 2026-10 the transports were computed at the top of the step
       !! from the stage-entry thickness and FOLDED into the resolved
@@ -3752,18 +3752,23 @@ contains
          call continuity_gm_apply(grid, metrics, ct, ms, gm, dt, budget_w, tr_mode, &
                                   set_flux_h=is_eulerian)
       end if
+      if (is_eulerian) then
+         ! Pin the Eulerian layers: the vertical w-divergence cancels the
+         ! bolus divergence `continuity_gm_apply` left in `flux_h_layer`,
+         ! carrying the tracers with it.  Column-local, so it runs BEFORE
+         ! the ghost refresh below: a ghost column's `flux_h_layer` is the
+         ! tile's own (the outermost ghost face carries no bolus), not its
+         ! owner's, so a ghost advanced here and NOT refreshed afterwards
+         ! made the step depend on where the seam fell (eulerian_z cells of
+         ! the compatibility matrix's DECOMP leg).
+         call compute_w_from_continuity(grid, va, ms)
+         call tracer_advect_vertical(grid, va, ms, dt)
+      end if
       call ocean_halo_exchange_ml_state(ms)
       if (present(bc)) then
          call ocean_periodic_wrap_state(grid, bc, ms, skip_x=ocean_halo_is_decomposed_x(), &
                                         skip_y=ocean_halo_is_decomposed_y())
          call ocean_fold_wrap_state(grid, bc, ms)
-      end if
-      if (is_eulerian) then
-         ! Pin the Eulerian layers: the vertical w-divergence cancels the
-         ! bolus divergence `continuity_gm_apply` left in `flux_h_layer`,
-         ! carrying the tracers with it (column-local, ghosts included).
-         call compute_w_from_continuity(grid, va, ms)
-         call tracer_advect_vertical(grid, va, ms, dt)
       end if
       if (dyn%check_h_positive) then
          call check_h_positive_or_die(grid, ms, "after the GM operator", 3, &

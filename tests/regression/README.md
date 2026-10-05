@@ -1747,7 +1747,7 @@ XFAIL; t = 3: 104 PASS, 216 REFUSED_GAP, 296 XFAIL; 0 FAIL, 0 XPASS):
 | row | leg | diagnosis |
 |---|---|---|
 | `restart_visc_rem` | RESTART | `visc_rem_precompute` builds its remnant from the previous stage's `vmix%kv`, which the restart registry does not carry: the first resumed step weights F_bt differently |
-| `restart_meke_gm_src_lag` | RESTART | MEKE reads the PREVIOUS thermo step's `gm%gm_src`; not checkpointed, so MEKE resumes from a cold source (3 % off at step 24) |
+| ~~`restart_meke_gm_src_lag`~~ | RESTART | MEKE reads the previous step's `gm%gm_src`, which was not checkpointed (3 % off at step 24). Retired 2026-10-05: `gm_src` (and the slopes / VarMix KhTh the GM operator reads between thermo refreshes) are restart-registered |
 | `restart_mle_mld_filter` | RESTART | MLE's running-mean `mld_filtered` (mld_decay_time > 0) is persistent state outside the registry |
 | `decomp_eulerian_z_ssp_rk2` | DECOMP | eulerian_z + ssp_rk2 + EPBL + MLE: last-bit differences in all owned cells on 2x2 / 4x1 (minimised); the visc_rem half was fixed (post-fold ghost refresh) |
 | `cavity_single_rank` | DECOMP (multirank) | the configure refusal on > 1 rank (the tripolar fold row `tripolar_fold_px1` was retired when the distributed fold lifted the `px > 1` refusal) |
