@@ -25,7 +25,11 @@ module rdb_ocean_pressure_force
    !! in the top layer) DO carry it; the split sheds exactly that term from
    !! the barotropic forcing (`pgf_free_surface_gravity`,
    !! `set_fast_forcing_eta_pf`) and keeps the rest of the depth mean.
+#ifdef LFORTRAN_PASSING
+   use rdb_constants, only: wp, GRAVITY, H_VANISHED, H_DIV_EPS
+#else
    use rdb_constants, only: wp, GRAVITY, H_VANISHED, H_DIV_EPS, NZ_STACK_MAX
+#endif
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_multilayer_state, only: multilayer_state_t
@@ -54,6 +58,12 @@ module rdb_ocean_pressure_force
    use rdb_mem_report, only: arr_bytes
    implicit none
    private
+#ifdef LFORTRAN_PASSING
+   integer, parameter :: NZ_STACK_MAX = 64
+      !! LFortran 0.64 workaround: module-local copy of the rdb_constants value
+      !! (an imported parameter used as an explicit-shape dummy bound inside a
+      !! PURE call becomes an impure getter under LFortran). Keep in sync (=64).
+#endif
 
    public :: ocean_pressure_force_t
    public :: ocean_pressure_force_compute
