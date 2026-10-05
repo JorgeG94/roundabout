@@ -718,6 +718,9 @@ contains
          call fill_layers(ms, h_entry, ni, nj, NZ)
          call map_in_ct(ms, sl, gm, ct)
          call gm_compute_transports(grid, metrics, gm, sl, ms, DT)
+         ! `map_out_ct` brings back h / T / S only (mem:separate): pull the
+         ! transports explicitly, or the host reads case (a)'s copy.
+         !$acc update self(gm%uhD, gm%vhD)
          call map_out_ct(ms, sl, gm, ct)
          worst_out = max(gm%uhD(ic + 1, jc, 1), -gm%uhD(ic, jc, 1), &
                          gm%vhD(ic, jc + 1, 1), -gm%vhD(ic, jc, 1))

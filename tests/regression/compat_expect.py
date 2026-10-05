@@ -340,6 +340,37 @@ ROWS = [
          expect=("CRASH",), message=r"remap preconditions at step \d+", scope="any",
          # minimised 2026-10-04 from c011 (greedy; every other axis at base)
          witness={"vcoord": "zstar", "lateral": "stress_tensor"}),
+    _gap("zstar_open_steps_stress_tensor_gm", "runtime", ("vc_zstar", "stress_tensor", "gm"),
+         "The zstar_open_steps_stress_tensor defect (arithmetic corner h_q against the face "
+         "divisor on a filler face) with GM on: the cell runs 24 steps with GM off and dies "
+         "with GM on.  Folded into continuity, GM's bolus drove a layer negative at step 2-3 "
+         "(remap guard); as its own operator on the current h it lasts to step 11-19 and then "
+         "trips the remap guard (sequential only) or the CFL panic (with MOM6 bottom-blocking). "
+         "Lifts with the h_q port.",
+         "NOT TRACKED (found by this matrix, 2026-10-05; GM sequential operator)",
+         expect=("CRASH",),
+         message=r"console stats: CFL > panic threshold|remap preconditions at step \d+",
+         scope="any",
+         # c010 of the 2026-10-05 train run (as generated, not minimised)
+         witness={"vcoord": "zstar", "split": "ssp_rk2", "vmix_bl": "pp81",
+                  "vmix_extra": "tidal", "vmix_bg": "scalar", "lateral": "kh_aniso",
+                  "eddy": "gm_meke", "tracers": "ideal_age", "pgf": "mont", "eos": "linear",
+                  "coriolis": "sadourny_hk", "pv_adv": "centered", "bt": "visc_rem",
+                  "geometry": "closed", "grid": "cartesian", "forcing": "warm_sw"}),
+    _gap("rho_gm_energy", "runtime", ("vc_rho", "gm"),
+         "Pure isopycnal (rho) with GM: cells that stopped within a few steps under "
+         "rho_runtime_crash (GM folded into continuity) now run all 24 steps with GM as its own "
+         "operator on the current h, but at 13-200x the PASS-population energy -- the same "
+         "validation-grade collapse of weakly stratified rho columns, reached later.",
+         "NOT TRACKED (found by this matrix, 2026-10-05; GM sequential operator)",
+         expect=("ENERGY",), message=r"x the \w+ PASS-population reference", scope="any",
+         # c044 of the 2026-10-05 train run (as generated, not minimised)
+         witness={"vcoord": "rho", "split": "pred_corr", "vmix_bl": "epbl",
+                  "vmix_extra": "conv", "vmix_bg": "bryan_lewis", "lateral": "leith_biharm",
+                  "eddy": "gm_meke", "tracers": "pseudo_salt", "pgf": "fv_mom6_plm",
+                  "eos": "linear", "coriolis": "sadourny", "pv_adv": "weno5",
+                  "bt": "substep_drag", "geometry": "obc", "grid": "spherical",
+                  "forcing": "cool"}),
     _gap("hycom_runtime_crash", "runtime", ("vc_hycom",),
          "hycom with an open boundary stops at step 4 (remap precondition guard + nan-catch) "
          "now that the land-column crash (item C3) no longer stops it at step 1.",
@@ -351,17 +382,6 @@ ROWS = [
                   "eddy": "mle", "tracers": "ts", "pgf": "fv_mom6", "eos": "roquet",
                   "coriolis": "sadourny_hk", "pv_adv": "centered", "bt": "substep_drag",
                   "geometry": "obc", "grid": "spherical", "forcing": "warm_sw"}),
-    _gap("hycom_decomp_run_fails", "runtime", ("vc_hycom",),
-         "A hycom cell that runs clean on one rank fails outright decomposed (2x2 and 4x1, "
-         "rc 1): the decomposed run itself, not a bitwise mismatch.",
-         "NOT TRACKED (found by this matrix, 2026-10-05)", expect=("DECOMP",),
-         message=r"the decomposed run failed", scope="any",
-         # c004 of the 2026-10-05 train run (as generated, not minimised)
-         witness={"vcoord": "hycom", "split": "ssp_rk2", "vmix_bl": "kpp", "vmix_extra": "ddiff",
-                  "vmix_bg": "henyey", "lateral": "const_nu_h", "eddy": "gm",
-                  "tracers": "ideal_age", "pgf": "fv_mom6_plm", "eos": "linear",
-                  "coriolis": "sadourny_energy", "pv_adv": "centered", "bt": "correction_bc_pgf",
-                  "geometry": "channel", "grid": "spherical", "forcing": "cool"}),
 
     # ===================================================================
     # KNOWN_GAP -- the legs (phase 3, 2026-10-04): RESTART, DECOMP.
@@ -373,30 +393,12 @@ ROWS = [
          "differently and every prognostic drifts (1e-11 relative by step 24).",
          "NOT TRACKED (found by this matrix, 2026-10-04)", expect=("RESTART",),
          message=r"differ after a warm restart"),
-    _gap("restart_meke_gm_src_lag", "runtime", ("meke",),
-         "MEKE does not resume bit-exact: `meke_step` reads `gm%gm_src` from the PREVIOUS "
-         "thermo step (a one-step lag) and that source is not in the restart registry, so the "
-         "first resumed step sources MEKE from a cold GM work (meke differs by ~3 % at step "
-         "24; the prognostics follow once MEKE feeds GM / the backscatter).",
-         "NOT TRACKED (found by this matrix, 2026-10-04)", expect=("RESTART",),
-         message=r"after a warm restart at step \d+: .*\bmeke: "),
     _gap("restart_mle_mld_filter", "runtime", ("mle_mld_filter",),
          "Fox-Kemper MLE with mld_decay_time > 0 does not resume bit-exact: its running-mean "
          "`mld_filtered` is persistent state but not in the restart registry, so a resume "
          "re-seeds it from the instantaneous MLD and the restratification flux changes.",
          "NOT TRACKED (found by this matrix, 2026-10-04)", expect=("RESTART",),
          message=r"differ after a warm restart"),
-    _gap("decomp_zstar_ssp_rk2_gm", "runtime", ("vc_zstar", "ssp_rk2", "gm"),
-         "zstar's open stepped bed with GM under ssp_rk2 runs clean on one rank and on 1x2, "
-         "but a split in x (2x1, 2x2, 4x1) drives one column negative and stops on the remap "
-         "guard at step 3; pred_corr at 2x2, z_fixed with closed faces and sigma are clean. "
-         "Independent of the PGF form and the Coriolis scheme (mont + sadourny_energy fails "
-         "the same way, and runs none of the code the zstar open-step fixes touched), so it "
-         "predates them: the cells only reach the DECOMP leg now that they pass checks 1-3.",
-         "NOT TRACKED (found by this matrix, 2026-10-04)", expect=("DECOMP",),
-         message=r"the decomposed run failed", scope="any",
-         # minimised 2026-10-04 from c015 (greedy over the decomposed run)
-         witness={"vcoord": "zstar", "split": "ssp_rk2", "eddy": "gm"}),
     _gap("decomp_eulerian_z_ssp_rk2", "runtime", ("vc_eulerian_z", "ssp_rk2", "epbl", "mle"),
          "eulerian_z under ssp_rk2 (its legacy per-stage vertical-advection + h-rescale path) "
          "with EPBL + Fox-Kemper MLE is not decomposition-invariant: last-bit differences in "
