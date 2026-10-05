@@ -299,6 +299,7 @@ contains
          deallocate (fx_peer_rank, fx_sn, fx_rn, fx_scol, fx_speer, fx_se, &
                      fx_rcol, fx_rpeer, fx_re, fx_rcls, fx_reqs, fx_stats)
       end if
+      call fx_plan%destroy()
       fx_cap = 0
       fx_slab_cap = 0
       fx_npeer = 0
