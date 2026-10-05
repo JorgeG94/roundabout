@@ -3604,6 +3604,30 @@ class OceanBt(Group):
         default=False,
     )
 
+    bt_rem_from_visc_rem = Bool(
+        'bt_rem_from_visc_rem',
+        doc='bt_rem_u/v = mask*av_rem**(1/n_inner), av_rem the frhat-weighted depth mean of visc_rem (MOM6 MOM_barotropic.F90:1553-1580); requires correction_visc_rem, mutually exclusive with substep_drag and bt_halo > 0',
+        units='',
+        required=False,
+        default=False,
+    )
+
+    strong_drag = Bool(
+        'strong_drag',
+        doc='MOM6 BT_STRONG_DRAG: rational-approximation bt_rem form n_inner*av_rem/(1+(n_inner-1)*av_rem) instead of the plain power; requires bt_rem_from_visc_rem',
+        units='',
+        required=False,
+        default=False,
+    )
+
+    rescale_strong_drag = Bool(
+        'rescale_strong_drag',
+        doc='MOM6 RESCALE_STRONG_DRAG: rescale the BT-correction increment by min(bt_rem**n_inner/av_rem, 1.0); requires strong_drag',
+        units='',
+        required=False,
+        default=False,
+    )
+
     split_scheme = Enum(
         'split_scheme',
         doc='Outer split-explicit time scheme: pred_corr (DEFAULT; MOM6 predictor-corrector, slow tendencies on the u_av/h_av step time-means, forward-backward gravity-wave pairing; lifts the internal-wave dt ceiling) or ssp_rk2 (EXPERIMENTAL; two-stage SSP average, widest envelope — the only scheme wired through eulerian_z, wet/dry and dt_tracer_advect_ratio>1 — but it spuriously grows internal gravity waves out of a stratified REST state, En 2.992E-05 vs 1.739E-09 at day 25 on resting_stratified_channel.nml; a (omega*dt)^4 noise floor, so forced viscous runs sit decades above it and quiescent or long spin-up runs do not)',
@@ -6264,4 +6288,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 60
-N_KNOBS = 686
+N_KNOBS = 689

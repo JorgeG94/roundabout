@@ -46,6 +46,7 @@ module rdb_ocean_dyn
                                       set_fast_forcing_eta_pf, pgf_free_surface_gravity, &
                                       compute_gtot_faces, compute_e_anom, &
                                       compute_bt_rem, reset_bt_rem, &
+                                      compute_bt_rem_from_visc_rem, &
                                       compute_bt_rem_wave_drag, mask_bt_rem, &
                                       set_local_BT_cont_types
    use rdb_ocean_bt_budget_probe, only: print_bt_budget
@@ -4902,12 +4903,24 @@ contains
       ! factor read by the substep loop.  When the knob is off, leave
       ! `bt_rem_u/v` at their init value of 1 ⇒ multiplication is a
       ! no-op (bit-identical to pre-knob path).
-      if (dyn%bt_work%bt_substep_drag) then
+      !
+      ! PR-2 (bt-rem-from-av-rem): `bt_rem_from_visc_rem` is a THIRD
+      ! resetter, mutually exclusive with `bt_substep_drag` at configure
+      ! (D2 — double-counted bed drag) — so this if/else-if chain still
+      ! dispatches to exactly one resetter per stage, never more than
+      ! one, preserving the multiplicative-accumulator contract (`src/
+      ! core/ocean/README.md`).  Built from the SAME visc_rem producer
+      ! the BT corrector reads (MOM6 MOM_barotropic.F90:1553-1580), once
+      ! per barotropic call, BEFORE the substeps below.
+      if (dyn%bt_work%bt_rem_from_visc_rem) then
+         call compute_bt_rem_from_visc_rem(grid, dyn%bt_work, ms, metrics, n_inner)
+      else if (dyn%bt_work%bt_substep_drag) then
          call compute_bt_rem(grid, dyn%bt_work, ms, metrics, bd%r_linear, bd%hbbl, dt_inner)
       else if (dyn%bt_work%lwd_enable) then
-         ! `bt_rem_u/v` is reset ONLY by `compute_bt_rem` above; when
-         ! `substep_drag` is off but wave drag is on, nothing else resets
-         ! it, and `compute_bt_rem_wave_drag` below MULTIPLIES into it —
+         ! `bt_rem_u/v` is reset ONLY by `compute_bt_rem`/
+         ! `compute_bt_rem_from_visc_rem` above; when both are off but
+         ! wave drag is on, nothing else resets it, and
+         ! `compute_bt_rem_wave_drag` below MULTIPLIES into it —
          ! without this reset bt_rem would compound geometrically across
          ! outer steps (bt_rem = R^n after n stages), silently annihilating
          ! the barotropic mode. See `src/core/ocean/README.md`.
@@ -5122,7 +5135,8 @@ contains
                                use_visc_rem=dyn%bt_work%bt_correction_visc_rem, &
                                metrics=metrics, &
                                scale=merge(dyn%pc_be, 1.0_wp, is_pred), &
-                               n_nonfin=dyn%bt_nonfin_step)
+                               n_nonfin=dyn%bt_nonfin_step, &
+                               n_inner=n_inner)
       if (dyn%bt_nonfin_step > 0) then
          write (output_unit, '("[nan-catch] stage ", i0, " step ", i0, ": ", i0, &
             &" non-finite BT-correction faces (fold skipped — BT loop blown up?)")') &
