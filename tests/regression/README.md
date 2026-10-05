@@ -1738,7 +1738,6 @@ XFAIL; t = 3: 104 PASS, 216 REFUSED_GAP, 296 XFAIL; 0 FAIL, 0 XPASS):
 | `decomp_weno_pv` | DECOMP | WENO PV interpolation: last-bit differences in all owned cells on 2x2 / 4x1 in some combinations (minimised: sadourny + weno7 on z*); unchanged by `-ffp-contract=off` |
 | `decomp_eulerian_z_ssp_rk2` | DECOMP | eulerian_z + ssp_rk2: same, with visc_rem or EPBL + MLE (minimised); unchanged by `-ffp-contract=off` |
 | `cavity_single_rank`, `tripolar_fold_px1` | DECOMP (multirank) | the configure refusals on > 1 rank; the tripolar cells then run 1x2, bitwise unless Redi or WENO PV is on |
-| `gpu_tripolar` | GPU | 3 of 10 tripolar cells stop in steps 1-3 on the GPU only, and the rest are non-deterministic run to run (6e-11 vs 1e-3, `hvisc_du_visc` ~4e26 in owned faces): a device race or uninitialised device read on the fold path |
 | `gpu_eulerian_z_epbl_mle_drift` | GPU | eulerian_z + ssp_rk2 + EPBL + MLE ends 1.6e-7 from gfortran, 3000x the population spread (the same combination is decomposition-sensitive) |
 | `zfixed_open_steps` (extended) | ENERGY | the open-staircase PGF: 49 of 49 accepted z_fixed_open cells in the t = 3 slice fail the bound |
 

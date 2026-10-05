@@ -407,23 +407,6 @@ ROWS = [
     # ===================================================================
     # KNOWN_GAP -- the GPU leg (nvfortran cc70) only.
     # ===================================================================
-    _gap("gpu_tripolar", "runtime", ("tripolar",),
-         "The tripolar fold on the GPU build does not run the CPU model: 3 of 10 tripolar "
-         "cells stop in steps 1-3 on every run (remap precondition guard, 'console stats: "
-         "NaN') where gfortran runs clean, and the others are NON-DETERMINISTIC -- the same "
-         "binary and cell ended within 6e-11 of gfortran on one run and 1e-3 off, with "
-         "hvisc_du_visc ~4e26 in OWNED faces, on another: a device race or an uninitialised "
-         "device read on the fold / bipolar-cap path.",
-         "NOT TRACKED (found by this matrix, 2026-10-04)",
-         expect=("CRASH", "NONFINITE", "CROSS_BACKEND"),
-         message=r"remap preconditions at step|NaN detected|nan-catch|norm .* > band",
-         scope="any", backend="gpu",
-         # c007 of the 2026-10-04 array: crashed at step 1 on both GPU runs
-         witness={"bt": "substep_drag", "coriolis": "sadourny_energy", "eddy": "gm_redi_meke",
-                  "eos": "wright", "forcing": "warm_sw", "geometry": "tripolar",
-                  "lateral": "nu_4", "pgf": "fv_mom6_ppm", "pv_adv": "centered",
-                  "split": "ssp_rk2", "tracers": "pseudo_salt", "vcoord": "zstar",
-                  "vmix_bg": "bryan_lewis", "vmix_bl": "kpp", "vmix_extra": "kappa_shear"}),
     _gap("gpu_eulerian_z_epbl_mle_drift", "runtime", ("vc_eulerian_z", "ssp_rk2", "epbl", "mle"),
          "eulerian_z + ssp_rk2 + EPBL + MLE ends 2e-7 (field norm) away from gfortran in 24 "
          "steps, 3000x the PASS population's spread: the same combination is not "
