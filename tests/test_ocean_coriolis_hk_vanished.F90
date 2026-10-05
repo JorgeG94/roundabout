@@ -37,6 +37,13 @@
 !!     column field the closed-face branch returns the original HK
 !!     tendencies BIT FOR BIT (the floor is a no-op where no cell
 !!     outweighs the other three of its corner).
+!!   * `open_step_latch_is_bounded` — the same staircase with closed faces
+!!     OFF (`zstar` / `z_fixed` / `zstar_full` over a stepped bed: every face
+!!     open, fillers next to live cells) and flow on every face.  With the
+!!     `coriolis_adv_t%hk_pair_floor` latch the energy-form bound holds;
+!!     without it the same state exceeds the bound (non-vacuous: the
+!!     unguarded kernel is what took the compat matrix's
+!!     `zstar x sadourny_hk` cell to a negative layer at step 2).
 !!   * `pair_antisymmetry_kept` — the Coriolis work
 !!     `Σ_U uh·CAu/IdxCu + Σ_V vh·CAv/IdyCv` vanishes to round-off on the
 !!     staircase with arbitrary velocities: the floor is a property of the
@@ -77,7 +84,8 @@ contains
                   new_unittest("rest_is_exactly_zero", test_rest), &
                   new_unittest("geostrophic_step_is_bounded", test_geostrophic_step), &
                   new_unittest("floor_inert_without_contrast", test_floor_inert), &
-                  new_unittest("pair_antisymmetry_kept", test_antisymmetry) &
+                  new_unittest("pair_antisymmetry_kept", test_antisymmetry), &
+                  new_unittest("open_step_latch_is_bounded", test_open_step_latch) &
                   ]
    end subroutine collect_ocean_coriolis_hk_vanished_tests
 
@@ -157,19 +165,22 @@ contains
       end do
    end subroutine set_open_velocities
 
-   subroutine run_hk(grid, metrics, ms, pvx, pvy, kec, mfu, mfv)
+   subroutine run_hk(grid, metrics, ms, pvx, pvy, kec, mfu, mfv, pair_floor)
       !! One HK evaluation on the host state `ms`, every buffer mapped and
       !! read back (`mem:separate`-safe).  Returns the tendencies, the
       !! centre KE and the (masked) transports the kernel used.
+      !! `pair_floor` sets the `hk_pair_floor` latch (default off).
       type(hgrid_t), intent(in) :: grid
       type(ocean_metrics_t), intent(in) :: metrics
       type(multilayer_state_t), intent(inout) :: ms
       real(wp), allocatable, intent(out) :: pvx(:, :, :), pvy(:, :, :), kec(:, :, :)
       real(wp), allocatable, intent(out) :: mfu(:, :, :), mfv(:, :, :)
+      logical, intent(in), optional :: pair_floor
       type(coriolis_adv_t) :: cor
 
       cor%f_0 = F0
       cor%pv_variant = PV_VARIANT_SADOURNY_HK
+      if (present(pair_floor)) cor%hk_pair_floor = pair_floor
       call cor%init(grid, nz_ml=NZ)
       !$acc enter data copyin(ms, cor)
       call ms%enter_data(); call cor%enter_data()
@@ -361,5 +372,71 @@ contains
 99    call ms%destroy()
       call destroy_cartesian_metrics(metrics)
    end subroutine test_antisymmetry
+
+   subroutine test_open_step_latch(error)
+      !! Closed faces OFF over the staircase: every face open, so a live
+      !! cell faces a FILLER (1e-4 m) across the patch edge.  Uniform flow
+      !! on every interior face.  The pair-floor latch must hold the
+      !! energy-form bound; the unlatched kernel must not (the defect).
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_metrics_t) :: metrics
+      real(wp), allocatable :: pvx(:, :, :), pvy(:, :, :), kec(:, :, :)
+      real(wp), allocatable :: mfu(:, :, :), mfv(:, :, :)
+      real(wp), parameter :: U0 = 0.02_wp, V0 = 0.01_wp
+      real(wp) :: bound, worst(2), abs_vort_max
+      integer :: ilatch
+      character(len=200) :: msg
+
+      do ilatch = 1, 2
+         call build_staircase(grid, ms, metrics)
+         ! Open steps: no z-level mask anywhere.
+         metrics%use_closed_faces = .false.
+         metrics%open_u = 1.0_wp
+         metrics%open_v = 1.0_wp
+         !$acc update device(metrics%open_u, metrics%open_v)
+         call set_open_velocities(grid, ms, metrics, U0, V0, .false.)
+         call run_hk(grid, metrics, ms, pvx, pvy, kec, mfu, mfv, pair_floor=(ilatch == 1))
+         worst(ilatch) = max_pv_tendency(grid, pvx, pvy, kec)
+         call check(error, all(ieee_is_finite(pvx)) .and. all(ieee_is_finite(pvy)), &
+                    "open staircase: non-finite HK tendency")
+         call ms%destroy()
+         call destroy_cartesian_metrics(metrics)
+         if (allocated(error)) return
+      end do
+      abs_vort_max = abs(F0) + 2.0_wp*(abs(U0) + abs(V0))/DX
+      bound = 2.0_wp*abs_vort_max*max(abs(U0), abs(V0))*(1.0_wp + 1.0e-12_wp)
+      write (msg, "(a,es12.4,a,es12.4,a,es12.4)") "latched ", worst(1), &
+         "  unlatched ", worst(2), "  bound ", bound
+      call check(error, worst(1) <= bound, &
+                 "open staircase, hk_pair_floor: HK exceeds the energy-form bound: "//trim(msg))
+      if (allocated(error)) return
+      call check(error, worst(2) > bound, &
+                 "open staircase WITHOUT the latch should exceed the bound (vacuous test?): " &
+                 //trim(msg))
+   end subroutine test_open_step_latch
+
+   function max_pv_tendency(grid, pvx, pvy, kec) result(worst)
+      !! max |pv_flux + grad KE| over every face: the PV part of the HK
+      !! tendency, the quantity the energy-form bound limits.
+      type(hgrid_t), intent(in) :: grid
+      real(wp), intent(in) :: pvx(:, :, :), pvy(:, :, :), kec(:, :, :)
+      real(wp) :: worst
+      integer :: i, j, k
+      worst = 0.0_wp
+      do k = 1, NZ
+         do j = 1, grid%ny_total
+            do i = 2, grid%nx_total
+               worst = max(worst, abs(pvx(i, j, k) + (kec(i, j, k) - kec(i - 1, j, k))/DX))
+            end do
+         end do
+         do j = 2, grid%ny_total
+            do i = 1, grid%nx_total
+               worst = max(worst, abs(pvy(i, j, k) + (kec(i, j, k) - kec(i, j - 1, k))/DX))
+            end do
+         end do
+      end do
+   end function max_pv_tendency
 
 end module test_ocean_coriolis_hk_vanished

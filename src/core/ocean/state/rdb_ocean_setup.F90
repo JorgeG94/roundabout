@@ -764,6 +764,11 @@ contains
          (ocean_state%coriolis_adv%pv_variant == PV_VARIANT_SADOURNY_HK)
       ocean_state%coriolis_adv%pv_adv_scheme = &
          parse_pv_adv_scheme(cfg%ocean%coriolis%pv_adv_scheme)
+      ! HK pair floor on the coordinates with STATIC bed fillers, closed
+      ! faces or not (see `coriolis_adv_t%hk_pair_floor`).
+      ocean_state%coriolis_adv%hk_pair_floor = &
+         any(parse_ocean_vcoord_type(cfg%vcoord_type) == &
+             [VCOORD_Z_FIXED, VCOORD_ZSTAR, VCOORD_ZSTAR_FULL])
       ! Coastal lateral BC (land mask, C1): free-slip default, shared knob.
       ocean_state%coriolis_adv%no_slip = cfg%ocean%hvisc%no_slip
       ! Mass-consistent CorAdCalc (MOM6 parity); config fail-loud
