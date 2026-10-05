@@ -272,11 +272,12 @@ ROWS = [
 
     # ----- under an ice-shelf cavity (single-rank row) -------------------
     _gap("cavity_vcoord", "refused", ("cavity",),
-         "Under a cavity v1 accepts sigma / zstar (they rescale the live column) and z_fixed "
-         "(taught the ice base) only; the others are unvalidated or draft-following.",
+         "Under a cavity v1 accepts sigma (it rescales the live column) and z_fixed (taught "
+         "the ice base) only; the others are unvalidated or draft-following -- zstar too, "
+         "since it became MOM6 z* (a geopotential z_fixed stack dilated per column).",
          "'Cavity-only refusals' (+ design/phase6_zlike_coordinates_under_ice.md)",
-         message=r"ocean_cavity_dyn_nml enable=\.true\. accepts vcoord_type='sigma', 'zstar'",
-         unless=("vc_sigma", "vc_zstar", "vc_z_fixed")),
+         message=r"ocean_cavity_dyn_nml enable=\.true\. accepts vcoord_type='sigma' or 'z_fixed'",
+         unless=("vc_sigma", "vc_z_fixed")),
 ] + [
     _gap("cavity_zfixed_" + f, "refused", ("cavity", "vc_z_fixed", f),
          "Under a cavity the z_fixed top layers inside the draft are fillers, and this closure "
