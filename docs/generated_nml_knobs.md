@@ -524,7 +524,7 @@ Coriolis-advection scheme selector.
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `form` | `"sadourny"` |  | Coriolis-advection variant |
-| `pv_adv_scheme` | `"centered"` |  | PV face interpolation (Sadourny path): centered (default) or weno3/weno5/weno7 (WENO-Z); weno5/weno7 need nghost>=3/4 |
+| `pv_adv_scheme` | `"centered"` |  | PV face interpolation (Sadourny path): centered (default) or weno3/weno5/weno7 (WENO-Z); weno5/weno7 need nghost>=4/5 |
 | `use_state_fluxes` | `.false.` |  | mom6-corrector CorAdv consumes continuity's renormalised mass fluxes (MOM6 mass-consistent uh/vh) |
 | `bound_coriolis` | `.false.` |  | clamp the energy-scheme Coriolis accel to the (f+zeta)*v velocity-form range (MOM6 BOUND_CORIOLIS; sadourny_energy only) |
 | `corner_h` | `"cell_mean"` |  | PV corner-thickness construction (energy scheme) |

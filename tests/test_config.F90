@@ -9,6 +9,7 @@ module test_config
                          diag_density_levels_ok, MAX_OCEAN_DIAG_Z_LEVELS, &
                          ice_hlim_count, ice_hlim_spec_is_valid, MAX_ICE_HLIM_VALS, &
                          validate_config
+   use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_VALIDATE
    implicit none
    private
 
@@ -61,7 +62,8 @@ contains
                   new_unittest("diag_density_requires_rho_levels", test_diag_density_requires_rho_levels), &
                   new_unittest("ice_hlim_count_leading_run", test_ice_hlim_count_leading_run), &
                   new_unittest("ice_hlim_spec_validity", test_ice_hlim_spec_validity), &
-                  new_unittest("nz_stack_guard_refuses_oversized_nz", test_nz_stack_guard) &
+                  new_unittest("nz_stack_guard_refuses_oversized_nz", test_nz_stack_guard), &
+                  new_unittest("pv_weno_nghost_gate_radius_plus_one", test_pv_weno_nghost_gate) &
                   ]
    end subroutine collect_config_tests
 
@@ -120,6 +122,52 @@ contains
          if (allocated(error)) exit checks
       end block checks
    end subroutine test_nz_stack_guard
+
+   subroutine test_pv_weno_nghost_gate(error)
+      !! `validate_config` asks the WENO PV face interpolation for a halo of
+      !! its stencil radius + 1 (`pv_adv_required_nghost`): at nghost =
+      !! radius a decomposed run is not bit-identical to one rank (compat
+      !! matrix row `decomp_weno_pv`, closed by this gate).  weno7 (radius 4)
+      !! is refused at nghost = 4 and accepted at 5; weno5 (radius 3) is
+      !! refused at 3 and accepted at 4.
+      type(error_type), allocatable, intent(out) :: error
+      integer :: ierr
+
+      ierr = validate_pv(4, "weno7")
+      call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
+                 "weno7 at nghost = 4 must be refused (needs radius + 1 = 5)")
+      if (allocated(error)) return
+      ierr = validate_pv(5, "weno7")
+      call check(error, ierr == OCEAN_STATUS_OK, "weno7 at nghost = 5 must be accepted")
+      if (allocated(error)) return
+      ierr = validate_pv(3, "weno5")
+      call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
+                 "weno5 at nghost = 3 must be refused (needs radius + 1 = 4)")
+      if (allocated(error)) return
+      ierr = validate_pv(4, "weno5")
+      call check(error, ierr == OCEAN_STATUS_OK, "weno5 at nghost = 4 must be accepted")
+   end subroutine test_pv_weno_nghost_gate
+
+   function validate_pv(nghost, scheme) result(ierr)
+      !! `validate_config` status of a minimal ocean namelist on the Sadourny
+      !! enstrophy path with the given PV scheme and halo.
+      integer, intent(in) :: nghost
+      character(len=*), intent(in) :: scheme
+      integer :: ierr
+      type(config_t) :: cfg
+      character(len=8) :: sng
+
+      write (sng, '(i0)') nghost
+      ierr = -999
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 24, ny = 16, nghost = "//trim(sng)// &
+         ", dx = 20000.0, dy = 20000.0 /"//new_line('a')// &
+         "&ocean_coriolis_nml form = 'sadourny', pv_adv_scheme = '"//scheme//"' /"// &
+         new_line('a'), cfg, ierr=ierr)
+      if (ierr /= OCEAN_STATUS_OK) return
+      call validate_config(cfg, ierr=ierr)
+   end function validate_pv
 
    subroutine test_cartesian_degrees(error)
       !! MOM6-style Cartesian sizing: len_lon/len_lat in degrees over nx/ny

@@ -572,14 +572,14 @@ CASES = [
                  "vcoord_zstar"],
     },
     {
-        # weno7 PV reconstruction (radius-4 stencil, nghost=4): exercises the
+        # weno7 PV reconstruction (radius-4 stencil, nghost=5): exercises the
         # weno7_recon path (Balsara-Shu smoothness) on the wind-driven gyre.
         "name": "double_gyre_weno7",
         "nml": "validation_examples/ocean/double_gyre/double_gyre_weno7.nml",
         "n_steps": 10,
         "timeout_s": 120,
         "backends": ALL_BACKENDS,
-        "tags": ["weno_pv", "coriolis_sadourny", "pv_adv_weno7", "nghost4",
+        "tags": ["weno_pv", "coriolis_sadourny", "pv_adv_weno7", "nghost5",
                  "vcoord_zstar"],
     },
 ]

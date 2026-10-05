@@ -27,7 +27,7 @@ module rdb_ocean_halo_width
    !!
    !! The six rules folded here:
    !!   1. global floor                        1   (`rdb_config.F90` nghost >= 1)
-   !!   2. PV-advection weno5/weno7             3/4 (`rdb_coriolis_adv::pv_adv_required_nghost`)
+   !!   2. PV-advection weno5/weno7             4/5 (`rdb_coriolis_adv::pv_adv_required_nghost`)
    !!   3. tracer reconstruction weno5/7/9      3/4/5 (`rdb_recon_weno::tracer_recon_required_nghost`)
    !!   4. any PERIODIC topology                3   (`rdb_ocean_boundary_types::ocean_bc_validate_periodic`)
    !!   5. tripolar north fold                  3   (`rdb_ocean_boundary_types::ocean_bc_validate_fold`)
