@@ -83,6 +83,12 @@
 !!     constant wind, with the double-Drake land reaching the fold line; its
 !!     x splits (2x1, 4x1 = 8/8/7/7, 2x2) fold through the distributed fold
 !!     exchange, its 1xN splits through the local kernels.
+!!   * visc_rem_chain — the island_basin topology with the visc_rem chain
+!!     live (`&ocean_vdiff_nml hvel_mom6 + bbl_glue`, `&ocean_bt_nml
+!!     correction_visc_rem + bt_rem_from_visc_rem`) -- av_rem/bt_rem are
+!!     per-face column sums built on the FULL face extent including ghosts,
+!!     so a decomposition-sensitive seam in them shows here exactly like
+!!     every other compared field.
 !! All are stratified with a boundary-layer scheme on, so the tiles exchange real
 !! flow and real tracer structure.  26 x 18 cells (tripolar: 30 x 24),
 !! nghost = 3 (weno7_pv: 26 x 24, nghost = 5): every factorisation above is
@@ -157,7 +163,7 @@ program test_ocean_decomp_bitid_mpi
    integer :: rank, nprocs, n_fail, total_fail, ic
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(15) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(16) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -166,7 +172,8 @@ program test_ocean_decomp_bitid_mpi
                                                 "closures", "file_readers", &
                                                 "file_readers_zstar_full", &
                                                 "file_readers_zstar", "sea_ice", &
-                                                "sea_ice_transport", "tripolar"]
+                                                "sea_ice_transport", "tripolar", &
+                                                "visc_rem_chain"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -221,6 +228,8 @@ contains
       ! group (one group per namelist).
       bt_extra = ""
       if (label == "visc_rem_zstar") bt_extra = ", correction_visc_rem = .true."
+      if (label == "visc_rem_chain") bt_extra = ", correction_visc_rem = .true., "// &
+                                                 "bt_rem_from_visc_rem = .true."
       write (spx, '(i0)') px
       write (spy, '(i0)') py
       write (snx, '(i0)') NX_G
@@ -250,6 +259,21 @@ contains
                "&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, "// &
                "slope_scale = 0.15, wind_config = '2gyre', taux_magnitude = 0.1, "// &
                "coriolis_beta = 2.0e-11 /"//NL// &
+               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+      case ("visc_rem_chain")
+         ! The island basin with the visc_rem chain live end to end: MOM6
+         ! BOTTOMDRAGLAW glue (hvel_mom6 + bbl_glue) feeding the BT corrector
+         ! weight (correction_visc_rem) and bt_rem = av_rem**(1/n_inner)
+         ! substep damping (bt_rem_from_visc_rem, via bt_extra above).
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, "// &
+               "slope_scale = 0.15, wind_config = '2gyre', taux_magnitude = 0.1, "// &
+               "coriolis_beta = 2.0e-11 /"//NL// &
+               "&ocean_vdiff_nml hvel_mom6 = .true., bbl_glue = .true. /"//NL// &
                "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
       case ("weno7_pv")
          ! The island basin on the Sadourny enstrophy path with the weno7 PV
