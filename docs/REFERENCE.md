@@ -87,8 +87,9 @@ projection anywhere in the dynamical core.
   `pv_adv_scheme=` selects the corner-vorticity→face interpolation:
   `centered` (default, bit-identical 2-point average) or
   `weno3`/`weno5`/`weno7` (upwind-biased WENO-Z, MOM6 WENOVI{3,5,7}TH).
-  `weno5`/`weno7` need `nghost ≥ 3`/`4` (fail-loud via
-  `pv_adv_required_nghost`).
+  `weno5`/`weno7` need `nghost ≥ 4`/`5` — stencil radius + 1, the
+  halo at which a decomposed run is bit-identical to one rank (fail-loud
+  via `pv_adv_required_nghost`).
 - **Pressure gradient**: finite-volume, `&ocean_pgf_nml form=` —
   Montgomery potential (`mont`, **default**), z-corrected FV
   (`fv_lite`), FV + Wright in-situ

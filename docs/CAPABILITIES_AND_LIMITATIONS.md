@@ -359,11 +359,6 @@ documented, the only such paths found):
   split in x, drifts at round-off on the east boundary face.  A west sponge
   edge (alone, or with Orlanski-open and clamped edges) and every other
   combination tested are exact.
-- **WENO PV at its minimum halo** (`&ocean_coriolis_nml pv_adv_scheme =
-  'weno5'` at `nghost = 3`, `'weno7'` at `nghost = 4` — the smallest each
-  configure gate, `pv_adv_required_nghost`, accepts) drifts at round-off
-  (3e-11 relative after 24 steps); one ghost more is exact.  Found by the
-  compatibility matrix (row `decomp_weno_pv`).
 - **`eulerian_z` under `ssp_rk2` with EPBL + Fox-Kemper MLE** drifts at
   round-off (3e-11 relative after 24 steps); EPBL alone, the pair on any
   other coordinate, or under `pred_corr` is exact (row

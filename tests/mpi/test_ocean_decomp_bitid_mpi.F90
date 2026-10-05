@@ -26,6 +26,9 @@
 !! Cases (each under `pred_corr` AND `ssp_rk2`, 48 steps):
 !!   * island_basin — closed Cartesian basin with an interior land block
 !!     (static land mask), beta plane, `2gyre` wind, sigma;
+!!   * weno7_pv — island_basin on the Sadourny enstrophy path with the weno7
+!!     PV face interpolation at nghost = 5, the stencil radius + 1 its
+!!     configure gate asks for (`pv_adv_required_nghost`);
 !!   * periodic_channel_zstar — re-entrant channel over a seamount on z*
 !!     (ALE remap every step), with porous barriers;
 !!   * visc_rem_zstar — closed, cooled Cartesian spoon basin on z* (bed
@@ -82,7 +85,8 @@
 !!     exchange, its 1xN splits through the local kernels.
 !! All are stratified with a boundary-layer scheme on, so the tiles exchange real
 !! flow and real tracer structure.  26 x 18 cells (tripolar: 30 x 24),
-!! nghost = 3: every factorisation above is uneven somewhere.
+!! nghost = 3 (weno7_pv: 26 x 24, nghost = 5): every factorisation above is
+!! uneven somewhere.
 !!
 !! The barotropic march-in (`&ocean_bt_nml bt_halo > 0`) is NOT covered: it
 !! is opt-in precisely because it is not bit-identical to the serial run over
@@ -121,7 +125,6 @@ program test_ocean_decomp_bitid_mpi
 
    integer, parameter :: NX_G = 26
    integer, parameter :: NY_G = 18
-   integer, parameter :: NG = 3
    integer, parameter :: N_STEPS = 48
    integer, parameter :: N_CKPT = 25
       !! Checkpoint step of the write/resume leg: odd, so with
@@ -143,7 +146,7 @@ program test_ocean_decomp_bitid_mpi
    type :: snap_t
       integer :: n = 0
       type(field_t) :: f(MAXF)
-      integer :: io = 0, jo = 0, nxl = 0, nyl = 0
+      integer :: io = 0, jo = 0, nxl = 0, nyl = 0, ng = 0
       type(conservation_budget_t) :: bud
          !! Closed-budget mass/salt/heat out+src totals at the final step —
          !! EFP-reduced (`reproducing_sums`, default on), so these must be
@@ -154,8 +157,9 @@ program test_ocean_decomp_bitid_mpi
    integer :: rank, nprocs, n_fail, total_fail, ic
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(14) = [character(len=24) :: &
-                                                "island_basin", "periodic_channel_zstar", &
+   character(len=24), parameter :: CASES(15) = [character(len=24) :: &
+                                                "island_basin", "weno7_pv", &
+                                                "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
                                                 "periodic_sponge", &
                                                 "open_obc", "spherical", "obc_radiation_sponge", &
@@ -246,6 +250,24 @@ contains
                "&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, "// &
                "slope_scale = 0.15, wind_config = '2gyre', taux_magnitude = 0.1, "// &
                "coriolis_beta = 2.0e-11 /"//NL// &
+               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+      case ("weno7_pv")
+         ! The island basin on the Sadourny enstrophy path with the weno7 PV
+         ! face interpolation, at its gate's halo (stencil radius 4 + 1 =
+         ! nghost 5).  At nghost = 4 (radius) the stencil's edge corners are
+         ! built from the outermost ghost ring of u/v and the decomposed run
+         ! drifts at the last bit (compat-matrix row `decomp_weno_pv`).  Its
+         ! own ny = 24, so every 1xN tile (1x4: 6 rows) is wider than the
+         ! 5-deep ghost band it sends.
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = 24, nghost = 5, "// &
+               "dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, "// &
+               "slope_scale = 0.15, wind_config = '2gyre', taux_magnitude = 0.1, "// &
+               "coriolis_beta = 2.0e-11 /"//NL// &
+               "&ocean_coriolis_nml form = 'sadourny', pv_adv_scheme = 'weno7' /"//NL// &
                "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
       case ("periodic_channel_zstar")
          ! Re-entrant channel over a seamount, z* (ALE remap every step).
@@ -620,6 +642,7 @@ contains
       s%jo = engine%grid%j_offset_global
       s%nxl = engine%grid%nx_phys
       s%nyl = engine%grid%ny_phys
+      s%ng = engine%grid%nghost
    end subroutine take_snapshot
 
 #ifndef RDB_NO_NETCDF
@@ -785,13 +808,13 @@ contains
          end if
          if (carried_tendency(dec%f(e)%tag)) cycle
          associate (a => dec%f(e)%a, b => ref%f(e)%a)
-            ex = size(a, 1) - (dec%nxl + 2*NG)
-            ey = size(a, 2) - (dec%nyl + 2*NG)
+            ex = size(a, 1) - (dec%nxl + 2*dec%ng)
+            ey = size(a, 2) - (dec%nyl + 2*dec%ng)
             nb = 0
             first = ""
             do k = 1, size(a, 3)
-               do j = NG + 1, NG + dec%nyl + ey
-                  do i = NG + 1, NG + dec%nxl + ex
+               do j = dec%ng + 1, dec%ng + dec%nyl + ey
+                  do i = dec%ng + 1, dec%ng + dec%nxl + ex
                      if (.not. ieee_is_finite(b(i + dec%io, j + dec%jo, k))) nfin = nfin + 1
                      if (transfer(a(i, j, k), 0_int64) /= &
                          transfer(b(i + dec%io, j + dec%jo, k), 0_int64)) then

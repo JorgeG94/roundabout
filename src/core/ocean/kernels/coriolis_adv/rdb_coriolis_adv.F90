@@ -82,19 +82,21 @@ module rdb_coriolis_adv
    ! 2-point corner average -> bit-identical.  `weno{3,5,7}` replace it with
    ! an essentially-non-oscillatory upwind-biased reconstruction (MOM6
    ! CoriolisAdv WENO-VI: Large et al. WENO-Z weights) that sharpens PV
-   ! fronts without the global dissipation the centred form leaks.  weno3
-   ! (radius-2 stencil) fits nghost>=2; weno5/weno7 (radius 3/4) require
-   ! nghost>=3/4 (fail-loud at configure via `pv_adv_required_nghost`).
+   ! fronts without the global dissipation the centred form leaks.  The halo
+   ! must be the stencil radius + 1 (`pv_adv_required_nghost`, fail-loud at
+   ! configure): weno5/weno7 (radius 3/4) require nghost>=4/5; weno3
+   ! (radius 2) keeps the nghost>=2 baseline because every decomposed run
+   ! already floors nghost at 3 = its radius + 1.
    integer, parameter, public :: PV_ADV_CENTERED = 0
       !! 2-point corner average (default; bit-identical to pre-F1).
    integer, parameter, public :: PV_ADV_WENO3 = 1
       !! 3rd-order WENO-Z PV reconstruction (MOM6 WENOVI3RD, radius 2).
    integer, parameter, public :: PV_ADV_WENO5 = 2
       !! 5th-order WENO-Z PV reconstruction (MOM6 WENOVI5TH, radius 3 =>
-      !! nghost>=3).
+      !! nghost>=4, radius + 1).
    integer, parameter, public :: PV_ADV_WENO7 = 3
       !! 7th-order WENO-Z PV reconstruction (MOM6 WENOVI7TH, radius 4 =>
-      !! nghost>=4).
+      !! nghost>=5, radius + 1).
    integer, parameter, public :: PV_ADV_INVALID = -1
       !! Sentinel for an unrecognised string (fail-loud, mirrors
       !! `PV_VARIANT_INVALID`).
@@ -142,7 +144,8 @@ module rdb_coriolis_adv
          !! or `PV_ADV_WENO{3,5,7}` (upwind-biased WENO-Z reconstruction of the
          !! corner absolute vorticity onto the faces in the Sadourny path).
          !! Driven from `&ocean_coriolis_nml pv_adv_scheme` via
-         !! `parse_pv_adv_scheme`; weno5/weno7 require nghost>=3/4.
+         !! `parse_pv_adv_scheme`; weno5/weno7 require nghost>=4/5
+         !! (`pv_adv_required_nghost`).
       logical :: weno_velocity_smooth = .false.
          !! `&ocean_coriolis_nml weno_velocity_smooth` (MOM6
          !! `WENO_VELOCITY_SMOOTH`, default off): when on, the WENO
@@ -1716,7 +1719,7 @@ contains
       !! Translate a namelist string into a `PV_ADV_*` code.  An
       !! unrecognised string returns `PV_ADV_INVALID` (fail-loud — a typo
       !! must not silently degrade the PV interpolation).  `weno5`/`weno7`
-      !! are implemented; they additionally require `nghost >= 3`/`4`
+      !! are implemented; they additionally require `nghost >= 4`/`5`
       !! (`pv_adv_required_nghost`), checked at configure.
       character(len=*), intent(in) :: name
       integer :: code
@@ -1746,17 +1749,34 @@ contains
    end function pv_adv_scheme_is_implemented
 
    pure function pv_adv_required_nghost(code) result(ng)
-      !! Minimum `nghost` for a PV face-interp scheme's stencil radius:
-      !! weno5 (radius 3) -> 3, weno7 (radius 4) -> 4; centered/weno3 fit the
-      !! nghost>=2 baseline.  Mirrors the tracer-WENO ladder's per-rung gate;
+      !! Minimum `nghost` for a PV face-interp scheme: the stencil RADIUS + 1.
+      !! weno5 (radius 3) -> 4, weno7 (radius 4) -> 5; centered and weno3
+      !! (radius 2) keep the nghost>=2 baseline -- one rank has no seam, and
+      !! every decomposed run is already floored at nghost>=3 (`ocean_halo_init`),
+      !! which is weno3's radius + 1 (measured bitwise, 2x2 / 4x1).
+      !!
+      !! Why + 1: at nghost = radius a decomposed run is NOT bit-identical to
+      !! one rank (weno7 at 4, weno5 at 3: last-bit drift in every owned cell
+      !! on 2x2 / 4x1, under both split schemes; compat-matrix row
+      !! `decomp_weno_pv`, now closed), and one ghost more is bitwise.  In
+      !! `coriolis_adv_compute_tendencies_sadourny` the u-face stencil reads
+      !! the corners `j-r+1 .. j+r` (`i-r+1 .. i+r` on the v-faces), so at
+      !! nghost = r the first/last owned face reaches corner 2 and corner
+      !! `ny`/`nx` -- the corners `q_corner` builds from the OUTERMOST ghost
+      !! row/column of `u`/`v` (rows 1 and `ny`).  That ring is not kept as
+      !! the neighbour's image (the end-of-step checkpoint differs there by
+      !! O(0.1 m/s) from the serial run's matching cells while every inner
+      !! ring agrees), so the corner PV at the stencil's edge is one ring
+      !! short of valid.  Radius + 1 keeps every corner the stencil reads off
+      !! that ring.  Mirrors the tracer-WENO ladder's per-rung gate;
       !! `configure` fail-loud rejects an under-provisioned halo.
       integer, intent(in) :: code
       integer :: ng
       select case (code)
       case (PV_ADV_WENO5)
-         ng = 3
-      case (PV_ADV_WENO7)
          ng = 4
+      case (PV_ADV_WENO7)
+         ng = 5
       case default
          ng = 2
       end select

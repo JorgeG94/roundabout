@@ -386,21 +386,6 @@ ROWS = [
          "re-seeds it from the instantaneous MLD and the restratification flux changes.",
          "NOT TRACKED (found by this matrix, 2026-10-04)", expect=("RESTART",),
          message=r"differ after a warm restart"),
-    _gap("decomp_weno_pv", "runtime", ("pv_weno",),
-         "The WENO PV face interpolation is not decomposition-invariant at the SMALLEST halo "
-         "its configure gate accepts (`pv_adv_required_nghost`: weno5 -> 3, weno7 -> 4): "
-         "last-bit differences in h / u / v / rho in every owned cell on 2x2 and 4x1 "
-         "(sadourny + weno7, nghost = 4: max|diff|/max|field| 3e-11 after 24 steps).  One "
-         "ghost more is bitwise (weno7 at nghost 5 / 6, weno5 at 4), and weno5 at nghost 3 "
-         "fails the same way, so the stencil reads one ghost ring that is not the "
-         "neighbour's image -- the gate is one short, or the corner field it reads is.  "
-         "On the matrix (nghost = 4) only weno7 bites; weno3 / weno5 are bitwise.",
-         "NOT TRACKED (found by this matrix, 2026-10-04)", expect=("DECOMP",),
-         message=r"\dx\d: \d+ field mismatch", scope="any",
-         # re-minimised 2026-10-05 on the base coordinate (z_fixed + closed
-         # faces, every other axis at base): the old z* witness now stops
-         # on ENERGY first (MOM6 z*, #123), so its DECOMP leg never ran.
-         witness={"coriolis": "sadourny", "pv_adv": "weno7"}),
     _gap("decomp_zstar_ssp_rk2_gm", "runtime", ("vc_zstar", "ssp_rk2", "gm"),
          "zstar's open stepped bed with GM under ssp_rk2 runs clean on one rank and on 1x2, "
          "but a split in x (2x1, 2x2, 4x1) drives one column negative and stops on the remap "

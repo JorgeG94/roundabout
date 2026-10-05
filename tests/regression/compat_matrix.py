@@ -383,7 +383,10 @@ AXES = [
         ("centered", {"ocean_coriolis_nml": {"pv_adv_scheme": "centered"}}),
         ("weno3", {"ocean_coriolis_nml": {"pv_adv_scheme": "weno3"}}),
         ("weno5", {"ocean_coriolis_nml": {"pv_adv_scheme": "weno5"}}),
-        ("weno7", {"ocean_coriolis_nml": {"pv_adv_scheme": "weno7"}}),
+        # weno7 is the one value whose halo floor (`pv_adv_required_nghost`:
+        # stencil radius + 1 = 5) is above the base's nghost = 4.
+        ("weno7", {"ocean_coriolis_nml": {"pv_adv_scheme": "weno7"},
+                   "grid_nml": {"nghost": 5}}),
     ]),
     ("bt", [
         ("default", {}),
