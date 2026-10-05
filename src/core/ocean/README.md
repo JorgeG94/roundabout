@@ -265,7 +265,6 @@ vanished layer, because they are answering a different question:
 | consumer | substitution on a vanished layer | why |
 |---|---|---|
 | `rdb_eos` (`eos_*_impl`) | reference `T_ref`/`S_ref` ⇒ `rho = rho_0` | a filler must not perturb the density column the PGF integrates |
-| `rdb_ocean_pressure_force` (T/S reconstruction) | `hS/H_VANISHED` (floored divide) | keeps the PLM/PPM edge stencil finite across a filler |
 | `rdb_ocean_sponge` (`snapshot_column_concentration`) | the nearest massive layer's concentration | the relaxation target must be a physical water mass |
 | `rdb_ocean_diag_fills` (`fill_tracer_impl` — T, S, age, pseudo-salt) | IEEE quiet NaN | a plot must show a gap, not a copy of the layer above |
 | `rdb_ocean_diag_derived` (`fill_rho_layer_impl`) | IEEE quiet NaN | the EOS's `rho_0` in a filler is a substitution, not a measurement |
@@ -279,6 +278,26 @@ Each of those is a considered, documented choice; none of them is I1′,
 and none of them should be routed through `rdb_vl_conc`. If you add
 another, say so with a `! vanished-ok: <reason>` waiver where the lint
 sees it.
+
+**A substitution is only safe where the value is multiplied by the
+filler's OWN thickness.** The FV-MOM6 PGF used to be on this list, reading
+a filler's T/S as `hS/max(h, H_VANISHED)`. That is `h/H_VANISHED` of the
+truth, two-thirds at the default `zstar_h_min = 1e-4 m`. It was harmless
+in the vertical `pa` stack, but the cross-face Boole integral interpolates
+T/S between the two columns over the interpolated thickness
+`wl·h_L + wr·h_R`, and the PLM/PPM edge stencil reads its neighbours. So
+at an OPEN z-like step (a live layer facing a bed filler, `zstar`, or
+`z_fixed` with closed faces off) the wrong salinity was integrated over
+tens of metres of live water. The result was an at-rest acceleration of
+`2.9e-3 m/s²` on a live|filler face against `1.4e-6` with the true value.
+That is the open-staircase blow-up `refuse_open_zfixed_staircase` was
+written against, and the `zstar` ENERGY / CRASH cells of the compat matrix.
+The PGF now reads I1′ itself, `c_live` off the donor (`pgf_layer_conc`,
+2026-10-04; gate `test_ocean_pgf_insitu :: open_step_filler_faces_*`).
+The EOS's `rho_0` substitution above has the same hazard wherever a
+cross-face term multiplies it by a non-vanished height: the FV-lite /
+FV-Wright `rho_face·Δz_centre` correction is such a term, and it is not
+yet ported.
 
 **What the diagnostics can and cannot tell you.** Every diagnostic uses
 the ONE predicate, so a layer at `h <= H_VANISHED` is missing everywhere

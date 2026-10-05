@@ -25,7 +25,7 @@ module rdb_ocean_pressure_force
    !! in the top layer) DO carry it; the split sheds exactly that term from
    !! the barotropic forcing (`pgf_free_surface_gravity`,
    !! `set_fast_forcing_eta_pf`) and keeps the rest of the depth mean.
-   use rdb_constants, only: wp, GRAVITY, H_VANISHED, H_DIV_EPS
+   use rdb_constants, only: wp, GRAVITY, H_VANISHED, H_DIV_EPS, NZ_STACK_MAX
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_multilayer_state, only: multilayer_state_t
@@ -1618,11 +1618,9 @@ contains
       ! A layer's edges come from its own short vertical stencil of layer
       ! means (k-1..k+1 for PLM, k-2..k+2 for PPM), so this is a 3-D
       ! `do concurrent`; the per-column form built seven NZ_STACK_MAX
-      ! stacks per thread in device local memory.  The means are `hTr/h`
-      ! floored at H_VANISHED (`recon_layer_mean`, the D4 vanished-layer
-      ! role, not the old 1e-10: during an active drain the PPM limiter
-      ! only guarantees h >= 0, so a layer in (0, H_VANISHED] would
-      ! otherwise feed hS/h ≈ hS/1e-8 into the reconstruction).  Stencil
+      ! stacks per thread in device local memory.  The means come from
+      ! `pgf_layer_conc`: `hTr/h` on a live layer, the I1′ donor
+      ! concentration on a vanished one (never a near-zero divisor).  Stencil
       ! indices outside the column are clamped into it; the boundary
       ! branches that would read them do not.  Done as its own pass so the
       ! quadrature passes below read clean edge arrays.
@@ -1634,27 +1632,27 @@ contains
          if (parabolic) then
             call ppm_edges_layer(k, nz, h_layer(i, j, km2), h_layer(i, j, km1), &
                                  h_layer(i, j, k), h_layer(i, j, kp1), h_layer(i, j, kp2), &
-                                 recon_layer_mean(hS(i, j, km2), h_layer(i, j, km2)), &
-                                 recon_layer_mean(hS(i, j, km1), h_layer(i, j, km1)), &
-                                 recon_layer_mean(hS(i, j, k), h_layer(i, j, k)), &
-                                 recon_layer_mean(hS(i, j, kp1), h_layer(i, j, kp1)), &
-                                 recon_layer_mean(hS(i, j, kp2), h_layer(i, j, kp2)), &
-                                 recon_layer_mean(hT(i, j, km2), h_layer(i, j, km2)), &
-                                 recon_layer_mean(hT(i, j, km1), h_layer(i, j, km1)), &
-                                 recon_layer_mean(hT(i, j, k), h_layer(i, j, k)), &
-                                 recon_layer_mean(hT(i, j, kp1), h_layer(i, j, kp1)), &
-                                 recon_layer_mean(hT(i, j, kp2), h_layer(i, j, kp2)), &
+                                 pgf_layer_conc(i, j, km2, nx, ny, nz, h_layer, hS), &
+                                 pgf_layer_conc(i, j, km1, nx, ny, nz, h_layer, hS), &
+                                 pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hS), &
+                                 pgf_layer_conc(i, j, kp1, nx, ny, nz, h_layer, hS), &
+                                 pgf_layer_conc(i, j, kp2, nx, ny, nz, h_layer, hS), &
+                                 pgf_layer_conc(i, j, km2, nx, ny, nz, h_layer, hT), &
+                                 pgf_layer_conc(i, j, km1, nx, ny, nz, h_layer, hT), &
+                                 pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hT), &
+                                 pgf_layer_conc(i, j, kp1, nx, ny, nz, h_layer, hT), &
+                                 pgf_layer_conc(i, j, kp2, nx, ny, nz, h_layer, hT), &
                                  S_t(i, j, k), S_b(i, j, k), T_t(i, j, k), T_b(i, j, k))
          else
             call plm_edges_layer(k, nz, h_layer(i, j, km1), h_layer(i, j, k), h_layer(i, j, kp1), &
-                                 recon_layer_mean(hS(i, j, km1), h_layer(i, j, km1)), &
-                                 recon_layer_mean(hS(i, j, k), h_layer(i, j, k)), &
-                                 recon_layer_mean(hS(i, j, kp1), h_layer(i, j, kp1)), &
+                                 pgf_layer_conc(i, j, km1, nx, ny, nz, h_layer, hS), &
+                                 pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hS), &
+                                 pgf_layer_conc(i, j, kp1, nx, ny, nz, h_layer, hS), &
                                  S_t(i, j, k), S_b(i, j, k))
             call plm_edges_layer(k, nz, h_layer(i, j, km1), h_layer(i, j, k), h_layer(i, j, kp1), &
-                                 recon_layer_mean(hT(i, j, km1), h_layer(i, j, km1)), &
-                                 recon_layer_mean(hT(i, j, k), h_layer(i, j, k)), &
-                                 recon_layer_mean(hT(i, j, kp1), h_layer(i, j, kp1)), &
+                                 pgf_layer_conc(i, j, km1, nx, ny, nz, h_layer, hT), &
+                                 pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hT), &
+                                 pgf_layer_conc(i, j, kp1, nx, ny, nz, h_layer, hT), &
                                  T_t(i, j, k), T_b(i, j, k))
          end if
       end do
@@ -1699,9 +1697,9 @@ contains
             call boole_dpa_intz_layer_wright(rho0, rho_ref, &
                                              e_face(i, j, k + 1), h_layer(i, j, k), &
                                              T_t(i, j, k), T_b(i, j, k), &
-                                             recon_layer_mean(hT(i, j, k), h_layer(i, j, k)), &
+                                             pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hT), &
                                              S_t(i, j, k), S_b(i, j, k), &
-                                             recon_layer_mean(hS(i, j, k), h_layer(i, j, k)), &
+                                             pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hS), &
                                              parabolic, dpa_kk, intz_kk)
             pa(i, j, k) = dpa_kk
             intz_dpa(i, j, k) = intz_kk
@@ -1711,9 +1709,9 @@ contains
             call roquet_recon_dpa_intz(rho0, rho_ref, &
                                        e_face(i, j, k + 1), h_layer(i, j, k), &
                                        T_t(i, j, k), T_b(i, j, k), &
-                                       recon_layer_mean(hT(i, j, k), h_layer(i, j, k)), &
+                                       pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hT), &
                                        S_t(i, j, k), S_b(i, j, k), &
-                                       recon_layer_mean(hS(i, j, k), h_layer(i, j, k)), &
+                                       pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hS), &
                                        parabolic, dpa_kk, intz_kk)
             pa(i, j, k) = dpa_kk
             intz_dpa(i, j, k) = intz_kk
@@ -1723,9 +1721,9 @@ contains
             call boole_dpa_intz_layer(eos, rho0, rho_ref, &
                                       e_face(i, j, k + 1), h_layer(i, j, k), &
                                       T_t(i, j, k), T_b(i, j, k), &
-                                      recon_layer_mean(hT(i, j, k), h_layer(i, j, k)), &
+                                      pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hT), &
                                       S_t(i, j, k), S_b(i, j, k), &
-                                      recon_layer_mean(hS(i, j, k), h_layer(i, j, k)), &
+                                      pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hS), &
                                       parabolic, dpa_kk, intz_kk)
             pa(i, j, k) = dpa_kk
             intz_dpa(i, j, k) = intz_kk
@@ -1748,10 +1746,10 @@ contains
       if (eos_variant == EOS_VARIANT_WRIGHT_97) then
          do concurrent(k=1:nz, j=1:ny, i=2:nx) &
             local(dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R)
-            t_m_L = recon_layer_mean(hT(i - 1, j, k), h_layer(i - 1, j, k))
-            t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
-            s_m_L = recon_layer_mean(hS(i - 1, j, k), h_layer(i - 1, j, k))
-            s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
+            t_m_L = pgf_layer_conc(i - 1, j, k, nx, ny, nz, h_layer, hT)
+            t_m_R = pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hT)
+            s_m_L = pgf_layer_conc(i - 1, j, k, nx, ny, nz, h_layer, hS)
+            s_m_R = pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hS)
             dpa_L = pa(i - 1, j, k) - pa(i - 1, j, k + 1)
             dpa_R = pa(i, j, k) - pa(i, j, k + 1)
             call boole_dpa_face_wright(rho0, rho_ref, &
@@ -1767,10 +1765,10 @@ contains
       else if (eos_variant == EOS_VARIANT_ROQUET_SPV) then
          do concurrent(k=1:nz, j=1:ny, i=2:nx) &
             local(dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R)
-            t_m_L = recon_layer_mean(hT(i - 1, j, k), h_layer(i - 1, j, k))
-            t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
-            s_m_L = recon_layer_mean(hS(i - 1, j, k), h_layer(i - 1, j, k))
-            s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
+            t_m_L = pgf_layer_conc(i - 1, j, k, nx, ny, nz, h_layer, hT)
+            t_m_R = pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hT)
+            s_m_L = pgf_layer_conc(i - 1, j, k, nx, ny, nz, h_layer, hS)
+            s_m_R = pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hS)
             dpa_L = pa(i - 1, j, k) - pa(i - 1, j, k + 1)
             dpa_R = pa(i, j, k) - pa(i, j, k + 1)
             call roquet_recon_dpa_face(rho0, rho_ref, &
@@ -1786,10 +1784,10 @@ contains
       else
          do concurrent(k=1:nz, j=1:ny, i=2:nx) &
             local(dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R)
-            t_m_L = recon_layer_mean(hT(i - 1, j, k), h_layer(i - 1, j, k))
-            t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
-            s_m_L = recon_layer_mean(hS(i - 1, j, k), h_layer(i - 1, j, k))
-            s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
+            t_m_L = pgf_layer_conc(i - 1, j, k, nx, ny, nz, h_layer, hT)
+            t_m_R = pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hT)
+            s_m_L = pgf_layer_conc(i - 1, j, k, nx, ny, nz, h_layer, hS)
+            s_m_R = pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hS)
             dpa_L = pa(i - 1, j, k) - pa(i - 1, j, k + 1)
             dpa_R = pa(i, j, k) - pa(i, j, k + 1)
             call boole_dpa_face(eos, rho0, rho_ref, &
@@ -1824,10 +1822,10 @@ contains
       if (eos_variant == EOS_VARIANT_WRIGHT_97) then
          do concurrent(k=1:nz, j=2:ny, i=1:nx) &
             local(dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R)
-            t_m_L = recon_layer_mean(hT(i, j - 1, k), h_layer(i, j - 1, k))
-            t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
-            s_m_L = recon_layer_mean(hS(i, j - 1, k), h_layer(i, j - 1, k))
-            s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
+            t_m_L = pgf_layer_conc(i, j - 1, k, nx, ny, nz, h_layer, hT)
+            t_m_R = pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hT)
+            s_m_L = pgf_layer_conc(i, j - 1, k, nx, ny, nz, h_layer, hS)
+            s_m_R = pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hS)
             dpa_L = pa(i, j - 1, k) - pa(i, j - 1, k + 1)
             dpa_R = pa(i, j, k) - pa(i, j, k + 1)
             call boole_dpa_face_wright(rho0, rho_ref, &
@@ -1843,10 +1841,10 @@ contains
       else if (eos_variant == EOS_VARIANT_ROQUET_SPV) then
          do concurrent(k=1:nz, j=2:ny, i=1:nx) &
             local(dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R)
-            t_m_L = recon_layer_mean(hT(i, j - 1, k), h_layer(i, j - 1, k))
-            t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
-            s_m_L = recon_layer_mean(hS(i, j - 1, k), h_layer(i, j - 1, k))
-            s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
+            t_m_L = pgf_layer_conc(i, j - 1, k, nx, ny, nz, h_layer, hT)
+            t_m_R = pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hT)
+            s_m_L = pgf_layer_conc(i, j - 1, k, nx, ny, nz, h_layer, hS)
+            s_m_R = pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hS)
             dpa_L = pa(i, j - 1, k) - pa(i, j - 1, k + 1)
             dpa_R = pa(i, j, k) - pa(i, j, k + 1)
             call roquet_recon_dpa_face(rho0, rho_ref, &
@@ -1862,10 +1860,10 @@ contains
       else
          do concurrent(k=1:nz, j=2:ny, i=1:nx) &
             local(dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R)
-            t_m_L = recon_layer_mean(hT(i, j - 1, k), h_layer(i, j - 1, k))
-            t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
-            s_m_L = recon_layer_mean(hS(i, j - 1, k), h_layer(i, j - 1, k))
-            s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
+            t_m_L = pgf_layer_conc(i, j - 1, k, nx, ny, nz, h_layer, hT)
+            t_m_R = pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hT)
+            s_m_L = pgf_layer_conc(i, j - 1, k, nx, ny, nz, h_layer, hS)
+            s_m_R = pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hS)
             dpa_L = pa(i, j - 1, k) - pa(i, j - 1, k + 1)
             dpa_R = pa(i, j, k) - pa(i, j, k + 1)
             call boole_dpa_face(eos, rho0, rho_ref, &
@@ -2135,8 +2133,8 @@ contains
       ! Wright kernel carries none of the Boole path's register pressure.
       if (wright_analytic) then
          do concurrent(k=1:nz, j=1:ny, i=1:nx) local(dpa_kk, intz_kk, t_m, s_m)
-            t_m = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
-            s_m = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
+            t_m = pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hT)
+            s_m = pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hS)
             call wright_pcm_dpa_intz(t_m, s_m, e_face(i, j, k + 1), h_layer(i, j, k), &
                                      rho0, rho_ref, dpa_kk, intz_kk)
             pa(i, j, k) = dpa_kk
@@ -2144,8 +2142,8 @@ contains
          end do
       else
          do concurrent(k=1:nz, j=1:ny, i=1:nx) local(dpa_kk, intz_kk, t_m, s_m)
-            t_m = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
-            s_m = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
+            t_m = pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hT)
+            s_m = pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hS)
             call roquet_pcm_dpa_intz(t_m, s_m, e_face(i, j, k + 1), h_layer(i, j, k), &
                                      rho0, rho_ref, dpa_kk, intz_kk)
             pa(i, j, k) = dpa_kk
@@ -2167,10 +2165,10 @@ contains
                                       e_face(i - 1, j, k + 1), e_face(i, j, k + 1), &
                                       h_layer(i - 1, j, k), h_layer(i, j, k), h_neglect, &
                                       hwt_ll, hwt_lr, hwt_rr, hwt_rl)
-            t_m_L = recon_layer_mean(hT(i - 1, j, k), h_layer(i - 1, j, k))
-            t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
-            s_m_L = recon_layer_mean(hS(i - 1, j, k), h_layer(i - 1, j, k))
-            s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
+            t_m_L = pgf_layer_conc(i - 1, j, k, nx, ny, nz, h_layer, hT)
+            t_m_R = pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hT)
+            s_m_L = pgf_layer_conc(i - 1, j, k, nx, ny, nz, h_layer, hS)
+            s_m_R = pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hS)
             dpa_L = pa(i - 1, j, k) - pa(i - 1, j, k + 1)
             dpa_R = pa(i, j, k) - pa(i, j, k + 1)
             call wright_pcm_dpa_face(e_face(i - 1, j, k + 1), e_face(i, j, k + 1), &
@@ -2186,10 +2184,10 @@ contains
                                       e_face(i - 1, j, k + 1), e_face(i, j, k + 1), &
                                       h_layer(i - 1, j, k), h_layer(i, j, k), h_neglect, &
                                       hwt_ll, hwt_lr, hwt_rr, hwt_rl)
-            t_m_L = recon_layer_mean(hT(i - 1, j, k), h_layer(i - 1, j, k))
-            t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
-            s_m_L = recon_layer_mean(hS(i - 1, j, k), h_layer(i - 1, j, k))
-            s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
+            t_m_L = pgf_layer_conc(i - 1, j, k, nx, ny, nz, h_layer, hT)
+            t_m_R = pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hT)
+            s_m_L = pgf_layer_conc(i - 1, j, k, nx, ny, nz, h_layer, hS)
+            s_m_R = pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hS)
             dpa_L = pa(i - 1, j, k) - pa(i - 1, j, k + 1)
             dpa_R = pa(i, j, k) - pa(i, j, k + 1)
             call roquet_pcm_dpa_face(e_face(i - 1, j, k + 1), e_face(i, j, k + 1), &
@@ -2224,10 +2222,10 @@ contains
                                       e_face(i, j - 1, k + 1), e_face(i, j, k + 1), &
                                       h_layer(i, j - 1, k), h_layer(i, j, k), h_neglect, &
                                       hwt_ll, hwt_lr, hwt_rr, hwt_rl)
-            t_m_L = recon_layer_mean(hT(i, j - 1, k), h_layer(i, j - 1, k))
-            t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
-            s_m_L = recon_layer_mean(hS(i, j - 1, k), h_layer(i, j - 1, k))
-            s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
+            t_m_L = pgf_layer_conc(i, j - 1, k, nx, ny, nz, h_layer, hT)
+            t_m_R = pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hT)
+            s_m_L = pgf_layer_conc(i, j - 1, k, nx, ny, nz, h_layer, hS)
+            s_m_R = pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hS)
             dpa_L = pa(i, j - 1, k) - pa(i, j - 1, k + 1)
             dpa_R = pa(i, j, k) - pa(i, j, k + 1)
             call wright_pcm_dpa_face(e_face(i, j - 1, k + 1), e_face(i, j, k + 1), &
@@ -2243,10 +2241,10 @@ contains
                                       e_face(i, j - 1, k + 1), e_face(i, j, k + 1), &
                                       h_layer(i, j - 1, k), h_layer(i, j, k), h_neglect, &
                                       hwt_ll, hwt_lr, hwt_rr, hwt_rl)
-            t_m_L = recon_layer_mean(hT(i, j - 1, k), h_layer(i, j - 1, k))
-            t_m_R = recon_layer_mean(hT(i, j, k), h_layer(i, j, k))
-            s_m_L = recon_layer_mean(hS(i, j - 1, k), h_layer(i, j - 1, k))
-            s_m_R = recon_layer_mean(hS(i, j, k), h_layer(i, j, k))
+            t_m_L = pgf_layer_conc(i, j - 1, k, nx, ny, nz, h_layer, hT)
+            t_m_R = pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hT)
+            s_m_L = pgf_layer_conc(i, j - 1, k, nx, ny, nz, h_layer, hS)
+            s_m_R = pgf_layer_conc(i, j, k, nx, ny, nz, h_layer, hS)
             dpa_L = pa(i, j - 1, k) - pa(i, j - 1, k + 1)
             dpa_R = pa(i, j, k) - pa(i, j, k + 1)
             call roquet_pcm_dpa_face(e_face(i, j - 1, k + 1), e_face(i, j, k + 1), &
@@ -2339,24 +2337,73 @@ contains
       end if
    end subroutine compute_fv_mom6_insitu_pcm_impl
 
-   pure function recon_layer_mean(hq, h) result(q)
+   pure function pgf_layer_conc(i, j, k, nx, ny, nz, h, hq) result(q)
       !$acc routine seq
-      !! Layer-mean tracer from the thickness-weighted prognostic,
-      !! `q = hq/h`, with the D4 vanished-layer floor.  Same gate as the
-      !! reconstruct kernel's Pass 0/1 (`H_VANISHED`, not `1e-10`): during
-      !! an active drain the PPM positivity limiter only guarantees
-      !! `h >= 0`, so a layer in `(0, H_VANISHED]` would otherwise divide
-      !! by a near-zero thickness.
-      real(wp), intent(in) :: hq
-         !! Thickness-weighted tracer (e.g. `S*h`).
-      real(wp), intent(in) :: h
+      !! Layer-mean tracer of cell `(i, j, k)` as the FV-MOM6 kernels read
+      !! it: `hq/h` on a live layer and, on a vanished one, the I1′ donor
+      !! concentration `c_live` (the nearest live layer above; for a run of
+      !! fillers that reaches the top of the column, the topmost live
+      !! layer; `0` in a column with no live layer) — the per-cell form of
+      !! `rdb_vl_column_conc`, read off the donor so no near-zero thickness
+      !! is ever a divisor.  MOM6 carries T/S as CONCENTRATIONS, so its
+      !! vanished layers hold a finite remapped value and its
+      !! `int_density_dz_generic_pcm` reads that; `c_live` is the same value
+      !! in a content-prognostic model.
+      !!
+      !! **Why not a floored divide.**  This used to be
+      !! `hq/max(h, H_VANISHED)`, harmless only while the result is
+      !! multiplied by the layer's OWN thickness (the `pa` stack).  It is
+      !! not: the cross-face Boole integral (`*_pcm_dpa_face`,
+      !! `boole_dpa_face*`) interpolates T/S linearly between the two
+      !! columns over the INTERPOLATED thickness `wl*h_L + wr*h_R`, and the
+      !! PLM/PPM edge stencil reads its neighbours.  At an open z-like step
+      !! (a live layer facing a `zstar_h_min = 1e-4 m` bed filler) the
+      !! floored read is `(h/H_VANISHED)·c = 2/3·c` — S ≈ 23 PSU, T at
+      !! two-thirds — integrated over tens of metres of the live layer's
+      !! thickness: a spurious along-layer pressure gradient that ran the
+      !! open-faced `zstar`/`z_fixed` staircase to the CFL panic in a few
+      !! steps (the open-staircase defect `refuse_open_zfixed_staircase`
+      !! guards).  A live layer reads `hq/h` exactly as before, so a column
+      !! without fillers is bit-identical.
+      integer, intent(in) :: i, j, k
+         !! Cell indices.
+      integer, intent(in) :: nx, ny, nz
+         !! Array extents.
+      real(wp), intent(in) :: h(nx, ny, nz)
          !! Layer thickness (m).
+      real(wp), intent(in) :: hq(nx, ny, nz)
+         !! Thickness-weighted tracer content (e.g. `S*h`).
       real(wp) :: q
-      ! Branch-free (`h > H_VANISHED` selects `h`, else the floor): the
-      ! same quotient either way, and a CPU compiler can vectorise the
-      ! kernels that call this.
-      q = hq/max(h, H_VANISHED)
-   end function recon_layer_mean
+      integer :: kd, k_don
+
+      if (rdb_vl_is_live(h(i, j, k))) then
+         q = rdb_vl_conc(hq(i, j, k), h(i, j, k))
+         return
+      end if
+      ! Donor: the nearest live layer above `k` ...
+      k_don = 0
+      do kd = k + 1, nz
+         if (rdb_vl_is_live(h(i, j, kd))) then
+            k_don = kd
+            exit
+         end if
+      end do
+      ! ... or, for a run of fillers reaching the top, the topmost live
+      ! layer, i.e. the first live one below `k`.
+      if (k_don == 0) then
+         do kd = k - 1, 1, -1
+            if (rdb_vl_is_live(h(i, j, kd))) then
+               k_don = kd
+               exit
+            end if
+         end do
+      end if
+      if (k_don == 0) then
+         q = 0.0_wp
+      else
+         q = rdb_vl_conc(hq(i, j, k_don), h(i, j, k_don))
+      end if
+   end function pgf_layer_conc
 
    pure subroutine wright_pcm_dpa_intz(t, s, e_top, dz, rho0, rho_ref, dpa, intz_dpa)
       !$acc routine seq
@@ -3323,5 +3370,6 @@ contains
    end function ocean_pressure_force_bytes
 
 #include "rdb_roquet_spv.inc"
+#include "rdb_vanished_layer.inc"
 
 end module rdb_ocean_pressure_force
