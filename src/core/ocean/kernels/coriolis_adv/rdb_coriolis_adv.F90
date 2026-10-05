@@ -164,6 +164,19 @@ module rdb_coriolis_adv
          !! the factor becomes `2 - wet_q` (image vorticity, MOM6's no-slip).
          !! Set from `&ocean_hvisc_nml no_slip` (shared with the lateral
          !! strain).  All-wet ⇒ `wet_q≡1` ⇒ factor `≡1` ⇒ bit-identical.
+      logical :: hk_pair_floor = .false.
+         !! Run the `sadourny_hk` PAIR-FLOORED passes (`hk_pair_coef`) even
+         !! with `&vcoord_nml zfixed_closed_faces` off.  Latched at setup
+         !! for the coordinates that lay STATIC bed fillers (`z_fixed`,
+         !! `zstar`, `zstar_full`): over a stepped bed an OPEN face then
+         !! pairs a live cell with a `zstar_h_min` filler, so an HK "cross"
+         !! pair meets a corner of fillers (`h_corner ~ 1e-4 m`) against a
+         !! transport through a live face — the same unbounded
+         !! `h_face/h_corner` the floor exists for, four decades larger than
+         !! on the closed-face partial cells it was written against.  The
+         !! floor is inactive wherever no cell outweighs the other three of
+         !! its corner, so a flat bed stays bit-identical.  Off (default)
+         !! for every other coordinate ⇒ bit-identical there.
       integer :: corner_h_variant = CORNER_H_CELL_MEAN
          !! PV corner-thickness construction (energy scheme).
          !! `CORNER_H_CELL_MEAN` (default, bit-identical) — wet-area 4-cell
@@ -881,7 +894,13 @@ contains
       !! (1-degree Southern Ocean: NaN at step 11).  The floor keeps the
       !! pair coefficients symmetric, so the energy-conserving antisymmetry
       !! is kept, and is inactive wherever no cell outweighs the other three
-      !! of its corner.  Knob off ⇒ the original passes, bit-identical.
+      !! of its corner.  The same twin runs with the knob OFF on the
+      !! coordinates that lay static bed fillers (`hk_pair_floor`): there
+      !! the open step face pairs a live cell with a `1e-4 m` filler, and
+      !! without the floor the matrix staircase leaves the remap a negative
+      !! thickness at step 2 (compat matrix `vcoord=zstar` x
+      !! `coriolis=sadourny_hk`).  Every other coordinate ⇒ the original
+      !! passes, bit-identical.
       type(hgrid_t), intent(in) :: grid
       type(ocean_metrics_t), intent(in) :: metrics
       type(coriolis_adv_t), intent(inout) :: this
@@ -1045,10 +1064,12 @@ contains
                                         metrics%areaCv(i, j + 1)*v(i, j + 1, k)**2)
       end do
 
-      if (metrics%use_closed_faces) then
+      if (metrics%use_closed_faces .or. this%hk_pair_floor) then
          ! ---- Passes 5f/6f: the same stencil, PAIR-FLOORED PV ----
-         ! `&vcoord_nml zfixed_closed_faces` only; knob off ⇒ the ELSE branch,
-         ! the original Passes 5/6, textually untouched ⇒ bit-identical.  Inline,
+         ! `&vcoord_nml zfixed_closed_faces`, or an OPEN staircase of static
+         ! bed fillers (`hk_pair_floor`: z_fixed / zstar / zstar_full);
+         ! otherwise the ELSE branch, the original Passes 5/6, textually
+         ! untouched ⇒ bit-identical.  Inline,
          ! not a call: a host-gated call handing the tendency buffers to another
          ! procedure pessimises every loop of this routine on nvfortran.
          ! Each pair coefficient sums three corner PVs; the "cross" ones meet a
