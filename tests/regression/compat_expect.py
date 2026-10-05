@@ -261,15 +261,10 @@ ROWS = [
          message=r"ocean_foxkemper_nml: enable=\.true\. requires ocean_epbl_nml enable=\.true\.",
          unless=("epbl",)),
 ] + [
-    _gap("closed_faces_nu_4", "refused", ("closed_faces", "nu_4"),
-         "The free-slip closure of a closed face exists for the harmonic velocity-Laplacian "
-         "kernels only.",
-         "item 4 (fix/biharmonic-zfixed-closed-faces lifts the nu_4 refusal)",
-         message=r"zfixed_closed_faces does not yet compose with the BIHARMONIC viscosity"),
     _gap("closed_faces_stress_tensor", "refused", ("closed_faces", "stress_tensor"),
          "stress_tensor's tension/shear use 2-D wet masks (kh_aniso rides on it).",
          "item 10 (queued)",
-         message=r"zfixed_closed_faces does not yet compose with the BIHARMONIC viscosity"),
+         message=r"zfixed_closed_faces does not yet compose with &ocean_hvisc_nml stress_tensor"),
     _gap("closed_faces_bc_pgf", "refused", ("closed_faces", "bt_bc_pgf"),
          "compute_pbce / compute_gtot_faces / the bc-PGF block weight by the FULL column.",
          "item 9 (queued)",
