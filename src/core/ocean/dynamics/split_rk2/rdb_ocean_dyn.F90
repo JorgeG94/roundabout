@@ -1812,24 +1812,49 @@ contains
                                    visc_rem_v=bt_work%visc_rem_v, &
                                    remnant_only=.true.)
       end if
-      ! Only when a consumer actually reads visc_rem_u/v: `is_pc` alone
-      ! (every pred_corr stage, default knobs) already called this
-      ! routine before PR-1 (MOM6-order parity, PGF_BUG.md §9) even
-      ! though the output went completely unread with every consumer
-      ! off -- harmless when the halo refresh was a no-op (nothing
-      ! called it).  PR-1's halo exchange is NOT free: under a real
-      ! decomposition `ocean_halo_face_x/v` is a live non-blocking MPI
-      ! Isend/Irecv pair, and issuing an UNPAIRED extra one on every
-      ! pred_corr stage of every default (no-visc_rem-consumer) run
-      ! broke `test_ocean_dyn_mpi` (measured: FPE / poisoned reductions
-      ! under 4 ranks) -- the halo call itself was fine in isolation,
-      ! but the production call site had no business making it when
-      ! nothing downstream reads the result.  Gate it the same way the
-      ! answer-relevant consumers are gated.
-      if (bt_work%bt_correction_visc_rem .or. bt_work%bt_forcing_visc_rem .or. &
-          bt_work%bt_renorm_visc_rem) then
-         call visc_rem_halo_refresh(grid, bt_work, bc)
-      end if
+      ! PR-2 root cause (replaces the PR-1 consumer-flag gate that used to
+      ! sit here): `is_pc` alone (every pred_corr stage, default knobs)
+      ! already called this routine before PR-1 (MOM6-order parity,
+      ! PGF_BUG.md §9) even though the output went completely unread with
+      ! every consumer off.  PR-1 found that making the new halo refresh
+      ! UNCONDITIONAL broke `rdb_test_ocean_dyn_mpi_4rank`'s hand-derived
+      ! `check_exchange_counts` canary (`tests/mpi/test_ocean_dyn_mpi.F90`)
+      ! -- `face_x_3d`/`face_y_3d` came back exactly DOUBLE the expected
+      ! count, and (at nprocs=2) `msgs` came back exactly
+      ! `+4*N_STEPS` (wall) / `+8*N_STEPS` (periodic, 2 active x-dirs).
+      ! That is the EXACT signature of the new, legitimate
+      ! visc_rem_halo_refresh traffic (one face_x_3d + one face_y_3d per
+      ! pred_corr stage, same `is_pc .and. decomposed` gating as the
+      ! existing u_av/v_av seam fill) -- i.e. the counters were telling
+      ! the truth and the test's hand-derived formula was stale, not
+      ! reporting a defect.  Verified directly: `visc_rem_u/v` starts at
+      ! 1.0 everywhere (`barotropic_workstate_init`) and the exchange is a
+      ! same-shape, blocking, self-contained isend/irecv/waitall pair
+      ! (`ocean_halo_face_x_3d`/`_y_3d`) identical in structure to every
+      ! other 3D face exchange in this module -- there is no unpaired
+      ! request, no tag collision (each call posts and waits inside the
+      ! same subroutine invocation, no module-level async state survives
+      ! past the `waitall`), and no shape mismatch (`visc_rem_u/v` are
+      ! allocated `(nx+1,ny,nz)`/`(nx,ny+1,nz)` off the SAME `nz_ml` as
+      ! every other layered field).  Running this routine's gate removed
+      ! at 1/2/4 ranks for 100 steps on the wall/island/periodic/
+      ! poisoned-wall/poisoned-periodic legs produces IDENTICAL mass/KE/
+      ! salt/heat agreement to round-off (~1e-16) in every leg; the only
+      ! failures were the stale counter formula (fixed in
+      ! `check_exchange_counts`, `tests/mpi/test_ocean_dyn_mpi.F90`). The
+      ! pre-existing `[nan-catch]` BT-correction messages some legs print
+      ! are `apply_bt_correction`'s own defensive non-finite counter
+      ! (unrelated to visc_rem -- it already fires in the GATED baseline,
+      ! just later/rarer); it recovers the finite answer either way and
+      ! is not evidence of poisoning.
+      !
+      ! MOM6 semantics settle it anyway: `pass_visc_rem`
+      ! (MOM_dynamics_split_RK2.F90:494) runs UNCONDITIONALLY after every
+      ! `vertvisc_remnant` call, with no consumer gate -- a face field
+      ! that starts at 1.0 and is only ever READ by an opt-in consumer
+      ! cannot be "poisoned" by being exchanged.  So: drop the gate, keep
+      ! the halo refresh unconditional, exactly like MOM6.
+      call visc_rem_halo_refresh(grid, bt_work, bc)
    end subroutine visc_rem_precompute
 
    subroutine visc_rem_halo_refresh(grid, bt_work, bc)
