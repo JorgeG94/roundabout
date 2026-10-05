@@ -43,13 +43,25 @@
 !!      0 ⇒ Inf diagonal ⇒ NaN viscous remnant γ.  With the floor γ stays
 !!      finite and bounded 0 < γ ≤ 1 (the tracer path was already
 !!      guarded; the momentum path was the gap the review flagged).
+!!   7. set_viscous_bbl_unstratified_rotation — MOM6 `set_viscous_BBL`
+!!      (quadratic law): u* from the HBBL-mean speed with the background
+!!      velocity in quadrature, the whole-column h_N of an unstratified
+!!      column and the KW99 rotation limit, to round-off; the v-face reads
+!!      the same speed through the transverse average.
+!!   8. set_viscous_bbl_stratified_hN — the stratification limit: a strong
+!!      bed-layer density jump stops the BBL at `h1·sqrt(ustarsq/Δfn)`.
+!!   9. glue_quadratic_single_layer_piston — configure -> BBL -> momentum
+!!      solve on one layer: the bed piston `kv_bbl/min(H/2, bbl_thick)`
+!!      with `kv_bbl = cd·u_bbl·H`, to round-off.
 module test_ocean_vdiff_bbl
    use testdrive, only: new_unittest, unittest_type, error_type, check
-   use rdb_constants, only: wp
+   use rdb_constants, only: wp, GRAVITY
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_barotropic_workstate, only: barotropic_workstate_t
-   use rdb_ocean_vdiff, only: ocean_vdiff_t, vdiff_apply_momentum, face_thick
+   use rdb_ocean_vdiff, only: ocean_vdiff_t, vdiff_apply_momentum, face_thick, &
+                              vdiff_set_viscous_bbl, vdiff_bbl_configure, BBL_FORM_QUADRATIC
+   use rdb_eos, only: eos_t, EOS_VARIANT_LINEAR, eos_density_derivs
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    implicit none
    private
@@ -69,6 +81,10 @@ contains
                   new_unittest("bbl_glue_damps_near_bed", test_bbl_glue_damps), &
                   new_unittest("face_thick_blend_pointwise", test_face_thick_pointwise), &
                   new_unittest("hvel_upwind_gate", test_hvel_upwind_gate), &
+                  new_unittest("set_viscous_bbl_unstratified_rotation", test_set_bbl_unstratified), &
+                  new_unittest("set_viscous_bbl_stratified_hN", test_set_bbl_stratified), &
+                  new_unittest("glue_quadratic_single_layer_piston", &
+                               test_glue_quadratic_single_layer), &
                   new_unittest("collapsed_interior_layer_gamma_finite", &
                                test_collapsed_layer_finite) &
                   ]
@@ -394,9 +410,11 @@ contains
 
       vd_on%K_v_momentum = 0.3_wp
       vd_on%hvel_mom6 = .true.
+      vd_on%hvel_harmonic = .true.   ! the upwind blend lives in the HARMONIC_VISC branch
       vd_on%hvel_upwind = .true.
       vd_off%K_v_momentum = 0.3_wp
       vd_off%hvel_mom6 = .true.
+      vd_off%hvel_harmonic = .true.   ! the upwind blend lives in the HARMONIC_VISC branch
       vd_off%hvel_upwind = .false.
 
       do j = 1, ny
@@ -502,5 +520,164 @@ contains
       end block checks
       call bt%destroy(); call vd%destroy(); call ms%destroy()
    end subroutine test_collapsed_layer_finite
+
+   subroutine bbl_case(grid, ms, vd, eos, f_c, nz, h_prof, t_prof, u0, f0, form, cd, r_lin, bg)
+      !! A uniform column state on a 4x3 grid with the per-face MOM6 BBL
+      !! configured (`vdiff_bbl_configure`) and everything mapped.
+      type(hgrid_t), intent(out) :: grid
+      type(multilayer_state_t), intent(inout) :: ms
+      type(ocean_vdiff_t), intent(inout) :: vd
+      type(eos_t), intent(out) :: eos
+      real(wp), allocatable, intent(out) :: f_c(:, :)
+      integer, intent(in) :: nz
+      real(wp), intent(in) :: h_prof(nz), t_prof(nz)
+      real(wp), intent(in) :: u0, f0, cd, r_lin, bg
+      integer, intent(in) :: form
+      integer :: k
+
+      call make_grid(grid, 4, 3)
+      ms%nz_ml = nz
+      call ms%init(grid)
+      call vd%init(grid, nz_ml=nz)
+      eos%variant = EOS_VARIANT_LINEAR
+      eos%rho0 = RHO0
+      eos%alpha_T = 0.2_wp     ! kg/m^3/K (the linear EOS takes dρ/dT)
+      eos%beta_S = 0.76_wp     ! kg/m^3/PSU
+      eos%T_ref = 0.0_wp
+      eos%S_ref = 35.0_wp
+      do k = 1, nz
+         ms%h_layer(:, :, k) = h_prof(k)
+         ms%tracers(ms%idx_temperature)%hTr(:, :, k) = h_prof(k)*t_prof(k)
+         ms%tracers(ms%idx_salinity)%hTr(:, :, k) = h_prof(k)*35.0_wp
+      end do
+      ms%u_face_x_layer = u0
+      ms%v_face_y_layer = 0.0_wp
+      allocate (f_c(grid%nx_total + 1, grid%ny_total + 1), source=f0)
+      vd%hvel_mom6 = .true.
+      vd%bbl_glue = .true.
+      call vdiff_bbl_configure(vd, grid%nx_total, grid%ny_total, nz, form, cd, r_lin, &
+                               10.0_wp, bg, 0.0_wp, .false., RHO0, 1.0e-4_wp)
+      call map_in(ms, vd)
+      !$acc enter data copyin(f_c)
+   end subroutine bbl_case
+
+   subroutine test_set_bbl_unstratified(error)
+      !! MOM6 `set_viscous_BBL`, quadratic law, unstratified, rotating.
+      !! Uniform `u0`, `v = 0`, three 100 m layers: the HBBL (10 m) lies in
+      !! the bed layer, so `u* = sqrt(cd)·sqrt(u0² + bg²)`; no density jump
+      !! anywhere, so the stratification limit spans the whole column,
+      !! `h_N = 300 m`; KW99 rotation then gives `bbl_thick = h_N/(1/2 +
+      !! sqrt(1/4 + (2f·h_N/u*)²))` and `kv_bbl = sqrt(cd)·u*·bbl_thick`.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_vdiff_t) :: vd
+      type(eos_t) :: eos
+      real(wp), allocatable :: f_c(:, :)
+      real(wp), parameter :: CD = 3.0e-3_wp, BG = 0.1_wp, U0 = 0.2_wp, F0 = 1.0e-4_wp
+      real(wp) :: ustar, thick, kv, rel_t, rel_k
+      integer :: i, j
+
+      call bbl_case(grid, ms, vd, eos, f_c, 3, [100.0_wp, 100.0_wp, 100.0_wp], &
+                    [5.0_wp, 5.0_wp, 5.0_wp], U0, F0, BBL_FORM_QUADRATIC, CD, 0.0_wp, BG)
+      call vdiff_set_viscous_bbl(grid, vd, ms, eos, f_c)
+      !$acc update self(vd%kv_bbl_u, vd%bbl_thick_u, vd%kv_bbl_v, vd%bbl_thick_v)
+      ustar = sqrt(CD)*sqrt(U0*U0 + BG*BG)
+      thick = 300.0_wp/(0.5_wp + sqrt(0.25_wp + (300.0_wp*2.0_wp*F0/ustar)**2))
+      kv = sqrt(CD)*ustar*thick
+      i = 2 + grid%nghost
+      j = 1 + grid%nghost
+      rel_t = abs(vd%bbl_thick_u(i, j) - thick)/thick
+      rel_k = abs(vd%kv_bbl_u(i, j) - kv)/kv
+      call check(error, rel_t < 1.0e-12_wp, "unstratified: bbl_thick_u /= KW99 rotation limit")
+      if (.not. allocated(error)) &
+         call check(error, rel_k < 1.0e-12_wp, "unstratified: kv_bbl_u /= sqrt(cd)*u*·bbl_thick")
+      ! A v-face sees u0 as the TRANSVERSE speed: same u_bbl, same answer.
+      if (.not. allocated(error)) &
+         call check(error, abs(vd%kv_bbl_v(i, j + 1) - kv)/kv < 1.0e-12_wp, &
+                    "unstratified: kv_bbl_v must use the transverse speed (set_u_at_v)")
+      !$acc exit data delete(f_c)
+      call map_out(ms, vd)
+      call vd%destroy()
+      call ms%destroy()
+   end subroutine test_set_bbl_unstratified
+
+   subroutine test_set_bbl_stratified(error)
+      !! The stratification limit (KW99 eq. 2.22, Stephens & Hallberg):
+      !! two 100 m layers, 0 °C under 10 °C, at rest, no rotation.  The
+      !! interface density jump `Δρ·h₁` far exceeds `400·ρ₀·u*²/g`, so the
+      !! BBL takes only the fraction `sqrt(ustarsq/Δfn)` of the bed layer
+      !! and stops; `u* = sqrt(cd)·bg_vel` (empty-flow limit of the
+      !! quadratic law at rest), `bbl_thick = h_N` with `f = 0`.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_vdiff_t) :: vd
+      type(eos_t) :: eos
+      real(wp), allocatable :: f_c(:, :)
+      real(wp), parameter :: CD = 3.0e-3_wp, BG = 0.1_wp
+      real(wp) :: ustar, ustarsq, drdt, drds, dfn, h_n, press
+      integer :: i, j
+
+      call bbl_case(grid, ms, vd, eos, f_c, 2, [100.0_wp, 100.0_wp], [0.0_wp, 10.0_wp], &
+                    0.0_wp, 0.0_wp, BBL_FORM_QUADRATIC, CD, 0.0_wp, BG)
+      call vdiff_set_viscous_bbl(grid, vd, ms, eos, f_c)
+      !$acc update self(vd%kv_bbl_u, vd%bbl_thick_u)
+      ustar = sqrt(CD)*BG
+      ustarsq = 400.0_wp*RHO0/GRAVITY*ustar*ustar
+      press = RHO0*GRAVITY*200.0_wp
+      call eos_density_derivs(eos, 0.0_wp, 35.0_wp, press, drdt, drds)
+      dfn = drdt*(0.0_wp - 10.0_wp)*100.0_wp
+      h_n = 100.0_wp*sqrt(ustarsq/dfn)
+      i = 2 + grid%nghost
+      j = 1 + grid%nghost
+      call check(error, dfn > ustarsq, "stratified: the case must be stratification-limited")
+      if (.not. allocated(error)) &
+         call check(error, abs(vd%bbl_thick_u(i, j) - h_n)/h_n < 1.0e-10_wp, &
+                    "stratified: bbl_thick_u /= h1*sqrt(ustarsq/dfn)")
+      if (.not. allocated(error)) &
+         call check(error, abs(vd%kv_bbl_u(i, j) - sqrt(CD)*ustar*h_n)/(sqrt(CD)*ustar*h_n) &
+                    < 1.0e-10_wp, "stratified: kv_bbl_u /= sqrt(cd)*u*·h_N")
+      !$acc exit data delete(f_c)
+      call map_out(ms, vd)
+      call vd%destroy()
+      call ms%destroy()
+   end subroutine test_set_bbl_stratified
+
+   subroutine test_glue_quadratic_single_layer(error)
+      !! End to end: configure -> `vdiff_set_viscous_bbl` -> the momentum
+      !! solve, quadratic law, ONE 50 m layer, no interior viscosity, no
+      !! rotation.  `h_N = H` (the top-layer rule), `bbl_thick = H`,
+      !! `kv_bbl = cd·u_bbl·H`, and the bed row is MOM6's piston
+      !! `a_cpl = kv_bbl/min(H/2, bbl_thick)` (MOM_vert_friction.F90:2258),
+      !! so one backward-Euler step gives `u0/(1 + dt·kv_bbl/(H·H/2))` —
+      !! the explicit drag apply is not involved at all.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_vdiff_t) :: vd
+      type(eos_t) :: eos
+      real(wp), allocatable :: f_c(:, :)
+      real(wp), parameter :: CD = 3.0e-3_wp, BG = 0.1_wp, U0 = 0.3_wp, H = 50.0_wp
+      real(wp), parameter :: DT = 900.0_wp
+      real(wp) :: kv, u_expect
+      integer :: i, j
+
+      call bbl_case(grid, ms, vd, eos, f_c, 1, [H], [5.0_wp], U0, 0.0_wp, &
+                    BBL_FORM_QUADRATIC, CD, 0.0_wp, BG)
+      vd%K_v_momentum = 0.0_wp
+      call vdiff_set_viscous_bbl(grid, vd, ms, eos, f_c)
+      call vdiff_apply_momentum(grid, vd, ms, DT, rho0=RHO0)
+      !$acc exit data delete(f_c)
+      call map_out(ms, vd)
+      kv = CD*sqrt(U0*U0 + BG*BG)*H
+      u_expect = U0/(1.0_wp + DT*kv/(H*0.5_wp*H))
+      i = 2 + grid%nghost
+      j = 1 + grid%nghost
+      call check(error, abs(ms%u_face_x_layer(i, j, 1) - u_expect) < 1.0e-12_wp, &
+                 "single layer: glue bed piston /= u0/(1+dt*kv_bbl/(H*H/2))")
+      call vd%destroy()
+      call ms%destroy()
+   end subroutine test_glue_quadratic_single_layer
 
 end module test_ocean_vdiff_bbl

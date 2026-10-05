@@ -115,7 +115,8 @@ module rdb_ocean_dyn
                                      tracer_hdiff
    use rdb_ocean_vdiff, only: ocean_vdiff_t, &
                               vdiff_apply_momentum, &
-                              vdiff_apply_tracers
+                              vdiff_apply_tracers, &
+                              vdiff_set_viscous_bbl
    use rdb_ocean_vmix, only: ocean_vmix_t, vmix_compute_pp81, &
                              vmix_apply_kpp_overlay, vmix_add_kv_ml_invz2, &
                              vmix_apply_nonlocal_tendencies, vmix_assemble, &
@@ -984,6 +985,11 @@ contains
          end do
       end if
 
+      ! MOM6 `set_viscous_BBL`: the per-face bottom boundary layer the
+      ! vdiff glue reads, once per outer step from the start-of-step
+      ! state.  No-op unless the per-face BBL glue is configured.
+      call vdiff_set_viscous_bbl(grid, vd, ms, eos, cor%f_corner)
+
       ! ---- Stage 1: tendencies at u^n, FE step -> u^(1) ----
       call run_stage(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, va, hd, &
                      vd, vmix, ms, dt, 1, sf=sf, geo=geo, lateral_mix=lateral_mix, &
@@ -1238,8 +1244,10 @@ contains
       ! their explicit pre-solve applies are SKIPPED here so the forcing is
       ! not applied twice.  Channel (side-wall) drag is a distinct lateral
       ! term and always applies.  Defaults (both off) ⇒ both applies run ⇒
-      ! bit-identical to the prior path.
-      if (.not. vd%implicit_drag) then
+      ! bit-identical to the prior path.  The MOM6 BBL glue (`bbl_glue`)
+      ! is the same kind of fold: its piston IS the bed drag, so the
+      ! explicit (or `&ocean_bdrag_nml implicit` split-apply) one is skipped.
+      if (.not. (vd%implicit_drag .or. vd%bbl_glue)) then
          call ocean_bottom_drag_apply_tendencies(bd, ms, dt, no_wait=.true.)
       end if
       call ocean_channel_drag_apply_tendencies(bd, ms, dt, no_wait=.true.)
@@ -3119,6 +3127,13 @@ contains
       ! actual arg stays absent in the callee.  This collapses the
       ! previous 4-branch cartesian-product dispatch (vcoord × bc)
       ! into a single stage loop.
+      !
+      ! MOM6 `set_viscous_BBL` (`step_MOM_dynamics`, once per step before
+      ! the predictor): the per-face bottom boundary layer — `kv_bbl`,
+      ! `bbl_thick` — that the vdiff glue (and the visc_rem producer) read
+      ! in both stages / both schemes.  From the start-of-step state.  No-op
+      ! unless the per-face BBL glue is configured.
+      call vdiff_set_viscous_bbl(grid, vd, ms, eos, cor%f_corner)
       do stage = 1, 2
          if (psurf_on .and. pgf%p_top_in_bc) then
             ! The load reaches the slow PGF too (`ms%p_top` in the FV_MOM6
@@ -4801,8 +4816,9 @@ contains
       ! — is PR-56's territory (changes the barotropic mode, gated on
       ! the Bleck/Hallberg instability test).  For strict split-path use
       ! today, keep the explicit / &ocean_bdrag_nml implicit split-apply.
-      ! Defaults (folds off) ⇒ both applies run ⇒ bit-identical.
-      if (.not. vd%implicit_drag) then
+      ! Defaults (folds off) ⇒ both applies run ⇒ bit-identical.  The MOM6
+      ! BBL glue's piston is the bed drag too (see `run_stage`).
+      if (.not. (vd%implicit_drag .or. vd%bbl_glue)) then
          call ocean_bottom_drag_apply_tendencies(bd, ms, dt_vel, no_wait=.true.)
       end if
       call ocean_channel_drag_apply_tendencies(bd, ms, dt_vel, no_wait=.true.)

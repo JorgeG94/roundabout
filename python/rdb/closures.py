@@ -358,27 +358,31 @@ class ImplicitVerticalFriction:
     """-> `&ocean_vdiff_nml`
 
     ``ImplicitVerticalFriction(stress=False, drag=False,
-    harmonic_thickness=False, bbl_glue=False, hbbl=10.0,
-    bbl_piston=3e-4)``
+    harmonic_thickness=False, harmonic_visc=False, bbl_glue=False,
+    hbbl=10.0, bbl_piston=3e-4)``
 
-    `bbl_glue` has THREE prerequisites: `harmonic_thickness` (->
-    `hvel_mom6`) + `drag` (-> `implicit_drag`) + a LINEAR bottom drag
-    (lives on a different object -- `LinearDrag` in the same
-    `closures=` list). The composer checks all three and names whichever
-    is missing.
+    `harmonic_thickness` -> `hvel_mom6` (MOM6's momentum face thickness);
+    `harmonic_visc` -> `hvel_harmonic` (MOM6 `HARMONIC_VISC`: which
+    branch of it). `bbl_glue` -> MOM6 `BOTTOMDRAGLAW` (per-face
+    `set_viscous_BBL`, drag law and parameters from the bottom-drag
+    object in the same `closures=` list); it requires
+    `harmonic_thickness`, which the composer checks.
     """
 
     def __init__(self, stress=False, drag=False, harmonic_thickness=False,
-                 bbl_glue=False, hbbl=10.0, bbl_piston=3e-4):
+                 harmonic_visc=False, bbl_glue=False, hbbl=10.0,
+                 bbl_piston=3e-4):
         self.stress, self.drag = stress, drag
         self.harmonic_thickness, self.bbl_glue = (
             harmonic_thickness, bbl_glue)
+        self.harmonic_visc = harmonic_visc
         self.hbbl, self.bbl_piston = hbbl, bbl_piston
 
     def apply(self, config):
         config.ocean_vdiff.implicit_stress = bool(self.stress)
         config.ocean_vdiff.implicit_drag = bool(self.drag)
         config.ocean_vdiff.hvel_mom6 = bool(self.harmonic_thickness)
+        config.ocean_vdiff.hvel_harmonic = bool(self.harmonic_visc)
         config.ocean_vdiff.bbl_glue = bool(self.bbl_glue)
         config.ocean_vdiff.hbbl_visc = float(self.hbbl)
         config.ocean_vdiff.bbl_piston = float(self.bbl_piston)

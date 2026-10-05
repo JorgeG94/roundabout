@@ -1446,14 +1446,23 @@ module rdb_config
          !! correction_visc_rem` (the visc_rem producer; fail-loud at
          !! configure).  Split path only (v1).  Default off ⇒ bit-identical.
       logical :: implicit_drag = .false.
-      logical :: hvel_mom6 = .false.
-      real(wp) :: hbbl_visc = 10.0_wp
          !! Fold the bottom drag into the vdiff bed-row diagonal (stress
          !! bottom-BC; the row is the face's first LIVE layer `k_bot_u/v`,
          !! `k = 1` off `z_fixed`) instead of the explicit pre-solve add.  Mutually
-         !! exclusive with `&ocean_bdrag_nml implicit` (split-apply) and
-         !! incompatible with HBBL-distributed drag (`hbbl > 0`); both fail
-         !! loud at configure.
+         !! exclusive with `&ocean_bdrag_nml implicit` (split-apply) and,
+         !! without `bbl_glue`, incompatible with HBBL-distributed drag
+         !! (`hbbl > 0`); both fail loud at configure.  Under `bbl_glue`
+         !! the glue's piston replaces the fold.
+      logical :: hvel_mom6 = .false.
+         !! MOM6 momentum face thickness `hvel` for the vertical-friction
+         !! solve (`vertvisc_coef`), with MOM6's arithmetic `h_shear` and
+         !! the height-above-bed stack the BBL glue reads; the branch is
+         !! `hvel_harmonic`.  `.false.` ⇒ the historical arithmetic `h_u`.
+      real(wp) :: hbbl_visc = 10.0_wp
+         !! MOM6 `HBBL` (m) for the `hvel_mom6` botfn blend without the
+         !! BBL glue (under the glue each face's `bbl_thick` normalises the
+         !! height above the bed), and the glue's HBBL when
+         !! `&ocean_bdrag_nml hbbl = 0`.
       logical :: implicit_top_drag = .false.
          !! Fold the ICE-SHELF TOP drag into the vdiff `k = nz` DIAGONAL
          !! (`&ocean_tdrag_nml`'s mirror of `implicit_drag`) instead of
@@ -1471,19 +1480,34 @@ module rdb_config
          !! and with `htbl > 0` (the fold is one `k = nz` rate and
          !! cannot represent a distributed band).  All fail loud at
          !! configure.  Default `.false.` ⇒ bit-identical.
+      logical :: hvel_harmonic = .false.
+         !! Which MOM6 face-thickness branch `hvel_mom6` builds (MOM6
+         !! `HARMONIC_VISC`).  `.false.` (MOM6's default): arithmetic face
+         !! thickness, blended to harmonic near the bed for thin -> thick
+         !! flow, height above the bed `max(zh, z_clear)` — every face layer
+         !! below the shallower bed of a step sits inside the BBL.  `.true.`:
+         !! the harmonic branch (harmonic thickness, upwind-arithmetic blend
+         !! gated by `hvel_upwind`) — the historical `hvel_mom6`.
       logical :: bbl_glue = .false.
-         !! MOM6 `bottomdraglaw` coupling parity: raise the momentum-solve
-         !! interface viscosity to `kv_bbl` within botfn reach of the bed
-         !! (harmonic-z bookkeeping) and replace the bed-row `dt·λ` Rayleigh
-         !! fold with the piston `kv_bbl/(min(hvel₁/2, bbl_thick))` — the
-         !! absorber that keeps MOM6's layered rest state at rest under the
-         !! same spurious grounded-layer PGF we compute (PGF_BUG.md §9).
-         !! Requires `hvel_mom6`, `implicit_drag`, and
-         !! `&ocean_bdrag_nml form="linear"`; all enforced at configure.
+         !! MOM6 `BOTTOMDRAGLAW`: the bottom drag lives in the vertical
+         !! viscosity.  MOM6 `set_viscous_BBL` computes, per face and once
+         !! per outer step, the BBL viscosity `kv_bbl = sqrt(CDRAG)·u*·
+         !! bbl_thick` (`u*` from the HBBL-mean speed under the quadratic
+         !! law, `sqrt(CDRAG)·DRAG_BG_VEL` under the linear one) and the
+         !! rotation/stratification-limited `bbl_thick` (KW99); the
+         !! momentum solve then raises the interface viscosity by
+         !! `(kv_bbl − KV)·botfn` near the bed and takes the bed row as the
+         !! piston `kv_bbl/(min(hvel₁/2, bbl_thick))`, which REPLACES the
+         !! explicit / folded bed drag.  The drag law and its parameters
+         !! come from `&ocean_bdrag_nml` (`form`, `cd` or `r`, `hbbl` —
+         !! falling back to `hbbl_visc` when 0 — `bg_vel`,
+         !! `bbl_thick_min`); with no drag configured the glue is inert.
+         !! Requires `hvel_mom6` (fail-loud at configure).
       real(wp) :: bbl_piston = 3.0e-4_wp
-         !! BBL drag piston velocity u* (m/s) for `bbl_glue` — MOM6
-         !! `CDRAG·DRAG_BG_VEL` (0.003·0.1 at reference defaults);
-         !! `kv_bbl = bbl_piston·hbbl_visc`.
+         !! Historical constant BBL piston velocity (m/s), `kv_bbl =
+         !! bbl_piston·hbbl_visc`: read only by a hand-built vdiff slot
+         !! without the per-face BBL (unit tests).  A configured run's glue
+         !! takes its drag from `&ocean_bdrag_nml`.
       logical :: hvel_upwind = .true.
          !! Near-bed upwind (arithmetic-donor) blend in the `hvel_mom6`
          !! face-thickness build.  Default `.true.` = MOM6 parity /
@@ -5032,7 +5056,8 @@ contains
                            "ocean_bdrag implicit (split-apply): set only one")
          has_error = .true.
       end if
-      if (cfg%ocean%vdiff%implicit_drag .and. cfg%ocean%bdrag%hbbl > 0.0_wp) then
+      if (cfg%ocean%vdiff%implicit_drag .and. cfg%ocean%bdrag%hbbl > 0.0_wp &
+          .and. .not. cfg%ocean%vdiff%bbl_glue) then
          call logger%error("ocean_vdiff implicit_drag does not yet support "// &
                            "HBBL-distributed drag (ocean_bdrag hbbl > 0); use the "// &
                            "split-apply path (ocean_bdrag implicit) for HBBL")
@@ -5073,28 +5098,18 @@ contains
             has_error = .true.
          end if
       end if
-      ! `bbl_glue` (MOM6 bottomdraglaw coupling parity, PGF_BUG.md §9)
-      ! needs the harmonic-z bookkeeping that only the hvel_mom6 path
-      ! builds, replaces the implicit-drag bed fold (so that fold must be
-      ! on for there to be exactly one bed sink), and is a CONSTANT-piston
-      ! parity — only the linear drag form maps onto it (the quadratic
-      ! |U|-dependent piston composition is deferred).  Fail loud on each.
+      ! `bbl_glue` (MOM6 BOTTOMDRAGLAW) needs the height-above-bed stack
+      ! that only the hvel_mom6 path accumulates.  It composes with every
+      ! drag form and fold: its piston IS the bed sink (the explicit apply,
+      ! the `&ocean_bdrag_nml implicit` split-apply and the `implicit_drag`
+      ! fold are all skipped on the layers; the explicit tendency still
+      ! feeds the barotropic F_slow, as under `implicit_drag`), which is
+      ! also why `implicit_drag` + `hbbl > 0` is accepted under it.
       if (cfg%ocean%vdiff%bbl_glue) then
          if (.not. cfg%ocean%vdiff%hvel_mom6) then
             call logger%error("ocean_vdiff bbl_glue requires hvel_mom6=.true. — the "// &
-                              "botfn glue reads the harmonic height-above-bed stack "// &
-                              "that only the hvel_mom6 path accumulates")
-            has_error = .true.
-         end if
-         if (.not. cfg%ocean%vdiff%implicit_drag) then
-            call logger%error("ocean_vdiff bbl_glue requires implicit_drag=.true. — "// &
-                              "the glue's piston bed row REPLACES the implicit-drag "// &
-                              "fold; without it the bed would carry no sink at all")
-            has_error = .true.
-         end if
-         if (trim(cfg%ocean%bdrag%form) /= "linear") then
-            call logger%error("ocean_vdiff bbl_glue requires ocean_bdrag form='linear' "// &
-                              "(constant-piston parity; quadratic composition deferred)")
+                              "botfn glue reads the height-above-bed stack that only "// &
+                              "the hvel_mom6 face-thickness build accumulates")
             has_error = .true.
          end if
       end if
@@ -10582,18 +10597,26 @@ contains
                              "MOM6 HARMONIC_VISC parity: harmonic momentum face "// &
                              "thickness with the near-bed upwind blend, and arithmetic "// &
                              "h_shear. Suppresses grounded-sliver momentum as MOM6 does"))
+      pl => cfg%ocean%vdiff%hvel_harmonic
+      call g%add(nml_logical("hvel_harmonic", pl, &
+                             "MOM6 HARMONIC_VISC for the hvel_mom6 face thickness: .false. = "// &
+                             "MOM6 default (arithmetic + z_clear near-bed harmonic blend), "// &
+                             ".true. = harmonic + near-bed upwind-arithmetic blend"))
       pr => cfg%ocean%vdiff%hbbl_visc
       call g%add(nml_real("hbbl_visc", pr, &
-                          "Bottom-layer scale for the hvel_mom6 botfn blend (MOM6 HBBL)"))
+                          "Bottom-layer scale for the hvel_mom6 botfn blend without the BBL "// &
+                          "glue, and the glue's HBBL when ocean_bdrag hbbl = 0 (MOM6 HBBL)", &
+                          units="m"))
       pl => cfg%ocean%vdiff%bbl_glue
       call g%add(nml_logical("bbl_glue", pl, &
-                             "MOM6 bottomdraglaw coupling parity: kv_bbl botfn glue at "// &
-                             "near-bed interfaces + piston bed drag. Absorbs the spurious "// &
-                             "grounded-layer PGF as MOM6 does (PGF_BUG.md par.9). Requires "// &
-                             "hvel_mom6 + implicit_drag + linear bottom drag"))
+                             "MOM6 BOTTOMDRAGLAW: per-face set_viscous_BBL kv_bbl/bbl_thick "// &
+                             "from the ocean_bdrag law (quadratic or linear); kv_bbl botfn "// &
+                             "glue at near-bed interfaces + piston bed row replace the bed "// &
+                             "drag apply. Requires hvel_mom6"))
       pr => cfg%ocean%vdiff%bbl_piston
       call g%add(nml_real("bbl_piston", pr, &
-                          "BBL drag piston velocity u* for bbl_glue (MOM6 CDRAG*DRAG_BG_VEL)", &
+                          "Historical constant BBL piston u* (hand-built slots only; a "// &
+                          "configured glue takes its drag from ocean_bdrag)", &
                           units="m/s", min=0.0_wp))
       pl => cfg%ocean%vdiff%hvel_upwind
       call g%add(nml_logical("hvel_upwind", pl, &
