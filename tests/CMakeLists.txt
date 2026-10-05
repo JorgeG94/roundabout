@@ -717,9 +717,9 @@ if(RDB_ENABLE_MPI)
                          PROPERTIES LABELS "ocean")
   endforeach()
   # The distributed fold at the baroclinic / continuity / stress seam sites, on
-  # a decomposed engine state vs the serial run (engine_setup's test-only
-  # allow_distributed_fold).  2-rank leg (2x1) from the foreach above; add 3x1
-  # and the 4-rank 4x1 (8/8/7/7) + 2x2 legs.
+  # a decomposed engine state vs the serial run (px > 1 is accepted now that
+  # every fold site is ported).  2-rank leg (2x1) from the foreach above; add
+  # 3x1 and the 4-rank 4x1 (8/8/7/7) + 2x2 legs.
   foreach(_np 3 4)
     add_test(NAME rdb_test_ocean_fold_sites_mpi_${_np}rank
              COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${_np}
