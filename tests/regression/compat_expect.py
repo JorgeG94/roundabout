@@ -310,6 +310,42 @@ ROWS = [
          "precondition guard stops at step 1.  Same land-column class as C3; new site.",
          "item C3 (NEW site: the zstar_full target builder)", expect=("CRASH",),
          message=_PRECOND_STEP1),
+    _gap("rho_runtime_crash", "runtime", ("vc_rho",),
+         "Pure isopycnal (rho) stops within 2-12 steps on the matrix domains: the remap "
+         "precondition guard, or the console CFL panic.  Before the land-column fix (item C3) "
+         "the same cells stopped at step 1; with it they run further and die later "
+         "(CLAUDE.md: rho is validation-grade alone, weakly stratified columns collapse).",
+         "NOT TRACKED (found by this matrix, 2026-10-05)", expect=("CRASH",),
+         message=r"remap preconditions at step \d+|console stats: CFL > panic threshold",
+         scope="any",
+         # c045 of the 2026-10-05 train run (as generated, not minimised)
+         witness={"vcoord": "rho", "split": "pred_corr", "vmix_bl": "epbl",
+                  "vmix_extra": "ddiff", "vmix_bg": "bryan_lewis", "lateral": "nu_4",
+                  "eddy": "mle", "tracers": "pseudo_salt", "pgf": "fv_mom6_plm", "eos": "linear",
+                  "coriolis": "sadourny", "pv_adv": "weno7", "bt": "correction_bc_pgf",
+                  "geometry": "closed", "grid": "spherical", "forcing": "cool"}),
+    _gap("hycom_runtime_crash", "runtime", ("vc_hycom",),
+         "hycom with an open boundary stops at step 4 (remap precondition guard + nan-catch) "
+         "now that the land-column crash (item C3) no longer stops it at step 1.",
+         "NOT TRACKED (found by this matrix, 2026-10-05)", expect=("CRASH",),
+         message=r"remap preconditions at step \d+", scope="any",
+         # c002 of the 2026-10-05 train run (as generated, not minimised)
+         witness={"vcoord": "hycom", "split": "pred_corr", "vmix_bl": "epbl",
+                  "vmix_extra": "none", "vmix_bg": "henyey", "lateral": "kh_aniso",
+                  "eddy": "mle", "tracers": "ts", "pgf": "fv_mom6", "eos": "roquet",
+                  "coriolis": "sadourny_hk", "pv_adv": "centered", "bt": "substep_drag",
+                  "geometry": "obc", "grid": "spherical", "forcing": "warm_sw"}),
+    _gap("hycom_decomp_run_fails", "runtime", ("vc_hycom",),
+         "A hycom cell that runs clean on one rank fails outright decomposed (2x2 and 4x1, "
+         "rc 1): the decomposed run itself, not a bitwise mismatch.",
+         "NOT TRACKED (found by this matrix, 2026-10-05)", expect=("DECOMP",),
+         message=r"the decomposed run failed", scope="any",
+         # c004 of the 2026-10-05 train run (as generated, not minimised)
+         witness={"vcoord": "hycom", "split": "ssp_rk2", "vmix_bl": "kpp", "vmix_extra": "ddiff",
+                  "vmix_bg": "henyey", "lateral": "const_nu_h", "eddy": "gm",
+                  "tracers": "ideal_age", "pgf": "fv_mom6_plm", "eos": "linear",
+                  "coriolis": "sadourny_energy", "pv_adv": "centered", "bt": "correction_bc_pgf",
+                  "geometry": "channel", "grid": "spherical", "forcing": "cool"}),
 
     # ===================================================================
     # KNOWN_GAP -- the legs (phase 3, 2026-10-04): RESTART, DECOMP.
