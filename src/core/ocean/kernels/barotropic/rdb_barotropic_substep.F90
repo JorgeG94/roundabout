@@ -1447,12 +1447,15 @@ contains
             call profiler_stop("ocean_comms_bt")
          end if
          ! `bt_mid` (px > 1): the η fold (B1) and the ubt fold (B2) as one
-         ! owner-routed group, after the mid-substep u exchange (which
-         ! drained async(1) — `ocean_halo_is_decomposed()` holds whenever
-         ! px > 1) and before Pass 2c, whose fold-line v update reads both
-         ! the η and the ubt north ghost rows.
+         ! owner-routed group, after the mid-substep u exchange and before
+         ! Pass 2c, whose fold-line v update reads both the η and the ubt
+         ! north ghost rows.  The pack reads `bt_eta`/`bt_ubt` on the host
+         ! side of the queue, so drain async(1) here unconditionally: the
+         ! u exchange above drains it too, but it is skipped under the
+         ! march-in (`bt_halo > 0`), and a wait on an empty queue is free.
          if (dist_fold) then
             call profiler_start("ocean_comms_bt")
+            !$acc wait(1)
             call ocean_fold_begin(2*grid%nghost)
             call ocean_fold_pack(bt_eta, nx, ny, FOLD_STAG_T)
             call ocean_fold_pack(bt_ubt, nx + 1, ny, FOLD_STAG_U)
