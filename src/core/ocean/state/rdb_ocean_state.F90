@@ -2123,6 +2123,39 @@ contains
                               size(state%vmix%bl_depth, 1), size(state%vmix%bl_depth, 2))
       end if
 
+      ! --- PR-2 (bt-rem-from-av-rem): vmix%kv, closing the REAL root cause
+      !     of compat row `restart_visc_rem`.  `visc_rem_precompute` runs
+      !     at the START of every pred_corr stage (MOM6-order parity,
+      !     PGF_BUG.md §9), BEFORE that stage's own `vmix_apply_in_stage`
+      !     recomputes `vmix%kv` -- so it always reads the PREVIOUS
+      !     stage's `kv`, one stage stale by design (mirrors MOM6:
+      !     `vertvisc_coef`'s `visc%Kv_slow`/the shear-viscosity input is
+      !     likewise carried across the predictor/corrector boundary, and
+      !     MOM6 checkpoints exactly this class of field --
+      !     `set_visc_register_restarts`, MOM_set_viscosity.F90:2817-2913,
+      !     registers `Kv_shear`/`Kd_shear`/`Kv_shear_Bu`/`MLD` for the
+      !     same "read before recomputed" reason).  Unregistered, a warm
+      !     restart re-seeds `kv` from the COLD background value
+      !     (`vmix_seed_backgrounds`, `pp81_nu_bg`) rather than the
+      !     spun-up profile, so the first resumed stage's visc_rem matrix
+      !     (hence `F_bt`'s weighting under `bt_forcing_visc_rem`/
+      !     `bt_renorm_visc_rem`, and the BT corrector under
+      !     `bt_correction_visc_rem`) differs from the continued run --
+      !     every prognostic then drifts (measured 1e-11 relative by step
+      !     24, `tests/regression/compat_expect.py::restart_visc_rem`).
+      !     `kv` is allocated UNCONDITIONALLY by `ocean_vmix_init`
+      !     (every vmix consumer shares it, not just visc_rem), so this
+      !     registers on every run, not just visc_rem-chain ones --
+      !     cheap and simple beats a consumer-flag gate here: one extra
+      !     `(nx, ny, nz+1)` field, the same class of cost as
+      !     `epbl_kd_int` two lines below.  `optional=.true.`: a
+      !     pre-PR-2 checkpoint has no such field and must still resume
+      !     (re-seeding `kv` cold, the pre-existing one-stage-stale
+      !     defect, same compat posture as `bt_visc_rem_u/v` above). ---
+      if (allocated(state%vmix%kv)) then
+         call register_full_3d_opt(reg, "vmix_kv", state%vmix%kv)
+      end if
+
       ! --- EPBL prev-MLD seed + kd_int (merged every stage) ---
       if (allocated(state%epbl%mld)) then
          call reg%register_2d("epbl_mld", state%epbl%mld, 0, &
