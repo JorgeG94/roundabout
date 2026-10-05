@@ -28,6 +28,13 @@
 !!     (static land mask), beta plane, `2gyre` wind, sigma;
 !!   * periodic_channel_zstar — re-entrant channel over a seamount on z*
 !!     (ALE remap every step), with porous barriers;
+!!   * visc_rem_zstar — closed, cooled Cartesian spoon basin on z* (bed
+!!     fillers on the shallow rim) with the visc_rem-weighted BT corrector
+!!     (`correction_visc_rem` + the implicit bed-drag fold): the fold writes
+!!     every face, ghosts included, with a per-layer weight that is not
+!!     halo-valid, so its ghost velocities must be refreshed before the
+!!     vertical mixing reads them (closed walls, so no OBC/sponge refresh
+!!     hides it);
 !!   * periodic_sponge — re-entrant channel, periodic west/east, with a
 !!     relaxing sponge band on the closed north edge; besides the usual
 !!     bitwise field comparison, its closed-budget mass/salt/heat totals
@@ -147,8 +154,9 @@ program test_ocean_decomp_bitid_mpi
    integer :: rank, nprocs, n_fail, total_fail, ic
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(13) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(14) = [character(len=24) :: &
                                                 "island_basin", "periodic_channel_zstar", &
+                                                "visc_rem_zstar", &
                                                 "periodic_sponge", &
                                                 "open_obc", "spherical", "obc_radiation_sponge", &
                                                 "closures", "file_readers", &
@@ -203,8 +211,12 @@ contains
       character(len=:), allocatable :: nml
       character(len=*), parameter :: NL = new_line("a")
       character(len=16) :: spx, spy, snx, sny
-      character(len=:), allocatable :: common
+      character(len=:), allocatable :: common, bt_extra
 
+      ! The visc_rem-weighted BT corrector rides on the common &ocean_bt_nml
+      ! group (one group per namelist).
+      bt_extra = ""
+      if (label == "visc_rem_zstar") bt_extra = ", correction_visc_rem = .true."
       write (spx, '(i0)') px
       write (spy, '(i0)') py
       write (snx, '(i0)') NX_G
@@ -215,7 +227,8 @@ contains
                "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
                "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0, "// &
                "T_init_surface = 20.0, T_init_bottom = 4.0 /"//NL// &
-               "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"' /"//NL// &
+               "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"'"// &
+               bt_extra//" /"//NL// &
                "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
                "smag_ah = .true. /"//NL// &
                "&ocean_diag_nml enabled = .false. /"//NL// &
@@ -246,6 +259,22 @@ contains
                "&ocean_porous_nml enable = .true. /"//NL// &
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'wall' /"//NL
+      case ("visc_rem_zstar")
+         ! Closed, cooled Cartesian spoon basin, MOM6 z* (the 300 m rim
+         ! carries bed fillers), with the visc_rem-weighted BT corrector.
+         ! visc_rem needs the implicit drag fold, which refuses an
+         ! HBBL-distributed drag: bed-only drag.
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.1 /"//NL// &
+               "&vcoord_nml vcoord_type = 'zstar' /"//NL// &
+               "&ocean_topo_nml topo_config = 'spoon', max_depth = 3000.0, "// &
+               "edge_depth = 300.0, slope_scale = 300000.0 /"//NL// &
+               "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -60.0 /"//NL// &
+               "&ocean_vdiff_nml implicit_drag = .true. /"//NL// &
+               "&ocean_bdrag_nml form = 'quadratic', cd = 3.0e-3, hbbl = 0.0 /"//NL// &
+               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
       case ("periodic_sponge")
          ! Re-entrant channel, periodic west/east, with a relaxing sponge
          ! band on the closed north edge -- the shape of the real Southern
