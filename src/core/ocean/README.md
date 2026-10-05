@@ -292,7 +292,7 @@ tens of metres of live water. The result was an at-rest acceleration of
 `2.9e-3 m/s²` on a live|filler face against `1.4e-6` with the true value.
 That is the open-staircase blow-up `refuse_open_zfixed_staircase` was
 written against, and the `zstar` ENERGY / CRASH cells of the compat matrix.
-The PGF now reads I1′ itself, `c_live` off the donor (`pgf_layer_conc`,
+The PGF now reads I1′ itself, `c_live` off the donor (Pass C of the FV-MOM6 kernels, into `conc_T`/`conc_S`,
 2026-10-04; gate `test_ocean_pgf_insitu :: open_step_filler_faces_*`).
 The EOS's `rho_0` substitution above has the same hazard wherever a
 cross-face term multiplies it by a non-vanished height: the FV-lite /
