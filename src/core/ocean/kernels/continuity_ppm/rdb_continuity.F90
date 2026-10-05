@@ -26,7 +26,7 @@ module rdb_continuity
                              scratch_3d_buffer_enter_data_impl, &
                              scratch_3d_buffer_exit_data_impl
    use rdb_ocean_boundary_types, only: ocean_bc_state_t, OBC_WALL, OBC_CLAMPED, OBC_PERIODIC, &
-                                       ocean_bc_outer_face_tag
+                                       OBC_TRIPOLAR_FOLD, ocean_bc_outer_face_tag
    use rdb_ocean_periodic, only: ocean_periodic_wrap_centre_3d, &
                                  ocean_periodic_wrap_face_x_3d, &
                                  ocean_periodic_wrap_face_y_3d
@@ -34,7 +34,7 @@ module rdb_continuity
    use rdb_ocean_fold, only: fold_north_centre, fold_north_u_face, fold_north_v_face
    use rdb_ocean_fold_exchange, only: ocean_fold_north_v_face
    use rdb_ocean_mle, only: ocean_mle_t, mle_fold_x, mle_fold_y
-   use rdb_ocean_gm, only: ocean_gm_t, gm_fold_x, gm_fold_y
+   use rdb_ocean_gm, only: ocean_gm_t
    use rdb_ocean_halo, only: ocean_halo_centre, &
                              ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y
    use rdb_profiler, only: profiler_start, profiler_stop
@@ -87,6 +87,9 @@ module rdb_continuity
    ! Production entry point: interleaved continuity+tracer directional (Lie)
    ! split, CWC-consistent.  Driven by rdb_ocean_dyn (split RK2).
    public :: continuity_tracer_step_split
+   ! Gent-McWilliams thickness diffusion as its OWN sequential operator on
+   ! the current thickness (MOM6 `thickness_diffuse`), after the dynamics.
+   public :: continuity_gm_apply
 
    ! Sea-ice PR 4b: the five SIS2-equivalent PPM stencil helpers
    ! (mirror-at-land, swept-volume face flux, van-Leer slope, CW84 cell
@@ -2434,7 +2437,7 @@ contains
    end subroutine tracer_advect_meridional
 
    subroutine continuity_tracer_step_split(grid, metrics, this, ms, dt, uhbt, vhbt, bc, mle, mle_fold_active, &
-                                           tracer_mode, gm, h_min, visc_rem_u, visc_rem_v, u_cor, v_cor)
+                                           tracer_mode, h_min, visc_rem_u, visc_rem_v, u_cor, v_cor)
       !! Production entry point for the directionally-split
       !! continuity + tracer step.  Interleaves the two so the
       !! CWC discrete theorem holds in the split form:
@@ -2509,13 +2512,6 @@ contains
          !! stage, weight 0.5 baked in — closes the reconstruction against
          !! the RK2-averaged h), and SKIP the per-step tracer advect so
          !! `hTr` stays frozen until the boundary drain.
-      type(ocean_gm_t), intent(in), optional :: gm
-         !! Gent-McWilliams thickness-diffusion transports (capability [2]).
-         !! Folded into the per-layer mass fluxes exactly like `mle` — after
-         !! each direction's flux fill and before the matching tracer advect
-         !! + divergence (conservative; `Sum_k uhD = 0`).  Gated by the same
-         !! `mle_fold_active` thermo-cadence flag.  Absent / disabled ⇒
-         !! bit-identical no-op.
       real(wp), intent(in), optional :: h_min
          !! Phase-1 Lagrangian minimum-thickness floor (m). When > 0, passed
          !! to `continuity_apply_zonal`/`_meridional` to clamp h_new >= h_min.
@@ -2551,13 +2547,13 @@ contains
       ! the fold on non-thermo steps when dt_therm_ratio > 1.
       do_mle_fold = .true.
       if (present(mle_fold_active)) do_mle_fold = mle_fold_active
-      ! Whether a GM/MLE bolus fold actually contributes this call.  When it
+      ! Whether the MLE bolus fold actually contributes this call.  When it
       ! does, the augmented flux must be re-closed at no-normal-flow WALL
       ! faces (the fold adds bolus transport at every face, including the
       ! physical wall the resolved flux already zeroed — otherwise the bolus
-      ! bleeds tracer mass into the ghost halo across the wall).
+      ! bleeds tracer mass into the ghost halo across the wall).  GM is no
+      ! longer folded: it is its own operator (`continuity_gm_apply`).
       fold_wall = .false.
-      if (present(gm)) fold_wall = fold_wall .or. gm%enable
       if (present(mle)) fold_wall = fold_wall .or. mle%enable
       fold_wall = fold_wall .and. do_mle_fold
       nx = grid%nx_total
@@ -2604,22 +2600,17 @@ contains
       if (present(mle) .and. do_mle_fold) then
          call mle_fold_x(mle, ms%mass_flux_x_layer, nx + 1, ny, nz)
       end if
-      ! GM thickness-diffusion fold (capability [2]): same thermo-cadence
-      ! gate as the FK fold; conservative because Sum_k uhD = 0.
-      if (present(gm) .and. do_mle_fold) then
-         call gm_fold_x(gm, ms%mass_flux_x_layer, nx + 1, ny, nz)
-      end if
-      ! No-normal-flow wall closure for the bolus folds (mirrors the
-      ! resolved-flux wall zeroing in `continuity_zonal_flux`): the GM/MLE
-      ! folds above add `uhD`/`uhml` at the physical WALL faces, which the
+      ! No-normal-flow wall closure for the bolus fold (mirrors the
+      ! resolved-flux wall zeroing in `continuity_zonal_flux`): the MLE
+      ! fold above adds `uhml` at the physical WALL faces, which the
       ! resolved flux had zeroed.  Without re-zeroing, the bolus transports
       ! tracer mass across the wall into the ghost halo and the
       ! physical-domain `sum(hTr)` drifts.  BC-aware: periodic / open edges
       ! keep the folded transport.
       if (fold_wall) then
-         ! Re-close the physical walls after the GM / MLE fold.  An MPI seam
+         ! Re-close the physical walls after the MLE fold.  An MPI seam
          ! (`has_*` false) is not a wall: zeroing it cut every decomposed
-         ! GM / Fox-Kemper run's transport at the rank seams (the tile edge
+         ! Fox-Kemper run's transport at the rank seams (the tile edge
          ! is an interior face the neighbour computes identically).
          bc_w_tag = OBC_WALL
          bc_e_tag = OBC_WALL
@@ -2636,7 +2627,7 @@ contains
       end if
       ! P2 positive-definite outflux limiter (zonal): scale the OUTGOING
       ! east-face mass fluxes so no donor drains below h_lim.  Applied to the
-      ! FOLDED total (after the GM/MLE bolus folds + wall closure) so the
+      ! FOLDED total (after the MLE bolus fold + wall closure) so the
       ! h-apply, tracer advect, uhtr accumulation, and the corrector's
       ! `use_state_fluxes` reads all consume the SAME limited flux (D3).
       ! Off ⇒ skipped ⇒ bit-identical.
@@ -2737,9 +2728,6 @@ contains
       if (present(mle) .and. do_mle_fold) then
          call mle_fold_y(mle, ms%mass_flux_y_layer, nx, ny + 1, nz)
       end if
-      if (present(gm) .and. do_mle_fold) then
-         call gm_fold_y(gm, ms%mass_flux_y_layer, nx, ny + 1, nz)
-      end if
       ! No-normal-flow wall closure for the meridional bolus fold (see the
       ! zonal block above for the rationale).
       if (fold_wall) then
@@ -2770,7 +2758,7 @@ contains
       ! Tripolar fold-line flux projection.  The fold-line row (north face
       ! of the last T-row, `rdb_ocean_fold` header) stores ONE physical face
       ! twice; its two flux slots were computed independently (PPM
-      ! reconstruction, vhbt renormalisation, GM/MLE bolus, limiter) and
+      ! reconstruction, vhbt renormalisation, MLE bolus, limiter) and
       ! agree only up to rounding.  Project the FINAL flux antisymmetric
       ! (and refill the rows above it) before it touches h / hTr / the
       ! accumulated transport, so the cross-fold exchange telescopes: what
@@ -2836,6 +2824,303 @@ contains
       ! when positive_definite is off, so this is a no-op there.
       this%n_limited_total = this%n_limited_total + this%n_limited_step
    end subroutine continuity_tracer_step_split
+
+   subroutine continuity_gm_apply(grid, metrics, this, ms, gm, dt, budget_w, tracer_mode, bc, &
+                                  set_flux_h)
+      !! Gent-McWilliams thickness diffusion as its OWN sequential operator:
+      !! move `h_layer` AND every tracer by the bolus transport `gm%uhD`/
+      !! `gm%vhD`, which `gm_compute_transports` has JUST filled from this
+      !! same, untouched `h_layer` with this same `dt`.
+      !!
+      !! MOM6 parity: `thickness_diffuse` runs after `step_MOM_dyn_split_RK2`
+      !! (MOM.F90:1388) and updates `h` in place,
+      !! `h -= dt·IareaT·(div uhD)` (MOM_thickness_diffuse.F90:639-641), while
+      !! adding `uhD·dt` to `uhtr` so the SAME tracer advection that carries
+      !! the resolved transport carries the bolus one.  Here:
+      !!
+      !!   * every-step tracers (`TR_MODE_ADVECT`): the bolus flux goes
+      !!     through the resolved path's own PPM tracer kernels
+      !!     (`tracer_advect_{zonal,meridional}_one_impl`), interleaved with
+      !!     the two thickness applies exactly as in
+      !!     `continuity_tracer_step_split` (x: advect at h, apply; seam
+      !!     refresh; y: advect at h*, apply) — so a uniform tracer stays
+      !!     uniform (CWC) and the content is conserved to round-off;
+      !!   * windowed tracers (`TR_MODE_ACCUMULATE`): `uhD·dt`/`vhD·dt` join
+      !!     the window accumulator `uhtr`/`vhtr` (MOM6's `uhtr += uhD·dt`)
+      !!     and the concentration hold is re-weighted onto the new `h`, so
+      !!     the drain spends the bolus transport with the resolved one.
+      !!
+      !! Positivity: `uhD` is capped per face by `A·(h − H_VANISHED)/(4·dt)` of
+      !! the DONOR at the `h` passed in, so the four faces of a cell remove at
+      !! most `h − H_VANISHED` over `dt` — no layer is taken below
+      !! `min(h, H_VANISHED)`, whatever the dynamics left.  (Folded into the
+      !! resolved sweeps, as until 2026-10, the cap bounded the stage-entry
+      !! `h` and the resolved outflow came on top — see `rdb_ocean_gm`.)
+      !!
+      !! Edges: the bolus transport is ZEROED on every physical edge face
+      !! that is not periodic or a tripolar fold — walls, sponges and every
+      !! open-boundary type — as MOM6 masks the GM slopes / KhTh by
+      !! `OBCmaskCu/Cv` (MOM_thickness_diffuse.F90:1121, 1161-1169): no GM
+      !! flux leaves the domain, so no budget term and no ghost fill is
+      !! needed.  An MPI seam (`has_*` false) is interior and keeps its
+      !! transport.
+      !!
+      !! I1′: fillers keep their donor's concentration through this operator
+      !! — the PPM kernel reads a filler's `hTr/h`, which IS `c_live` under
+      !! I1′, and a filler cannot DONATE (its availability is 0); what it
+      !! receives arrives at its live neighbour's concentration.  The pool
+      !! (`multilayer_state_t%enforce_vanished_content`) at the tail of the
+      !! outer step restores I1′ exactly, as after the resolved continuity.
+      !!
+      !! `budget_w` multiplies the heat/salt horizontal-advection budget
+      !! increments: this operator runs AFTER the RK2 stage average, so it
+      !! records `1/ocean_budget_stage_weight` (2 under ssp_rk2, 1 under
+      !! pred_corr) for the console's per-step weight to recover it 1:1.
+      !!
+      !! `set_flux_h` (optional, default false): leave the bolus thickness
+      !! divergence in `ms%flux_h_layer` for the `eulerian_z` vertical
+      !! advection (`compute_w_from_continuity`), which then cancels it per
+      !! layer exactly as it cancels the resolved divergence.
+      !!
+      !! The caller refreshes the h / tracer ghosts afterwards
+      !! (`ocean_halo_exchange_ml_state` + periodic wrap + fold).  No-op when
+      !! GM is uninitialised or disabled.
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_metrics_t), intent(in) :: metrics
+      type(continuity_t), intent(inout) :: this
+      type(multilayer_state_t), intent(inout) :: ms
+      type(ocean_gm_t), intent(inout) :: gm
+         !! `uhD`/`vhD` (inout: the edge closure and the fold-line
+         !! projection are applied to them in place).
+      real(wp), intent(in) :: dt
+         !! The step the transports were capped for (s).
+      real(wp), intent(in) :: budget_w
+         !! Budget bookkeeping weight (see above).
+      integer, intent(in) :: tracer_mode
+         !! `TR_MODE_ADVECT` or `TR_MODE_ACCUMULATE`.
+      type(ocean_bc_state_t), intent(in), optional :: bc
+         !! Edge tags (absent ⇒ every edge a wall).
+      logical, intent(in), optional :: set_flux_h
+         !! Leave the bolus divergence in `ms%flux_h_layer` (eulerian_z).
+
+      integer :: nx, ny, nz, nx_phys, ny_phys, nghost, it
+      integer :: i, j, k
+      integer :: tag_w, tag_e, tag_s, tag_n
+      logical :: keep_w, keep_e, keep_s, keep_n, per_x, per_y, want_flux_h
+      real(wp) :: div
+
+      if (.not. gm%is_init) return
+      if (.not. gm%enable) return
+      if (.not. allocated(gm%uhD)) return
+
+      nx = grid%nx_total
+      ny = grid%ny_total
+      nz = ms%nz_ml
+      nx_phys = grid%nx_phys
+      ny_phys = grid%ny_phys
+      nghost = grid%nghost
+      want_flux_h = .false.
+      if (present(set_flux_h)) want_flux_h = set_flux_h
+
+      ! ---- Edge closure (MOM6 OBCmaskCu/Cv): keep only periodic / fold
+      ! edges and MPI seams.
+      tag_w = OBC_WALL
+      tag_e = OBC_WALL
+      tag_s = OBC_WALL
+      tag_n = OBC_WALL
+      per_x = .false.
+      per_y = .false.
+      if (present(bc)) then
+         tag_w = ocean_bc_outer_face_tag(bc%west%bc_type)
+         tag_e = ocean_bc_outer_face_tag(bc%east%bc_type)
+         tag_s = ocean_bc_outer_face_tag(bc%south%bc_type)
+         tag_n = ocean_bc_outer_face_tag(bc%north%bc_type)
+         if (.not. bc%has_west) tag_w = OBC_PERIODIC
+         if (.not. bc%has_east) tag_e = OBC_PERIODIC
+         if (.not. bc%has_south) tag_s = OBC_PERIODIC
+         if (.not. bc%has_north) tag_n = OBC_PERIODIC
+         per_x = bc%periodic_x .and. .not. ocean_halo_is_decomposed_x()
+         per_y = bc%periodic_y .and. .not. ocean_halo_is_decomposed_y()
+      end if
+      keep_w = tag_w == OBC_PERIODIC .or. tag_w == OBC_TRIPOLAR_FOLD
+      keep_e = tag_e == OBC_PERIODIC .or. tag_e == OBC_TRIPOLAR_FOLD
+      keep_s = tag_s == OBC_PERIODIC .or. tag_s == OBC_TRIPOLAR_FOLD
+      keep_n = tag_n == OBC_PERIODIC .or. tag_n == OBC_TRIPOLAR_FOLD
+      do concurrent(k=1:nz, j=1:ny)
+         if (.not. keep_w) gm%uhD(nghost + 1, j, k) = 0.0_wp
+         if (.not. keep_e) gm%uhD(nghost + nx_phys + 1, j, k) = 0.0_wp
+      end do
+      do concurrent(k=1:nz, i=1:nx)
+         if (.not. keep_s) gm%vhD(i, nghost + 1, k) = 0.0_wp
+         if (.not. keep_n) gm%vhD(i, nghost + ny_phys + 1, k) = 0.0_wp
+      end do
+      ! Tripolar fold-line projection (see `continuity_tracer_step_split`):
+      ! the duplicated fold-line face must carry ONE antisymmetric flux so
+      ! what leaves (i,nj) north is exactly what enters (ni+1-i,nj).
+      if (present(bc)) then
+         if (bc%north_fold) call ocean_fold_north_v_face(gm%vhD, nx, ny + 1, nz, &
+                                                         nx_phys, ny_phys, nghost)
+      end if
+
+      ! ---- x half: tracers at h^n, then h^n -> h*.
+      if (tracer_mode == TR_MODE_ACCUMULATE) then
+         call drain_copy_3d(nx, ny, nz, ms%h_layer, this%hprev_work)
+         do concurrent(k=1:nz, j=1:ny, i=1:nx + 1)
+            this%uhtr(i, j, k) = this%uhtr(i, j, k) + gm%uhD(i, j, k)*dt
+         end do
+      else
+         call gm_tracer_advect_x(grid, metrics, this, ms, gm%uhD, dt, budget_w)
+      end if
+      do concurrent(k=1:nz, j=1:ny, i=1:nx) local(div)
+         div = (gm%uhD(i + 1, j, k) - gm%uhD(i, j, k))*metrics%iareaT(i, j)
+         ms%h_layer(i, j, k) = ms%h_layer(i, j, k) - dt*div
+      end do
+      if (want_flux_h) then
+         do concurrent(k=1:nz, j=1:ny, i=1:nx)
+            ms%flux_h_layer(i, j, k) = (gm%uhD(i + 1, j, k) - gm%uhD(i, j, k))*metrics%iareaT(i, j)
+         end do
+      end if
+
+      ! ---- Mid-split seam refresh (the meridional PPM reads h / tracer
+      ! ghosts the neighbour's x half just moved) — the same three steps as
+      ! `continuity_tracer_step_split`.
+      call profiler_start("ocean_comms_ml")
+      call ocean_halo_centre(ms%h_layer, nz)
+      if (allocated(ms%tracers)) then
+         do it = 1, size(ms%tracers)
+            if (.not. allocated(ms%tracers(it)%hTr)) cycle
+            call ocean_halo_centre(ms%tracers(it)%hTr, nz)
+         end do
+      end if
+      call profiler_stop("ocean_comms_ml")
+      if (per_x .or. per_y) then
+         call ocean_periodic_wrap_centre_3d(ms%h_layer, nx, ny, nz, &
+                                            nx_phys, ny_phys, nghost, per_x, per_y, no_wait=.true.)
+         if (allocated(ms%tracers)) then
+            do it = 1, size(ms%tracers)
+               if (.not. allocated(ms%tracers(it)%hTr)) cycle
+               call ocean_periodic_wrap_centre_3d(ms%tracers(it)%hTr, nx, ny, nz, &
+                                                  nx_phys, ny_phys, nghost, per_x, per_y, no_wait=.true.)
+            end do
+         end if
+         !$acc wait(1)
+      end if
+      if (present(bc)) call ocean_fold_wrap_centre_3d_state(grid, bc, ms)
+
+      ! ---- y half: tracers at h*, then h* -> h^{n+1}.
+      if (tracer_mode == TR_MODE_ACCUMULATE) then
+         do concurrent(k=1:nz, j=1:ny + 1, i=1:nx)
+            this%vhtr(i, j, k) = this%vhtr(i, j, k) + gm%vhD(i, j, k)*dt
+         end do
+      else
+         call gm_tracer_advect_y(grid, metrics, this, ms, gm%vhD, dt, budget_w)
+      end if
+      do concurrent(k=1:nz, j=1:ny, i=1:nx) local(div)
+         div = (gm%vhD(i, j + 1, k) - gm%vhD(i, j, k))*metrics%iareaT(i, j)
+         ms%h_layer(i, j, k) = ms%h_layer(i, j, k) - dt*div
+      end do
+      if (want_flux_h) then
+         do concurrent(k=1:nz, j=1:ny, i=1:nx)
+            ms%flux_h_layer(i, j, k) = ms%flux_h_layer(i, j, k) + &
+                                       (gm%vhD(i, j + 1, k) - gm%vhD(i, j, k))*metrics%iareaT(i, j)
+         end do
+      end if
+
+      ! ---- Windowed mode: re-weight the held concentration onto the new h
+      ! (the same hold `continuity_tracer_step_split` keeps per stage), with
+      ! the post-average budget weight.
+      if (tracer_mode == TR_MODE_ACCUMULATE .and. allocated(ms%tracers)) then
+         do it = 1, size(ms%tracers)
+            if (.not. allocated(ms%tracers(it)%hTr)) cycle
+            if (.not. ms%tracers(it)%do_horizontal_advection) cycle
+            select case (ms%tracers(it)%budget_id)
+            case (TRACER_BUDGET_HEAT)
+               call drain_rescale_hTr_budget(nx, ny, nz, ms%h_layer, this%hprev_work, &
+                                             budget_w, ms%tracers(it)%hTr, ms%heat_budget_horiz_adv)
+            case (TRACER_BUDGET_SALT)
+               call drain_rescale_hTr_budget(nx, ny, nz, ms%h_layer, this%hprev_work, &
+                                             budget_w, ms%tracers(it)%hTr, ms%salt_budget_horiz_adv)
+            case default
+               call drain_rescale_hTr(nx, ny, nz, ms%h_layer, this%hprev_work, &
+                                      ms%tracers(it)%hTr)
+            end select
+         end do
+      end if
+   end subroutine continuity_gm_apply
+
+   pure subroutine gm_tracer_advect_x(grid, metrics, this, ms, uflux, dt, budget_w)
+      !! Zonal PPM tracer advection of every horizontally-advected tracer by
+      !! the GM bolus flux `uflux` (the resolved path's own kernel,
+      !! `tracer_advect_zonal_one_impl`; heat/salt budgets weighted by
+      !! `budget_w`).  No OBC ghost override: `continuity_gm_apply` has
+      !! closed every non-periodic edge face.
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_metrics_t), intent(in) :: metrics
+      type(continuity_t), intent(inout) :: this
+      type(multilayer_state_t), intent(inout) :: ms
+      real(wp), intent(in) :: uflux(grid%nx_total + 1, grid%ny_total, ms%nz_ml)
+         !! GM zonal bolus transport (m^3/s).
+      real(wp), intent(in) :: dt, budget_w
+      integer :: it
+      if (.not. allocated(ms%tracers)) return
+      do it = 1, size(ms%tracers)
+         if (.not. ms%tracers(it)%do_horizontal_advection) cycle
+         select case (ms%tracers(it)%budget_id)
+         case (TRACER_BUDGET_HEAT)
+            call tracer_advect_zonal_one_impl(grid%nx_total, grid%ny_total, ms%nz_ml, &
+                                              dt, metrics%iareaT, metrics%wet_T, ms%h_layer, &
+                                              ms%tracers(it)%hTr, uflux, &
+                                              this%h_face_left_x%data, this%h_face_right_x%data, &
+                                              budget_adv=ms%heat_budget_horiz_adv, budget_w=budget_w)
+         case (TRACER_BUDGET_SALT)
+            call tracer_advect_zonal_one_impl(grid%nx_total, grid%ny_total, ms%nz_ml, &
+                                              dt, metrics%iareaT, metrics%wet_T, ms%h_layer, &
+                                              ms%tracers(it)%hTr, uflux, &
+                                              this%h_face_left_x%data, this%h_face_right_x%data, &
+                                              budget_adv=ms%salt_budget_horiz_adv, budget_w=budget_w)
+         case default
+            call tracer_advect_zonal_one_impl(grid%nx_total, grid%ny_total, ms%nz_ml, &
+                                              dt, metrics%iareaT, metrics%wet_T, ms%h_layer, &
+                                              ms%tracers(it)%hTr, uflux, &
+                                              this%h_face_left_x%data, this%h_face_right_x%data)
+         end select
+      end do
+   end subroutine gm_tracer_advect_x
+
+   pure subroutine gm_tracer_advect_y(grid, metrics, this, ms, vflux, dt, budget_w)
+      !! Meridional twin of `gm_tracer_advect_x`.
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_metrics_t), intent(in) :: metrics
+      type(continuity_t), intent(inout) :: this
+      type(multilayer_state_t), intent(inout) :: ms
+      real(wp), intent(in) :: vflux(grid%nx_total, grid%ny_total + 1, ms%nz_ml)
+         !! GM meridional bolus transport (m^3/s).
+      real(wp), intent(in) :: dt, budget_w
+      integer :: it
+      if (.not. allocated(ms%tracers)) return
+      do it = 1, size(ms%tracers)
+         if (.not. ms%tracers(it)%do_horizontal_advection) cycle
+         select case (ms%tracers(it)%budget_id)
+         case (TRACER_BUDGET_HEAT)
+            call tracer_advect_meridional_one_impl(grid%nx_total, grid%ny_total, ms%nz_ml, &
+                                                   dt, metrics%iareaT, metrics%wet_T, ms%h_layer, &
+                                                   ms%tracers(it)%hTr, vflux, &
+                                                   this%h_face_left_y%data, this%h_face_right_y%data, &
+                                                   budget_adv=ms%heat_budget_horiz_adv, budget_w=budget_w)
+         case (TRACER_BUDGET_SALT)
+            call tracer_advect_meridional_one_impl(grid%nx_total, grid%ny_total, ms%nz_ml, &
+                                                   dt, metrics%iareaT, metrics%wet_T, ms%h_layer, &
+                                                   ms%tracers(it)%hTr, vflux, &
+                                                   this%h_face_left_y%data, this%h_face_right_y%data, &
+                                                   budget_adv=ms%salt_budget_horiz_adv, budget_w=budget_w)
+         case default
+            call tracer_advect_meridional_one_impl(grid%nx_total, grid%ny_total, ms%nz_ml, &
+                                                   dt, metrics%iareaT, metrics%wet_T, ms%h_layer, &
+                                                   ms%tracers(it)%hTr, vflux, &
+                                                   this%h_face_left_y%data, this%h_face_right_y%data)
+         end select
+      end do
+   end subroutine gm_tracer_advect_y
 
    subroutine pd_limit_zonal_impl(nx, ny, nz, dt, h_lim, iareaT, h_layer, &
                                   mass_flux_x, theta, n_limited, u_cor)
@@ -3038,7 +3323,7 @@ contains
    pure subroutine tracer_advect_zonal_one_impl(nx, ny, nz, dt, iareaT, wet_T, h, hTr, &
                                                 mass_flux_x, &
                                                 Tr_face_left_x, Tr_face_right_x, &
-                                                budget_adv)
+                                                budget_adv, budget_w)
       !! Zonal half of `tracer_advect_one_impl`.  Same three-pass
       !! pattern (PPM reconstruction → upwind pick into tracer mass
       !! flux → forward-Euler update) but only the x-direction half.
@@ -3068,11 +3353,16 @@ contains
          !! (same sign/units as hTr).  When present, the zonal-flux
          !! divergence is added (+=) here after the prognostic update.
          !! Absent ⇒ inert (byte-identical to the pre-feature build).
+      real(wp), intent(in), optional :: budget_w
+         !! Bookkeeping weight on the `budget_adv` increment (absent ⇒ 1,
+         !! bit-identical).  A caller writing OUTSIDE an RK2 stage (the GM
+         !! operator, after the stage average) passes the reciprocal of the
+         !! console's per-step weight, `1/ocean_budget_stage_weight`.
 
       integer :: i, j, k
       real(wp) :: Tr_m2, Tr_m1, Tr_0, Tr_p1, Tr_p2
       real(wp) :: dh_m1, dh_0, dh_p1, Tr_left, Tr_right
-      real(wp) :: mass_x, Tr_face
+      real(wp) :: mass_x, Tr_face, dt_b
 
       do concurrent(k=1:nz, j=1:ny, i=3:nx - 2) &
          local(Tr_m2, Tr_m1, Tr_0, Tr_p1, Tr_p2, &
@@ -3126,8 +3416,10 @@ contains
       ! same divergence that was just applied to hTr — the console uses it to
       ! close the salt/heat conservation residual.
       if (present(budget_adv)) then
+         dt_b = dt
+         if (present(budget_w)) dt_b = dt*budget_w
          do concurrent(k=1:nz, j=1:ny, i=1:nx)
-            budget_adv(i, j, k) = budget_adv(i, j, k) - dt* &
+            budget_adv(i, j, k) = budget_adv(i, j, k) - dt_b* &
                                   (Tr_face_left_x(i + 1, j, k) - Tr_face_left_x(i, j, k))*iareaT(i, j)
          end do
       end if
@@ -3136,7 +3428,7 @@ contains
    pure subroutine tracer_advect_meridional_one_impl(nx, ny, nz, dt, iareaT, wet_T, h, hTr, &
                                                      mass_flux_y, &
                                                      Tr_face_left_y, Tr_face_right_y, &
-                                                     budget_adv)
+                                                     budget_adv, budget_w)
       !! Meridional half of `tracer_advect_one_impl`.  Same shape
       !! as the zonal impl, applied to y.  In the split flow, `h`
       !! here is the post-zonal-apply thickness so the Tr = hTr/h
@@ -3162,11 +3454,14 @@ contains
          !! Per-cell meridional-advection budget accumulator (PSU·m or
          !! °C·m per cell).  Added to the same array as the zonal half
          !! so the net entry covers both directions.  Absent ⇒ inert.
+      real(wp), intent(in), optional :: budget_w
+         !! Bookkeeping weight on the `budget_adv` increment; see the
+         !! zonal impl.  Absent ⇒ 1, bit-identical.
 
       integer :: i, j, k
       real(wp) :: Tr_m2, Tr_m1, Tr_0, Tr_p1, Tr_p2
       real(wp) :: dh_m1, dh_0, dh_p1, Tr_left, Tr_right
-      real(wp) :: mass_y, Tr_face
+      real(wp) :: mass_y, Tr_face, dt_b
 
       do concurrent(k=1:nz, j=3:ny - 2, i=1:nx) &
          local(Tr_m2, Tr_m1, Tr_0, Tr_p1, Tr_p2, &
@@ -3217,8 +3512,10 @@ contains
 
       ! Budget accumulator: same guarded pattern as the zonal half.
       if (present(budget_adv)) then
+         dt_b = dt
+         if (present(budget_w)) dt_b = dt*budget_w
          do concurrent(k=1:nz, j=1:ny, i=1:nx)
-            budget_adv(i, j, k) = budget_adv(i, j, k) - dt* &
+            budget_adv(i, j, k) = budget_adv(i, j, k) - dt_b* &
                                   (Tr_face_left_y(i, j + 1, k) - Tr_face_left_y(i, j, k))*iareaT(i, j)
          end do
       end if

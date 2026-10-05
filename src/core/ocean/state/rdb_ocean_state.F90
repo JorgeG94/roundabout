@@ -2140,6 +2140,41 @@ contains
                               size(state%meke%meke, 1), size(state%meke%meke, 2))
       end if
 
+      ! --- Gent-McWilliams carried state.  The GM operator runs AFTER the
+      !     dynamics of step n (`run_gm_step`) and leaves its PE release
+      !     `gm_src`, which MEKE reads at the top of step n+1: carried, so
+      !     a resume between the two must restore it (without it the first
+      !     resumed MEKE step sourced from a cold GM work, ~3 % off at step
+      !     24).  With `dt_therm_ratio > 1` the GM operator also runs on
+      !     the steps BETWEEN thermo refreshes, reading the slopes and the
+      !     VarMix(+MEKE) base KhTh the last thermo step left — carried as
+      !     well (at ratio 1 they are recomputed before every read, so
+      !     restoring them is inert).  Registered on EVERY GM run: this
+      !     registry is built for the read BEFORE `configure_ocean_vmix`
+      !     sets `dyn%dt_therm_ratio`, so the ratio cannot gate it (a
+      !     ratio-gated registration wrote them and never read them back —
+      !     `restart_engine_bit_exact_gm_meke_varmix_therm2`).  All
+      !     optional: a checkpoint written before they were registered
+      !     still resumes, with the old one-step defect. ---
+      if (state%gm%enable .and. allocated(state%gm%gm_src)) then
+         call reg%register_2d("gm_src", state%gm%gm_src, 0, &
+                              size(state%gm%gm_src, 1), size(state%gm%gm_src, 2), optional=.true.)
+         if (allocated(state%slopes%slope_x)) then
+            call register_full_3d_opt(reg, "slopes_slope_x", state%slopes%slope_x)
+            call register_full_3d_opt(reg, "slopes_slope_y", state%slopes%slope_y)
+            call register_full_3d_opt(reg, "slopes_n2_u", state%slopes%n2_u)
+            call register_full_3d_opt(reg, "slopes_n2_v", state%slopes%n2_v)
+         end if
+         if (state%varmix%enable .and. allocated(state%varmix%khth_u)) then
+            call reg%register_2d("varmix_khth_u", state%varmix%khth_u, 0, &
+                                 size(state%varmix%khth_u, 1), size(state%varmix%khth_u, 2), &
+                                 optional=.true.)
+            call reg%register_2d("varmix_khth_v", state%varmix%khth_v, 0, &
+                                 size(state%varmix%khth_v, 1), size(state%varmix%khth_v, 2), &
+                                 optional=.true.)
+         end if
+      end if
+
       ! --- Wet/dry hysteresis mask (docs/ocean_wetdry_plan.md): persistent
       !     front state (wet/dry/held-in-band).  optional — a restart
       !     written before the knob existed re-seeds from depth at

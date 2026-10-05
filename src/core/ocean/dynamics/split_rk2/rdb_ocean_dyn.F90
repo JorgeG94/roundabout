@@ -64,6 +64,7 @@ module rdb_ocean_dyn
                              continuity_compute_fluxes_barotropic, &
                              continuity_apply_fluxes_barotropic, &
                              continuity_tracer_step_split, &
+                             continuity_gm_apply, &
                              continuity_tracer_drain, &
                              TR_MODE_ADVECT, TR_MODE_ACCUMULATE, TR_MODE_NONE
    use rdb_coriolis_adv, only: coriolis_adv_t, &
@@ -139,7 +140,7 @@ module rdb_ocean_dyn
    use pic_strings, only: to_string
    use, intrinsic :: iso_fortran_env, only: output_unit, int64, real64
    use rdb_efp, only: efp_carry, EFP_DIGITS
-   use rdb_ocean_console_stats, only: efp_decompose_impl
+   use rdb_ocean_console_stats, only: efp_decompose_impl, ocean_budget_stage_weight
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_mem_report, only: arr_bytes
    implicit none
@@ -2727,10 +2728,12 @@ contains
          !! disabled ⇒ no-op.
       type(ocean_gm_t), intent(inout), optional :: gm
          !! Gent-McWilliams thickness-diffusion slot (capability [2]).
-         !! Absent or `enable=.false.` preserves bit-identity.  Transports
-         !! are computed once per outer step at THERMO cadence (after the
-         !! slope refresh) and folded into the continuity mass fluxes in
-         !! both RK2 stages, exactly like `mle`.
+         !! Absent or `enable=.false.` preserves bit-identity.  Its slopes /
+         !! VarMix / MEKE inputs refresh at THERMO cadence at the top of the
+         !! step; the bolus transport itself is computed from the
+         !! post-dynamics thickness and applied as its own sequential
+         !! operator EVERY outer step after the stage loop (`run_gm_step`,
+         !! MOM6 `thickness_diffuse` after `step_MOM_dyn_split_RK2`).
       type(ocean_varmix_t), intent(inout), optional :: varmix
          !! VarMix slot (capability [4]): spatially-varying GM/Redi
          !! coefficients.  When present + `enable=.true.` (and wavespeed
@@ -2750,10 +2753,11 @@ contains
          !! along-coordinate `tracer_hdiff`.
       type(ocean_meke_t), intent(inout), optional :: meke
          !! MEKE prognostic eddy-energy slot (capability [5]).  Stepped once
-         !! per outer step at THERMO cadence BETWEEN `varmix_compute` and
-         !! `gm_compute_transports`: it reads `gm%gm_src` from the PREVIOUS
-         !! thermo step (one-step lag) and feeds the geom-mean of its derived
-         !! `kh` into `varmix%khth_u/v` (+ khtr) BEFORE GM's CFL clamp.
+         !! per outer step at THERMO cadence right after `varmix_compute`:
+         !! it reads `gm%gm_src` from the PREVIOUS outer step's GM operator
+         !! (one-step lag; `gm_src` is restart-registered) and feeds the
+         !! geom-mean of its derived `kh` into `varmix%khth_u/v` (+ khtr),
+         !! which this step's GM operator CFL-clamps after the dynamics.
          !! Absent or `enable=.false.` ⇒ no-op (bit-identical).
       type(ocean_tides_t), intent(inout), optional :: tides
          !! Equilibrium body-force tide slot (C1) + scalar SAL (C2).  When
@@ -3000,52 +3004,38 @@ contains
          end if
       end if
 
-      ! Gent-McWilliams thickness diffusion (capability [2]): refresh the
-      ! isopycnal slopes then compute the bolus thickness transports ONCE
-      ! per outer step at THERMO cadence (a slow buoyancy-driven process).
-      ! `run_stage_split` then folds the same uhD/vhD into the mass fluxes
-      ! in both stages.  The split driver does not otherwise call
-      ! `ocean_slopes_compute`, so GM owns the slope refresh.  No-op when
-      ! absent / disabled.
+      ! Gent-McWilliams thickness diffusion (capability [2]) — INPUTS: refresh
+      ! the isopycnal slopes, the VarMix base KhTh and MEKE once per outer
+      ! step at THERMO cadence (a slow buoyancy-driven process).  The bolus
+      ! transport itself is NOT computed here: it is computed from the
+      ! thickness the dynamics LEAVES and applied as its own operator after
+      ! the stage loop (`run_gm_step`, below) — MOM6's `thickness_diffuse`
+      ! after `step_MOM_dyn_split_RK2`.  The split driver does not otherwise
+      ! call `ocean_slopes_compute`, so GM owns the slope refresh.  No-op
+      ! when absent / disabled.
       if (present(gm)) then
          if (dyn%enable_thermodynamics .and. dyn%is_thermo_step()) then
             if (gm%enable .and. present(slopes)) then
                call profiler_start("ocean_gm")
                call ocean_slopes_compute(grid, metrics, eos, slopes, ms, dyn%therm_dt(dt))
                ! VarMix (capability [4]): fill the spatially-varying pre-CFL
-               ! base KhTh face field from the fresh slopes + cg1, then hand
-               ! it to GM as the external base.  When VarMix is absent /
-               ! disabled GM falls back to its scalar khth (bit-identical).
+               ! base KhTh face field from the fresh slopes + cg1; the GM
+               ! operator consumes it as its external base.  When VarMix is
+               ! absent / disabled GM falls back to its scalar khth.
                if (present(varmix) .and. present(wavespeed)) then
                   if (varmix%enable) then
                      call varmix_compute(grid, metrics, varmix, slopes, &
                                          wavespeed, ms)
-                     ! MEKE (capability [5]): step the prognostic eddy-energy
-                     ! field AFTER VarMix and BEFORE GM so it reads the prior
-                     ! step's gm_src (one-step lag) and adds the geom-mean kh
-                     ! into varmix%khth before GM's CFL clamp.  No-op when
-                     ! absent / disabled.
-                     call run_meke_step(grid, metrics, gm, varmix, wavespeed, hv, &
-                                        ms, dyn%therm_dt(dt), meke)
-                     call gm_compute_transports(grid, metrics, gm, slopes, ms, &
-                                                dyn%therm_dt(dt), &
-                                                khth_ext_u=varmix%khth_u, &
-                                                khth_ext_v=varmix%khth_v)
-                  else
-                     ! VarMix off ⇒ MEKE still evolves E (feedback inert, no
-                     ! face accumulator to feed) — pass varmix so meke_step
-                     ! can still no-op cleanly on the seam.
-                     call run_meke_step(grid, metrics, gm, varmix, wavespeed, hv, &
-                                        ms, dyn%therm_dt(dt), meke)
-                     call gm_compute_transports(grid, metrics, gm, slopes, ms, &
-                                                dyn%therm_dt(dt))
                   end if
-               else
-                  call run_meke_step(grid, metrics, gm, varmix, wavespeed, hv, &
-                                     ms, dyn%therm_dt(dt), meke)
-                  call gm_compute_transports(grid, metrics, gm, slopes, ms, &
-                                             dyn%therm_dt(dt))
                end if
+               ! MEKE (capability [5]): step the prognostic eddy-energy field
+               ! AFTER VarMix so it reads the previous step's gm_src
+               ! (one-step lag) and adds the geom-mean kh into varmix%khth
+               ! before the GM operator's CFL clamp.  VarMix off ⇒ MEKE
+               ! still evolves E (feedback inert).  No-op when absent /
+               ! disabled.
+               call run_meke_step(grid, metrics, gm, varmix, wavespeed, hv, &
+                                  ms, dyn%therm_dt(dt), meke)
                call profiler_stop("ocean_gm")
             end if
          end if
@@ -3128,7 +3118,7 @@ contains
             call run_stage_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
                                  va, hd, vd, vmix, ms, dt, n_inner, &
                                  sf=sf, geo=geo, stage=stage, vcoord=vcoord, bc=bc, sp=sp, t=t, &
-                                 lateral_mix=lateral_mix, epbl=epbl, kshear=kshear, mle=mle, gm=gm, &
+                                 lateral_mix=lateral_mix, epbl=epbl, kshear=kshear, mle=mle, &
                                  redi=redi, varmix=varmix, vmix_tidal=vmix_tidal, meke=meke, &
                                  eta_forcing=psurf%eta_seam, td=td, cav=cav, &
                                  eta_pf_seam=psurf%eta_ib)
@@ -3139,21 +3129,21 @@ contains
             call run_stage_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
                                  va, hd, vd, vmix, ms, dt, n_inner, &
                                  sf=sf, geo=geo, stage=stage, vcoord=vcoord, bc=bc, sp=sp, t=t, &
-                                 lateral_mix=lateral_mix, epbl=epbl, kshear=kshear, mle=mle, gm=gm, &
+                                 lateral_mix=lateral_mix, epbl=epbl, kshear=kshear, mle=mle, &
                                  redi=redi, varmix=varmix, vmix_tidal=vmix_tidal, meke=meke, &
                                  eta_forcing=psurf%eta_seam, td=td, cav=cav)
          else if (tide_on) then
             call run_stage_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
                                  va, hd, vd, vmix, ms, dt, n_inner, &
                                  sf=sf, geo=geo, stage=stage, vcoord=vcoord, bc=bc, sp=sp, t=t, &
-                                 lateral_mix=lateral_mix, epbl=epbl, kshear=kshear, mle=mle, gm=gm, &
+                                 lateral_mix=lateral_mix, epbl=epbl, kshear=kshear, mle=mle, &
                                  redi=redi, varmix=varmix, vmix_tidal=vmix_tidal, meke=meke, &
                                  eta_forcing=tides%eta_forcing, td=td, cav=cav)
          else
             call run_stage_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
                                  va, hd, vd, vmix, ms, dt, n_inner, &
                                  sf=sf, geo=geo, stage=stage, vcoord=vcoord, bc=bc, sp=sp, t=t, &
-                                 lateral_mix=lateral_mix, epbl=epbl, kshear=kshear, mle=mle, gm=gm, &
+                                 lateral_mix=lateral_mix, epbl=epbl, kshear=kshear, mle=mle, &
                                  redi=redi, varmix=varmix, vmix_tidal=vmix_tidal, meke=meke, td=td, &
                                  cav=cav)
          end if
@@ -3198,6 +3188,12 @@ contains
          end if
       end if
       call probe_dS(grid, ms, "after rk2_average", 3, dyn%outer_step_count + 1)
+
+      ! ---- Gent-McWilliams thickness diffusion: its OWN sequential operator
+      ! on the CURRENT thickness, after the dynamics (MOM6 `thickness_diffuse`,
+      ! MOM.F90:1388), every outer step.  See `run_gm_step`.
+      call run_gm_step(grid, metrics, dyn, ct, va, ms, dt, gm, slopes, varmix, &
+                       wavespeed, vcoord, bc)
 
       ! Phase 2 (6b): advance the windowed-advect clock once per OUTER step
       ! (not per RK2 stage) when accumulating.  Reset to 0 by the drain.
@@ -3427,7 +3423,7 @@ contains
    subroutine run_continuity_chain(grid, metrics, dyn, ct, hd, va, redi, varmix, ms, &
                                    dt, therm_dt, therm_active, is_lagrangian, &
                                    h_min_floor, mass_out_weight, h_only, &
-                                   stage_id, step_id, bc, mle, gm)
+                                   stage_id, step_id, bc, mle)
       !! The slow horizontal continuity + tracer chain (ghost fills →
       !! constrained continuity+tracer split → reservoirs → halo/wrap →
       !! tracer hdiff → Redi → vertical advection), extracted verbatim
@@ -3455,7 +3451,6 @@ contains
       integer, intent(in) :: stage_id, step_id
       type(ocean_bc_state_t), intent(inout), optional :: bc
       type(ocean_mle_t), intent(inout), optional :: mle
-      type(ocean_gm_t), intent(inout), optional :: gm
 
       integer :: tr_mode
       real(wp) :: h_min_pass
@@ -3544,7 +3539,7 @@ contains
                                               uhbt=dyn%bt_work%bt_uhbt, &
                                               vhbt=dyn%bt_work%bt_vhbt, bc=bc, mle=mle, &
                                               mle_fold_active=dyn%is_thermo_step(), &
-                                              tracer_mode=tr_mode, gm=gm, &
+                                              tracer_mode=tr_mode, &
                                               h_min=h_min_pass, &
                                               visc_rem_u=dyn%bt_work%visc_rem_u, &
                                               visc_rem_v=dyn%bt_work%visc_rem_v, &
@@ -3554,7 +3549,7 @@ contains
                                               uhbt=dyn%bt_work%bt_uhbt, &
                                               vhbt=dyn%bt_work%bt_vhbt, mle=mle, &
                                               mle_fold_active=dyn%is_thermo_step(), &
-                                              tracer_mode=tr_mode, gm=gm, &
+                                              tracer_mode=tr_mode, &
                                               h_min=h_min_pass, &
                                               visc_rem_u=dyn%bt_work%visc_rem_u, &
                                               visc_rem_v=dyn%bt_work%visc_rem_v, &
@@ -3565,7 +3560,7 @@ contains
                                            uhbt=dyn%bt_work%bt_uhbt, &
                                            vhbt=dyn%bt_work%bt_vhbt, bc=bc, mle=mle, &
                                            mle_fold_active=dyn%is_thermo_step(), &
-                                           tracer_mode=tr_mode, gm=gm, &
+                                           tracer_mode=tr_mode, &
                                            h_min=h_min_pass, &
                                            u_cor=ms%u_av_layer, v_cor=ms%v_av_layer)
       else
@@ -3573,7 +3568,7 @@ contains
                                            uhbt=dyn%bt_work%bt_uhbt, &
                                            vhbt=dyn%bt_work%bt_vhbt, mle=mle, &
                                            mle_fold_active=dyn%is_thermo_step(), &
-                                           tracer_mode=tr_mode, gm=gm, &
+                                           tracer_mode=tr_mode, &
                                            h_min=h_min_pass, &
                                            u_cor=ms%u_av_layer, v_cor=ms%v_av_layer)
       end if
@@ -3678,6 +3673,105 @@ contains
          call profiler_stop("ocean_vertical_advect")
       end if
    end subroutine run_continuity_chain
+
+   subroutine run_gm_step(grid, metrics, dyn, ct, va, ms, dt, gm, slopes, varmix, &
+                          wavespeed, vcoord, bc)
+      !! Gent-McWilliams thickness diffusion as its OWN sequential operator,
+      !! run once per outer step AFTER the dynamics (the stage loop and, under
+      !! ssp_rk2, the stage average) — where MOM6 calls `thickness_diffuse`
+      !! (MOM.F90:1379-1395, after `step_MOM_dyn_split_RK2`, every dynamics
+      !! step):
+      !!
+      !!   1. `gm_compute_transports` fills `uhD`/`vhD` + `gm_src` from the
+      !!      thickness the dynamics LEFT, with the stored slopes and the
+      !!      VarMix/MEKE base KhTh refreshed at the top of the step;
+      !!   2. `continuity_gm_apply` moves `h_layer` and every tracer by them
+      !!      with the same `dt` — so the per-face availability cap
+      !!      `A·(h − H_VANISHED)/(4·dt)` bounds what is actually there
+      !!      (MOM_thickness_diffuse.F90:896-906, applied at :639-641);
+      !!   3. the h / tracer ghosts are refreshed (exchange, periodic wrap,
+      !!      fold), as after the resolved continuity;
+      !!   4. `eulerian_z` only: the bolus divergence is cancelled per layer by
+      !!      the vertical advection, exactly as the resolved one is.
+      !!
+      !! Until 2026-10 the transports were computed at the top of the step
+      !! from the stage-entry thickness and FOLDED into the resolved
+      !! continuity sweeps; the cap then bounded the wrong `h` and a partial
+      !! bed cell on an open z* step was driven negative (`rdb_ocean_gm`).
+      !!
+      !! Cadence: every outer step, with the outer `dt` (MOM6: every
+      !! dynamics step).  The fold path applied GM on thermo steps only, so
+      !! under `dt_therm_ratio > 1` it ran at 1/ratio of its strength.
+      !! No-op when GM is absent / disabled, the slopes slot is absent, or
+      !! thermodynamics is off.
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_metrics_t), intent(in) :: metrics
+      type(ocean_dyn_t), intent(inout) :: dyn
+      type(continuity_t), intent(inout) :: ct
+      type(ocean_vertical_advection_t), intent(inout) :: va
+      type(multilayer_state_t), intent(inout) :: ms
+      real(wp), intent(in) :: dt
+      type(ocean_gm_t), intent(inout), optional :: gm
+      type(ocean_slopes_t), intent(inout), optional :: slopes
+      type(ocean_varmix_t), intent(inout), optional :: varmix
+      type(ocean_wave_speed_t), intent(inout), optional :: wavespeed
+      type(ocean_vcoord_t), intent(in), optional :: vcoord
+      type(ocean_bc_state_t), intent(inout), optional :: bc
+
+      integer :: tr_mode
+      logical :: use_ext, is_eulerian
+      real(wp) :: budget_w
+
+      if (.not. present(gm)) return
+      if (.not. present(slopes)) return
+      if (.not. gm%enable) return
+      if (.not. dyn%enable_thermodynamics) return
+
+      call profiler_start("ocean_gm")
+      use_ext = .false.
+      if (present(varmix) .and. present(wavespeed)) use_ext = varmix%enable
+      if (use_ext) then
+         call gm_compute_transports(grid, metrics, gm, slopes, ms, dt, &
+                                    khth_ext_u=varmix%khth_u, khth_ext_v=varmix%khth_v)
+      else
+         call gm_compute_transports(grid, metrics, gm, slopes, ms, dt)
+      end if
+
+      tr_mode = TR_MODE_ADVECT
+      if (dyn%dt_tracer_advect_ratio > 1) tr_mode = TR_MODE_ACCUMULATE
+      ! Post-average budget weight: the console multiplies the heat/salt
+      ! accumulators by `ocean_budget_stage_weight` (0.5 ssp_rk2, 1
+      ! pred_corr); this operator runs once, after the average.
+      budget_w = 1.0_wp/ocean_budget_stage_weight(dyn%split_scheme == SPLIT_SCHEME_PRED_CORR)
+      is_eulerian = .false.
+      if (present(vcoord)) is_eulerian = vcoord%coord_type == VCOORD_EULERIAN_Z
+      if (present(bc)) then
+         call continuity_gm_apply(grid, metrics, ct, ms, gm, dt, budget_w, tr_mode, bc=bc, &
+                                  set_flux_h=is_eulerian)
+      else
+         call continuity_gm_apply(grid, metrics, ct, ms, gm, dt, budget_w, tr_mode, &
+                                  set_flux_h=is_eulerian)
+      end if
+      call ocean_halo_exchange_ml_state(ms)
+      if (present(bc)) then
+         call ocean_periodic_wrap_state(grid, bc, ms, skip_x=ocean_halo_is_decomposed_x(), &
+                                        skip_y=ocean_halo_is_decomposed_y())
+         call ocean_fold_wrap_state(grid, bc, ms)
+      end if
+      if (is_eulerian) then
+         ! Pin the Eulerian layers: the vertical w-divergence cancels the
+         ! bolus divergence `continuity_gm_apply` left in `flux_h_layer`,
+         ! carrying the tracers with it (column-local, ghosts included).
+         call compute_w_from_continuity(grid, va, ms)
+         call tracer_advect_vertical(grid, va, ms, dt)
+      end if
+      if (dyn%check_h_positive) then
+         call check_h_positive_or_die(grid, ms, "after the GM operator", 3, &
+                                      dyn%outer_step_count + 1, check_layers=.true.)
+      end if
+      call profiler_stop("ocean_gm")
+      call probe_dS(grid, ms, "after GM", 3, dyn%outer_step_count + 1)
+   end subroutine run_gm_step
 
    subroutine run_meke_step(grid, metrics, gm, varmix, wavespeed, hv, ms, dt, meke)
       !! Thin dispatcher: call `meke_step` only when the MEKE slot is present
@@ -4037,7 +4131,7 @@ contains
 
    subroutine run_stage_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
                               va, hd, vd, vmix, ms, dt, n_inner, sf, geo, stage, vcoord, bc, sp, t, &
-                              lateral_mix, epbl, kshear, mle, gm, redi, varmix, vmix_tidal, meke, &
+                              lateral_mix, epbl, kshear, mle, redi, varmix, vmix_tidal, meke, &
                               eta_forcing, td, cav, eta_pf_seam)
       !! One FE stage of the split-explicit step.  See the
       !! `ocean_dyn_step_split` header for the design.
@@ -4116,10 +4210,6 @@ contains
          !! Fox-Kemper MLE slot (B5).  Forwarded to
          !! `continuity_tracer_step_split` to fold the precomputed
          !! `uhml`/`vhml` into the mass fluxes.  See `ocean_dyn_step_split`.
-      type(ocean_gm_t), intent(inout), optional :: gm
-         !! GM thickness-diffusion slot (capability [2]).  Forwarded to
-         !! `continuity_tracer_step_split` to fold the precomputed
-         !! `uhD`/`vhD` into the mass fluxes.  See `ocean_dyn_step_split`.
       type(ocean_redi_t), intent(inout), optional :: redi
          !! Redi neutral-diffusion slot (capability [3]).  The Phase-A
          !! coefficients are precomputed in `ocean_dyn_step_split`; here
@@ -4746,7 +4836,7 @@ contains
          call run_continuity_chain(grid, metrics, dyn, ct, hd, va, redi, varmix, ms, &
                                    dt, therm_dt, therm_active, is_lagrangian, &
                                    h_min_floor, chain_weight, is_pred, &
-                                   stage_id, step_id, bc=bc, mle=mle, gm=gm)
+                                   stage_id, step_id, bc=bc, mle=mle)
       end if
 
       ! ---- 6. Velocity-tendency applies ----
@@ -5067,7 +5157,7 @@ contains
          call run_continuity_chain(grid, metrics, dyn, ct, hd, va, redi, varmix, ms, &
                                    dt, therm_dt, therm_active, is_lagrangian, &
                                    h_min_floor, chain_weight, is_pred, &
-                                   stage_id, step_id, bc=bc, mle=mle, gm=gm)
+                                   stage_id, step_id, bc=bc, mle=mle)
       end if
 
       ! ---- 10. Stage-end seam reconciliation (tripolar only) ----

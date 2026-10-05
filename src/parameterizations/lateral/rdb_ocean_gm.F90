@@ -2,8 +2,27 @@
 module rdb_ocean_gm
    !! Gent & McWilliams (1990) / Griffies (1998) skew-flux thickness
    !! diffusion.  The eddy-induced ("bolus") overturning is realized as a
-   !! layer THICKNESS flux (never an explicit velocity), folded into the
-   !! continuity / windowed-PPM tracer path like the Fox-Kemper MLE slot.
+   !! layer THICKNESS flux (never an explicit velocity), applied as its OWN
+   !! sequential operator on the CURRENT thickness, after the dynamics of
+   !! every outer step (`rdb_continuity :: continuity_gm_apply`, driven by
+   !! `rdb_ocean_dyn :: run_gm_step`) — MOM6's `thickness_diffuse`, called
+   !! from `step_MOM` (MOM.F90:1388) after `step_MOM_dyn_split_RK2`, which
+   !! updates `h` in place (MOM_thickness_diffuse.F90:639-641).
+   !!
+   !! ### Why sequential, not folded
+   !!
+   !! The per-face availability cap `h_avail = A·(h − H_VANISHED)/(4·dt)`
+   !! (MOM_thickness_diffuse.F90:896-906) bounds four faces' outflow by
+   !! `h − H_VANISHED`, so `h_new >= H_VANISHED` — but ONLY for the `h` it
+   !! was computed from.  Until 2026-10 this slot computed `uhD` from the
+   !! stage-entry `h` and FOLDED it into the resolved continuity sweeps
+   !! (`gm_fold_x/y`), so the cap bounded the stage-entry thickness and the
+   !! resolved outflow came on top: on the 1-degree Southern Ocean (z*,
+   !! open steps) an 8.6 cm partial bed cell with two open faces onto
+   !! fillers was drained by GM at the cap on all four faces and the
+   !! resolved flux took it to −8.2e-4 m.  Computed here from the thickness
+   !! the dynamics LEFT, the cap bounds what is actually there (prototype:
+   !! `python_prototypes/gm_sequential/gm_sequential.py`).
    !!
    !! At each u/v face the eddy streamfunction is
    !!     Sfn_unlim = -(KhTh * dy_Cu) * Slope
@@ -35,9 +54,9 @@ module rdb_ocean_gm
    !! Under `z_fixed` a face column is not the whole water column: a layer
    !! that is an inert FILLER on either side (inside the bed or the ice
    !! draft) is a WALL for that layer at that face (`metrics%open_u/open_v
-   !! == 0`).  Continuity applies that mask to the resolved flux BEFORE
-   !! `gm_fold_x/y` adds `uhD`, so GM must build its overturning on the
-   !! OPEN part of each face column itself.  With the knob on, each face
+   !! == 0`).  Continuity applies that mask to the resolved flux, and GM
+   !! runs on its own (it does not pass through that mask), so GM must
+   !! build its overturning on the OPEN part of each face column itself.  With the knob on, each face
    !! first marks its open layers,
    !!     ok(k) = open(k) .and. live(h_W(k)) .and. live(h_E(k))
    !! (`rdb_vl_is_live`, the one vanished-layer predicate), and the
@@ -97,7 +116,6 @@ module rdb_ocean_gm
 
    public :: ocean_gm_t
    public :: gm_compute_transports
-   public :: gm_fold_x, gm_fold_y
 
    type :: ocean_gm_t
       !! Gent-McWilliams thickness-diffusion state.  All fields default to
@@ -107,8 +125,8 @@ module rdb_ocean_gm
          !! True between `init` and `destroy`; gate on this (never on
          !! `allocated`, which misses the GPU mapping).
       logical :: enable = .false.
-         !! Master switch.  Off => `gm_compute_transports` is a no-op and
-         !! the folds add nothing => bit-identity preserved.  Requires the
+         !! Master switch.  Off => `gm_compute_transports` and
+         !! `continuity_gm_apply` are no-ops => bit-identity preserved.  Requires the
          !! slopes slot (`&ocean_slopes_nml enable`); the loud invariant is
          !! checked at configure (`configure_ocean_gm`).
       real(wp) :: khth = 0.0_wp
@@ -135,12 +153,13 @@ module rdb_ocean_gm
          !! Thickness diffusivity at v-faces (m^2/s), `(nx,ny+1)`.
 
       ! ---- Per-layer GM bolus transports (faces) ----
-      ! k=1 bed, k=nz surface.  Added to the continuity mass fluxes before
-      ! the divergence; Sum_k over each face is ~0 (closed overturning).
+      ! k=1 bed, k=nz surface.  Sum_k over each face is ~0 (closed
+      ! overturning).  Step-internal: filled from the current h and spent
+      ! by `continuity_gm_apply` in the same outer step (not restart state).
       real(wp), allocatable :: uhD(:, :, :)
-         !! GM x-face transport (m^3/s), `(nx+1,ny,nz)`.  Filled once per
-         !! outer step at thermo cadence, folded into continuity every
-         !! dynamics call via `gm_fold_x`.
+         !! GM x-face transport (m^3/s), `(nx+1,ny,nz)`.  Filled every outer
+         !! step from the post-dynamics thickness and applied at once by
+         !! `continuity_gm_apply`.
       real(wp), allocatable :: vhD(:, :, :)
          !! GM y-face transport (m^3/s), `(nx,ny+1,nz)`.
 
@@ -148,6 +167,9 @@ module rdb_ocean_gm
       real(wp), allocatable :: gm_src(:, :)
          !! Potential-energy release `-1/4 Sum_k rho0 KH Slope^2 N^2 h`
          !! (W/m^2-ish; >= 0 for a stable tilted column), `(nx,ny)`.
+         !! CARRIED state: filled after the dynamics of step n, read by
+         !! `meke_step` at the top of step n+1, so it is in the restart
+         !! registry (`gm_src`).
    contains
       procedure, non_overridable :: init => ocean_gm_init
       procedure, non_overridable :: destroy => ocean_gm_destroy
@@ -242,10 +264,13 @@ contains
    subroutine gm_compute_transports(grid, metrics, this, slopes, ms, dt, &
                                     khth_ext_u, khth_ext_v)
       !! Fill `uhD`/`vhD` (m^3/s) with the GM bolus thickness transport and
-      !! `gm_src` with the PE release.  Run once per outer step at THERMO
-      !! cadence, AFTER `ocean_slopes_compute` and BEFORE the continuity
-      !! divergence.  No-op when disabled, uninitialised, or the slopes
-      !! slot is absent/disabled.
+      !! `gm_src` with the PE release, from the CURRENT `ms%h_layer` and the
+      !! stored slopes.  Run every outer step AFTER the dynamics, and
+      !! immediately followed by `continuity_gm_apply` with the SAME `dt`
+      !! and the same, untouched `h_layer`: the availability cap
+      !! `A·(h − H_VANISHED)/(4·dt)` bounds that `h` and no other (see the
+      !! module docstring).  No-op when disabled, uninitialised, or the
+      !! slopes slot is absent/disabled.
       !!
       !! `khth_ext_u/khth_ext_v` (optional): spatially-varying PRE-CFL base
       !! KhTh face field from VarMix.  When present the per-face CFL clamp
@@ -779,41 +804,6 @@ contains
          gm_src(i, j) = 0.25_wp*rho0*acc
       end do
    end subroutine gm_pe_release
-
-   ! =================================================================
-   ! Fold into continuity mass fluxes (called inside the split step)
-   ! =================================================================
-
-   pure subroutine gm_fold_x(this, mass_flux_x_layer, nx1, ny, nz)
-      !! Add the GM x-face bolus transport into the per-layer zonal mass
-      !! flux, AFTER `continuity_zonal_flux` fills it and BEFORE the zonal
-      !! tracer advect / divergence — so the augmented flux transports both
-      !! h and tracers (conservative; no velocity touched).  No-op when
-      !! disabled.
-      type(ocean_gm_t), intent(in) :: this
-      integer, intent(in) :: nx1, ny, nz
-      real(wp), intent(inout) :: mass_flux_x_layer(nx1, ny, nz)
-      integer :: i, j, k
-      if (.not. this%is_init) return
-      if (.not. this%enable) return
-      do concurrent(k=1:nz, j=1:ny, i=1:nx1)
-         mass_flux_x_layer(i, j, k) = mass_flux_x_layer(i, j, k) + this%uhD(i, j, k)
-      end do
-   end subroutine gm_fold_x
-
-   pure subroutine gm_fold_y(this, mass_flux_y_layer, nx, ny1, nz)
-      !! Add the GM y-face bolus transport into the per-layer meridional
-      !! mass flux.  Mirror of `gm_fold_x`.  No-op when disabled.
-      type(ocean_gm_t), intent(in) :: this
-      integer, intent(in) :: nx, ny1, nz
-      real(wp), intent(inout) :: mass_flux_y_layer(nx, ny1, nz)
-      integer :: i, j, k
-      if (.not. this%is_init) return
-      if (.not. this%enable) return
-      do concurrent(k=1:nz, j=1:ny1, i=1:nx)
-         mass_flux_y_layer(i, j, k) = mass_flux_y_layer(i, j, k) + this%vhD(i, j, k)
-      end do
-   end subroutine gm_fold_y
 
    pure function ocean_gm_bytes(this) result(nbytes)
       !! Counted allocatable footprint of the GM slot

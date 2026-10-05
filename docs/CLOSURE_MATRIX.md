@@ -153,13 +153,35 @@ bathymetry reads zero slope on every coordinate — `test_ocean_slopes_datum`)
 is turned into per-layer thickness transports
 (`uhD`/`vhD`) by the MOM6 `uhtot` column recurrence with a safe-streamfunction
 slope limiter + a mass-availability limiter (keeps `h ≥ H_VANISHED` without a
-post-hoc clamp).  Folded into the continuity mass fluxes BEFORE the divergence
-like Fox-Kemper — conservative by construction (`Σ_k uhD = 0`).  KhTh is a 2D
-face field (constant-fill for v1; CFL-clamped via `khth_max_cfl`); the VarMix /
-MEKE seam will make it spatially varying (`+=`).  `gm_src` carries the
-`-¼·Σ_k ρ₀·KH·S²·N²·h` PE release for the future MEKE coupling.  Runs at THERMO
-cadence (owns the slope refresh in the split driver).  Deferred: bottom-blocking,
-FGNV/EBT/int_slope.  Default off ⇒ bit-identical.
+post-hoc clamp).  **Its own sequential operator on the CURRENT thickness**, as
+MOM6's `thickness_diffuse` (MOM.F90:1388, after `step_MOM_dyn_split_RK2`;
+in-place `h` update at MOM_thickness_diffuse.F90:639-641): every outer step,
+after the stage loop (and the ssp_rk2 average), `run_gm_step` computes
+`uhD`/`vhD` from the thickness the dynamics LEFT and `continuity_gm_apply` moves
+`h` and every tracer by them with the same `dt` — through the resolved path's
+own PPM tracer kernels (x half, seam refresh, y half), or, under windowed tracer
+advection, into the `uhtr`/`vhtr` window accumulator (MOM6 `uhtr += uhD·dt`).
+The per-face cap `A·(h−H_VANISHED)/(4·dt)` (MOM_thickness_diffuse.F90:896-906)
+therefore bounds what is actually there: no layer goes below
+`min(h, H_VANISHED)`.  Until 2026-10 the transports were computed at the top of
+the step from the stage-ENTRY `h` and FOLDED into the resolved continuity
+sweeps, so the cap bounded the wrong thickness and the resolved outflow came on
+top — an 8.6 cm partial bed cell on the 1° Southern Ocean's open z\* steps was
+drained to `−8.2e-4 m` (test `gm_sequential_partial_cell`; prototype
+`python_prototypes/gm_sequential/`).  Conservative by construction
+(`Σ_k uhD = 0`); zeroed on every non-periodic physical edge face (walls,
+sponges, every OBC — MOM6 `OBCmaskCu/Cv`), so no GM flux leaves the domain.
+Under `eulerian_z` the vertical advection cancels the bolus divergence per layer
+exactly as it cancels the resolved one.  KhTh is a 2D face field
+(constant-fill; CFL-clamped via `khth_max_cfl`; VarMix / MEKE make it
+spatially varying).  `gm_src` carries the `-¼·Σ_k ρ₀·KH·S²·N²·h` PE release
+MEKE reads at the top of the next step (restart-registered, as are the slopes
+and the VarMix KhTh the operator reads between thermo refreshes).  The slope /
+VarMix / MEKE refresh runs at THERMO cadence at the top of the step; the
+operator itself runs every outer step (MOM6: every dynamics step — the fold
+applied GM on thermo steps only, i.e. at `1/dt_therm_ratio` strength).
+Deferred: bottom-blocking, FGNV/EBT/int_slope, refreshing the slopes on the
+post-dynamics `h` (MOM6 recomputes them there).  Default off ⇒ bit-identical.
 **Partial-step z-level faces** (`&vcoord_nml zfixed_closed_faces`): GM builds
 its overturning on each face's OPEN column — the layers open at that face
 (`open_u/open_v`) and live on both sides.  A layer outside it gets zero
