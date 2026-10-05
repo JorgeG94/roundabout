@@ -380,11 +380,6 @@ ROWS = [
                  "global reductions its configure does not take.",
                  "'Single-rank-only features to lift: ... cavity'",
                  message=r"&ocean_cavity_dyn_nml enable=\.true\. is single-rank in v1"),
-    _single_rank("tripolar_fold_px1", ("tripolar",),
-                 "The tripolar north fold is single-rank IN X (px = 1); 2x2 and 4x1 are refused "
-                 "and the leg falls back to the 1x2 north-south split, which must be bitwise.",
-                 "distributed tripolar fold (docs/plans/tripolar_fold_px_gt_1.md, PRs 1-7)",
-                 message=r"Tripolar north fold with px = \d+ > 1"),
 ]
 
 
