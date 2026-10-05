@@ -758,7 +758,9 @@ contains
       !! Build one column's TOP-DOWN interface P/T/S + density derivs from the
       !! BOTTOM-UP native column, restricted to the face's open window
       !! `kb..kt` (`nk = kt-kb+1` layers; the whole column `1..nz` off the
-      !! z-level closed-face path).  Layer T/S = hTr/h (floored); interface
+      !! z-level closed-face path).  Layer T/S = the I1′ column read
+      !! (`rdb_vl_column_conc`: `hTr/h` on a live layer, the donor's
+      !! concentration on a vanished one); interface
       !! T/S = PPM edge reconstruction on the flipped window; interface P =
       !! surface-relative hydrostatic, seeded with the column ABOVE the
       !! window (fillers under an ice draft; nothing — exactly 0 — when
@@ -773,18 +775,35 @@ contains
       real(wp), intent(out) :: Pint(nz + 1), Tint(nz + 1), Sint(nz + 1)
       real(wp), intent(out) :: dRdT(nz + 1), dRdS(nz + 1)
       real(wp) :: htd(NZ_STACK_MAX), ttd(NZ_STACK_MAX), std(NZ_STACK_MAX)
-      real(wp) :: rho_i, dsv_dt, dsv_ds, he
+      real(wp) :: hs(NZ_STACK_MAX), qs(NZ_STACK_MAX), cT(NZ_STACK_MAX), cS(NZ_STACK_MAX)
+      real(wp) :: rho_i, dsv_dt, dsv_ds
       integer :: k, kf, nk
 
       nk = kt - kb + 1
+      ! Layer T/S from the FULL native column by the I1′ rule
+      ! (`rdb_vl_column_conc`): a vanished layer reads its donor's
+      ! concentration, never `hTr/max(h, H_DIV_EPS)`.  The floored divide is
+      ! `hTr/1e-20` on a layer the continuity step has taken to (or below)
+      ! zero, which on an OPEN z-like step (closed faces off, so the window
+      ! is the whole column and fillers are paired) read T ~ 1e17 and put
+      ! 1e12-1e27 of content into the face (1-degree Southern Ocean, zstar,
+      ! step 13).  A live layer reads `hTr/h`, the same divide as before.
+      do k = 1, nz
+         hs(k) = h_col(k)
+         qs(k) = thtr_col(k)
+      end do
+      call rdb_vl_column_conc(nz, hs, qs, cT)
+      do k = 1, nz
+         qs(k) = shtr_col(k)
+      end do
+      call rdb_vl_column_conc(nz, hs, qs, cS)
       ! Flip the native bottom-up window -> top-down layer arrays.  Native
-      ! layer k maps to top-down layer (kt+1-k).  Layer T/S = hTr/h (floored).
+      ! layer k maps to top-down layer (kt+1-k).
       do k = kb, kt
          kf = kt + 1 - k
-         he = max(h_col(k), H_DIV_EPS)
          htd(kf) = h_col(k)
-         ttd(kf) = thtr_col(k)/he
-         std(kf) = shtr_col(k)/he
+         ttd(kf) = cT(k)
+         std(kf) = cS(k)
       end do
 
       ! PPM interface edge values (top-down) for T and S.
@@ -1048,22 +1067,23 @@ contains
       !! `aLe/aRe` from the bottom-up native (h, hTr) column (fixed-size
       !! NZ_STACK_MAX copies), restricted to the face's open window
       !! `kb..kt` (`1..nz` off the z-level closed-face path) — indexed in
-      !! the WINDOW top-down frame, `1..nk`, `nk = kt-kb+1`.  Tlay = hTr/h
-      !! floored.  Mirrors MOM6 interface_scalar + ppm_left_right_edge_values.
+      !! the WINDOW top-down frame, `1..nk`, `nk = kt-kb+1`.  Tlay = the I1′
+      !! column read (`rdb_vl_column_conc`, see `redi_build_column`).
+      !! Mirrors MOM6 interface_scalar + ppm_left_right_edge_values.
       integer, intent(in) :: kb, kt
          !! Native (bottom-up) open window, `1 <= kb <= kt`.
       real(wp), intent(in) :: h_col(NZ_STACK_MAX), htr_col(NZ_STACK_MAX)
       real(wp), intent(out) :: Tlay(NZ_STACK_MAX), Tint(NZ_STACK_MAX + 1)
       real(wp), intent(out) :: aLe(NZ_STACK_MAX), aRe(NZ_STACK_MAX)
-      real(wp) :: htd(NZ_STACK_MAX), tedge(NZ_STACK_MAX + 1)
-      real(wp) :: he, alk, ark, tlk
+      real(wp) :: htd(NZ_STACK_MAX), tedge(NZ_STACK_MAX + 1), cc(NZ_STACK_MAX)
+      real(wp) :: alk, ark, tlk
       integer :: k, kf, nk
       nk = kt - kb + 1
+      call rdb_vl_column_conc(kt, h_col, htr_col, cc)
       do k = kb, kt
          kf = kt + 1 - k
-         he = max(h_col(k), H_DIV_EPS)
          htd(kf) = h_col(k)
-         Tlay(kf) = htr_col(k)/he
+         Tlay(kf) = cc(k)
       end do
       call redi_interface_scalar(nk, htd, Tlay, tedge)
       do k = 1, nk + 1
