@@ -225,6 +225,8 @@ program rdb_tests
 #endif
    use test_ocean_bottom_drag, only: ocean_bottom_drag_collect => collect_ocean_bottom_drag_tests
    use test_ocean_top_drag, only: ocean_top_drag_collect => collect_ocean_top_drag_tests
+   use test_ocean_bt_rem_from_visc_rem, only: ocean_bt_rem_from_visc_rem_collect => &
+                                              collect_bt_rem_from_visc_rem_tests
    use test_ocean_bl_under_ice, only: ocean_bl_under_ice_collect => &
                                       collect_ocean_bl_under_ice_tests
    use test_ocean_cfl_trunc, only: ocean_cfl_trunc_collect => collect_ocean_cfl_trunc_tests
@@ -422,6 +424,7 @@ program rdb_tests
 #endif
                 new_testsuite("ocean_bottom_drag", ocean_bottom_drag_collect), &
                 new_testsuite("ocean_top_drag", ocean_top_drag_collect), &
+                new_testsuite("ocean_bt_rem_from_visc_rem", ocean_bt_rem_from_visc_rem_collect), &
                 new_testsuite("ocean_bl_under_ice", ocean_bl_under_ice_collect), &
                 new_testsuite("ocean_cfl_trunc", ocean_cfl_trunc_collect), &
                 new_testsuite("ocean_periodic", ocean_periodic_collect), &

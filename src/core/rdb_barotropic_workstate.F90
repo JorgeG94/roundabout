@@ -143,6 +143,22 @@ module rdb_barotropic_workstate
          !! `bt_correction_visc_rem` is on; `dt_vel ≡ dt` on both ssp_rk2
          !! stages, so the split `dt_remnant` path is never taken there.
 
+      logical :: bt_rem_from_visc_rem = .false.
+         !! PR-2 (bt-rem-from-av-rem, `&ocean_bt_nml
+         !! bt_rem_from_visc_rem`): `compute_bt_rem_from_visc_rem` builds
+         !! `bt_rem_u/v` from `av_rem_u/v` (`:= Σ_k frhat_k·visc_rem_k`,
+         !! `frhat_k` the face layer fraction `derive_bt_from_layers`
+         !! uses) instead of the linear-piston law — MOM6
+         !! `MOM_barotropic.F90:1553-1580`.  Mutually exclusive with
+         !! `bt_substep_drag` (double-counted bed drag) and `bt_halo > 0`
+         !! (checked in `validate_config`).
+      logical :: bt_strong_drag = .false.
+         !! MOM6 `BT_STRONG_DRAG` (`:1561-1570`): the rational-
+         !! approximation `bt_rem` form.  Requires `bt_rem_from_visc_rem`.
+      logical :: bt_rescale_strong_drag = .false.
+         !! MOM6 `RESCALE_STRONG_DRAG` (`:1989-1997`).  Requires
+         !! `bt_strong_drag`.
+
       logical :: bt_correction_bc_pgf = .false.
          !! When `.true.`, `apply_bt_correction` adds the per-layer
          !! baroclinic-PGF retro-correction on top of the uniform /
@@ -355,6 +371,21 @@ module rdb_barotropic_workstate
       real(wp), allocatable :: bt_rem_v(:, :)
          !! v-face counterpart, shape (nx, ny+1).
 
+      ! ---- PR-2 (bt-rem-from-av-rem): visc_rem depth mean ----
+      ! `av_rem_u/v := Σ_k frhat_k·visc_rem_k`, the frhat-weighted (plain
+      ! face-thickness-fraction, NOT visc_rem-weighted — see
+      ! `compute_av_rem`'s docstring for the distinction from
+      ! `face_depth_mean_rem_u`'s `wt_u`) depth mean of the viscous
+      ! remnant, built once per barotropic call by
+      ! `compute_bt_rem_from_visc_rem` when `bt_rem_from_visc_rem` is on
+      ! (MOM6 `MOM_barotropic.F90:1553-1559`).  Allocated unconditionally
+      ! (cheap, 2D, same class as `bt_rem_u/v`); default 1.0 so an
+      ! unused array is still well-defined if ever read.
+      real(wp), allocatable :: av_rem_u(:, :)
+         !! u-face visc_rem depth mean, shape (nx+1, ny).
+      real(wp), allocatable :: av_rem_v(:, :)
+         !! v-face counterpart, shape (nx, ny+1).
+
       ! ---- Barotropic linear (Rayleigh) wave drag (Egbert & Ray 2001;
       ! Jayne & St Laurent 2001) ----
       ! Static per-face piston velocity `r_H` [m/s] representing the
@@ -522,6 +553,8 @@ contains
       ! still get them.
       allocate (this%bt_rem_u(nx + 1, ny), source=1.0_wp)
       allocate (this%bt_rem_v(nx, ny + 1), source=1.0_wp)
+      allocate (this%av_rem_u(nx + 1, ny), source=1.0_wp)
+      allocate (this%av_rem_v(nx, ny + 1), source=1.0_wp)
 
       ! BT_cont_type coefficient packs are allocated lazily by the
       ! driver after the namelist toggle is read.
@@ -572,6 +605,8 @@ contains
       if (allocated(this%visc_rem_v)) deallocate (this%visc_rem_v)
       if (allocated(this%bt_rem_u)) deallocate (this%bt_rem_u)
       if (allocated(this%bt_rem_v)) deallocate (this%bt_rem_v)
+      if (allocated(this%av_rem_u)) deallocate (this%av_rem_u)
+      if (allocated(this%av_rem_v)) deallocate (this%av_rem_v)
       if (allocated(this%lwd_drag_u)) deallocate (this%lwd_drag_u)
       if (allocated(this%lwd_drag_v)) deallocate (this%lwd_drag_v)
       if (allocated(this%BTCL_u)) deallocate (this%BTCL_u)
@@ -612,6 +647,8 @@ contains
       !$acc enter data copyin(this%bt_ubt_prev, this%bt_vbt_prev)
       ! bt_rem_u/v: always present (barotropic-only path uses them too)
       !$acc enter data copyin(this%bt_rem_u, this%bt_rem_v)
+      ! av_rem_u/v: PR-2, same "always present" posture as bt_rem_u/v.
+      !$acc enter data copyin(this%av_rem_u, this%av_rem_v)
       ! Wave-drag piston-velocity maps: filled on the host at configure
       ! time and never written on the device, so this MUST be `copyin`
       ! (not `create`) — see CLAUDE.md gotcha (2).  Lazy: allocated only
@@ -674,6 +711,7 @@ contains
       !$acc exit data delete(this%bt_zeta_corner, this%bt_ke_centre, this%bt_eta_new)
       !$acc exit data delete(this%bt_ubt_prev, this%bt_vbt_prev)
       !$acc exit data delete(this%bt_rem_u, this%bt_rem_v)
+      !$acc exit data delete(this%av_rem_u, this%av_rem_v)
       if (allocated(this%lwd_drag_u)) then
          !$acc exit data delete(this%lwd_drag_u, this%lwd_drag_v)
       end if
@@ -752,6 +790,8 @@ contains
                + arr_bytes(this%visc_rem_v) &
                + arr_bytes(this%bt_rem_u) &
                + arr_bytes(this%bt_rem_v) &
+               + arr_bytes(this%av_rem_u) &
+               + arr_bytes(this%av_rem_v) &
                + arr_bytes(this%lwd_drag_u) &
                + arr_bytes(this%lwd_drag_v) &
                + arr_bytes(this%h_face_up_x) &

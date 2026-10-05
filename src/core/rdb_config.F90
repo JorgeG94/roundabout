@@ -711,6 +711,47 @@ module rdb_config
          !! depth-mean ballistically (PGF_BUG.md §9).  Requires
          !! `correction_visc_rem = .true.` (the visc_rem producer);
          !! checked in `validate_config`.
+      logical :: bt_rem_from_visc_rem = .false.
+         !! PR-2 (bt-rem-from-av-rem): `bt_rem_u/v` built from the SAME
+         !! viscous remnant the layered momentum solve uses, instead of
+         !! the linear-piston `substep_drag` law or the static `1.0`
+         !! no-op. MOM6 `MOM_barotropic.F90:1553-1580`:
+         !! `av_rem = Σ_k frhat_k·visc_rem_k` (the visc_rem depth mean,
+         !! `frhat_k` the face layer fraction `derive_bt_from_layers`
+         !! already uses), then `bt_rem = mask·av_rem**(1/n_inner)`
+         !! (zero where `mask·av_rem <= 0`), built ONCE per barotropic
+         !! call — after the visc_rem producer, before the inner
+         !! substeps — into the existing `bt_work%bt_rem_u/v` multiplier
+         !! the substep loop already reads.  This is the fix for the
+         !! bbl_glue day-253 instability (the barotropic solver was
+         !! seeing weak explicit drag while the layers were strongly
+         !! glued): the fast mode now feels the SAME friction.  Default
+         !! `.false.` ⇒ no answer change.  Requires `correction_visc_rem
+         !! = .true.` (the visc_rem producer); mutually exclusive with
+         !! `substep_drag` (bed drag would be double-counted — once
+         !! inside visc_rem via the glue/implicit_drag fold, once again
+         !! via the linear piston) and with `bt_halo > 0` (the wide-halo
+         !! BT clone's `metrics_w`/halo-widened arrays carry no
+         !! `av_rem`/`visc_rem` ghost width yet — same posture as
+         !! porous). Composes with `wave_drag` (multiplied in after).
+      logical :: strong_drag = .false.
+         !! MOM6 `BT_STRONG_DRAG` (default `.false.`, `:1561-1570`):
+         !! replace the plain power form with the rational approximation
+         !! `bt_rem = mask·n_inner·av_rem/(1 + (n_inner-1)·av_rem)`, which
+         !! damps LESS aggressively per substep for a given `av_rem` —
+         !! recommended only if the plain `av_rem**(1/n_inner)` form still
+         !! leaves the acceptance-gate run unstable (D3, a measured
+         !! deviation to report, not a default).  Requires
+         !! `bt_rem_from_visc_rem = .true.`; inert otherwise (checked in
+         !! `validate_config`).
+      logical :: rescale_strong_drag = .false.
+         !! MOM6 `RESCALE_STRONG_DRAG` (`:1989-1997`): under `strong_drag`,
+         !! `bt_rem**n_inner /= av_rem` exactly (the rational form is only
+         !! an approximation), so the barotropic-correction `Δu` is
+         !! rescaled by `min(bt_rem**n_inner/av_rem, 1.0)` before it is
+         !! folded into the layers, keeping the correction consistent
+         !! with the TRUE depth-mean remnant.  Requires `strong_drag =
+         !! .true.`; inert (and refused) otherwise.
       logical :: correction_bc_pgf = .false.
          !! Adds a per-layer baroclinic-PGF retro-correction for the η
          !! change during the BT substep.  Requires `pgf%form = "fv_mom6"`.
@@ -5281,6 +5322,51 @@ contains
                              "then carries no drag, so visc_rem = 1 identically and the "// &
                              "BT corrector reduces to the uniform fold")
       end if
+      ! PR-2 (bt-rem-from-av-rem): `bt_rem_from_visc_rem` reads the same
+      ! visc_rem producer arrays as the other `*_visc_rem` knobs.
+      if (cfg%ocean%bt%bt_rem_from_visc_rem .and. .not. cfg%ocean%bt%correction_visc_rem) then
+         call logger%error("&ocean_bt_nml bt_rem_from_visc_rem=.true. requires "// &
+                           "correction_visc_rem=.true. — that knob is the visc_rem "// &
+                           "producer; without it av_rem = 1 identically and the chain "// &
+                           "is a no-op gate, not the MOM6 damping path")
+         has_error = .true.
+      end if
+      ! D2: `substep_drag`'s linear piston and the visc_rem chain both put
+      ! bed drag into bt_rem — composing them double-counts it (once via
+      ! the glue/implicit_drag fold inside visc_rem, once via the piston).
+      if (cfg%ocean%bt%bt_rem_from_visc_rem .and. cfg%ocean%bt%substep_drag) then
+         call logger%error("&ocean_bt_nml bt_rem_from_visc_rem=.true. is mutually "// &
+                           "exclusive with substep_drag=.true. (bed drag would be "// &
+                           "double-counted: once inside the visc_rem producer via the "// &
+                           "bbl_glue/implicit_drag fold, once again via the linear "// &
+                           "piston law)")
+         has_error = .true.
+      end if
+      ! Decomposition: av_rem/bt_rem are built on the SAME normal-width
+      ! face stencil visc_rem occupies (valid after PR-1's halo refresh);
+      ! the wide-halo BT clone's metrics_w/halo-widened arrays carry no
+      ! av_rem/visc_rem ghost width yet — same posture as porous.
+      if (cfg%ocean%bt%bt_rem_from_visc_rem .and. cfg%ocean%bt%bt_halo > 0) then
+         call logger%error("&ocean_bt_nml bt_rem_from_visc_rem=.true. is mutually "// &
+                           "exclusive with bt_halo > 0 (the wide-halo BT clone carries "// &
+                           "no av_rem/visc_rem ghost-width statistics, like porous)")
+         has_error = .true.
+      end if
+      ! D3: BT_STRONG_DRAG / RESCALE_STRONG_DRAG are refinements OF the
+      ! av_rem chain, not independent knobs.
+      if (cfg%ocean%bt%strong_drag .and. .not. cfg%ocean%bt%bt_rem_from_visc_rem) then
+         call logger%error("&ocean_bt_nml strong_drag=.true. requires "// &
+                           "bt_rem_from_visc_rem=.true. — the rational-approximation "// &
+                           "bt_rem form is only defined in terms of av_rem")
+         has_error = .true.
+      end if
+      if (cfg%ocean%bt%rescale_strong_drag .and. .not. cfg%ocean%bt%strong_drag) then
+         call logger%error("&ocean_bt_nml rescale_strong_drag=.true. requires "// &
+                           "strong_drag=.true. — the rescale corrects for the rational "// &
+                           "form's bt_rem**n_inner /= av_rem gap, which the plain power "// &
+                           "form does not have")
+         has_error = .true.
+      end if
       if (substep_drag_ignores_bdrag_form(cfg)) then
          call logger%warning("&ocean_bt_nml substep_drag=.true. with "// &
                              "&ocean_bdrag_nml form='"// &
@@ -7385,6 +7471,16 @@ contains
                               "with grid_config='"//trim(cfg%ocean%grid%grid_config)// &
                               "' (file-based metrics cannot be re-filled on a wide grid; "// &
                               "cartesian/spherical formula fills supported)")
+            has_error = .true.
+         end if
+         if (cfg%ocean%bt%bt_rem_from_visc_rem) then
+            ! Same check as above, from the bt_halo side — belt-and-
+            ! braces so the error fires regardless of which knob a reader
+            ! finds first in the namelist.
+            call logger%error("&ocean_bt_nml bt_halo > 0 is mutually exclusive "// &
+                              "with bt_rem_from_visc_rem=.true. (the wide-halo BT "// &
+                              "clone carries no av_rem/visc_rem ghost-width "// &
+                              "statistics, like porous)")
             has_error = .true.
          end if
       end if
@@ -10036,6 +10132,22 @@ contains
                              "visc_rem/<visc_rem>_h BT-corrector weight + the visc_rem "// &
                              "producer (visc_rem is produced by vdiff and "// &
                              "is inert, =1, without ocean_vdiff_nml implicit_drag)"))
+      pl => cfg%ocean%bt%bt_rem_from_visc_rem
+      call g%add(nml_logical("bt_rem_from_visc_rem", pl, &
+                             "bt_rem_u/v = mask*av_rem**(1/n_inner), av_rem the frhat-"// &
+                             "weighted depth mean of visc_rem (MOM6 MOM_barotropic.F90:"// &
+                             "1553-1580); requires correction_visc_rem, mutually "// &
+                             "exclusive with substep_drag and bt_halo > 0"))
+      pl => cfg%ocean%bt%strong_drag
+      call g%add(nml_logical("strong_drag", pl, &
+                             "MOM6 BT_STRONG_DRAG: rational-approximation bt_rem form "// &
+                             "n_inner*av_rem/(1+(n_inner-1)*av_rem) instead of the plain "// &
+                             "power; requires bt_rem_from_visc_rem"))
+      pl => cfg%ocean%bt%rescale_strong_drag
+      call g%add(nml_logical("rescale_strong_drag", pl, &
+                             "MOM6 RESCALE_STRONG_DRAG: rescale the BT-correction "// &
+                             "increment by min(bt_rem**n_inner/av_rem, 1.0); requires "// &
+                             "strong_drag"))
       ps => cfg%ocean%bt%split_scheme
       call g%add(nml_enum("split_scheme", ps, &
                           "Outer split-explicit time scheme: pred_corr (DEFAULT; MOM6 "// &

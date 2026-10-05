@@ -3808,6 +3808,25 @@ contains
                           "(MOM6 bt_rem_u: r·HBBL/(Htot+r·HBBL·dt_bt))")
       end if
 
+      ! PR-2 (bt-rem-from-av-rem): bt_rem_u/v from the SAME viscous
+      ! remnant the layered momentum solve uses (MOM6
+      ! MOM_barotropic.F90:1553-1580). Mutually exclusive with
+      ! substep_drag and bt_halo > 0 (validated at configure).
+      ocean_state%dyn%bt_work%bt_rem_from_visc_rem = cfg%ocean%bt%bt_rem_from_visc_rem
+      ocean_state%dyn%bt_work%bt_strong_drag = cfg%ocean%bt%strong_drag
+      ocean_state%dyn%bt_work%bt_rescale_strong_drag = cfg%ocean%bt%rescale_strong_drag
+      if (compute_rank == 0 .and. cfg%ocean%bt%bt_rem_from_visc_rem) then
+         block
+            character(len=:), allocatable :: bt_rem_msg
+            bt_rem_msg = "BT substep:       bt_rem = av_rem**(1/n_inner) ON "// &
+                         "(MOM6 av_rem/bt_rem from visc_rem"
+            if (cfg%ocean%bt%strong_drag) bt_rem_msg = bt_rem_msg//", strong_drag"
+            if (cfg%ocean%bt%rescale_strong_drag) bt_rem_msg = bt_rem_msg//", rescale_strong_drag"
+            bt_rem_msg = bt_rem_msg//")"
+            call logger%info(bt_rem_msg)
+         end block
+      end if
+
       ! MOM6 planetary-only fast loop — drop live ζ_bt/∇KE from the substeps
       ! (they stay frozen inside F_bt_*_fast); Cor_ref reduces to f·v̄.
       ocean_state%dyn%bt_work%substep_zeta_ke = cfg%ocean%bt%substep_zeta_ke

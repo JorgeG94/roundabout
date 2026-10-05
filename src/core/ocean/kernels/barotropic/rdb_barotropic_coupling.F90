@@ -41,6 +41,7 @@ module rdb_barotropic_coupling
    public :: compute_e_anom
    public :: compute_bt_rem
    public :: reset_bt_rem
+   public :: compute_bt_rem_from_visc_rem
    public :: compute_bt_rem_wave_drag
    public :: mask_bt_rem
    ! BT_cont_type producer — fills BTCL_u/v on bt_work
@@ -1189,7 +1190,7 @@ contains
    end subroutine face_depth_mean_v
 
    pure subroutine apply_bt_correction(bt_work, ms, dt, metrics, skip_h_rescale, &
-                                       grid, use_bc_pgf, use_visc_rem, scale, n_nonfin)
+                                       grid, use_bc_pgf, use_visc_rem, scale, n_nonfin, n_inner)
       !! Replace the bt mode in the per-layer face velocities with the
       !! barotropic-substep end-step value, adding `Δu·wt_k` to every layer,
       !! `Δu = u_bt_end − u_bt_at_n − dt·F_bt_u` (same for v). Split-explicit
@@ -1280,13 +1281,24 @@ contains
          !! the fold write for such a face (leaving its velocity as-is for the
          !! truncation's NaN-catch backstop) and this counts it loudly.  0 on
          !! a healthy run.
+      integer, intent(in), optional :: n_inner
+         !! Barotropic substeps per outer step.  REQUIRED when
+         !! `bt_work%bt_rescale_strong_drag` is on (PR-2, MOM6
+         !! `RESCALE_STRONG_DRAG`, `MOM_barotropic.F90:1989-1997`):
+         !! `bt_strong_drag`'s rational-approximation `bt_rem` does not
+         !! satisfy `bt_rem**n_inner == av_rem` exactly (unlike the plain
+         !! power form, which does by construction), so the Δu/Δv
+         !! correction is rescaled by `min(bt_rem**n_inner/av_rem, 1.0)`
+         !! before being distributed into the layers — keeping the
+         !! correction consistent with the TRUE depth-mean remnant.
+         !! Ignored when `bt_rescale_strong_drag` is off.
 
       integer :: i, j, k, nu, nv, nx, ny, nz, nfin
       real(wp) :: delta_u, delta_v, total_h_old, total_h_new, ratio
       real(wp) :: du_scale
       real(wp) :: h_face, sum_h, sum_hvr, vr_bar, wt, vr_k
       real(wp) :: du_bc, dv_bc
-      logical :: do_rescale, do_bc_pgf, do_visc_rem, do_open
+      logical :: do_rescale, do_bc_pgf, do_visc_rem, do_open, do_bt_rescale
 
       do_rescale = .true.
       if (present(skip_h_rescale)) do_rescale = .not. skip_h_rescale
@@ -1297,6 +1309,7 @@ contains
       du_scale = 1.0_wp
       if (present(scale)) du_scale = scale
       do_open = metrics%use_closed_faces
+      do_bt_rescale = bt_work%bt_rescale_strong_drag .and. present(n_inner)
       if (do_bc_pgf .and. .not. present(grid)) then
          error stop "apply_bt_correction: use_bc_pgf=.true. requires grid"
       end if
@@ -1336,6 +1349,11 @@ contains
          do concurrent(j=1:ny, i=1:nu) &
             local(k, delta_u, sum_h, sum_hvr, h_face, vr_bar, wt, vr_k)
             delta_u = du_scale*(bt_work%bt_ubt_end(i, j) - bt_work%ubt_at_n(i, j) - dt*bt_work%F_bt_u(i, j))
+            if (do_bt_rescale) then
+               if (bt_work%av_rem_u(i, j) > 0.0_wp .and. ieee_is_finite(bt_work%av_rem_u(i, j))) then
+                  delta_u = delta_u*min(bt_work%bt_rem_u(i, j)**n_inner/bt_work%av_rem_u(i, j), 1.0_wp)
+               end if
+            end if
             sum_h = 0.0_wp
             sum_hvr = 0.0_wp
             do k = 1, nz
@@ -1365,6 +1383,11 @@ contains
          do concurrent(j=1:nv, i=1:nx) &
             local(k, delta_v, sum_h, sum_hvr, h_face, vr_bar, wt, vr_k)
             delta_v = du_scale*(bt_work%bt_vbt_end(i, j) - bt_work%vbt_at_n(i, j) - dt*bt_work%F_bt_v(i, j))
+            if (do_bt_rescale) then
+               if (bt_work%av_rem_v(i, j) > 0.0_wp .and. ieee_is_finite(bt_work%av_rem_v(i, j))) then
+                  delta_v = delta_v*min(bt_work%bt_rem_v(i, j)**n_inner/bt_work%av_rem_v(i, j), 1.0_wp)
+               end if
+            end if
             sum_h = 0.0_wp
             sum_hvr = 0.0_wp
             do k = 1, nz
@@ -1397,12 +1420,22 @@ contains
          ! loop) so the fold never mints NaN into the layer velocity.
          do concurrent(k=1:nz, j=1:ny, i=1:nu) local(delta_u)
             delta_u = du_scale*(bt_work%bt_ubt_end(i, j) - bt_work%ubt_at_n(i, j) - dt*bt_work%F_bt_u(i, j))
+            if (do_bt_rescale) then
+               if (bt_work%av_rem_u(i, j) > 0.0_wp .and. ieee_is_finite(bt_work%av_rem_u(i, j))) then
+                  delta_u = delta_u*min(bt_work%bt_rem_u(i, j)**n_inner/bt_work%av_rem_u(i, j), 1.0_wp)
+               end if
+            end if
             if (ieee_is_finite(delta_u)) then
                ms%u_face_x_layer(i, j, k) = ms%u_face_x_layer(i, j, k) + delta_u
             end if
          end do
          do concurrent(k=1:nz, j=1:nv, i=1:nx) local(delta_v)
             delta_v = du_scale*(bt_work%bt_vbt_end(i, j) - bt_work%vbt_at_n(i, j) - dt*bt_work%F_bt_v(i, j))
+            if (do_bt_rescale) then
+               if (bt_work%av_rem_v(i, j) > 0.0_wp .and. ieee_is_finite(bt_work%av_rem_v(i, j))) then
+                  delta_v = delta_v*min(bt_work%bt_rem_v(i, j)**n_inner/bt_work%av_rem_v(i, j), 1.0_wp)
+               end if
+            end if
             if (ieee_is_finite(delta_v)) then
                ms%v_face_y_layer(i, j, k) = ms%v_face_y_layer(i, j, k) + delta_v
             end if
@@ -1416,6 +1449,11 @@ contains
          do concurrent(j=1:ny, i=1:nu) &
             local(k, delta_u, sum_h, sum_hvr, h_face, vr_bar, wt)
             delta_u = du_scale*(bt_work%bt_ubt_end(i, j) - bt_work%ubt_at_n(i, j) - dt*bt_work%F_bt_u(i, j))
+            if (do_bt_rescale) then
+               if (bt_work%av_rem_u(i, j) > 0.0_wp .and. ieee_is_finite(bt_work%av_rem_u(i, j))) then
+                  delta_u = delta_u*min(bt_work%bt_rem_u(i, j)**n_inner/bt_work%av_rem_u(i, j), 1.0_wp)
+               end if
+            end if
             if (ieee_is_finite(delta_u)) then
                sum_h = 0.0_wp
                sum_hvr = 0.0_wp
@@ -1440,6 +1478,11 @@ contains
          do concurrent(j=1:nv, i=1:nx) &
             local(k, delta_v, sum_h, sum_hvr, h_face, vr_bar, wt)
             delta_v = du_scale*(bt_work%bt_vbt_end(i, j) - bt_work%vbt_at_n(i, j) - dt*bt_work%F_bt_v(i, j))
+            if (do_bt_rescale) then
+               if (bt_work%av_rem_v(i, j) > 0.0_wp .and. ieee_is_finite(bt_work%av_rem_v(i, j))) then
+                  delta_v = delta_v*min(bt_work%bt_rem_v(i, j)**n_inner/bt_work%av_rem_v(i, j), 1.0_wp)
+               end if
+            end if
             if (ieee_is_finite(delta_v)) then
                sum_h = 0.0_wp
                sum_hvr = 0.0_wp
@@ -1857,6 +1900,110 @@ contains
          bt_work%bt_rem_v(i, j) = 1.0_wp
       end do
    end subroutine reset_bt_rem
+
+   pure subroutine compute_bt_rem_from_visc_rem(grid, bt_work, ms, metrics, n_inner)
+      !! PR-2 (bt-rem-from-av-rem): build `bt_rem_u/v` from the SAME
+      !! viscous remnant the layered momentum solve uses, MOM6
+      !! `MOM_barotropic.F90:1553-1580`.  Dispatched the same way as
+      !! `compute_bt_rem` — a RESETTER, mutually exclusive at configure
+      !! with `bt_substep_drag` (D2, double-counted bed drag) and with
+      !! `bt_halo > 0` (`validate_config`) — so this and `compute_bt_rem`/
+      !! `reset_bt_rem` never both run for the same stage; `src/core/
+      !! ocean/README.md`'s "exactly one resets, everything else
+      !! MULTIPLIES" contract gets this as its third resetter.
+      !!
+      !! Two steps:
+      !!
+      !! 1. `av_rem_u/v := Σ_k frhat_k·visc_rem_k`, `frhat_k` the PLAIN
+      !!    face-thickness fraction (`h_face_k / Σ_k h_face_k`) —
+      !!    **not** `face_depth_mean_rem_u`'s `wt_u = h_face·visc_rem`
+      !!    weighting (that one is MOM6's FORCING weight, `forcing_
+      !!    visc_rem`/PR-3 scope; this is the plain depth mean MOM6 calls
+      !!    `frhatu`). `frhat_k/Σ_k h_face_k` is EXACTLY
+      !!    `face_depth_mean_u`'s own weight (num = Σ F·h_face, denom =
+      !!    Σ h_face), so `av_rem_u = face_depth_mean_u(visc_rem_u,
+      !!    h_layer)` — no separate kernel needed; this reuses the SAME
+      !!    `h_face`/`metrics%open_u` branches `derive_bt_from_layers`
+      !!    builds `ubt` with (the `metrics` REQUIRED-argument contract:
+      !!    see that routine's docstring), so `av_rem` is the depth mean
+      !!    over the SAME column the fast loop actually transports on.
+      !!    `face_depth_mean_u` already returns `0` on a dry/fully-closed
+      !!    face (`denom <= 0`), which is exactly the MOM6 "av_rem = 0 on
+      !!    a massless column" edge case.
+      !!
+      !! 2. `bt_rem = av_rem**(1/n_inner)` where `av_rem > 0` (MOM6
+      !!    `Instep = 1/nstep`), else `0` — no `max(..., eps)` floor
+      !!    substitute (CLAUDE.md: the thin-cell floor is the `av_rem >
+      !!    0` MASK itself, ported exactly).  `bt_strong_drag` (MOM6
+      !!    `BT_STRONG_DRAG`) swaps in the rational approximation
+      !!    `n_inner·av_rem/(1+(n_inner-1)·av_rem)` instead.  Land/dry
+      !!    faces are left to the existing `mask_bt_rem` call that always
+      !!    runs last in the dispatch (same posture as `compute_bt_rem`,
+      !!    which also does not self-mask) — MOM6's own `mask2dCu`
+      !!    multiply is therefore redundant with, not additional to, that
+      !!    final mask pass.
+      !!
+      !! Ghosts: both steps run over the FULL face extent (`size(...,1)`)
+      !! including ghost columns/rows, matching `face_depth_mean_u`'s own
+      !! convention — `visc_rem_u/v`'s ghosts are halo-valid after PR-1's
+      !! `visc_rem_halo_refresh`, so `av_rem`/`bt_rem` are correct on
+      !! every face the substep loop reads, not just the owned interior.
+      type(hgrid_t), intent(in) :: grid
+      type(barotropic_workstate_t), intent(inout) :: bt_work
+      type(multilayer_state_t), intent(in) :: ms
+      type(ocean_metrics_t), intent(in) :: metrics
+         !! REQUIRED — see `derive_bt_from_layers`/`face_depth_mean_u`.
+      integer, intent(in) :: n_inner
+         !! Barotropic substeps per outer step (MOM6 `nstep`; must be
+         !! >= 1 — `auto_n_inner`/the namelist floor already enforce
+         !! that).  `Instep = 1/n_inner`.
+
+      integer :: i, j, nu, nv, ny_u, nx_v
+      real(wp) :: instep
+      real(wp) :: rn
+
+      call face_depth_mean_u(grid, bt_work%visc_rem_u, ms%h_layer, bt_work%av_rem_u, &
+                             ms%nz_ml, metrics)
+      call face_depth_mean_v(grid, bt_work%visc_rem_v, ms%h_layer, bt_work%av_rem_v, &
+                             ms%nz_ml, metrics)
+
+      nu = size(bt_work%av_rem_u, 1)
+      ny_u = size(bt_work%av_rem_u, 2)
+      nx_v = size(bt_work%av_rem_v, 1)
+      nv = size(bt_work%av_rem_v, 2)
+      instep = 1.0_wp/real(n_inner, wp)
+      rn = real(n_inner, wp)
+
+      if (bt_work%bt_strong_drag) then
+         do concurrent(j=1:ny_u, i=1:nu)
+            bt_work%bt_rem_u(i, j) = 0.0_wp
+            if (bt_work%av_rem_u(i, j) > 0.0_wp .and. ieee_is_finite(bt_work%av_rem_u(i, j))) then
+               bt_work%bt_rem_u(i, j) = (rn*bt_work%av_rem_u(i, j))/ &
+                                        (1.0_wp + (rn - 1.0_wp)*bt_work%av_rem_u(i, j))
+            end if
+         end do
+         do concurrent(j=1:nv, i=1:nx_v)
+            bt_work%bt_rem_v(i, j) = 0.0_wp
+            if (bt_work%av_rem_v(i, j) > 0.0_wp .and. ieee_is_finite(bt_work%av_rem_v(i, j))) then
+               bt_work%bt_rem_v(i, j) = (rn*bt_work%av_rem_v(i, j))/ &
+                                        (1.0_wp + (rn - 1.0_wp)*bt_work%av_rem_v(i, j))
+            end if
+         end do
+      else
+         do concurrent(j=1:ny_u, i=1:nu)
+            bt_work%bt_rem_u(i, j) = 0.0_wp
+            if (bt_work%av_rem_u(i, j) > 0.0_wp .and. ieee_is_finite(bt_work%av_rem_u(i, j))) then
+               bt_work%bt_rem_u(i, j) = bt_work%av_rem_u(i, j)**instep
+            end if
+         end do
+         do concurrent(j=1:nv, i=1:nx_v)
+            bt_work%bt_rem_v(i, j) = 0.0_wp
+            if (bt_work%av_rem_v(i, j) > 0.0_wp .and. ieee_is_finite(bt_work%av_rem_v(i, j))) then
+               bt_work%bt_rem_v(i, j) = bt_work%av_rem_v(i, j)**instep
+            end if
+         end do
+      end if
+   end subroutine compute_bt_rem_from_visc_rem
 
    pure subroutine bt_rem_open_impl(nx, ny, nz, h_layer, open_u, open_v, drag_dt, &
                                     bt_rem_u, bt_rem_v)
