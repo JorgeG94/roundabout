@@ -4739,17 +4739,25 @@ class OceanVdiff(Group):
         default=False,
     )
 
+    hvel_harmonic = Bool(
+        'hvel_harmonic',
+        doc='MOM6 HARMONIC_VISC for the hvel_mom6 face thickness: .false. = MOM6 default (arithmetic + z_clear near-bed harmonic blend), .true. = harmonic + near-bed upwind-arithmetic blend',
+        units='',
+        required=False,
+        default=False,
+    )
+
     hbbl_visc = Real(
         'hbbl_visc',
-        doc='Bottom-layer scale for the hvel_mom6 botfn blend (MOM6 HBBL)',
-        units='',
+        doc="Bottom-layer scale for the hvel_mom6 botfn blend without the BBL glue, and the glue's HBBL when ocean_bdrag hbbl = 0 (MOM6 HBBL)",
+        units='m',
         required=False,
         default=10.0,
     )
 
     bbl_glue = Bool(
         'bbl_glue',
-        doc='MOM6 bottomdraglaw coupling parity: kv_bbl botfn glue at near-bed interfaces + piston bed drag. Absorbs the spurious grounded-layer PGF as MOM6 does (PGF_BUG.md par.9). Requires hvel_mom6 + implicit_drag + linear bottom drag',
+        doc='MOM6 BOTTOMDRAGLAW: per-face set_viscous_BBL kv_bbl/bbl_thick from the ocean_bdrag law (quadratic or linear); kv_bbl botfn glue at near-bed interfaces + piston bed row replace the bed drag apply. Requires hvel_mom6',
         units='',
         required=False,
         default=False,
@@ -4757,7 +4765,7 @@ class OceanVdiff(Group):
 
     bbl_piston = Real(
         'bbl_piston',
-        doc='BBL drag piston velocity u* for bbl_glue (MOM6 CDRAG*DRAG_BG_VEL)',
+        doc='Historical constant BBL piston u* (hand-built slots only; a configured glue takes its drag from ocean_bdrag)',
         units='m/s',
         required=False,
         default=0.0003,
@@ -6256,4 +6264,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 60
-N_KNOBS = 685
+N_KNOBS = 686

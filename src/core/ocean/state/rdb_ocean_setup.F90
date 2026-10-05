@@ -40,6 +40,7 @@ module rdb_ocean_setup
    use rdb_vcoord, only: parse_remap_method, parse_z_fixed_profile, z_fixed_nominal_dz, &
                          ZFIXED_PROFILE_UNIFORM, ZFIXED_PROFILE_INVALID, ZFIXED_DZ_OK
    use rdb_ocean_bottom_drag, only: parse_bdrag_variant
+   use rdb_ocean_vdiff, only: vdiff_bbl_configure, BBL_FORM_LINEAR, BBL_FORM_QUADRATIC
    use rdb_ocean_top_drag, only: parse_tdrag_variant, TDRAG_QUADRATIC, &
                                  top_drag_fill_face_cover_impl
    use rdb_ocean_lateral_mix, only: parse_lateral_closure, LMIX_NONE, &
@@ -1190,23 +1191,56 @@ contains
       ! arithmetic h_shear.  Off by default => historical arithmetic h_u.
       ocean_state%vdiff%hvel_mom6 = cfg%ocean%vdiff%hvel_mom6
       ocean_state%vdiff%hbbl_visc = cfg%ocean%vdiff%hbbl_visc
+      ocean_state%vdiff%hvel_harmonic = cfg%ocean%vdiff%hvel_harmonic
       ! MOM6 bottomdraglaw coupling parity: kv_bbl botfn glue + piston bed
-      ! drag (PGF_BUG.md §9).  Preconditions (hvel_mom6, implicit_drag,
-      ! linear bdrag form) validated at configure.
+      ! drag (PGF_BUG.md §9), with MOM6's per-face `set_viscous_BBL`
+      ! (`vdiff_set_viscous_bbl`) built from the bottom-drag configuration:
+      ! the drag law, `cd`/`r`, `bg_vel`, `bbl_thick_min`, and `HBBL` =
+      ! `&ocean_bdrag_nml hbbl`, falling back to `&ocean_vdiff_nml
+      ! hbbl_visc` for a drag configured bed-only (`hbbl = 0`) — MOM6 has
+      ! ONE HBBL and no bed-only form.  No drag configured ⇒ the latch
+      ! leaves the glue OFF.  `hvel_mom6` is validated at configure.
       ocean_state%vdiff%bbl_glue = cfg%ocean%vdiff%bbl_glue
       ocean_state%vdiff%bbl_piston = cfg%ocean%vdiff%bbl_piston
       ocean_state%vdiff%hvel_upwind = cfg%ocean%vdiff%hvel_upwind
+      block
+         integer :: bbl_form
+         real(wp) :: bbl_hbbl
+         bbl_form = BBL_FORM_QUADRATIC
+         if (trim(cfg%ocean%bdrag%form) == "linear") bbl_form = BBL_FORM_LINEAR
+         bbl_hbbl = cfg%ocean%bdrag%hbbl
+         if (bbl_hbbl <= 0.0_wp) bbl_hbbl = cfg%ocean%vdiff%hbbl_visc
+         call vdiff_bbl_configure(ocean_state%vdiff, &
+                                  size(ocean_state%multilayer%h_layer, 1), &
+                                  size(ocean_state%multilayer%h_layer, 2), &
+                                  size(ocean_state%multilayer%h_layer, 3), &
+                                  bbl_form, cfg%ocean%bdrag%cd, cfg%ocean%bdrag%r, &
+                                  bbl_hbbl, cfg%ocean%bdrag%bg_vel, &
+                                  cfg%ocean%bdrag%bbl_thick_min, &
+                                  cfg%ocean%kshear%enable, ocean_state%eos%rho0, &
+                                  cfg%ocean%vmix%pp81_nu_bg)
+      end block
       if (compute_rank == 0 .and. cfg%ocean%vdiff%hvel_mom6 &
           .and. .not. cfg%ocean%vdiff%hvel_upwind) then
          call logger%info("vdiff: hvel near-bed upwind blend OFF (pure harmonic hvel)")
       end if
       if (compute_rank == 0 .and. cfg%ocean%vdiff%hvel_mom6) then
-         call logger%info("vdiff: MOM6 hvel (harmonic + near-bed upwind blend, "// &
-                          "arithmetic h_shear) ON")
+         if (cfg%ocean%vdiff%hvel_harmonic) then
+            call logger%info("vdiff: MOM6 hvel, HARMONIC_VISC=True branch (harmonic + "// &
+                             "near-bed upwind blend, arithmetic h_shear) ON")
+         else
+            call logger%info("vdiff: MOM6 hvel, HARMONIC_VISC=False branch (arithmetic, "// &
+                             "z_clear near-bed harmonic blend, arithmetic h_shear) ON")
+         end if
       end if
-      if (compute_rank == 0 .and. cfg%ocean%vdiff%bbl_glue) then
-         call logger%info("vdiff: MOM6 bottomdraglaw BBL coupling glue ON "// &
-                          "(kv_bbl botfn interfaces + piston bed row)")
+      if (compute_rank == 0 .and. ocean_state%vdiff%bbl_glue) then
+         call logger%info("vdiff: MOM6 bottomdraglaw BBL glue ON (per-face "// &
+                          "set_viscous_BBL kv_bbl/bbl_thick, "//trim(cfg%ocean%bdrag%form)// &
+                          " law; botfn interfaces + piston bed row replace the "// &
+                          "explicit bed-drag apply)")
+      else if (compute_rank == 0 .and. cfg%ocean%vdiff%bbl_glue) then
+         call logger%info("vdiff: bbl_glue requested but no bottom drag is configured "// &
+                          "(&ocean_bdrag_nml cd/r = 0, or linear with bg_vel = 0) — glue OFF")
       end if
       if (compute_rank == 0) then
          if (cfg%ocean%vmix%harmonic_visc) then
@@ -3842,7 +3876,7 @@ contains
       ! e_uniform=0 precedent): PR-19 (visc_rem) is the named owner that
       ! fills the arrays for other configurations.
       if (compute_rank == 0 .and. cfg%ocean%bt%correction_visc_rem .and. &
-          .not. cfg%ocean%vdiff%implicit_drag) then
+          .not. (cfg%ocean%vdiff%implicit_drag .or. ocean_state%vdiff%bbl_glue)) then
          call logger%warning("&ocean_bt_nml correction_visc_rem=.true. has no effect "// &
                              "without &ocean_vdiff_nml implicit_drag=.true. "// &
                              "(visc_rem_u/v stay at their source=1.0 default; PR-19 owns filling them)")
