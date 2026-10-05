@@ -4868,6 +4868,28 @@ contains
             stage_id, step_id, dyn%bt_nonfin_step
          flush (output_unit)
       end if
+      ! visc_rem-weighted fold (and the accel_visc_rem reweight above):
+      ! both write EVERY face, ghosts included, with the per-layer weight
+      ! `visc_rem_u/v` read at that face — and a ghost face's visc_rem is
+      ! NOT the neighbour's value.  The vdiff remnant solve builds it from
+      ! the tile's ghost-column `vmix%kv`, which the boundary-layer /
+      ! smoothing stencils compute from tile data (see the tracer-ghost
+      ! note before `run_continuity_chain` below), and from neighbour
+      ! cells clamped at the array edge.  So the fold leaves ghost
+      ! velocities that are not images of the neighbour's owned faces,
+      ! and the vertical mixing below reads them (KPP shear in the ghost
+      ! columns -> ghost kv -> the seam face's momentum solve) before the
+      ! stage-end exchange: a decomposed run drifted off the serial one
+      ! by 1e-10 within 24 steps (compat matrix: z* or eulerian_z +
+      ! correction_visc_rem, 2x2 / 4x1).  The uniform fold has no
+      ! per-layer weight and keeps the ghosts exact.  Refresh the face
+      ! ghosts (D0-unconditional: no-op on a non-periodic single rank,
+      ! local re-wrap on a periodic axis; collective when decomposed —
+      ! the gate is a configure-time knob, rank-uniform).
+      if (dyn%bt_work%bt_correction_visc_rem) then
+         call ocean_halo_face_x(ms%u_face_x_layer, ms%nz_ml)
+         call ocean_halo_face_y(ms%v_face_y_layer, ms%nz_ml)
+      end if
       call chksum_state(grid, ms, dyn%chksum_probe, "post_bt_fold", stage_id, step_id)
       ! Land-face velocity reset (C4 / R4b.2): zero re-ingested land-face
       ! layer velocity after the BT correction.  No-op for all-wet.

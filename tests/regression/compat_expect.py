@@ -387,15 +387,20 @@ ROWS = [
          "NOT TRACKED (found by this matrix, 2026-10-04)", expect=("RESTART",),
          message=r"differ after a warm restart"),
     _gap("decomp_weno_pv", "runtime", ("pv_weno",),
-         "The WENO PV face interpolation is not decomposition-invariant: last-bit differences "
-         "in h / u / v / rho in every owned cell on 2x2 and 4x1 (sadourny + weno7 on z*: "
-         "max|diff|/max|field| 4e-11 after 24 steps) in SOME combinations.  Unchanged by "
-         "-ffp-contract=off, so not the FMA / remainder-loop class `carried_tendency` "
-         "documents.",
+         "The WENO PV face interpolation is not decomposition-invariant at the SMALLEST halo "
+         "its configure gate accepts (`pv_adv_required_nghost`: weno5 -> 3, weno7 -> 4): "
+         "last-bit differences in h / u / v / rho in every owned cell on 2x2 and 4x1 "
+         "(sadourny + weno7, nghost = 4: max|diff|/max|field| 3e-11 after 24 steps).  One "
+         "ghost more is bitwise (weno7 at nghost 5 / 6, weno5 at 4), and weno5 at nghost 3 "
+         "fails the same way, so the stencil reads one ghost ring that is not the "
+         "neighbour's image -- the gate is one short, or the corner field it reads is.  "
+         "On the matrix (nghost = 4) only weno7 bites; weno3 / weno5 are bitwise.",
          "NOT TRACKED (found by this matrix, 2026-10-04)", expect=("DECOMP",),
          message=r"\dx\d: \d+ field mismatch", scope="any",
-         # minimised 2026-10-04 from c019 (greedy, every other axis at base)
-         witness={"vcoord": "zstar", "coriolis": "sadourny", "pv_adv": "weno7"}),
+         # re-minimised 2026-10-05 on the base coordinate (z_fixed + closed
+         # faces, every other axis at base): the old z* witness now stops
+         # on ENERGY first (MOM6 z*, #123), so its DECOMP leg never ran.
+         witness={"coriolis": "sadourny", "pv_adv": "weno7"}),
     _gap("decomp_zstar_ssp_rk2_gm", "runtime", ("vc_zstar", "ssp_rk2", "gm"),
          "zstar's open stepped bed with GM under ssp_rk2 runs clean on one rank and on 1x2, "
          "but a split in x (2x1, 2x2, 4x1) drives one column negative and stops on the remap "
@@ -407,15 +412,17 @@ ROWS = [
          message=r"the decomposed run failed", scope="any",
          # minimised 2026-10-04 from c015 (greedy over the decomposed run)
          witness={"vcoord": "zstar", "split": "ssp_rk2", "eddy": "gm"}),
-    _gap("decomp_eulerian_z_ssp_rk2", "runtime", ("vc_eulerian_z", "ssp_rk2"),
+    _gap("decomp_eulerian_z_ssp_rk2", "runtime", ("vc_eulerian_z", "ssp_rk2", "epbl", "mle"),
          "eulerian_z under ssp_rk2 (its legacy per-stage vertical-advection + h-rescale path) "
-         "is not decomposition-invariant in some combinations: last-bit differences in every "
-         "owned cell on 2x2 and 4x1 with visc_rem, or with EPBL + MLE.  Unchanged by "
-         "-ffp-contract=off.",
+         "with EPBL + Fox-Kemper MLE is not decomposition-invariant: last-bit differences in "
+         "every owned cell on 2x2 and 4x1 (max|diff|/max|field| 3e-11 after 24 steps); "
+         "EPBL alone, and the same pair on z_fixed / sigma or under pred_corr, are bitwise.  "
+         "(Its visc_rem half was the visc_rem-weighted BT fold leaving non-image ghost "
+         "velocities; fixed by the post-fold face refresh in `run_stage_split`.)",
          "NOT TRACKED (found by this matrix, 2026-10-04)", expect=("DECOMP",),
          message=r"\dx\d: \d+ field mismatch", scope="any",
-         # minimised 2026-10-04 from c045 (greedy, every other axis at base)
-         witness={"vcoord": "eulerian_z", "split": "ssp_rk2", "bt": "visc_rem"}),
+         # re-minimised 2026-10-05 (greedy, every other axis at base)
+         witness={"vcoord": "eulerian_z", "split": "ssp_rk2", "vmix_bl": "epbl", "eddy": "mle"}),
 
     # ===================================================================
     # KNOWN_GAP -- the GPU leg (nvfortran cc70) only.

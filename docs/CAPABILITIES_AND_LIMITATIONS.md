@@ -279,11 +279,13 @@ The full operator-by-operator surface, with knobs and limits, is in the [Ocean p
 every prognostic field is bit-identical to the single-rank run on every
 supported decomposition — not a global integral that agrees to round-off.
 The gate is `tests/mpi/test_ocean_decomp_bitid_mpi` (ctest at 1, 2 and 4
-ranks: every `px x py` factorisation — 2x1, 1x2, 4x1, 2x2, 1x4 — of ten
+ranks: every `px x py` factorisation — 2x1, 1x2, 4x1, 2x2, 1x4 — of fourteen
 configurations under both `pred_corr` and `ssp_rk2`, 48 steps, every field
 of the restart registry plus the barotropic `eta`, compared bitwise over
 the owned cells). The configurations: a closed basin with an interior
 island, a periodic seamount channel on z* with porous barriers, a
+closed cooled spoon basin on z* with the visc_rem-weighted barotropic
+corrector (`correction_visc_rem` + `implicit_drag`), a
 periodic channel with a north sponge band, a tidal /
 Flather open-boundary basin on zstar_sigma, a spherical sector (planetary
 f, Wright EOS), an Orlanski + reservoir / clamped / west-sponge open
@@ -351,6 +353,15 @@ documented, the only such paths found):
   split in x, drifts at round-off on the east boundary face.  A west sponge
   edge (alone, or with Orlanski-open and clamped edges) and every other
   combination tested are exact.
+- **WENO PV at its minimum halo** (`&ocean_coriolis_nml pv_adv_scheme =
+  'weno5'` at `nghost = 3`, `'weno7'` at `nghost = 4` — the smallest each
+  configure gate, `pv_adv_required_nghost`, accepts) drifts at round-off
+  (3e-11 relative after 24 steps); one ghost more is exact.  Found by the
+  compatibility matrix (row `decomp_weno_pv`).
+- **`eulerian_z` under `ssp_rk2` with EPBL + Fox-Kemper MLE** drifts at
+  round-off (3e-11 relative after 24 steps); EPBL alone, the pair on any
+  other coordinate, or under `pred_corr` is exact (row
+  `decomp_eulerian_z_ssp_rk2`).
 
 **Not yet**: resuming a restart on a different rank count, a parallel (collective) NetCDF
 writer (diagnostics and restarts are per-rank files, merged offline by
