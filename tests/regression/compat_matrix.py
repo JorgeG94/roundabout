@@ -1320,8 +1320,12 @@ def restart_leg(ctx, cell, cid, main_dir):
     diffs = compat_legs.compare_full(os.path.join(main_dir, "restart_rank_000000.nc"), ck2,
                                      os.path.join(root, cid + "_nc"))
     if diffs:
+        # Four in full, then every other differing field by NAME: the rows
+        # match on the field (e.g. `meke: `), and the list is alphabetical,
+        # so a cut at four hid MEKE behind hvisc_* / kshear_* (c011).
+        rest = ["{}: also differs".format(d.split(":", 1)[0]) for d in diffs[4:]]
         return False, "{} field(s) differ after a warm restart at step {}: {}".format(
-            len(diffs), RESTART_AT, "; ".join(diffs[:4]))
+            len(diffs), RESTART_AT, "; ".join(diffs[:4] + rest))
     return True, "{} + restart + {} == {} straight, bitwise".format(
         RESTART_AT, N_STEPS - RESTART_AT, N_STEPS)
 
