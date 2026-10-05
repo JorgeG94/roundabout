@@ -324,6 +324,22 @@ ROWS = [
                   "eddy": "mle", "tracers": "pseudo_salt", "pgf": "fv_mom6_plm", "eos": "linear",
                   "coriolis": "sadourny", "pv_adv": "weno7", "bt": "correction_bc_pgf",
                   "geometry": "closed", "grid": "spherical", "forcing": "cool"}),
+    _gap("zstar_open_steps_stress_tensor", "runtime", ("vc_zstar", "stress_tensor"),
+         "zstar's open stepped bed (closed faces off: a live layer faces a 1e-4 m filler) "
+         "with the MOM6 stress-tensor viscosity drives a layer negative and stops on the remap "
+         "guard at step 2-3.  The corner shear stress is weighted by the ARITHMETIC 4-cell "
+         "mean h_q (`hvisc_compute_stress`, Phase 2) while the divergence divides by the face "
+         "thickness, so on a filler face beside a live corner the explicit viscous step is "
+         "amplified by h_q/h_u ~ 1e5.  MOM6 forms hq as the harmonic-type mean of the four "
+         "face thicknesses (MOM_hor_visc.F90 `hq = 2*h2uq*h2vq/(...)`), small whenever one "
+         "face is vanished; substituting it runs this witness clean (En 6.46e-3 against the "
+         "sigma twin's 6.73e-3).  The same operator defect is the vcoord matrix's FINDING A "
+         "(thin density-space layers driven negative); the port changes every stress_tensor "
+         "answer, so it is its own PR.",
+         "NOT TRACKED (found by this matrix, 2026-10-04; vcoord matrix FINDING A)",
+         expect=("CRASH",), message=r"remap preconditions at step \d+", scope="any",
+         # minimised 2026-10-04 from c011 (greedy; every other axis at base)
+         witness={"vcoord": "zstar", "lateral": "stress_tensor"}),
     _gap("hycom_runtime_crash", "runtime", ("vc_hycom",),
          "hycom with an open boundary stops at step 4 (remap precondition guard + nan-catch) "
          "now that the land-column crash (item C3) no longer stops it at step 1.",
