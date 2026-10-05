@@ -1861,7 +1861,7 @@ contains
    subroutine test_weno3_parse(error)
       !! parse_pv_adv_scheme + the implemented gate + the per-rung nghost
       !! requirement: centered/weno3/weno5/weno7 all ship; a typo is INVALID;
-      !! weno5 needs nghost>=3, weno7 needs nghost>=4.
+      !! weno5 needs nghost>=4, weno7 needs nghost>=5 (stencil radius + 1).
       type(error_type), allocatable, intent(out) :: error
       call check(error, parse_pv_adv_scheme("centered") == PV_ADV_CENTERED .and. &
                  parse_pv_adv_scheme("weno3") == PV_ADV_WENO3 .and. &
