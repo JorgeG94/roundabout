@@ -47,6 +47,7 @@ contains
                   new_unittest("fold_centre_3d_levels", test_centre_3d_levels), &
                   new_unittest("fold_cyclic_corner", test_cyclic_corner), &
                   new_unittest("fold_corner_scalar_vs_vector", test_corner_modes), &
+                  new_unittest("fold_u_v_face_scalar_vs_vector", test_face_scalar_modes), &
                   new_unittest("fold_centre_gpu", test_centre_gpu), &
                   new_unittest("fold_geometric_maps", test_geometric_maps), &
                   new_unittest("fold_line_row_periodic_ghosts", test_fold_row_ghosts) &
@@ -457,6 +458,75 @@ contains
          deallocate (w)
       end block checks
    end subroutine test_corner_modes
+
+   ! -----------------------------------------------------------------
+   ! PR-1: u-face / v-face `negate` contract (visc_rem_u/v's fold) —
+   ! the u/v-face twin of `test_corner_modes`.  `negate=.true.` (the
+   ! default, exercised already by `test_vector_halo`/`test_v_online`
+   ! for tau_x/tau_y and u/v_face_x/y_layer) sign-flips; `negate=.false.`
+   ! (new: PR-1's `ocean_fold_wrap_visc_rem`) copies.
+   ! -----------------------------------------------------------------
+   subroutine test_face_scalar_modes(error)
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      integer :: nxt, nyt, nxf, nyf, jlo, jf, i, ip
+      real(wp), allocatable :: us(:, :), vs(:, :, :)
+
+      checks: block
+         call make_grid(grid)
+         nxt = grid%nx_total; nyt = grid%ny_total
+         nxf = nxt + 1; nyf = nyt + 1
+         jlo = NGHOST + NJ + 1
+
+         ! u-face scalar: halo must COPY (sign +), unlike the vector
+         ! default (-1, test_vector_halo).
+         allocate (us(nxf, nyt), source=1.0_wp)
+         call fold_north_u_face(us, nxf, nyt, NI, NJ, NGHOST, negate=.false.)
+         do i = 1, nxf
+            call check(error, us(i, jlo) == 1.0_wp, &
+                       "u-face scalar (negate=.false.) halo must copy, not negate")
+            if (allocated(error)) exit checks
+         end do
+         deallocate (us)
+
+         ! v-face scalar: halo rows beyond the fold line COPY, and the
+         ! on-line projection at the fold row copies the east mirror
+         ! (not its negative) into the west half — the "same physical
+         ! attribute of the same face" contract (visc_rem_v is NOT a
+         ! normal velocity, so there is no v = -v antisymmetry to
+         ! enforce).  NI=8 is even, so there is no self-conjugate
+         ! column to check (unlike the ni-odd vector case).
+         jf = NGHOST + NJ + 1
+         allocate (vs(nxt, nyf, 1), source=0.0_wp)
+         do i = 1, nxt
+            vs(i, jf, 1) = real(modulo(i - NGHOST - 1, NI) + 1, wp)
+         end do
+         call fold_north_v_face(vs, nxt, nyf, 1, NI, NJ, NGHOST, negate=.false.)
+         do i = 1, NI/2
+            ip = NI + 1 - i
+            call check(error, vs(NGHOST + i, jf, 1) == vs(NGHOST + ip, jf, 1), &
+                       "v-face scalar on-line projection must COPY the east mirror")
+            if (allocated(error)) exit checks
+         end do
+         ! Halo strictly beyond the fold row: copy, not negate.
+         do i = NGHOST + NJ + 2, nyf
+            call check(error, vs(1, i, 1) == 0.0_wp, &
+                       "v-face scalar halo beyond the fold row must copy the (zero) mirror")
+            if (allocated(error)) exit checks
+         end do
+         deallocate (vs)
+
+         ! Sign check: re-seed and compare negate=.true. vs negate=.false.
+         ! on the SAME field — they must differ by an exact sign flip in
+         ! the halo, proving `negate` actually reaches the kernel (not a
+         ! dead dummy).
+         allocate (us(nxf, nyt), source=1.0_wp)
+         call fold_north_u_face(us, nxf, nyt, NI, NJ, NGHOST, negate=.true.)
+         call check(error, us(1, jlo) == -1.0_wp, &
+                    "u-face negate=.true. must still sign-flip (default contract unchanged)")
+         deallocate (us)
+      end block checks
+   end subroutine test_face_scalar_modes
 
    ! -----------------------------------------------------------------
    ! Test 9: GPU-resident centre fold — map, fold on device, update self.

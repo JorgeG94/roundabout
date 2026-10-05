@@ -94,7 +94,13 @@ module rdb_barotropic_workstate
          !! of uniformly — biasing the Δu distribution toward layers LESS
          !! damped by vertical viscosity, depth mean preserved
          !! (`&ocean_bt_nml correction_visc_rem`).  Also gates the
-         !! visc_rem PRODUCER in `vmix_apply_in_stage`.
+         !! visc_rem PRODUCER fused into `vmix_apply_in_stage`'s momentum
+         !! vdiff solve (MOM6 `vertvisc_remnant`, MOM_vert_friction.F90:
+         !! 1157-1258, sharing `vertvisc_coef`'s SAME coupling
+         !! coefficients `a_u` — includes `kv_bbl`/the BBL glue and the
+         !! Rayleigh/bed piston whenever the glue or `implicit_drag` folds
+         !! them into the matrix; the producer itself does NOT require
+         !! `implicit_drag` — see `vdiff_apply_momentum`'s `do_remnant`).
       logical :: bt_forcing_visc_rem = .false.
          !! MOM6 `wt_u` parity for the BT forcing assembly: weight the
          !! `F_bt_u/v` depth-mean (and the PGF-projection subtraction) by
@@ -105,6 +111,37 @@ module rdb_barotropic_workstate
          !! renorm_visc_rem`) — `visc_rem_u/v` forwarded into the slow
          !! continuity so `u_cor = u + du·γ_k` and the fluxes carry the
          !! same weights.
+         !!
+         !! **PR-1 call-point / dt mapping to MOM6
+         !! `MOM_dynamics_split_RK2.F90`** (the three `vertvisc_remnant`
+         !! call sites, all at the OUTER step's `dt` — `VISC_REM_TIMESTEP_
+         !! BUG` defaults `.false.`, so none of them use `dt_pred`):
+         !!   * `:619-620` (pre-predictor, `dt`) maps to
+         !!     `visc_rem_precompute`'s pre-substep refresh in
+         !!     `run_stage_split`, which always runs at the stage's `dt`
+         !!     (gated `is_pc .or. bt_forcing_visc_rem .or.
+         !!     bt_renorm_visc_rem`, i.e. unconditionally once per
+         !!     `pred_corr` stage).
+         !!   * `:777-779` (post-predictor, full `dt`, NOT `dt_pred`) maps
+         !!     to `vmix_apply_in_stage`'s stage-end producer called with
+         !!     the `dt_remnant=dt` argument at the PREDICTOR stage —
+         !!     decoupled from the predictor's own velocity-apply `dt_vel
+         !!     = pc_be·dt` so the remnant matrix is built at the full
+         !!     step, matching MOM6's default (non-buggy) behaviour.  Both
+         !!     this and the pre-predictor call build the SAME linear
+         !!     matrix (visc_rem does not depend on velocity, only on
+         !!     dt/h/kv/drag), so they agree exactly — mirroring MOM6,
+         !!     where both calls reuse the SAME `vertvisc_coef` output and
+         !!     so are identical by construction.
+         !!   * `:1031` (corrector, `dt`) maps to the stage-end producer's
+         !!     existing fused call at the CORRECTOR stage, where `dt_vel
+         !!     ≡ dt` already (no predictor off-centring) — unchanged.
+         !! `ssp_rk2` (no predictor/corrector split): one refresh per
+         !! stage, before that stage's barotropic step — the pre-substep
+         !! `visc_rem_precompute` call (gated on `bt_forcing_visc_rem
+         !! .or. bt_renorm_visc_rem`) plus the stage-end producer when
+         !! `bt_correction_visc_rem` is on; `dt_vel ≡ dt` on both ssp_rk2
+         !! stages, so the split `dt_remnant` path is never taken there.
 
       logical :: bt_correction_bc_pgf = .false.
          !! When `.true.`, `apply_bt_correction` adds the per-layer

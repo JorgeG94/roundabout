@@ -49,6 +49,7 @@ module rdb_ocean_fold_apply
    public :: ocean_fold_wrap_eta_2d
    public :: ocean_fold_wrap_time_means
    public :: ocean_fold_wrap_stress
+   public :: ocean_fold_wrap_visc_rem
 
 contains
 
@@ -294,5 +295,57 @@ contains
       call fold_north_u_face(tau_x, nxt + 1, nyt, grid%nx_phys, grid%ny_phys, grid%nghost)
       call fold_north_v_face(tau_y, nxt, nyt + 1, grid%nx_phys, grid%ny_phys, grid%nghost)
    end subroutine ocean_fold_wrap_stress
+
+   subroutine ocean_fold_wrap_visc_rem(grid, bc, visc_rem_u, visc_rem_v, device_resident)
+      !! Fold the viscous-remnant pair: `visc_rem_u` (u-face) and
+      !! `visc_rem_v` (v-face) — PR-1's `bt_work%visc_rem_u/v` seam.
+      !! UNLIKE `ocean_fold_wrap_stress` (its vector twin, tau_x/tau_y),
+      !! `visc_rem` is a POSITIVE SCALAR (the fraction of a barotropic
+      !! acceleration a layer still feels after one implicit-friction
+      !! step, MOM6 `vertvisc_remnant` — MOM_vert_friction.F90:1157-1258),
+      !! not a flux/velocity component, so both face kernels are called
+      !! with `negate=.false.`: the 180-degree fold still swaps which side
+      !! of the seam the ghost value comes from, but the value itself does
+      !! not change sign, and the v-face fold-line duplicate DOF is forced
+      !! EQUAL (not opposite) across the seam.  Call after the pair's halo
+      !! exchange + periodic wrap (MOM6's `pass_visc_rem` group pass,
+      !! MOM_dynamics_split_RK2.F90:494, run after every one of the three
+      !! `vertvisc_remnant` calls: :628-651, :783, :1041).  No-op when not
+      !! folding.
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_bc_state_t), intent(in) :: bc
+      real(wp), intent(inout) :: visc_rem_u(:, :, :)
+         !! u-face per-layer remnant, shape (nx_total+1, ny_total, nz).
+      real(wp), intent(inout) :: visc_rem_v(:, :, :)
+         !! v-face per-layer remnant, shape (nx_total, ny_total+1, nz).
+      logical, intent(in), optional :: device_resident
+         !! px > 1 only: `.false.` for host-side calls.
+
+      integer :: nxu, nyu, nxv, nyv, nz
+
+      if (.not. bc%north_fold) return
+
+      nxu = size(visc_rem_u, 1)
+      nyu = size(visc_rem_u, 2)
+      nxv = size(visc_rem_v, 1)
+      nyv = size(visc_rem_v, 2)
+      nz = size(visc_rem_u, 3)
+
+      if (ocean_fold_is_distributed()) then
+         call ocean_fold_begin(2*(grid%nghost + 1)*nz)
+         call ocean_fold_pack(visc_rem_u, nxu, nyu, nz, FOLD_STAG_U, device_resident)
+         call ocean_fold_pack(visc_rem_v, nxv, nyv, nz, FOLD_STAG_V, device_resident)
+         call ocean_fold_exchange(device_resident)
+         call ocean_fold_unpack(visc_rem_u, nxu, nyu, nz, FOLD_STAG_U, .false., device_resident)
+         call ocean_fold_unpack(visc_rem_v, nxv, nyv, nz, FOLD_STAG_V, .false., device_resident)
+         call ocean_fold_end()
+         return
+      end if
+
+      call fold_north_u_face(visc_rem_u, nxu, nyu, nz, &
+                             grid%nx_phys, grid%ny_phys, grid%nghost, negate=.false.)
+      call fold_north_v_face(visc_rem_v, nxv, nyv, nz, &
+                             grid%nx_phys, grid%ny_phys, grid%nghost, negate=.false.)
+   end subroutine ocean_fold_wrap_visc_rem
 
 end module rdb_ocean_fold_apply
