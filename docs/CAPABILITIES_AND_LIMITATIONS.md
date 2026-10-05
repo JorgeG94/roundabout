@@ -294,13 +294,19 @@ Flather open-boundary basin on zstar_sigma, a spherical sector (planetary
 f, Wright EOS), an Orlanski + reservoir / clamped / west-sponge open
 basin, the spherical sector with the closure set (EPBL, Fox-Kemper MLE,
 GM + MEKE, Redi, kappa-shear, tidal mixing, convective adjustment,
-geothermal heating, tracer hdiff), the file-reader case below, a
+geothermal heating, tracer hdiff), the three file-reader cases below (on
+sigma, `zstar_full` and z*), a
 tripolar cap (wind, double-Drake land reaching the fold line) whose 2x1,
 4x1 and 2x2 splits fold through the distributed fold exchange, and sea
 ice (thermo + ITD, EVP dynamics, the ice->ocean stress blend, in a
 cooled periodic channel, without and with the category transport; every
 ice registry field compared). It
-passes on gfortran (CPU ranks) and nvfortran (one V100 per rank).
+passes on gfortran (CPU ranks), nvfortran CPU + HPC-X, and nvfortran (one V100
+per rank). On the nvfortran CPU build `rdb_ocean_horizontal_viscosity.F90` is
+compiled `-Mnofma` (`cmake/compiler_flags.cmake`): its vectorised kernels
+otherwise round a face differently in the vector body and the scalar
+remainder, i.e. by its position in the tile, and `pred_corr` carries that
+tendency into the prognostics.
 The tripolar north fold has its own gate,
 `tests/mpi/test_ocean_tripolar_fold_mpi` (every split of 1-4 ranks, north-
 south and east-west, whole storage windows incl. ghosts, three grids —
