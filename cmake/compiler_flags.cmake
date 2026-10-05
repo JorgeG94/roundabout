@@ -85,6 +85,20 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     message(STATUS "CPU serial (no threading)")
   endif()
 
+  if(NOT RDB_ENABLE_GPU)
+    # Decomposition bit-identity on the CPU build.  nvfortran vectorises the
+    # horizontal-viscosity kernels with an FMA-contracted vector body and a
+    # differently-contracted scalar remainder, so a face's rounding depends on
+    # its position in the TILE.  The `pred_corr` predictor carries that tendency
+    # (`hvisc_du_visc`) into the prognostics: z* + visc_rem on a 4x1 split
+    # drifted 1e-8 in eta within 24 steps (test_ocean_decomp_bitid_mpi
+    # `visc_rem_zstar`).  The GPU build has no remainder loop and is bitwise
+    # without this.
+    set_source_files_properties(
+      ${PROJECT_SOURCE_DIR}/src/parameterizations/lateral/rdb_ocean_horizontal_viscosity.F90
+      PROPERTIES COMPILE_OPTIONS "-Mnofma")
+  endif()
+
 elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   set(CMAKE_Fortran_FLAGS
       "${CMAKE_Fortran_FLAGS} -ffree-form -std=gnu -O3 -ffree-line-length-none")
