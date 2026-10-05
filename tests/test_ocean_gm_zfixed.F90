@@ -1,7 +1,7 @@
 !! Gent-McWilliams thickness diffusion on `z_fixed` with partial-step
 !! CLOSED faces (`&vcoord_nml zfixed_closed_faces`).  Every case runs the
 !! production device kernels — `ocean_slopes_compute` +
-!! `gm_compute_transports` (+ `continuity_tracer_step_split(gm=gm)` and
+!! `gm_compute_transports` (+ the GM operator `continuity_gm_apply` and
 !! the I1′ enforcement point for the multi-step case) — over a
 !! hand-specified staircase whose layer thicknesses AND closed-face masks
 !! come from the SAME production builders a configured run uses
@@ -19,7 +19,7 @@
 !!     slopes, whose interface-tilt term differences the heights ABOVE THE
 !!     LOCAL BED and so reads the bathymetry step as an isopycnal slope.
 !!  2. `tilted_staircase_open_column` — tilted isopycnals over the same
-!!     staircase, NSTEP GM + continuity steps: a closed face-layer carries
+!!     staircase, NSTEP GM-operator steps: a closed face-layer carries
 !!     EXACTLY zero GM flux, every face's column-integrated transport is 0
 !!     to round-off, no field is non-finite, the fillers keep their
 !!     thickness exactly, I1′ holds after every step, and mass + T content
@@ -39,7 +39,7 @@ module test_ocean_gm_zfixed
    use rdb_eos, only: eos_t, EOS_VARIANT_LINEAR
    use rdb_ocean_isopycnal_slopes, only: ocean_slopes_t, ocean_slopes_compute
    use rdb_ocean_gm, only: ocean_gm_t, gm_compute_transports
-   use rdb_continuity, only: continuity_t, continuity_tracer_step_split
+   use rdb_continuity, only: continuity_t, continuity_gm_apply, TR_MODE_ADVECT
    use rdb_ocean_vcoord, only: ocean_vcoord_z_fixed_target_uniform, &
                                ocean_vcoord_closed_face_masks
    use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
@@ -418,7 +418,7 @@ contains
          do it = 1, NSTEP
             call ocean_slopes_compute(grid, metrics, eos, sl, ms, DT)
             call gm_compute_transports(grid, metrics, gm, sl, ms, DT)
-            call continuity_tracer_step_split(grid, metrics, ct, ms, DT, gm=gm)
+            call continuity_gm_apply(grid, metrics, ct, ms, gm, DT, 1.0_wp, TR_MODE_ADVECT)
             ! The production step tail: restore I1′, then the tripwire scan.
             call ms%enforce_vanished_content(ni, nj)
             call ms%scan_vanished_content(ni, nj, n_bad, worst_i1)

@@ -42,7 +42,14 @@
 !!   * sea_ice_components -- the same under `&ocean_forcing_nml
 !!     enable_components`, where `Q_heat`/`Q_salt` are ASSEMBLED at the
 !!     end of each thermo window and carried, unchanged, through the steps
-!!     until the next one.
+!!     until the next one;
+!!   * gm_meke_varmix_therm2 -- Gent-McWilliams + MEKE + VarMix over a
+!!     stratified seamount under `dt_therm_ratio = 2`, N_WRITE odd.  The GM
+!!     operator runs AFTER the dynamics of every outer step and leaves
+!!     `gm_src`, which MEKE reads at the top of the next thermo step; on
+!!     the step between two thermo refreshes it also reads the slopes and
+!!     the VarMix(+MEKE) KhTh the last refresh left.  All of it is carried
+!!     across the checkpoint, so all of it must be restart-registered.
 module test_ocean_restart_engine
    use, intrinsic :: iso_fortran_env, only: int64
    use testdrive, only: new_unittest, unittest_type, error_type, check
@@ -90,7 +97,9 @@ contains
                   new_unittest("restart_engine_bit_exact_sea_ice_periodic_ssp_rk2", &
                                test_engine_bit_exact_ice_ssp), &
                   new_unittest("restart_engine_bit_exact_sea_ice_components", &
-                               test_engine_bit_exact_ice_components) &
+                               test_engine_bit_exact_ice_components), &
+                  new_unittest("restart_engine_bit_exact_gm_meke_varmix_therm2", &
+                               test_engine_bit_exact_gm) &
                   ]
    end subroutine collect_ocean_restart_engine_tests
 
@@ -167,6 +176,35 @@ contains
          if (label == "sea_ice_components") then
             nml = nml//"&ocean_forcing_nml enable_components = .true. /"//NL
          end if
+      case ("gm_meke_varmix_therm2")
+         ! Stratified seamount on z* with GM + MEKE + VarMix (the compat
+         ! matrix's `gm_meke` overlay), thermo every second step.
+         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
+               "&time_nml t_end = 86400.0, dt_fixed = 600.0 /"//NL// &
+               "&nonhydrostatic_nml nz_layers = 6 /"//NL// &
+               "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0, "// &
+               "T_init_surface = 20.0, T_init_bottom = 4.0 /"//NL// &
+               "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
+               "&ocean_hvisc_nml nu_h = 200.0 /"//NL// &
+               "&ocean_diag_nml enabled = .false. /"//NL// &
+               "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 10000.0, dy = 10000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.08 /"//NL// &
+               "&vcoord_nml vcoord_type = 'zstar' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 1000.0, "// &
+               "edge_depth = 800.0, slope_scale = 40000.0 /"//NL// &
+               "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
+               "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL// &
+               "&ocean_slopes_nml enable = .true. /"//NL// &
+               "&ocean_gm_nml enable = .true., khth = 500.0 /"//NL// &
+               "&ocean_meke_nml enable = .true., gmcoeff = 0.15, khcoeff = 1.0, "// &
+               "damping = 1.0e-6 /"//NL// &
+               "&ocean_wavespeed_nml enable = .true. /"//NL// &
+               "&ocean_varmix_nml enable = .true., use_visbeck = .true., "// &
+               "khth_slope_cff = 0.1, khtr_slope_cff = 0.1, visbeck_l_scale = 3.0e4, "// &
+               "khth_max = 2000.0, khtr_max = 2000.0 /"//NL// &
+               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+               "north = 'wall' /"//NL// &
+               "&output_nml output_to_file = .false. /"//NL
       case default
          error stop "test_ocean_restart_engine: unknown case"
       end select
@@ -415,6 +453,16 @@ contains
       type(error_type), allocatable, intent(out) :: error
       call ice_round_trip(error, "sea_ice_components")
    end subroutine test_engine_bit_exact_ice_components
+
+   subroutine test_engine_bit_exact_gm(error)
+      !! N_WRITE = 5 (odd) with `dt_therm_ratio = 2`: the checkpoint lands
+      !! mid thermo window, so the resumed step runs the GM operator on the
+      !! carried slopes / KhTh, and the next thermo step's MEKE reads the
+      !! carried `gm_src`.
+      type(error_type), allocatable, intent(out) :: error
+      integer :: n_ice
+      call run_round_trip(error, "gm_meke_varmix_therm2", 5, 4, n_ice)
+   end subroutine test_engine_bit_exact_gm
 
    subroutine ice_round_trip(error, label)
       !! N_WRITE = 5 (odd) with `dt_therm_ratio = 2`: the checkpoint lands

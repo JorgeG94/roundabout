@@ -11,10 +11,18 @@
 !!  1. gm_conserves_mass     — Sum_{i,j,k} h unchanged after a GM step.
 !!  2. gm_flattens_isopycnal — a tilted 2-layer interface relaxes toward
 !!                             flat under GM-only (tilt monotone-decreasing).
-!!  3. gm_tracer_conserves   — column tracer content conserved through the
-!!                             fold + continuity drain.
+!!  3. gm_tracer_conserves   — tracer content conserved through the GM
+!!                             operator (`continuity_gm_apply`).
 !!  4. gm_slope_limiter      — S >> slope_max ⇒ bounded Psi, h >= H_VANISHED.
 !!  5. gm_gm_src_sign        — gm_src >= 0 (PE release) for a stable column.
+!!  6. gm_sequential_partial_cell — the 1-degree Southern Ocean failure: an
+!!                             8.6 cm partial bed cell next to fillers under a
+!!                             dome, drained at the cap on all four faces.
+!!                             GM computed from the thickness the dynamics
+!!                             LEFT keeps it >= H_VANISHED and conserves
+!!                             volume + T/S content; the same transport
+!!                             computed from the stage-ENTRY thickness (the
+!!                             old fold) takes it negative.
 module test_ocean_gm
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp, GRAVITY, H_VANISHED
@@ -23,8 +31,8 @@ module test_ocean_gm
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_eos, only: eos_t, EOS_VARIANT_LINEAR
    use rdb_ocean_isopycnal_slopes, only: ocean_slopes_t, ocean_slopes_compute
-   use rdb_ocean_gm, only: ocean_gm_t, gm_compute_transports, gm_fold_x, gm_fold_y
-   use rdb_continuity, only: continuity_t, continuity_tracer_step_split
+   use rdb_ocean_gm, only: ocean_gm_t, gm_compute_transports
+   use rdb_continuity, only: continuity_t, continuity_gm_apply, TR_MODE_ADVECT
    use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
    implicit none
    private
@@ -49,7 +57,8 @@ contains
                   new_unittest("gm_tracer_conserves", test_tracer_conserves), &
                   new_unittest("gm_wall_no_leak", test_wall_no_leak), &
                   new_unittest("gm_slope_limiter", test_slope_limiter), &
-                  new_unittest("gm_gm_src_sign", test_gm_src_sign) &
+                  new_unittest("gm_gm_src_sign", test_gm_src_sign), &
+                  new_unittest("gm_sequential_partial_cell", test_sequential_partial_cell) &
                   ]
    end subroutine collect_ocean_gm_tests
 
@@ -390,7 +399,7 @@ contains
          do it = 1, NSTEP
             call ocean_slopes_compute(grid, metrics, eos, sl, ms, DTL)
             call gm_compute_transports(grid, metrics, gm, sl, ms, DTL)
-            call continuity_tracer_step_split(grid, metrics, ct, ms, DTL, gm=gm)
+            call continuity_gm_apply(grid, metrics, ct, ms, gm, DTL, 1.0_wp, TR_MODE_ADVECT)
             !$acc update self(ms%h_layer)
             tilt = abs(ms%h_layer(iw, j, 1) - ms%h_layer(ie, j, 1))
             if (tilt > prev + 1.0e-9_wp) monotone = .false.
@@ -412,7 +421,7 @@ contains
    end subroutine test_flattens
 
    ! ------------------------------------------------------------------
-   ! Test 3: tracer content conserved through fold + continuity
+   ! Test 3: tracer content conserved through the GM operator
    ! ------------------------------------------------------------------
    subroutine test_tracer_conserves(error)
       type(error_type), allocatable, intent(out) :: error
@@ -438,12 +447,11 @@ contains
          call make_eos(eos)
          call fill_tilted_TS(ms, grid, NZ, DZ, 1.0e-4_wp)
 
-         ! GM is conservative over the CLOSED discrete domain.  Bolus flux
-         ! vanishes only at the ARRAY edges (i=1/nx+1, j=1/ny+1), where the
-         ! slopes are zeroed; the physical sub-region exchanges tracer with
-         ! the ghost halo across its inner faces (the tilted-T edge fluxes
-         ! don't cancel even though uniform-h mass flux nets to zero).  So
-         ! the conservation invariant is the FULL-array sum.
+         ! GM is conservative over the CLOSED discrete domain: the operator
+         ! zeroes the bolus transport on every non-periodic physical edge
+         ! face (here all four are walls), so the full-array sum and the
+         ! physical-domain sum are both invariant; the full array is the
+         ! stricter bookkeeping (nothing may appear in the halo either).
          i0 = 1
          i1 = grid%nx_total
          j0 = 1
@@ -456,7 +464,7 @@ contains
          call map_in_ct(ms, sl, gm, ct)
          call ocean_slopes_compute(grid, metrics, eos, sl, ms, DT)
          call gm_compute_transports(grid, metrics, gm, sl, ms, DT)
-         call continuity_tracer_step_split(grid, metrics, ct, ms, DT, gm=gm)
+         call continuity_gm_apply(grid, metrics, ct, ms, gm, DT, 1.0_wp, TR_MODE_ADVECT)
          call map_out_ct(ms, sl, gm, ct)
 
          hsum = sum_phys_h(ms, i0, i1, j0, j1, NZ)
@@ -482,13 +490,12 @@ contains
    ! ------------------------------------------------------------------
    ! Test 3b: no bolus leak across a no-normal-flow WALL.
    ! Regression for the GM/MLE wall-closure bug found by benchmark_ALE:
-   ! the fold added uhD/vhD at the physical WALL faces (which the resolved
-   ! flux had zeroed), so the bolus carried tracer mass into the ghost halo
-   ! and the PHYSICAL-domain sum(hTr) drifted (~1e-8/step) even though the
-   ! FULL-array sum stayed closed.  With no `bc` argument the continuity
-   ! step defaults every edge to OBC_WALL, so the physical-domain content
-   ! must now conserve to round-off.  Resolved velocity is zero (tilted-T
-   ! only) ⇒ the bolus fold is the SOLE transport, isolating the wall path.
+   ! the old fold added uhD/vhD at the physical WALL faces (which the
+   ! resolved flux had zeroed), so the bolus carried tracer mass into the
+   ! ghost halo and the PHYSICAL-domain sum(hTr) drifted (~1e-8/step).
+   ! With no `bc` argument the GM operator treats every edge as a wall and
+   ! zeroes the bolus there, so the physical-domain content must conserve
+   ! to round-off.
    ! ------------------------------------------------------------------
    subroutine test_wall_no_leak(error)
       type(error_type), allocatable, intent(out) :: error
@@ -526,7 +533,7 @@ contains
          call map_in_ct(ms, sl, gm, ct)
          call ocean_slopes_compute(grid, metrics, eos, sl, ms, DT)
          call gm_compute_transports(grid, metrics, gm, sl, ms, DT)
-         call continuity_tracer_step_split(grid, metrics, ct, ms, DT, gm=gm)
+         call continuity_gm_apply(grid, metrics, ct, ms, gm, DT, 1.0_wp, TR_MODE_ADVECT)
          call map_out_ct(ms, sl, gm, ct)
 
          tsum = sum_phys_tr(ms, ms%idx_temperature, i0, i1, j0, j1, NZ)
@@ -544,6 +551,182 @@ contains
       call ms%destroy()
       call destroy_cartesian_metrics(metrics)
    end subroutine test_wall_no_leak
+
+   ! ------------------------------------------------------------------
+   ! Test 6: the sequential operator cannot take a partial cell negative
+   ! ------------------------------------------------------------------
+   subroutine test_sequential_partial_cell(error)
+      !! The 1-degree Southern Ocean failure, reduced to one column (z* open
+      !! steps, nothing closed).  The centre column's bed layer is an 8.6 cm
+      !! PARTIAL cell; in its four neighbours the same layer is an inert
+      !! filler (1e-4 m).  The stored isopycnals are DOMED over the centre,
+      !! so GM drains its deep water outward on all four faces — at the
+      !! availability cap `A·(h − H_VANISHED)/(4·dt)` with this slope.  The
+      !! dynamics of the step has already taken 60 % of the partial cell.
+      !!
+      !!   * FOLDED (the pre-2026-10 path): the transport computed from the
+      !!     stage-ENTRY thickness (8.6 cm) and applied to what the dynamics
+      !!     left (3.44 cm) — the cap bounds the wrong `h`, and the cell goes
+      !!     NEGATIVE.  Asserted, as the witness that the case bites.
+      !!   * SEQUENTIAL (now): the transport computed from the thickness the
+      !!     dynamics left — the cap bounds what is there, the cell ends at
+      !!     >= H_VANISHED, every layer stays >= min(its h, H_VANISHED), and
+      !!     total volume and T/S content are conserved to round-off.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_metrics_t) :: metrics
+      type(ocean_slopes_t) :: sl
+      type(ocean_gm_t) :: gm
+      type(continuity_t) :: ct
+      integer, parameter :: NX = 5, NY = 5, NZ = 4
+      real(wp), parameter :: DX = 2000.0_wp, HL = 1000.0_wp
+      real(wp), parameter :: PARTIAL = 0.086_wp, FILL = 1.0e-4_wp, KEEP = 0.4_wp
+      real(wp), parameter :: SLOPE0 = 5.0e-3_wp
+      real(wp), allocatable :: h_left(:, :, :), h_entry(:, :, :)
+      real(wp) :: vol0, vol, t0s, ts, s0s, ss, h_fold, h_seq, cap, gain
+      integer :: i, j, k, ic, jc, ni, nj, it_t, it_s
+      logical :: floor_ok
+      checks: block
+         call make_grid(grid, NX, NY, DX)
+         ms%nz_ml = NZ
+         call ms%init(grid)
+         call ct%init(grid, nz_ml=NZ)
+         call make_cartesian_metrics(metrics, grid)
+         call setup_slopes(sl, grid, NZ)
+         call setup_gm(gm, grid, NZ)
+         ni = grid%nx_total
+         nj = grid%ny_total
+         ic = NGHOST + (NX + 1)/2
+         jc = NGHOST + (NY + 1)/2
+         it_t = ms%idx_temperature
+         it_s = ms%idx_salinity
+
+         ! Stage-ENTRY thickness: uniform 1000 m layers, the centre bed layer
+         ! an 8.6 cm partial cell, its four neighbours' bed layer a filler.
+         allocate (h_entry(ni, nj, NZ))
+         h_entry = HL
+         h_entry(ic - 1, jc, 1) = FILL
+         h_entry(ic + 1, jc, 1) = FILL
+         h_entry(ic, jc - 1, 1) = FILL
+         h_entry(ic, jc + 1, 1) = FILL
+         h_entry(ic, jc, 1) = PARTIAL
+         ! What the dynamics LEFT: 60 % of the partial cell moved into the
+         ! four neighbouring fillers.
+         allocate (h_left(ni, nj, NZ))
+         h_left = h_entry
+         gain = (1.0_wp - KEEP)*PARTIAL/4.0_wp
+         h_left(ic, jc, 1) = KEEP*PARTIAL
+         h_left(ic - 1, jc, 1) = FILL + gain
+         h_left(ic + 1, jc, 1) = FILL + gain
+         h_left(ic, jc - 1, 1) = FILL + gain
+         h_left(ic, jc + 1, 1) = FILL + gain
+
+         ! Domed stored slopes: + west/south of the centre, - east/north;
+         ! zero at the bed (K=1) and the surface (K=NZ+1).
+         sl%slope_x = 0.0_wp
+         sl%slope_y = 0.0_wp
+         sl%n2_u = 1.0e-6_wp
+         sl%n2_v = 1.0e-6_wp
+         do k = 2, NZ
+            do j = 1, nj
+               do i = 1, ni + 1
+                  sl%slope_x(i, j, k) = merge(SLOPE0, -SLOPE0, i <= ic)
+               end do
+            end do
+            do j = 1, nj + 1
+               do i = 1, ni
+                  sl%slope_y(i, j, k) = merge(SLOPE0, -SLOPE0, j <= jc)
+               end do
+            end do
+         end do
+
+         ! ---- FOLDED: transport from the stage-entry h, applied to h_left.
+         call fill_layers(ms, h_entry, ni, nj, NZ)
+         call map_in_ct(ms, sl, gm, ct)
+         call gm_compute_transports(grid, metrics, gm, sl, ms, DT)
+         !$acc update self(gm%uhD)
+         cap = DX*DX*(PARTIAL - H_VANISHED)/(4.0_wp*DT)
+         call check(error, abs(gm%uhD(ic + 1, jc, 1) - cap) <= 1.0e-12_wp*cap .and. &
+                    abs(-gm%uhD(ic, jc, 1) - cap) <= 1.0e-12_wp*cap, &
+                    "the dome must drain the partial cell AT the cap (case strength)")
+         if (allocated(error)) exit checks
+         ms%h_layer = h_left
+         !$acc update device(ms%h_layer)
+         call continuity_gm_apply(grid, metrics, ct, ms, gm, DT, 1.0_wp, TR_MODE_ADVECT)
+         !$acc update self(ms%h_layer)
+         h_fold = ms%h_layer(ic, jc, 1)
+         call map_out_ct(ms, sl, gm, ct)
+         call check(error, h_fold < 0.0_wp, &
+                    "witness: the stage-entry (folded) transport drives the partial cell negative")
+         if (allocated(error)) exit checks
+
+         ! ---- SEQUENTIAL: transport from the thickness the dynamics left.
+         call fill_layers(ms, h_left, ni, nj, NZ)
+         vol0 = sum_phys_h(ms, 1, ni, 1, nj, NZ)
+         t0s = sum_phys_tr(ms, it_t, 1, ni, 1, nj, NZ)
+         s0s = sum_phys_tr(ms, it_s, 1, ni, 1, nj, NZ)
+         call map_in_ct(ms, sl, gm, ct)
+         call gm_compute_transports(grid, metrics, gm, sl, ms, DT)
+         call continuity_gm_apply(grid, metrics, ct, ms, gm, DT, 1.0_wp, TR_MODE_ADVECT)
+         call map_out_ct(ms, sl, gm, ct)
+         h_seq = ms%h_layer(ic, jc, 1)
+         floor_ok = .true.
+         do k = 1, NZ
+            do j = 1, nj
+               do i = 1, ni
+                  if (ms%h_layer(i, j, k) < min(h_left(i, j, k), H_VANISHED)*(1.0_wp - 1.0e-12_wp)) &
+                     floor_ok = .false.
+               end do
+            end do
+         end do
+         vol = sum_phys_h(ms, 1, ni, 1, nj, NZ)
+         ts = sum_phys_tr(ms, it_t, 1, ni, 1, nj, NZ)
+         ss = sum_phys_tr(ms, it_s, 1, ni, 1, nj, NZ)
+
+         call check(error, h_seq >= H_VANISHED*(1.0_wp - 1.0e-12_wp), &
+                    "sequential GM must leave the partial cell >= H_VANISHED")
+         if (allocated(error)) exit checks
+         call check(error, h_seq < KEEP*PARTIAL, &
+                    "sequential GM must still drain the partial cell (non-trivial)")
+         if (allocated(error)) exit checks
+         call check(error, floor_ok, &
+                    "sequential GM must keep every layer >= min(h, H_VANISHED)")
+         if (allocated(error)) exit checks
+         call check(error, abs(vol - vol0) <= 1.0e-14_wp*vol0, &
+                    "sequential GM must conserve volume")
+         if (allocated(error)) exit checks
+         call check(error, abs(ts - t0s) <= 1.0e-13_wp*abs(t0s), &
+                    "sequential GM must conserve temperature content")
+         if (allocated(error)) exit checks
+         call check(error, abs(ss - s0s) <= 1.0e-13_wp*abs(s0s), &
+                    "sequential GM must conserve salinity content")
+      end block checks
+      call ct%destroy()
+      call gm%destroy()
+      call sl%destroy()
+      call ms%destroy()
+      call destroy_cartesian_metrics(metrics)
+   end subroutine test_sequential_partial_cell
+
+   subroutine fill_layers(ms, h, ni, nj, nz)
+      !! Set `h_layer` and T/S content (T warm over cold, S uniform; a
+      !! filler carries its donor's concentration, I1').
+      type(multilayer_state_t), intent(inout) :: ms
+      integer, intent(in) :: ni, nj, nz
+      real(wp), intent(in) :: h(ni, nj, nz)
+      integer :: k
+      ms%h_layer = h
+      ms%u_face_x_layer = 0.0_wp
+      ms%v_face_y_layer = 0.0_wp
+      do k = 1, nz
+         ms%tracers(ms%idx_temperature)%hTr(:, :, k) = (2.0_wp + 4.0_wp*real(k, wp))*h(:, :, k)
+         ms%tracers(ms%idx_salinity)%hTr(:, :, k) = S0*h(:, :, k)
+      end do
+      ! I1': the bed fillers carry the layer above's temperature.
+      where (h(:, :, 1) <= H_VANISHED) &
+         ms%tracers(ms%idx_temperature)%hTr(:, :, 1) = (2.0_wp + 8.0_wp)*h(:, :, 1)
+   end subroutine fill_layers
 
    ! ------------------------------------------------------------------
    ! continuity-aware map helpers + physical-domain sums
