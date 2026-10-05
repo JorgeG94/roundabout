@@ -396,6 +396,17 @@ ROWS = [
          message=r"\dx\d: \d+ field mismatch", scope="any",
          # minimised 2026-10-04 from c019 (greedy, every other axis at base)
          witness={"vcoord": "zstar", "coriolis": "sadourny", "pv_adv": "weno7"}),
+    _gap("decomp_zstar_ssp_rk2_gm", "runtime", ("vc_zstar", "ssp_rk2", "gm"),
+         "zstar's open stepped bed with GM under ssp_rk2 runs clean on one rank and on 1x2, "
+         "but a split in x (2x1, 2x2, 4x1) drives one column negative and stops on the remap "
+         "guard at step 3; pred_corr at 2x2, z_fixed with closed faces and sigma are clean. "
+         "Independent of the PGF form and the Coriolis scheme (mont + sadourny_energy fails "
+         "the same way, and runs none of the code the zstar open-step fixes touched), so it "
+         "predates them: the cells only reach the DECOMP leg now that they pass checks 1-3.",
+         "NOT TRACKED (found by this matrix, 2026-10-04)", expect=("DECOMP",),
+         message=r"the decomposed run failed", scope="any",
+         # minimised 2026-10-04 from c015 (greedy over the decomposed run)
+         witness={"vcoord": "zstar", "split": "ssp_rk2", "eddy": "gm"}),
     _gap("decomp_eulerian_z_ssp_rk2", "runtime", ("vc_eulerian_z", "ssp_rk2"),
          "eulerian_z under ssp_rk2 (its legacy per-stage vertical-advection + h-rescale path) "
          "is not decomposition-invariant in some combinations: last-bit differences in every "
