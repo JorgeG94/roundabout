@@ -82,6 +82,8 @@ program test_ocean_tripolar_fold_mpi
       logical :: has_north = .true.
       integer :: px = 1
          !! Tiles along x of the run that produced the snapshot.
+      integer :: ng = 0
+         !! `nghost` of the run that produced the snapshot.
    end type snap_t
 
    integer :: rank, nprocs, n_fail, total_fail
@@ -270,6 +272,7 @@ contains
       s%has_south = engine%decomp%has_south
       s%has_north = engine%decomp%has_north
       s%px = engine%decomp%px
+      s%ng = engine%grid%nghost
       associate (ms => engine%state%multilayer, mt => engine%state%metrics)
          if (after_steps) then
             !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
@@ -333,7 +336,7 @@ contains
 
       uface = .false.
       if (present(is_uface)) uface = is_uface
-      ng = 3
+      ng = d%ng
       nyl = size(tile, 2) - 2*ng
       if (is_vface) nyl = nyl - 1
       jhi = ng + nyl
