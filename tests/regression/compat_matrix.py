@@ -392,8 +392,7 @@ AXES = [
         ("wave_drag", {"ocean_bt_nml": {"wave_drag": True, "wave_drag_r_uniform": 1.0e-3}}),
         # The visc_rem family needs the implicit drag fold, which refuses an
         # HBBL-distributed drag: the value brings bed-only drag with it.
-        ("visc_rem", {"ocean_bt_nml": {"correction_h_weighted": True,
-                                       "correction_visc_rem": True},
+        ("visc_rem", {"ocean_bt_nml": {"correction_visc_rem": True},
                       "ocean_vdiff_nml": {"implicit_drag": True},
                       "ocean_bdrag_nml": {"hbbl": 0.0}}),
     ]),
