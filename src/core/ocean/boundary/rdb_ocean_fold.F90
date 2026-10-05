@@ -180,38 +180,60 @@ contains
    ! ================================================================
 
    pure subroutine fold_north_u_face_2d(u, nx_face, ny_total, &
-                                        nx_phys, ny_phys, nghost)
-      !! Fill the north halo of a 2D x-face (Cu) field; sign-flipped.
+                                        nx_phys, ny_phys, nghost, negate)
+      !! Fill the north halo of a 2D x-face (Cu) field.  Sign-flipped by
+      !! default (`negate` absent / `.true.`, the true-vector contract —
+      !! wind stress, velocity).  `negate=.false.` copies instead: for a
+      !! SCALAR carried on a u-face (e.g. the viscous remnant `visc_rem_u`
+      !! — a fraction, not a flux component), the 180-degree fold rotation
+      !! still swaps which side of the seam the value sits on, but the
+      !! value itself does not change sign (see `fold_north_corner_2d`'s
+      !! `negate` for the matching corner-stagger contract).
       integer, intent(in) :: nx_face, ny_total, nx_phys, ny_phys, nghost
       real(wp), intent(inout) :: u(nx_face, ny_total)
          !! x-face field, shape (nx_total+1, ny_total).
+      logical, intent(in), optional :: negate
+         !! `.true.` (default) = true-vector component; `.false.` = scalar.
 
       integer :: i, j, fsum, jsum, j_lo
+      real(wp) :: sgn
 
+      sgn = -1.0_wp
+      if (present(negate)) then
+         if (.not. negate) sgn = 1.0_wp
+      end if
       fsum = 2*nghost + nx_phys + 2
       jsum = 2*nghost + 2*ny_phys + 1
       j_lo = nghost + ny_phys + 1
 
       do concurrent(j=j_lo:ny_total, i=1:nx_face)
-         u(i, j) = -u(fsum - i, jsum - j)
+         u(i, j) = sgn*u(fsum - i, jsum - j)
       end do
    end subroutine fold_north_u_face_2d
 
    pure subroutine fold_north_u_face_3d(u, nx_face, ny_total, nz, &
-                                        nx_phys, ny_phys, nghost)
-      !! 3D x-face (Cu) north-halo fill; sign-flipped, per-level identical.
+                                        nx_phys, ny_phys, nghost, negate)
+      !! 3D x-face (Cu) north-halo fill, per-level identical.  See the 2D
+      !! twin for the `negate` (vector vs. scalar) contract.
       integer, intent(in) :: nx_face, ny_total, nz, nx_phys, ny_phys, nghost
       real(wp), intent(inout) :: u(nx_face, ny_total, nz)
          !! x-face 3D field, shape (nx_total+1, ny_total, nz).
+      logical, intent(in), optional :: negate
+         !! `.true.` (default) = true-vector component; `.false.` = scalar.
 
       integer :: i, j, k, fsum, jsum, j_lo
+      real(wp) :: sgn
 
+      sgn = -1.0_wp
+      if (present(negate)) then
+         if (.not. negate) sgn = 1.0_wp
+      end if
       fsum = 2*nghost + nx_phys + 2
       jsum = 2*nghost + 2*ny_phys + 1
       j_lo = nghost + ny_phys + 1
 
       do concurrent(k=1:nz, j=j_lo:ny_total, i=1:nx_face)
-         u(i, j, k) = -u(fsum - i, jsum - j, k)
+         u(i, j, k) = sgn*u(fsum - i, jsum - j, k)
       end do
    end subroutine fold_north_u_face_3d
 
@@ -227,16 +249,29 @@ contains
    ! ================================================================
 
    pure subroutine fold_north_v_face_2d(v, nx_total, ny_face, &
-                                        nx_phys, ny_phys, nghost)
-      !! 2D y-face (Cv) fold: north-halo fill (negated) + on-line
-      !! antisymmetric projection at the fold row.  Used for the
-      !! barotropic `bt_vbt` field in the BT fast loop.
+                                        nx_phys, ny_phys, nghost, negate)
+      !! 2D y-face (Cv) fold: north-halo fill + on-line antisymmetric
+      !! projection at the fold row.  Used for the barotropic `bt_vbt`
+      !! field in the BT fast loop.  `negate` (default `.true.`, see the
+      !! u-face twin) selects true-vector (sign flip + self-conjugate
+      !! zero) vs. scalar (copy + self-conjugate left unchanged, matching
+      !! `fold_north_corner_2d`'s scalar contract) — a scalar on a v-face
+      !! (e.g. `visc_rem_v`) is the SAME physical attribute of the SAME
+      !! face seen from both sides of the seam, so the duplicated DOF at
+      !! the fold line must agree, not cancel.
       integer, intent(in) :: nx_total, ny_face, nx_phys, ny_phys, nghost
       real(wp), intent(inout) :: v(nx_total, ny_face)
          !! y-face 2D field, shape (nx_total, ny_total+1).
+      logical, intent(in), optional :: negate
+         !! `.true.` (default) = true-vector component; `.false.` = scalar.
 
       integer :: i, j, isum, jsum, j_fold, i_lo, p, pm
+      real(wp) :: sgn
+      logical :: negate_l
 
+      negate_l = .true.
+      if (present(negate)) negate_l = negate
+      sgn = merge(-1.0_wp, 1.0_wp, negate_l)
       isum = 2*nghost + nx_phys + 1
       jsum = 2*nghost + 2*ny_phys + 2   ! v is SOUTH-face: y = j-1
       j_fold = nghost + ny_phys + 1     ! north face of the last T-row
@@ -244,35 +279,44 @@ contains
 
       ! (1) Halo rows strictly beyond the fold row.
       do concurrent(j=j_fold + 1:ny_face, i=1:nx_total)
-         v(i, j) = -v(isum - i, jsum - j)
+         v(i, j) = sgn*v(isum - i, jsum - j)
       end do
 
-      ! (2) On-line antisymmetric projection at j = j_fold, over EVERY
-      !     storage column (periodic ghosts included, so the row stays
-      !     periodic-consistent without a second wrap): a column whose
-      !     physical index p lies in the west half takes -v of the east
-      !     mirror p' = ni+1-p; the east half is the (read-only) source.
+      ! (2) On-line projection at j = j_fold, over EVERY storage column
+      !     (periodic ghosts included, so the row stays periodic-consistent
+      !     without a second wrap): a column whose physical index p lies in
+      !     the west half takes sgn*(the east mirror p' = ni+1-p); the east
+      !     half is the (read-only) source.  Self-conjugate column: zeroed
+      !     for a vector (v = -v ⇒ 0), left as is for a scalar.
       do concurrent(i=1:nx_total) local(p, pm)
          p = modulo(i - i_lo, nx_phys) + 1
          pm = nx_phys + 1 - p
          if (p < pm) then
-            v(i, j_fold) = -v(nghost + pm, j_fold)
-         else if (p == pm) then
+            v(i, j_fold) = sgn*v(nghost + pm, j_fold)
+         else if (p == pm .and. negate_l) then
             v(i, j_fold) = 0.0_wp
          end if
       end do
    end subroutine fold_north_v_face_2d
 
    pure subroutine fold_north_v_face_3d(v, nx_total, ny_face, nz, &
-                                        nx_phys, ny_phys, nghost)
-      !! 3D y-face (Cv) fold: north-halo fill (negated) + on-line
-      !! antisymmetric projection at the fold row.
+                                        nx_phys, ny_phys, nghost, negate)
+      !! 3D y-face (Cv) fold: north-halo fill + on-line antisymmetric
+      !! projection at the fold row.  See the 2D twin for the `negate`
+      !! (vector vs. scalar) contract.
       integer, intent(in) :: nx_total, ny_face, nz, nx_phys, ny_phys, nghost
       real(wp), intent(inout) :: v(nx_total, ny_face, nz)
          !! y-face 3D field, shape (nx_total, ny_total+1, nz).
+      logical, intent(in), optional :: negate
+         !! `.true.` (default) = true-vector component; `.false.` = scalar.
 
       integer :: i, j, k, isum, jsum, j_fold, i_lo, p, pm
+      real(wp) :: sgn
+      logical :: negate_l
 
+      negate_l = .true.
+      if (present(negate)) negate_l = negate
+      sgn = merge(-1.0_wp, 1.0_wp, negate_l)
       isum = 2*nghost + nx_phys + 1
       jsum = 2*nghost + 2*ny_phys + 2    ! v is SOUTH-face: y = j-1
       j_fold = nghost + ny_phys + 1      ! the self-conjugate fold row
@@ -280,20 +324,21 @@ contains
 
       ! (1) Halo rows strictly beyond the fold row.
       do concurrent(k=1:nz, j=j_fold + 1:ny_face, i=1:nx_total)
-         v(i, j, k) = -v(isum - i, jsum - j, k)
+         v(i, j, k) = sgn*v(isum - i, jsum - j, k)
       end do
 
-      ! (2) On-line antisymmetric projection at j = j_fold (see the 2D
-      !     twin): every storage column whose physical index p is in the
-      !     west half takes -v of its east mirror p' = ni+1-p; the
-      !     self-conjugate column (odd ni only) is zeroed; the east half is
-      !     the read-only source, so the kernel is race-free.
+      ! (2) On-line projection at j = j_fold (see the 2D twin): every
+      !     storage column whose physical index p is in the west half
+      !     takes sgn*(its east mirror p' = ni+1-p); the self-conjugate
+      !     column (odd ni only) is zeroed for a vector, left as is for a
+      !     scalar; the east half is the read-only source, so the kernel
+      !     is race-free.
       do concurrent(k=1:nz, i=1:nx_total) local(p, pm)
          p = modulo(i - i_lo, nx_phys) + 1
          pm = nx_phys + 1 - p
          if (p < pm) then
-            v(i, j_fold, k) = -v(nghost + pm, j_fold, k)
-         else if (p == pm) then
+            v(i, j_fold, k) = sgn*v(nghost + pm, j_fold, k)
+         else if (p == pm .and. negate_l) then
             v(i, j_fold, k) = 0.0_wp
          end if
       end do

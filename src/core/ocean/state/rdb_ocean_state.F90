@@ -2185,6 +2185,27 @@ contains
                               size(state%dyn%bt_work%wd_wet_dyn, 2), optional=.true.)
       end if
 
+      ! --- PR-1 viscous remnant γ (`bt_work%visc_rem_u/v`): REFRESHED,
+      !     not re-derived from scratch, by the stage-end vdiff producer
+      !     (`bt_correction_visc_rem`) and the pre-substep
+      !     `visc_rem_precompute` (`forcing_visc_rem`/`renorm_visc_rem`)
+      !     -- a cold resume without this checkpoint would restart every
+      !     post-restart stage from the `source=1.0` init value, which is
+      !     one stage's worth of refresh behind a continued run (the BT
+      !     corrector reads the PREVIOUS stage's γ by design -- see
+      !     `bt_correction_visc_rem`'s docstring in
+      !     `rdb_barotropic_workstate`).  Allocated unconditionally by
+      !     `barotropic_workstate_t%init`.  `optional=.true.`: a pre-PR-1
+      !     checkpoint has no such variables and must still resume -- it
+      !     re-seeds at 1.0, same as a cold start (closes compat row
+      !     `restart_visc_rem`). ---
+      if (allocated(state%dyn%bt_work%visc_rem_u)) then
+         call register_full_3d_opt(reg, "bt_visc_rem_u", state%dyn%bt_work%visc_rem_u)
+      end if
+      if (allocated(state%dyn%bt_work%visc_rem_v)) then
+         call register_full_3d_opt(reg, "bt_visc_rem_v", state%dyn%bt_work%visc_rem_v)
+      end if
+
       ! --- Sea-ice frazil bank (PR 1): un-spent supercooling heat the ice
       !     model (PR 3) will consume.  PERSISTENT (accumulates across
       !     steps), so a restart must carry it or banked energy would be

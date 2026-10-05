@@ -99,7 +99,9 @@ contains
                   new_unittest("restart_engine_bit_exact_sea_ice_components", &
                                test_engine_bit_exact_ice_components), &
                   new_unittest("restart_engine_bit_exact_gm_meke_varmix_therm2", &
-                               test_engine_bit_exact_gm) &
+                               test_engine_bit_exact_gm), &
+                  new_unittest("restart_engine_bit_exact_visc_rem_chain", &
+                               test_engine_bit_exact_visc_rem) &
                   ]
    end subroutine collect_ocean_restart_engine_tests
 
@@ -130,6 +132,36 @@ contains
                "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
                "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
                "smag_ah = .true. /"//NL// &
+               "&ocean_diag_nml enabled = .false. /"//NL// &
+               "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 10000.0, dy = 10000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.08 /"//NL// &
+               "&vcoord_nml vcoord_type = 'z_fixed', z_fixed_profile = 'tanh', "// &
+               "z_fixed_dz_top = 20.0, z_fixed_tanh_center = 0.5, "// &
+               "z_fixed_tanh_width = 0.25 /"//NL// &
+               "&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, "// &
+               "slope_scale = 0.25 /"//NL// &
+               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+               "north = 'wall' /"//NL// &
+               "&output_nml output_to_file = .false. /"//NL
+      case ("island_periodic_zfixed_visc_rem")
+         ! PR-1: the SAME island/periodic/z_fixed/pred_corr case as
+         ! `island_periodic_zfixed`, but with the visc_rem chain live
+         ! (`implicit_drag` + `correction_visc_rem`) so
+         ! `bt_work%visc_rem_u/v` holds NON-trivial values (not just the
+         ! `source=1.0` init) at the checkpoint — the restart test that
+         ! closes compat row `restart_visc_rem`.  Linear bed drag with
+         ! `hbbl = 0` (no HBBL band — `implicit_drag` + `hbbl > 0` stays
+         ! refused at configure).
+         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
+               "&time_nml t_end = 86400.0, dt_fixed = 600.0 /"//NL// &
+               "&nonhydrostatic_nml nz_layers = 6 /"//NL// &
+               "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0, "// &
+               "T_init_surface = 20.0, T_init_bottom = 4.0 /"//NL// &
+               "&ocean_bt_nml auto_n_inner = .true., correction_visc_rem = .true. /"//NL// &
+               "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
+               "smag_ah = .true. /"//NL// &
+               "&ocean_bdrag_nml form = 'linear', r = 2.0e-4, hbbl = 0.0, bg_vel = 0.1 /"//NL// &
+               "&ocean_vdiff_nml implicit_drag = .true. /"//NL// &
                "&ocean_diag_nml enabled = .false. /"//NL// &
                "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 10000.0, dy = 10000.0 /"//NL// &
                "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.08 /"//NL// &
@@ -368,7 +400,7 @@ contains
       call check(error, nbad_fields == 0, "fields differ "//when//":"//msg)
    end subroutine compare
 
-   subroutine run_round_trip(error, label, n_write, n_after, n_ice)
+   subroutine run_round_trip(error, label, n_write, n_after, n_ice, resume_point_only)
       !! Straight N_WRITE + N_AFTER vs N_WRITE + checkpoint + warm restart
       !! through `engine_setup` + N_AFTER, compared on every field -- twice:
       !! at the RESUME POINT (the writer's state right after the checkpoint
@@ -379,14 +411,26 @@ contains
       character(len=*), intent(in) :: label
       integer, intent(in) :: n_write, n_after
       integer, intent(out) :: n_ice
+      logical, intent(in), optional :: resume_point_only
+         !! `.true.` = only the AT-RESUME-POINT snapshot comparison runs
+         !! (checkpoint plumbing); the post-restart N_AFTER steps are
+         !! skipped, so a case whose answer is known to drift for a
+         !! reason OTHER than the checkpoint/restore wiring (e.g. the
+         !! `restart_visc_rem` compat gap -- see
+         !! `test_engine_resume_point_only_visc_rem`) can still assert
+         !! the registry round-trip is exact without asserting something
+         !! this test cannot make true.  Default `.false.` = the full
+         !! round trip (every other case).
       type(ocean_engine_t), target :: ea, eb
       type(config_t) :: cfg_a, cfg_b
       type(snapshot_t) :: sa, sb, sa0, sb0
       real(wp) :: t_a, t_b
       integer :: step_b, ierr
-      logical :: ok
+      logical :: ok, point_only
 
       n_ice = 0
+      point_only = .false.
+      if (present(resume_point_only)) point_only = resume_point_only
       ! ---- A: n_write steps, checkpoint, n_after more ----
       call make_engine(ea, cfg_a, case_nml(label), ok)
       call check(error, ok, "engine A setup failed")
@@ -416,7 +460,7 @@ contains
       if (allocated(error)) return
       call take_snapshot(eb, sb0)
       call compare(error, sa0, sb0, n_ice, "at the resume point")
-      if (allocated(error)) then
+      if (allocated(error) .or. point_only) then
          call engine_exit_data(eb)
          call engine_teardown(eb)
          call delete_file(FN)
@@ -438,6 +482,44 @@ contains
       integer :: n_ice
       call run_round_trip(error, "island_periodic_zfixed", 6, 3, n_ice)
    end subroutine test_engine_bit_exact
+
+   subroutine test_engine_bit_exact_visc_rem(error)
+      !! PR-1: `bt_correction_visc_rem` live.  Checks the AT-RESUME-POINT
+      !! snapshot only (the checkpoint/restore plumbing PR-1 adds for
+      !! `bt_work%visc_rem_u/v` — this DOES verify, exactly, because
+      !! `register_full_3d_opt` round-trips the field bitwise through
+      !! `ocean_state_restart_write`/`_read`).
+      !!
+      !! It does NOT run the full round trip (N_AFTER steps post-restart)
+      !! -- that still diverges, but for a reason PR-1 does not fix and
+      !! is already tracked: `tests/regression/compat_expect.py`'s
+      !! `restart_visc_rem` KNOWN_GAP documents that `visc_rem_precompute`
+      !! (the pre-substep producer, gated on `is_pc .or. forcing_visc_rem
+      !! .or. renorm_visc_rem`) builds its remnant matrix from the
+      !! PREVIOUS stage's `vmix%kv` (a one-stage lag, by design -- see
+      !! that routine's docstring) -- and `vmix%kv` itself is a derived
+      !! field, never checkpointed.  On the FIRST resumed predictor
+      !! stage this reads whatever `vmix%kv` cold-initializes to, not the
+      !! continuous run's left-over corrector-stage value, so `F_bt`'s
+      !! rem-weighting (and hence every prognostic) diverges at the
+      !! 1e-11-ish relative level from the very first resumed step --
+      !! confirmed empirically here (diverges in `ml_h_layer`,
+      !! `ml_u_face_x_layer`, every tracer, `hvisc_du_visc/dv_visc`,
+      !! `vmix_bl_depth`, and `bt_visc_rem_u/v` itself, all consistent
+      !! with ONE upstream cause rather than N independent restart bugs).
+      !! Checkpointing `bt_work%visc_rem_u/v` was necessary but NOT
+      !! sufficient to close `restart_visc_rem` -- the row stays open; a
+      !! full fix needs either checkpointing `vmix%kv` (a derived field,
+      !! normally deliberately NOT carried, and shared by every vmix
+      !! consumer, not just visc_rem) or a warm-restart "pre-warm" vmix
+      !! pass before the first resumed predictor stage.  Flagging as a
+      !! design decision for the maintainer rather than choosing one
+      !! inside PR-1 (see the PR-1 report).
+      type(error_type), allocatable, intent(out) :: error
+      integer :: n_ice
+      call run_round_trip(error, "island_periodic_zfixed_visc_rem", 6, 3, n_ice, &
+                          resume_point_only=.true.)
+   end subroutine test_engine_bit_exact_visc_rem
 
    subroutine test_engine_bit_exact_ice(error)
       type(error_type), allocatable, intent(out) :: error

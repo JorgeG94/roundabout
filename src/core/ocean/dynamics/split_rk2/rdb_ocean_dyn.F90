@@ -20,7 +20,7 @@ module rdb_ocean_dyn
                                  ocean_periodic_wrap_face_x_3d, &
                                  ocean_periodic_wrap_face_y_3d
    use rdb_ocean_fold_apply, only: ocean_fold_wrap_state, ocean_fold_wrap_centre_3d_state, &
-                                   ocean_fold_wrap_time_means
+                                   ocean_fold_wrap_time_means, ocean_fold_wrap_visc_rem
    use rdb_ocean_halo_state, only: ocean_halo_exchange_ml_state
    use rdb_ocean_halo, only: ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y, &
                              ocean_halo_bt_group_2d, ocean_halo_centre, &
@@ -163,6 +163,12 @@ module rdb_ocean_dyn
 #ifdef RDB_ENABLE_TESTING
    public :: reset_vanished_layer_velocities
    public :: mask_layer_velocities
+   public :: vmix_apply_in_stage
+      !! PR-1: exposed test-only so `test_ocean_visc_rem` can pin the
+      !! `dt_remnant` call-point dispatch directly (the pred_corr
+      !! predictor's split remnant-only refresh vs. the historical fused
+      !! path) without duplicating `run_stage_split`'s full state setup.
+      !! No production module outside `rdb_ocean_dyn` calls it.
 #endif
 
    ! ---- Baroclinic-stability diagnostic (debug-gated, default OFF) ----
@@ -1371,7 +1377,7 @@ contains
 
    subroutine vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt, stage, sf, epbl, kshear, vmix_tidal, bt_work, &
                                   lambda_top_u, lambda_top_v, cover_u, cover_v, &
-                                  apply_tracers, metrics)
+                                  apply_tracers, metrics, dt_remnant, bc)
       !! Bundle the per-stage vmix closure / KPP overlay / KV_ML_INVZ2 /
       !! assembly gate / vdiff dispatch into one routine so the run_stage
       !! drivers can call `vmix_apply_in_stage(grid, dyn, vmix, vd, ss,
@@ -1485,9 +1491,26 @@ contains
          !! consumers fail loud when their knob is on and the slot is
          !! absent — `kappa_shear_compute` for `at_vertex`, and
          !! `vmix_assemble` for `bkgnd_henyey`.
+      real(wp), intent(in), optional :: dt_remnant
+         !! PR-1: when present AND different from the velocity-apply
+         !! `dt` (the `pred_corr` PREDICTOR, where this routine is called
+         !! with `dt_vel = pc_be·dt`), the visc_rem PRODUCER is split out
+         !! of the velocity solve and re-run as its own remnant-only call
+         !! at `dt_remnant` — matching MOM6's `VISC_REM_TIMESTEP_BUG =
+         !! .false.` default (`vertvisc_remnant` always at the outer
+         !! step's `dt`, MOM_dynamics_split_RK2.F90:777-779), never at
+         !! `dt_pred`.  Absent ⇒ the historical fused behaviour (remnant
+         !! built from the SAME matrix as the velocity solve, at `dt`).
+         !! See `bt_forcing_visc_rem`'s docstring in
+         !! `rdb_barotropic_workstate` for the full call-point mapping.
+      type(ocean_bc_state_t), intent(in), optional :: bc
+         !! Open-boundary / periodic / tripolar-fold state — forwarded
+         !! ONLY so the visc_rem halo refresh (`visc_rem_halo_refresh`)
+         !! can re-wrap `bt_work%visc_rem_u/v`'s ghosts after production.
+         !! Unread when `do_remnant` is false.
 
       logical :: epbl_active, kshear_active, tidal_active, do_remnant
-      logical :: do_tracers, vertex_kv
+      logical :: do_tracers, vertex_kv, split_remnant, request_remnant
 
       do_tracers = .true.
       if (present(apply_tracers)) do_tracers = apply_tracers
@@ -1506,6 +1529,19 @@ contains
       if (present(vmix_tidal)) tidal_active = vmix_tidal%enable
       do_remnant = .false.
       if (present(bt_work)) do_remnant = bt_work%bt_correction_visc_rem
+      ! PR-1 VISC_REM_TIMESTEP_BUG fix: at the pred_corr PREDICTOR this
+      ! routine is called with `dt_vel = pc_be·dt` (the provisional
+      ! velocity's own apply dt), but MOM6's default (non-buggy) remnant
+      ! is always built at the OUTER step's `dt`.  Since the remnant
+      ! matrix depends only on {dt, h, kv, drag} — never on velocity — it
+      ! cannot be produced correctly by fusing it into a dt_vel-based
+      ! velocity solve; `split_remnant` routes it to a SEPARATE
+      ! remnant-only call at `dt_remnant` instead (`visc_rem_precompute`),
+      ! run AFTER the (remnant-free) velocity solve below.  `request_remnant`
+      ! is what actually reaches `vdiff_apply_momentum` this call.
+      split_remnant = .false.
+      if (do_remnant .and. present(dt_remnant)) split_remnant = (dt_remnant /= dt)
+      request_remnant = do_remnant .and. .not. split_remnant
 
       if (vmix%use_closure) then
          call profiler_start("ocean_vmix_compute")
@@ -1606,7 +1642,7 @@ contains
          call profiler_start("ocean_vdiff_apply")
          if (vertex_kv) then
             ! Corner Kv seam: same calls + the corner viscosity source.
-            if (do_remnant) then
+            if (request_remnant) then
                call vdiff_apply_momentum(grid, vd, ms, dt, kv_source=vmix%kv, &
                                          tau_u=ss%tau_x, tau_v=ss%tau_y, &
                                          lambda_bot_u=bd%lambda_bot_u, &
@@ -1626,7 +1662,7 @@ contains
                                          kv_corner_source=kshear%kd_corner, &
                                          kv_corner_prandtl=kshear%prandtl_turb)
             end if
-         else if (do_remnant) then
+         else if (request_remnant) then
             call vdiff_apply_momentum(grid, vd, ms, dt, kv_source=vmix%kv, &
                                       tau_u=ss%tau_x, tau_v=ss%tau_y, &
                                       lambda_bot_u=bd%lambda_bot_u, &
@@ -1652,7 +1688,7 @@ contains
          call profiler_stop("ocean_vdiff_apply")
       else
          call profiler_start("ocean_vdiff_apply")
-         if (do_remnant) then
+         if (request_remnant) then
             call vdiff_apply_momentum(grid, vd, ms, dt, &
                                       tau_u=ss%tau_x, tau_v=ss%tau_y, &
                                       lambda_bot_u=bd%lambda_bot_u, &
@@ -1673,10 +1709,24 @@ contains
          end if
          call profiler_stop("ocean_vdiff_apply")
       end if
+      ! PR-1: the split-dt remnant refresh (predictor stage, see
+      ! `split_remnant` above) runs AFTER the velocity solve above, at
+      ! `dt_remnant` — `visc_rem_precompute` does its own halo/periodic/
+      ! fold refresh at the end, so nothing further is needed here.  The
+      ! FUSED path (every other call site) must still get its own halo
+      ! refresh — MOM6's `pass_visc_rem` group pass runs after EVERY
+      ! `vertvisc_remnant` call, not just the split one.
+      if (split_remnant) then
+         call visc_rem_precompute(grid, bt_work, vmix, vd, ss, bd, ms, dt_remnant, kshear=kshear, &
+                                  lambda_top_u=lambda_top_u, lambda_top_v=lambda_top_v, &
+                                  cover_u=cover_u, cover_v=cover_v, bc=bc)
+      else if (request_remnant) then
+         call visc_rem_halo_refresh(grid, bt_work, bc)
+      end if
    end subroutine vmix_apply_in_stage
 
-   subroutine visc_rem_precompute(grid, dyn, vmix, vd, ss, bd, ms, dt, kshear, &
-                                  lambda_top_u, lambda_top_v, cover_u, cover_v)
+   subroutine visc_rem_precompute(grid, bt_work, vmix, vd, ss, bd, ms, dt, kshear, &
+                                  lambda_top_u, lambda_top_v, cover_u, cover_v, bc)
       !! Refresh `bt_work%visc_rem_u/v` from the CURRENT stage state
       !! BEFORE the barotropic forcing assembly (PGF_BUG.md §9) — the
       !! MOM6-order parity (`vertvisc_coef` runs before `btstep` every
@@ -1694,7 +1744,7 @@ contains
       !! weight the BT corrector with a different friction operator
       !! than the one actually applied).
       type(hgrid_t), intent(in) :: grid
-      type(ocean_dyn_t), intent(inout) :: dyn
+      type(barotropic_workstate_t), intent(inout) :: bt_work
       type(ocean_vmix_t), intent(in) :: vmix
       type(ocean_vdiff_t), intent(inout) :: vd
       type(ocean_surface_stress_t), intent(in) :: ss
@@ -1715,6 +1765,12 @@ contains
       real(wp), intent(in), optional :: cover_u(grid%nx_total + 1, grid%ny_total)
       real(wp), intent(in), optional :: cover_v(grid%nx_total, grid%ny_total + 1)
          !! Face ice-cover masks, same reason.
+      type(ocean_bc_state_t), intent(in), optional :: bc
+         !! Forwarded ONLY for the post-production halo/periodic/fold
+         !! refresh of `visc_rem_u/v` (`visc_rem_halo_refresh`, PR-1) —
+         !! MOM6's `pass_visc_rem` group pass, run after every
+         !! `vertvisc_remnant` call (MOM_dynamics_split_RK2.F90:494,
+         !! 628-651/783/1041).
 
       logical :: vertex_kv
 
@@ -1729,8 +1785,8 @@ contains
                                       lambda_bot_v=bd%lambda_bot_v, rho0=ss%rho0, &
                                       lambda_top_u=lambda_top_u, lambda_top_v=lambda_top_v, &
                                       cover_u=cover_u, cover_v=cover_v, &
-                                      visc_rem_u=dyn%bt_work%visc_rem_u, &
-                                      visc_rem_v=dyn%bt_work%visc_rem_v, &
+                                      visc_rem_u=bt_work%visc_rem_u, &
+                                      visc_rem_v=bt_work%visc_rem_v, &
                                       remnant_only=.true., &
                                       kv_corner_source=kshear%kd_corner, &
                                       kv_corner_prandtl=kshear%prandtl_turb)
@@ -1741,8 +1797,8 @@ contains
                                       lambda_bot_v=bd%lambda_bot_v, rho0=ss%rho0, &
                                       lambda_top_u=lambda_top_u, lambda_top_v=lambda_top_v, &
                                       cover_u=cover_u, cover_v=cover_v, &
-                                      visc_rem_u=dyn%bt_work%visc_rem_u, &
-                                      visc_rem_v=dyn%bt_work%visc_rem_v, &
+                                      visc_rem_u=bt_work%visc_rem_u, &
+                                      visc_rem_v=bt_work%visc_rem_v, &
                                       remnant_only=.true.)
          end if
       else
@@ -1752,11 +1808,80 @@ contains
                                    lambda_bot_v=bd%lambda_bot_v, rho0=ss%rho0, &
                                    lambda_top_u=lambda_top_u, lambda_top_v=lambda_top_v, &
                                    cover_u=cover_u, cover_v=cover_v, &
-                                   visc_rem_u=dyn%bt_work%visc_rem_u, &
-                                   visc_rem_v=dyn%bt_work%visc_rem_v, &
+                                   visc_rem_u=bt_work%visc_rem_u, &
+                                   visc_rem_v=bt_work%visc_rem_v, &
                                    remnant_only=.true.)
       end if
+      ! Only when a consumer actually reads visc_rem_u/v: `is_pc` alone
+      ! (every pred_corr stage, default knobs) already called this
+      ! routine before PR-1 (MOM6-order parity, PGF_BUG.md §9) even
+      ! though the output went completely unread with every consumer
+      ! off -- harmless when the halo refresh was a no-op (nothing
+      ! called it).  PR-1's halo exchange is NOT free: under a real
+      ! decomposition `ocean_halo_face_x/v` is a live non-blocking MPI
+      ! Isend/Irecv pair, and issuing an UNPAIRED extra one on every
+      ! pred_corr stage of every default (no-visc_rem-consumer) run
+      ! broke `test_ocean_dyn_mpi` (measured: FPE / poisoned reductions
+      ! under 4 ranks) -- the halo call itself was fine in isolation,
+      ! but the production call site had no business making it when
+      ! nothing downstream reads the result.  Gate it the same way the
+      ! answer-relevant consumers are gated.
+      if (bt_work%bt_correction_visc_rem .or. bt_work%bt_forcing_visc_rem .or. &
+          bt_work%bt_renorm_visc_rem) then
+         call visc_rem_halo_refresh(grid, bt_work, bc)
+      end if
    end subroutine visc_rem_precompute
+
+   subroutine visc_rem_halo_refresh(grid, bt_work, bc)
+      !! Exchange `bt_work%visc_rem_u/v` face halos right after
+      !! production — MOM6's `pass_visc_rem` group pass
+      !! (MOM_dynamics_split_RK2.F90:494, run after every one of the
+      !! three `vertvisc_remnant` calls: :628-651, :783, :1041).  MPI
+      !! halo first, then the periodic wrap, then the tripolar fold —
+      !! the same ordering contract every other seam fill in this module
+      !! follows (`ocean_halo_exchange_ml_state` then
+      !! `ocean_periodic_wrap_state` then `ocean_fold_wrap_state`).
+      !! `visc_rem` is a POSITIVE SCALAR on a face (the viscous-remnant
+      !! fraction), not a true-vector flux component, so the fold uses
+      !! `ocean_fold_wrap_visc_rem` (copy across the seam), NOT
+      !! `ocean_fold_wrap_stress`'s negate-on-fold vector contract.
+      !! `bc` absent (e.g. a direct unit-test call with no boundary
+      !! state) ⇒ periodic wrap + fold are skipped; the halo exchange
+      !! itself is unconditional (no-op on 1 rank, D0).
+      type(hgrid_t), intent(in) :: grid
+      type(barotropic_workstate_t), intent(inout) :: bt_work
+      type(ocean_bc_state_t), intent(in), optional :: bc
+
+      integer :: nz
+
+      nz = size(bt_work%visc_rem_u, 3)
+
+      ! GATED on an actually-decomposed axis (mirrors the `u_av_layer`/
+      ! `v_av_layer` seam fill in `run_stage_split`): the halo specifics
+      ! take EXPLICIT-SHAPE dummies sized from the comm module's own
+      ! `oh_nx_total`/`oh_ny_total`, which a direct unit-test call that
+      ! never runs `ocean_halo_init` leaves at 0 — a mis-shaped device
+      ! dummy, not a benign no-op, on the GPU build.
+      if (ocean_halo_is_decomposed_x() .or. ocean_halo_is_decomposed_y()) then
+         call ocean_halo_face_x(bt_work%visc_rem_u, nz)
+         call ocean_halo_face_y(bt_work%visc_rem_v, nz)
+      end if
+      if (.not. present(bc)) return
+      if (bc%periodic_x .or. bc%periodic_y) then
+         call ocean_periodic_wrap_face_x_3d( &
+            bt_work%visc_rem_u, size(bt_work%visc_rem_u, 1), size(bt_work%visc_rem_u, 2), &
+            nz, grid%nx_phys, grid%ny_phys, grid%nghost, &
+            bc%periodic_x .and. .not. ocean_halo_is_decomposed_x(), &
+            bc%periodic_y .and. .not. ocean_halo_is_decomposed_y())
+         call ocean_periodic_wrap_face_y_3d( &
+            bt_work%visc_rem_v, size(bt_work%visc_rem_v, 1), size(bt_work%visc_rem_v, 2), &
+            nz, grid%nx_phys, grid%ny_phys, grid%nghost, &
+            bc%periodic_x .and. .not. ocean_halo_is_decomposed_x(), &
+            bc%periodic_y .and. .not. ocean_halo_is_decomposed_y())
+      end if
+      ! Tripolar north-fold seam — periodic-FIRST-fold-SECOND, as above.
+      if (bc%north_fold) call ocean_fold_wrap_visc_rem(grid, bc, bt_work%visc_rem_u, bt_work%visc_rem_v)
+   end subroutine visc_rem_halo_refresh
 
    subroutine accel_visc_rem_snapshot(n1, n2, n3, vel, snap)
       !! accel_visc_rem stage-entry snapshot: `snap = vel`, device-side.
@@ -4626,11 +4751,11 @@ contains
       if (dyn%bt_work%bt_forcing_visc_rem .or. dyn%bt_work%bt_renorm_visc_rem &
           .or. is_pc) then
          if (fold_top) then
-            call visc_rem_precompute(grid, dyn, vmix, vd, ss, bd, ms, dt, kshear=kshear, &
+            call visc_rem_precompute(grid, dyn%bt_work, vmix, vd, ss, bd, ms, dt, kshear=kshear, &
                                      lambda_top_u=td%lambda_top_u, lambda_top_v=td%lambda_top_v, &
-                                     cover_u=td%cover_u, cover_v=td%cover_v)
+                                     cover_u=td%cover_u, cover_v=td%cover_v, bc=bc)
          else
-            call visc_rem_precompute(grid, dyn, vmix, vd, ss, bd, ms, dt, kshear=kshear)
+            call visc_rem_precompute(grid, dyn%bt_work, vmix, vd, ss, bd, ms, dt, kshear=kshear, bc=bc)
          end if
       end if
       call sum_slow_tendencies_into_F_slow(dyn%bt_work, pgf, cor, hv, bd, ss, ms)
@@ -5124,16 +5249,24 @@ contains
       ! predictor continuity forms u_av.  Momentum-only there (tracers
       ! untouched); dt_vel = BE·dt matches MOM6's dt_pred.
       if (is_pred) then
+         ! PR-1: thread `dt_remnant=dt` so the visc_rem PRODUCER (when
+         ! `bt_correction_visc_rem` is on) is built at the outer step's
+         ! full `dt`, NOT the predictor's own `dt_vel = pc_be·dt` —
+         ! MOM6's `VISC_REM_TIMESTEP_BUG = .false.` default
+         ! (MOM_dynamics_split_RK2.F90:777-779).  `bc` is forwarded so the
+         ! split remnant-only refresh can re-wrap the ghosts.
          if (fold_top) then
             call vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt_vel, stage, sf, epbl=epbl, &
                                      kshear=kshear, vmix_tidal=vmix_tidal, bt_work=dyn%bt_work, &
                                      apply_tracers=.false., metrics=metrics, &
                                      lambda_top_u=td%lambda_top_u, lambda_top_v=td%lambda_top_v, &
-                                     cover_u=td%cover_u, cover_v=td%cover_v)
+                                     cover_u=td%cover_u, cover_v=td%cover_v, &
+                                     dt_remnant=dt, bc=bc)
          else
             call vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt_vel, stage, sf, epbl=epbl, &
                                      kshear=kshear, vmix_tidal=vmix_tidal, bt_work=dyn%bt_work, &
-                                     apply_tracers=.false., metrics=metrics)
+                                     apply_tracers=.false., metrics=metrics, &
+                                     dt_remnant=dt, bc=bc)
          end if
       else
          if (fold_top) then
@@ -5141,11 +5274,11 @@ contains
                                      kshear=kshear, vmix_tidal=vmix_tidal, bt_work=dyn%bt_work, &
                                      metrics=metrics, &
                                      lambda_top_u=td%lambda_top_u, lambda_top_v=td%lambda_top_v, &
-                                     cover_u=td%cover_u, cover_v=td%cover_v)
+                                     cover_u=td%cover_u, cover_v=td%cover_v, bc=bc)
          else
             call vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt, stage, sf, epbl=epbl, &
                                      kshear=kshear, vmix_tidal=vmix_tidal, bt_work=dyn%bt_work, &
-                                     metrics=metrics)
+                                     metrics=metrics, bc=bc)
          end if
       end if
       ! KE attribution: implicit vertical friction (+ folded drag/stress

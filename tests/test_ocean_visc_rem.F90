@@ -52,6 +52,10 @@ module test_ocean_visc_rem
    use rdb_barotropic_coupling, only: apply_bt_correction
    use rdb_ocean_metrics, only: ocean_metrics_t
    use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
+   use rdb_ocean_dyn, only: ocean_dyn_t, vmix_apply_in_stage
+   use rdb_ocean_vmix, only: ocean_vmix_t
+   use rdb_ocean_surface_stress, only: ocean_surface_stress_t
+   use rdb_ocean_bottom_drag, only: ocean_bottom_drag_t
    implicit none
    private
 
@@ -77,7 +81,13 @@ contains
                   new_unittest("remnant_consistent_with_momentum_response", &
                                test_consistent_with_definition), &
                   new_unittest("producer_then_corrector_biases_against_bbl", &
-                               test_end_to_end_wire) &
+                               test_end_to_end_wire), &
+                  new_unittest("pr1_single_layer_linear_drag_closed_form", &
+                               test_pr1_single_layer_closed_form), &
+                  new_unittest("pr1_two_layer_bbl_glue_closed_form", &
+                               test_pr1_two_layer_bbl_glue_closed_form), &
+                  new_unittest("pr1_predictor_remnant_uses_full_dt_not_dt_pred", &
+                               test_pr1_predictor_dt_remnant) &
                   ]
    end subroutine collect_ocean_visc_rem_tests
 
@@ -529,5 +539,289 @@ contains
       call vd%destroy(); call ms%destroy()
       call ms_a%destroy(); call ms_b%destroy()
    end subroutine test_end_to_end_wire
+
+   subroutine test_pr1_single_layer_closed_form(error)
+      !! PR-1 plan §3 "Tests": a single layer with linear drag gives
+      !! `visc_rem = h/(h + r·dt)` (MOM6's un-normalized convention,
+      !! `MOM_vert_friction.F90:1157-1258` — `b_denom_1 = h_u(1) +
+      !! dt·Ray`, `visc_rem_u(1) = h_u(1)/b1`).  Roundabout's rows are
+      !! pre-normalized by h (see the module docstring), so `lambda_bot`
+      !! is already the RATE `Ray/h`, and the SAME formula becomes
+      !! `visc_rem = 1/(1 + dt·lambda_bot)` — algebraically identical
+      !! (divide MOM6's h/(h+dt·Ray) top and bottom by h).  NZ=1 has no
+      !! interior coupling at all (a = c = 0), so this is EXACT, not an
+      !! approximation.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_vdiff_t) :: vd
+      type(barotropic_workstate_t) :: bt
+      integer, parameter :: NZ = 1
+      real(wp), parameter :: DT = 1800.0_wp, R_BOT = 2.5e-4_wp, H1 = 37.0_wp
+      real(wp), allocatable :: lam_u(:, :), lam_v(:, :)
+      real(wp) :: expect, max_dev
+      integer :: nu_face, nv_uface, nx_vface, nv_face, ig, jg
+      checks: block
+         call make_grid(grid, 4, 4)
+         ms%nz_ml = NZ
+         call ms%init(grid)
+         call vd%init(grid, nz_ml=NZ)
+         call bt%init(grid, nz_ml=NZ)
+         vd%K_v_momentum = 0.3_wp   ! irrelevant at NZ=1: no interior interface
+         vd%implicit_drag = .true.
+         nu_face = size(ms%u_face_x_layer, 1)
+         nv_uface = size(ms%u_face_x_layer, 2)
+         nx_vface = size(ms%v_face_y_layer, 1)
+         nv_face = size(ms%v_face_y_layer, 2)
+         ig = 1 + grid%nghost
+         jg = 1 + grid%nghost
+         allocate (lam_u(nu_face, nv_uface), source=R_BOT)
+         allocate (lam_v(nx_vface, nv_face), source=R_BOT)
+
+         ms%h_layer(:, :, 1) = H1
+         ms%u_face_x_layer = 0.0_wp
+         ms%v_face_y_layer = 0.0_wp
+
+         call map_in(ms, vd)
+         call vdiff_apply_momentum(grid, vd, ms, DT, &
+                                   lambda_bot_u=lam_u, lambda_bot_v=lam_v, rho0=RHO0, &
+                                   visc_rem_u=bt%visc_rem_u, visc_rem_v=bt%visc_rem_v)
+         call map_out(ms, vd)
+
+         expect = 1.0_wp/(1.0_wp + DT*R_BOT)   ! == H1/(H1 + R_BOT*H1*DT), h-cancelled
+         max_dev = max(abs(bt%visc_rem_u(ig, jg, 1) - expect), &
+                       abs(bt%visc_rem_v(ig, jg, 1) - expect))
+         call check(error, max_dev < 1.0e-13_wp, &
+                    "single-layer linear-drag closed form visc_rem = 1/(1+r*dt) violated")
+      end block checks
+      if (allocated(lam_u)) deallocate (lam_u, lam_v)
+      call bt%destroy(); call vd%destroy(); call ms%destroy()
+   end subroutine test_pr1_single_layer_closed_form
+
+   subroutine test_pr1_two_layer_bbl_glue_closed_form(error)
+      !! PR-1 plan §3 "Tests": a two-layer BBL-glued case against the
+      !! closed-form tridiagonal.  `bbl_glue` requires `hvel_mom6`
+      !! (`rdb_config.F90:5108-5110`); a UNIFORM column on both sides of
+      !! every face (`h_delta = 0`) collapses `diffuse_velocity_columns_
+      !! impl`'s hvel/upwind blend to the plain arithmetic mean and makes
+      !! `zint(k)` an exact cumulative-height-above-bed (no blend
+      !! branches taken — see the module's `hvel_mom6 .and. .not.
+      !! hvel_harmonic` block).  With `kv_bbl_bg = 0` and `K_v_momentum =
+      !! 0` the only coupling is the BBL-glue piston, so the whole 2x2
+      !! tridiagonal reduces to the closed-form quantities computed here
+      !! (independently, via Cramer's rule rather than the production
+      !! Thomas-sweep recurrence) and compared against the real kernel.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_vdiff_t) :: vd
+      type(barotropic_workstate_t) :: bt
+      integer, parameter :: NZ = 2
+      real(wp), parameter :: DT = 1000.0_wp
+      real(wp), parameter :: H1 = 8.0_wp, H2 = 15.0_wp       ! bed, surface
+      real(wp), parameter :: HBBL_VISC = 5.0_wp, BBL_PISTON = 2.0e-4_wp
+      real(wp), parameter :: EPS_HVEL = 1.0e-30_wp           ! mirrors the kernel's own guard
+      real(wp) :: i_hbbl, zint1, botfn_int, kv_bbl, bbl_thick
+      real(wp) :: dz_raw, dz_corr, nu_eff, alpha, beta, bed_drag
+      real(wp) :: b1, c1, a2, b2, det, gamma1_ref, gamma2_ref
+      real(wp) :: max_dev
+      integer :: ig, jg
+      checks: block
+         call make_grid(grid, 4, 4)
+         ms%nz_ml = NZ
+         call ms%init(grid)
+         call vd%init(grid, nz_ml=NZ)
+         call bt%init(grid, nz_ml=NZ)
+         vd%K_v_momentum = 0.0_wp
+         vd%implicit_drag = .false.      ! the BBL piston is the only sink
+         vd%hvel_mom6 = .true.           ! mandatory for bbl_glue
+         vd%hvel_harmonic = .false.      ! the "arithmetic + upwind blend" branch
+         vd%bbl_glue = .true.
+         vd%bbl_per_face = .false.       ! constant piston: kv_bbl = bbl_piston*hbbl_visc
+         vd%hbbl_visc = HBBL_VISC
+         vd%bbl_piston = BBL_PISTON
+         vd%kv_bbl_bg = 0.0_wp
+         ig = 1 + grid%nghost
+         jg = 1 + grid%nghost
+
+         ! UNIFORM column (same h on both sides of every face): kills the
+         ! hvel upwind blend (h_delta = 0 identically) so hvel(k) = h(k)
+         ! exactly and zint(k) is the plain cumulative height above bed.
+         ms%h_layer(:, :, 1) = H1
+         ms%h_layer(:, :, 2) = H2
+         ms%u_face_x_layer = 0.0_wp
+         ms%v_face_y_layer = 0.0_wp
+
+         call map_in(ms, vd)
+         call vdiff_apply_momentum(grid, vd, ms, DT, &
+                                   visc_rem_u=bt%visc_rem_u, visc_rem_v=bt%visc_rem_v)
+         call map_out(ms, vd)
+
+         ! ---- Independent closed-form re-derivation (Cramer's rule) ----
+         kv_bbl = BBL_PISTON*HBBL_VISC
+         bbl_thick = HBBL_VISC
+         i_hbbl = 1.0_wp/(bbl_thick + EPS_HVEL)
+         zint1 = H1*i_hbbl                              ! cumulative height above bed at k=1
+         botfn_int = 1.0_wp/(1.0_wp + 0.09_wp*zint1**6)
+         nu_eff = max(0.0_wp, kv_bbl*botfn_int)          ! kv_bbl_bg = 0
+         dz_raw = 0.5_wp*(H1 + H2)                       ! hvel_mom6 face thickness
+         dz_corr = dz_raw
+         if (dz_raw > bbl_thick) dz_corr = (1.0_wp - botfn_int)*dz_raw + botfn_int*bbl_thick
+         alpha = DT*nu_eff/(H1*dz_corr)                  ! bed row (k=1), own h = H1
+         beta = DT*nu_eff/(H2*dz_corr)                   ! surface row (k=2), own h = H2
+         bed_drag = DT*kv_bbl/(H1*(min(0.5_wp*H1, bbl_thick) + EPS_HVEL))
+
+         b1 = 1.0_wp + alpha + bed_drag
+         c1 = -alpha
+         a2 = -beta
+         b2 = 1.0_wp + beta
+         det = b1*b2 - c1*a2
+         gamma1_ref = (b2 - c1)/det
+         gamma2_ref = (b1 - a2)/det
+
+         max_dev = max(abs(bt%visc_rem_u(ig, jg, 1) - gamma1_ref), &
+                       abs(bt%visc_rem_u(ig, jg, 2) - gamma2_ref), &
+                       abs(bt%visc_rem_v(ig, jg, 1) - gamma1_ref), &
+                       abs(bt%visc_rem_v(ig, jg, 2) - gamma2_ref))
+         call check(error, max_dev < 1.0e-10_wp, &
+                    "two-layer BBL-glue visc_rem deviates from the independent 2x2 "// &
+                    "closed-form (Cramer's rule) solve")
+      end block checks
+      call bt%destroy(); call vd%destroy(); call ms%destroy()
+   end subroutine test_pr1_two_layer_bbl_glue_closed_form
+
+   subroutine test_pr1_predictor_dt_remnant(error)
+      !! PR-1 call-point test: pins that `vmix_apply_in_stage`'s visc_rem
+      !! producer, when called with `dt_remnant` present and different
+      !! from the velocity-apply `dt` (the `pred_corr` PREDICTOR, which
+      !! calls it at `dt_vel = pc_be·dt`), builds the remnant from the
+      !! OUTER step's full `dt` — matching MOM6's `VISC_REM_TIMESTEP_BUG
+      !! = .false.` default (`vertvisc_remnant` always at `dt`, NEVER
+      !! `dt_pred`, MOM_dynamics_split_RK2.F90:777-779) — and NOT from
+      !! `dt_vel`, which is what the historical fused call (no
+      !! `dt_remnant`) used and is a DIFFERENT, wrong number whenever
+      !! `dt_vel /= dt`.
+      !!
+      !! Three runs on IDENTICAL input state:
+      !!  (a) "split": `vmix_apply_in_stage(..., dt=DT_VEL, dt_remnant=
+      !!      DT_FULL, ...)` — the FIXED predictor call.
+      !!  (b) "reference": a standalone `vdiff_apply_momentum(...,
+      !!      DT_FULL, remnant_only=.true., ...)` on the UNTOUCHED input
+      !!      state — visc_rem depends only on {dt, h, kv, drag}, never
+      !!      on velocity, so this must equal (a) to machine precision
+      !!      even though (a) also solves the velocity at DT_VEL first.
+      !!  (c) "fused" (no `dt_remnant`): the historical path, remnant
+      !!      built from the SAME matrix as the DT_VEL velocity solve —
+      !!      must DIFFER from (a)/(b), proving the fix changes the
+      !!      opt-in answer (as the plan documents: this chain is still
+      !!      opt-in, so no DEFAULT config is affected).
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms_split, ms_ref, ms_fused
+      type(ocean_vdiff_t) :: vd_split, vd_ref, vd_fused
+      type(ocean_vmix_t) :: vmix_split, vmix_fused
+      type(ocean_surface_stress_t) :: ss_split, ss_fused
+      type(ocean_bottom_drag_t) :: bd_split, bd_fused
+      type(ocean_dyn_t) :: dyn_split, dyn_fused
+      type(barotropic_workstate_t) :: bt_split, bt_ref, bt_fused
+      integer, parameter :: NZ = 5
+      real(wp), parameter :: DT_FULL = 1200.0_wp, PC_BE = 0.6_wp
+      real(wp), parameter :: DT_VEL = PC_BE*DT_FULL    ! mimics the pred_corr predictor
+      real(wp), parameter :: NU = 4.0e-2_wp, R_BOT = 6.0e-4_wp
+      real(wp) :: max_dev_split_vs_ref, min_dev_fused_vs_split
+      integer :: k, ig, jg
+      checks: block
+         call make_grid(grid, 4, 4)
+         ms_split%nz_ml = NZ; ms_ref%nz_ml = NZ; ms_fused%nz_ml = NZ
+         call ms_split%init(grid); call ms_ref%init(grid); call ms_fused%init(grid)
+         call vd_split%init(grid, nz_ml=NZ); call vd_ref%init(grid, nz_ml=NZ)
+         call vd_fused%init(grid, nz_ml=NZ)
+         call vmix_split%init(grid, nz_ml=NZ); call vmix_fused%init(grid, nz_ml=NZ)
+         call ss_split%init(grid, nz_ml=NZ); call ss_fused%init(grid, nz_ml=NZ)
+         call bd_split%init(grid, nz_ml=NZ); call bd_fused%init(grid, nz_ml=NZ)
+         call dyn_split%init(grid, nz_ml=NZ); call dyn_fused%init(grid, nz_ml=NZ)
+         call bt_split%init(grid, nz_ml=NZ); call bt_ref%init(grid, nz_ml=NZ)
+         call bt_fused%init(grid, nz_ml=NZ)
+         ig = 1 + grid%nghost
+         jg = 1 + grid%nghost
+
+         vmix_split%use_closure = .false.; vmix_fused%use_closure = .false.
+         dyn_split%enable_thermodynamics = .false.; dyn_fused%enable_thermodynamics = .false.
+         vd_split%K_v_momentum = NU; vd_ref%K_v_momentum = NU; vd_fused%K_v_momentum = NU
+         vd_split%implicit_drag = .true.; vd_ref%implicit_drag = .true.
+         vd_fused%implicit_drag = .true.
+         bd_split%lambda_bot_u = R_BOT; bd_split%lambda_bot_v = R_BOT
+         bd_fused%lambda_bot_u = R_BOT; bd_fused%lambda_bot_v = R_BOT
+         call ss_split%set_wind_stress_const(0.0_wp, 0.0_wp)
+         call ss_fused%set_wind_stress_const(0.0_wp, 0.0_wp)
+         bt_split%bt_correction_visc_rem = .true.
+         bt_fused%bt_correction_visc_rem = .true.
+
+         do k = 1, NZ
+            ms_split%h_layer(:, :, k) = real(k, wp)*11.0_wp
+            ms_ref%h_layer(:, :, k) = real(k, wp)*11.0_wp
+            ms_fused%h_layer(:, :, k) = real(k, wp)*11.0_wp
+            ms_split%u_face_x_layer(:, :, k) = 0.1_wp*real(k, wp)
+            ms_fused%u_face_x_layer(:, :, k) = 0.1_wp*real(k, wp)
+         end do
+
+         !$acc enter data copyin(ms_split, ms_ref, ms_fused)
+         call ms_split%enter_data(); call ms_ref%enter_data(); call ms_fused%enter_data()
+         !$acc enter data copyin(vd_split, vd_ref, vd_fused, vmix_split, vmix_fused)
+         !$acc enter data copyin(ss_split, ss_fused, bd_split, bd_fused, dyn_split, dyn_fused)
+         call vd_split%enter_data(); call vd_ref%enter_data(); call vd_fused%enter_data()
+         call vmix_split%enter_data(); call vmix_fused%enter_data()
+         call ss_split%enter_data(); call ss_fused%enter_data()
+         call bd_split%enter_data(); call bd_fused%enter_data()
+         call dyn_split%enter_data(); call dyn_fused%enter_data()
+
+         ! (b) reference: standalone remnant-only call at DT_FULL on the
+         ! untouched state — no dependence on vmix_apply_in_stage at all.
+         call vdiff_apply_momentum(grid, vd_ref, ms_ref, DT_FULL, &
+                                   lambda_bot_u=bd_split%lambda_bot_u, &
+                                   lambda_bot_v=bd_split%lambda_bot_v, rho0=ss_split%rho0, &
+                                   visc_rem_u=bt_ref%visc_rem_u, visc_rem_v=bt_ref%visc_rem_v, &
+                                   remnant_only=.true.)
+
+         ! (a) split: the FIXED predictor call point.
+         call vmix_apply_in_stage(grid, dyn_split, vmix_split, vd_split, ss_split, bd_split, &
+                                  ms_split, DT_VEL, 1, bt_work=bt_split, &
+                                  dt_remnant=DT_FULL)
+
+         ! (c) fused: the historical (buggy-at-the-predictor) path.
+         call vmix_apply_in_stage(grid, dyn_fused, vmix_fused, vd_fused, ss_fused, bd_fused, &
+                                  ms_fused, DT_VEL, 1, bt_work=bt_fused)
+
+         call ms_split%exit_data(); call ms_ref%exit_data(); call ms_fused%exit_data()
+         !$acc exit data delete(ms_split, ms_ref, ms_fused)
+         call vd_split%exit_data(); call vd_ref%exit_data(); call vd_fused%exit_data()
+         call vmix_split%exit_data(); call vmix_fused%exit_data()
+         call ss_split%exit_data(); call ss_fused%exit_data()
+         call bd_split%exit_data(); call bd_fused%exit_data()
+         call dyn_split%exit_data(); call dyn_fused%exit_data()
+         !$acc exit data delete(vd_split, vd_ref, vd_fused, vmix_split, vmix_fused)
+         !$acc exit data delete(ss_split, ss_fused, bd_split, bd_fused, dyn_split, dyn_fused)
+
+         max_dev_split_vs_ref = max(maxval(abs(bt_split%visc_rem_u - bt_ref%visc_rem_u)), &
+                                    maxval(abs(bt_split%visc_rem_v - bt_ref%visc_rem_v)))
+         call check(error, max_dev_split_vs_ref < 1.0e-13_wp, &
+                    "predictor dt_remnant path must equal a standalone remnant-only call "// &
+                    "at the full outer dt")
+         if (allocated(error)) exit checks
+
+         min_dev_fused_vs_split = max(maxval(abs(bt_fused%visc_rem_u - bt_split%visc_rem_u)), &
+                                      maxval(abs(bt_fused%visc_rem_v - bt_split%visc_rem_v)))
+         call check(error, min_dev_fused_vs_split > 1.0e-6_wp, &
+                    "the historical fused (dt_vel-based) path should DIFFER from the fixed "// &
+                    "dt_remnant path -- otherwise the VISC_REM_TIMESTEP_BUG fix changed nothing")
+      end block checks
+      call bt_split%destroy(); call bt_ref%destroy(); call bt_fused%destroy()
+      call dyn_split%destroy(); call dyn_fused%destroy()
+      call bd_split%destroy(); call bd_fused%destroy()
+      call ss_split%destroy(); call ss_fused%destroy()
+      call vmix_split%destroy(); call vmix_fused%destroy()
+      call vd_split%destroy(); call vd_ref%destroy(); call vd_fused%destroy()
+      call ms_split%destroy(); call ms_ref%destroy(); call ms_fused%destroy()
+   end subroutine test_pr1_predictor_dt_remnant
 
 end module test_ocean_visc_rem
