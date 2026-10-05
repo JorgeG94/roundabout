@@ -303,15 +303,6 @@ ROWS = [
     # ===================================================================
     # KNOWN_GAP -- runtime failures of accepted configurations.
     # ===================================================================
-    _gap("land_column_regrid_rho_hycom", "runtime", ("vc_hycom",),
-         "The rho/hycom regrid writes a negative thickness in a LAND column (10 x 1.5e-4 m "
-         "minus 9 inflated layers = -1.2e-3 m); the remap precondition guard stops step 1.",
-         "item C3 (fix/rho-regrid-land-negative-thickness)", expect=("CRASH",),
-         message=_PRECOND_STEP1),
-    _gap("land_column_regrid_rho", "runtime", ("vc_rho",),
-         "As land_column_regrid_rho_hycom, on the pure isopycnal coordinate.",
-         "item C3 (fix/rho-regrid-land-negative-thickness)", expect=("CRASH",),
-         message=_PRECOND_STEP1),
     _gap("land_column_target_zstar_full", "runtime", ("vc_zstar_full",),
          "zstar_full builds a LAND column's target as nz x zstar_h_min (1.0e-3 m) against a "
          "column of nz x H_VANISHED (1.5e-3 m): a 1/3 column-total mismatch the remap "
