@@ -469,14 +469,64 @@ RK2:
    so it biases the corrector's Δu against layers inside a frictional
    bottom boundary layer.  γ ≡ 1 (the fold reduces to the uniform one,
    bit for bit) unless `&ocean_vdiff_nml implicit_drag = .true.` also
-   folds bottom drag into the vdiff operator.  The h-weighted fold
-   (`correction_h_weighted`) is **RETIRED and refused at configure**:
-   `Δu_k ∝ h_k` adds a positive-definite `½Δ²H(κ−1)` source plus a
-   self-reinforcing shear feedback on any column whose layers differ in
-   thickness (`κ−1 ≈ 0.2` on the 50-level tanh `z_fixed` stack); it grew
-   the 1-degree Southern Ocean ~8× in KE by day 10 and to non-finite on
-   day 16, and MOM6 has no such fold.
+   folds bottom drag into the vdiff operator — OR `&ocean_vdiff_nml
+   bbl_glue = .true.` (the MOM6 BBL piston, which requires `hvel_mom6`),
+   which folds the bed sink in regardless of `implicit_drag` (the glue
+   REPLACES, not augments, the Rayleigh fold — see
+   `rdb_ocean_vdiff.F90`'s `diffuse_velocity_columns_impl`).  The
+   h-weighted fold (`correction_h_weighted`) is **RETIRED and refused at
+   configure**: `Δu_k ∝ h_k` adds a positive-definite `½Δ²H(κ−1)` source
+   plus a self-reinforcing shear feedback on any column whose layers
+   differ in thickness (`κ−1 ≈ 0.2` on the 50-level tanh `z_fixed`
+   stack); it grew the 1-degree Southern Ocean ~8× in KE by day 10 and
+   to non-finite on day 16, and MOM6 has no such fold.
 4. Stage 2 averages.
+
+**PR-1 (visc_rem producer, call points, halo, restart — 2026-10-05).**
+The producer (`vdiff_apply_momentum`'s `do_remnant` branch) was already
+independent of `implicit_drag` (gated only on whether a caller supplies
+`visc_rem_u/v`); what PR-1 closed:
+- **Call-point `dt` bug**: under `split_scheme = "pred_corr"`, the
+  stage-end producer used to be fused with the PREDICTOR's own
+  velocity-apply call at `dt_vel = pc_be·dt` — MOM6's
+  `VISC_REM_TIMESTEP_BUG` (default `.false.`) always builds the remnant
+  at the OUTER step's full `dt`, never `dt_pred`
+  (`MOM_dynamics_split_RK2.F90:777-779`). `vmix_apply_in_stage` now
+  takes an optional `dt_remnant`; the predictor's two call sites pass
+  `dt_remnant = dt`, which splits the remnant off into its own
+  `visc_rem_precompute` call (run AFTER the velocity-apply, since the
+  remnant matrix depends only on `{dt, h, kv, drag}`, never velocity).
+  The corrector (`dt_vel ≡ dt` already) and `ssp_rk2` (no predictor
+  off-centring) are unaffected.
+- **Halo.** `visc_rem_halo_refresh` exchanges `bt_work%visc_rem_u/v`
+  (MPI halo → periodic wrap → tripolar fold, MOM6's `pass_visc_rem`
+  group pass) right after every production call — but ONLY when a
+  consumer (`correction_visc_rem`/`forcing_visc_rem`/`renorm_visc_rem`)
+  is actually on: the pre-existing `visc_rem_precompute` call fires on
+  EVERY `pred_corr` stage regardless of any consumer (MOM6-order
+  parity), and issuing the halo exchange unconditionally there broke
+  `test_ocean_decomp_bitid_mpi`'s 4-rank leg (a non-finite / poisoned
+  reduction) on every default `pred_corr` namelist — gated, it is
+  inert off and correct on. The tripolar fold adds a `negate=.false.`
+  contract to `fold_north_u_face`/`fold_north_v_face`
+  (`rdb_ocean_fold.F90`): `visc_rem` is a positive SCALAR on a face
+  (the viscous-remnant fraction), not a true-vector flux component, so
+  the fold copies across the seam rather than sign-flipping (mirrors
+  `fold_north_corner`'s existing vector/scalar `negate` contract).
+- **Restart.** `bt_work%visc_rem_u/v` is now registered
+  (`register_full_3d_opt`, optional on read) — necessary but **NOT
+  sufficient** to close compat row `restart_visc_rem`: the row's root
+  cause (`visc_rem_precompute` reads the PREVIOUS stage's `vmix%kv`, a
+  derived field that is never checkpointed) is confirmed by a dedicated
+  test (`test_engine_bit_exact_visc_rem` in
+  `tests/test_ocean_restart_engine.F90`) — the checkpoint/restore of
+  `visc_rem_u/v` itself IS bitwise at the resume point, but the first
+  resumed `pred_corr` stage still reads a cold-started (not
+  continuous-run-stale) `vmix%kv`, so every prognostic drifts from the
+  very first resumed step. A full fix needs either checkpointing
+  `vmix%kv` (shared by every vmix consumer, not just visc_rem) or a
+  warm-restart "pre-warm" vmix pass — left as a maintainer decision,
+  not chosen here.
 
 Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
 **continuity-PPM** — no Poisson constraint, no FFT projection.
