@@ -415,12 +415,13 @@ contains
          !! `.true.` = only the AT-RESUME-POINT snapshot comparison runs
          !! (checkpoint plumbing); the post-restart N_AFTER steps are
          !! skipped, so a case whose answer is known to drift for a
-         !! reason OTHER than the checkpoint/restore wiring (e.g. the
-         !! `restart_visc_rem` compat gap -- see
-         !! `test_engine_bit_exact_visc_rem`) can still assert
-         !! the registry round-trip is exact without asserting something
-         !! this test cannot make true.  Default `.false.` = the full
-         !! round trip (every other case).
+         !! reason OTHER than the checkpoint/restore wiring can still
+         !! assert the registry round-trip is exact without asserting
+         !! something this test cannot (yet) make true.  No current case
+         !! uses `.true.` -- the `restart_visc_rem` gap that used to need
+         !! it is closed (see `test_engine_bit_exact_visc_rem`); kept as
+         !! general test infra for a future compat gap of the same shape.
+         !! Default `.false.` = the full round trip (every case today).
       type(ocean_engine_t), target :: ea, eb
       type(config_t) :: cfg_a, cfg_b
       type(snapshot_t) :: sa, sb, sa0, sb0
@@ -484,41 +485,21 @@ contains
    end subroutine test_engine_bit_exact
 
    subroutine test_engine_bit_exact_visc_rem(error)
-      !! PR-1: `bt_correction_visc_rem` live.  Checks the AT-RESUME-POINT
-      !! snapshot only (the checkpoint/restore plumbing PR-1 adds for
-      !! `bt_work%visc_rem_u/v` — this DOES verify, exactly, because
-      !! `register_full_3d_opt` round-trips the field bitwise through
-      !! `ocean_state_restart_write`/`_read`).
-      !!
-      !! It does NOT run the full round trip (N_AFTER steps post-restart)
-      !! -- that still diverges, but for a reason PR-1 does not fix and
-      !! is already tracked: `tests/regression/compat_expect.py`'s
-      !! `restart_visc_rem` KNOWN_GAP documents that `visc_rem_precompute`
-      !! (the pre-substep producer, gated on `is_pc .or. forcing_visc_rem
-      !! .or. renorm_visc_rem`) builds its remnant matrix from the
-      !! PREVIOUS stage's `vmix%kv` (a one-stage lag, by design -- see
-      !! that routine's docstring) -- and `vmix%kv` itself is a derived
-      !! field, never checkpointed.  On the FIRST resumed predictor
-      !! stage this reads whatever `vmix%kv` cold-initializes to, not the
-      !! continuous run's left-over corrector-stage value, so `F_bt`'s
-      !! rem-weighting (and hence every prognostic) diverges at the
-      !! 1e-11-ish relative level from the very first resumed step --
-      !! confirmed empirically here (diverges in `ml_h_layer`,
-      !! `ml_u_face_x_layer`, every tracer, `hvisc_du_visc/dv_visc`,
-      !! `vmix_bl_depth`, and `bt_visc_rem_u/v` itself, all consistent
-      !! with ONE upstream cause rather than N independent restart bugs).
-      !! Checkpointing `bt_work%visc_rem_u/v` was necessary but NOT
-      !! sufficient to close `restart_visc_rem` -- the row stays open; a
-      !! full fix needs either checkpointing `vmix%kv` (a derived field,
-      !! normally deliberately NOT carried, and shared by every vmix
-      !! consumer, not just visc_rem) or a warm-restart "pre-warm" vmix
-      !! pass before the first resumed predictor stage.  Flagging as a
-      !! design decision for the maintainer rather than choosing one
-      !! inside PR-1 (see the PR-1 report).
+      !! `bt_correction_visc_rem` live.  PR-2 (bt-rem-from-av-rem) closes
+      !! compat row `restart_visc_rem` for real: checkpointing
+      !! `bt_work%visc_rem_u/v` (PR-1) was necessary but NOT sufficient,
+      !! because `visc_rem_precompute` (the pre-substep producer, gated
+      !! on `is_pc .or. forcing_visc_rem .or. renorm_visc_rem`) builds its
+      !! remnant matrix from the PREVIOUS stage's `vmix%kv` -- a one-stage
+      !! lag, by design, mirroring MOM6's `vertvisc_coef` -- and `vmix%kv`
+      !! itself was never checkpointed.  Registering `vmix_kv`
+      !! (`ocean_state_build_restart_registry`,
+      !! `src/core/ocean/state/rdb_ocean_state.F90`) closes the gap: this
+      !! now runs the FULL round trip (N_AFTER steps post-restart, not
+      !! just the at-resume-point snapshot) and is bit-exact end to end.
       type(error_type), allocatable, intent(out) :: error
       integer :: n_ice
-      call run_round_trip(error, "island_periodic_zfixed_visc_rem", 6, 3, n_ice, &
-                          resume_point_only=.true.)
+      call run_round_trip(error, "island_periodic_zfixed_visc_rem", 6, 3, n_ice)
    end subroutine test_engine_bit_exact_visc_rem
 
    subroutine test_engine_bit_exact_ice(error)

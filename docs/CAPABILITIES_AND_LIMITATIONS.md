@@ -500,33 +500,46 @@ independent of `implicit_drag` (gated only on whether a caller supplies
   off-centring) are unaffected.
 - **Halo.** `visc_rem_halo_refresh` exchanges `bt_work%visc_rem_u/v`
   (MPI halo → periodic wrap → tripolar fold, MOM6's `pass_visc_rem`
-  group pass) right after every production call — but ONLY when a
-  consumer (`correction_visc_rem`/`forcing_visc_rem`/`renorm_visc_rem`)
-  is actually on: the pre-existing `visc_rem_precompute` call fires on
-  EVERY `pred_corr` stage regardless of any consumer (MOM6-order
-  parity), and issuing the halo exchange unconditionally there broke
-  `test_ocean_decomp_bitid_mpi`'s 4-rank leg (a non-finite / poisoned
-  reduction) on every default `pred_corr` namelist — gated, it is
-  inert off and correct on. The tripolar fold adds a `negate=.false.`
-  contract to `fold_north_u_face`/`fold_north_v_face`
+  group pass) right after every production call, UNCONDITIONALLY —
+  matching MOM6, which has no consumer gate on `pass_visc_rem` either.
+  PR-1 shipped this gated on a BT-rem consumer
+  (`correction_visc_rem`/`forcing_visc_rem`/`renorm_visc_rem`) because
+  making it unconditional changed `rdb_test_ocean_dyn_mpi_4rank`'s
+  hand-derived `check_exchange_counts` canary
+  (`tests/mpi/test_ocean_dyn_mpi.F90`). PR-2 root-caused that: the
+  counts were CORRECT (one extra face_x_3d + face_y_3d exchange per
+  `pred_corr` stage, same `is_pc .and. decomposed` gating as the
+  existing `u_av`/`v_av` seam fill) — the test's formula was stale, not
+  the exchange broken. Verified directly at 1/2/4 ranks on gfortran +
+  OpenMPI: mass/KE/salt/heat agreement stays at round-off
+  (~1e-16) in every wall/island/periodic/poisoned leg whether the gate
+  is present or not; `visc_rem_u/v` starts at `1.0` everywhere and the
+  exchange is a same-shape, self-contained, blocking isend/irecv/waitall
+  pair, so there is no tag collision, no unpaired request and no shape
+  mismatch to poison anything. The gate is gone; `check_exchange_counts`
+  now accounts for the unconditional refresh. The tripolar fold adds a
+  `negate=.false.` contract to `fold_north_u_face`/`fold_north_v_face`
   (`rdb_ocean_fold.F90`): `visc_rem` is a positive SCALAR on a face
   (the viscous-remnant fraction), not a true-vector flux component, so
   the fold copies across the seam rather than sign-flipping (mirrors
   `fold_north_corner`'s existing vector/scalar `negate` contract).
-- **Restart.** `bt_work%visc_rem_u/v` is now registered
-  (`register_full_3d_opt`, optional on read) — necessary but **NOT
-  sufficient** to close compat row `restart_visc_rem`: the row's root
-  cause (`visc_rem_precompute` reads the PREVIOUS stage's `vmix%kv`, a
-  derived field that is never checkpointed) is confirmed by a dedicated
-  test (`test_engine_bit_exact_visc_rem` in
-  `tests/test_ocean_restart_engine.F90`) — the checkpoint/restore of
-  `visc_rem_u/v` itself IS bitwise at the resume point, but the first
-  resumed `pred_corr` stage still reads a cold-started (not
-  continuous-run-stale) `vmix%kv`, so every prognostic drifts from the
-  very first resumed step. A full fix needs either checkpointing
-  `vmix%kv` (shared by every vmix consumer, not just visc_rem) or a
-  warm-restart "pre-warm" vmix pass — left as a maintainer decision,
-  not chosen here.
+- **Restart — CLOSED by PR-2 (2026-10-05).** `bt_work%visc_rem_u/v`
+  was registered by PR-1 (`register_full_3d_opt`, optional on read) but
+  that was **not sufficient** to close compat row `restart_visc_rem`:
+  the row's real root cause was `visc_rem_precompute` reading the
+  PREVIOUS stage's `vmix%kv`, a derived field that was never
+  checkpointed, confirmed by a dedicated test
+  (`test_engine_bit_exact_visc_rem` in
+  `tests/test_ocean_restart_engine.F90`). PR-2 registers `vmix%kv`
+  itself (`register_full_3d_opt`, tag `vmix_kv`,
+  `ocean_state_build_restart_registry`) — `kv` is allocated
+  unconditionally by every vmix configuration (PP81 always runs), so
+  this is registered on every run rather than gated behind a visc_rem
+  consumer flag (cheap: one extra `(nx, ny, nz+1)` field, the same
+  class of cost as the already-registered `epbl_kd_int`). With `kv`
+  checkpointed, `test_engine_bit_exact_visc_rem` runs the FULL round
+  trip (resume + N more steps), not just the at-resume-point snapshot,
+  and the compat row is deleted (`tests/regression/compat_expect.py`).
 
 Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
 **continuity-PPM** — no Poisson constraint, no FFT projection.

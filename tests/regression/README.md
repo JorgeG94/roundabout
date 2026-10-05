@@ -1746,7 +1746,7 @@ XFAIL; t = 3: 104 PASS, 216 REFUSED_GAP, 296 XFAIL; 0 FAIL, 0 XPASS):
 
 | row | leg | diagnosis |
 |---|---|---|
-| `restart_visc_rem` | RESTART | `visc_rem_precompute` builds its remnant from the previous stage's `vmix%kv`, which the restart registry does not carry: the first resumed step weights F_bt differently |
+| ~~`restart_visc_rem`~~ | RESTART | CLOSED (PR-2, bt-rem-from-av-rem, 2026-10-05): the real root cause was `visc_rem_precompute` reading the previous stage's `vmix%kv`, never checkpointed — registering `vmix_kv` closes it; row deleted from `compat_expect.py` |
 | ~~`restart_meke_gm_src_lag`~~ | RESTART | MEKE reads the previous step's `gm%gm_src`, which was not checkpointed (3 % off at step 24). Retired 2026-10-05: `gm_src` (and the slopes / VarMix KhTh the GM operator reads between thermo refreshes) are restart-registered |
 | `restart_mle_mld_filter` | RESTART | MLE's running-mean `mld_filtered` (mld_decay_time > 0) is persistent state outside the registry |
 | `decomp_eulerian_z_ssp_rk2` | DECOMP | eulerian_z + ssp_rk2 + EPBL + MLE: last-bit differences in all owned cells on 2x2 / 4x1 (minimised); the visc_rem half was fixed (post-fold ghost refresh) |

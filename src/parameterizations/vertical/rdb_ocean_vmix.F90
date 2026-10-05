@@ -625,7 +625,7 @@ contains
       this%is_init = .true.
    end subroutine ocean_vmix_init
 
-   pure subroutine vmix_seed_backgrounds(this)
+   pure subroutine vmix_seed_backgrounds(this, reseed_arrays)
       !! Seed `kv_bg`/`kt_bg`/`ks_bg` and the `kv`/`kt`/`ks`/`kd_bg` arrays
       !! from the current `pp81_nu_bg`/`pp81_kappa_bg` fields, then zero
       !! the closed-BC boundary interfaces on `kv`/`ks`.  Extracted out of
@@ -639,11 +639,36 @@ contains
       !! `kv`/`kt`/`ks`/`kd_bg` already allocated (true after `init`; the
       !! config-copy call runs strictly after `init_from_config`).
       class(ocean_vmix_t), intent(inout) :: this
+      logical, intent(in), optional :: reseed_arrays
+         !! PR-2 (bt-rem-from-av-rem): default `.true.` (the historical
+         !! behaviour — `kv`/`kt`/`ks`/`kd_bg` are pure parameters at cold
+         !! start, so re-deriving them from the configured
+         !! `pp81_nu_bg`/`pp81_kappa_bg` is correct and necessary).  The
+         !! config-copy call site (`configure_ocean_lateral`, AFTER
+         !! `engine_setup`'s restart read) passes `.false.` on a WARM
+         !! restart: `kv` is now a CARRIED, checkpointed field (tag
+         !! `vmix_kv`, closing compat row `restart_visc_rem`) because
+         !! `visc_rem_precompute` reads the PREVIOUS stage's `kv` before
+         !! this stage recomputes it — an unconditional array reseed here
+         !! would silently stomp the just-restored value back to the
+         !! background on EVERY warm restart (found by
+         !! `test_engine_bit_exact_visc_rem` once `vmix_kv` was
+         !! registered: the resumed `kv` read back as the pure background
+         !! `pp81_nu_bg`, not the spun-up checkpoint).  The SCALAR
+         !! trackers `kv_bg`/`kt_bg`/`ks_bg` are always re-derived
+         !! regardless — they are nml-configured parameters, identical on
+         !! a continued and a resumed run, never restart-registry state.
+      logical :: do_arrays
       integer :: nz1
+
+      do_arrays = .true.
+      if (present(reseed_arrays)) do_arrays = reseed_arrays
 
       this%kv_bg = this%pp81_nu_bg
       this%kt_bg = this%pp81_kappa_bg
       this%ks_bg = this%pp81_kappa_bg
+
+      if (.not. do_arrays) return
 
       this%kv = this%pp81_nu_bg
       this%kt = this%pp81_kappa_bg

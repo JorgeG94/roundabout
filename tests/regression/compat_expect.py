@@ -386,25 +386,14 @@ ROWS = [
     # ===================================================================
     # KNOWN_GAP -- the legs (phase 3, 2026-10-04): RESTART, DECOMP.
     # ===================================================================
-    _gap("restart_visc_rem", "runtime", ("visc_rem", "pred_corr"),
-         "The visc_rem BT corrector does not resume bit-exact UNDER pred_corr specifically: "
-         "`visc_rem_precompute` -- which pred_corr's `is_pc` runs on EVERY stage regardless "
-         "of the bt_* consumer knobs (MOM6-order parity) -- builds its remnant matrix from "
-         "the previous stage's `vmix%kv` ('one stage stale'), which the restart registry "
-         "does not carry, so the first resumed step weights F_bt differently and every "
-         "prognostic drifts (1e-11 relative by step 24). PR-1 (2026-10-05) registered "
-         "`bt_work%visc_rem_u/v` itself (bitwise at the resume point, confirmed by "
-         "`test_engine_bit_exact_visc_rem`) and fixed the predictor's "
-         "VISC_REM_TIMESTEP_BUG-equivalent dt, but checkpointing visc_rem_u/v was NOT "
-         "sufficient to close the pred_corr cells -- the `vmix%kv` staleness above is the "
-         "root cause and is unfixed there (needs checkpointing `vmix%kv`, shared by every "
-         "vmix consumer, or a warm-restart vmix pre-warm pass -- a maintainer decision, not "
-         "made in PR-1). Narrowed to `pred_corr` in PR-1: under `ssp_rk2`, correction_visc_rem "
-         "alone never calls `visc_rem_precompute` (no forcing_visc_rem/renorm_visc_rem, no "
-         "is_pc), so the stale-kv path is never taken and that split DOES resume bit-exact "
-         "(found XPASS by this matrix, 2026-10-05, p006).",
-         "NOT TRACKED (found by this matrix, 2026-10-04)", expect=("RESTART",),
-         message=r"differ after a warm restart"),
+    # `restart_visc_rem` CLOSED by PR-2 (bt-rem-from-av-rem, 2026-10-05):
+    # the root cause (`visc_rem_precompute` reading the PREVIOUS stage's
+    # `vmix%kv`, which the restart registry did not carry) is fixed by
+    # registering `vmix_kv` (`ocean_state_build_restart_registry`,
+    # `src/core/ocean/state/rdb_ocean_state.F90`) -- `test_engine_bit_exact_
+    # visc_rem` (`tests/test_ocean_restart_engine.F90`) now runs the FULL
+    # round trip (not resume-point-only) and is bit-exact.  Row deleted so
+    # it does not XPASS.
     _gap("restart_mle_mld_filter", "runtime", ("mle_mld_filter",),
          "Fox-Kemper MLE with mld_decay_time > 0 does not resume bit-exact: its running-mean "
          "`mld_filtered` is persistent state but not in the restart registry, so a resume "
