@@ -1749,8 +1749,8 @@ XFAIL; t = 3: 104 PASS, 216 REFUSED_GAP, 296 XFAIL; 0 FAIL, 0 XPASS):
 | `restart_visc_rem` | RESTART | `visc_rem_precompute` builds its remnant from the previous stage's `vmix%kv`, which the restart registry does not carry: the first resumed step weights F_bt differently |
 | `restart_meke_gm_src_lag` | RESTART | MEKE reads the PREVIOUS thermo step's `gm%gm_src`; not checkpointed, so MEKE resumes from a cold source (3 % off at step 24) |
 | `restart_mle_mld_filter` | RESTART | MLE's running-mean `mld_filtered` (mld_decay_time > 0) is persistent state outside the registry |
-| `decomp_weno_pv` | DECOMP | WENO PV interpolation: last-bit differences in all owned cells on 2x2 / 4x1 in some combinations (minimised: sadourny + weno7 on z*); unchanged by `-ffp-contract=off` |
-| `decomp_eulerian_z_ssp_rk2` | DECOMP | eulerian_z + ssp_rk2: same, with visc_rem or EPBL + MLE (minimised); unchanged by `-ffp-contract=off` |
+| `decomp_weno_pv` | DECOMP | WENO PV interpolation at the minimum halo its gate accepts (weno7 at `nghost = 4`, weno5 at 3): last-bit differences in all owned cells on 2x2 / 4x1; one ghost more is exact (witness: sadourny + weno7 on the base `z_fixed` + closed faces) |
+| `decomp_eulerian_z_ssp_rk2` | DECOMP | eulerian_z + ssp_rk2 + EPBL + MLE: same (minimised); the visc_rem half was fixed (post-fold ghost refresh) |
 | `cavity_single_rank` | DECOMP (multirank) | the configure refusal on > 1 rank (the tripolar fold row `tripolar_fold_px1` was retired when the distributed fold lifted the `px > 1` refusal) |
 | `gpu_eulerian_z_epbl_mle_drift` | GPU | eulerian_z + ssp_rk2 + EPBL + MLE ends 1.6e-7 from gfortran, 3000x the population spread (the same combination is decomposition-sensitive) |
 
