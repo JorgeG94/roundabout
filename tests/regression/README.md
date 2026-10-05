@@ -1606,9 +1606,9 @@ each now a row, so the committed table is green:
 
 | finding | class now | evidence |
 |---|---|---|
-| Redi + a Flather open edge: the model's own **salt budget misses ~4e-5** of the content in 24 steps, on every such cell (Redi on walls or a periodic channel closes to 1e-15) | `redi_obc_salt_budget` (NOT TRACKED) | 6 cells: `Salt residual -3.8e-05 .. -5.2e-05` |
-| `correction_bc_pgf` with the Montgomery PGF is **accepted at configure** and `error stop`s in step 1 (`compute_pbce: requires ocean_pgf_form = 'fv_mom6'`) — a missing `validate_config` refusal | `bc_pgf_needs_fv_mom6` (NOT TRACKED) | 4 cells |
-| z_fixed WITHOUT closed faces: En 23-85x the closed-face run in 24 steps everywhere, and a negative thickness the remap guard stops at step 20 in one combination | `zfixed_open_steps` (item 11, `scope="any"`) | 1 cell |
+| Redi + a Flather open edge: the model's own **salt budget misses ~4e-5** of the content in 24 steps, on every such cell (Redi on walls or a periodic channel closes to 1e-15) | fixed by fix/redi-obc-salt-budget (Redi books its open-face flux); row retired | 6 cells: `Salt residual -3.8e-05 .. -5.2e-05` |
+| `correction_bc_pgf` with the Montgomery PGF is **accepted at configure** and `error stop`s in step 1 (`compute_pbce: requires ocean_pgf_form = 'fv_mom6'`) — a missing `validate_config` refusal | `bc_pgf_needs_fv_mom6`, a PHYSICAL refusal since fix/bc-pgf-needs-fv-mom6 | 4 cells |
+| z_fixed WITHOUT closed faces: En 23-85x the closed-face run in 24 steps everywhere, and a negative thickness the remap guard stops at step 20 in one combination | `zfixed_open_steps`, a PHYSICAL refusal (stepped bed) since fix/zfixed-require-closed-faces | 1 cell |
 
 It also showed that `zstar_full`, `hycom` and `rho` cannot run a step on any
 domain with LAND (the island): the remap precondition guard stops step 1 on the
@@ -1734,12 +1734,10 @@ XFAIL; t = 3: 104 PASS, 216 REFUSED_GAP, 296 XFAIL; 0 FAIL, 0 XPASS):
 | `restart_visc_rem` | RESTART | `visc_rem_precompute` builds its remnant from the previous stage's `vmix%kv`, which the restart registry does not carry: the first resumed step weights F_bt differently |
 | `restart_meke_gm_src_lag` | RESTART | MEKE reads the PREVIOUS thermo step's `gm%gm_src`; not checkpointed, so MEKE resumes from a cold source (3 % off at step 24) |
 | `restart_mle_mld_filter` | RESTART | MLE's running-mean `mld_filtered` (mld_decay_time > 0) is persistent state outside the registry |
-| `decomp_redi_seam` | DECOMP | Redi differs from 1 rank in every owned cell (1e-4 .. 1e-2 of the field max after 24 steps): the Redi seam-as-wall bug item 2's branch fixes |
 | `decomp_weno_pv` | DECOMP | WENO PV interpolation: last-bit differences in all owned cells on 2x2 / 4x1 in some combinations (minimised: sadourny + weno7 on z*); unchanged by `-ffp-contract=off` |
 | `decomp_eulerian_z_ssp_rk2` | DECOMP | eulerian_z + ssp_rk2: same, with visc_rem or EPBL + MLE (minimised); unchanged by `-ffp-contract=off` |
 | `cavity_single_rank`, `tripolar_fold_px1` | DECOMP (multirank) | the configure refusals on > 1 rank; the tripolar cells then run 1x2, bitwise unless Redi or WENO PV is on |
 | `gpu_eulerian_z_epbl_mle_drift` | GPU | eulerian_z + ssp_rk2 + EPBL + MLE ends 1.6e-7 from gfortran, 3000x the population spread (the same combination is decomposition-sensitive) |
-| `zfixed_open_steps` (extended) | ENERGY | the open-staircase PGF: 49 of 49 accepted z_fixed_open cells in the t = 3 slice fail the bound |
 
 Instrument findings, fixed in the runner (not the model): the GPU's
 exit-time `Warning: ieee_* is signaling` line read as a refusal reason; 4

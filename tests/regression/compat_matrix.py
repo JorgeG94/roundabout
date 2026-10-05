@@ -1950,6 +1950,11 @@ def cmd_self_test(args):
     _check(cells == generate_cells((), SEED)[0], "the real cell list is seed-stable", fails)
     # An expected refusal forbids exactly the tuple that causes it.
     rows = {r.rid: r for r in compat_expect.ROWS}
+    # A synthetic refusal row on two features: the GM-on-closed-faces row this
+    # probe was written against was retired when GM learned closed faces.
+    rows["closed_faces_gm"] = compat_expect._gap(
+        "closed_faces_gm", "refused", ("closed_faces", "gm"), "synthetic", "self-test",
+        message=r"^synthetic refusal")
     probes = [
         (dict(BASE_CELL, eddy="gm"), "closed_faces_gm",
          (("eddy", "gm"), ("vcoord", "z_fixed_cf"))),
