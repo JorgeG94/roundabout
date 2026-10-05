@@ -37,6 +37,22 @@
 !!     under a cavity is still refused at configure.
 !!  4. `all_open_matches_full_column` — flat bed, nothing closed: the knob
 !!     ON (window = the whole column) gives the knob-OFF answer BITWISE.
+!!  5. `open_steps_drained_cell_bounded` — the same tilted staircase with
+!!     closed faces OFF (`zstar`'s open steps, MOM6-style: the window is the
+!!     whole column, so fillers are paired), and one live partial bed cell
+!!     OVER-DRAINED by the continuity step to `h = -8.2e-4 m`, its content
+!!     advected with it (`hTr = c·h`) — the cell kind, and the value, the
+!!     1-degree Southern Ocean reached at step 12 (a thin partial cell
+!!     beside two open filler faces, drained by the GM bolus flux folded into
+!!     the same continuity sweeps as the resolved flux).  Redi must read that
+!!     layer's concentration by the I1′ rule (`rdb_vl_column_conc`: a
+!!     non-live layer reads its donor's), so every live cell stays inside the
+!!     initial live range, no cell's content exceeds 2·max|c|·H_NOM, and
+!!     everything stays finite.  Phase A (`redi_calc_coeffs`) runs on the
+!!     healthy state and Phase B (`redi_apply_flux`) on the drained one, as
+!!     in the model (coefficients at the start of the thermo step, the flux
+!!     after continuity).  Fails on the floored read `hTr/max(h, 1e-20)`:
+!!     measured hT = 2.4e18 in the drained cell and a live T of -3.0e16.
 module test_ocean_redi_zfixed
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp, H_VANISHED
@@ -86,7 +102,8 @@ contains
                   new_unittest("uniform_ts_zero_flux", test_uniform_ts), &
                   new_unittest("tilted_isopycnals_open_window", test_tilted_open_window), &
                   new_unittest("ice_draft_open_window", test_ice_draft), &
-                  new_unittest("all_open_matches_full_column", test_all_open_bitwise) &
+                  new_unittest("all_open_matches_full_column", test_all_open_bitwise), &
+                  new_unittest("open_steps_drained_cell_bounded", test_open_drained_cell) &
                   ]
    end subroutine collect_ocean_redi_zfixed_tests
 
@@ -592,5 +609,92 @@ contains
       call rd%destroy()
       call ms%destroy()
    end subroutine test_all_open_bitwise
+
+   ! ------------------------------------------------------------------
+   ! Case 5: open steps, an over-drained live partial cell
+   ! ------------------------------------------------------------------
+   subroutine test_open_drained_cell(error)
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_metrics_t) :: metrics
+      type(multilayer_state_t) :: ms
+      type(ocean_redi_t) :: rd
+      type(eos_t) :: eos
+      real(wp), allocatable :: tgt(:, :, :)
+      real(wp) :: tmin0, tmax0, smin0, smax0, tmin, tmax, smin, smax, tol, c_t, c_s
+      integer :: i, j, k, id, jd, kd
+      character(len=200) :: msg
+
+      call build_case(grid, metrics, ms, rd, eos, tgt, 0.0_wp, GX, GY, GZ, SX, SY, &
+                      .true., .false.)
+      checks: block
+         call live_range(ms, ms%idx_temperature, tmin0, tmax0)
+         call live_range(ms, ms%idx_salinity, smin0, smax0)
+         ! The live partial bed cell sitting directly on the topmost bed
+         ! filler of an interior column (the thin cell GM drains through its
+         ! open filler faces).
+         id = 0
+         do j = NG + 2, NG + NYP - 1
+            do i = NG + 2, NG + NXP - 1
+               do k = NZ - 1, 1, -1
+                  if (id == 0 .and. tgt(i, j, k) <= H_VANISHED .and. &
+                      tgt(i, j, k + 1) > H_VANISHED) then
+                     id = i; jd = j; kd = k
+                  end if
+               end do
+            end do
+         end do
+         call check(error, id > 0, "the open staircase must carry an interior bed filler")
+         if (allocated(error)) exit checks
+         kd = kd + 1
+         c_t = ms%tracers(ms%idx_temperature)%hTr(id, jd, kd)/ms%h_layer(id, jd, kd)
+         c_s = ms%tracers(ms%idx_salinity)%hTr(id, jd, kd)/ms%h_layer(id, jd, kd)
+
+         ! Phase A on the healthy state (the model runs it at the start of
+         ! the thermo step) ...
+         call map_in(ms, rd)
+         call redi_calc_coeffs(grid, metrics, eos, rd, ms)
+         ! ... then continuity over-drains the cell to the observed -8.2e-4 m,
+         ! its content advected with it, and Phase B runs on that state.
+         !$acc update self(ms%h_layer, ms%tracers(ms%idx_temperature)%hTr)
+         !$acc update self(ms%tracers(ms%idx_salinity)%hTr)
+         ms%h_layer(id, jd, kd) = -8.2e-4_wp
+         ms%tracers(ms%idx_temperature)%hTr(id, jd, kd) = c_t*ms%h_layer(id, jd, kd)
+         ms%tracers(ms%idx_salinity)%hTr(id, jd, kd) = c_s*ms%h_layer(id, jd, kd)
+         !$acc update device(ms%h_layer, ms%tracers(ms%idx_temperature)%hTr)
+         !$acc update device(ms%tracers(ms%idx_salinity)%hTr)
+         call redi_apply_flux(grid, metrics, rd, ms, DT)
+         call pull_back(ms, rd)
+         call map_out(ms, rd, metrics)
+
+         call check(error, all_finite_3d(ms%tracers(ms%idx_temperature)%hTr) .and. &
+                    all_finite_3d(ms%tracers(ms%idx_salinity)%hTr), &
+                    "open steps, drained cell: the Redi update must stay finite")
+         if (allocated(error)) exit checks
+         ! Content bound on EVERY cell, the drained one included: twice the
+         ! largest concentration times the thickest layer.  The initial state
+         ! sits ON `max|c|*H_NOM` (a full layer at the warmest T), so the bound
+         ! needs room for round-off (GPU FMA); the defect is 1e18.
+         write (msg, '(a,2es12.4)') "max|hT|, max|hS| = ", &
+            maxval(abs(ms%tracers(ms%idx_temperature)%hTr)), &
+            maxval(abs(ms%tracers(ms%idx_salinity)%hTr))
+         call check(error, maxval(abs(ms%tracers(ms%idx_temperature)%hTr)) <= &
+                    2.0_wp*max(abs(tmin0), abs(tmax0))*H_NOM .and. &
+                    maxval(abs(ms%tracers(ms%idx_salinity)%hTr)) <= &
+                    2.0_wp*max(abs(smin0), abs(smax0))*H_NOM, &
+                    "open steps, drained cell: unbounded content: "//trim(msg))
+         if (allocated(error)) exit checks
+         call live_range(ms, ms%idx_temperature, tmin, tmax)
+         call live_range(ms, ms%idx_salinity, smin, smax)
+         tol = 1.0e-9_wp
+         write (msg, '(a,4es12.4,a,4es12.4)') "T before/after ", tmin0, tmax0, tmin, tmax, &
+            "  S before/after ", smin0, smax0, smin, smax
+         call check(error, tmin >= tmin0 - tol .and. tmax <= tmax0 + tol .and. &
+                    smin >= smin0 - tol .and. smax <= smax0 + tol, &
+                    "open steps, drained cell: Redi made new live extrema: "//trim(msg))
+      end block checks
+      call rd%destroy()
+      call ms%destroy()
+   end subroutine test_open_drained_cell
 
 end module test_ocean_redi_zfixed

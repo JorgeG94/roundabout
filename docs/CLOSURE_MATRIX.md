@@ -189,7 +189,14 @@ unchanged.  A window layer no longer live when Phase B runs skips the face
 (symmetric for both cells).  Without the window the full-column pairing put
 fluxes with `hEff` up to the layer thickness through closed face-layers once
 the isopycnals tilt by more than a bed step.  All-open window ⇒ the
-full-column arithmetic bitwise; knob off ⇒ byte-identical.  Test:
+full-column arithmetic bitwise; knob off ⇒ byte-identical.  On EVERY path
+Phase A and Phase B read layer T/S by the I1′ column rule
+(`rdb_vl_column_conc`: `hTr/h` on a live layer, the donor's on a vanished
+one).  Before 2026-10-05 they used `hTr/max(h, 1e-20)`.  With closed faces
+off the window is the whole column, so a thin partial cell drained negative
+by continuity was read as T ~ 1e17 and Redi put 5e12 of content into it
+(1-degree Southern Ocean, `zstar`, step 12; `open_steps_drained_cell_bounded`).
+Live layers read the same divide as before.  Test:
 `test_ocean_redi_zfixed`.  Redi under a cavity stays refused.
 **MOM6 divergence (recorded, not deferred — PR-8):** MOM6's
 thickness-diffusion (ALE mode) always runs its top layer through a
