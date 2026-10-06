@@ -2018,27 +2018,68 @@ contains
       end do
    end subroutine compute_pbce
 
-   pure subroutine compute_gtot_faces(grid, bt_work, ms)
+   pure subroutine compute_gtot_faces(grid, bt_work, ms, metrics)
       !! Face-centred depth-weighted column averages of `pbce` (gtot_E/W/N/S).
       !! Wall cells fall back to `pbce(:,:,nz)`. By construction
       !! Σ_k h_face(k)·(pbce(k) − gtot_face) = 0 per column, making the bc-PGF
-      !! Δu correction depth-mean zero.
+      !! Δu correction depth-mean zero -- UNDER THE SAME h_face/weight
+      !! `derive_bt_from_layers` and `apply_bt_correction`'s folds use.
+      !!
+      !! Root cause of the fix(bt) frhat-matrix mass leak (budget
+      !! c055-class cells, `eulerian_z` + `correction_bc_pgf`, 2026-10-06):
+      !! this routine hand-rolled `h_face = 0.5*(h_L+h_R)` -- the plain
+      !! arithmetic mean, UNCONDITIONALLY -- while every other depth mean
+      !! in this module (`derive_bt_from_layers`'s `bt_ubt`, the BT
+      !! forcing's `F_bt_u/_fast`, `apply_bt_correction`'s own folds)
+      !! already dispatches on `&ocean_bt_nml frhat_scheme` via
+      !! `frhat_h_face_step`, gated to `metrics%use_closed_faces` like
+      !! every other call site (see `derive_bt_from_layers`'s matching
+      !! comment). `gtot_face`'s "depth-mean zero" property holds for ANY
+      !! weight consistent with ITSELF (true by construction of a
+      !! weighted mean), but `apply_bt_correction`'s `do_bc_pgf` fold adds
+      !! `Δu_bc` directly, LAYER BY LAYER, to `u_face_x_layer` -- so what
+      !! cancels the barotropic mode's own mass transport is Δu_bc's depth
+      !! mean UNDER THE WEIGHT THE FAST LOOP ACTUALLY INTEGRATED, not under
+      !! some independent, always-arithmetic weight. Fixing ONLY this
+      !! routine does not, by itself, close the c055 leak (isolated by
+      !! bisection: `derive_bt_from_layers`'s own `bt_ubt`, gated above, is
+      !! the dominant term -- HYBRID's shelf-test/harmonic suppression
+      !! assumes the z_fixed/zstar FILLER convention, where a layer with
+      !! h -> 0 genuinely carries no water; on every other family
+      !! (hycom, eulerian_z, rho, sigma, lagrangian) a thin layer is REAL
+      !! water merely scaled by a shallow column, and HYBRID suppresses it
+      !! anyway, breaking exactly this mass consistency) -- but this
+      !! routine is its own latent instance of the same inconsistency
+      !! class and would bite the moment `correction_bc_pgf` composes with
+      !! a closed-faces z_fixed/zstar run (currently refused at configure,
+      !! `closed_faces_bc_pgf`), so it is fixed here too, independently.
       type(hgrid_t), intent(in) :: grid
       type(barotropic_workstate_t), intent(inout) :: bt_work
       type(multilayer_state_t), intent(in) :: ms
+      type(ocean_metrics_t), intent(in) :: metrics
+         !! REQUIRED, like every other frhat call site's `metrics` --
+         !! see `derive_bt_from_layers`'s docstring for why an optional
+         !! here is the defect class, not a defect.
 
-      integer :: i, j, k, nx, ny, nz
-      real(wp) :: h_face, h_sum, p_sum
+      integer :: i, j, k, nx, ny, nz, scheme
+      real(wp) :: h_face, h_sum, p_sum, href_l, href_r, e_prev
 
       nx = grid%nx_total
       ny = grid%ny_total
       nz = ms%nz_ml
+      ! Gated exactly like every other frhat call site in this module --
+      ! see `derive_bt_from_layers`'s matching comment.
+      scheme = merge(bt_work%frhat_scheme, FRHAT_ARITHMETIC, metrics%use_closed_faces)
 
-      do concurrent(j=1:ny, i=1:nx - 1) local(k, h_face, h_sum, p_sum)
+      do concurrent(j=1:ny, i=1:nx - 1) local(k, h_face, h_sum, p_sum, href_l, href_r, e_prev)
+         href_l = bt_work%bt_H_ref(i, j)
+         href_r = bt_work%bt_H_ref(i + 1, j)
+         e_prev = -0.5_wp*(href_l + href_r)
          h_sum = 0.0_wp
          p_sum = 0.0_wp
          do k = 1, nz
-            h_face = 0.5_wp*(ms%h_layer(i, j, k) + ms%h_layer(i + 1, j, k))
+            call frhat_h_face_step(ms%h_layer(i, j, k), ms%h_layer(i + 1, j, k), &
+                                   href_l, href_r, scheme, e_prev, h_face)
             h_sum = h_sum + h_face
             p_sum = p_sum + h_face*bt_work%pbce(i, j, k)
          end do
@@ -2052,11 +2093,15 @@ contains
          bt_work%gtot_E(nx, j) = bt_work%pbce(nx, j, nz)
       end do
 
-      do concurrent(j=1:ny, i=2:nx) local(k, h_face, h_sum, p_sum)
+      do concurrent(j=1:ny, i=2:nx) local(k, h_face, h_sum, p_sum, href_l, href_r, e_prev)
+         href_l = bt_work%bt_H_ref(i - 1, j)
+         href_r = bt_work%bt_H_ref(i, j)
+         e_prev = -0.5_wp*(href_l + href_r)
          h_sum = 0.0_wp
          p_sum = 0.0_wp
          do k = 1, nz
-            h_face = 0.5_wp*(ms%h_layer(i - 1, j, k) + ms%h_layer(i, j, k))
+            call frhat_h_face_step(ms%h_layer(i - 1, j, k), ms%h_layer(i, j, k), &
+                                   href_l, href_r, scheme, e_prev, h_face)
             h_sum = h_sum + h_face
             p_sum = p_sum + h_face*bt_work%pbce(i, j, k)
          end do
@@ -2070,11 +2115,15 @@ contains
          bt_work%gtot_W(1, j) = bt_work%pbce(1, j, nz)
       end do
 
-      do concurrent(j=1:ny - 1, i=1:nx) local(k, h_face, h_sum, p_sum)
+      do concurrent(j=1:ny - 1, i=1:nx) local(k, h_face, h_sum, p_sum, href_l, href_r, e_prev)
+         href_l = bt_work%bt_H_ref(i, j)
+         href_r = bt_work%bt_H_ref(i, j + 1)
+         e_prev = -0.5_wp*(href_l + href_r)
          h_sum = 0.0_wp
          p_sum = 0.0_wp
          do k = 1, nz
-            h_face = 0.5_wp*(ms%h_layer(i, j, k) + ms%h_layer(i, j + 1, k))
+            call frhat_h_face_step(ms%h_layer(i, j, k), ms%h_layer(i, j + 1, k), &
+                                   href_l, href_r, scheme, e_prev, h_face)
             h_sum = h_sum + h_face
             p_sum = p_sum + h_face*bt_work%pbce(i, j, k)
          end do
@@ -2088,11 +2137,15 @@ contains
          bt_work%gtot_N(i, ny) = bt_work%pbce(i, ny, nz)
       end do
 
-      do concurrent(j=2:ny, i=1:nx) local(k, h_face, h_sum, p_sum)
+      do concurrent(j=2:ny, i=1:nx) local(k, h_face, h_sum, p_sum, href_l, href_r, e_prev)
+         href_l = bt_work%bt_H_ref(i, j - 1)
+         href_r = bt_work%bt_H_ref(i, j)
+         e_prev = -0.5_wp*(href_l + href_r)
          h_sum = 0.0_wp
          p_sum = 0.0_wp
          do k = 1, nz
-            h_face = 0.5_wp*(ms%h_layer(i, j - 1, k) + ms%h_layer(i, j, k))
+            call frhat_h_face_step(ms%h_layer(i, j - 1, k), ms%h_layer(i, j, k), &
+                                   href_l, href_r, scheme, e_prev, h_face)
             h_sum = h_sum + h_face
             p_sum = p_sum + h_face*bt_work%pbce(i, j, k)
          end do
