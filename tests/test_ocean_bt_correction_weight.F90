@@ -55,7 +55,9 @@ module test_ocean_bt_correction_weight
    use rdb_ocean_metrics, only: ocean_metrics_t
    use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
    use rdb_vcoord, only: z_fixed_nominal_dz, ZFIXED_PROFILE_TANH, ZFIXED_DZ_OK
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_string, validate_config, &
+                         ocean_bt_correction_visc_rem_on, ocean_bt_forcing_visc_rem_on, &
+                         ocean_bt_renorm_visc_rem_on, ocean_bt_rem_from_visc_rem_on
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_VALIDATE
    use rdb_error_ring, only: error_ring_clear, error_ring_get, error_ring_count, &
                              ERROR_RING_MSG_LEN
@@ -87,7 +89,12 @@ contains
                   new_unittest("visc_rem_biases_against_bed", test_vr_bed), &
                   new_unittest("skip_nonfinite_fold_input", test_skip_nonfinite), &
                   new_unittest("h_weighted_refused", test_h_weighted_refused), &
-                  new_unittest("visc_rem_chain_standalone", test_visc_rem_chain) &
+                  new_unittest("visc_rem_chain_standalone", test_visc_rem_chain), &
+                  new_unittest("visc_rem_chain_on_helpers", test_chain_on_helpers), &
+                  new_unittest("visc_rem_chain_switch_configures", test_chain_switch), &
+                  new_unittest("visc_rem_chain_substep_drag_refused", test_chain_substep_drag), &
+                  new_unittest("visc_rem_chain_strong_drag_accepted", test_chain_strong_drag), &
+                  new_unittest("accel_visc_rem_retired", test_accel_visc_rem_retired) &
                   ]
    end subroutine collect_ocean_bt_correction_weight_tests
 
@@ -473,6 +480,110 @@ contains
       call expect_status(error, base_nml("forcing_visc_rem = .true."), .false., &
                          "forcing_visc_rem without its producer")
    end subroutine test_visc_rem_chain
+
+   subroutine test_chain_on_helpers(error)
+      !! PR-3 (D1): the four `ocean_bt_*_on` helpers in `rdb_config` are
+      !! `visc_rem_chain .OR. <the direct knob>` — never a superset,
+      !! never a subset.  A truth-table check on the four combinations
+      !! that matter, no namelist I/O required.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+
+      ! Neither set: every helper false.
+      call check(error,.not. ocean_bt_correction_visc_rem_on(cfg), "neither: correction off")
+      if (allocated(error)) return
+      call check(error,.not. ocean_bt_forcing_visc_rem_on(cfg), "neither: forcing off")
+      if (allocated(error)) return
+      call check(error,.not. ocean_bt_renorm_visc_rem_on(cfg), "neither: renorm off")
+      if (allocated(error)) return
+      call check(error,.not. ocean_bt_rem_from_visc_rem_on(cfg), "neither: bt_rem off")
+      if (allocated(error)) return
+
+      ! Direct knob only (chain off): that ONE helper true, the others false.
+      cfg%ocean%bt%correction_visc_rem = .true.
+      call check(error, ocean_bt_correction_visc_rem_on(cfg), "direct correction_visc_rem: on")
+      if (allocated(error)) return
+      call check(error,.not. ocean_bt_forcing_visc_rem_on(cfg), "direct correction_visc_rem: forcing stays off")
+      if (allocated(error)) return
+      cfg%ocean%bt%correction_visc_rem = .false.
+
+      ! Chain only: ALL FOUR helpers true.
+      cfg%ocean%bt%visc_rem_chain = .true.
+      call check(error, ocean_bt_correction_visc_rem_on(cfg), "chain: correction on")
+      if (allocated(error)) return
+      call check(error, ocean_bt_forcing_visc_rem_on(cfg), "chain: forcing on")
+      if (allocated(error)) return
+      call check(error, ocean_bt_renorm_visc_rem_on(cfg), "chain: renorm on")
+      if (allocated(error)) return
+      call check(error, ocean_bt_rem_from_visc_rem_on(cfg), "chain: bt_rem on")
+   end subroutine test_chain_on_helpers
+
+   subroutine test_chain_switch(error)
+      !! `visc_rem_chain = .true.` alone configures exactly like setting
+      !! all four constituent knobs by hand (the `test_visc_rem_chain`
+      !! case two lines up), with no other knob touched.
+      type(error_type), allocatable, intent(out) :: error
+      call expect_status(error, base_nml("visc_rem_chain = .true."), .true., &
+                         "visc_rem_chain alone")
+   end subroutine test_chain_switch
+
+   subroutine test_chain_substep_drag(error)
+      !! D2: `visc_rem_chain` composes with `substep_drag` exactly like
+      !! `bt_rem_from_visc_rem` already does — mutually exclusive,
+      !! fail-loud (double-counted bed drag).
+      type(error_type), allocatable, intent(out) :: error
+      call expect_status(error, base_nml("visc_rem_chain = .true., substep_drag = .true."), &
+                         .false., "visc_rem_chain + substep_drag")
+   end subroutine test_chain_substep_drag
+
+   subroutine test_chain_strong_drag(error)
+      !! D3: `strong_drag` (MOM6 BT_STRONG_DRAG, opt-in, default off) is
+      !! reachable through `visc_rem_chain` exactly as it already is
+      !! through `bt_rem_from_visc_rem`.
+      type(error_type), allocatable, intent(out) :: error
+      call expect_status(error, base_nml("visc_rem_chain = .true., strong_drag = .true."), &
+                         .true., "visc_rem_chain + strong_drag")
+   end subroutine test_chain_strong_drag
+
+   subroutine test_accel_visc_rem_retired(error)
+      !! PR-3: `&ocean_vdiff_nml accel_visc_rem = .true.` is REFUSED at
+      !! configure (no MOM6 state-update equivalent — see its docstring
+      !! in `rdb_config.F90`), naming the real MOM6 mechanisms on the
+      !! error ring.  The underlying kernels + their own direct unit
+      !! tests (`tests/test_ocean_accel_visc_rem.F90`) are untouched —
+      !! only the configure-time path from a namelist is refused here.
+      type(error_type), allocatable, intent(out) :: error
+      character(len=:), allocatable :: nml
+      character(len=ERROR_RING_MSG_LEN) :: msg
+      logical :: found
+      integer :: n
+
+      nml = "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
+            "&grid_nml nx = 8, ny = 6, nghost = 2, dx = 1000.0, dy = 1000.0 /"//new_line("a")// &
+            "&nonhydrostatic_nml nz_layers = 4 /"//new_line("a")// &
+            "&time_nml t_end = 3600.0, dt_fixed = 60.0 /"//new_line("a")// &
+            "&ocean_topo_nml max_depth = 400.0 /"//new_line("a")// &
+            "&ocean_vdiff_nml accel_visc_rem = .true. /"//new_line("a")// &
+            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
+            "&output_nml output_to_file = .false. /"//new_line("a")
+
+      call error_ring_clear()
+      call expect_status(error, nml, .false., "accel_visc_rem = .true.")
+      if (allocated(error)) return
+      found = .false.
+      do n = 0, error_ring_count() - 1
+         msg = error_ring_get(n)
+         if (index(msg, "accel_visc_rem is RETIRED") > 0) then
+            found = .true.
+            exit
+         end if
+      end do
+      call check(error, found, "the retirement reason must be on the error ring")
+      if (allocated(error)) return
+      call check(error, index(msg, "renorm_visc_rem") > 0 .and. &
+                 index(msg, "rescale_strong_drag") > 0, &
+                 "the refusal must name the real MOM6 mechanisms: "//trim(msg))
+   end subroutine test_accel_visc_rem_retired
 
    pure function base_nml(bt_body) result(nml)
       !! A minimal in-envelope `z_fixed` namelist; `bt_body` is the extra

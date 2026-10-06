@@ -15,7 +15,8 @@ module rdb_ocean_setup
    use rdb_constants, only: wp, GRAVITY, LAND_DEPTH_THRESHOLD, NZ_STACK_MAX
 #endif
    use rdb_constants, only: H_VANISHED, VCOORD_ZSTAR_FULL, VCOORD_ZSTAR
-   use rdb_config, only: config_t
+   use rdb_config, only: config_t, ocean_bt_correction_visc_rem_on, ocean_bt_forcing_visc_rem_on, &
+                         ocean_bt_renorm_visc_rem_on, ocean_bt_rem_from_visc_rem_on
    use rdb_grid, only: hgrid_t
    use rdb_decomp, only: decomp_t
    use rdb_ocean_state, only: ocean_state_t, ocean_state_seed_land_cells, &
@@ -3805,10 +3806,10 @@ contains
       ! remnant the layered momentum solve uses (MOM6
       ! MOM_barotropic.F90:1553-1580). Mutually exclusive with
       ! substep_drag and bt_halo > 0 (validated at configure).
-      ocean_state%dyn%bt_work%bt_rem_from_visc_rem = cfg%ocean%bt%bt_rem_from_visc_rem
+      ocean_state%dyn%bt_work%bt_rem_from_visc_rem = ocean_bt_rem_from_visc_rem_on(cfg)
       ocean_state%dyn%bt_work%bt_strong_drag = cfg%ocean%bt%strong_drag
       ocean_state%dyn%bt_work%bt_rescale_strong_drag = cfg%ocean%bt%rescale_strong_drag
-      if (compute_rank == 0 .and. cfg%ocean%bt%bt_rem_from_visc_rem) then
+      if (compute_rank == 0 .and. ocean_bt_rem_from_visc_rem_on(cfg)) then
          block
             character(len=:), allocatable :: bt_rem_msg
             bt_rem_msg = "BT substep:       bt_rem = av_rem**(1/n_inner) ON "// &
@@ -3834,16 +3835,16 @@ contains
       ! from the momentum tridiagonal (rdb_ocean_vdiff.F90); it is inert
       ! (≡ 1) unless &ocean_vdiff_nml implicit_drag is also on (validate_config
       ! warns in that case).
-      ocean_state%dyn%bt_work%bt_correction_visc_rem = cfg%ocean%bt%correction_visc_rem
-      if (compute_rank == 0 .and. cfg%ocean%bt%correction_visc_rem) then
+      ocean_state%dyn%bt_work%bt_correction_visc_rem = ocean_bt_correction_visc_rem_on(cfg)
+      if (compute_rank == 0 .and. ocean_bt_correction_visc_rem_on(cfg)) then
          call logger%info("BT correction:    visc_rem/<visc_rem>_h weight ON "// &
                           "(visc_rem produced by vdiff)")
       end if
       ! MOM6 wt_u parity for the BT FORCING assembly (PGF_BUG.md §9):
       ! friction-damped layers stop forcing the fast loop.  Requires
       ! correction_visc_rem (validated at configure).
-      ocean_state%dyn%bt_work%bt_forcing_visc_rem = cfg%ocean%bt%forcing_visc_rem
-      if (compute_rank == 0 .and. cfg%ocean%bt%forcing_visc_rem) then
+      ocean_state%dyn%bt_work%bt_forcing_visc_rem = ocean_bt_forcing_visc_rem_on(cfg)
+      if (compute_rank == 0 .and. ocean_bt_forcing_visc_rem_on(cfg)) then
          call logger%info("BT forcing:       h·visc_rem weight ON (MOM6 wt_u)")
       end if
       ! MOM6 dt·visc_rem·accel parity: the per-layer slow applies are
@@ -3894,8 +3895,8 @@ contains
          end if
       end if
       ! SPEC S2b: γ-weighted continuity transport-matching inversion.
-      ocean_state%dyn%bt_work%bt_renorm_visc_rem = cfg%ocean%bt%renorm_visc_rem
-      if (compute_rank == 0 .and. cfg%ocean%bt%renorm_visc_rem) then
+      ocean_state%dyn%bt_work%bt_renorm_visc_rem = ocean_bt_renorm_visc_rem_on(cfg)
+      if (compute_rank == 0 .and. ocean_bt_renorm_visc_rem_on(cfg)) then
          call logger%info("BT renormaliser:  gamma-weighted du + u_cor (MOM6 "// &
                           "continuity inversion parity)")
       end if
@@ -3906,7 +3907,7 @@ contains
       ! exactly gamma==1 (a x1.0). Warn rather than abort (tidal_mixing
       ! e_uniform=0 precedent): PR-19 (visc_rem) is the named owner that
       ! fills the arrays for other configurations.
-      if (compute_rank == 0 .and. cfg%ocean%bt%correction_visc_rem .and. &
+      if (compute_rank == 0 .and. ocean_bt_correction_visc_rem_on(cfg) .and. &
           .not. (cfg%ocean%vdiff%implicit_drag .or. ocean_state%vdiff%bbl_glue)) then
          call logger%warning("&ocean_bt_nml correction_visc_rem=.true. has no effect "// &
                              "without &ocean_vdiff_nml implicit_drag=.true. "// &
