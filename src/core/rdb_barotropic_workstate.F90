@@ -7,7 +7,7 @@ module rdb_barotropic_workstate
    !! u at east faces, v at north faces, ζ at corners.  `F_slow_*`,
    !! `F_bt_*`, `ubt_at_n`, `vbt_at_n`, etc. are allocated only when
    !! `init` is passed `nz_ml` (barotropic-only unit tests skip them).
-   use rdb_constants, only: wp
+   use rdb_constants, only: wp, FRHAT_ARITHMETIC
    use rdb_grid, only: hgrid_t
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_mem_report, only: arr_bytes
@@ -182,6 +182,26 @@ module rdb_barotropic_workstate
       logical :: bt_rescale_strong_drag = .false.
          !! MOM6 `RESCALE_STRONG_DRAG`.  Requires
          !! `bt_strong_drag`.
+
+      integer :: frhat_scheme = FRHAT_ARITHMETIC
+         !! `&ocean_bt_nml frhat_scheme` (`rdb_constants::FRHAT_*`,
+         !! `parse_frhat_scheme`; default `FRHAT_ARITHMETIC`, bit-identical
+         !! to the pre-port tree).  `FRHAT_HYBRID` ports MOM6's `btcalc`
+         !! HVEL_SCHEME=HYBRID face-thickness closure
+         !! (`MOM_barotropic.F90:4546-4790`) into every barotropic depth
+         !! mean that reads a layer's face thickness: `derive_bt_from_
+         !! layers`, `face_depth_mean_u/v`, `face_depth_mean_rem_u/v`,
+         !! `apply_bt_correction`'s open/visc_rem folds, and (through
+         !! `face_depth_mean_u/v`) `compute_bt_rem_from_visc_rem`'s
+         !! `av_rem`. Read on the host before each `do concurrent` (a plain
+         !! scalar dispatch flag, like `bt_strong_drag` — never dereferenced
+         !! from `bt_work` INSIDE a kernel, so it needs no `enter_data` map
+         !! of its own). See `rdb_barotropic_coupling::frhat_h_face_step`
+         !! (`src/shared_module_utilities/rdb_frhat_face.inc`) for the
+         !! bottom-up port of MOM6's `e_u`/`D_shallow_u` sweep, and
+         !! `derive_bt_from_layers`'s docstring for the one site
+         !! (`use_upstream_h_face`) that has no MOM6 frhat counterpart and
+         !! is deliberately left untouched.
 
       logical :: bt_correction_bc_pgf = .false.
          !! When `.true.`, `apply_bt_correction` adds the per-layer

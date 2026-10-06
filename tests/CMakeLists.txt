@@ -326,6 +326,7 @@ set(RDB_TESTS
     "test_ocean_bt_corrector_bc_pgf|test_ocean_bt_corrector_bc_pgf|collect_bt_corrector_bc_pgf_tests|ocean_bt_corrector_bc_pgf|ocean"
     "test_ocean_bt_substep_drag|test_ocean_bt_substep_drag|collect_bt_substep_drag_tests|ocean_bt_substep_drag|ocean"
     "test_ocean_bt_rem_from_visc_rem|test_ocean_bt_rem_from_visc_rem|collect_bt_rem_from_visc_rem_tests|ocean_bt_rem_from_visc_rem|ocean"
+    "test_ocean_bt_frhat|test_ocean_bt_frhat|collect_ocean_bt_frhat_tests|ocean_bt_frhat|ocean"
     "test_ocean_wave_drag|test_ocean_wave_drag|collect_ocean_wave_drag_tests|ocean_wave_drag|ocean"
     "test_ocean_wetdry|test_ocean_wetdry|collect_ocean_wetdry_tests|ocean_wetdry|ocean"
     "test_ocean_wetdry_driver|test_ocean_wetdry_driver|collect_ocean_wetdry_driver_tests|ocean_wetdry_driver|ocean"
