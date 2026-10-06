@@ -366,39 +366,14 @@ ROWS = [
     # kappa-shear on the cliff) clean. XPASS under this matrix; deleted
     # rather than re-pinned since leave-one-out found no other cliff
     # witness in this family that still fails.
-    _gap("zstar_open_steps_stress_tensor", "runtime", ("vc_zstar", "stress_tensor"),
-         "zstar's open steps (closed faces off: a live layer faces a 1e-4 m filler) "
-         "with the MOM6 stress-tensor viscosity drives a layer negative and stops on the remap "
-         "guard at step 2-3.  The corner shear stress is weighted by the ARITHMETIC 4-cell "
-         "mean h_q (`hvisc_compute_stress`, Phase 2) while the divergence divides by the face "
-         "thickness, so on a filler face beside a live corner the explicit viscous step is "
-         "amplified by h_q/h_u ~ 1e5.  MOM6 forms hq as the harmonic-type mean of the four "
-         "face thicknesses (MOM_hor_visc.F90 `hq = 2*h2uq*h2vq/(...)`), small whenever one "
-         "face is vanished.  The same operator defect is the vcoord matrix's FINDING A "
-         "(thin density-space layers driven negative); the port changes every stress_tensor "
-         "answer, so it is its own PR.  Since the MOM6 BBL glue became the default "
-         "(2026-10-05) the staircase witness runs clean (the glue couples the filler faces); "
-         "the cliff under ssp_rk2 still crashes at step 3.",
-         "NOT TRACKED (found by this matrix, 2026-10-04; vcoord matrix FINDING A)",
-         expect=("CRASH",), message=r"remap preconditions at step \d+", scope="any",
-         # re-pinned 2026-10-05 (leave-one-out from c010): the staircase witness
-         # {zstar, stress_tensor} passes under the BBL glue default; this one stops at
-         # step 3 (its staircase twin and its pred_corr twin both run 24 steps)
-         witness={"vcoord": "zstar", "lateral": "stress_tensor", "geometry": "cliff",
-                  "split": "ssp_rk2"}),
-    _gap("hycom_runtime_crash", "runtime", ("vc_hycom",),
-         "hycom stops on the remap precondition guard within a few steps in some "
-         "compositions.  The first witness (an open boundary + kh_aniso + MLE, step 4) runs "
-         "24 steps since the MOM6 BBL glue became the default (2026-10-05).  The cliff with "
-         "MEKE backscatter + Fox-Kemper MLE still stops at step 5 (step 4 before the glue): "
-         "both lateral terms are needed (leave-one-out), the staircase twin runs clean, the "
-         "zstar twin runs clean -- a thin hycom layer on the 10 m shelf is driven negative by "
-         "a lateral transport the vertical glue cannot reach.  Not diagnosed further.",
-         "NOT TRACKED (found by this matrix, 2026-10-05)", expect=("CRASH",),
-         message=r"remap preconditions at step \d+", scope="any",
-         # re-pinned 2026-10-05, minimised from c070 (leave-one-out)
-         witness={"vcoord": "hycom", "geometry": "cliff", "lateral": "meke_backscatter",
-                  "eddy": "mle", "vmix_bl": "epbl"}),
+    # `zstar_open_steps_stress_tensor` DELETED (feat/mom6-frhat, 2026-10-06): its
+    # pinned witness ({vcoord=zstar, lateral=stress_tensor, geometry=cliff,
+    # split=ssp_rk2}) now runs clean on this base -- an XPASS re-tally, not a fix
+    # this branch claims.
+    # `hycom_runtime_crash` DELETED (feat/mom6-frhat, 2026-10-06): its pinned
+    # witness ({vcoord=hycom, geometry=cliff, lateral=meke_backscatter, eddy=mle,
+    # vmix_bl=epbl}) now runs clean (real decaying En, budgets at round-off) on
+    # this base -- an XPASS re-tally, not a fix this branch claims.
     # `hycom_decomp_run_fails` DELETED (PR-4, the flip): its pinned witness
     # (hycom + ssp_rk2 + kpp/ddiff/henyey/const_nu_h/gm/ideal_age/fv_mom6_plm/
     # linear/sadourny_energy/centered/correction_bc_pgf/channel/spherical/
@@ -421,57 +396,16 @@ ROWS = [
          "re-seeds it from the instantaneous MLD and the restratification flux changes.",
          "NOT TRACKED (found by this matrix, 2026-10-04)", expect=("RESTART",),
          message=r"differ after a warm restart"),
-    _gap("decomp_hycom_ssp_rk2_chain_crash", "runtime", ("vc_hycom", "ssp_rk2"),
-         "PR-4 (the flip): hycom + ssp_rk2 cells that run clean on one rank fail outright "
-         "decomposed (2x2 and 4x1, rc 1) now that visc_rem_chain is the default -- the "
-         "decomposed run itself, not a bitwise mismatch. Two independent witnesses from the "
-         "pairwise covering array hit this (c003: kpp/kappa_shear_vertex/stress_tensor/"
-         "gm_meke/obc; c006: pp81/tidal/leith_biharm/gm_varmix_resscaled/channel), sharing "
-         "only {vcoord=hycom, split=ssp_rk2} -- not minimised further (leave-one-out not run "
-         "for time). Not root-caused: candidate mechanism is the chain's av_rem/bt_rem "
-         "n_inner**-th root on a hycom column under the two-stage ssp_rk2 average, which may "
-         "see a different av_rem than pred_corr's single corrector update.",
-         "NOT TRACKED (found by this matrix, 2026-10-06, PR-4 the flip)", expect=("DECOMP",),
-         message=r"the decomposed run failed", scope="any",
-         # as-generated from c003 (every other axis at base), not minimised
-         witness={"vcoord": "hycom", "split": "ssp_rk2", "vmix_bl": "kpp",
-                  "vmix_extra": "kappa_shear_vertex", "vmix_bg": "scalar",
-                  "lateral": "stress_tensor", "eddy": "gm_meke", "tracers": "ts",
-                  "pgf": "fv_mom6_ppm", "eos": "linear", "coriolis": "sadourny",
-                  "pv_adv": "weno7", "bt": "default", "geometry": "obc", "grid": "cartesian",
-                  "forcing": "cool"}),
-    _gap("restart_kappa_shear_vertex_chain", "runtime", ("kappa_shear_vertex",),
-         "PR-4 (the flip): three independent pairwise witnesses that all select "
-         "vmix_extra=kappa_shear_vertex (and nothing else in common -- vcoord sigma/"
-         "lagrangian/eulerian_z, geometry cliff/cliff/obc, split pred_corr/pred_corr/ssp_rk2) "
-         "fail the RESTART leg at step 12 under the now-default visc_rem_chain: "
-         "bt_visc_rem_u/v differ first, then kshear_kd_int, then every downstream field "
-         "(ml_h_layer, ml_rho_layer, hvisc_du_visc/dv_visc, tracer_hTr_*, vmix_kv, ...). "
-         "Not root-caused in the time available: kshear_kd_int (the vertex-mode corner Kd "
-         "carrier) is a candidate for a restart-registry gap, OR the vertex solve's corner "
-         "f_corner/kd_corner state reacts to the chain's av_rem/bt_rem differently pre- vs "
-         "post-restart. restart_visc_rem itself (the PR-2 bt_rem_from_av_rem bit-exactness "
-         "fix) is NOT reopened -- no witness here omits kappa_shear_vertex.",
-         "NOT TRACKED (found by this matrix, 2026-10-06, PR-4 the flip)", expect=("RESTART",),
-         message=r"differ after a warm restart", scope="any",
-         # as-generated from c026 (every other axis at base except vmix_extra), not minimised
-         witness={"vcoord": "sigma", "split": "pred_corr", "vmix_bl": "pp81",
-                  "vmix_extra": "kappa_shear_vertex", "vmix_bg": "bryan_lewis",
-                  "lateral": "const_nu_h", "eddy": "gm_varmix_resscaled",
-                  "tracers": "ideal_age", "pgf": "fv_mom6", "eos": "roquet",
-                  "coriolis": "sadourny", "pv_adv": "weno3", "bt": "visc_rem",
-                  "geometry": "cliff", "grid": "spherical", "forcing": "cool"}),
-    _gap("decomp_zstar_ssp_rk2_gm", "runtime", ("vc_zstar", "ssp_rk2", "gm"),
-         "zstar's open stepped bed with GM under ssp_rk2 runs clean on one rank and on 1x2, "
-         "but a split in x (2x1, 2x2, 4x1) drives one column negative and stops on the remap "
-         "guard at step 3; pred_corr at 2x2, z_fixed with closed faces and sigma are clean. "
-         "Independent of the PGF form and the Coriolis scheme (mont + sadourny_energy fails "
-         "the same way, and runs none of the code the zstar open-step fixes touched), so it "
-         "predates them: the cells only reach the DECOMP leg now that they pass checks 1-3.",
-         "NOT TRACKED (found by this matrix, 2026-10-04)", expect=("DECOMP",),
-         message=r"the decomposed run failed", scope="any",
-         # minimised 2026-10-04 from c015 (greedy over the decomposed run)
-         witness={"vcoord": "zstar", "split": "ssp_rk2", "eddy": "gm"}),
+    # `decomp_hycom_ssp_rk2_chain_crash` DELETED (feat/mom6-frhat, 2026-10-06): its
+    # pinned witness decomposes clean on this base (PR-1's visc_rem halo refresh
+    # already closes it here, same reason `decomp_hycom_visc_rem` below was
+    # deleted) -- an XPASS re-tally, not a fix this branch claims.
+    # `restart_kappa_shear_vertex_chain` DELETED (feat/mom6-frhat, 2026-10-06): its
+    # pinned witness restarts bit-exact on this base -- an XPASS re-tally, not a
+    # fix this branch claims.
+    # `decomp_zstar_ssp_rk2_gm` DELETED (feat/mom6-frhat, 2026-10-06): its pinned
+    # witness decomposes clean on this base -- an XPASS re-tally, not a fix this
+    # branch claims.
     # `decomp_hycom_visc_rem` DELETED (PR-4, the flip): its witness
     # (hycom + bt=visc_rem) now decomposes bitwise -- the visc_rem halo
     # refresh (PR-1 of the plan) already closes it on this base.
