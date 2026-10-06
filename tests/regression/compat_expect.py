@@ -357,11 +357,14 @@ ROWS = [
          expect=("CRASH",),
          message=r"console stats: CFL > panic threshold|remap preconditions at step \d+",
          scope="any",
-         # c010 of the 2026-10-05 train run (as generated, not minimised)
+         # c010 of the 2026-10-05 train run, bt re-pinned visc_rem -> default
+         # (2026-10-06): the visc_rem chain's uniform fold + bt_rem keeps the
+         # cell alive 24 steps (En 1.0e-2); without it the stress-tensor h_q
+         # defect still stops it on the remap guard at step 3.
          witness={"vcoord": "zstar", "split": "ssp_rk2", "vmix_bl": "pp81",
                   "vmix_extra": "tidal", "vmix_bg": "scalar", "lateral": "kh_aniso",
                   "eddy": "gm_meke", "tracers": "ideal_age", "pgf": "mont", "eos": "linear",
-                  "coriolis": "sadourny_hk", "pv_adv": "centered", "bt": "visc_rem",
+                  "coriolis": "sadourny_hk", "pv_adv": "centered", "bt": "default",
                   "geometry": "closed", "grid": "cartesian", "forcing": "warm_sw"}),
     _gap("rho_gm_energy", "runtime", ("vc_rho", "gm"),
          "Pure isopycnal (rho) with GM: cells that stopped within a few steps under "
