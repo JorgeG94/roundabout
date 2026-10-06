@@ -1658,10 +1658,16 @@ coordinate x both splits x both grids, base closures, with MOM6's BBL glue
 the default), because the pairwise cover puts only a handful of cells on it.
 Before the glue the same sweep read zstar 4.7x, hycom 5.4x, sigma 4.4x and
 lagrangian 14.9x their closed-geometry En, and eulerian_z crashed; with it
-every family sits at 1.0-1.3x. Two cliff residuals are rows:
-`terrain_following_cliff_pgf` (sigma-like stacks with kappa-shear or the
-linear EOS) and `zlike_cliff_linear_eos_filler_rho` (zstar / hycom with the
-linear EOS).
+every family sits at 1.0-1.3x. Four cliff residuals are rows:
+`zlike_cliff_linear_eos_filler_rho` and `zstar_cliff_wave_drag_ssp_rk2_negative_h`
+(zstar / hycom with the linear EOS, an inflated ratio and a negative-thickness
+crash respectively), and `kappa_shear_vertex_cliff_corner_noise` /
+`cliff_linear_eos_shelf_filler_rho` (found by the per-PR pairwise slice,
+2026-10-06: kappa-shear's vertex/corner solve, and the linear EOS's
+reference-density filler treatment, each independently excited by the cliff
+on ANY vcoord that carries a near-vanished shelf-side layer, not only the
+open-step z-like families -- both pre-existing, confirmed orthogonal to this
+PR's hvel_mom6/bbl_glue/visc_rem_chain/frhat_scheme flip).
 
 The bound (`compat_legs.EN_REF` = the medians, `ENERGY_RATIO_MAX` = **2.5**):
 En(24) <= 2.5 x the geometry's median — 1.6x headroom over the widest PASS
