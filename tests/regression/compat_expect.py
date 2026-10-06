@@ -359,6 +359,33 @@ ROWS = [
          # En(24) 2.43e-2 = 3.1x EN_REF[cliff]; the same cell on the closed geometry 8.8e-3
          witness={"vcoord": "hycom", "geometry": "cliff", "eos": "linear",
                   "coriolis": "sadourny"}),
+    # Sibling of `zlike_cliff_linear_eos_filler_rho` above (same family:
+    # z-like open steps + cliff + linear EOS), but a harder failure mode on
+    # this particular closure stack -- a CRASH instead of an inflated
+    # energy ratio, so it needs its own row (the ENERGY row's `expect`
+    # never reaches checks the CRASH gate stops at first).
+    _gap("zstar_cliff_wave_drag_ssp_rk2_negative_h", "runtime",
+         ("vc_zlike_open", "cliff", "eos_linear"),
+         "zstar over the cliff (10 m shelf beside 2000 m, rx0 ~ 0.99) with the linear EOS, "
+         "ssp_rk2, wave_drag, and the PLM FV-MOM6 PGF reconstruction: a column is driven to a "
+         "small negative thickness (-1e-5 .. -2e-1 m, same order as the adjacent ENERGY row's "
+         "cliff-with-linear-EOS mechanism) and the remap precondition guard stops at step 4-5. "
+         "Attribution (frix/frhat-matrix, 2026-10-06): PRE-EXISTING, orthogonal to the "
+         "frhat port and the hvel_mom6/bbl_glue/visc_rem_chain/frhat_scheme flip -- reverting "
+         "each of the four new defaults individually, and all four together, still crashes "
+         "(earlier, at step 2-4, with a LARGER negative thickness, -0.2 .. -2760 m, than the "
+         "flipped defaults' -1e-5 m at step 5): the BBL glue net REDUCES this cliff family's "
+         "instability (see the adjacent row and the ENERGY-bound section of "
+         "tests/regression/README.md), it does not cause it. Not minimised below 10 axes "
+         "(vcoord, split, vmix_bl, vmix_extra, vmix_bg, lateral, pgf, bt, geometry, eos all "
+         "load-bearing in leave-one-out; eddy/grid/forcing/coriolis/pv_adv/tracers drop freely).",
+         "NOT TRACKED (found by this matrix's cliff geometry, 2026-10-06)",
+         expect=("CRASH",), message=r"remap preconditions at step \d+", scope="any",
+         # minimised 2026-10-06 from c010 (leave-one-out, every other axis at base)
+         witness={"vcoord": "zstar", "split": "ssp_rk2", "vmix_bl": "epbl",
+                  "vmix_extra": "tidal", "vmix_bg": "bryan_lewis", "lateral": "kh_aniso",
+                  "pgf": "fv_mom6_plm", "eos": "linear", "bt": "wave_drag",
+                  "geometry": "cliff"}),
     # `terrain_following_cliff_pgf` DELETED (PR-4, the flip): the full
     # visc_rem_chain (producer + av_rem + bt_rem + wt_u forcing + renorm --
     # strictly more bed friction reaching the barotropic mode than
