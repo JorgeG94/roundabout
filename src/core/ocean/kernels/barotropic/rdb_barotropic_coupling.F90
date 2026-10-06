@@ -119,7 +119,17 @@ contains
       ny_face = size(ms%v_face_y_layer, 2)
       use_upstream = bt_work%use_upstream_h_face
       use_open = metrics%use_closed_faces
-      scheme = bt_work%frhat_scheme
+      ! Gated exactly like `compute_bt_rem_from_visc_rem`'s av_rem (see that
+      ! routine's `av_rem_scheme` docstring, fix(bt) d885304234): HYBRID's
+      ! shelf test is built for a genuine z_fixed/zstar partial-step bed, the
+      ! only case `metrics%use_closed_faces` represents.  Off that family
+      ! (hycom, eulerian_z, rho, sigma, lagrangian, ...) `href`/`e_prev`'s
+      ! "shelf" has no such meaning, and HYBRID measurably corrupts the
+      ! barotropic coupling there -- see FRHAT_HYBRID's gate in
+      ! `face_depth_mean_u` for the full writeup and the two matrix
+      ! witnesses (`decomp_hycom_visc_rem_chain`, `budget_eulerian_z_bc_pgf`)
+      ! that found it.
+      scheme = merge(bt_work%frhat_scheme, FRHAT_ARITHMETIC, use_open)
 
       do concurrent(j=1:ny, i=1:nx) local(k, total_h)
          total_h = 0.0_wp
@@ -956,11 +966,16 @@ contains
       integer :: i, j, k, nu, ny, nx_cells, il, ir
       real(wp) :: h_face, num, denom, href_l, href_r, e_prev
       logical :: use_open
+      integer :: eff_scheme
 
       nu = size(F_3d, 1)
       ny = size(F_3d, 2)
       nx_cells = grid%nx_total
       use_open = metrics%use_closed_faces
+      ! FRHAT_HYBRID only under closed faces -- see `derive_bt_from_layers`'
+      ! matching comment; off that family this is FRHAT_ARITHMETIC
+      ! regardless of what the caller passed as `scheme`.
+      eff_scheme = merge(scheme, FRHAT_ARITHMETIC, use_open)
 
       if (use_open) then
          do concurrent(j=1:ny, i=1:nu) local(k, il, ir, href_l, href_r, e_prev, h_face, num, denom)
@@ -973,7 +988,7 @@ contains
             denom = 0.0_wp
             do k = 1, nz
                call frhat_h_face_step(h_layer(il, j, k), h_layer(ir, j, k), &
-                                      href_l, href_r, scheme, e_prev, h_face)
+                                      href_l, href_r, eff_scheme, e_prev, h_face)
                h_face = h_face*metrics%open_u(i, j, k)
                num = num + F_3d(i, j, k)*h_face
                denom = denom + h_face
@@ -995,7 +1010,7 @@ contains
             denom = 0.0_wp
             do k = 1, nz
                call frhat_h_face_step(h_layer(il, j, k), h_layer(ir, j, k), &
-                                      href_l, href_r, scheme, e_prev, h_face)
+                                      href_l, href_r, eff_scheme, e_prev, h_face)
                num = num + F_3d(i, j, k)*h_face
                denom = denom + h_face
             end do
@@ -1059,12 +1074,16 @@ contains
       integer :: i, j, k, nu, ny, nx_cells, il, ir
       real(wp) :: h_face, wt, num, denom, vr, instep, href_l, href_r, e_prev
       logical :: use_open
+      integer :: eff_scheme
 
       nu = size(F_3d, 1)
       ny = size(F_3d, 2)
       nx_cells = grid%nx_total
 
       use_open = metrics%use_closed_faces
+      ! FRHAT_HYBRID only under closed faces -- see `derive_bt_from_layers`'
+      ! matching comment.
+      eff_scheme = merge(scheme, FRHAT_ARITHMETIC, use_open)
       instep = 1.0_wp/real(max(n_inner, 1), wp)
 
       if (use_open) then
@@ -1079,7 +1098,7 @@ contains
             denom = 0.0_wp
             do k = 1, nz
                call frhat_h_face_step(h_layer(il, j, k), h_layer(ir, j, k), &
-                                      href_l, href_r, scheme, e_prev, h_face)
+                                      href_l, href_r, eff_scheme, e_prev, h_face)
                if (ieee_is_finite(rem(i, j, k))) then
                   ! Clamp to [0, 1] BEFORE MOM6's floor: MOM6's remnant is
                   ! non-negative by construction, but a round-off -1e-17 here
@@ -1112,7 +1131,7 @@ contains
             denom = 0.0_wp
             do k = 1, nz
                call frhat_h_face_step(h_layer(il, j, k), h_layer(ir, j, k), &
-                                      href_l, href_r, scheme, e_prev, h_face)
+                                      href_l, href_r, eff_scheme, e_prev, h_face)
                if (ieee_is_finite(rem(i, j, k))) then
                   ! Clamp to [0, 1] BEFORE MOM6's floor: MOM6's remnant is
                   ! non-negative by construction, but a round-off -1e-17 here
@@ -1165,12 +1184,16 @@ contains
       integer :: i, j, k, nx, nv, ny_cells, jl, jr
       real(wp) :: h_face, wt, num, denom, vr, instep, href_l, href_r, e_prev
       logical :: use_open
+      integer :: eff_scheme
 
       nx = size(F_3d, 1)
       nv = size(F_3d, 2)
       ny_cells = grid%ny_total
 
       use_open = metrics%use_closed_faces
+      ! FRHAT_HYBRID only under closed faces -- see `derive_bt_from_layers`'
+      ! matching comment.
+      eff_scheme = merge(scheme, FRHAT_ARITHMETIC, use_open)
       instep = 1.0_wp/real(max(n_inner, 1), wp)
 
       if (use_open) then
@@ -1185,7 +1208,7 @@ contains
             denom = 0.0_wp
             do k = 1, nz
                call frhat_h_face_step(h_layer(i, jl, k), h_layer(i, jr, k), &
-                                      href_l, href_r, scheme, e_prev, h_face)
+                                      href_l, href_r, eff_scheme, e_prev, h_face)
                if (ieee_is_finite(rem(i, j, k))) then
                   ! Clamp to [0, 1] BEFORE MOM6's floor: MOM6's remnant is
                   ! non-negative by construction, but a round-off -1e-17 here
@@ -1218,7 +1241,7 @@ contains
             denom = 0.0_wp
             do k = 1, nz
                call frhat_h_face_step(h_layer(i, jl, k), h_layer(i, jr, k), &
-                                      href_l, href_r, scheme, e_prev, h_face)
+                                      href_l, href_r, eff_scheme, e_prev, h_face)
                if (ieee_is_finite(rem(i, j, k))) then
                   ! Clamp to [0, 1] BEFORE MOM6's floor: MOM6's remnant is
                   ! non-negative by construction, but a round-off -1e-17 here
@@ -1261,11 +1284,15 @@ contains
       integer :: i, j, k, nx, nv, ny_cells, jl, jr
       real(wp) :: h_face, num, denom, href_l, href_r, e_prev
       logical :: use_open
+      integer :: eff_scheme
 
       nx = size(F_3d, 1)
       nv = size(F_3d, 2)
       ny_cells = grid%ny_total
       use_open = metrics%use_closed_faces
+      ! FRHAT_HYBRID only under closed faces -- see `derive_bt_from_layers`'
+      ! matching comment.
+      eff_scheme = merge(scheme, FRHAT_ARITHMETIC, use_open)
 
       if (use_open) then
          do concurrent(j=1:nv, i=1:nx) local(k, jl, jr, href_l, href_r, e_prev, h_face, num, denom)
@@ -1278,7 +1305,7 @@ contains
             denom = 0.0_wp
             do k = 1, nz
                call frhat_h_face_step(h_layer(i, jl, k), h_layer(i, jr, k), &
-                                      href_l, href_r, scheme, e_prev, h_face)
+                                      href_l, href_r, eff_scheme, e_prev, h_face)
                h_face = h_face*metrics%open_v(i, j, k)
                num = num + F_3d(i, j, k)*h_face
                denom = denom + h_face
@@ -1300,7 +1327,7 @@ contains
             denom = 0.0_wp
             do k = 1, nz
                call frhat_h_face_step(h_layer(i, jl, k), h_layer(i, jr, k), &
-                                      href_l, href_r, scheme, e_prev, h_face)
+                                      href_l, href_r, eff_scheme, e_prev, h_face)
                num = num + F_3d(i, j, k)*h_face
                denom = denom + h_face
             end do
@@ -1439,7 +1466,11 @@ contains
       integer :: il, ir, jl, jr, frhat_scheme
       logical :: do_rescale, do_bc_pgf, do_visc_rem, do_open, do_bt_rescale
 
-      frhat_scheme = bt_work%frhat_scheme
+      ! FRHAT_HYBRID only under closed faces -- see `derive_bt_from_layers`'
+      ! matching comment (the same gate `compute_bt_rem_from_visc_rem`
+      ! already applies to av_rem, extended here to this fold's two
+      ! `do concurrent` blocks and their hand-inlined GPU twins below).
+      frhat_scheme = merge(bt_work%frhat_scheme, FRHAT_ARITHMETIC, metrics%use_closed_faces)
       do_rescale = .true.
       if (present(skip_h_rescale)) do_rescale = .not. skip_h_rescale
       do_bc_pgf = .false.
