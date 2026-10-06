@@ -27,7 +27,8 @@ See [`docs/CAPABILITIES_AND_LIMITATIONS.md`](docs/CAPABILITIES_AND_LIMITATIONS.m
 ## Authorship
 
 Most of Roundabout's code was written by Claude, Anthropic's AI model,
-working through Claude Code. The baseline design is the author's: the
+working through Claude Code. Claude was chosen simply because it is what the
+author had and pays for. The baseline design is the author's: the
 architecture, the API, the memory model and the parallelism model, all
 designed by Jorge Luis Gálvez Vallejo.
 
