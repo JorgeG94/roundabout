@@ -34,7 +34,11 @@
 !! Per-column work is serial in k (Thomas recurrence); parallelism
 !! is `do concurrent (j, i)`.
 module rdb_ocean_vdiff
+#ifdef LFORTRAN_PASSING
+   use rdb_constants, only: wp, H_VANISHED, GRAVITY
+#else
    use rdb_constants, only: wp, H_VANISHED, NZ_STACK_MAX, GRAVITY
+#endif
    use rdb_grid, only: hgrid_t
    use rdb_eos, only: eos_t, eos_density_derivs
    use rdb_multilayer_state, only: multilayer_state_t
@@ -47,6 +51,12 @@ module rdb_ocean_vdiff
    use pic_logger, only: logger => global_logger
    implicit none
    private
+#ifdef LFORTRAN_PASSING
+   integer, parameter :: NZ_STACK_MAX = 64
+      !! LFortran 0.64 workaround: module-local copy of the rdb_constants value
+      !! (an imported parameter used as an explicit-shape dummy bound inside a
+      !! PURE call becomes an impure getter under LFortran). Keep in sync (=64).
+#endif
 
    public :: ocean_vdiff_t
    public :: vdiff_apply_momentum
