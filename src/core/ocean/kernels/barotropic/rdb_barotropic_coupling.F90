@@ -53,8 +53,8 @@ module rdb_barotropic_coupling
    ! upstream-h-sum producer — the closure stays in the cubic-near-zero
    ! branch (≈ naive u·h_face); real saturation needs a PPM-perturbation FA.
    real(wp), parameter :: BTC_VOL_CFL = 0.5_wp
-   ! MOM6 `wt_u`'s round-off guard (MOM_barotropic.F90 module parameter
-   ! `subroundoff`, :467) — only ever used inside the `wt_u` floor below.
+   ! MOM6 `wt_u`'s round-off guard (its barotropic solver module parameter
+   ! `subroundoff`) — only ever used inside the `wt_u` floor below.
    real(wp), parameter :: VISC_REM_SUBROUNDOFF = 1.0e-30_wp
 
 contains
@@ -987,7 +987,7 @@ contains
       !! column (the substep should not force an immobilized column).
       !!
       !! `rem` is run through MOM6's exact `wt_u` floor before it weights
-      !! anything (`MOM_barotropic.F90:1082-1101`): `vr = min(rem, 1)`,
+      !! anything: `vr = min(rem, 1)`,
       !! `vr = max(vr, 1 - 0.5·Instep/(vr + subroundoff))`,
       !! `vr = max(vr, 0)`, `Instep = 1/n_inner` — NOT roundabout's old
       !! plain `[0,1]` clamp, which let a near-zero `visc_rem` on a
@@ -1285,8 +1285,8 @@ contains
       !! `use_visc_rem` (MOM6 `visc_rem_u`; the drag-aware weighting),
       !! else 1, and `open ≡ 1` unless `metrics%use_closed_faces`.  With
       !! neither it is the uniform fold, `wt ≡ 1` — MOM6's own barotropic
-      !! acceleration, `accel_layer_u(I,j,k) = u_accel_bt(I,j)`
-      !! (`MOM_barotropic.F90`), the same increment in every layer.
+      !! acceleration, `accel_layer_u(I,j,k) = u_accel_bt(I,j)`, the
+      !! same increment in every layer.
       !!
       !! The weight does NOT carry `h`.  An earlier opt-in h-weighted form
       !! (`wt = h_face/⟨h⟩_h`, `&ocean_bt_nml correction_h_weighted`, now
@@ -1363,7 +1363,7 @@ contains
       integer, intent(in), optional :: n_inner
          !! Barotropic substeps per outer step.  REQUIRED when
          !! `bt_work%bt_rescale_strong_drag` is on (PR-2, MOM6
-         !! `RESCALE_STRONG_DRAG`, `MOM_barotropic.F90:1989-1997`):
+         !! `RESCALE_STRONG_DRAG`):
          !! `bt_strong_drag`'s rational-approximation `bt_rem` does not
          !! satisfy `bt_rem**n_in == av_rem` exactly (unlike the plain
          !! power form, which does by construction), so the Δu/Δv
@@ -1992,8 +1992,8 @@ contains
 
    pure subroutine compute_bt_rem_from_visc_rem(grid, bt_work, ms, metrics, n_inner)
       !! PR-2 (bt-rem-from-av-rem): build `bt_rem_u/v` from the SAME
-      !! viscous remnant the layered momentum solve uses, MOM6
-      !! `MOM_barotropic.F90:1553-1580`.  Dispatched the same way as
+      !! viscous remnant the layered momentum solve uses, MOM6's
+      !! barotropic solver.  Dispatched the same way as
       !! `compute_bt_rem` — a RESETTER, mutually exclusive at configure
       !! with `bt_substep_drag` (D2, double-counted bed drag) and with
       !! `bt_halo > 0` (`validate_config`) — so this and `compute_bt_rem`/

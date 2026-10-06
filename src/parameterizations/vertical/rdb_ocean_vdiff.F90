@@ -172,12 +172,12 @@ module rdb_ocean_vdiff
          !! ports both halves into the momentum tridiagonal:
          !!   * interface kv → `kv + (kv_bbl − KV)·botfn` (`KV` =
          !!     `kv_bbl_bg`), with `h_shear` capped toward `bbl_thick` under
-         !!     the same botfn weight (MOM_vert_friction.F90:2214-2229);
-         !!   * bed row → `dt·kv_bbl/(hf₁·(min(hvel₁/2, bbl_thick)))`
-         !!     (lines 2257-2259) — THE bed sink whenever the glue is on: it
-         !!     replaces the `dt·λ_bot` Rayleigh fold, and the driver skips
-         !!     the explicit drag apply (the explicit `du_drag` still feeds
-         !!     the barotropic `F_slow`, the split `implicit_drag` takes).
+         !!     the same botfn weight;
+         !!   * bed row → `dt·kv_bbl/(hf₁·(min(hvel₁/2, bbl_thick)))` — THE
+         !!     bed sink whenever the glue is on: it replaces the
+         !!     `dt·λ_bot` Rayleigh fold, and the driver skips the explicit
+         !!     drag apply (the explicit `du_drag` still feeds the
+         !!     barotropic `F_slow`, the split `implicit_drag` takes).
          !! `kv_bbl` and `bbl_thick` are PER FACE: `vdiff_set_viscous_bbl`
          !! (MOM6 `set_viscous_BBL`, quadratic or linear drag law, KW99
          !! rotation/stratification-limited thickness) fills them once per
@@ -202,27 +202,26 @@ module rdb_ocean_vdiff
       logical :: hvel_harmonic = .false.
          !! Which MOM6 face-thickness branch `hvel_mom6` builds.  `.false.`
          !! (default) is MOM6's DEFAULT, `HARMONIC_VISC = False`
-         !! (`MOM_vert_friction.F90:1497-1530`, vertvisc_coef): the face
-         !! thickness is the ARITHMETIC mean, blended toward the harmonic
-         !! mean near the bed when the flow runs from the thin side to the
-         !! thick one, and the height above the bed is `max(zh, z_clear)` —
-         !! `z_clear` the height of the higher of the two cells' interfaces
-         !! above the SHALLOWER of the two beds.  So every face layer below
-         !! the shallower bed of a step sits at `z_i ≈ 0`, inside the bottom
-         !! boundary layer, and the BBL glue couples it.  `.true.` is MOM6
-         !! `HARMONIC_VISC = True` (lines 1479-1495): harmonic face
-         !! thickness, blended toward arithmetic when the flow runs thick ->
-         !! thin, height above bed from harmonic thicknesses alone (the
-         !! historical roundabout `hvel_mom6`, gated by `hvel_upwind`).
+         !! (`vertvisc_coef`): the face thickness is the ARITHMETIC mean,
+         !! blended toward the harmonic mean near the bed when the flow runs
+         !! from the thin side to the thick one, and the height above the
+         !! bed is `max(zh, z_clear)` — `z_clear` the height of the higher of
+         !! the two cells' interfaces above the SHALLOWER of the two beds.
+         !! So every face layer below the shallower bed of a step sits at
+         !! `z_i ≈ 0`, inside the bottom boundary layer, and the BBL glue
+         !! couples it.  `.true.` is MOM6 `HARMONIC_VISC = True`: harmonic
+         !! face thickness, blended toward arithmetic when the flow runs
+         !! thick -> thin, height above bed from harmonic thicknesses alone
+         !! (the historical roundabout `hvel_mom6`, gated by `hvel_upwind`).
       logical :: bbl_per_face = .false.
-         !! The MOM6 bottom boundary layer (`set_viscous_BBL`,
-         !! `MOM_set_viscosity.F90:151`) is computed per face once per outer
-         !! step by `vdiff_set_viscous_bbl` into `kv_bbl_u/v` and
-         !! `bbl_thick_u/v`, which the glue then reads.  Set at configure
-         !! when `bbl_glue` is on AND a bottom drag is configured with
-         !! `&ocean_bdrag_nml hbbl > 0` (MOM6 requires HBBL).  `.false.` ⇒
-         !! the glue uses the historical constants `bbl_piston·hbbl_visc` /
-         !! `hbbl_visc`, refilled each call (the hand-built test path).
+         !! The MOM6 bottom boundary layer (`set_viscous_BBL`) is computed
+         !! per face once per outer step by `vdiff_set_viscous_bbl` into
+         !! `kv_bbl_u/v` and `bbl_thick_u/v`, which the glue then reads.
+         !! Set at configure when `bbl_glue` is on AND a bottom drag is
+         !! configured with `&ocean_bdrag_nml hbbl > 0` (MOM6 requires
+         !! HBBL).  `.false.` ⇒ the glue uses the historical constants
+         !! `bbl_piston·hbbl_visc` / `hbbl_visc`, refilled each call (the
+         !! hand-built test path).
       integer :: bbl_form = BBL_FORM_QUADRATIC
          !! Drag law of the BBL (`BBL_FORM_*`).
       real(wp) :: bbl_cd = 0.0_wp
@@ -239,14 +238,14 @@ module rdb_ocean_vdiff
          !! default 0).
       logical :: bbl_rino_cap = .false.
          !! MOM6 `RiNo_mix` (= kappa-shear on): the BBL is capped at
-         !! `0.5·HBBL` (`MOM_set_viscosity.F90:927`).
+         !! `0.5·HBBL`.
       real(wp) :: bbl_rho0 = 1035.0_wp
          !! Boussinesq reference density of the BBL stratification measure.
       real(wp) :: kv_bbl_bg = 1.0e-4_wp
          !! MOM6 `KV`: the background viscosity the BBL viscosity REPLACES
-         !! within the boundary layer, `Kv_tot = Kv_tot + (kv_bbl − KV)·botfn`
-         !! (`find_coupling_coef`, `MOM_vert_friction.F90:2220`) — the
-         !! shear / boundary-layer contributions are kept.  Set from
+         !! within the boundary layer,
+         !! `Kv_tot = Kv_tot + (kv_bbl − KV)·botfn` (`find_coupling_coef`) —
+         !! the shear / boundary-layer contributions are kept.  Set from
          !! `&ocean_vmix_nml kv_bg`.
       real(wp), allocatable :: kv_bbl_u(:, :)
          !! BBL viscosity `kv_bbl` (m²/s) at u-faces, `(nx+1, ny)`.
@@ -710,8 +709,7 @@ contains
       !! Latch the MOM6 per-face bottom boundary layer (`bbl_per_face`) from
       !! the bottom-drag configuration and size its workspace.  Called once
       !! at configure, BEFORE `enter_data`, by `rdb_ocean_setup` when
-      !! `bbl_glue` is on.  MOM6 `set_visc_init` (`MOM_set_viscosity.F90:
-      !! 3107-3213`) is the parameter map:
+      !! `bbl_glue` is on.  MOM6 `set_visc_init` is the parameter map:
       !!
       !!   * quadratic: `CDRAG = cd`, `LINEAR_DRAG = False`;
       !!   * linear: `LINEAR_DRAG = True` with `CDRAG·DRAG_BG_VEL = r·hbbl`,
@@ -719,7 +717,7 @@ contains
       !!     drag, so `CDRAG = r·hbbl/bg_vel` (needs `bg_vel > 0`);
       !!   * `HBBL = hbbl`, `DRAG_BG_VEL = bg_vel`, `BBL_THICK_MIN =
       !!     thick_min`, `KV = kv_bg`, `RiNo_mix = rino_cap`;
-      !!   * `BBL_USE_EOS = True` (mandatory in ALE mode, line 3175),
+      !!   * `BBL_USE_EOS = True` (mandatory in ALE mode),
       !!     `CORRECT_BBL_BOUNDS = False`, `BBL_USE_TIDAL_BG = False`,
       !!     `CHANNEL_DRAG = False`, `BODY_FORCE_DRAG = False`.
       !!
@@ -777,7 +775,7 @@ contains
    end subroutine vdiff_bbl_configure
 
    subroutine vdiff_set_viscous_bbl(grid, this, ms, eos, f_corner)
-      !! MOM6 `set_viscous_BBL` (`MOM_set_viscosity.F90:151`, the
+      !! MOM6 `set_viscous_BBL` (the
       !! `BOTTOMDRAGLAW` branch): the per-face bottom-boundary-layer
       !! viscosity `kv_bbl_u/v` and thickness `bbl_thick_u/v` that the
       !! vertical-friction glue reads.  Called ONCE per outer step, before
@@ -789,7 +787,7 @@ contains
       !! is our `k = 1`):
       !!
       !!   1. `h_at_vel`: harmonic mean of the two cells when the flow runs
-      !!      thin -> thick (`u·Δh >= 0`), else arithmetic (lines 491-510);
+      !!      thin -> thick (`u·Δh >= 0`), else arithmetic;
       !!      T and S at the face are plain averages of the two cells'
       !!      CONCENTRATIONS (I1′ column rule).
       !!   2. `u_bbl`: the `h_at_vel`-weighted mean, over the bottom `HBBL`,
@@ -797,21 +795,21 @@ contains
       !!      thickness-weighted average of the four transverse faces,
       !!      `set_v_at_u`); `u* = sqrt(CDRAG)·u_bbl`, or
       !!      `sqrt(CDRAG)·DRAG_BG_VEL` for the linear law or an empty
-      !!      average (lines 647-708).
+      !!      average.
       !!   3. `h_N`: the stratification-limited thickness, integrating the
       !!      density jump up from the bed until `h·Δρ` reaches
-      !!      `400·ρ₀·u*²/g` (Killworth & Edwards 1999 eq. 2.22; lines
-      !!      757-856), with `∂ρ/∂T`, `∂ρ/∂S` at the BBL-mean T/S and the
+      !!      `400·ρ₀·u*²/g` (Killworth & Edwards 1999 eq. 2.22), with
+      !!      `∂ρ/∂T`, `∂ρ/∂S` at the BBL-mean T/S and the
       !!      bottom pressure `ρ₀·g·Σh` (no surface-pressure term).
       !!   4. `bbl_thick = h_N/(1/2 + sqrt(1/4 + (2f·h_N/u*)²))` (rotation,
-      !!      KW99 eq. 2.20; lines 875-915), floored at `BBL_THICK_MIN`,
-      !!      capped at `HBBL/2` under kappa-shear (line 927).
-      !!   5. `kv_bbl = sqrt(CDRAG)·u*·bbl_thick` (line 1111) — the
-      !!      viscosity whose stress over `bbl_thick` is `CDRAG·u_bbl²`.
+      !!      Killworth & Edwards 1999 eq. 2.20), floored at `BBL_THICK_MIN`,
+      !!      capped at `HBBL/2` under kappa-shear.
+      !!   5. `kv_bbl = sqrt(CDRAG)·u*·bbl_thick` — the viscosity whose
+      !!      stress over `bbl_thick` is `CDRAG·u_bbl²`.
       !!
       !! A dry face gets `kv_bbl = 0`, `bbl_thick = HBBL`.  Open-boundary
-      !! faces are NOT given MOM6's zero-gradient projection (lines
-      !! 561-640): they read their two cells like any interior face.
+      !! faces are NOT given MOM6's zero-gradient projection: they read
+      !! their two cells like any interior face.
       type(hgrid_t), intent(in) :: grid
       type(ocean_vdiff_t), intent(inout) :: this
       type(multilayer_state_t), intent(in) :: ms
@@ -878,10 +876,9 @@ contains
                                   conc_t, conc_s, ncx, ncy, ncz, f_corner, use_eos, eos, &
                                   form, cd, hbbl, bg_vel, thick_min, rino_cap, rho0, &
                                   kv_bbl, bbl_thick)
-      !! Per-face body of `vdiff_set_viscous_bbl` (see there; line numbers
-      !! are `MOM_set_viscosity.F90`).  `x_face` selects the u-faces
-      !! `(nx+1, ny)` (cells `i-1`, `i`) or the v-faces `(nx, ny+1)` (cells
-      !! `j-1`, `j`).
+      !! Per-face body of `vdiff_set_viscous_bbl` (see there).  `x_face`
+      !! selects the u-faces `(nx+1, ny)` (cells `i-1`, `i`) or the v-faces
+      !! `(nx, ny+1)` (cells `j-1`, `j`).
       integer, intent(in) :: nu, nv, nx, ny, nz, ncx, ncy, ncz
       logical, intent(in) :: x_face
       real(wp), intent(in) :: u_x(nx + 1, ny, nz)
@@ -958,7 +955,7 @@ contains
                end if
             end do
 
-            ! ---- 2. u_bbl and u* over the bottom HBBL (lines 647-708) ----
+            ! ---- 2. u_bbl and u* over the bottom HBBL ----
             htot_vel = 0.0_wp
             hwtot = 0.0_wp
             hutot = 0.0_wp
@@ -1013,7 +1010,7 @@ contains
                ustar = cd_sqrt*hutot/hwtot
             end if
 
-            ! ---- 3. stratification-limited thickness h_N (lines 757-856) ----
+            ! ---- 3. stratification-limited thickness h_N ----
             drdt = 0.0_wp
             drds = 0.0_wp
             if (use_eos) then
@@ -1047,14 +1044,14 @@ contains
                thtot = thtot + tv(k)*dh
                shtot = shtot + sv(k)*dh
             end do
-            ! The top layer might be part of the BBL (lines 828-835).
+            ! The top layer might be part of the BBL.
             if (oldfn < ustarsq .and. hav(nz) > 0.0_wp) then
                if (drdt*(thtot - tv(nz)*htot) + drds*(shtot - sv(nz)*htot) < ustarsq) then
                   htot = htot + hav(nz)
                end if
             end if
 
-            ! ---- 4. rotation (KW99 eq. 2.20, lines 875-915) + caps ----
+            ! ---- 4. rotation (Killworth & Edwards 1999 eq. 2.20) + caps ----
             if (x_face) then
                c2f = f_corner(i, j) + f_corner(i, j + 1)
             else
@@ -1073,7 +1070,7 @@ contains
             end if
             if (rino_cap .and. thick > 0.5_wp*hbbl) thick = 0.5_wp*hbbl
 
-            ! ---- 5. the viscosity that carries CDRAG·u_bbl² (line 1111) ----
+            ! ---- 5. the viscosity that carries CDRAG·u_bbl² ----
             kv_bbl(i, j) = cd_sqrt*ustar*thick
             bbl_thick(i, j) = thick
          end if
@@ -1701,9 +1698,10 @@ contains
             hl_c = h_layer(i_left, j_below, k)
             hr_c = h_layer(i_right, j_above, k)
             if (hvel_mom6 .and. .not. hvel_harmonic) then
-               ! MOM_vert_friction.F90:1497-1530.  `zcol_*` is the height of
-               ! the TOP of layer k in each cell; `z_clear` the height of the
-               ! higher of the two above the SHALLOWER bed (`-d_min`), so a
+               ! MOM6 vertvisc_coef, HARMONIC_VISC = False branch.  `zcol_*`
+               ! is the height of the TOP of layer k in each cell; `z_clear`
+               ! is the height of the higher of the two above the SHALLOWER
+               ! bed (`-d_min`), so a
                ! face layer below the shallower bed of a step sits at
                ! z_clear <= 0 and only `zh` (harmonic, ~0 against a filler)
                ! lifts it.  `harm_BL_val = 0` (MOM6 HARMONIC_BL_SCALE
@@ -1821,9 +1819,9 @@ contains
                              kv_prandtl*(0.5_wp*(kv_corner(i, j, kb + 1) + kv_corner(i_c2, j_c2, kb + 1)))
             end if
             ! BBL glue at the interface above the bed layer (MOM6
-            ! find_coupling_coef, MOM_vert_friction.F90:2214-2229): within
-            ! botfn reach of the bed the BBL viscosity REPLACES the background
-            ! one, `Kv_tot + (kv_bbl − KV)·botfn` (shear / boundary-layer
+            ! find_coupling_coef): within botfn reach of the bed the BBL
+            ! viscosity REPLACES the background one, `Kv_tot +
+            ! (kv_bbl − KV)·botfn` (shear / boundary-layer
             ! contributions kept; floored at 0 for a `kv_bbl` below `KV`,
             ! where MOM6 relies on Kv_tot >= KV), and the shear distance is
             ! capped toward bbl_thick — grounded stacks (zint ≈ 0) become
@@ -1859,8 +1857,7 @@ contains
          ! Gated INSIDE the single DC (no split loop — NVHPC penalty); the
          ! optional `lambda_bot` is guaranteed present when `do_drag`.
          if (bbl_glue) then
-            ! MOM6 bed coupling (`a_cpl(nz+1)`, MOM_vert_friction.F90:
-            ! 2257-2259): the drag is a viscous PISTON
+            ! MOM6 bed coupling (`a_cpl(nz+1)`): the drag is a viscous PISTON
             ! `kv_bbl/(min(hvel₁/2, bbl_thick))` — it DIVERGES as the bottom
             ! layer thins (a sliver bed layer is anchored rigidly to rest),
             ! where the Rayleigh `dt·λ` fold below is h-independent and lets

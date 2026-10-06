@@ -1,5 +1,5 @@
 !! Unit tests for the BT-substep multiplicative drag damping
-!! (MOM6 `bt_rem_u` / `bt_rem_v` at `MOM_barotropic.F90:3648`).
+!! (MOM6 `bt_rem_u` / `bt_rem_v`).
 !!
 !! The damping factor is computed by `compute_bt_rem` (in
 !! `rdb_barotropic_coupling`) as

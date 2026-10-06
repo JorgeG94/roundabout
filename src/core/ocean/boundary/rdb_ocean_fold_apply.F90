@@ -302,16 +302,15 @@ contains
       !! UNLIKE `ocean_fold_wrap_stress` (its vector twin, tau_x/tau_y),
       !! `visc_rem` is a POSITIVE SCALAR (the fraction of a barotropic
       !! acceleration a layer still feels after one implicit-friction
-      !! step, MOM6 `vertvisc_remnant` — MOM_vert_friction.F90:1157-1258),
-      !! not a flux/velocity component, so both face kernels are called
+      !! step, MOM6 `vertvisc_remnant`), not a flux/velocity component,
+      !! so both face kernels are called
       !! with `negate=.false.`: the 180-degree fold still swaps which side
       !! of the seam the ghost value comes from, but the value itself does
       !! not change sign, and the v-face fold-line duplicate DOF is forced
       !! EQUAL (not opposite) across the seam.  Call after the pair's halo
-      !! exchange + periodic wrap (MOM6's `pass_visc_rem` group pass,
-      !! MOM_dynamics_split_RK2.F90:494, run after every one of the three
-      !! `vertvisc_remnant` calls: :628-651, :783, :1041).  No-op when not
-      !! folding.
+      !! exchange + periodic wrap (MOM6's `pass_visc_rem` group pass, run
+      !! after every one of the three `vertvisc_remnant` calls).  No-op
+      !! when not folding.
       type(hgrid_t), intent(in) :: grid
       type(ocean_bc_state_t), intent(in) :: bc
       real(wp), intent(inout) :: visc_rem_u(:, :, :)

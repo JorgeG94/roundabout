@@ -3610,12 +3610,12 @@ class OceanBt(Group):
         units='',
         required=False,
         default=False,
-        dead_on_ocean_path="RETIRED -- MOM6's accel_layer_u applies the BT-correction acceleration UNIFORMLY across every layer (MOM_barotropic.F90:3665-3675), then the SAME implicit friction the glue uses distributes it -- never twice. This fold re-weighted it a second time by visc_rem/<visc_rem>_h, an unbounded ratio that NaNs the 1-degree Southern Ocean z* open-step case under bbl_glue at step ~40. Setting it .true. is a fail-loud configure error (validate_config). Use visc_rem_chain instead.",
+        dead_on_ocean_path="RETIRED -- MOM6's accel_layer_u applies the BT-correction acceleration UNIFORMLY across every layer, then the SAME implicit friction the glue uses distributes it -- never twice. This fold re-weighted it a second time by visc_rem/<visc_rem>_h, an unbounded ratio that NaNs the 1-degree Southern Ocean z* open-step case under bbl_glue at step ~40. Setting it .true. is a fail-loud configure error (validate_config). Use visc_rem_chain instead.",
     )
 
     bt_rem_from_visc_rem = Bool(
         'bt_rem_from_visc_rem',
-        doc='bt_rem_u/v = mask*av_rem**(1/n_inner), av_rem the frhat-weighted depth mean of visc_rem (MOM6 MOM_barotropic.F90:1553-1582); self-sufficient (the producer runs whenever this is on), mutually exclusive with substep_drag and bt_halo > 0. An equivalent subset of visc_rem_chain, kept for granular testing -- prefer visc_rem_chain.',
+        doc="bt_rem_u/v = mask*av_rem**(1/n_inner), av_rem the frhat-weighted depth mean of visc_rem (MOM6's barotropic solver); self-sufficient (the producer runs whenever this is on), mutually exclusive with substep_drag and bt_halo > 0. An equivalent subset of visc_rem_chain, kept for granular testing -- prefer visc_rem_chain.",
         units='',
         required=False,
         default=False,

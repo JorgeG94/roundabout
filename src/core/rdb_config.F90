@@ -590,8 +590,8 @@ module rdb_config
          !! `auto_n_inner = .true.` (typical 0.65-0.7).
       real(wp) :: bebt = 0.1_wp
          !! BT continuity-flux velocity projection weight (MOM6 `BEBT`).
-         !! Default `0.1` = MOM6's default (`MOM_barotropic.F90` get_param
-         !! "BEBT", default=0.1): damps the barotropic gravity waves at
+         !! Default `0.1` = MOM6's own default for that parameter: damps
+         !! the barotropic gravity waves at
          !! `|λ|² = 1 − b·a²` per substep (`a = c·dt_bt·k_eff`), which is
          !! what damps the barotropic grid-scale mode under `pred_corr`.
          !! `0.0` = pure forward-backward Euler (neutral, the pre-2026-09-22
@@ -621,9 +621,9 @@ module rdb_config
          !! RETIRED (2026-10, D1 follow-up) — setting `.true.` is a
          !! fail-loud `validate_config` error.  This used to weight the
          !! BT-corrector fold by `visc_rem(k)/⟨visc_rem⟩_h` instead of
-         !! uniformly, but MOM6's `accel_layer_u`
-         !! (`MOM_barotropic.F90:3665-3675`) gives every layer the SAME
-         !! `u_accel_bt` — no `visc_rem` weight — folded into `up` BEFORE
+         !! uniformly, but MOM6's barotropic solver gives every layer the
+         !! SAME `u_accel_bt` via `accel_layer_u` — no `visc_rem` weight —
+         !! folded into `up` BEFORE
          !! `vertvisc` distributes it via the SAME implicit friction the
          !! BBL glue uses, so MOM6 never damps it twice.  This fold did,
          !! and the SECOND, unbounded `visc_rem_k/⟨visc_rem⟩_h` ratio is
@@ -643,8 +643,8 @@ module rdb_config
          !! consumer below needs it) plus `forcing_visc_rem` (MOM6
          !! `wt_u`), `renorm_visc_rem` (MOM6 continuity `u_cor = u +
          !! du*visc_rem`, which IS how MOM6 ties `visc_rem` to a velocity
-         !! correction) and `bt_rem_from_visc_rem` (MOM6 `av_rem`/`bt_rem`,
-         !! `MOM_barotropic.F90:1553-1582`) all at once.  The
+         !! correction) and `bt_rem_from_visc_rem` (MOM6's barotropic
+         !! `av_rem`/`bt_rem` viscous-remnant depth mean) all at once.  The
          !! barotropic-correction fold (`apply_bt_correction`) stays
          !! UNIFORM under this switch — MOM6's `accel_layer_u` never
          !! weights it by `visc_rem`, so neither does this chain; see
@@ -762,7 +762,7 @@ module rdb_config
          !! PR-2 (bt-rem-from-av-rem): `bt_rem_u/v` built from the SAME
          !! viscous remnant the layered momentum solve uses, instead of
          !! the linear-piston `substep_drag` law or the static `1.0`
-         !! no-op. MOM6 `MOM_barotropic.F90:1553-1580`:
+         !! no-op. Matches MOM6's barotropic solver:
          !! `av_rem = Σ_k frhat_k·visc_rem_k` (the visc_rem depth mean,
          !! `frhat_k` the face layer fraction `derive_bt_from_layers`
          !! already uses), then `bt_rem = mask·av_rem**(1/n_inner)`
@@ -784,7 +784,7 @@ module rdb_config
          !! `av_rem`/`visc_rem` ghost width yet — same posture as
          !! porous). Composes with `wave_drag` (multiplied in after).
       logical :: strong_drag = .false.
-         !! MOM6 `BT_STRONG_DRAG` (default `.false.`, `:1561-1570`):
+         !! MOM6 `BT_STRONG_DRAG` (default `.false.`):
          !! replace the plain power form with the rational approximation
          !! `bt_rem = mask·n_inner·av_rem/(1 + (n_inner-1)·av_rem)`, which
          !! damps LESS aggressively per substep for a given `av_rem` —
@@ -794,7 +794,7 @@ module rdb_config
          !! `bt_rem_from_visc_rem = .true.`; inert otherwise (checked in
          !! `validate_config`).
       logical :: rescale_strong_drag = .false.
-         !! MOM6 `RESCALE_STRONG_DRAG` (`:1989-1997`): under `strong_drag`,
+         !! MOM6 `RESCALE_STRONG_DRAG`: under `strong_drag`,
          !! `bt_rem**n_inner /= av_rem` exactly (the rational form is only
          !! an approximation), so the barotropic-correction `Δu` is
          !! rescaled by `min(bt_rem**n_inner/av_rem, 1.0)` before it is
@@ -1533,9 +1533,8 @@ module rdb_config
          !! `u = u_entry + visc_rem·(u_applied − u_entry)` after the
          !! CorAdv/PGF/hvisc/drag applies, before the BT correction — but
          !! PR-3's audit found NO MOM6 state-update equivalent:
-         !! `btstep_layer_accel` (`MOM_barotropic.F90:3608-3677`) and the
-         !! corrector's `up`/`vp` update (`MOM_dynamics_split_RK2.F90:
-         !! 702-704`) apply the depth-mean barotropic acceleration
+         !! `btstep_layer_accel` and the split-explicit RK2 corrector's
+         !! `up`/`vp` update both apply the depth-mean barotropic acceleration
          !! `u_accel_bt` UNIFORMLY across every layer, with no `visc_rem`
          !! weight anywhere in that path.  The real MOM6 mechanisms that
          !! multiply a velocity correction by `visc_rem` are
@@ -5368,9 +5367,8 @@ contains
          end if
       end if
       ! RETIRED `accel_visc_rem`: PR-3's audit found no MOM6 state-update
-      ! equivalent — `btstep_layer_accel` (MOM_barotropic.F90:3608-3677,
-      ! and the corrector `up`/`vp` update in
-      ! MOM_dynamics_split_RK2.F90:702-704) applies the depth-mean
+      ! equivalent — `btstep_layer_accel` and the split-explicit RK2
+      ! corrector's `up`/`vp` update both apply the depth-mean
       ! barotropic acceleration `u_accel_bt` UNIFORMLY across every
       ! layer — no `visc_rem` weight anywhere in that path (the only
       ! `visc_rem x u_accel_bt` products in MOM6 are a diagnostic-only
@@ -5395,13 +5393,12 @@ contains
          end block
          has_error = .true.
       end if
-      ! RETIRED `correction_visc_rem`: MOM6's `accel_layer_u`
-      ! (`MOM_barotropic.F90:3665-3675`) gives every layer the SAME
-      ! `u_accel_bt` plus only the depth-mean-zero `pbce` baroclinic-
-      ! pressure term — NO `visc_rem` weight — and that unweighted
-      ! acceleration is folded into `up` BEFORE `vertvisc`
-      ! (`MOM_dynamics_split_RK2.F90:702-704`, consumed at `:763`/`:1018`),
-      ! so the glue's implicit friction (which already includes the BBL
+      ! RETIRED `correction_visc_rem`: MOM6's `accel_layer_u` gives every
+      ! layer the SAME `u_accel_bt` plus only the depth-mean-zero `pbce`
+      ! baroclinic-pressure term — NO `visc_rem` weight — and that
+      ! unweighted acceleration is folded into `up` BEFORE `vertvisc`
+      ! (in the split-explicit RK2 corrector), so the glue's implicit
+      ! friction (which already includes the BBL
       ! piston) is what then distributes it across layers — ONCE, not
       ! twice.  roundabout's `correction_visc_rem` applies
       ! `apply_bt_correction` BEFORE that same implicit friction
@@ -5423,8 +5420,8 @@ contains
          block
             character(len=*), parameter :: msg = &
                                            "&ocean_bt_nml correction_visc_rem is RETIRED: MOM6's accel_layer_u "// &
-                                           "applies the barotropic acceleration UNIFORMLY across every layer "// &
-                                           "(MOM_barotropic.F90:3665-3675), before vertvisc distributes it via "// &
+                                           "applies the barotropic acceleration UNIFORMLY across every layer, "// &
+                                           "before vertvisc distributes it via "// &
                                            "the SAME implicit friction the glue uses -- this fold re-weights it "// &
                                            "a second time by visc_rem/<visc_rem>_h, an unbounded ratio that "// &
                                            "NaNs the 1-degree Southern Ocean z* open-step case under bbl_glue "// &
@@ -8072,8 +8069,8 @@ contains
    end function ocean_bt_renorm_visc_rem_on
 
    pure function ocean_bt_rem_from_visc_rem_on(cfg) result(on)
-      !! PR-3 (D1): is `bt_rem` built from `av_rem` (MOM6
-      !! `MOM_barotropic.F90:1553-1582`) on, either directly
+      !! PR-3 (D1): is `bt_rem` built from `av_rem` (MOM6's barotropic
+      !! viscous-remnant depth mean) on, either directly
       !! (`bt_rem_from_visc_rem`) or via `visc_rem_chain`?
       type(config_t), intent(in) :: cfg
       logical :: on
@@ -10298,8 +10295,8 @@ contains
       call g%add(nml_logical("correction_visc_rem", pl, &
                              "RETIRED (refused when set)", &
                              dead_on_ocean_path="RETIRED -- MOM6's accel_layer_u applies "// &
-                             "the BT-correction acceleration UNIFORMLY across every layer "// &
-                             "(MOM_barotropic.F90:3665-3675), then the SAME implicit "// &
+                             "the BT-correction acceleration UNIFORMLY across every layer, "// &
+                             "then the SAME implicit "// &
                              "friction the glue uses distributes it -- never twice. This "// &
                              "fold re-weighted it a second time by visc_rem/<visc_rem>_h, "// &
                              "an unbounded ratio that NaNs the 1-degree Southern Ocean z* "// &
@@ -10309,8 +10306,8 @@ contains
       pl => cfg%ocean%bt%bt_rem_from_visc_rem
       call g%add(nml_logical("bt_rem_from_visc_rem", pl, &
                              "bt_rem_u/v = mask*av_rem**(1/n_inner), av_rem the frhat-"// &
-                             "weighted depth mean of visc_rem (MOM6 MOM_barotropic.F90:"// &
-                             "1553-1582); self-sufficient (the producer runs whenever "// &
+                             "weighted depth mean of visc_rem (MOM6's barotropic "// &
+                             "solver); self-sufficient (the producer runs whenever "// &
                              "this is on), mutually exclusive with substep_drag and "// &
                              "bt_halo > 0. An equivalent subset of visc_rem_chain, kept "// &
                              "for granular testing -- prefer visc_rem_chain."))

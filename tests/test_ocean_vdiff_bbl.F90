@@ -649,7 +649,8 @@ contains
       !! solve, quadratic law, ONE 50 m layer, no interior viscosity, no
       !! rotation.  `h_N = H` (the top-layer rule), `bbl_thick = H`,
       !! `kv_bbl = cd·u_bbl·H`, and the bed row is MOM6's piston
-      !! `a_cpl = kv_bbl/min(H/2, bbl_thick)` (MOM_vert_friction.F90:2258),
+      !! `a_cpl = kv_bbl/min(H/2, bbl_thick)` (bottom boundary layer
+      !! coupling per Killworth & Edwards 1999),
       !! so one backward-Euler step gives `u0/(1 + dt·kv_bbl/(H·H/2))` —
       !! the explicit drag apply is not involved at all.
       type(error_type), allocatable, intent(out) :: error

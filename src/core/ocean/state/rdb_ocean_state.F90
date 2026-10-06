@@ -2141,7 +2141,7 @@ contains
       !     `vertvisc_coef`'s `visc%Kv_slow`/the shear-viscosity input is
       !     likewise carried across the predictor/corrector boundary, and
       !     MOM6 checkpoints exactly this class of field --
-      !     `set_visc_register_restarts`, MOM_set_viscosity.F90:2817-2913,
+      !     `set_visc_register_restarts`
       !     registers `Kv_shear`/`Kd_shear`/`Kv_shear_Bu`/`MLD` for the
       !     same "read before recomputed" reason).  Unregistered, a warm
       !     restart re-seeds `kv` from the COLD background value

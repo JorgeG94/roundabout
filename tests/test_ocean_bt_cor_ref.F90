@@ -5,8 +5,8 @@
 !! substep) contains the depth mean of the layer Coriolis-advection
 !! tendencies, and the substep integrates its own live `(ζ+f)·v − ∇KE`
 !! on top — so without a reference subtraction the barotropic Coriolis
-!! is integrated twice (MOM6 removes it with `Cor_ref_u/v`,
-!! `MOM_barotropic.F90:1526-1535`).  `subtract_fast_cor_ref` subtracts
+!! is integrated twice (MOM6 removes it with the reference-velocity
+!! subtraction `Cor_ref_u/v`).  `subtract_fast_cor_ref` subtracts
 !! the fast-loop terms evaluated at the reference barotropic velocity
 !! `bt_work%cor_ref_u/v` from `F_bt_u_fast`/`F_bt_v_fast`.  (That
 !! reference is a named slot filled by `set_cor_ref_velocity`: the

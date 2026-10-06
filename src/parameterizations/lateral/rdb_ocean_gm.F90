@@ -5,14 +5,14 @@ module rdb_ocean_gm
    !! layer THICKNESS flux (never an explicit velocity), applied as its OWN
    !! sequential operator on the CURRENT thickness, after the dynamics of
    !! every outer step (`rdb_continuity :: continuity_gm_apply`, driven by
-   !! `rdb_ocean_dyn :: run_gm_step`) — MOM6's `thickness_diffuse`, called
-   !! from `step_MOM` (MOM.F90:1388) after `step_MOM_dyn_split_RK2`, which
-   !! updates `h` in place (MOM_thickness_diffuse.F90:639-641).
+   !! `rdb_ocean_dyn :: run_gm_step`) — mirroring how MOM6 applies its
+   !! `thickness_diffuse` step after the split-RK2 dynamics step, updating
+   !! `h` in place.
    !!
    !! ### Why sequential, not folded
    !!
    !! The per-face availability cap `h_avail = A·(h − H_VANISHED)/(4·dt)`
-   !! (MOM_thickness_diffuse.F90:896-906) bounds four faces' outflow by
+   !! bounds four faces' outflow by
    !! `h − H_VANISHED`, so `h_new >= H_VANISHED` — but ONLY for the `h` it
    !! was computed from.  Until 2026-10 this slot computed `uhD` from the
    !! stage-entry `h` and FOLDED it into the resolved continuity sweeps
@@ -34,7 +34,7 @@ module rdb_ocean_gm
    !!     uhtot  = uhtot + uhD(k)
    !! so `Sum_k uhD = 0` (closes at the bed) — mass/tracer conservative.
    !!
-   !! Bottom-blocking (MOM6, MOM_thickness_diffuse.F90:1097-1114) acts on the
+   !! Bottom-blocking (MOM6's rule for the GM streamfunction) acts on the
    !! UNLIMITED streamfunction first: no transport from a donor layer that
    !! lies entirely below the receiving column's bed, and a share scaled by
    !! the fraction above it for a donor layer that straddles it
@@ -772,8 +772,7 @@ contains
       result(sfn_b)
       !$acc routine seq
       !! MOM6 bottom-blocking ("Avoid moving dense water upslope from below the
-      !! level of the bottom on the receiving side",
-      !! MOM_thickness_diffuse.F90:1097-1114).  `sfn` is the unlimited
+      !! level of the bottom on the receiving side").  `sfn` is the unlimited
       !! streamfunction at an interface: the transport of everything BELOW
       !! it, `> 0` from L to R.  Its donor layer is the one just below the
       !! interface on the donor side (`[e_bot, e_top]`).
