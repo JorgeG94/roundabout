@@ -50,6 +50,11 @@ In the author's words:
 >
 > If a reference is missing, that is not malicious in any way, shape or form.
 > It is human error, and it will be addressed when someone brings it up.
+>
+> Because of this, the licensing of this code is MIT.
+
+The parts ported from MOM6 and SIS2 are used and modified under the
+Apache License 2.0, as set out in [`NOTICE`](NOTICE).
 
 ## Acknowledgement: NOAA-GFDL, MOM6 and SIS2
 
