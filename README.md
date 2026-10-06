@@ -36,6 +36,21 @@ Roundabout makes no claim to be a novel implementation of a general
 circulation model. It is an LLM-driven, human-supervised experiment in
 taking a general circulation model to GPUs.
 
+In the author's words:
+
+> I (Jorge) acknowledge that no work here is claiming to be novel. It is a
+> porting endeavor, with four aims:
+>
+> - to explore the role of agents in GPU porting;
+> - to show Fortran as a viable, modern language for GPU-accelerated,
+>   portable scientific code;
+> - to provide example codebases in modern Fortran for LFortran compiler
+>   development;
+> - to support the wider Fortran community.
+>
+> If a reference is missing, that is not malicious in any way, shape or form.
+> It is human error, and it will be addressed when someone brings it up.
+
 ## Acknowledgement: NOAA-GFDL, MOM6 and SIS2
 
 **The numerical methods in Roundabout were developed at NOAA's Geophysical
