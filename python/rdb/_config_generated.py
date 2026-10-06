@@ -3674,6 +3674,15 @@ class OceanBt(Group):
         default=False,
     )
 
+    frhat_scheme = Enum(
+        'frhat_scheme',
+        doc="Per-layer barotropic face-thickness closure for every depth mean that reads a face thickness (derive_bt_from_layers, face_depth_mean_u/v, face_depth_mean_rem_u/v's wt_u, apply_bt_correction's open/visc_rem folds, and av_rem via face_depth_mean_u/v): arithmetic (DEFAULT, bit-identical -- the plain two-abutting-cell mean) or hybrid (MOM6 btcalc HVEL_SCHEME=HYBRID, MOM_barotropic.F90:4546-4790 -- arithmetic mean above the shallower column's bed, harmonic mean below it, suppressing a thin partial-bed layer's weight next to a thick abutting one)",
+        units='',
+        required=False,
+        default='arithmetic',
+        allowed=('arithmetic', 'hybrid'),
+    )
+
     correction_bc_pgf = Bool(
         'correction_bc_pgf',
         doc="Per-layer baroclinic-PGF retro-correction for the eta change (requires &ocean_pgf_nml form='fv_mom6')",
@@ -6298,4 +6307,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 60
-N_KNOBS = 690
+N_KNOBS = 691
