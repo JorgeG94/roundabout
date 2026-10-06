@@ -3596,9 +3596,17 @@ class OceanBt(Group):
         dead_on_ocean_path='RETIRED -- the h-weighted barotropic-correction fold was energy-non-conserving (a positive 0.5*D^2*H*(kappa-1) source plus shear feedback) and MOM6 has no such fold; setting it .true. is a fail-loud configure error (validate_config). Drag-aware weighting is correction_visc_rem.',
     )
 
+    visc_rem_chain = Bool(
+        'visc_rem_chain',
+        doc="PR-3 (D1): ONE switch for exactly MOM6's visc_rem/bt_rem set -- equivalent to correction_visc_rem + forcing_visc_rem + renorm_visc_rem + bt_rem_from_visc_rem all at once (never a superset); strong_drag/rescale_strong_drag stay separate keys (their own MOM6 params). Still requires ocean_vdiff_nml implicit_drag or bbl_glue, else visc_rem is inert (=1, warned).",
+        units='',
+        required=False,
+        default=False,
+    )
+
     correction_visc_rem = Bool(
         'correction_visc_rem',
-        doc='visc_rem/<visc_rem>_h BT-corrector weight + the visc_rem producer (visc_rem is produced by vdiff and is inert, =1, without ocean_vdiff_nml implicit_drag)',
+        doc='visc_rem/<visc_rem>_h BT-corrector weight + the visc_rem producer (visc_rem is produced by vdiff and is inert, =1, without ocean_vdiff_nml implicit_drag). An equivalent subset of visc_rem_chain, kept for granular testing -- prefer visc_rem_chain.',
         units='',
         required=False,
         default=False,
@@ -3606,7 +3614,7 @@ class OceanBt(Group):
 
     bt_rem_from_visc_rem = Bool(
         'bt_rem_from_visc_rem',
-        doc='bt_rem_u/v = mask*av_rem**(1/n_inner), av_rem the frhat-weighted depth mean of visc_rem (MOM6 MOM_barotropic.F90:1553-1580); requires correction_visc_rem, mutually exclusive with substep_drag and bt_halo > 0',
+        doc='bt_rem_u/v = mask*av_rem**(1/n_inner), av_rem the frhat-weighted depth mean of visc_rem (MOM6 MOM_barotropic.F90:1553-1582); requires correction_visc_rem (or visc_rem_chain), mutually exclusive with substep_drag and bt_halo > 0. An equivalent subset of visc_rem_chain, kept for granular testing -- prefer visc_rem_chain.',
         units='',
         required=False,
         default=False,
@@ -3614,7 +3622,7 @@ class OceanBt(Group):
 
     strong_drag = Bool(
         'strong_drag',
-        doc='MOM6 BT_STRONG_DRAG: rational-approximation bt_rem form n_inner*av_rem/(1+(n_inner-1)*av_rem) instead of the plain power; requires bt_rem_from_visc_rem',
+        doc='MOM6 BT_STRONG_DRAG: rational-approximation bt_rem form n_inner*av_rem/(1+(n_inner-1)*av_rem) instead of the plain power; requires bt_rem_from_visc_rem (or visc_rem_chain)',
         units='',
         required=False,
         default=False,
@@ -3651,7 +3659,7 @@ class OceanBt(Group):
 
     renorm_visc_rem = Bool(
         'renorm_visc_rem',
-        doc='gamma-weighted continuity transport-matching inversion (MOM6 u_cor = u + du*visc_rem; requires correction_visc_rem)',
+        doc='gamma-weighted continuity transport-matching inversion (MOM6 u_cor = u + du*visc_rem; requires correction_visc_rem or visc_rem_chain). An equivalent subset of visc_rem_chain, kept for granular testing -- prefer visc_rem_chain.',
         units='',
         required=False,
         default=False,
@@ -3659,7 +3667,7 @@ class OceanBt(Group):
 
     forcing_visc_rem = Bool(
         'forcing_visc_rem',
-        doc='MOM6 wt_u parity: h*visc_rem-weight the BT forcing depth-mean so friction-damped (glued) layers do not force the fast loop (requires correction_visc_rem)',
+        doc='MOM6 wt_u parity: h*visc_rem-weight the BT forcing depth-mean so friction-damped (glued) layers do not force the fast loop (requires correction_visc_rem or visc_rem_chain). An equivalent subset of visc_rem_chain, kept for granular testing -- prefer visc_rem_chain.',
         units='',
         required=False,
         default=False,
@@ -4733,10 +4741,11 @@ class OceanVdiff(Group):
 
     accel_visc_rem = Bool(
         'accel_visc_rem',
-        doc='MOM6 parity: attenuate the slow explicit accelerations by the per-layer viscous remnant (u = u0 + visc_rem*(u-u0) after the applies); requires ocean_bt_nml correction_visc_rem',
+        doc='RETIRED (refused when set)',
         units='',
         required=False,
         default=False,
+        dead_on_ocean_path="RETIRED -- PR-3's audit found no MOM6 state-update equivalent: btstep_layer_accel applies the depth-mean barotropic acceleration uniformly across every layer, no visc_rem weight. Setting it .true. is a fail-loud configure error (validate_config). The real MOM6 visc_rem*velocity mechanisms are ocean_bt_nml renorm_visc_rem and rescale_strong_drag.",
     )
 
     implicit_drag = Bool(
@@ -6288,4 +6297,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 60
-N_KNOBS = 689
+N_KNOBS = 690

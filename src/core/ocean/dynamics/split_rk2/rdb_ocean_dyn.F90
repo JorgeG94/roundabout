@@ -4804,9 +4804,11 @@ contains
       ! first stage degenerates to the plain h-mean.
       if (dyn%bt_work%bt_forcing_visc_rem) then
          call face_depth_mean_rem_u(grid, dyn%bt_work%F_slow_u, ms%h_layer, &
-                                    dyn%bt_work%visc_rem_u, dyn%bt_work%F_bt_u, ms%nz_ml, metrics)
+                                    dyn%bt_work%visc_rem_u, dyn%bt_work%F_bt_u, ms%nz_ml, metrics, &
+                                    n_inner)
          call face_depth_mean_rem_v(grid, dyn%bt_work%F_slow_v, ms%h_layer, &
-                                    dyn%bt_work%visc_rem_v, dyn%bt_work%F_bt_v, ms%nz_ml, metrics)
+                                    dyn%bt_work%visc_rem_v, dyn%bt_work%F_bt_v, ms%nz_ml, metrics, &
+                                    n_inner)
       else
          call face_depth_mean_u(grid, dyn%bt_work%F_slow_u, ms%h_layer, dyn%bt_work%F_bt_u, ms%nz_ml, metrics)
          call face_depth_mean_v(grid, dyn%bt_work%F_slow_v, ms%h_layer, dyn%bt_work%F_bt_v, ms%nz_ml, metrics)
@@ -4832,9 +4834,11 @@ contains
          end if
       else if (dyn%bt_work%bt_forcing_visc_rem) then
          call face_depth_mean_rem_u(grid, pgf%dpdx_face%data, ms%h_layer, &
-                                    dyn%bt_work%visc_rem_u, dyn%bt_work%F_bt_u_fast, ms%nz_ml, metrics)
+                                    dyn%bt_work%visc_rem_u, dyn%bt_work%F_bt_u_fast, ms%nz_ml, metrics, &
+                                    n_inner)
          call face_depth_mean_rem_v(grid, pgf%dpdy_face%data, ms%h_layer, &
-                                    dyn%bt_work%visc_rem_v, dyn%bt_work%F_bt_v_fast, ms%nz_ml, metrics)
+                                    dyn%bt_work%visc_rem_v, dyn%bt_work%F_bt_v_fast, ms%nz_ml, metrics, &
+                                    n_inner)
       else
          call face_depth_mean_u(grid, pgf%dpdx_face%data, ms%h_layer, dyn%bt_work%F_bt_u_fast, ms%nz_ml, metrics)
          call face_depth_mean_v(grid, pgf%dpdy_face%data, ms%h_layer, dyn%bt_work%F_bt_v_fast, ms%nz_ml, metrics)
@@ -4875,7 +4879,7 @@ contains
          ! depth-mean above used.  Without this the uncancelled
          ! `f × (v̄_av − v̄^n)` forces every substep and pumps the basin's
          ! gravest Poincaré seiche (see `set_cor_ref_velocity`).
-         call set_cor_ref_velocity(grid, dyn%bt_work, ms, is_pc, metrics)
+         call set_cor_ref_velocity(grid, dyn%bt_work, ms, is_pc, metrics, n_inner)
          call subtract_fast_cor_ref(grid, metrics, dyn%bt_work, cor%f_corner, &
                                     bc_w_drv, bc_e_drv, bc_s_drv, bc_n_drv, &
                                     has_w_drv, has_e_drv, has_s_drv, has_n_drv)

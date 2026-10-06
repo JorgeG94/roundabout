@@ -582,6 +582,103 @@ partial bed cell / 70 m, `python_prototypes/bt_rem`'s geometry and
 visc_rem profiles — bounded with the chain on, undamped/bounded
 without).
 
+**PR-3 (visc_rem chain audit + unification — 2026-10-05).** Audited every
+existing `*_visc_rem` knob against MOM6 (`python_prototypes/design/
+visc_rem_bt_rem_plan.md` §3/§4, D1-D3) and exposed ONE `&ocean_bt_nml
+visc_rem_chain` switch (default off): equivalent to setting
+`correction_visc_rem` + `forcing_visc_rem` + `renorm_visc_rem` +
+`bt_rem_from_visc_rem` all at once — never a superset, never a subset
+(`ocean_bt_*_visc_rem_on(cfg)` helpers in `rdb_config.F90`, read by both
+`validate_config`'s cross-checks and `configure_ocean_bt`'s setup
+wire-up, so the chain and the four individual knobs can never disagree).
+The four knobs stay individually registered — never retired — for the
+existing fine-grained tests; `strong_drag`/`rescale_strong_drag` stay
+separate keys per D1 (MOM6's own `BT_STRONG_DRAG`/`RESCALE_STRONG_DRAG`
+params) and now require `bt_rem_from_visc_rem` OR `visc_rem_chain`.  D2
+(`substep_drag` mutually exclusive with the chain) and D3 (`strong_drag`
+opt-in, default off) were already shipped by PR-2 and now read through
+the chain identically. Findings from the audit:
+- **`forcing_visc_rem`'s `wt_u` floor fixed to MOM6 exactly**
+  (`MOM_barotropic.F90:1082-1101`): `vr = min(visc_rem, 1)`, `vr =
+  max(vr, 1 − 0.5·Instep/(vr + subroundoff))`, `vr = max(vr, 0)`,
+  `Instep = 1/n_inner`, `subroundoff = 1e-30` — `face_depth_mean_rem_u/v`
+  previously ran a plain `[0,1]` clamp instead, which (per the plan's own
+  "Thin-cell floors" risk note) can weight a many-substep column's
+  forcing much closer to zero than MOM6 ever lets it on exactly the thin
+  cells this chain exists for. `ieee_is_finite`-guarded (no `max(…,eps)`
+  substitute on a non-finite input); threaded through `n_inner` into both
+  `face_depth_mean_rem_u/v` call sites AND `set_cor_ref_velocity` (which
+  shares the same weighting for the `pred_corr` Coriolis reference, now
+  an optional `n_inner` defaulting to 1 — inert unless
+  `bt_forcing_visc_rem` is also on). Default off ⇒ no answer change for
+  any run that does not set `forcing_visc_rem`/`visc_rem_chain`.
+- **Wind × surface `visc_rem` (MOM6 `MOM_barotropic.F90:1354,1380`,
+  `BT_force_u = taux·IDatu·visc_rem_u(surface)`) was already covered**,
+  not missing: `sum_slow_tendencies_into_F_slow` folds the wind-stress
+  tendency (`ss%du_stress`, nonzero only at the surface layer `k=nz`,
+  bottom-up) into `F_slow_u/v` at every layer BEFORE the depth-mean, and
+  `forcing_visc_rem`'s weighted depth-mean (`face_depth_mean_rem_u/v`)
+  then weights that `k=nz` wind contribution by `visc_rem_u(:,:,nz)`
+  exactly like every other layer's slow tendency — no separate wind-only
+  term needed.
+- **`correction_visc_rem`/`renorm_visc_rem` ↔ MOM6's continuity `u_cor =
+  u + du·visc_rem`**: the plan's citation (`MOM_continuity_PPM.F90`'s
+  `continuity_adjust_vel`) is dead code in MOM6 (zero call sites); the
+  real mechanism is `MOM_dynamics_split_RK2.F90:793-795,1052-1054`
+  calling `continuity(... visc_rem_u=..., u_cor=u_av ...)`, with the
+  actual weighted correction in `MOM_continuity_PPM.F90`'s
+  `zonal_mass_flux`/`meridional_mass_flux` internals (`u_cor(I,j,k) = u +
+  du·visc_rem`, roughly :891/:2051). roundabout's `renorm_visc_rem`
+  targets exactly the same field MOM6 does, `ms%u_av_layer`/`v_av_layer`
+  (verified at the `continuity_tracer_step_split(..., u_cor=ms%u_av_layer,
+  v_cor=ms%v_av_layer)` call site) — a genuine match, not a gap.
+  `correction_visc_rem`'s OWN weighted fold (`apply_bt_correction`,
+  applied to the prognostic `ms%u_face_x_layer`/`v_face_y_layer`) has no
+  literal MOM6 twin either — MOM6's `accel_layer_u` applies `u_accel_bt`
+  UNIFORMLY there (see `accel_visc_rem` below) — but roundabout's
+  architecture does not carry MOM6's separate `up`/`u_av` split the same
+  way, so this fold is the closest roundabout analogue of the SAME
+  physics applied to the field that plays that role here. Flagged for
+  the maintainer as a design nuance the plan does not settle, not
+  reworked in this PR (no answer change; PR-3 is audit-and-unify only).
+- **`accel_visc_rem` is RETIRED** (`&ocean_vdiff_nml`, refused at
+  configure): no MOM6 state-update equivalent exists.
+  `btstep_layer_accel` (`MOM_barotropic.F90:3608-3677`) and the
+  corrector's `up`/`vp` update (`MOM_dynamics_split_RK2.F90:702-704`)
+  apply the depth-mean barotropic acceleration `u_accel_bt` UNIFORMLY
+  across every layer — the only `visc_rem x u_accel_bt` products in MOM6
+  are a diagnostic-only post-product (never fed back into state) and
+  `RESCALE_STRONG_DRAG`'s depth-MEAN rescale (already its own knob). The
+  underlying kernels (`accel_visc_rem_snapshot`/`accel_visc_rem_reweight`
+  in `rdb_ocean_dyn.F90`) and `tests/test_ocean_accel_visc_rem.F90`
+  (which call them directly, not through `cfg`) are untouched — only the
+  namelist path to reach them is refused, naming `renorm_visc_rem` and
+  `rescale_strong_drag` as the real MOM6 mechanisms.
+- **frhat parity — reported, not ported.** roundabout's `av_rem`,
+  `forcing_visc_rem`'s `wt_u` and `correction_visc_rem`'s corrector all
+  share ONE face depth-mean weight, the plain two-cell arithmetic mean
+  `0.5·(h_L+h_R)`. MOM6's `frhatu`/`frhatv` come from `btcalc`
+  (`MOM_barotropic.F90:4546-4790`) and dispatch on `HVEL_SCHEME`:
+  `ARITHMETIC` (roundabout's form), `HARMONIC`
+  (`2·h_L·h_R/(h_L+h_R+h_neglect)`, which strongly suppresses a face
+  where one side is thin — exactly the partial-bed-cell regime
+  motivating this whole plan), or MOM6's practical default `HYBRID` (a
+  shape-dependent arithmetic/harmonic blend, not flow/flux-dependent).
+  At the plan's own motivating 8.4 m / 0.74 m geometry, MOM6's default
+  already suppresses the thin side before `visc_rem` is even applied —
+  roundabout's plain mean does not. The port itself would be small
+  (`btcalc`'s default-arg form is a self-contained ~45-line-per-direction
+  function of `h` alone, no PPM/flux coupling), but the plan requires
+  porting it to EVERY depth-mean site in the chain at once (never just
+  one, or the fold stops being self-consistent) — `av_rem`,
+  `forcing_visc_rem`, AND `correction_visc_rem`'s corrector all share
+  `face_depth_mean_u/v`/`face_depth_mean_rem_u/v`, which are also the
+  GENERAL-purpose BT depth-mean used by every configuration, visc_rem
+  chain on or off. Changing their weight formula is an answer change for
+  every existing run, not a default-off opt-in one, so it is OUT OF
+  SCOPE for PR-3 (no answer changes) and deferred as a measured finding
+  for a follow-up PR, not implemented here.
+
 Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
 **continuity-PPM** — no Poisson constraint, no FFT projection.
 

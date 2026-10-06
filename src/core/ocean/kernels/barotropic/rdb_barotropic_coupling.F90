@@ -53,6 +53,9 @@ module rdb_barotropic_coupling
    ! upstream-h-sum producer — the closure stays in the cubic-near-zero
    ! branch (≈ naive u·h_face); real saturation needs a PPM-perturbation FA.
    real(wp), parameter :: BTC_VOL_CFL = 0.5_wp
+   ! MOM6 `wt_u`'s round-off guard (MOM_barotropic.F90 module parameter
+   ! `subroundoff`, :467) — only ever used inside the `wt_u` floor below.
+   real(wp), parameter :: VISC_REM_SUBROUNDOFF = 1.0e-30_wp
 
 contains
 
@@ -786,7 +789,7 @@ contains
       end do
    end subroutine subtract_fast_cor_ref
 
-   pure subroutine set_cor_ref_velocity(grid, bt_work, ms, from_u_av, metrics)
+   pure subroutine set_cor_ref_velocity(grid, bt_work, ms, from_u_av, metrics, n_inner)
       !! Fill `bt_work%cor_ref_u/v` — the barotropic velocity at which
       !! `subtract_fast_cor_ref` evaluates the Coriolis/advection
       !! reference it removes from the substep forcing (MOM6
@@ -843,19 +846,30 @@ contains
          !! above, and `face_depth_mean_u`'s own `metrics` docstring.
          !! Knob off ⇒ the depth means take their original branch and
          !! this is byte-identical.
+      integer, intent(in), optional :: n_inner
+         !! Barotropic substep count, forwarded to `face_depth_mean_rem_u/v`'s
+         !! MOM6 `wt_u` floor when `bt_forcing_visc_rem` is on.  Optional
+         !! (defaults to 1) ONLY so call sites that never set
+         !! `forcing_visc_rem` (that branch is then never taken) need not
+         !! be touched — a real `forcing_visc_rem` run must pass the true
+         !! value or the floor's `Instep` is wrong.
 
-      integer :: i, j, nu, nv, nx, ny
+      integer :: i, j, nu, nv, nx, ny, n_inner_use
       logical :: use_av
 
+      n_inner_use = 1
+      if (present(n_inner)) n_inner_use = n_inner
       use_av = from_u_av
       if (use_av) use_av = allocated(ms%u_av_layer) .and. allocated(ms%v_av_layer)
 
       if (use_av) then
          if (bt_work%bt_forcing_visc_rem) then
             call face_depth_mean_rem_u(grid, ms%u_av_layer, ms%h_layer, &
-                                       bt_work%visc_rem_u, bt_work%cor_ref_u, ms%nz_ml, metrics)
+                                       bt_work%visc_rem_u, bt_work%cor_ref_u, ms%nz_ml, metrics, &
+                                       n_inner_use)
             call face_depth_mean_rem_v(grid, ms%v_av_layer, ms%h_layer, &
-                                       bt_work%visc_rem_v, bt_work%cor_ref_v, ms%nz_ml, metrics)
+                                       bt_work%visc_rem_v, bt_work%cor_ref_v, ms%nz_ml, metrics, &
+                                       n_inner_use)
          else
             call face_depth_mean_u(grid, ms%u_av_layer, ms%h_layer, bt_work%cor_ref_u, &
                                    ms%nz_ml, metrics)
@@ -960,7 +974,7 @@ contains
       end if
    end subroutine face_depth_mean_u
 
-   pure subroutine face_depth_mean_rem_u(grid, F_3d, h_layer, rem, F_mean_2d, nz, metrics)
+   pure subroutine face_depth_mean_rem_u(grid, F_3d, h_layer, rem, F_mean_2d, nz, metrics, n_inner)
       !! `face_depth_mean_u` with MOM6 `wt_u` weighting (`&ocean_bt_nml
       !! forcing_visc_rem`): the weight is
       !! `h_face·visc_rem(k)` instead of `h_face`, so layers the implicit
@@ -971,6 +985,18 @@ contains
       !! the layer velocities themselves are glued (PGF_BUG.md §9).
       !! Denominator falls back to zero-output on an all-remnant-zero
       !! column (the substep should not force an immobilized column).
+      !!
+      !! `rem` is run through MOM6's exact `wt_u` floor before it weights
+      !! anything (`MOM_barotropic.F90:1082-1101`): `vr = min(rem, 1)`,
+      !! `vr = max(vr, 1 - 0.5·Instep/(vr + subroundoff))`,
+      !! `vr = max(vr, 0)`, `Instep = 1/n_inner` — NOT roundabout's old
+      !! plain `[0,1]` clamp, which let a near-zero `visc_rem` on a
+      !! many-substep column weight the forcing far closer to zero than
+      !! MOM6 ever lets it (the floor's whole job is to keep the
+      !! `Instep`-th root finite on exactly this kind of thin cell; see
+      !! the plan's "Thin-cell floors" risk note).  `ieee_is_finite`-
+      !! guarded per the CLAUDE.md NaN-clamp gotcha: a non-finite `rem`
+      !! passes through unmasked rather than being laundered to 0 or 1.
       type(hgrid_t), intent(in) :: grid
       ! assumed-shape-ok: face arrays have shape (nx+1,ny,nz); a single (nx,ny,nz)
       ! explicit-shape triplet would mis-bound the face axis.
@@ -988,8 +1014,12 @@ contains
          !! the closed-face vdiff decoupling leaves it uncoupled, so
          !! `visc_rem` alone does NOT stand in for the mask here.
          !! Knob off ⇒ the ORIGINAL loop, byte-identical.
+      integer, intent(in) :: n_inner
+         !! Barotropic substep count (MOM6 `nstep`); `Instep = 1/n_inner`
+         !! in the `wt_u` floor.  `max(n_inner, 1)` guards the unsplit
+         !! (`n_inner = 0`) configuration.
       integer :: i, j, k, nu, ny, nx_cells
-      real(wp) :: h_face, wt, num, denom
+      real(wp) :: h_face, wt, num, denom, vr, instep
       logical :: use_open
 
       nu = size(F_3d, 1)
@@ -997,9 +1027,10 @@ contains
       nx_cells = grid%nx_total
 
       use_open = metrics%use_closed_faces
+      instep = 1.0_wp/real(max(n_inner, 1), wp)
 
       if (use_open) then
-         do concurrent(j=1:ny, i=1:nu) local(k, h_face, wt, num, denom)
+         do concurrent(j=1:ny, i=1:nu) local(k, h_face, wt, num, denom, vr)
             num = 0.0_wp
             denom = 0.0_wp
             do k = 1, nz
@@ -1010,7 +1041,14 @@ contains
                else
                   h_face = 0.5_wp*(h_layer(i - 1, j, k) + h_layer(i, j, k))
                end if
-               wt = metrics%open_u(i, j, k)*h_face*min(max(rem(i, j, k), 0.0_wp), 1.0_wp)
+               if (ieee_is_finite(rem(i, j, k))) then
+                  vr = min(rem(i, j, k), 1.0_wp)
+                  vr = max(vr, 1.0_wp - 0.5_wp*instep/(vr + VISC_REM_SUBROUNDOFF))
+                  vr = max(vr, 0.0_wp)
+               else
+                  vr = rem(i, j, k)
+               end if
+               wt = metrics%open_u(i, j, k)*h_face*vr
                num = num + F_3d(i, j, k)*wt
                denom = denom + wt
             end do
@@ -1021,7 +1059,7 @@ contains
             end if
          end do
       else
-         do concurrent(j=1:ny, i=1:nu) local(k, h_face, wt, num, denom)
+         do concurrent(j=1:ny, i=1:nu) local(k, h_face, wt, num, denom, vr)
             num = 0.0_wp
             denom = 0.0_wp
             do k = 1, nz
@@ -1032,7 +1070,14 @@ contains
                else
                   h_face = 0.5_wp*(h_layer(i - 1, j, k) + h_layer(i, j, k))
                end if
-               wt = h_face*min(max(rem(i, j, k), 0.0_wp), 1.0_wp)
+               if (ieee_is_finite(rem(i, j, k))) then
+                  vr = min(rem(i, j, k), 1.0_wp)
+                  vr = max(vr, 1.0_wp - 0.5_wp*instep/(vr + VISC_REM_SUBROUNDOFF))
+                  vr = max(vr, 0.0_wp)
+               else
+                  vr = rem(i, j, k)
+               end if
+               wt = h_face*vr
                num = num + F_3d(i, j, k)*wt
                denom = denom + wt
             end do
@@ -1045,8 +1090,9 @@ contains
       end if
    end subroutine face_depth_mean_rem_u
 
-   pure subroutine face_depth_mean_rem_v(grid, F_3d, h_layer, rem, F_mean_2d, nz, metrics)
-      !! Symmetric v-face counterpart of `face_depth_mean_rem_u`.
+   pure subroutine face_depth_mean_rem_v(grid, F_3d, h_layer, rem, F_mean_2d, nz, metrics, n_inner)
+      !! Symmetric v-face counterpart of `face_depth_mean_rem_u` — same
+      !! MOM6 `wt_u` floor, `ieee_is_finite`-guarded the same way.
       type(hgrid_t), intent(in) :: grid
       ! assumed-shape-ok: face arrays have shape (nx,ny+1,nz); a single (nx,ny,nz)
       ! explicit-shape triplet would mis-bound the face axis.
@@ -1064,8 +1110,10 @@ contains
          !! the closed-face vdiff decoupling leaves it uncoupled, so
          !! `visc_rem` alone does NOT stand in for the mask here.
          !! Knob off ⇒ the ORIGINAL loop, byte-identical.
+      integer, intent(in) :: n_inner
+         !! Barotropic substep count (MOM6 `nstep`); see `face_depth_mean_rem_u`.
       integer :: i, j, k, nx, nv, ny_cells
-      real(wp) :: h_face, wt, num, denom
+      real(wp) :: h_face, wt, num, denom, vr, instep
       logical :: use_open
 
       nx = size(F_3d, 1)
@@ -1073,9 +1121,10 @@ contains
       ny_cells = grid%ny_total
 
       use_open = metrics%use_closed_faces
+      instep = 1.0_wp/real(max(n_inner, 1), wp)
 
       if (use_open) then
-         do concurrent(j=1:nv, i=1:nx) local(k, h_face, wt, num, denom)
+         do concurrent(j=1:nv, i=1:nx) local(k, h_face, wt, num, denom, vr)
             num = 0.0_wp
             denom = 0.0_wp
             do k = 1, nz
@@ -1086,7 +1135,14 @@ contains
                else
                   h_face = 0.5_wp*(h_layer(i, j - 1, k) + h_layer(i, j, k))
                end if
-               wt = metrics%open_v(i, j, k)*h_face*min(max(rem(i, j, k), 0.0_wp), 1.0_wp)
+               if (ieee_is_finite(rem(i, j, k))) then
+                  vr = min(rem(i, j, k), 1.0_wp)
+                  vr = max(vr, 1.0_wp - 0.5_wp*instep/(vr + VISC_REM_SUBROUNDOFF))
+                  vr = max(vr, 0.0_wp)
+               else
+                  vr = rem(i, j, k)
+               end if
+               wt = metrics%open_v(i, j, k)*h_face*vr
                num = num + F_3d(i, j, k)*wt
                denom = denom + wt
             end do
@@ -1097,7 +1153,7 @@ contains
             end if
          end do
       else
-         do concurrent(j=1:nv, i=1:nx) local(k, h_face, wt, num, denom)
+         do concurrent(j=1:nv, i=1:nx) local(k, h_face, wt, num, denom, vr)
             num = 0.0_wp
             denom = 0.0_wp
             do k = 1, nz
@@ -1108,7 +1164,14 @@ contains
                else
                   h_face = 0.5_wp*(h_layer(i, j - 1, k) + h_layer(i, j, k))
                end if
-               wt = h_face*min(max(rem(i, j, k), 0.0_wp), 1.0_wp)
+               if (ieee_is_finite(rem(i, j, k))) then
+                  vr = min(rem(i, j, k), 1.0_wp)
+                  vr = max(vr, 1.0_wp - 0.5_wp*instep/(vr + VISC_REM_SUBROUNDOFF))
+                  vr = max(vr, 0.0_wp)
+               else
+                  vr = rem(i, j, k)
+               end if
+               wt = h_face*vr
                num = num + F_3d(i, j, k)*wt
                denom = denom + wt
             end do
