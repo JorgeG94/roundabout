@@ -417,7 +417,7 @@ contains
          !! skipped, so a case whose answer is known to drift for a
          !! reason OTHER than the checkpoint/restore wiring (e.g. the
          !! `restart_visc_rem` compat gap -- see
-         !! `test_engine_resume_point_only_visc_rem`) can still assert
+         !! `test_engine_bit_exact_visc_rem`) can still assert
          !! the registry round-trip is exact without asserting something
          !! this test cannot make true.  Default `.false.` = the full
          !! round trip (every other case).
