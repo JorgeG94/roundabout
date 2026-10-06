@@ -1931,6 +1931,15 @@ contains
       !!    face (`denom <= 0`), which is exactly the MOM6 "av_rem = 0 on
       !!    a massless column" edge case.
       !!
+      !!    NOTE this `frhat` is roundabout's own: the two-abutting-cell
+      !!    arithmetic-mean `h_face` `face_depth_mean_u`/`derive_bt_from_
+      !!    layers`/`apply_bt_correction` already share, which is what
+      !!    SELF-CONSISTENCY across the BT chain requires here — not
+      !!    necessarily MOM6's own `frhatu`, which comes from `BT_cont`'s
+      !!    face thicknesses (a different, flux-bounded construction).
+      !!    Auditing that parity (or documenting the deliberate
+      !!    divergence) is PR-3 scope, not this one.
+      !!
       !! 2. `bt_rem = av_rem**(1/n_inner)` where `av_rem > 0` (MOM6
       !!    `Instep = 1/nstep`), else `0` — no `max(..., eps)` floor
       !!    substitute (CLAUDE.md: the thin-cell floor is the `av_rem >
