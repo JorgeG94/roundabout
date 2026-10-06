@@ -162,7 +162,7 @@ contains
       case ("island_periodic_zfixed_visc_rem")
          ! PR-1: the SAME island/periodic/z_fixed/pred_corr case as
          ! `island_periodic_zfixed`, but with the visc_rem chain live
-         ! (`implicit_drag` + `correction_visc_rem`) so
+         ! (`implicit_drag` + `visc_rem_chain`) so
          ! `bt_work%visc_rem_u/v` holds NON-trivial values (not just the
          ! `source=1.0` init) at the checkpoint — the restart test that
          ! closes compat row `restart_visc_rem`.  Linear bed drag with
@@ -173,7 +173,7 @@ contains
                "&nonhydrostatic_nml nz_layers = 6 /"//NL// &
                "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0, "// &
                "T_init_surface = 20.0, T_init_bottom = 4.0 /"//NL// &
-               "&ocean_bt_nml auto_n_inner = .true., correction_visc_rem = .true. /"//NL// &
+               "&ocean_bt_nml auto_n_inner = .true., visc_rem_chain = .true. /"//NL// &
                "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
                "smag_ah = .true. /"//NL// &
                "&ocean_bdrag_nml form = 'linear', r = 2.0e-4, hbbl = 0.0, bg_vel = 0.1 /"//NL// &
@@ -198,7 +198,7 @@ contains
          ! case pass for the wrong reason) on `zstar` (MOM6 z*), with the
          ! kappa-shear VERTEX closure live (`&ocean_kappa_shear_nml
          ! enable = .true., at_vertex = .true.`) and the visc_rem chain
-         ! (`&ocean_bt_nml correction_visc_rem + bt_rem_from_visc_rem`).
+         ! (`&ocean_bt_nml visc_rem_chain = .true.`).
          ! `wind_stress_x =
          ! 2.0` is deliberately strong -- it is what pushes the corner
          ! solve's converged `kd_corner` well above `kappa_trunc`
@@ -232,7 +232,7 @@ contains
                "T_init_surface = 16.0, T_init_bottom = 3.0, "// &
                "S_init_surface = 34.6, S_init_bottom = 35.0 /"//NL// &
                "&ocean_bt_nml auto_n_inner = .true., split_scheme = 'pred_corr', "// &
-               "correction_visc_rem = .true., bt_rem_from_visc_rem = .true. /"//NL// &
+               "visc_rem_chain = .true. /"//NL// &
                "&ocean_hvisc_nml nu_h = 10.0 /"//NL// &
                "&ocean_bdrag_nml form = 'quadratic', cd = 0.003, hbbl = 0.0, "// &
                "bg_vel = 0.05 /"//NL// &
@@ -264,7 +264,7 @@ contains
                "&nonhydrostatic_nml nz_layers = 6 /"//NL// &
                "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0, "// &
                "T_init_surface = 20.0, T_init_bottom = 4.0 /"//NL// &
-               "&ocean_bt_nml auto_n_inner = .true., correction_visc_rem = .true. /"//NL// &
+               "&ocean_bt_nml auto_n_inner = .true., visc_rem_chain = .true. /"//NL// &
                "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
                "smag_ah = .true. /"//NL// &
                "&ocean_bdrag_nml form = 'linear', r = 2.0e-4, hbbl = 0.0, bg_vel = 0.1 /"//NL// &
@@ -595,7 +595,11 @@ contains
    end subroutine test_engine_bit_exact
 
    subroutine test_engine_bit_exact_visc_rem(error)
-      !! `bt_correction_visc_rem` live.  PR-2 (bt-rem-from-av-rem) closes
+      !! `visc_rem_chain` live (D1 follow-up: was `correction_visc_rem`,
+      !! retired 2026-10 -- `visc_rem_chain` gives the same NON-trivial
+      !! `visc_rem_u/v` at checkpoint via the self-sufficient forcing/
+      !! renorm/bt_rem_from producer, plus broader restart coverage of
+      !! those three).  PR-2 (bt-rem-from-av-rem) closes
       !! compat row `restart_visc_rem` for real: checkpointing
       !! `bt_work%visc_rem_u/v` (PR-1) was necessary but NOT sufficient,
       !! because `visc_rem_precompute` (the pre-substep producer, gated
@@ -631,7 +635,7 @@ contains
       !! `kd_bg` and the `kv`/`ks` boundary zero -- `kd_bg` is set ONLY
       !! in that routine, so a Bryan-Lewis background (`&ocean_vmix_nml
       !! bkgnd_profile`) silently lost its depth-varying floor on every
-      !! warm restart of a `correction_visc_rem`/`implicit_drag` (closed
+      !! warm restart of a `visc_rem_chain`/`implicit_drag` (closed
       !! south/north wall) case.  Full round trip (not resume-point-only)
       !! on `island_periodic_zfixed_bkgnd`.
       type(error_type), allocatable, intent(out) :: error

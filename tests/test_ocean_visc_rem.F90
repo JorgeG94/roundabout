@@ -754,8 +754,16 @@ contains
          bd_fused%lambda_bot_u = R_BOT; bd_fused%lambda_bot_v = R_BOT
          call ss_split%set_wind_stress_const(0.0_wp, 0.0_wp)
          call ss_fused%set_wind_stress_const(0.0_wp, 0.0_wp)
+         ! D1 follow-up: the PRODUCER gate is decoupled from the retired
+         ! weighted-fold flag (`bt_correction_visc_rem`) — `do_remnant`
+         ! in `vmix_apply_in_stage` now reads `bt_visc_rem_producer`.
+         ! Set both here: `bt_correction_visc_rem` is kept so this test
+         ! also still exercises the (unretired, kernel-level) weighted
+         ! dispatch if `apply_bt_correction` were called on these states.
          bt_split%bt_correction_visc_rem = .true.
          bt_fused%bt_correction_visc_rem = .true.
+         bt_split%bt_visc_rem_producer = .true.
+         bt_fused%bt_visc_rem_producer = .true.
 
          do k = 1, NZ
             ms_split%h_layer(:, :, k) = real(k, wp)*11.0_wp

@@ -91,10 +91,10 @@ module rdb_config
    public :: p_top_has_producer
    public :: substep_drag_ignores_bdrag_form
    public :: bbl_glue_is_effective
-   public :: ocean_bt_correction_visc_rem_on
    public :: ocean_bt_forcing_visc_rem_on
    public :: ocean_bt_renorm_visc_rem_on
    public :: ocean_bt_rem_from_visc_rem_on
+   public :: ocean_bt_visc_rem_producer_on
    public :: cavity_draft_is_uniform
    public :: zfixed_cavity_nu_h_below_envelope
    public :: ZFIXED_CAVITY_NU_H_MIN
@@ -618,45 +618,58 @@ module rdb_config
          !! stays registered only so the refusal can say why; drag-aware
          !! weighting is `correction_visc_rem`.
       logical :: correction_visc_rem = .false.
-         !! Weight the BT-corrector fold by `visc_rem(k)/⟨visc_rem⟩_h`
-         !! (`⟨·⟩_h` the open-column h-weighted mean, so the depth mean is
-         !! preserved exactly) instead of uniformly, and switch ON the
-         !! visc_rem producer the other `*_visc_rem` knobs read.  `visc_rem` (the
-         !! bt_work%visc_rem_u/v seam) is produced by
-         !! `vdiff_apply_momentum` from the SAME factorized momentum
-         !! tridiagonal with RHS ≡ 1 — see `rdb_ocean_vdiff.F90`.  Its rows
-         !! sum to exactly 1 unless `&ocean_vdiff_nml implicit_drag=.true.`
-         !! breaks the bed row, so with `implicit_drag=.false.` visc_rem ≡ 1
-         !! identically and this knob is mathematically inert (warned, not
-         !! an error — a legal, merely no-op configuration).
+         !! RETIRED (2026-10, D1 follow-up) — setting `.true.` is a
+         !! fail-loud `validate_config` error.  This used to weight the
+         !! BT-corrector fold by `visc_rem(k)/⟨visc_rem⟩_h` instead of
+         !! uniformly, but MOM6's `accel_layer_u`
+         !! (`MOM_barotropic.F90:3665-3675`) gives every layer the SAME
+         !! `u_accel_bt` — no `visc_rem` weight — folded into `up` BEFORE
+         !! `vertvisc` distributes it via the SAME implicit friction the
+         !! BBL glue uses, so MOM6 never damps it twice.  This fold did,
+         !! and the SECOND, unbounded `visc_rem_k/⟨visc_rem⟩_h` ratio is
+         !! what NaNs the 1-degree Southern Ocean z* open-step case under
+         !! `bbl_glue` at step ~40 (see `validate_config`'s refusal
+         !! message for the measured isolation). `visc_rem_chain` is the
+         !! replacement and uses the UNIFORM fold, matching MOM6. The key
+         !! stays registered only so the refusal can say why; the
+         !! underlying kernel dispatch (`apply_bt_correction`'s
+         !! `use_visc_rem`) and its direct unit tests are untouched.
       logical :: visc_rem_chain = .false.
-         !! PR-3 (visc_rem audit + unification, D1): ONE switch for
-         !! exactly MOM6's `vertvisc_remnant`/`bt_rem` set — equivalent to
-         !! setting `correction_visc_rem` (the producer + BT-corrector
-         !! weight), `forcing_visc_rem` (MOM6 `wt_u`), `renorm_visc_rem`
-         !! (MOM6 continuity `u_cor = u + du*visc_rem`) and
-         !! `bt_rem_from_visc_rem` (MOM6 `av_rem`/`bt_rem`,
-         !! `MOM_barotropic.F90:1553-1582`) all at once.  Same caveat as
-         !! `correction_visc_rem`: without `&ocean_vdiff_nml
-         !! implicit_drag=.true.` or `bbl_glue=.true.`, `visc_rem` stays
-         !! ≡ 1 and the whole chain is a legal, warned, no-op.
-         !! The four `*_visc_rem` knobs stay individually settable (never
-         !! retired) for the existing fine-grained tests, each an
-         !! equivalent SUBSET of this switch, never a superset — setting
-         !! any of them has exactly the same effect as this switch would
-         !! for that one piece.  `strong_drag`/`rescale_strong_drag` stay
-         !! separate namelist keys per D1 (MOM6 has its own
-         !! `BT_STRONG_DRAG`/`RESCALE_STRONG_DRAG` parameters for them)
-         !! and require this switch (or `bt_rem_from_visc_rem`) on, same
-         !! as before. `accel_visc_rem` (`&ocean_vdiff_nml`) is NOT part
-         !! of this chain — PR-3's audit found no MOM6 state-update
-         !! equivalent (`btstep_layer_accel` applies `u_accel_bt`
-         !! uniformly across layers, no `visc_rem` weight) and it is
-         !! RETIRED (see its own docstring).  Default `.false.` ⇒ no
-         !! answer change (PR-4 is the default flip).  D2: mutually
-         !! exclusive with `substep_drag` (checked via
-         !! `bt_rem_from_visc_rem`'s existing requirement, which this
-         !! switch satisfies identically to setting it directly).
+         !! PR-3 (visc_rem audit + unification, D1 — revised 2026-10 once
+         !! MOM6 settled the BT-correction fold question): ONE switch for
+         !! exactly MOM6's `vertvisc_remnant`/`av_rem`/`bt_rem` set —
+         !! equivalent to switching on the visc_rem PRODUCER (decoupled
+         !! from the retired `correction_visc_rem`, runs whenever any
+         !! consumer below needs it) plus `forcing_visc_rem` (MOM6
+         !! `wt_u`), `renorm_visc_rem` (MOM6 continuity `u_cor = u +
+         !! du*visc_rem`, which IS how MOM6 ties `visc_rem` to a velocity
+         !! correction) and `bt_rem_from_visc_rem` (MOM6 `av_rem`/`bt_rem`,
+         !! `MOM_barotropic.F90:1553-1582`) all at once.  The
+         !! barotropic-correction fold (`apply_bt_correction`) stays
+         !! UNIFORM under this switch — MOM6's `accel_layer_u` never
+         !! weights it by `visc_rem`, so neither does this chain; see
+         !! `correction_visc_rem`'s docstring for why that fold is
+         !! retired, not folded in here.  Same caveat as before: without
+         !! `&ocean_vdiff_nml implicit_drag=.true.` or `bbl_glue=.true.`,
+         !! `visc_rem` stays ≡ 1 and the whole chain is a legal, warned,
+         !! no-op.  The three `*_visc_rem` consumer knobs
+         !! (`forcing_visc_rem`/`renorm_visc_rem`/`bt_rem_from_visc_rem`)
+         !! stay individually settable (never retired) for the existing
+         !! fine-grained tests, each an equivalent SUBSET of this switch,
+         !! never a superset, and each now SELF-SUFFICIENT (no longer
+         !! "requires" a separate producer knob — the producer runs
+         !! whenever any one of them is on).  `strong_drag`/
+         !! `rescale_strong_drag` stay separate namelist keys per D1
+         !! (MOM6 has its own `BT_STRONG_DRAG`/`RESCALE_STRONG_DRAG`
+         !! parameters for them) and require this switch (or
+         !! `bt_rem_from_visc_rem`) on, same as before. `accel_visc_rem`
+         !! (`&ocean_vdiff_nml`) is likewise NOT part of this chain and is
+         !! RETIRED (see its own docstring) — no MOM6 state-update
+         !! equivalent. Default `.false.` ⇒ no answer change (PR-4 is the
+         !! default flip).  D2: mutually exclusive with `substep_drag`
+         !! (checked via `bt_rem_from_visc_rem`'s existing requirement,
+         !! which this switch satisfies identically to setting it
+         !! directly).
       character(len=16) :: split_scheme = "pred_corr"
          !! Outer time-integration scheme for the split-explicit ocean path
          !! (SPEC §4 S3/S4).  Both schemes are supported and both are under
@@ -728,9 +741,10 @@ module rdb_config
          !! — a heavily-frictioned layer receives a smaller share of the
          !! barotropic correction than an undamped one, and the same
          !! weighting lands in the mass fluxes.  Behaviour change when
-         !! on (the flux expression tree gains the γ factors).  Requires
-         !! `correction_visc_rem = .true.` (the visc_rem producer);
-         !! checked in `validate_config`.
+         !! on (the flux expression tree gains the γ factors).
+         !! Self-sufficient (D1 follow-up) — the visc_rem producer runs
+         !! whenever this is on, decoupled from the retired
+         !! `correction_visc_rem`.
       logical :: forcing_visc_rem = .false.
          !! MOM6 `wt_u` parity for the BT FORCING assembly:
          !! weight each layer's
@@ -740,9 +754,10 @@ module rdb_config
          !! friction will immediately damp — grounded sliver stacks under
          !! the vdiff BBL glue — then contribute nothing to the fast loop,
          !! which otherwise integrates the spurious grounded-layer PGF's
-         !! depth-mean ballistically (PGF_BUG.md §9).  Requires
-         !! `correction_visc_rem = .true.` (the visc_rem producer);
-         !! checked in `validate_config`.
+         !! depth-mean ballistically (PGF_BUG.md §9).
+         !! Self-sufficient (D1 follow-up) — the visc_rem producer runs
+         !! whenever this is on, decoupled from the retired
+         !! `correction_visc_rem`.
       logical :: bt_rem_from_visc_rem = .false.
          !! PR-2 (bt-rem-from-av-rem): `bt_rem_u/v` built from the SAME
          !! viscous remnant the layered momentum solve uses, instead of
@@ -758,8 +773,10 @@ module rdb_config
          !! bbl_glue day-253 instability (the barotropic solver was
          !! seeing weak explicit drag while the layers were strongly
          !! glued): the fast mode now feels the SAME friction.  Default
-         !! `.false.` ⇒ no answer change.  Requires `correction_visc_rem
-         !! = .true.` (the visc_rem producer); mutually exclusive with
+         !! `.false.` ⇒ no answer change.  Self-sufficient (D1
+         !! follow-up) — the visc_rem producer runs whenever this is on,
+         !! decoupled from the retired `correction_visc_rem`; mutually
+         !! exclusive with
          !! `substep_drag` (bed drag would be double-counted — once
          !! inside visc_rem via the glue/implicit_drag fold, once again
          !! via the linear piston) and with `bt_halo > 0` (the wide-halo
@@ -5232,9 +5249,12 @@ contains
                                            "barotropic KE change it adds a positive source 0.5*D^2*H*(kappa-1), "// &
                                            "kappa = sum(h^3)sum(h)/sum(h^2)^2 >= 1, plus a shear feedback that grew "// &
                                            "stretched z_fixed runs non-finite). MOM6 has no h-weighted fold; the "// &
-                                           "uniform fold is the default. For drag-aware weighting use "// &
-                                           "correction_visc_rem=.true. (with &ocean_vdiff_nml implicit_drag), else "// &
-                                           "delete the key."
+                                           "uniform fold is the default and MOM6's own one (accel_layer_u applies "// &
+                                           "the BT acceleration uniformly). For drag-aware damping use "// &
+                                           "visc_rem_chain=.true. (with &ocean_vdiff_nml implicit_drag or "// &
+                                           "bbl_glue) -- it does NOT re-weight this fold (correction_visc_rem, "// &
+                                           "the knob that used to, is itself retired), it feeds visc_rem into "// &
+                                           "bt_rem/av_rem instead. Else delete the key."
             call error_ring_push(msg)
             call logger%error(msg)
          end block
@@ -5243,23 +5263,25 @@ contains
       ! The vdiff operator's row sums are exactly 1 (a no-flux-top/no-flux-
       ! bottom viscous operator cannot remove a uniform acceleration)
       ! UNLESS the implicit-drag fold breaks the k=1 row sum.  So without
-      ! `implicit_drag`, the remnant producer still runs but returns
-      ! gamma ≡ 1 identically, and the corrector reduces to the uniform
-      ! fold.  Legal and mathematically correct — merely inert.
-      ! Warn (not error): same "enabled but inert" precedent as the tidal-
-      ! mixing e_uniform=0 warning.
-      ! `forcing_visc_rem` reads the same visc_rem arrays the corrector
-      ! weighting does — without the producer knob they stay ≡ 1 and the
-      ! forcing weighting silently degenerates to the plain h-mean.
-      ! PR-3 (D1): the producer requirement reads through
-      ! `ocean_bt_correction_visc_rem_on`, so `visc_rem_chain = .true.`
-      ! satisfies it exactly like `correction_visc_rem = .true.` would.
-      if (ocean_bt_forcing_visc_rem_on(cfg) .and. .not. ocean_bt_correction_visc_rem_on(cfg)) then
-         call logger%error("&ocean_bt_nml forcing_visc_rem=.true. requires "// &
-                           "correction_visc_rem=.true. (or visc_rem_chain=.true.) — "// &
-                           "that knob is the visc_rem producer; without it the weights "// &
-                           "are identically 1")
-         has_error = .true.
+      ! `implicit_drag` (or `bbl_glue`), the remnant producer still runs
+      ! but returns gamma ≡ 1 identically, and every `*_visc_rem` consumer
+      ! degenerates to its own no-op (the forcing weight to the plain
+      ! h-mean, the continuity renormaliser to the uniform `du`, av_rem to
+      ! 1).  Legal and mathematically correct — merely inert.  Warn (not
+      ! error): same "enabled but inert" precedent as the tidal-mixing
+      ! e_uniform=0 warning.  PR-3 (D1) follow-up: `forcing_visc_rem`/
+      ! `renorm_visc_rem`/`bt_rem_from_visc_rem` are each now
+      ! SELF-SUFFICIENT — the producer is decoupled from the retired
+      ! `correction_visc_rem` weighted fold and instead runs whenever ANY
+      ! of them (or `visc_rem_chain`) is on, so none of them "requires" a
+      ! separate producer knob any more.
+      if (ocean_bt_visc_rem_producer_on(cfg) .and. .not. &
+          (cfg%ocean%vdiff%implicit_drag .or. cfg%ocean%vdiff%bbl_glue)) then
+         call logger%warning("&ocean_bt_nml forcing_visc_rem/renorm_visc_rem/"// &
+                             "bt_rem_from_visc_rem/visc_rem_chain is on but neither "// &
+                             "&ocean_vdiff_nml implicit_drag nor bbl_glue is: the vdiff "// &
+                             "operator then carries no drag, so visc_rem = 1 identically "// &
+                             "and every consumer is a no-op")
       end if
       ! The bc-PGF retro-correction (MOM6 btstep_layer_accel) builds its
       ! per-layer `pbce` from the FV_MOM6 interface-height stack
@@ -5373,31 +5395,45 @@ contains
          end block
          has_error = .true.
       end if
-      ! `renorm_visc_rem` (SPEC S2b) reads the same producer arrays.
-      ! PR-3 (D1): reads through the helpers, so `visc_rem_chain = .true.`
-      ! satisfies every one of these "requires the producer" checks.
-      if (ocean_bt_renorm_visc_rem_on(cfg) .and. .not. ocean_bt_correction_visc_rem_on(cfg)) then
-         call logger%error("&ocean_bt_nml renorm_visc_rem=.true. requires "// &
-                           "correction_visc_rem=.true. (or visc_rem_chain=.true.) — "// &
-                           "that knob is the visc_rem producer; without it the gamma "// &
-                           "weights are identically 1")
-         has_error = .true.
-      end if
-      if (ocean_bt_correction_visc_rem_on(cfg) .and. .not. cfg%ocean%vdiff%implicit_drag) then
-         call logger%warning("&ocean_bt_nml correction_visc_rem=.true. (or "// &
-                             "visc_rem_chain=.true.) but &ocean_vdiff_nml "// &
-                             "implicit_drag=.false.: the vdiff operator then carries no "// &
-                             "drag, so visc_rem = 1 identically and the BT corrector "// &
-                             "reduces to the uniform fold")
-      end if
-      ! PR-2 (bt-rem-from-av-rem): `bt_rem_from_visc_rem` reads the same
-      ! visc_rem producer arrays as the other `*_visc_rem` knobs.
-      if (ocean_bt_rem_from_visc_rem_on(cfg) .and. .not. ocean_bt_correction_visc_rem_on(cfg)) then
-         call logger%error("&ocean_bt_nml bt_rem_from_visc_rem=.true. requires "// &
-                           "correction_visc_rem=.true. (or visc_rem_chain=.true.) — "// &
-                           "that knob is the visc_rem producer; without it av_rem = 1 "// &
-                           "identically and the chain is a no-op gate, not the MOM6 "// &
-                           "damping path")
+      ! RETIRED `correction_visc_rem`: MOM6's `accel_layer_u`
+      ! (`MOM_barotropic.F90:3665-3675`) gives every layer the SAME
+      ! `u_accel_bt` plus only the depth-mean-zero `pbce` baroclinic-
+      ! pressure term — NO `visc_rem` weight — and that unweighted
+      ! acceleration is folded into `up` BEFORE `vertvisc`
+      ! (`MOM_dynamics_split_RK2.F90:702-704`, consumed at `:763`/`:1018`),
+      ! so the glue's implicit friction (which already includes the BBL
+      ! piston) is what then distributes it across layers — ONCE, not
+      ! twice.  roundabout's `correction_visc_rem` applies
+      ! `apply_bt_correction` BEFORE that same implicit friction
+      ! (`vmix_apply_in_stage`) and weights it by `visc_rem_k/⟨visc_rem⟩_h`
+      ! on top — a SECOND, unbounded-ratio damping that concentrates the
+      ! correction into whichever layers the glue left least damped.
+      ! Measured on the 1-degree Southern Ocean z* OPEN-step probe
+      ! (`probes/pr3_producer_only`): `hvel_mom6`+`bbl_glue`+
+      ! `implicit_drag` alone runs clean; adding ONLY `correction_visc_rem`
+      ! NaNs at step 38.  Under D1 ("exactly MOM6's set") this fold is not
+      ! part of the chain and has no standalone namelist path of its own;
+      ! refused, never silently ignored.  The kernel itself
+      ! (`apply_bt_correction`'s `use_visc_rem` dispatch) and its direct
+      ! unit tests (`tests/test_ocean_bt_correction_weight.F90`
+      ! `visc_rem_unity_is_uniform`/`visc_rem_biases_against_bed`/
+      ! `closed_faces_open_column`) are untouched — they call it with a
+      ! raw logical, not through `cfg`.
+      if (cfg%ocean%bt%correction_visc_rem) then
+         block
+            character(len=*), parameter :: msg = &
+                                           "&ocean_bt_nml correction_visc_rem is RETIRED: MOM6's accel_layer_u "// &
+                                           "applies the barotropic acceleration UNIFORMLY across every layer "// &
+                                           "(MOM_barotropic.F90:3665-3675), before vertvisc distributes it via "// &
+                                           "the SAME implicit friction the glue uses -- this fold re-weights it "// &
+                                           "a second time by visc_rem/<visc_rem>_h, an unbounded ratio that "// &
+                                           "NaNs the 1-degree Southern Ocean z* open-step case under bbl_glue "// &
+                                           "at step ~40. Use visc_rem_chain (producer + bt_rem_from_av_rem + "// &
+                                           "wt_u forcing + renorm_visc_rem, uniform BT-correction fold) instead, "// &
+                                           "or delete the key."
+            call error_ring_push(msg)
+            call logger%error(msg)
+         end block
          has_error = .true.
       end if
       ! D2: `substep_drag`'s linear piston and the visc_rem chain both put
@@ -8018,19 +8054,6 @@ contains
                 trim(adjustl(cfg%ocean%bdrag%form)) /= "linear"
    end function substep_drag_ignores_bdrag_form
 
-   pure function ocean_bt_correction_visc_rem_on(cfg) result(on)
-      !! PR-3 (D1): is the visc_rem PRODUCER + BT-corrector weight on,
-      !! either directly (`&ocean_bt_nml correction_visc_rem`) or via the
-      !! single `visc_rem_chain` switch?  Every cross-check and setup
-      !! wire-up that used to read `cfg%ocean%bt%correction_visc_rem`
-      !! directly reads this instead, so `visc_rem_chain = .true.` is
-      !! exactly equivalent to setting the four `*_visc_rem` knobs by
-      !! hand — never a superset, never a subset.
-      type(config_t), intent(in) :: cfg
-      logical :: on
-      on = cfg%ocean%bt%visc_rem_chain .or. cfg%ocean%bt%correction_visc_rem
-   end function ocean_bt_correction_visc_rem_on
-
    pure function ocean_bt_forcing_visc_rem_on(cfg) result(on)
       !! PR-3 (D1): is the MOM6 `wt_u` BT-forcing weight on, either
       !! directly (`forcing_visc_rem`) or via `visc_rem_chain`?
@@ -8056,6 +8079,26 @@ contains
       logical :: on
       on = cfg%ocean%bt%visc_rem_chain .or. cfg%ocean%bt%bt_rem_from_visc_rem
    end function ocean_bt_rem_from_visc_rem_on
+
+   pure function ocean_bt_visc_rem_producer_on(cfg) result(on)
+      !! D1 follow-up: is the visc_rem PRODUCER needed, independent of
+      !! the (retired) weighted BT-correction fold?  `.true.` whenever
+      !! ANY real consumer is on — `forcing_visc_rem`/`renorm_visc_rem`/
+      !! `bt_rem_from_visc_rem` (each already `.or.`-ed with
+      !! `visc_rem_chain` by their own helper) — or the legacy
+      !! `correction_visc_rem` field itself, so a test that constructs
+      !! `cfg` directly and sets that field alone (bypassing the nml
+      !! retirement check) still gets a live producer.  This is what
+      !! `configure_ocean_bt` wires into `bt_work%bt_visc_rem_producer`,
+      !! which `vmix_apply_in_stage`'s `do_remnant` reads — NOT
+      !! `bt_work%bt_correction_visc_rem`, which now drives ONLY the
+      !! weighted-fold dispatch in `apply_bt_correction` (and is never
+      !! set by `visc_rem_chain`).
+      type(config_t), intent(in) :: cfg
+      logical :: on
+      on = cfg%ocean%bt%correction_visc_rem .or. ocean_bt_forcing_visc_rem_on(cfg) &
+           .or. ocean_bt_renorm_visc_rem_on(cfg) .or. ocean_bt_rem_from_visc_rem_on(cfg)
+   end function ocean_bt_visc_rem_producer_on
 
    pure function cavity_draft_is_uniform(cfg) result(uniform)
       !! Is the configured ice-shelf draft UNIFORM over the whole array?
@@ -10236,30 +10279,39 @@ contains
                              "correction fold was energy-non-conserving (a positive "// &
                              "0.5*D^2*H*(kappa-1) source plus shear feedback) and MOM6 "// &
                              "has no such fold; setting it .true. is a fail-loud "// &
-                             "configure error (validate_config). Drag-aware weighting "// &
-                             "is correction_visc_rem."))
+                             "configure error (validate_config). Drag-aware damping "// &
+                             "is visc_rem_chain (it does not re-weight this fold -- "// &
+                             "correction_visc_rem, which used to, is itself retired)."))
       pl => cfg%ocean%bt%visc_rem_chain
       call g%add(nml_logical("visc_rem_chain", pl, &
-                             "PR-3 (D1): ONE switch for exactly MOM6's visc_rem/bt_rem "// &
-                             "set -- equivalent to correction_visc_rem + "// &
-                             "forcing_visc_rem + renorm_visc_rem + bt_rem_from_visc_rem "// &
-                             "all at once (never a superset); strong_drag/"// &
-                             "rescale_strong_drag stay separate keys (their own MOM6 "// &
-                             "params). Still requires ocean_vdiff_nml implicit_drag or "// &
-                             "bbl_glue, else visc_rem is inert (=1, warned)."))
+                             "PR-3 (D1): ONE switch for exactly MOM6's visc_rem/av_rem/"// &
+                             "bt_rem set -- equivalent to switching on the visc_rem "// &
+                             "producer plus forcing_visc_rem + renorm_visc_rem + "// &
+                             "bt_rem_from_visc_rem all at once (never a superset); the "// &
+                             "BT-correction fold stays UNIFORM (MOM6 accel_layer_u never "// &
+                             "weights it; correction_visc_rem, which used to, is retired). "// &
+                             "strong_drag/rescale_strong_drag stay separate keys (their "// &
+                             "own MOM6 params). Still requires ocean_vdiff_nml "// &
+                             "implicit_drag or bbl_glue, else visc_rem is inert "// &
+                             "(=1, warned)."))
       pl => cfg%ocean%bt%correction_visc_rem
       call g%add(nml_logical("correction_visc_rem", pl, &
-                             "visc_rem/<visc_rem>_h BT-corrector weight + the visc_rem "// &
-                             "producer (visc_rem is produced by vdiff and "// &
-                             "is inert, =1, without ocean_vdiff_nml implicit_drag). An "// &
-                             "equivalent subset of visc_rem_chain, kept for granular "// &
-                             "testing -- prefer visc_rem_chain."))
+                             "RETIRED (refused when set)", &
+                             dead_on_ocean_path="RETIRED -- MOM6's accel_layer_u applies "// &
+                             "the BT-correction acceleration UNIFORMLY across every layer "// &
+                             "(MOM_barotropic.F90:3665-3675), then the SAME implicit "// &
+                             "friction the glue uses distributes it -- never twice. This "// &
+                             "fold re-weighted it a second time by visc_rem/<visc_rem>_h, "// &
+                             "an unbounded ratio that NaNs the 1-degree Southern Ocean z* "// &
+                             "open-step case under bbl_glue at step ~40. Setting it "// &
+                             ".true. is a fail-loud configure error (validate_config). "// &
+                             "Use visc_rem_chain instead."))
       pl => cfg%ocean%bt%bt_rem_from_visc_rem
       call g%add(nml_logical("bt_rem_from_visc_rem", pl, &
                              "bt_rem_u/v = mask*av_rem**(1/n_inner), av_rem the frhat-"// &
                              "weighted depth mean of visc_rem (MOM6 MOM_barotropic.F90:"// &
-                             "1553-1582); requires correction_visc_rem (or "// &
-                             "visc_rem_chain), mutually exclusive with substep_drag and "// &
+                             "1553-1582); self-sufficient (the producer runs whenever "// &
+                             "this is on), mutually exclusive with substep_drag and "// &
                              "bt_halo > 0. An equivalent subset of visc_rem_chain, kept "// &
                              "for granular testing -- prefer visc_rem_chain."))
       pl => cfg%ocean%bt%strong_drag
@@ -10298,17 +10350,18 @@ contains
       pl => cfg%ocean%bt%renorm_visc_rem
       call g%add(nml_logical("renorm_visc_rem", pl, &
                              "gamma-weighted continuity transport-matching inversion "// &
-                             "(MOM6 u_cor = u + du*visc_rem; requires correction_visc_rem "// &
-                             "or visc_rem_chain). An equivalent subset of "// &
-                             "visc_rem_chain, kept for granular testing -- prefer "// &
+                             "(MOM6 u_cor = u + du*visc_rem); self-sufficient (the "// &
+                             "producer runs whenever this is on). An equivalent subset "// &
+                             "of visc_rem_chain, kept for granular testing -- prefer "// &
                              "visc_rem_chain."))
       pl => cfg%ocean%bt%forcing_visc_rem
       call g%add(nml_logical("forcing_visc_rem", pl, &
                              "MOM6 wt_u parity: h*visc_rem-weight the BT forcing "// &
                              "depth-mean so friction-damped (glued) layers do not "// &
-                             "force the fast loop (requires correction_visc_rem or "// &
-                             "visc_rem_chain). An equivalent subset of visc_rem_chain, "// &
-                             "kept for granular testing -- prefer visc_rem_chain."))
+                             "force the fast loop; self-sufficient (the producer runs "// &
+                             "whenever this is on). An equivalent subset of "// &
+                             "visc_rem_chain, kept for granular testing -- prefer "// &
+                             "visc_rem_chain."))
       pl => cfg%ocean%bt%correction_bc_pgf
       call g%add(nml_logical("correction_bc_pgf", pl, &
                              "Per-layer baroclinic-PGF retro-correction for the eta change "// &

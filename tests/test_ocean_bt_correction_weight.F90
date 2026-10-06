@@ -6,9 +6,16 @@
 !!
 !!     wt_k = open_k·vr_k / ⟨vr⟩_h,     ⟨vr⟩_h = Σ h_o·vr / Σ h_o,
 !!
-!! `vr = visc_rem` under `&ocean_bt_nml correction_visc_rem`, else 1, and
-!! `open ≡ 1` unless `&vcoord_nml zfixed_closed_faces`.  Without visc_rem
+!! `vr = visc_rem` when the kernel's `use_visc_rem` dummy is `.true.`, else 1,
+!! and `open ≡ 1` unless `&vcoord_nml zfixed_closed_faces`.  Without visc_rem
 !! that is the uniform fold, MOM6's `accel_layer_u(I,j,k) = u_accel_bt(I,j)`.
+!! `&ocean_bt_nml correction_visc_rem` — the namelist path that used to drive
+!! `use_visc_rem` — is RETIRED (D1 follow-up, 2026-10): MOM6 never weights
+!! this fold, and roundabout's weighted version is what NaNs the 1-degree
+!! Southern Ocean z* open-step case under `bbl_glue`.  `visc_rem_chain` uses
+!! the UNIFORM branch below. The tests here call `apply_bt_correction`
+!! directly with a raw `use_visc_rem` argument, so the weighted-fold KERNEL
+!! path stays covered even though no live namelist reaches it any more.
 !!
 !! ### Why this file exists
 !!
@@ -56,8 +63,8 @@ module test_ocean_bt_correction_weight
    use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
    use rdb_vcoord, only: z_fixed_nominal_dz, ZFIXED_PROFILE_TANH, ZFIXED_DZ_OK
    use rdb_config, only: config_t, read_config_from_string, validate_config, &
-                         ocean_bt_correction_visc_rem_on, ocean_bt_forcing_visc_rem_on, &
-                         ocean_bt_renorm_visc_rem_on, ocean_bt_rem_from_visc_rem_on
+                         ocean_bt_forcing_visc_rem_on, ocean_bt_renorm_visc_rem_on, &
+                         ocean_bt_rem_from_visc_rem_on, ocean_bt_visc_rem_producer_on
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_VALIDATE
    use rdb_error_ring, only: error_ring_clear, error_ring_get, error_ring_count, &
                              ERROR_RING_MSG_LEN
@@ -92,6 +99,7 @@ contains
                   new_unittest("visc_rem_chain_standalone", test_visc_rem_chain), &
                   new_unittest("visc_rem_chain_on_helpers", test_chain_on_helpers), &
                   new_unittest("visc_rem_chain_switch_configures", test_chain_switch), &
+                  new_unittest("correction_visc_rem_retired", test_correction_visc_rem_retired), &
                   new_unittest("visc_rem_chain_substep_drag_refused", test_chain_substep_drag), &
                   new_unittest("visc_rem_chain_strong_drag_accepted", test_chain_strong_drag), &
                   new_unittest("accel_visc_rem_retired", test_accel_visc_rem_retired) &
@@ -436,8 +444,8 @@ contains
    subroutine test_h_weighted_refused(error)
       !! `correction_h_weighted = .true.` is REFUSED at configure, and the
       !! specific reason — energy non-conservation, no MOM6 counterpart,
-      !! `correction_visc_rem` as the replacement — is on the error ring,
-      !! not only the generic rollup.  The same namelist without the key
+      !! `visc_rem_chain` as the replacement — is on the error ring, not
+      !! only the generic rollup.  The same namelist without the key
       !! configures (so the refusal is the knob, not the fixture).
       type(error_type), allocatable, intent(out) :: error
       character(len=ERROR_RING_MSG_LEN) :: msg
@@ -461,36 +469,44 @@ contains
       if (allocated(error)) return
       call check(error, index(msg, "energy-non-conserving") > 0 .and. &
                  index(msg, "MOM6 has no h-weighted fold") > 0 .and. &
-                 index(msg, "correction_visc_rem") > 0, &
+                 index(msg, "visc_rem_chain") > 0, &
                  "the refusal must name the defect, MOM6 and the replacement: "//trim(msg))
    end subroutine test_h_weighted_refused
 
    subroutine test_visc_rem_chain(error)
-      !! The visc_rem chain no longer needs `correction_h_weighted`:
-      !! `correction_visc_rem` alone, and with each of its dependants,
-      !! configures.  The dependants still need the PRODUCER knob.
+      !! D1 (revised once MOM6 settled the BT-correction fold question):
+      !! `correction_visc_rem` (the weighted fold) alone is now REFUSED.
+      !! The three real consumers are each SELF-SUFFICIENT — no longer
+      !! "require" a separate producer knob — and compose freely.
       type(error_type), allocatable, intent(out) :: error
-      call expect_status(error, base_nml("correction_visc_rem = .true."), .true., &
-                         "correction_visc_rem alone")
+      call expect_status(error, base_nml("correction_visc_rem = .true."), .false., &
+                         "correction_visc_rem alone (retired)")
       if (allocated(error)) return
-      call expect_status(error, base_nml("correction_visc_rem = .true., forcing_visc_rem = .true., "// &
-                                         "renorm_visc_rem = .true."), .true., &
-                         "correction_visc_rem + forcing_visc_rem + renorm_visc_rem")
+      call expect_status(error, base_nml("forcing_visc_rem = .true."), .true., &
+                         "forcing_visc_rem alone (self-sufficient)")
       if (allocated(error)) return
-      call expect_status(error, base_nml("forcing_visc_rem = .true."), .false., &
-                         "forcing_visc_rem without its producer")
+      call expect_status(error, base_nml("renorm_visc_rem = .true."), .true., &
+                         "renorm_visc_rem alone (self-sufficient)")
+      if (allocated(error)) return
+      call expect_status(error, base_nml("bt_rem_from_visc_rem = .true."), .true., &
+                         "bt_rem_from_visc_rem alone (self-sufficient)")
+      if (allocated(error)) return
+      call expect_status(error, base_nml("forcing_visc_rem = .true., renorm_visc_rem = .true., "// &
+                                         "bt_rem_from_visc_rem = .true."), .true., &
+                         "forcing_visc_rem + renorm_visc_rem + bt_rem_from_visc_rem")
    end subroutine test_visc_rem_chain
 
    subroutine test_chain_on_helpers(error)
-      !! PR-3 (D1): the four `ocean_bt_*_on` helpers in `rdb_config` are
-      !! `visc_rem_chain .OR. <the direct knob>` — never a superset,
-      !! never a subset.  A truth-table check on the four combinations
-      !! that matter, no namelist I/O required.
+      !! PR-3 (D1): the `ocean_bt_*_on` helpers in `rdb_config` are
+      !! `visc_rem_chain .OR. <the direct knob>` — never a superset, never
+      !! a subset — and `ocean_bt_visc_rem_producer_on` is the OR of the
+      !! three real consumers plus the (retired, direct-cfg-only) raw
+      !! `correction_visc_rem` field.  Truth-table, no namelist I/O.
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
 
       ! Neither set: every helper false.
-      call check(error,.not. ocean_bt_correction_visc_rem_on(cfg), "neither: correction off")
+      call check(error,.not. ocean_bt_visc_rem_producer_on(cfg), "neither: producer off")
       if (allocated(error)) return
       call check(error,.not. ocean_bt_forcing_visc_rem_on(cfg), "neither: forcing off")
       if (allocated(error)) return
@@ -499,33 +515,76 @@ contains
       call check(error,.not. ocean_bt_rem_from_visc_rem_on(cfg), "neither: bt_rem off")
       if (allocated(error)) return
 
-      ! Direct knob only (chain off): that ONE helper true, the others false.
+      ! The retired raw knob alone (direct cfg construction, bypassing the
+      ! nml refusal): the PRODUCER still runs (so a test exercising it
+      ! directly gets live visc_rem), but none of the three real
+      ! consumers turn on.
       cfg%ocean%bt%correction_visc_rem = .true.
-      call check(error, ocean_bt_correction_visc_rem_on(cfg), "direct correction_visc_rem: on")
+      call check(error, ocean_bt_visc_rem_producer_on(cfg), "direct correction_visc_rem: producer on")
       if (allocated(error)) return
       call check(error,.not. ocean_bt_forcing_visc_rem_on(cfg), "direct correction_visc_rem: forcing stays off")
       if (allocated(error)) return
       cfg%ocean%bt%correction_visc_rem = .false.
 
-      ! Chain only: ALL FOUR helpers true.
+      ! Each real consumer alone also turns the producer on.
+      cfg%ocean%bt%forcing_visc_rem = .true.
+      call check(error, ocean_bt_visc_rem_producer_on(cfg), "forcing_visc_rem alone: producer on")
+      if (allocated(error)) return
+      cfg%ocean%bt%forcing_visc_rem = .false.
+
+      ! Chain only: producer + the three real consumers, NEVER the
+      ! retired weighted fold.
       cfg%ocean%bt%visc_rem_chain = .true.
-      call check(error, ocean_bt_correction_visc_rem_on(cfg), "chain: correction on")
+      call check(error, ocean_bt_visc_rem_producer_on(cfg), "chain: producer on")
       if (allocated(error)) return
       call check(error, ocean_bt_forcing_visc_rem_on(cfg), "chain: forcing on")
       if (allocated(error)) return
       call check(error, ocean_bt_renorm_visc_rem_on(cfg), "chain: renorm on")
       if (allocated(error)) return
       call check(error, ocean_bt_rem_from_visc_rem_on(cfg), "chain: bt_rem on")
+      if (allocated(error)) return
+      call check(error,.not. cfg%ocean%bt%correction_visc_rem, &
+                 "chain: the retired raw weighted-fold field itself stays untouched")
    end subroutine test_chain_on_helpers
 
    subroutine test_chain_switch(error)
       !! `visc_rem_chain = .true.` alone configures exactly like setting
-      !! all four constituent knobs by hand (the `test_visc_rem_chain`
-      !! case two lines up), with no other knob touched.
+      !! the three real consumer knobs by hand (the `test_visc_rem_chain`
+      !! case two lines up), with no other knob touched — in particular
+      !! it does NOT turn on the retired weighted BT-correction fold.
       type(error_type), allocatable, intent(out) :: error
       call expect_status(error, base_nml("visc_rem_chain = .true."), .true., &
                          "visc_rem_chain alone")
    end subroutine test_chain_switch
+
+   subroutine test_correction_visc_rem_retired(error)
+      !! `&ocean_bt_nml correction_visc_rem = .true.` is REFUSED at
+      !! configure, naming MOM6's uniform `accel_layer_u`, the NaN
+      !! isolation and `visc_rem_chain` as the replacement on the error
+      !! ring, not only the generic rollup.
+      type(error_type), allocatable, intent(out) :: error
+      character(len=ERROR_RING_MSG_LEN) :: msg
+      logical :: found
+      integer :: n
+      call error_ring_clear()
+      call expect_status(error, base_nml("correction_visc_rem = .true."), .false., &
+                         "correction_visc_rem = .true.")
+      if (allocated(error)) return
+      found = .false.
+      do n = 0, error_ring_count() - 1
+         msg = error_ring_get(n)
+         if (index(msg, "correction_visc_rem is RETIRED") > 0) then
+            found = .true.
+            exit
+         end if
+      end do
+      call check(error, found, "the retirement reason must be on the error ring")
+      if (allocated(error)) return
+      call check(error, index(msg, "accel_layer_u") > 0 .and. &
+                 index(msg, "UNIFORMLY") > 0 .and. &
+                 index(msg, "visc_rem_chain") > 0, &
+                 "the refusal must name MOM6's uniform fold and the replacement: "//trim(msg))
+   end subroutine test_correction_visc_rem_retired
 
    subroutine test_chain_substep_drag(error)
       !! D2: `visc_rem_chain` composes with `substep_drag` exactly like

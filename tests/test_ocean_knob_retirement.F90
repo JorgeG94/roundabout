@@ -2,12 +2,18 @@
 module test_ocean_knob_retirement
    !! Roundabout's config schema is strict — `rdb_config.F90` `error stop`s on
    !! any unknown key.  PR-8 deleted five registered `&ocean_*` keys that
-   !! validated and then did nothing (`&ocean_bt_nml correction_visc_rem`
-   !! is the one exception — kept, per its own coordination note in the
-   !! plan, and NOT covered here).  This suite pins the contract that
-   !! makes the retirement real: setting a retired key in a `.nml` must be
-   !! REJECTED with an "unknown key" error, not silently ignored — the
-   !! exact defect class this PR closes.  Cloned from
+   !! validated and then did nothing.  `&ocean_bt_nml correction_visc_rem`
+   !! was a deliberate exception at the time (kept, per its own
+   !! coordination note in the plan) — it is since RETIRED too (D1
+   !! follow-up, 2026-10: MOM6 never weights the BT-correction fold), but
+   !! via a `validate_config` fail-loud, not an unknown-key schema
+   !! rejection (it stays registered so the refusal can say why — see
+   !! `tests/test_ocean_bt_correction_weight.F90::correction_visc_rem_
+   !! retired` for that contract), so it is still NOT covered here.  This
+   !! suite pins the contract that makes the schema-level retirement
+   !! real: setting a retired key in a `.nml` must be REJECTED with an
+   !! "unknown key" error, not silently ignored — the exact defect class
+   !! this PR closes.  Cloned from
    !! `tests/test_config_schema.F90:test_typo`
    !! (itself modelled on `tests/test_nml_schema.F90:test_unknown_key`).
    use testdrive, only: new_unittest, unittest_type, error_type, check

@@ -2148,8 +2148,8 @@ contains
       !     (`vmix_seed_backgrounds`, `pp81_nu_bg`) rather than the
       !     spun-up profile, so the first resumed stage's visc_rem matrix
       !     (hence `F_bt`'s weighting under `bt_forcing_visc_rem`/
-      !     `bt_renorm_visc_rem`, and the BT corrector under
-      !     `bt_correction_visc_rem`) differs from the continued run --
+      !     `bt_renorm_visc_rem`, and `bt_rem_from_visc_rem`'s av_rem/
+      !     bt_rem) differs from the continued run --
       !     every prognostic then drifts (measured 1e-11 relative by step
       !     24, `tests/regression/compat_expect.py::restart_visc_rem`).
       !     `kv` is allocated UNCONDITIONALLY by `ocean_vmix_init`
@@ -2229,14 +2229,16 @@ contains
 
       ! --- PR-1 viscous remnant γ (`bt_work%visc_rem_u/v`): REFRESHED,
       !     not re-derived from scratch, by the stage-end vdiff producer
-      !     (`bt_correction_visc_rem`) and the pre-substep
-      !     `visc_rem_precompute` (`forcing_visc_rem`/`renorm_visc_rem`)
-      !     -- a cold resume without this checkpoint would restart every
-      !     post-restart stage from the `source=1.0` init value, which is
-      !     one stage's worth of refresh behind a continued run (the BT
-      !     corrector reads the PREVIOUS stage's γ by design -- see
-      !     `bt_correction_visc_rem`'s docstring in
-      !     `rdb_barotropic_workstate`).  Allocated unconditionally by
+      !     (`bt_visc_rem_producer`, D1 follow-up -- decoupled from the
+      !     retired `bt_correction_visc_rem`) and the pre-substep
+      !     `visc_rem_precompute` (`forcing_visc_rem`/`renorm_visc_rem`/
+      !     `bt_rem_from_visc_rem`) -- a cold resume without this
+      !     checkpoint would restart every post-restart stage from the
+      !     `source=1.0` init value, which is one stage's worth of
+      !     refresh behind a continued run (consumers read the PREVIOUS
+      !     stage's γ by design -- see `bt_visc_rem_producer`'s
+      !     docstring in `rdb_barotropic_workstate`).  Allocated
+      !     unconditionally by
       !     `barotropic_workstate_t%init`.  `optional=.true.`: a pre-PR-1
       !     checkpoint has no such variables and must still resume -- it
       !     re-seeds at 1.0, same as a cold start (closes compat row

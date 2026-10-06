@@ -3593,12 +3593,12 @@ class OceanBt(Group):
         units='',
         required=False,
         default=False,
-        dead_on_ocean_path='RETIRED -- the h-weighted barotropic-correction fold was energy-non-conserving (a positive 0.5*D^2*H*(kappa-1) source plus shear feedback) and MOM6 has no such fold; setting it .true. is a fail-loud configure error (validate_config). Drag-aware weighting is correction_visc_rem.',
+        dead_on_ocean_path='RETIRED -- the h-weighted barotropic-correction fold was energy-non-conserving (a positive 0.5*D^2*H*(kappa-1) source plus shear feedback) and MOM6 has no such fold; setting it .true. is a fail-loud configure error (validate_config). Drag-aware damping is visc_rem_chain (it does not re-weight this fold -- correction_visc_rem, which used to, is itself retired).',
     )
 
     visc_rem_chain = Bool(
         'visc_rem_chain',
-        doc="PR-3 (D1): ONE switch for exactly MOM6's visc_rem/bt_rem set -- equivalent to correction_visc_rem + forcing_visc_rem + renorm_visc_rem + bt_rem_from_visc_rem all at once (never a superset); strong_drag/rescale_strong_drag stay separate keys (their own MOM6 params). Still requires ocean_vdiff_nml implicit_drag or bbl_glue, else visc_rem is inert (=1, warned).",
+        doc="PR-3 (D1): ONE switch for exactly MOM6's visc_rem/av_rem/bt_rem set -- equivalent to switching on the visc_rem producer plus forcing_visc_rem + renorm_visc_rem + bt_rem_from_visc_rem all at once (never a superset); the BT-correction fold stays UNIFORM (MOM6 accel_layer_u never weights it; correction_visc_rem, which used to, is retired). strong_drag/rescale_strong_drag stay separate keys (their own MOM6 params). Still requires ocean_vdiff_nml implicit_drag or bbl_glue, else visc_rem is inert (=1, warned).",
         units='',
         required=False,
         default=False,
@@ -3606,15 +3606,16 @@ class OceanBt(Group):
 
     correction_visc_rem = Bool(
         'correction_visc_rem',
-        doc='visc_rem/<visc_rem>_h BT-corrector weight + the visc_rem producer (visc_rem is produced by vdiff and is inert, =1, without ocean_vdiff_nml implicit_drag). An equivalent subset of visc_rem_chain, kept for granular testing -- prefer visc_rem_chain.',
+        doc='RETIRED (refused when set)',
         units='',
         required=False,
         default=False,
+        dead_on_ocean_path="RETIRED -- MOM6's accel_layer_u applies the BT-correction acceleration UNIFORMLY across every layer (MOM_barotropic.F90:3665-3675), then the SAME implicit friction the glue uses distributes it -- never twice. This fold re-weighted it a second time by visc_rem/<visc_rem>_h, an unbounded ratio that NaNs the 1-degree Southern Ocean z* open-step case under bbl_glue at step ~40. Setting it .true. is a fail-loud configure error (validate_config). Use visc_rem_chain instead.",
     )
 
     bt_rem_from_visc_rem = Bool(
         'bt_rem_from_visc_rem',
-        doc='bt_rem_u/v = mask*av_rem**(1/n_inner), av_rem the frhat-weighted depth mean of visc_rem (MOM6 MOM_barotropic.F90:1553-1582); requires correction_visc_rem (or visc_rem_chain), mutually exclusive with substep_drag and bt_halo > 0. An equivalent subset of visc_rem_chain, kept for granular testing -- prefer visc_rem_chain.',
+        doc='bt_rem_u/v = mask*av_rem**(1/n_inner), av_rem the frhat-weighted depth mean of visc_rem (MOM6 MOM_barotropic.F90:1553-1582); self-sufficient (the producer runs whenever this is on), mutually exclusive with substep_drag and bt_halo > 0. An equivalent subset of visc_rem_chain, kept for granular testing -- prefer visc_rem_chain.',
         units='',
         required=False,
         default=False,
@@ -3659,7 +3660,7 @@ class OceanBt(Group):
 
     renorm_visc_rem = Bool(
         'renorm_visc_rem',
-        doc='gamma-weighted continuity transport-matching inversion (MOM6 u_cor = u + du*visc_rem; requires correction_visc_rem or visc_rem_chain). An equivalent subset of visc_rem_chain, kept for granular testing -- prefer visc_rem_chain.',
+        doc='gamma-weighted continuity transport-matching inversion (MOM6 u_cor = u + du*visc_rem); self-sufficient (the producer runs whenever this is on). An equivalent subset of visc_rem_chain, kept for granular testing -- prefer visc_rem_chain.',
         units='',
         required=False,
         default=False,
@@ -3667,7 +3668,7 @@ class OceanBt(Group):
 
     forcing_visc_rem = Bool(
         'forcing_visc_rem',
-        doc='MOM6 wt_u parity: h*visc_rem-weight the BT forcing depth-mean so friction-damped (glued) layers do not force the fast loop (requires correction_visc_rem or visc_rem_chain). An equivalent subset of visc_rem_chain, kept for granular testing -- prefer visc_rem_chain.',
+        doc='MOM6 wt_u parity: h*visc_rem-weight the BT forcing depth-mean so friction-damped (glued) layers do not force the fast loop; self-sufficient (the producer runs whenever this is on). An equivalent subset of visc_rem_chain, kept for granular testing -- prefer visc_rem_chain.',
         units='',
         required=False,
         default=False,
