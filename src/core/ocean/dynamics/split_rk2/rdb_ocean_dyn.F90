@@ -4635,7 +4635,7 @@ contains
       ! no-op when bt_correction_bc_pgf is off.
       if (dyn%bt_work%bt_correction_bc_pgf) then
          call compute_pbce(grid, dyn%bt_work, pgf, ms)
-         call compute_gtot_faces(grid, dyn%bt_work, ms)
+         call compute_gtot_faces(grid, dyn%bt_work, ms, metrics)
       end if
       call profiler_start("ocean_hvisc")
       ! pred_corr predictor: SKIP the viscous recompute — MOM6's predictor

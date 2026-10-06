@@ -227,7 +227,7 @@ contains
          call seed_e_face_uniform(pgf, ms, 1250.0_wp)
 
          call compute_pbce(grid, bt, pgf, ms)
-         call compute_gtot_faces(grid, bt, ms)
+         call compute_gtot_faces(grid, bt, ms, metrics)
 
          nz = ms%nz_ml
          dev_max = 0.0_wp
@@ -286,7 +286,7 @@ contains
          bt_b%bt_H_ref = 1000.0_wp; bt_b%bt_eta_end = 0.0_wp
 
          call compute_pbce(grid, bt_b, pgf_b, ms_b)
-         call compute_gtot_faces(grid, bt_b, ms_b)
+         call compute_gtot_faces(grid, bt_b, ms_b, metrics)
          bt_b%e_anom = 0.0_wp     ! the critical setting
 
          call apply_bt_correction(bt_a, ms_a, 1.0_wp, metrics, skip_h_rescale=.true.)
@@ -335,7 +335,7 @@ contains
          bt%bt_H_ref = 1250.0_wp; bt%bt_eta_end = 0.0_wp
 
          call compute_pbce(grid, bt, pgf, ms)
-         call compute_gtot_faces(grid, bt, ms)
+         call compute_gtot_faces(grid, bt, ms, metrics)
          ! Mimic a non-trivial SSH anomaly that varies in x.
          do j = 1, size(bt%e_anom, 2)
             do i = 1, size(bt%e_anom, 1)
@@ -399,7 +399,7 @@ contains
          bt%bt_H_ref = 1500.0_wp; bt%bt_eta_end = 0.0_wp
 
          call compute_pbce(grid, bt, pgf, ms)
-         call compute_gtot_faces(grid, bt, ms)
+         call compute_gtot_faces(grid, bt, ms, metrics)
 
          ! e_anom: positive only on the east cell (i=NGHOST+3), zero
          ! elsewhere.  At the u-face between (i=NGHOST+2) and
