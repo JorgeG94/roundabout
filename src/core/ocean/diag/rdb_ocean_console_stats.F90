@@ -1197,14 +1197,46 @@ contains
    subroutine compute_ice_totals_efp(wet_T, areaT, part_size, m_ice, ncat, nghost, &
                                      wet_area_efp, ci_area_efp, hi_area_efp)
       !! EFP twin of `compute_ice_totals`.  2D-only (no k-slab blocking
-      !! needed -- one "slab"), so a single `efp_summands_guard` call
-      !! suffices.  Three SEPARATE single-pass reductions (one per
-      !! accumulator) rather than one 18-scalar combined reduction clause
-      !! -- ice diagnostics are a status-cadence cold path (SS11.11: "the
-      !! EFP path costs ~nz times more kernel launches... unmeasurable at
-      !! status cadence"), and three simple reductions are easier to keep
-      !! correct than one with 18 live accumulators.  Gather logic +
-      !! extent clamping copied verbatim from `compute_ice_totals`.
+      !! needed -- one "slab" per accumulator), so a single
+      !! `efp_summands_guard` call suffices.  THREE SEPARATE single-pass
+      !! reductions (one per accumulator, 7 reduction scalars each)
+      !! rather than one kernel combining all 21 -- ice diagnostics are a
+      !! status-cadence cold path (SS11.11: "the EFP path costs ~nz times
+      !! more kernel launches... unmeasurable at status cadence"), so the
+      !! extra category-sum pass for `ci`/`hi` is free.
+      !!
+      !! **GPU bug this works around** (reproduced on a V100, NVHPC 25.5,
+      !! `validation_examples/ocean/sea_ice_pack/sea_ice_pack.nml`, the
+      !! default `&ocean_diag_nml reproducing_sums = .true.` path): the
+      !! original implementation ran ONE `!$acc parallel loop
+      !! reduction(...)` combining all 21 scalar accumulators
+      !! (`ew*`/`ec*`/`eh*`) with ~17 more private scratch scalars AND an
+      !! un-annotated inner `do c = 1, ncat` category-gather loop ahead of
+      !! the `efp_decompose_impl` call (an `!$acc routine seq` helper with
+      !! SIX `intent(out)` arguments). On device this silently corrupted
+      !! the reductions: `wet_area_efp%poison` came back a nonzero,
+      !! RUN-INVARIANT garbage value on every status line (not a
+      !! data-dependent one) -- `efp_to_real` then returns NaN for a
+      !! poisoned total, the console's `g_wet_area > tiny(0.0_wp)` guard
+      !! is FALSE for NaN (IEEE comparisons with NaN are always false),
+      !! and `mean_ci`/`mean_hi` silently kept their pre-set `0.0_wp`
+      !! default -- the observed "Ice: conc 0.0000 thick 0.0000" on every
+      !! GPU status line, even step 0 off a 100%-covered IC.  Splitting
+      !! into three 7-accumulator passes (matching `compute_total_h_efp`'s
+      !! per-k-slab kernel, which never showed this defect) fixed the
+      !! wet-area pass outright (no inner category loop there), but the
+      !! `ci`/`hi` passes -- which DO have the inner `do c = 1, ncat`
+      !! gather -- stayed poisoned until that loop got an explicit
+      !! `!$acc loop seq` (see below): an un-annotated serial loop nested
+      !! in a `!$acc parallel loop reduction(...)` region, followed by a
+      !! multi-out `!$acc routine seq` call that feeds the reduction, is
+      !! what NVHPC mis-schedules. Both the split AND the explicit `loop
+      !! seq` are required; see `test_ocean_console_stats_efp`'s
+      !! `test_ice_totals_efp_many_accumulators` for the regression gate
+      !! (CPU-portable: the defect is GPU-codegen-specific, but the test
+      !! pins the VALUES, which must match `compute_ice_totals` on every
+      !! backend).  Gather logic + extent clamping copied verbatim from
+      !! `compute_ice_totals`.
       real(wp), intent(in) :: wet_T(:, :), areaT(:, :)
       real(wp), intent(in) :: part_size(:, :, 0:)
       real(wp), intent(in) :: m_ice(:, :, :)
@@ -1215,9 +1247,7 @@ contains
       integer(int64) :: ec1, ec2, ec3, ec4, ec5, ec6, ecp
       integer(int64) :: eh1, eh2, eh3, eh4, eh5, eh6, ehp
       integer(int64) :: dw1, dw2, dw3, dw4, dw5, dw6, dwp
-      integer(int64) :: dc1, dc2, dc3, dc4, dc5, dc6, dcp
-      integer(int64) :: dh1, dh2, dh3, dh4, dh5, dh6, dhp
-      real(real64) :: val_w, val_c, val_h
+      real(real64) :: val_w
       real(wp) :: ci, mice
 
       nx = min(size(wet_T, 1), size(areaT, 1), size(m_ice, 1))
@@ -1228,6 +1258,8 @@ contains
       j_hi = ny - nghost
       call efp_summands_guard(i_hi - i_lo + 1, j_hi - j_lo + 1, "compute_ice_totals_efp")
 
+      ! ---- Pass 1: wet area -- Sigma wet_T*areaT. Identical in both
+      ! ncat modes (does not touch part_size/m_ice).
       ew1 = 0_int64
       ew2 = 0_int64
       ew3 = 0_int64
@@ -1235,6 +1267,28 @@ contains
       ew5 = 0_int64
       ew6 = 0_int64
       ewp = 0_int64
+      !$acc parallel loop collapse(2) reduction(+:ew1,ew2,ew3,ew4,ew5,ew6,ewp) &
+      !$acc&    private(val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp) present(wet_T, areaT)
+      do j = j_lo, j_hi
+         do i = i_lo, i_hi
+            val_w = real(wet_T(i, j)*areaT(i, j), real64)
+            call efp_decompose_impl(val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp)
+            ew1 = ew1 + dw1
+            ew2 = ew2 + dw2
+            ew3 = ew3 + dw3
+            ew4 = ew4 + dw4
+            ew5 = ew5 + dw5
+            ew6 = ew6 + dw6
+            ewp = ewp + dwp
+         end do
+      end do
+      wet_area_efp%v = [ew1, ew2, ew3, ew4, ew5, ew6]
+      wet_area_efp%poison = ewp
+      call efp_carry(wet_area_efp%v)
+
+      ! ---- Pass 2: ice-covered area -- Sigma ci*areaT. `dw1..dwp` reused
+      ! as the per-cell decompose scratch (renamed `dc*` would only add
+      ! more private-list entries for the same purpose).
       ec1 = 0_int64
       ec2 = 0_int64
       ec3 = 0_int64
@@ -1242,6 +1296,55 @@ contains
       ec5 = 0_int64
       ec6 = 0_int64
       ecp = 0_int64
+      if (ncat == 1) then
+         !$acc parallel loop collapse(2) reduction(+:ec1,ec2,ec3,ec4,ec5,ec6,ecp) &
+         !$acc&    private(ci, val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp) present(wet_T, areaT, m_ice)
+         do j = j_lo, j_hi
+            do i = i_lo, i_hi
+               ci = 0.0_wp
+               if (wet_T(i, j) > 0.5_wp .and. m_ice(i, j, 1) > 0.0_wp) ci = 1.0_wp
+               val_w = real(ci*areaT(i, j), real64)
+               call efp_decompose_impl(val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp)
+               ec1 = ec1 + dw1
+               ec2 = ec2 + dw2
+               ec3 = ec3 + dw3
+               ec4 = ec4 + dw4
+               ec5 = ec5 + dw5
+               ec6 = ec6 + dw6
+               ecp = ecp + dwp
+            end do
+         end do
+      else
+         !$acc parallel loop collapse(2) reduction(+:ec1,ec2,ec3,ec4,ec5,ec6,ecp) &
+         !$acc&    private(c, ci, val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp) &
+         !$acc&    present(wet_T, areaT, part_size)
+         do j = j_lo, j_hi
+            do i = i_lo, i_hi
+               ci = 0.0_wp
+               if (wet_T(i, j) > 0.5_wp) then
+                  !$acc loop seq
+                  do c = 1, ncat
+                     ci = ci + part_size(i, j, c)
+                  end do
+                  ci = min(1.0_wp, ci)
+               end if
+               val_w = real(ci*areaT(i, j), real64)
+               call efp_decompose_impl(val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp)
+               ec1 = ec1 + dw1
+               ec2 = ec2 + dw2
+               ec3 = ec3 + dw3
+               ec4 = ec4 + dw4
+               ec5 = ec5 + dw5
+               ec6 = ec6 + dw6
+               ecp = ecp + dwp
+            end do
+         end do
+      end if
+      ci_area_efp%v = [ec1, ec2, ec3, ec4, ec5, ec6]
+      ci_area_efp%poison = ecp
+      call efp_carry(ci_area_efp%v)
+
+      ! ---- Pass 3: ice volume (as area) -- Sigma (mice/ICE_RHO_ICE)*areaT.
       eh1 = 0_int64
       eh2 = 0_int64
       eh3 = 0_int64
@@ -1249,107 +1352,49 @@ contains
       eh5 = 0_int64
       eh6 = 0_int64
       ehp = 0_int64
-
       if (ncat == 1) then
-         !$acc parallel loop collapse(2) &
-         !$acc&    reduction(+:ew1,ew2,ew3,ew4,ew5,ew6,ewp,ec1,ec2,ec3,ec4,ec5,ec6,ecp, &
-         !$acc&              eh1,eh2,eh3,eh4,eh5,eh6,ehp) &
-         !$acc&    private(ci, mice, val_w, val_c, val_h, &
-         !$acc&            dw1, dw2, dw3, dw4, dw5, dw6, dwp, &
-         !$acc&            dc1, dc2, dc3, dc4, dc5, dc6, dcp, &
-         !$acc&            dh1, dh2, dh3, dh4, dh5, dh6, dhp) present(wet_T, areaT, m_ice)
+         !$acc parallel loop collapse(2) reduction(+:eh1,eh2,eh3,eh4,eh5,eh6,ehp) &
+         !$acc&    private(mice, val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp) present(wet_T, areaT, m_ice)
          do j = j_lo, j_hi
             do i = i_lo, i_hi
-               val_w = real(wet_T(i, j)*areaT(i, j), real64)
+               mice = 0.0_wp
+               if (wet_T(i, j) > 0.5_wp .and. m_ice(i, j, 1) > 0.0_wp) mice = m_ice(i, j, 1)
+               val_w = real((mice/ICE_RHO_ICE)*areaT(i, j), real64)
                call efp_decompose_impl(val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp)
-               ew1 = ew1 + dw1
-               ew2 = ew2 + dw2
-               ew3 = ew3 + dw3
-               ew4 = ew4 + dw4
-               ew5 = ew5 + dw5
-               ew6 = ew6 + dw6
-               ewp = ewp + dwp
-               if (wet_T(i, j) > 0.5_wp .and. m_ice(i, j, 1) > 0.0_wp) then
-                  mice = m_ice(i, j, 1)
-                  ci = 1.0_wp
-                  val_c = real(ci*areaT(i, j), real64)
-                  val_h = real((mice/ICE_RHO_ICE)*areaT(i, j), real64)
-                  call efp_decompose_impl(val_c, dc1, dc2, dc3, dc4, dc5, dc6, dcp)
-                  ec1 = ec1 + dc1
-                  ec2 = ec2 + dc2
-                  ec3 = ec3 + dc3
-                  ec4 = ec4 + dc4
-                  ec5 = ec5 + dc5
-                  ec6 = ec6 + dc6
-                  ecp = ecp + dcp
-                  call efp_decompose_impl(val_h, dh1, dh2, dh3, dh4, dh5, dh6, dhp)
-                  eh1 = eh1 + dh1
-                  eh2 = eh2 + dh2
-                  eh3 = eh3 + dh3
-                  eh4 = eh4 + dh4
-                  eh5 = eh5 + dh5
-                  eh6 = eh6 + dh6
-                  ehp = ehp + dhp
-               end if
+               eh1 = eh1 + dw1
+               eh2 = eh2 + dw2
+               eh3 = eh3 + dw3
+               eh4 = eh4 + dw4
+               eh5 = eh5 + dw5
+               eh6 = eh6 + dw6
+               ehp = ehp + dwp
             end do
          end do
       else
-         !$acc parallel loop collapse(2) &
-         !$acc&    reduction(+:ew1,ew2,ew3,ew4,ew5,ew6,ewp,ec1,ec2,ec3,ec4,ec5,ec6,ecp, &
-         !$acc&              eh1,eh2,eh3,eh4,eh5,eh6,ehp) &
-         !$acc&    private(ci, mice, c, val_w, val_c, val_h, &
-         !$acc&            dw1, dw2, dw3, dw4, dw5, dw6, dwp, &
-         !$acc&            dc1, dc2, dc3, dc4, dc5, dc6, dcp, &
-         !$acc&            dh1, dh2, dh3, dh4, dh5, dh6, dhp) &
+         !$acc parallel loop collapse(2) reduction(+:eh1,eh2,eh3,eh4,eh5,eh6,ehp) &
+         !$acc&    private(c, mice, val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp) &
          !$acc&    present(wet_T, areaT, part_size, m_ice)
          do j = j_lo, j_hi
             do i = i_lo, i_hi
-               val_w = real(wet_T(i, j)*areaT(i, j), real64)
-               call efp_decompose_impl(val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp)
-               ew1 = ew1 + dw1
-               ew2 = ew2 + dw2
-               ew3 = ew3 + dw3
-               ew4 = ew4 + dw4
-               ew5 = ew5 + dw5
-               ew6 = ew6 + dw6
-               ewp = ewp + dwp
+               mice = 0.0_wp
                if (wet_T(i, j) > 0.5_wp) then
-                  mice = 0.0_wp
-                  ci = 0.0_wp
+                  !$acc loop seq
                   do c = 1, ncat
                      mice = mice + part_size(i, j, c)*m_ice(i, j, c)
-                     ci = ci + part_size(i, j, c)
                   end do
-                  ci = min(1.0_wp, ci)
-                  val_c = real(ci*areaT(i, j), real64)
-                  val_h = real((mice/ICE_RHO_ICE)*areaT(i, j), real64)
-                  call efp_decompose_impl(val_c, dc1, dc2, dc3, dc4, dc5, dc6, dcp)
-                  ec1 = ec1 + dc1
-                  ec2 = ec2 + dc2
-                  ec3 = ec3 + dc3
-                  ec4 = ec4 + dc4
-                  ec5 = ec5 + dc5
-                  ec6 = ec6 + dc6
-                  ecp = ecp + dcp
-                  call efp_decompose_impl(val_h, dh1, dh2, dh3, dh4, dh5, dh6, dhp)
-                  eh1 = eh1 + dh1
-                  eh2 = eh2 + dh2
-                  eh3 = eh3 + dh3
-                  eh4 = eh4 + dh4
-                  eh5 = eh5 + dh5
-                  eh6 = eh6 + dh6
-                  ehp = ehp + dhp
                end if
+               val_w = real((mice/ICE_RHO_ICE)*areaT(i, j), real64)
+               call efp_decompose_impl(val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp)
+               eh1 = eh1 + dw1
+               eh2 = eh2 + dw2
+               eh3 = eh3 + dw3
+               eh4 = eh4 + dw4
+               eh5 = eh5 + dw5
+               eh6 = eh6 + dw6
+               ehp = ehp + dwp
             end do
          end do
       end if
-
-      wet_area_efp%v = [ew1, ew2, ew3, ew4, ew5, ew6]
-      wet_area_efp%poison = ewp
-      call efp_carry(wet_area_efp%v)
-      ci_area_efp%v = [ec1, ec2, ec3, ec4, ec5, ec6]
-      ci_area_efp%poison = ecp
-      call efp_carry(ci_area_efp%v)
       hi_area_efp%v = [eh1, eh2, eh3, eh4, eh5, eh6]
       hi_area_efp%poison = ehp
       call efp_carry(hi_area_efp%v)
