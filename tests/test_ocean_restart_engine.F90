@@ -50,6 +50,13 @@
 !!     the step between two thermo refreshes it also reads the slopes and
 !!     the VarMix(+MEKE) KhTh the last refresh left.  All of it is carried
 !!     across the checkpoint, so all of it must be restart-registered.
+!!   * seamount_periodic_zstar_visc_rem_kshear_vertex -- compat row c069:
+!!     the vertex kappa-shear closure's corner carrier `kshear%kd_corner`
+!!     is only (re)allocated by `configure_ocean_kappa_shear`, which runs
+!!     AFTER the restart read in `engine_setup` -- so unlike every other
+!!     carried field above, it cannot be put in the registry the READ
+!!     sees unless something allocates it EARLIER.  A warm resume's first
+!!     stage read it at the cold `0` instead of the checkpointed value.
 module test_ocean_restart_engine
    use, intrinsic :: iso_fortran_env, only: int64
    use testdrive, only: new_unittest, unittest_type, error_type, check
@@ -103,6 +110,8 @@ contains
                                test_engine_bit_exact_gm), &
                   new_unittest("restart_engine_bit_exact_visc_rem_chain", &
                                test_engine_bit_exact_visc_rem), &
+                  new_unittest("restart_engine_bit_exact_visc_rem_kshear_vertex", &
+                               test_engine_bit_exact_visc_rem_kshear_vertex), &
                   new_unittest("restart_engine_bit_exact_bkgnd_profile", &
                                test_engine_bit_exact_bkgnd_profile), &
                   new_unittest("restart_engine_bkgnd_full_reseed_on_restart", &
@@ -177,6 +186,67 @@ contains
                "z_fixed_tanh_width = 0.25 /"//NL// &
                "&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, "// &
                "slope_scale = 0.25 /"//NL// &
+               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+               "north = 'wall' /"//NL// &
+               "&output_nml output_to_file = .false. /"//NL
+      case ("seamount_periodic_zstar_visc_rem_kshear_vertex")
+         ! c069 restart fix regression.  A wind-driven channel over a
+         ! seamount (real depth variation -> real vertical shear, needed
+         ! so the vertex kappa-shear corner solve produces a non-trivial
+         ! `kd_corner` -- a flat-bottom / weakly-sheared column leaves it
+         ! at exactly 0 whether warm-started or not, which would make this
+         ! case pass for the wrong reason) on `zstar` (MOM6 z*), with the
+         ! kappa-shear VERTEX closure live (`&ocean_kappa_shear_nml
+         ! enable = .true., at_vertex = .true.`) and the visc_rem chain
+         ! (`&ocean_bt_nml correction_visc_rem + bt_rem_from_visc_rem`).
+         ! `wind_stress_x =
+         ! 2.0` is deliberately strong -- it is what pushes the corner
+         ! solve's converged `kd_corner` well above `kappa_trunc`
+         ! (~1e-9) by step 12, so the bug (below) is not masked by both
+         ! sides happening to floor to the same 0.
+         !
+         ! `visc_rem_precompute` -- called at the START of every stage,
+         ! BEFORE that stage's own `vmix_apply_in_stage` refreshes the
+         ! kappa-shear corner carrier `kshear%kd_corner` -- reads
+         ! `kd_corner` as the vertex form's corner Kv source on EVERY
+         ! stage, including the FIRST stage of a warm-restarted run.
+         ! `kd_corner` is only ever (re)allocated by
+         ! `configure_ocean_kappa_shear`'s `init_vertex` call, which runs
+         ! well AFTER the restart read in `engine_setup` -- so without
+         ! the early, knob-gated `init_vertex` call added ahead of the
+         ! restart read (`rdb_ocean_engine.F90`), a warm resume's first
+         ! stage read `kd_corner` at the cold `0` `init_vertex` seeds it
+         ! with instead of the checkpointed value, perturbing
+         ! `bt_visc_rem_u/v` at the `kappa_trunc` scale and, from there,
+         ! every carried field (compat row c069). This is the MINIMAL
+         ! reproduction found by bisecting c069's 16-axis cell: only
+         ! `vcoord = zstar` + `kappa_shear(at_vertex)` + the visc_rem
+         ! chain are load-bearing; geometry/tripolar, GM/MEKE, KPP,
+         ! Bryan-Lewis and pseudo-salt are NOT (the real c069 cell fails
+         ! identically with or without them, and passes identically with
+         ! or without them once this fix is in).
+         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
+               "&time_nml t_end = 86400.0, dt_fixed = 600.0 /"//NL// &
+               "&nonhydrostatic_nml nz_layers = 10 /"//NL// &
+               "&tracer_nml initial_temperature = 9.0, initial_salinity = 34.8, "// &
+               "T_init_surface = 16.0, T_init_bottom = 3.0, "// &
+               "S_init_surface = 34.6, S_init_bottom = 35.0 /"//NL// &
+               "&ocean_bt_nml auto_n_inner = .true., split_scheme = 'pred_corr', "// &
+               "correction_visc_rem = .true., bt_rem_from_visc_rem = .true. /"//NL// &
+               "&ocean_hvisc_nml nu_h = 10.0 /"//NL// &
+               "&ocean_bdrag_nml form = 'quadratic', cd = 0.003, hbbl = 0.0, "// &
+               "bg_vel = 0.05 /"//NL// &
+               "&ocean_vdiff_nml implicit_drag = .true. /"//NL// &
+               "&ocean_kappa_shear_nml enable = .true., at_vertex = .true. /"//NL// &
+               "&ocean_vmix_nml use_closure = .true., use_kpp = .false. /"//NL// &
+               "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -60.0 /"//NL// &
+               "&ocean_diag_nml enabled = .false. /"//NL// &
+               "&grid_nml nx = 24, ny = 16, nghost = 4, dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 2.0 /"//NL// &
+               "&vcoord_nml vcoord_type = 'zstar' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+               "edge_depth = 1600.0, slope_scale = 80000.0, "// &
+               "coriolis_beta = 2.0e-11 /"//NL// &
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'wall' /"//NL// &
                "&output_nml output_to_file = .false. /"//NL
@@ -541,6 +611,18 @@ contains
       integer :: n_ice
       call run_round_trip(error, "island_periodic_zfixed_visc_rem", 6, 3, n_ice)
    end subroutine test_engine_bit_exact_visc_rem
+
+   subroutine test_engine_bit_exact_visc_rem_kshear_vertex(error)
+      !! c069 restart fix: the visc_rem chain + kappa-shear VERTEX form
+      !! together on `zstar` -- see `case_nml`'s
+      !! `seamount_periodic_zstar_visc_rem_kshear_vertex` docstring for the
+      !! mechanism. Fails before the `kd_corner` early-allocation +
+      !! restart-registration fix (`rdb_ocean_engine.F90`,
+      !! `rdb_ocean_state.F90`); bit-exact end to end after it.
+      type(error_type), allocatable, intent(out) :: error
+      integer :: n_ice
+      call run_round_trip(error, "seamount_periodic_zstar_visc_rem_kshear_vertex", 12, 12, n_ice)
+   end subroutine test_engine_bit_exact_visc_rem_kshear_vertex
 
    subroutine test_engine_bit_exact_bkgnd_profile(error)
       !! PR-2 review fix: `vmix_seed_backgrounds`'s FULL round trip under
