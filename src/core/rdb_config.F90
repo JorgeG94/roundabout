@@ -90,6 +90,7 @@ module rdb_config
    public :: bt_halo_auto_exclusion
    public :: p_top_has_producer
    public :: substep_drag_ignores_bdrag_form
+   public :: bbl_glue_is_effective
    public :: cavity_draft_is_uniform
    public :: zfixed_cavity_nu_h_below_envelope
    public :: ZFIXED_CAVITY_NU_H_MIN
@@ -5058,10 +5059,15 @@ contains
          has_error = .true.
       end if
       if (cfg%ocean%vdiff%implicit_drag .and. cfg%ocean%bdrag%hbbl > 0.0_wp &
-          .and. .not. cfg%ocean%vdiff%bbl_glue) then
+          .and. .not. bbl_glue_is_effective(cfg)) then
+         ! Exempt only while the glue is EFFECTIVE (it carries the band):
+         ! a requested glue that setup turns off (no drag coefficient)
+         ! would otherwise leave the unsupported fold + band running.
          call logger%error("ocean_vdiff implicit_drag does not yet support "// &
                            "HBBL-distributed drag (ocean_bdrag hbbl > 0); use the "// &
-                           "split-apply path (ocean_bdrag implicit) for HBBL")
+                           "split-apply path (ocean_bdrag implicit) for HBBL, or "// &
+                           "bbl_glue with a nonzero bottom drag (quadratic cd > 0, "// &
+                           "or linear r > 0 with bg_vel > 0)")
          has_error = .true.
       end if
       ! `implicit_top_drag` is the `k = nz` twin of the rule above, plus
@@ -7793,6 +7799,35 @@ contains
       logical :: has
       has = cfg%ocean%psurf%enable .or. cfg%ocean%cavity_dyn%enable
    end function p_top_has_producer
+
+   pure function bbl_glue_is_effective(cfg) result(on)
+      !! Will `&ocean_vdiff_nml bbl_glue` actually be ON after setup?
+      !!
+      !! `vdiff_bbl_configure` (`rdb_ocean_vdiff.F90`) turns a requested
+      !! glue OFF when its effective drag coefficient or BBL thickness is
+      !! not positive: quadratic `cd <= 0`, linear `bg_vel <= 0` (no
+      !! `cd = r·hbbl/bg_vel`) or `r <= 0`, or `hbbl` and its `hbbl_visc`
+      !! fallback both `<= 0`.  This is the same predicate on `cfg`, so a
+      !! configure check that only holds while the glue is on (the
+      !! `implicit_drag` + `hbbl > 0` exception) cannot accept a namelist
+      !! the setup then runs without it.  Keep the two in step.
+      type(config_t), intent(in) :: cfg
+      logical :: on
+      real(wp) :: hbbl, cd_eff
+      on = .false.
+      if (.not. cfg%ocean%vdiff%bbl_glue) return
+      hbbl = cfg%ocean%bdrag%hbbl
+      if (hbbl <= 0.0_wp) hbbl = cfg%ocean%vdiff%hbbl_visc
+      if (trim(adjustl(cfg%ocean%bdrag%form)) == "linear") then
+         cd_eff = 0.0_wp
+         if (cfg%ocean%bdrag%bg_vel > 0.0_wp) then
+            cd_eff = cfg%ocean%bdrag%r*hbbl/cfg%ocean%bdrag%bg_vel
+         end if
+      else
+         cd_eff = cfg%ocean%bdrag%cd
+      end if
+      on = cd_eff > 0.0_wp .and. hbbl > 0.0_wp
+   end function bbl_glue_is_effective
 
    pure function substep_drag_ignores_bdrag_form(cfg) result(ignores)
       !! Is `&ocean_bt_nml substep_drag` blind to the configured bottom
