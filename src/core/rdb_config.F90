@@ -809,7 +809,7 @@ module rdb_config
          !! folded into the layers, keeping the correction consistent
          !! with the TRUE depth-mean remnant.  Requires `strong_drag =
          !! .true.`; inert (and refused) otherwise.
-      character(len=16) :: frhat_scheme = "arithmetic"
+      character(len=16) :: frhat_scheme = "hybrid"
          !! `rdb_barotropic_coupling::frhat_h_face_step`'s per-layer
          !! face-thickness closure for EVERY barotropic depth mean that
          !! reads a layer's face thickness: `derive_bt_from_layers`,
@@ -818,23 +818,25 @@ module rdb_config
          !! open/visc_rem folds, and — through `face_depth_mean_u/v` —
          !! `compute_bt_rem_from_visc_rem`'s `av_rem`.
          !!
-         !! `"arithmetic"` (DEFAULT, bit-identical to the pre-port tree):
-         !! the plain two-abutting-cell mean, `h_face(k) =
-         !! 0.5*(h_L(k)+h_R(k))`.
+         !! `"hybrid"` — DEFAULT since PR-4 (the flip, 2026-10), TOGETHER
+         !! with `visc_rem_chain`/`hvel_mom6`/`bbl_glue`: MOM6's `btcalc`
+         !! `HVEL_SCHEME=HYBRID` (the MOM6 default,
+         !! `MOM_barotropic.F90:4546-4790`) — arithmetic mean above the
+         !! shallower of the two abutting columns' bed depths, harmonic
+         !! mean below it (with a linear blend across the transition), so
+         !! a thin partial-bed layer's weight is suppressed next to a
+         !! thick abutting layer instead of inflated — closing the
+         !! `docs/visc_rem_bt_rem_plan.md` Section 7 gap now that `av_rem`
+         !! feeds the barotropic fast loop by default too. Does NOT change
+         !! `derive_bt_from_layers`'s `use_upstream_h_face` branch (a
+         !! roundabout-only alternative with no MOM6 frhat counterpart) or
+         !! `apply_bt_correction`'s uniform fold (no depth mean involved
+         !! there at all — matches MOM6 `accel_layer_u`).
          !!
-         !! `"hybrid"`: MOM6's `btcalc` `HVEL_SCHEME=HYBRID` (the MOM6
-         !! default, `MOM_barotropic.F90:4546-4790`) — arithmetic mean
-         !! above the shallower of the two abutting columns' bed depths,
-         !! harmonic mean below it (with a linear blend across the
-         !! transition), so a thin partial-bed layer's weight is
-         !! suppressed next to a thick abutting layer instead of
-         !! inflated.  Does NOT change `derive_bt_from_layers`'s
-         !! `use_upstream_h_face` branch (a roundabout-only alternative
-         !! with no MOM6 frhat counterpart) or `apply_bt_correction`'s
-         !! uniform fold (no depth mean involved there at all — matches
-         !! MOM6 `accel_layer_u`).  `docs/visc_rem_bt_rem_plan.md`
-         !! Section 7 identifies this suppression as the piece still
-         !! missing from every roundabout barotropic depth mean.
+         !! `"arithmetic"` — the pre-port plain two-abutting-cell mean,
+         !! `h_face(k) = 0.5*(h_L(k)+h_R(k))`. `.false.` on all four of
+         !! `hvel_mom6`/`bbl_glue`/`visc_rem_chain`/`frhat_scheme` together
+         !! restores the pre-flip behaviour bit for bit.
       logical :: correction_bc_pgf = .false.
          !! Adds a per-layer baroclinic-PGF retro-correction for the η
          !! change during the BT substep.  Requires `pgf%form = "fv_mom6"`.
