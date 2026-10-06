@@ -24,6 +24,31 @@ and one can think that a roundabout is like an Eddie.
 
 See [`docs/CAPABILITIES_AND_LIMITATIONS.md`](docs/CAPABILITIES_AND_LIMITATIONS.md) for the full feature/limitation list, [`docs/CLOSURE_MATRIX.md`](docs/CLOSURE_MATRIX.md) for the enabled-closure ground truth + tunable knobs.
 
+## Physics oracle and attribution
+
+**MOM6 is Roundabout's physics oracle.** Wherever Roundabout implements an
+algorithm that MOM6 also has, MOM6's behaviour is the reference it is checked
+against. That covers the split-explicit barotropic solver, continuity-PPM, the
+finite-volume pressure gradient, ALE remapping, and the vertical and lateral
+closures. Deliberate divergences are documented in
+[`docs/CLOSURE_MATRIX.md`](docs/CLOSURE_MATRIX.md) and
+[`docs/CAPABILITIES_AND_LIMITATIONS.md`](docs/CAPABILITIES_AND_LIMITATIONS.md).
+The source cites the physics and the paper, not another model's source lines.
+
+Attribution:
+
+- **[MOM6](https://github.com/NOAA-GFDL/MOM6)** (NOAA-GFDL and the MOM6
+  developers; Apache License 2.0). Several ocean schemes are ported from or
+  modelled on MOM6, and `tools/om_topo_limit.f90` is derived from MOM6 code.
+- **[SIS2](https://github.com/NOAA-GFDL/SIS2)** (NOAA-GFDL). The sea-ice EVP
+  rheology, ice-thickness distribution and ice-ocean coupling are ported from
+  SIS2.
+- The physics itself comes from the published literature. The papers are
+  listed in [`rdb_docs/source/references.rst`](rdb_docs/source/references.rst),
+  and the module docstrings cite the paper behind each algorithm.
+
+Roundabout itself is released under the MIT License (see [`LICENSE`](LICENSE)).
+
 ## Backend Strategy
 
 Parallelism is **`do concurrent`, everywhere** — there is no full-OpenMP port, and `do concurrent`
@@ -219,6 +244,7 @@ Cross-backend validation:
 - [`docs/CLOSURE_MATRIX.md`](docs/CLOSURE_MATRIX.md) — which closure/scheme is enabled in which regime + the tunable knobs
 - [`src/core/ocean/README.md`](src/core/ocean/README.md) — the dyn-core design contract (conventions, dispatch pipeline, slot map)
 - [`docs/REFERENCE.md`](docs/REFERENCE.md) — physics + numerics + namelist reference
+- [`rdb_docs/source/references.rst`](rdb_docs/source/references.rst) — the physics oracle (MOM6), attribution, and the papers the physics comes from
 - [`FORTRAN_STYLE.md`](FORTRAN_STYLE.md) — coding style + the GPU (`do concurrent` + OpenACC) programming guide
 - [`docs/codebase/INDEX.md`](docs/codebase/INDEX.md) — repo map + run lifecycle
 - [`docs/ROADMAP_OCEAN.md`](docs/ROADMAP_OCEAN.md) — ocean dyn-core long-horizon roadmap

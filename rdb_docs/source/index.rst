@@ -25,6 +25,15 @@ gfortran and ifx.
 Roundabout is named for Canberra, the one large Australian city with no
 ocean, and its roundabouts, which look a lot like eddies.
 
+**MOM6 is Roundabout's physics oracle.** Where Roundabout implements an
+algorithm MOM6 also has, MOM6's behaviour is the reference it is checked
+against, and deliberate divergences are documented. Several ocean schemes are
+ported from or modelled on `MOM6 <https://github.com/NOAA-GFDL/MOM6>`_
+(NOAA-GFDL, Apache License 2.0), and the sea-ice EVP rheology, ice-thickness
+distribution and ice-ocean coupling are ported from
+`SIS2 <https://github.com/NOAA-GFDL/SIS2>`_ (NOAA-GFDL). The physics itself
+comes from the published literature: see :doc:`references`.
+
 The API documentation for the code itself — per-module and per-procedure
 reference generated from the source — is hosted separately:
 https://jorgeg94.github.io/roundabout/
@@ -44,6 +53,7 @@ https://jorgeg94.github.io/roundabout/
    running_simulations
    python_interface
    validation
+   references
 
 .. toctree::
    :maxdepth: 2

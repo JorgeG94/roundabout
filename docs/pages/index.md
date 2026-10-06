@@ -23,3 +23,17 @@ Acronyms and concept definitions are in
 Which closure is enabled and its tunable knobs:
 [`docs/CLOSURE_MATRIX.md`](https://github.com/JorgeG94/roundabout/blob/main/docs/CLOSURE_MATRIX.md)
 (drift-checked against the code by `tools/check_closure_matrix.py`).
+
+## Physics oracle and attribution
+
+**MOM6 is Roundabout's physics oracle.** Where Roundabout implements an
+algorithm MOM6 also has, MOM6's behaviour is the reference it is checked
+against, and deliberate divergences are documented in
+[`docs/CLOSURE_MATRIX.md`](https://github.com/JorgeG94/roundabout/blob/main/docs/CLOSURE_MATRIX.md).
+Several ocean schemes are ported from or modelled on
+[MOM6](https://github.com/NOAA-GFDL/MOM6) (NOAA-GFDL, Apache License 2.0),
+and the sea-ice EVP rheology, ice-thickness distribution and ice-ocean
+coupling are ported from [SIS2](https://github.com/NOAA-GFDL/SIS2) (NOAA-GFDL).
+The docstrings in this reference cite the paper behind each algorithm. The
+full reference list is in
+[`rdb_docs/source/references.rst`](https://github.com/JorgeG94/roundabout/blob/main/rdb_docs/source/references.rst).
