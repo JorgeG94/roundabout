@@ -1,0 +1,209 @@
+! Global 1-degree tripolar ocean + sea ice — global_1deg_wind.nml plus
+! &ocean_ice_nml enable=.true.  Grid, bathymetry, vertical grid, WOA13
+! initial state, JRA55-do wind stress, physics, time step and the base
+! diagnostics are IDENTICAL to the wind-forced case; the only change is
+! the sea-ice slot.  v0.1.0 release-showcase run: one simulated year of a
+! global ocean + sea ice on one GPU.  See README.md here (section "Sea
+! ice: global_1deg_ice.nml") for the measured numbers and an honest
+! accounting of what this configuration does and does not represent.
+!
+! SEA ICE    SIS2-port thermodynamics (Winton 2000 two-layer column) +
+!            multi-category ITD (ncat=5) + category ice/snow transport.
+!            EVP dynamics is requested by the release checklist for this
+!            run but is REFUSED at configure: `&ocean_ice_nml
+!            dynamics=.true.` is unconditionally incompatible with
+!            `north='tripolar_fold'` (v1 envelope: EVP's ghost-wrap
+!            contract is plain periodic/wall only, src/core/rdb_config.F90
+!            "Sea-ice PR 5: C-grid EVP dynamics envelope" block) -- this
+!            holds on ANY rank count, not only above one rank. With
+!            dynamics=.false. ice velocity falls back to sampling the
+!            ocean surface layer, so ice is advected (transport=.true.)
+!            by the resolved ocean currents but has no independent
+!            rheology and the EVP ice-ocean stress blend does not apply;
+!            momentum reaches the ocean as the ice-blind wind-stress
+!            snapshot (documented divergence D7).  Confirmed with
+!            `./rdb --validate-only` (see README §"Configure-time
+!            refusal").
+!
+! ATMOSPHERIC FORCING FOR ICE  `&ocean_ice_nml air_temp`/`restore_lambda`/
+!            `sw_down` is the v1 scalar/uniform/time-invariant restoring
+!            filler (no bulk formulae, no 2-D fields, no file input) --
+!            the SAME values used by the validated
+!            validation_examples/ocean/sea_ice/polar_freezeup_thermo.nml
+!            and sea_ice_pack/sea_ice_pack.nml cases, reused here rather
+!            than invented.  It governs the SURFACE ENERGY BALANCE OF
+!            EXISTING ICE (conductive growth/melt against a -20 degC
+!            slab atmosphere); it does NOT cool open water.  No extra
+!            `&ocean_thermo_nml q_heat` is added: the WOA13 January
+!            surface IC already has ~11,000 of 115,200 surface cells
+!            (mostly the Arctic/sub-Arctic, some near Antarctica) at or
+!            below their local linear-liquidus freezing point, so the
+!            existing frazil-bank path (`ice_frazil_accumulate`) nucleates
+!            ice from those cells on its own, with nothing invented.
+!            BECAUSE the forcing is time-invariant and spatially uniform,
+!            it cannot itself produce a seasonal cycle -- see the README
+!            for what the year actually shows.
+!
+! INPUT FILES are read from ./INPUT/ relative to the run directory --
+! link it to the OM_1deg data directory, exactly as global_1deg_wind.nml:
+!
+!     ln -s "$RDB_DATA_DIR/OM_1deg" INPUT
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 360
+   ny     = 320
+   nghost = 3
+/
+
+&ocean_grid_nml
+   grid_config     = "supergrid"
+   supergrid_file  = "INPUT/ocean_hgrid.nc"
+   coriolis_scheme = "planetary"
+   rad_earth       = 6.371e6
+/
+
+&time_nml
+   t_end        = 365.0
+   time_unit    = "day"
+   dt_fixed     = 1800.0       ! MOM6 OM_1deg DT
+   cfl_interval = 1
+/
+
+&physics_nml
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&ocean_dataovr_nml
+   ! JRA55-do 1958 daily-mean wind stress on the model's C-grid faces
+   ! (taux on u faces, 361 x 320; tauy on v faces, 360 x 321), time axis
+   ! "days since 1958-01-01" at 0.5, 1.5, ..., 364.5.  Model t = 0 is
+   ! 1958-01-01 00:00, so no offset; cyclic over the 365-day year.
+   enable       = .true.
+   time_mode    = "cyclic"
+   cycle_period = 31536000.0   ! 365 days
+   t_offset     = 0.0
+   tau_x_file   = "INPUT/wind_jra55do_1958_24h.nc"
+   tau_x_var    = "taux"
+   tau_y_file   = "INPUT/wind_jra55do_1958_24h.nc"
+   tau_y_var    = "tauy"
+/
+
+&nonhydrostatic_nml
+   nz_layers = 50
+/
+
+&vcoord_nml
+   vcoord_type            = "z_fixed"
+   zfixed_closed_faces    = .true.
+   z_fixed_profile        = "tanh"
+   z_fixed_dz_top         = 2.0
+   z_fixed_tanh_center    = 0.5
+   z_fixed_tanh_width     = 0.25
+   check_vanished_content = .true.
+/
+
+&ocean_topo_nml
+   topo_config    = "file"
+   max_depth      = 6500.0
+   wind_config    = "constant"
+   taux_magnitude = 0.0
+/
+
+&output_nml
+   bathymetry_file = "INPUT/bathy_om1deg.nc"
+   output_dir      = "./output"
+   output_to_file  = .false.
+/
+
+&ocean_bc_nml
+   west  = "periodic"
+   east  = "periodic"
+   south = "wall"
+   north = "tripolar_fold"
+/
+
+&ocean_zinit_nml
+   enable = .true.
+   source = "file"
+   file   = "INPUT/ic_woa13_jan.nc"
+/
+
+&ocean_pgf_nml
+   form   = "fv_mom6"
+   maxvel = 6.0                ! MOM6 OM_1deg MAXVEL
+/
+
+&ocean_coriolis_nml
+   form = "sadourny_energy"
+/
+
+&ocean_hvisc_nml
+   ! OM_1deg: Smagorinsky Laplacian (0.15) + biharmonic (0.06), bounded.
+   nu_h            = 2000.0
+   lateral_closure = "smagorinsky"
+   c_smag          = 0.15
+   smag_ah         = .true.
+   smag_bi_const   = 0.06
+   bound_kh        = .true.
+/
+
+&ocean_bdrag_nml
+   ! Distributed over the bottom 10 m (MOM6 OM_1deg HBBL = 10, DRAG_BG_VEL
+   ! = 0.1).  Under z_fixed every column shallower than the deepest nominal
+   ! interface (6242 m here) has inert FILLERS below its partial bed cell;
+   ! the band (and the bed-only mode, hbbl = 0) starts at each face's first
+   ! LIVE layer (ms%k_bot_u/v), not at k = 1.
+   form   = "quadratic"
+   cd     = 3.0e-3
+   hbbl   = 10.0
+   bg_vel = 0.1
+/
+
+&ocean_bt_nml
+   auto_n_inner = .true.       ! per-wet-cell barotropic CFL (MOM6 set_dtbt)
+/
+
+&ocean_eos_nml
+   eos = "wright"
+/
+
+&ocean_ice_nml
+   ! SIS2-port thermodynamics + multi-category ITD + category transport.
+   ! dynamics stays OFF -- see the file header: EVP is refused at
+   ! configure under north='tripolar_fold', on any rank count.
+   enable         = .true.
+   ncat           = 5
+   nk_ice         = 2
+   air_temp       = -20.0      ! same value as polar_freezeup_thermo.nml /
+                                ! sea_ice_pack.nml -- a plausible polar-
+                                ! winter slab-atmosphere temperature, not
+                                ! invented for this run
+   restore_lambda = 20.0       ! ditto: the shipped "production melt
+                                ! season" reference value
+   sw_down        = 0.0        ! ditto: polar-night assumption (v1 stub
+                                ! has no diurnal/seasonal SW cycle to give
+                                ! it instead)
+   transport      = .true.     ! category ice/snow PPM advection by the
+                                ! resolved ocean surface currents
+   dynamics       = .false.    ! REFUSED under tripolar_fold -- see header
+/
+
+&ocean_diag_nml
+   ! Minimal output for this run: no SSH/u/v/T/S movie fields (that is
+   ! the wind-only case's job) -- just a ~monthly snapshot of the two
+   ! ice fields the console status line already summarises daily.
+   enabled          = .true.
+   filename         = "global_1deg_ice"
+   dt_out           = 30.0        ! day (time_unit); ~monthly
+   output_precision = "single"
+   diags            = "SSH:off  temperature:off  salinity:off  u:off  v:off  KE:off  ice_conc  ice_thick"
+/
+
+&logging_nml
+   status_interval = 1.0        ! day (time_unit) -- daily console stats
+/
