@@ -10,7 +10,7 @@ module test_ocean_ice_diags
    use rdb_constants, only: wp
    use rdb_grid, only: hgrid_t
    use rdb_ocean_state, only: ocean_state_t, ocean_state_enter_data, ocean_state_exit_data
-   use rdb_ocean_diag, only: DIAG_OP_INSTANT
+   use rdb_ocean_diag, only: DIAG_OP_INSTANT, diag_field_stats
    use rdb_ocean_diag_fills, only: register_default_diags, is_canonical_diag_name
    use rdb_ocean_diag_derived, only: register_derived, derived_catalog_size, &
                                      derived_catalog_name
@@ -18,6 +18,7 @@ module test_ocean_ice_diags
    use rdb_ocean_console_stats, only: compute_ice_totals
    use rdb_ice_state, only: ice_cell_concentration_impl
    use rdb_ice_column, only: ICE_RHO_ICE
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_nan
    use testdrive, only: error_type, check, new_unittest, unittest_type
    implicit none
    private
@@ -46,7 +47,9 @@ contains
                   new_unittest("ice_canonical_names", test_ice_canonical_names), &
                   new_unittest("ice_derived_catalog_has_velocity", &
                                test_ice_derived_catalog_has_velocity), &
-                  new_unittest("ice_speed_zero_when_ice_off", test_ice_speed_zero_when_ice_off) &
+                  new_unittest("ice_speed_zero_when_ice_off", test_ice_speed_zero_when_ice_off), &
+                  new_unittest("ice_conc_thick_ghost_nan_excluded", &
+                               test_ice_conc_thick_ghost_nan_excluded) &
                   ]
    end subroutine collect_ocean_ice_diags_tests
 
@@ -288,8 +291,13 @@ contains
    end subroutine test_ice_speed_face_average
 
    subroutine test_ice_diags_land_mask(error)
-      !! A land cell (wet_T=0) reads 0 for both conc + thick; neighbours
-      !! are unaffected.
+      !! A land cell (wet_T=0) reads the IEEE NaN missing-data sentinel
+      !! for both conc + thick (matching `fill_tracer_impl`'s land
+      !! convention, same as the ghost ring -- see
+      !! `test_ice_conc_thick_ghost_nan_excluded`); neighbours are
+      !! unaffected. Before the ghost/land NaN-sentinel fix this read a
+      !! plain 0.0, a LEGAL concentration value that `diag_field_stats`
+      !! could not tell apart from "no ice here".
       type(error_type), allocatable, intent(out) :: error
       type(hgrid_t) :: grid
       type(ocean_state_t) :: state
@@ -314,11 +322,11 @@ contains
          call state%diag%step(state, dt=1.0_wp, t=1.0_wp)
          call ocean_state_exit_data(state)
 
-         call check(error, abs(state%diag%vars(iconc)%output_buffer(2, 2, 1)) < TOL, &
-                    "land cell ice_conc should be 0")
+         call check(error, ieee_is_nan(state%diag%vars(iconc)%output_buffer(2, 2, 1)), &
+                    "land cell ice_conc should be the NaN sentinel")
          if (allocated(error)) exit checks
-         call check(error, abs(state%diag%vars(ithick)%output_buffer(2, 2, 1)) < TOL, &
-                    "land cell ice_thick should be 0")
+         call check(error, ieee_is_nan(state%diag%vars(ithick)%output_buffer(2, 2, 1)), &
+                    "land cell ice_thick should be the NaN sentinel")
          if (allocated(error)) exit checks
          call check(error, abs(state%diag%vars(iconc)%output_buffer(3, 2, 1) - 0.7_wp) < TOL, &
                     "neighbouring wet cell ice_conc should be unaffected (0.7)")
@@ -505,5 +513,93 @@ contains
       end block checks
       call state%destroy()
    end subroutine test_ice_speed_zero_when_ice_off
+
+   subroutine test_ice_conc_thick_ghost_nan_excluded(error)
+      !! Regression for the ghost-ring dilution bug: a fully ice-covered
+      !! domain (every wet cell at conc=1) used to read `ice_conc`/
+      !! `ice_thick` as a plain 0.0 on the ghost ring (`fill_ice_conc_
+      !! thick_impl` had no NaN-sentinel branch for `wet_T <= 0.5`, unlike
+      !! every other diag fill), so `diag_field_stats`'s mean counted the
+      !! ghost ring as "0% ice" ocean and the console/NetCDF mean read
+      !! `nphys/ntotal` instead of 1.0 (e.g. 1200/1496 = 0.802139 on a
+      !! 40x30/nghost=2 all-wet grid; 400/576 = 0.694444 on 20x20).  This
+      !! pins (1) the ghost ring is the IEEE NaN missing-data sentinel,
+      !! matching `fill_tracer_impl`'s convention, and (2) `diag_field_
+      !! stats`'s finite-cell mean is exactly 1.0 over N_phys cells, not
+      !! diluted by the N_total - N_phys ghost ring.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_state_t) :: state
+      integer :: iconc, ithick, nphys, ntotal, n_valid, n_total
+      real(wp) :: vmin, vmax, vmean
+      checks: block
+         call setup_state_ice(grid, state, ncat=1)
+         ! Fully covered: m_ice > 0 everywhere (host array, incl. ghosts;
+         ! only the PHYSICAL range is counted as "wet" by metrics%wet_T).
+         state%ice%m_ice(:, :, 1) = 500.0_wp
+
+         ! `metrics_fill_cartesian`/`metrics_finalize` leave an all-wet
+         ! test grid wet everywhere, INCLUDING the ghost ring (the real
+         ! driver's topography + boundary setup is what zeroes it) -- so
+         ! stamp the ghost ring explicitly here, the same way
+         ! `test_ice_diags_land_mask` stamps a land cell, AFTER
+         ! metrics_finalize and BEFORE enter_data (nghost=1 on this
+         ! fixture: a single-cell border).
+         state%metrics%wet_T(1, :) = 0.0_wp
+         state%metrics%wet_T(grid%nx_total, :) = 0.0_wp
+         state%metrics%wet_T(:, 1) = 0.0_wp
+         state%metrics%wet_T(:, grid%ny_total) = 0.0_wp
+
+         call register_default_diags(state, dt_out=1.0_wp)
+         iconc = find_var(state, "ice_conc")
+         ithick = find_var(state, "ice_thick")
+         call check(error, iconc > 0 .and. ithick > 0, "ice diags must be registered")
+         if (allocated(error)) exit checks
+
+         call ocean_state_enter_data(state)
+         call state%diag%step(state, dt=1.0_wp, t=1.0_wp)
+         call ocean_state_exit_data(state)
+
+         ! Corner ghost cell (1,1) is never physical (nghost=1 here) -- must
+         ! be the NaN sentinel, not 0.
+         call check(error, ieee_is_nan(state%diag%vars(iconc)%output_buffer(1, 1, 1)), &
+                    "ghost-ring ice_conc must be the NaN sentinel, not 0.0")
+         if (allocated(error)) exit checks
+         call check(error, ieee_is_nan(state%diag%vars(ithick)%output_buffer(1, 1, 1)), &
+                    "ghost-ring ice_thick must be the NaN sentinel, not 0.0")
+         if (allocated(error)) exit checks
+
+         ! A wet interior cell must stay exactly 1.0 / 500/ICE_RHO_ICE --
+         ! the NaN sentinel must not have leaked past the ghost ring.
+         call check(error, abs(state%diag%vars(iconc)%output_buffer(3, 2, 1) - 1.0_wp) < TOL, &
+                    "interior wet cell ice_conc must stay 1.0")
+         if (allocated(error)) exit checks
+
+         nphys = (grid%nx_total - 2*grid%nghost)*(grid%ny_total - 2*grid%nghost)
+         ntotal = grid%nx_total*grid%ny_total
+         call check(error, nphys < ntotal, "test grid must actually carry a ghost ring")
+         if (allocated(error)) exit checks
+
+         call diag_field_stats(state%diag%vars(iconc)%output_buffer, .false., &
+                               vmin, vmax, vmean, n_valid, n_total)
+         call check(error, n_total == ntotal, "diag_field_stats n_total must be the full buffer")
+         if (allocated(error)) exit checks
+         call check(error, n_valid == nphys, &
+                    "diag_field_stats must exclude exactly the ghost ring from n_valid")
+         if (allocated(error)) exit checks
+         call check(error, abs(vmean - 1.0_wp) < TOL, &
+                    "ice_conc mean must be the wet-cell mean (1.0), not diluted by ghosts")
+         if (allocated(error)) exit checks
+
+         call diag_field_stats(state%diag%vars(ithick)%output_buffer, .false., &
+                               vmin, vmax, vmean, n_valid, n_total)
+         call check(error, n_valid == nphys, &
+                    "ice_thick n_valid must also exclude the ghost ring")
+         if (allocated(error)) exit checks
+         call check(error, abs(vmean - 500.0_wp/ICE_RHO_ICE) < TOL, &
+                    "ice_thick mean must be the wet-cell mean, not diluted by ghosts")
+      end block checks
+      call state%destroy()
+   end subroutine test_ice_conc_thick_ghost_nan_excluded
 
 end module test_ocean_ice_diags
