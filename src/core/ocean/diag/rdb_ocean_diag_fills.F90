@@ -385,10 +385,19 @@ contains
       !! `ice_cell_concentration_impl` (`rdb_ice_state` — convention of
       !! record; `test_ocean_ice_diags` pins the copies equal): ncat==1
       !! legacy lumped (per-CELL m_ice, ci = 0/1), ncat>1 SIS2 ITD
-      !! (ci = min(1, Σ part_size), mice = Σ part_size·m_ice), land ⇒ 0.
+      !! (ci = min(1, Σ part_size), mice = Σ part_size·m_ice).
       !! `emit_thick=.false.` ⇒ buf = ci; `.true.` ⇒ buf = mice/ICE_RHO_ICE
       !! (grid-mean thickness, m).  Scalar flag branch is constant-folded on
       !! the device — one kernel, no scratch companion.
+      !!
+      !! Land AND ghost cells (`wet_T <= 0.5`) write the IEEE NaN
+      !! missing-data sentinel, matching `fill_tracer_impl`'s convention —
+      !! this used to write a plain 0.0, which is a LEGAL concentration/
+      !! thickness value, so `diag_field_stats`'s finite-cell mean counted
+      !! the whole ghost ring as "0% ice" ocean and diluted the mean (e.g.
+      !! 1200/1496 = 0.802139 on a 40x30/nghost=2 domain that is 100%
+      !! ice-covered everywhere wet). `test_fill_ice_conc_thick_nan_ghost`
+      !! pins the fix.
       integer, intent(in) :: ncat, nx, ny
       real(wp), intent(in) :: wet_T(nx, ny)
       real(wp), intent(in) :: part_size(nx, ny, 0:ncat)
@@ -396,21 +405,26 @@ contains
       logical, intent(in) :: emit_thick
       real(wp), intent(inout) :: buf(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
       integer :: i, j, c, nxl, nyl
-      real(wp) :: mice_val, ci_val, ci_sum
+      real(wp) :: mice_val, ci_val, ci_sum, qnan
 
       nxl = min(nx, size(buf, 1))
       nyl = min(ny, size(buf, 2))
+      qnan = ieee_value(0.0_wp, ieee_quiet_nan)
 
       if (ncat == 1) then
          do concurrent(j=1:nyl, i=1:nxl) local(mice_val, ci_val)
-            if (wet_T(i, j) > 0.5_wp .and. m_ice(i, j, 1) > 0.0_wp) then
-               mice_val = m_ice(i, j, 1)
-               ci_val = 1.0_wp
+            if (wet_T(i, j) > 0.5_wp) then
+               if (m_ice(i, j, 1) > 0.0_wp) then
+                  mice_val = m_ice(i, j, 1)
+                  ci_val = 1.0_wp
+               else
+                  mice_val = 0.0_wp
+                  ci_val = 0.0_wp
+               end if
+               buf(i, j, 1) = merge(mice_val/ICE_RHO_ICE, ci_val, emit_thick)
             else
-               mice_val = 0.0_wp
-               ci_val = 0.0_wp
+               buf(i, j, 1) = qnan
             end if
-            buf(i, j, 1) = merge(mice_val/ICE_RHO_ICE, ci_val, emit_thick)
          end do
       else
          do concurrent(j=1:nyl, i=1:nxl) local(c, mice_val, ci_val, ci_sum)
@@ -422,11 +436,10 @@ contains
                   ci_sum = ci_sum + part_size(i, j, c)
                end do
                ci_val = min(1.0_wp, ci_sum)
+               buf(i, j, 1) = merge(mice_val/ICE_RHO_ICE, ci_val, emit_thick)
             else
-               mice_val = 0.0_wp
-               ci_val = 0.0_wp
+               buf(i, j, 1) = qnan
             end if
-            buf(i, j, 1) = merge(mice_val/ICE_RHO_ICE, ci_val, emit_thick)
          end do
       end if
    end subroutine fill_ice_conc_thick_impl
