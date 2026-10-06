@@ -24,6 +24,7 @@ module rdb_constants
              VCOORD_RHO, VCOORD_HYCOM
    public :: REMAP_PCM, REMAP_PLM, REMAP_PPM, REMAP_PPM_H4, REMAP_PQM
    public :: KEPS_STAB_CONSTANT, KEPS_STAB_GALPERIN, KEPS_STAB_CANUTO
+   public :: FRHAT_ARITHMETIC, FRHAT_HYBRID, parse_frhat_scheme
 
 #ifdef RDB_DOUBLE_PRECISION
    integer, parameter :: wp = dp
@@ -243,7 +244,55 @@ module rdb_constants
       !! Canuto et al. (2001) Model A second-moment-closure stability functions
       !! (rational alpha_M / alpha_N form per Umlauf & Burchard 2003).
 
+   ! ---- Barotropic face-layer-weight ("frhat") scheme constants ----
+
+   integer, parameter :: FRHAT_ARITHMETIC = 0
+      !! `&ocean_bt_nml frhat_scheme = "arithmetic"` (DEFAULT pre-port
+      !! behaviour).  Every barotropic depth mean
+      !! (`rdb_barotropic_coupling::derive_bt_from_layers`,
+      !! `face_depth_mean_u/v`, `face_depth_mean_rem_u/v`,
+      !! `apply_bt_correction`'s open/visc_rem folds,
+      !! `compute_bt_rem_from_visc_rem`'s `av_rem`) weights each layer's
+      !! face thickness by the plain two-abutting-cell arithmetic mean,
+      !! `h_face(k) = 0.5*(h_L(k) + h_R(k))`.  Bit-identical to the
+      !! pre-frhat-port tree.
+   integer, parameter :: FRHAT_HYBRID = 1
+      !! `&ocean_bt_nml frhat_scheme = "hybrid"` — MOM6's
+      !! `HVEL_SCHEME = HYBRID` face-thickness closure (`btcalc`,
+      !! `MOM_barotropic.F90:4546-4790`, the default scheme there).
+      !! Above the shallower of the two abutting columns' bed depths the
+      !! face thickness is the arithmetic mean (as `FRHAT_ARITHMETIC`);
+      !! below it, the harmonic mean `h_L*h_R/(h_L+h_R)` — which
+      !! vanishes with the thinner side instead of being dragged up by
+      !! the thicker one — with a linear blend across the transition
+      !! layer.  Suppresses a thin partial-bed layer's weight next to a
+      !! thick abutting layer, the mechanism `docs/
+      !! visc_rem_bt_rem_plan.md` Section 7 identifies as still missing
+      !! from every roundabout barotropic depth mean.  See
+      !! `rdb_barotropic_coupling::frhat_h_face_step`
+      !! (`src/shared_module_utilities/rdb_frhat_face.inc`) for the
+      !! bottom-up port of MOM6's `e_u`/`D_shallow_u` recursion.
+
 contains
+
+   pure integer function parse_frhat_scheme(str, default_code) result(scheme)
+      !! Convert an `&ocean_bt_nml frhat_scheme` namelist string to a
+      !! `FRHAT_*` constant.  Unrecognised ⇒ `default_code` if given,
+      !! else `FRHAT_ARITHMETIC`.
+      character(len=*), intent(in) :: str
+      integer, intent(in), optional :: default_code
+      integer :: fallback
+      fallback = FRHAT_ARITHMETIC
+      if (present(default_code)) fallback = default_code
+      select case (trim(adjustl(str)))
+      case ("arithmetic", "ARITHMETIC")
+         scheme = FRHAT_ARITHMETIC
+      case ("hybrid", "HYBRID")
+         scheme = FRHAT_HYBRID
+      case default
+         scheme = fallback
+      end select
+   end function parse_frhat_scheme
 
    pure function nz_stack_required(nz) result(req)
       !! Smallest `NZ_STACK_MAX` that safely covers a run of `nz` layers.

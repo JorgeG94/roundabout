@@ -15,6 +15,7 @@ module rdb_ocean_setup
    use rdb_constants, only: wp, GRAVITY, LAND_DEPTH_THRESHOLD, NZ_STACK_MAX
 #endif
    use rdb_constants, only: H_VANISHED, VCOORD_ZSTAR_FULL, VCOORD_ZSTAR
+   use rdb_constants, only: FRHAT_ARITHMETIC, FRHAT_HYBRID, parse_frhat_scheme
    use rdb_config, only: config_t, ocean_bt_forcing_visc_rem_on, &
                          ocean_bt_renorm_visc_rem_on, ocean_bt_rem_from_visc_rem_on, &
                          ocean_bt_visc_rem_producer_on
@@ -3810,6 +3811,17 @@ contains
       ocean_state%dyn%bt_work%bt_rem_from_visc_rem = ocean_bt_rem_from_visc_rem_on(cfg)
       ocean_state%dyn%bt_work%bt_strong_drag = cfg%ocean%bt%strong_drag
       ocean_state%dyn%bt_work%bt_rescale_strong_drag = cfg%ocean%bt%rescale_strong_drag
+
+      ! frhat port (&ocean_bt_nml frhat_scheme): the per-layer face-thickness
+      ! closure every barotropic depth mean reads (MOM6 btcalc HYBRID vs the
+      ! plain two-abutting-cell arithmetic mean). Default "arithmetic" ==
+      ! bit-identical to the pre-port tree.
+      ocean_state%dyn%bt_work%frhat_scheme = parse_frhat_scheme(cfg%ocean%bt%frhat_scheme, &
+                                                                FRHAT_ARITHMETIC)
+      if (compute_rank == 0 .and. ocean_state%dyn%bt_work%frhat_scheme == FRHAT_HYBRID) then
+         call logger%info("BT frhat:         hybrid ON "// &
+                          "(MOM6 btcalc HVEL_SCHEME=HYBRID face-thickness closure)")
+      end if
       if (compute_rank == 0 .and. ocean_bt_rem_from_visc_rem_on(cfg)) then
          block
             character(len=:), allocatable :: bt_rem_msg

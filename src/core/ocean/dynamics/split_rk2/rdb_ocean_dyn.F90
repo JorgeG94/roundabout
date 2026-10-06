@@ -4811,13 +4811,15 @@ contains
       if (dyn%bt_work%bt_forcing_visc_rem) then
          call face_depth_mean_rem_u(grid, dyn%bt_work%F_slow_u, ms%h_layer, &
                                     dyn%bt_work%visc_rem_u, dyn%bt_work%F_bt_u, ms%nz_ml, metrics, &
-                                    n_inner)
+                                    n_inner, dyn%bt_work%bt_H_ref, dyn%bt_work%frhat_scheme)
          call face_depth_mean_rem_v(grid, dyn%bt_work%F_slow_v, ms%h_layer, &
                                     dyn%bt_work%visc_rem_v, dyn%bt_work%F_bt_v, ms%nz_ml, metrics, &
-                                    n_inner)
+                                    n_inner, dyn%bt_work%bt_H_ref, dyn%bt_work%frhat_scheme)
       else
-         call face_depth_mean_u(grid, dyn%bt_work%F_slow_u, ms%h_layer, dyn%bt_work%F_bt_u, ms%nz_ml, metrics)
-         call face_depth_mean_v(grid, dyn%bt_work%F_slow_v, ms%h_layer, dyn%bt_work%F_bt_v, ms%nz_ml, metrics)
+         call face_depth_mean_u(grid, dyn%bt_work%F_slow_u, ms%h_layer, dyn%bt_work%F_bt_u, ms%nz_ml, metrics, &
+                                dyn%bt_work%bt_H_ref, dyn%bt_work%frhat_scheme)
+         call face_depth_mean_v(grid, dyn%bt_work%F_slow_v, ms%h_layer, dyn%bt_work%F_bt_v, ms%nz_ml, metrics, &
+                                dyn%bt_work%bt_H_ref, dyn%bt_work%frhat_scheme)
       end if
       ! Remove from the forcing the part of the slow PGF the barotropic
       ! substep re-represents with its own live `-G·∂η/∂x`, or the bt
@@ -4841,13 +4843,15 @@ contains
       else if (dyn%bt_work%bt_forcing_visc_rem) then
          call face_depth_mean_rem_u(grid, pgf%dpdx_face%data, ms%h_layer, &
                                     dyn%bt_work%visc_rem_u, dyn%bt_work%F_bt_u_fast, ms%nz_ml, metrics, &
-                                    n_inner)
+                                    n_inner, dyn%bt_work%bt_H_ref, dyn%bt_work%frhat_scheme)
          call face_depth_mean_rem_v(grid, pgf%dpdy_face%data, ms%h_layer, &
                                     dyn%bt_work%visc_rem_v, dyn%bt_work%F_bt_v_fast, ms%nz_ml, metrics, &
-                                    n_inner)
+                                    n_inner, dyn%bt_work%bt_H_ref, dyn%bt_work%frhat_scheme)
       else
-         call face_depth_mean_u(grid, pgf%dpdx_face%data, ms%h_layer, dyn%bt_work%F_bt_u_fast, ms%nz_ml, metrics)
-         call face_depth_mean_v(grid, pgf%dpdy_face%data, ms%h_layer, dyn%bt_work%F_bt_v_fast, ms%nz_ml, metrics)
+         call face_depth_mean_u(grid, pgf%dpdx_face%data, ms%h_layer, dyn%bt_work%F_bt_u_fast, ms%nz_ml, metrics, &
+                                dyn%bt_work%bt_H_ref, dyn%bt_work%frhat_scheme)
+         call face_depth_mean_v(grid, pgf%dpdy_face%data, ms%h_layer, dyn%bt_work%F_bt_v_fast, ms%nz_ml, metrics, &
+                                dyn%bt_work%bt_H_ref, dyn%bt_work%frhat_scheme)
       end if
       if (.not. dyn%bt_work%bt_bc_pgf_forcing) then
          do concurrent(j=1:ny_uface, i=1:nx_face)

@@ -801,6 +801,32 @@ module rdb_config
          !! folded into the layers, keeping the correction consistent
          !! with the TRUE depth-mean remnant.  Requires `strong_drag =
          !! .true.`; inert (and refused) otherwise.
+      character(len=16) :: frhat_scheme = "arithmetic"
+         !! `rdb_barotropic_coupling::frhat_h_face_step`'s per-layer
+         !! face-thickness closure for EVERY barotropic depth mean that
+         !! reads a layer's face thickness: `derive_bt_from_layers`,
+         !! `face_depth_mean_u/v`, `face_depth_mean_rem_u/v`
+         !! (`forcing_visc_rem`'s `wt_u`), `apply_bt_correction`'s
+         !! open/visc_rem folds, and — through `face_depth_mean_u/v` —
+         !! `compute_bt_rem_from_visc_rem`'s `av_rem`.
+         !!
+         !! `"arithmetic"` (DEFAULT, bit-identical to the pre-port tree):
+         !! the plain two-abutting-cell mean, `h_face(k) =
+         !! 0.5*(h_L(k)+h_R(k))`.
+         !!
+         !! `"hybrid"`: MOM6's `btcalc` `HVEL_SCHEME=HYBRID` (the MOM6
+         !! default, `MOM_barotropic.F90:4546-4790`) — arithmetic mean
+         !! above the shallower of the two abutting columns' bed depths,
+         !! harmonic mean below it (with a linear blend across the
+         !! transition), so a thin partial-bed layer's weight is
+         !! suppressed next to a thick abutting layer instead of
+         !! inflated.  Does NOT change `derive_bt_from_layers`'s
+         !! `use_upstream_h_face` branch (a roundabout-only alternative
+         !! with no MOM6 frhat counterpart) or `apply_bt_correction`'s
+         !! uniform fold (no depth mean involved there at all — matches
+         !! MOM6 `accel_layer_u`).  `docs/visc_rem_bt_rem_plan.md`
+         !! Section 7 identifies this suppression as the piece still
+         !! missing from every roundabout barotropic depth mean.
       logical :: correction_bc_pgf = .false.
          !! Adds a per-layer baroclinic-PGF retro-correction for the η
          !! change during the BT substep.  Requires `pgf%form = "fv_mom6"`.
@@ -10362,6 +10388,19 @@ contains
                              "whenever this is on). An equivalent subset of "// &
                              "visc_rem_chain, kept for granular testing -- prefer "// &
                              "visc_rem_chain."))
+      ps => cfg%ocean%bt%frhat_scheme
+      call g%add(nml_enum("frhat_scheme", ps, &
+                          "Per-layer barotropic face-thickness closure for every depth "// &
+                          "mean that reads a face thickness (derive_bt_from_layers, "// &
+                          "face_depth_mean_u/v, face_depth_mean_rem_u/v's wt_u, "// &
+                          "apply_bt_correction's open/visc_rem folds, and av_rem via "// &
+                          "face_depth_mean_u/v): arithmetic (DEFAULT, bit-identical -- "// &
+                          "the plain two-abutting-cell mean) or hybrid (MOM6 btcalc "// &
+                          "HVEL_SCHEME=HYBRID, MOM_barotropic.F90:4546-4790 -- arithmetic "// &
+                          "mean above the shallower column's bed, harmonic mean below "// &
+                          "it, suppressing a thin partial-bed layer's weight next to a "// &
+                          "thick abutting one)", &
+                          allowed=[character(len=10) :: "arithmetic", "hybrid"]))
       pl => cfg%ocean%bt%correction_bc_pgf
       call g%add(nml_logical("correction_bc_pgf", pl, &
                              "Per-layer baroclinic-PGF retro-correction for the eta change "// &

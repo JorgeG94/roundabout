@@ -18,13 +18,12 @@ from rdb._knob import RdbDeadKnobWarning
 
 
 def test_group_and_knob_counts():
-    # 60 groups / 690 knobs total, i.e. exactly what `rdb_nml_json` +
+    # 60 groups / 691 knobs total, i.e. exactly what `rdb_nml_json` +
     # `tools/gen_python_config.py` report for the live schema (the last
-    # bump: &ocean_bt_nml visc_rem_chain, PR-3 visc_rem audit +
-    # unification -- ONE switch equivalent to correction_visc_rem +
-    # forcing_visc_rem + renorm_visc_rem + bt_rem_from_visc_rem).
+    # bump: &ocean_bt_nml frhat_scheme, the MOM6 btcalc HVEL_SCHEME=HYBRID
+    # face-thickness-closure port).
     assert N_GROUPS == 60
-    assert N_KNOBS == 690
+    assert N_KNOBS == 691
     assert "ocean_bc" in ALL_GROUPS
 
 

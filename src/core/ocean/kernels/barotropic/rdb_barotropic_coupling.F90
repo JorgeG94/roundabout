@@ -5,7 +5,7 @@
 !! `face_depth_mean_u/_v` (3D slow tendency → 2D face forcing),
 !! `apply_bt_correction` (bt time-mean → per-layer correction + h rescale).
 module rdb_barotropic_coupling
-   use rdb_constants, only: wp, GRAVITY
+   use rdb_constants, only: wp, GRAVITY, H_DIV_EPS, FRHAT_HYBRID
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
@@ -46,6 +46,10 @@ module rdb_barotropic_coupling
    public :: mask_bt_rem
    ! BT_cont_type producer — fills BTCL_u/v on bt_work
    public :: set_local_BT_cont_types
+   ! frhat port (src/shared_module_utilities/rdb_frhat_face.inc) -- exported
+   ! for its own direct unit tests; every production call site reaches it
+   ! through the routines above instead.
+   public :: frhat_h_face_step
 
    ! Floor below which a layer counts as "vanished" for FA accumulation.
    real(wp), parameter :: BTC_H_NEGLECT = 1.0e-10_wp
@@ -102,9 +106,11 @@ contains
          !! `do concurrent` is exactly the kind of thing that works on the
          !! host and faults under `mem:separate`.
 
-      integer :: i, j, k, nx, ny, nz, nx_face, ny_face
+      integer :: i, j, k, nx, ny, nz, nx_face, ny_face, il, ir, jl, jr
       logical :: use_upstream, use_open
       real(wp) :: total_h, hu_sum, h_face_sum, h_face, hv_sum
+      real(wp) :: href_l, href_r, e_prev
+      integer :: scheme
 
       nx = grid%nx_total
       ny = grid%ny_total
@@ -113,6 +119,7 @@ contains
       ny_face = size(ms%v_face_y_layer, 2)
       use_upstream = bt_work%use_upstream_h_face
       use_open = metrics%use_closed_faces
+      scheme = bt_work%frhat_scheme
 
       do concurrent(j=1:ny, i=1:nx) local(k, total_h)
          total_h = 0.0_wp
@@ -122,24 +129,31 @@ contains
          bt_work%bt_eta(i, j) = total_h - bt_work%bt_H_ref(i, j)
       end do
 
+      ! `il`/`ir` are the two columns a u-face abuts (equal at a wall, where
+      ! `frhat_h_face_step` degenerates to the single available column —
+      ! see that routine's docstring).  `use_upstream` (no MOM6 frhat
+      ! counterpart — a roundabout-only alternative orthogonal to
+      ! centred/hybrid) bypasses the frhat sweep entirely and is untouched.
       if (use_open) then
          do concurrent(j=1:ny, i=1:nx_face) &
-            local(k, hu_sum, h_face_sum, h_face)
+            local(k, il, ir, href_l, href_r, e_prev, hu_sum, h_face_sum, h_face)
+            il = max(1, i - 1)
+            ir = min(nx, i)
+            href_l = bt_work%bt_H_ref(il, j)
+            href_r = bt_work%bt_H_ref(ir, j)
+            e_prev = -0.5_wp*(href_l + href_r)
             hu_sum = 0.0_wp
             h_face_sum = 0.0_wp
             do k = 1, nz
-               if (i == 1) then
-                  h_face = ms%h_layer(1, j, k)
-               else if (i == nx_face) then
-                  h_face = ms%h_layer(nx, j, k)
-               else if (use_upstream) then
+               if (use_upstream .and. i > 1 .and. i < nx_face) then
                   if (ms%u_face_x_layer(i, j, k) >= 0.0_wp) then
                      h_face = ms%h_layer(i - 1, j, k)
                   else
                      h_face = ms%h_layer(i, j, k)
                   end if
                else
-                  h_face = 0.5_wp*(ms%h_layer(i - 1, j, k) + ms%h_layer(i, j, k))
+                  call frhat_h_face_step(ms%h_layer(il, j, k), ms%h_layer(ir, j, k), &
+                                         href_l, href_r, scheme, e_prev, h_face)
                end if
                h_face = h_face*metrics%open_u(i, j, k)
                hu_sum = hu_sum + ms%u_face_x_layer(i, j, k)*h_face
@@ -153,22 +167,24 @@ contains
          end do
       else
          do concurrent(j=1:ny, i=1:nx_face) &
-            local(k, hu_sum, h_face_sum, h_face)
+            local(k, il, ir, href_l, href_r, e_prev, hu_sum, h_face_sum, h_face)
+            il = max(1, i - 1)
+            ir = min(nx, i)
+            href_l = bt_work%bt_H_ref(il, j)
+            href_r = bt_work%bt_H_ref(ir, j)
+            e_prev = -0.5_wp*(href_l + href_r)
             hu_sum = 0.0_wp
             h_face_sum = 0.0_wp
             do k = 1, nz
-               if (i == 1) then
-                  h_face = ms%h_layer(1, j, k)
-               else if (i == nx_face) then
-                  h_face = ms%h_layer(nx, j, k)
-               else if (use_upstream) then
+               if (use_upstream .and. i > 1 .and. i < nx_face) then
                   if (ms%u_face_x_layer(i, j, k) >= 0.0_wp) then
                      h_face = ms%h_layer(i - 1, j, k)
                   else
                      h_face = ms%h_layer(i, j, k)
                   end if
                else
-                  h_face = 0.5_wp*(ms%h_layer(i - 1, j, k) + ms%h_layer(i, j, k))
+                  call frhat_h_face_step(ms%h_layer(il, j, k), ms%h_layer(ir, j, k), &
+                                         href_l, href_r, scheme, e_prev, h_face)
                end if
                hu_sum = hu_sum + ms%u_face_x_layer(i, j, k)*h_face
                h_face_sum = h_face_sum + h_face
@@ -183,22 +199,24 @@ contains
 
       if (use_open) then
          do concurrent(j=1:ny_face, i=1:nx) &
-            local(k, hv_sum, h_face_sum, h_face)
+            local(k, jl, jr, href_l, href_r, e_prev, hv_sum, h_face_sum, h_face)
+            jl = max(1, j - 1)
+            jr = min(ny, j)
+            href_l = bt_work%bt_H_ref(i, jl)
+            href_r = bt_work%bt_H_ref(i, jr)
+            e_prev = -0.5_wp*(href_l + href_r)
             hv_sum = 0.0_wp
             h_face_sum = 0.0_wp
             do k = 1, nz
-               if (j == 1) then
-                  h_face = ms%h_layer(i, 1, k)
-               else if (j == ny_face) then
-                  h_face = ms%h_layer(i, ny, k)
-               else if (use_upstream) then
+               if (use_upstream .and. j > 1 .and. j < ny_face) then
                   if (ms%v_face_y_layer(i, j, k) >= 0.0_wp) then
                      h_face = ms%h_layer(i, j - 1, k)
                   else
                      h_face = ms%h_layer(i, j, k)
                   end if
                else
-                  h_face = 0.5_wp*(ms%h_layer(i, j - 1, k) + ms%h_layer(i, j, k))
+                  call frhat_h_face_step(ms%h_layer(i, jl, k), ms%h_layer(i, jr, k), &
+                                         href_l, href_r, scheme, e_prev, h_face)
                end if
                h_face = h_face*metrics%open_v(i, j, k)
                hv_sum = hv_sum + ms%v_face_y_layer(i, j, k)*h_face
@@ -212,22 +230,24 @@ contains
          end do
       else
          do concurrent(j=1:ny_face, i=1:nx) &
-            local(k, hv_sum, h_face_sum, h_face)
+            local(k, jl, jr, href_l, href_r, e_prev, hv_sum, h_face_sum, h_face)
+            jl = max(1, j - 1)
+            jr = min(ny, j)
+            href_l = bt_work%bt_H_ref(i, jl)
+            href_r = bt_work%bt_H_ref(i, jr)
+            e_prev = -0.5_wp*(href_l + href_r)
             hv_sum = 0.0_wp
             h_face_sum = 0.0_wp
             do k = 1, nz
-               if (j == 1) then
-                  h_face = ms%h_layer(i, 1, k)
-               else if (j == ny_face) then
-                  h_face = ms%h_layer(i, ny, k)
-               else if (use_upstream) then
+               if (use_upstream .and. j > 1 .and. j < ny_face) then
                   if (ms%v_face_y_layer(i, j, k) >= 0.0_wp) then
                      h_face = ms%h_layer(i, j - 1, k)
                   else
                      h_face = ms%h_layer(i, j, k)
                   end if
                else
-                  h_face = 0.5_wp*(ms%h_layer(i, j - 1, k) + ms%h_layer(i, j, k))
+                  call frhat_h_face_step(ms%h_layer(i, jl, k), ms%h_layer(i, jr, k), &
+                                         href_l, href_r, scheme, e_prev, h_face)
                end if
                hv_sum = hv_sum + ms%v_face_y_layer(i, j, k)*h_face
                h_face_sum = h_face_sum + h_face
@@ -866,15 +886,15 @@ contains
          if (bt_work%bt_forcing_visc_rem) then
             call face_depth_mean_rem_u(grid, ms%u_av_layer, ms%h_layer, &
                                        bt_work%visc_rem_u, bt_work%cor_ref_u, ms%nz_ml, metrics, &
-                                       n_inner_use)
+                                       n_inner_use, bt_work%bt_H_ref, bt_work%frhat_scheme)
             call face_depth_mean_rem_v(grid, ms%v_av_layer, ms%h_layer, &
                                        bt_work%visc_rem_v, bt_work%cor_ref_v, ms%nz_ml, metrics, &
-                                       n_inner_use)
+                                       n_inner_use, bt_work%bt_H_ref, bt_work%frhat_scheme)
          else
             call face_depth_mean_u(grid, ms%u_av_layer, ms%h_layer, bt_work%cor_ref_u, &
-                                   ms%nz_ml, metrics)
+                                   ms%nz_ml, metrics, bt_work%bt_H_ref, bt_work%frhat_scheme)
             call face_depth_mean_v(grid, ms%v_av_layer, ms%h_layer, bt_work%cor_ref_v, &
-                                   ms%nz_ml, metrics)
+                                   ms%nz_ml, metrics, bt_work%bt_H_ref, bt_work%frhat_scheme)
          end if
       else
          nu = size(bt_work%bt_ubt, 1)
@@ -890,12 +910,15 @@ contains
       end if
    end subroutine set_cor_ref_velocity
 
-   pure subroutine face_depth_mean_u(grid, F_3d, h_layer, F_mean_2d, nz, metrics)
-      !! Depth-average a u-face 3D field, weighted by the face
-      !! thickness (= mean of the two abutting cell columns'
-      !! `h_layer` values).  Writes to a 2D field at the same u-face
-      !! shape.  Wall faces (i=1, nx+1) fall back to the single
-      !! available cell.
+   pure subroutine face_depth_mean_u(grid, F_3d, h_layer, F_mean_2d, nz, metrics, href, scheme)
+      !! Depth-average a u-face 3D field, weighted by the per-layer face
+      !! thickness `frhat_h_face_step` returns (`&ocean_bt_nml
+      !! frhat_scheme`; `FRHAT_ARITHMETIC` = the plain mean of the two
+      !! abutting cell columns' `h_layer` values, today's default; the
+      !! argument is otherwise unchanged).  Writes to a 2D field at the
+      !! same u-face shape.  Wall faces (i=1, nx+1) fall back to the
+      !! single available cell (`frhat_h_face_step` degenerates there for
+      !! either scheme — see its docstring).
       type(hgrid_t), intent(in) :: grid
       ! assumed-shape-ok: face arrays have shape (nx+1,ny,nz) / (nx,ny+1,nz);
       ! a single (nx,ny,nz) explicit-shape triplet would mis-bound the face axis.
@@ -919,8 +942,19 @@ contains
          !! days.  A caller that has no mask still has an
          !! `ocean_metrics_t` to hand; `use_closed_faces = .false.` ⇒ the
          !! ORIGINAL loop runs, textually unchanged (byte-identical).
-      integer :: i, j, k, nu, ny, nx_cells
-      real(wp) :: h_face, num, denom
+      real(wp), intent(in) :: href(:, :)  ! assumed-shape-ok: cell-centred (nx,ny); size() unused, indexed by column
+         !! Reference column depth (m), `barotropic_workstate_t%bt_H_ref` —
+         !! REQUIRED for the same reason `metrics` is: every call site has
+         !! a `bt_work` to hand, and an omitted/mismatched `href` would
+         !! silently change `FRHAT_HYBRID`'s answer. Unused under
+         !! `FRHAT_ARITHMETIC` but still dereferenced (no branch to skip
+         !! it), so it must be a real, fully-sized array on every call,
+         !! never a placeholder.
+      integer, intent(in) :: scheme
+         !! A `FRHAT_*` constant (`rdb_constants`; `&ocean_bt_nml
+         !! frhat_scheme`, via `bt_work%frhat_scheme`).
+      integer :: i, j, k, nu, ny, nx_cells, il, ir
+      real(wp) :: h_face, num, denom, href_l, href_r, e_prev
       logical :: use_open
 
       nu = size(F_3d, 1)
@@ -929,17 +963,17 @@ contains
       use_open = metrics%use_closed_faces
 
       if (use_open) then
-         do concurrent(j=1:ny, i=1:nu) local(k, h_face, num, denom)
+         do concurrent(j=1:ny, i=1:nu) local(k, il, ir, href_l, href_r, e_prev, h_face, num, denom)
+            il = max(1, i - 1)
+            ir = min(nx_cells, i)
+            href_l = href(il, j)
+            href_r = href(ir, j)
+            e_prev = -0.5_wp*(href_l + href_r)
             num = 0.0_wp
             denom = 0.0_wp
             do k = 1, nz
-               if (i == 1) then
-                  h_face = h_layer(1, j, k)
-               else if (i == nu) then
-                  h_face = h_layer(nx_cells, j, k)
-               else
-                  h_face = 0.5_wp*(h_layer(i - 1, j, k) + h_layer(i, j, k))
-               end if
+               call frhat_h_face_step(h_layer(il, j, k), h_layer(ir, j, k), &
+                                      href_l, href_r, scheme, e_prev, h_face)
                h_face = h_face*metrics%open_u(i, j, k)
                num = num + F_3d(i, j, k)*h_face
                denom = denom + h_face
@@ -951,17 +985,17 @@ contains
             end if
          end do
       else
-         do concurrent(j=1:ny, i=1:nu) local(k, h_face, num, denom)
+         do concurrent(j=1:ny, i=1:nu) local(k, il, ir, href_l, href_r, e_prev, h_face, num, denom)
+            il = max(1, i - 1)
+            ir = min(nx_cells, i)
+            href_l = href(il, j)
+            href_r = href(ir, j)
+            e_prev = -0.5_wp*(href_l + href_r)
             num = 0.0_wp
             denom = 0.0_wp
             do k = 1, nz
-               if (i == 1) then
-                  h_face = h_layer(1, j, k)
-               else if (i == nu) then
-                  h_face = h_layer(nx_cells, j, k)
-               else
-                  h_face = 0.5_wp*(h_layer(i - 1, j, k) + h_layer(i, j, k))
-               end if
+               call frhat_h_face_step(h_layer(il, j, k), h_layer(ir, j, k), &
+                                      href_l, href_r, scheme, e_prev, h_face)
                num = num + F_3d(i, j, k)*h_face
                denom = denom + h_face
             end do
@@ -974,7 +1008,8 @@ contains
       end if
    end subroutine face_depth_mean_u
 
-   pure subroutine face_depth_mean_rem_u(grid, F_3d, h_layer, rem, F_mean_2d, nz, metrics, n_inner)
+   pure subroutine face_depth_mean_rem_u(grid, F_3d, h_layer, rem, F_mean_2d, nz, metrics, n_inner, &
+                                         href, scheme)
       !! `face_depth_mean_u` with MOM6 `wt_u` weighting (`&ocean_bt_nml
       !! forcing_visc_rem`): the weight is
       !! `h_face·visc_rem(k)` instead of `h_face`, so layers the implicit
@@ -1018,8 +1053,11 @@ contains
          !! Barotropic substep count (MOM6 `nstep`); `Instep = 1/n_inner`
          !! in the `wt_u` floor.  `max(n_inner, 1)` guards the unsplit
          !! (`n_inner = 0`) configuration.
-      integer :: i, j, k, nu, ny, nx_cells
-      real(wp) :: h_face, wt, num, denom, vr, instep
+      real(wp), intent(in) :: href(:, :)  ! assumed-shape-ok: cell-centred (nx,ny); see face_depth_mean_u
+      integer, intent(in) :: scheme
+         !! A `FRHAT_*` constant.  See `face_depth_mean_u`.
+      integer :: i, j, k, nu, ny, nx_cells, il, ir
+      real(wp) :: h_face, wt, num, denom, vr, instep, href_l, href_r, e_prev
       logical :: use_open
 
       nu = size(F_3d, 1)
@@ -1030,17 +1068,18 @@ contains
       instep = 1.0_wp/real(max(n_inner, 1), wp)
 
       if (use_open) then
-         do concurrent(j=1:ny, i=1:nu) local(k, h_face, wt, num, denom, vr)
+         do concurrent(j=1:ny, i=1:nu) &
+            local(k, il, ir, href_l, href_r, e_prev, h_face, wt, num, denom, vr)
+            il = max(1, i - 1)
+            ir = min(nx_cells, i)
+            href_l = href(il, j)
+            href_r = href(ir, j)
+            e_prev = -0.5_wp*(href_l + href_r)
             num = 0.0_wp
             denom = 0.0_wp
             do k = 1, nz
-               if (i == 1) then
-                  h_face = h_layer(1, j, k)
-               else if (i == nu) then
-                  h_face = h_layer(nx_cells, j, k)
-               else
-                  h_face = 0.5_wp*(h_layer(i - 1, j, k) + h_layer(i, j, k))
-               end if
+               call frhat_h_face_step(h_layer(il, j, k), h_layer(ir, j, k), &
+                                      href_l, href_r, scheme, e_prev, h_face)
                if (ieee_is_finite(rem(i, j, k))) then
                   ! Clamp to [0, 1] BEFORE MOM6's floor: MOM6's remnant is
                   ! non-negative by construction, but a round-off -1e-17 here
@@ -1062,17 +1101,18 @@ contains
             end if
          end do
       else
-         do concurrent(j=1:ny, i=1:nu) local(k, h_face, wt, num, denom, vr)
+         do concurrent(j=1:ny, i=1:nu) &
+            local(k, il, ir, href_l, href_r, e_prev, h_face, wt, num, denom, vr)
+            il = max(1, i - 1)
+            ir = min(nx_cells, i)
+            href_l = href(il, j)
+            href_r = href(ir, j)
+            e_prev = -0.5_wp*(href_l + href_r)
             num = 0.0_wp
             denom = 0.0_wp
             do k = 1, nz
-               if (i == 1) then
-                  h_face = h_layer(1, j, k)
-               else if (i == nu) then
-                  h_face = h_layer(nx_cells, j, k)
-               else
-                  h_face = 0.5_wp*(h_layer(i - 1, j, k) + h_layer(i, j, k))
-               end if
+               call frhat_h_face_step(h_layer(il, j, k), h_layer(ir, j, k), &
+                                      href_l, href_r, scheme, e_prev, h_face)
                if (ieee_is_finite(rem(i, j, k))) then
                   ! Clamp to [0, 1] BEFORE MOM6's floor: MOM6's remnant is
                   ! non-negative by construction, but a round-off -1e-17 here
@@ -1096,7 +1136,8 @@ contains
       end if
    end subroutine face_depth_mean_rem_u
 
-   pure subroutine face_depth_mean_rem_v(grid, F_3d, h_layer, rem, F_mean_2d, nz, metrics, n_inner)
+   pure subroutine face_depth_mean_rem_v(grid, F_3d, h_layer, rem, F_mean_2d, nz, metrics, n_inner, &
+                                         href, scheme)
       !! Symmetric v-face counterpart of `face_depth_mean_rem_u` — same
       !! MOM6 `wt_u` floor, `ieee_is_finite`-guarded the same way.
       type(hgrid_t), intent(in) :: grid
@@ -1118,8 +1159,11 @@ contains
          !! Knob off ⇒ the ORIGINAL loop, byte-identical.
       integer, intent(in) :: n_inner
          !! Barotropic substep count (MOM6 `nstep`); see `face_depth_mean_rem_u`.
-      integer :: i, j, k, nx, nv, ny_cells
-      real(wp) :: h_face, wt, num, denom, vr, instep
+      real(wp), intent(in) :: href(:, :)  ! assumed-shape-ok: cell-centred (nx,ny); see face_depth_mean_u
+      integer, intent(in) :: scheme
+         !! A `FRHAT_*` constant.  See `face_depth_mean_u`.
+      integer :: i, j, k, nx, nv, ny_cells, jl, jr
+      real(wp) :: h_face, wt, num, denom, vr, instep, href_l, href_r, e_prev
       logical :: use_open
 
       nx = size(F_3d, 1)
@@ -1130,17 +1174,18 @@ contains
       instep = 1.0_wp/real(max(n_inner, 1), wp)
 
       if (use_open) then
-         do concurrent(j=1:nv, i=1:nx) local(k, h_face, wt, num, denom, vr)
+         do concurrent(j=1:nv, i=1:nx) &
+            local(k, jl, jr, href_l, href_r, e_prev, h_face, wt, num, denom, vr)
+            jl = max(1, j - 1)
+            jr = min(ny_cells, j)
+            href_l = href(i, jl)
+            href_r = href(i, jr)
+            e_prev = -0.5_wp*(href_l + href_r)
             num = 0.0_wp
             denom = 0.0_wp
             do k = 1, nz
-               if (j == 1) then
-                  h_face = h_layer(i, 1, k)
-               else if (j == nv) then
-                  h_face = h_layer(i, ny_cells, k)
-               else
-                  h_face = 0.5_wp*(h_layer(i, j - 1, k) + h_layer(i, j, k))
-               end if
+               call frhat_h_face_step(h_layer(i, jl, k), h_layer(i, jr, k), &
+                                      href_l, href_r, scheme, e_prev, h_face)
                if (ieee_is_finite(rem(i, j, k))) then
                   ! Clamp to [0, 1] BEFORE MOM6's floor: MOM6's remnant is
                   ! non-negative by construction, but a round-off -1e-17 here
@@ -1162,17 +1207,18 @@ contains
             end if
          end do
       else
-         do concurrent(j=1:nv, i=1:nx) local(k, h_face, wt, num, denom, vr)
+         do concurrent(j=1:nv, i=1:nx) &
+            local(k, jl, jr, href_l, href_r, e_prev, h_face, wt, num, denom, vr)
+            jl = max(1, j - 1)
+            jr = min(ny_cells, j)
+            href_l = href(i, jl)
+            href_r = href(i, jr)
+            e_prev = -0.5_wp*(href_l + href_r)
             num = 0.0_wp
             denom = 0.0_wp
             do k = 1, nz
-               if (j == 1) then
-                  h_face = h_layer(i, 1, k)
-               else if (j == nv) then
-                  h_face = h_layer(i, ny_cells, k)
-               else
-                  h_face = 0.5_wp*(h_layer(i, j - 1, k) + h_layer(i, j, k))
-               end if
+               call frhat_h_face_step(h_layer(i, jl, k), h_layer(i, jr, k), &
+                                      href_l, href_r, scheme, e_prev, h_face)
                if (ieee_is_finite(rem(i, j, k))) then
                   ! Clamp to [0, 1] BEFORE MOM6's floor: MOM6's remnant is
                   ! non-negative by construction, but a round-off -1e-17 here
@@ -1196,7 +1242,7 @@ contains
       end if
    end subroutine face_depth_mean_rem_v
 
-   pure subroutine face_depth_mean_v(grid, F_3d, h_layer, F_mean_2d, nz, metrics)
+   pure subroutine face_depth_mean_v(grid, F_3d, h_layer, F_mean_2d, nz, metrics, href, scheme)
       !! Symmetric v-face counterpart of `face_depth_mean_u`.
       type(hgrid_t), intent(in) :: grid
       ! assumed-shape-ok: face arrays have shape (nx,ny+1,nz); a single (nx,ny,nz)
@@ -1209,8 +1255,11 @@ contains
          !! REQUIRED.  See `face_depth_mean_u` for the argument and for
          !! why it is not optional; knob off ⇒ the ORIGINAL loop,
          !! byte-identical.
-      integer :: i, j, k, nx, nv, ny_cells
-      real(wp) :: h_face, num, denom
+      real(wp), intent(in) :: href(:, :)  ! assumed-shape-ok: cell-centred (nx,ny); see face_depth_mean_u
+      integer, intent(in) :: scheme
+         !! A `FRHAT_*` constant.  See `face_depth_mean_u`.
+      integer :: i, j, k, nx, nv, ny_cells, jl, jr
+      real(wp) :: h_face, num, denom, href_l, href_r, e_prev
       logical :: use_open
 
       nx = size(F_3d, 1)
@@ -1219,17 +1268,17 @@ contains
       use_open = metrics%use_closed_faces
 
       if (use_open) then
-         do concurrent(j=1:nv, i=1:nx) local(k, h_face, num, denom)
+         do concurrent(j=1:nv, i=1:nx) local(k, jl, jr, href_l, href_r, e_prev, h_face, num, denom)
+            jl = max(1, j - 1)
+            jr = min(ny_cells, j)
+            href_l = href(i, jl)
+            href_r = href(i, jr)
+            e_prev = -0.5_wp*(href_l + href_r)
             num = 0.0_wp
             denom = 0.0_wp
             do k = 1, nz
-               if (j == 1) then
-                  h_face = h_layer(i, 1, k)
-               else if (j == nv) then
-                  h_face = h_layer(i, ny_cells, k)
-               else
-                  h_face = 0.5_wp*(h_layer(i, j - 1, k) + h_layer(i, j, k))
-               end if
+               call frhat_h_face_step(h_layer(i, jl, k), h_layer(i, jr, k), &
+                                      href_l, href_r, scheme, e_prev, h_face)
                h_face = h_face*metrics%open_v(i, j, k)
                num = num + F_3d(i, j, k)*h_face
                denom = denom + h_face
@@ -1241,17 +1290,17 @@ contains
             end if
          end do
       else
-         do concurrent(j=1:nv, i=1:nx) local(k, h_face, num, denom)
+         do concurrent(j=1:nv, i=1:nx) local(k, jl, jr, href_l, href_r, e_prev, h_face, num, denom)
+            jl = max(1, j - 1)
+            jr = min(ny_cells, j)
+            href_l = href(i, jl)
+            href_r = href(i, jr)
+            e_prev = -0.5_wp*(href_l + href_r)
             num = 0.0_wp
             denom = 0.0_wp
             do k = 1, nz
-               if (j == 1) then
-                  h_face = h_layer(i, 1, k)
-               else if (j == nv) then
-                  h_face = h_layer(i, ny_cells, k)
-               else
-                  h_face = 0.5_wp*(h_layer(i, j - 1, k) + h_layer(i, j, k))
-               end if
+               call frhat_h_face_step(h_layer(i, jl, k), h_layer(i, jr, k), &
+                                      href_l, href_r, scheme, e_prev, h_face)
                num = num + F_3d(i, j, k)*h_face
                denom = denom + h_face
             end do
@@ -1382,8 +1431,11 @@ contains
       real(wp) :: du_scale
       real(wp) :: h_face, sum_h, sum_hvr, vr_bar, wt, vr_k
       real(wp) :: du_bc, dv_bc
+      real(wp) :: href_l, href_r, e_prev
+      integer :: il, ir, jl, jr, frhat_scheme
       logical :: do_rescale, do_bc_pgf, do_visc_rem, do_open, do_bt_rescale
 
+      frhat_scheme = bt_work%frhat_scheme
       do_rescale = .true.
       if (present(skip_h_rescale)) do_rescale = .not. skip_h_rescale
       do_bc_pgf = .false.
@@ -1436,17 +1488,23 @@ contains
          ! exactly that (not `open·1/1`) so the no-visc_rem closed-face
          ! answer is the one this branch always gave.
          do concurrent(j=1:ny, i=1:nu) &
-            local(k, delta_u, sum_h, sum_hvr, h_face, vr_bar, wt, vr_k)
+            local(k, il, ir, href_l, href_r, e_prev, delta_u, sum_h, sum_hvr, h_face, vr_bar, wt, vr_k)
             delta_u = du_scale*(bt_work%bt_ubt_end(i, j) - bt_work%ubt_at_n(i, j) - dt*bt_work%F_bt_u(i, j))
             if (do_bt_rescale) then
                if (bt_work%av_rem_u(i, j) > 0.0_wp .and. ieee_is_finite(bt_work%av_rem_u(i, j))) then
                   delta_u = delta_u*min(bt_work%bt_rem_u(i, j)**n_in/bt_work%av_rem_u(i, j), 1.0_wp)
                end if
             end if
+            il = max(1, i - 1)
+            ir = min(nu - 1, i)
+            href_l = bt_work%bt_H_ref(il, j)
+            href_r = bt_work%bt_H_ref(ir, j)
+            e_prev = -0.5_wp*(href_l + href_r)
             sum_h = 0.0_wp
             sum_hvr = 0.0_wp
             do k = 1, nz
-               h_face = 0.5_wp*(ms%h_layer(max(1, i - 1), j, k) + ms%h_layer(min(nu - 1, i), j, k))
+               call frhat_h_face_step(ms%h_layer(il, j, k), ms%h_layer(ir, j, k), &
+                                      href_l, href_r, frhat_scheme, e_prev, h_face)
                h_face = h_face*metrics%open_u(i, j, k)
                if (do_visc_rem) then
                   vr_k = bt_work%visc_rem_u(i, j, k)
@@ -1470,17 +1528,23 @@ contains
             end if
          end do
          do concurrent(j=1:nv, i=1:nx) &
-            local(k, delta_v, sum_h, sum_hvr, h_face, vr_bar, wt, vr_k)
+            local(k, jl, jr, href_l, href_r, e_prev, delta_v, sum_h, sum_hvr, h_face, vr_bar, wt, vr_k)
             delta_v = du_scale*(bt_work%bt_vbt_end(i, j) - bt_work%vbt_at_n(i, j) - dt*bt_work%F_bt_v(i, j))
             if (do_bt_rescale) then
                if (bt_work%av_rem_v(i, j) > 0.0_wp .and. ieee_is_finite(bt_work%av_rem_v(i, j))) then
                   delta_v = delta_v*min(bt_work%bt_rem_v(i, j)**n_in/bt_work%av_rem_v(i, j), 1.0_wp)
                end if
             end if
+            jl = max(1, j - 1)
+            jr = min(nv - 1, j)
+            href_l = bt_work%bt_H_ref(i, jl)
+            href_r = bt_work%bt_H_ref(i, jr)
+            e_prev = -0.5_wp*(href_l + href_r)
             sum_h = 0.0_wp
             sum_hvr = 0.0_wp
             do k = 1, nz
-               h_face = 0.5_wp*(ms%h_layer(i, max(1, j - 1), k) + ms%h_layer(i, min(nv - 1, j), k))
+               call frhat_h_face_step(ms%h_layer(i, jl, k), ms%h_layer(i, jr, k), &
+                                      href_l, href_r, frhat_scheme, e_prev, h_face)
                h_face = h_face*metrics%open_v(i, j, k)
                if (do_visc_rem) then
                   vr_k = bt_work%visc_rem_v(i, j, k)
@@ -1536,7 +1600,7 @@ contains
          ! only weight with the right depth mean when `⟨vr⟩_h` is
          ! undefined.
          do concurrent(j=1:ny, i=1:nu) &
-            local(k, delta_u, sum_h, sum_hvr, h_face, vr_bar, wt)
+            local(k, il, ir, href_l, href_r, e_prev, delta_u, sum_h, sum_hvr, h_face, vr_bar, wt)
             delta_u = du_scale*(bt_work%bt_ubt_end(i, j) - bt_work%ubt_at_n(i, j) - dt*bt_work%F_bt_u(i, j))
             if (do_bt_rescale) then
                if (bt_work%av_rem_u(i, j) > 0.0_wp .and. ieee_is_finite(bt_work%av_rem_u(i, j))) then
@@ -1544,10 +1608,16 @@ contains
                end if
             end if
             if (ieee_is_finite(delta_u)) then
+               il = max(1, i - 1)
+               ir = min(nu - 1, i)
+               href_l = bt_work%bt_H_ref(il, j)
+               href_r = bt_work%bt_H_ref(ir, j)
+               e_prev = -0.5_wp*(href_l + href_r)
                sum_h = 0.0_wp
                sum_hvr = 0.0_wp
                do k = 1, nz
-                  h_face = 0.5_wp*(ms%h_layer(max(1, i - 1), j, k) + ms%h_layer(min(nu - 1, i), j, k))
+                  call frhat_h_face_step(ms%h_layer(il, j, k), ms%h_layer(ir, j, k), &
+                                         href_l, href_r, frhat_scheme, e_prev, h_face)
                   sum_h = sum_h + h_face
                   sum_hvr = sum_hvr + h_face*bt_work%visc_rem_u(i, j, k)
                end do
@@ -1565,7 +1635,7 @@ contains
             end if
          end do
          do concurrent(j=1:nv, i=1:nx) &
-            local(k, delta_v, sum_h, sum_hvr, h_face, vr_bar, wt)
+            local(k, jl, jr, href_l, href_r, e_prev, delta_v, sum_h, sum_hvr, h_face, vr_bar, wt)
             delta_v = du_scale*(bt_work%bt_vbt_end(i, j) - bt_work%vbt_at_n(i, j) - dt*bt_work%F_bt_v(i, j))
             if (do_bt_rescale) then
                if (bt_work%av_rem_v(i, j) > 0.0_wp .and. ieee_is_finite(bt_work%av_rem_v(i, j))) then
@@ -1573,10 +1643,16 @@ contains
                end if
             end if
             if (ieee_is_finite(delta_v)) then
+               jl = max(1, j - 1)
+               jr = min(nv - 1, j)
+               href_l = bt_work%bt_H_ref(i, jl)
+               href_r = bt_work%bt_H_ref(i, jr)
+               e_prev = -0.5_wp*(href_l + href_r)
                sum_h = 0.0_wp
                sum_hvr = 0.0_wp
                do k = 1, nz
-                  h_face = 0.5_wp*(ms%h_layer(i, max(1, j - 1), k) + ms%h_layer(i, min(nv - 1, j), k))
+                  call frhat_h_face_step(ms%h_layer(i, jl, k), ms%h_layer(i, jr, k), &
+                                         href_l, href_r, frhat_scheme, e_prev, h_face)
                   sum_h = sum_h + h_face
                   sum_hvr = sum_hvr + h_face*bt_work%visc_rem_v(i, j, k)
                end do
@@ -2061,9 +2137,9 @@ contains
       real(wp) :: rn
 
       call face_depth_mean_u(grid, bt_work%visc_rem_u, ms%h_layer, bt_work%av_rem_u, &
-                             ms%nz_ml, metrics)
+                             ms%nz_ml, metrics, bt_work%bt_H_ref, bt_work%frhat_scheme)
       call face_depth_mean_v(grid, bt_work%visc_rem_v, ms%h_layer, bt_work%av_rem_v, &
-                             ms%nz_ml, metrics)
+                             ms%nz_ml, metrics, bt_work%bt_H_ref, bt_work%frhat_scheme)
 
       nu = size(bt_work%av_rem_u, 1)
       ny_u = size(bt_work%av_rem_u, 2)
@@ -2377,5 +2453,7 @@ contains
       ! stay at their type-default zero — wall faces in our setup carry
       ! ubt=0 and find_uhbt(0, anything)=0, so no flux through them.
    end subroutine set_local_BT_cont_types
+
+#include "rdb_frhat_face.inc"
 
 end module rdb_barotropic_coupling
