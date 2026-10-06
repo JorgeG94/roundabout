@@ -1,40 +1,57 @@
 .. _references:
 
-----------------------------------
-References, oracle and attribution
-----------------------------------
+-----------------------------------
+Acknowledgements and references
+-----------------------------------
 
 .. contents::
    :local:
 
 
-The physics oracle: MOM6
+NOAA-GFDL, MOM6 and SIS2
 ========================
 
-`MOM6 <https://github.com/NOAA-GFDL/MOM6>`_ is Roundabout's physics oracle.
-Wherever Roundabout implements an algorithm that MOM6 also has, MOM6's
-behaviour is the reference it is checked against. That covers the
-split-explicit barotropic solver, continuity-PPM, the finite-volume pressure
-gradient, ALE remapping, and the vertical and lateral closures.
+The numerical methods in Roundabout were developed at NOAA's Geophysical
+Fluid Dynamics Laboratory (NOAA-GFDL) by the developers of MOM6 and SIS2.
+Roundabout adapts them to GPUs. Its own work is the port: rewriting those
+methods around Fortran ``do concurrent``, with OpenACC for data movement and
+reductions, so the same source runs on NVIDIA GPUs and on CPUs. Full credit
+for the numerics goes to the MOM6 and SIS2 developers.
 
-Divergences from MOM6 are deliberate and documented in
+* **MOM6**, the Modular Ocean Model version 6,
+  https://github.com/NOAA-GFDL/MOM6. The ocean dynamical core follows it:
+  the split-explicit barotropic solver, continuity-PPM, the finite-volume
+  pressure gradient, ALE remapping, the vertical and lateral closures, and
+  the vertical-friction and bottom-boundary-layer treatment.
+  ``tools/om_topo_limit.f90`` is derived from MOM6 code.
+* **SIS2**, the Sea Ice Simulator version 2,
+  https://github.com/NOAA-GFDL/SIS2. The sea-ice component follows it:
+  thermodynamics, the ice-thickness distribution, category transport, the
+  C-grid elastic-viscous-plastic rheology and the ice-ocean coupling.
+
+
+The physics oracle
+==================
+
+MOM6 is Roundabout's physics oracle. Wherever Roundabout implements an
+algorithm MOM6 also has, MOM6's behaviour is the reference it is checked
+against. Divergences from it are deliberate and documented in
 ``docs/CLOSURE_MATRIX.md`` and ``docs/CAPABILITIES_AND_LIMITATIONS.md``. MOM6
-runtime parameters (for example ``BT_STRONG_DRAG`` or ``HVEL_SCHEME``) are
-named where a Roundabout option corresponds to one. The code itself cites the
-physics and the paper, never another model's source files or line numbers.
+and SIS2 runtime parameters (for example ``BT_STRONG_DRAG`` or
+``HVEL_SCHEME``) are named where a Roundabout option corresponds to one. The
+code itself cites the physics and the paper behind each algorithm.
 
 
-Attribution
-===========
+Licensing
+=========
 
-* **MOM6** -- NOAA-GFDL and the MOM6 developers,
-  https://github.com/NOAA-GFDL/MOM6, Apache License 2.0. Several ocean
-  schemes are ported from or modelled on MOM6. ``tools/om_topo_limit.f90`` is
-  derived from MOM6 code and says so in its header.
-* **SIS2** -- NOAA-GFDL, https://github.com/NOAA-GFDL/SIS2. The sea-ice EVP
-  rheology, ice-thickness distribution and ice-ocean coupling are ported from
-  SIS2. The divergences are listed in the sea-ice module docstrings.
-* **Roundabout** -- MIT License (see ``LICENSE`` in the repository root).
+MOM6 and SIS2 are licensed under the Apache License, Version 2.0. The code
+ported from them is used and modified under that licence. The repository
+carries a copy of it in ``LICENSES/Apache-2.0.txt``, and a ``NOTICE`` file
+that states what was ported and that it was modified. Roundabout's own code
+is released under the MIT License (``LICENSE``). Neither NOAA-GFDL nor the
+MOM6 or SIS2 developers endorse Roundabout, and they are not responsible for
+it.
 
 
 References

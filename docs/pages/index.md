@@ -24,16 +24,20 @@ Which closure is enabled and its tunable knobs:
 [`docs/CLOSURE_MATRIX.md`](https://github.com/JorgeG94/roundabout/blob/main/docs/CLOSURE_MATRIX.md)
 (drift-checked against the code by `tools/check_closure_matrix.py`).
 
-## Physics oracle and attribution
+## Acknowledgement: NOAA-GFDL, MOM6 and SIS2
 
-**MOM6 is Roundabout's physics oracle.** Where Roundabout implements an
-algorithm MOM6 also has, MOM6's behaviour is the reference it is checked
-against, and deliberate divergences are documented in
+**The numerical methods in Roundabout were developed at NOAA's Geophysical
+Fluid Dynamics Laboratory (NOAA-GFDL); Roundabout adapts them to GPUs.** The
+ocean dynamical core follows [MOM6](https://github.com/NOAA-GFDL/MOM6) and
+the sea-ice component follows [SIS2](https://github.com/NOAA-GFDL/SIS2).
+Full credit for the numerics goes to the MOM6 and SIS2 developers. MOM6 is
+also Roundabout's **physics oracle**: its behaviour is the reference
+Roundabout is checked against, and deliberate divergences are documented in
 [`docs/CLOSURE_MATRIX.md`](https://github.com/JorgeG94/roundabout/blob/main/docs/CLOSURE_MATRIX.md).
-Several ocean schemes are ported from or modelled on
-[MOM6](https://github.com/NOAA-GFDL/MOM6) (NOAA-GFDL, Apache License 2.0),
-and the sea-ice EVP rheology, ice-thickness distribution and ice-ocean
-coupling are ported from [SIS2](https://github.com/NOAA-GFDL/SIS2) (NOAA-GFDL).
-The docstrings in this reference cite the paper behind each algorithm. The
+
+MOM6 and SIS2 are licensed under the Apache License 2.0, and the ported code
+is used and modified under it (see
+[`NOTICE`](https://github.com/JorgeG94/roundabout/blob/main/NOTICE)). The
+docstrings in this reference cite the paper behind each algorithm, and the
 full reference list is in
 [`rdb_docs/source/references.rst`](https://github.com/JorgeG94/roundabout/blob/main/rdb_docs/source/references.rst).
