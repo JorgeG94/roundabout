@@ -18,8 +18,11 @@ methods around Fortran ``do concurrent``, with OpenACC for data movement and
 reductions, so the same source runs on NVIDIA GPUs and on CPUs. Full credit
 for the numerics goes to the MOM6 and SIS2 developers.
 
-Roundabout is a hobby project, written for fun and for learning. It runs in
-parallel to, and separately from, the GPU porting efforts at NOAA-GFDL and
+Roundabout is a hobby project, written for fun and as the author's
+learning project. The author is part of
+`MOM6-GPU <https://github.com/MOM6-GPU>`_, the effort to port MOM6 to
+GPUs. Roundabout runs in parallel to, and separately from, that work and
+the GPU porting efforts at NOAA-GFDL and
 `ACCESS-NRI <https://www.access-nri.org.au/>`_, and it is not part of
 them.
 

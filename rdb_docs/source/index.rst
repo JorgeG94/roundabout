@@ -38,8 +38,11 @@ licensed under the Apache License 2.0, and the ported code is used and
 modified under it. See :doc:`references` for the full acknowledgement,
 licensing and the papers the physics comes from.
 
-Roundabout is a hobby project, written for fun and for learning. It runs in
-parallel to, and separately from, the GPU porting efforts at NOAA-GFDL and
+Roundabout is a hobby project, written for fun and as the author's
+learning project. The author is part of
+`MOM6-GPU <https://github.com/MOM6-GPU>`_, the effort to port MOM6 to
+GPUs. Roundabout runs in parallel to, and separately from, that work and
+the GPU porting efforts at NOAA-GFDL and
 `ACCESS-NRI <https://www.access-nri.org.au/>`_, and it is not part of
 them.
 
