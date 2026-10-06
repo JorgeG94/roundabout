@@ -371,9 +371,9 @@ module rdb_ocean_dyn
          !! full-strength dt·F kick (the 2026-07-28 forensics: explicit
          !! force × dt on outcropped mm-layers is the dt=800 blow-up
          !! injector; the fold/vdiff mopped ±30 m/s per stage until
-         !! escape).  `&ocean_vdiff_nml accel_visc_rem`; requires
-         !! `&ocean_bt_nml correction_visc_rem` (the producer).  Default
-         !! off ⇒ bit-identical.  Split path only (v1).
+         !! escape).  `&ocean_vdiff_nml accel_visc_rem` — RETIRED (D1
+         !! follow-up): no MOM6 state-update equivalent, fail-loud at
+         !! configure.  Default off ⇒ bit-identical.  Split path only (v1).
       real(wp), allocatable :: avr_u0(:, :, :)
       real(wp), allocatable :: avr_v0(:, :, :)
          !! accel_visc_rem stage-entry velocity snapshots.  Eagerly
@@ -1447,11 +1447,12 @@ contains
          !! The BT-corrector workstate — supplies `visc_rem_u/v` as the
          !! vdiff kernel's OUTPUT.  Present only from `run_stage_split`
          !! (the unsplit path has no BT correction to consume it).  When
-         !! present AND `bt_work%bt_correction_visc_rem`, the viscous
+         !! present AND `bt_work%bt_visc_rem_producer`, the viscous
          !! remnant γ is (re)computed here, at step 9 of the CURRENT
-         !! stage — the BT corrector at step 7 of the NEXT stage reads
-         !! it, a one-stage (Δt/2) lag (see the step-9 call site below).
-         !! Absent, or the knob off, ⇒ no remnant work ⇒ bit-identical.
+         !! stage — the next stage's forcing/renorm/bt_rem_from consumers
+         !! read it, a one-stage (Δt/2) lag (see the step-9 call site
+         !! below).  Absent, or no consumer on, ⇒ no remnant work ⇒
+         !! bit-identical.
 
       real(wp), intent(in), optional :: lambda_top_u(grid%nx_total + 1, grid%ny_total)
       real(wp), intent(in), optional :: lambda_top_v(grid%nx_total, grid%ny_total + 1)
@@ -1528,8 +1529,13 @@ contains
       if (present(kshear)) vertex_kv = kshear_active .and. kshear%at_vertex
       tidal_active = .false.
       if (present(vmix_tidal)) tidal_active = vmix_tidal%enable
+      ! D1 follow-up: the producer must run whenever ANY consumer needs
+      ! visc_rem_u/v fresh, not only the (retired) weighted BT-correction
+      ! fold — read the decoupled `bt_visc_rem_producer` gate (set by
+      ! `configure_ocean_bt` to the OR of forcing/renorm/bt_rem_from and
+      ! the legacy correction flag), not `bt_correction_visc_rem` alone.
       do_remnant = .false.
-      if (present(bt_work)) do_remnant = bt_work%bt_correction_visc_rem
+      if (present(bt_work)) do_remnant = bt_work%bt_visc_rem_producer
       ! PR-1 VISC_REM_TIMESTEP_BUG fix: at the pred_corr PREDICTOR this
       ! routine is called with `dt_vel = pc_be·dt` (the provisional
       ! velocity's own apply dt), but MOM6's default (non-buggy) remnant
@@ -4775,7 +4781,7 @@ contains
       ! (PGF_BUG.md §9).  MOM6 computes vertvisc_coef + remnant in the
       ! predictor BEFORE btstep/continuity (SPEC §2 P5).
       if (dyn%bt_work%bt_forcing_visc_rem .or. dyn%bt_work%bt_renorm_visc_rem &
-          .or. is_pc) then
+          .or. dyn%bt_work%bt_rem_from_visc_rem .or. is_pc) then
          if (fold_top) then
             call visc_rem_precompute(grid, dyn%bt_work, vmix, vd, ss, bd, ms, dt, kshear=kshear, &
                                      lambda_top_u=td%lambda_top_u, lambda_top_v=td%lambda_top_v, &
@@ -5278,10 +5284,12 @@ contains
 
       ! ---- 9. Vertical mixing (implicit, stable under any dt) ----
       ! `bt_work=dyn%bt_work` is the visc_rem PRODUCER call: when
-      ! `bt_correction_visc_rem` is on, this (re)fills `bt_work%visc_rem_u/v`
-      ! from THIS stage's momentum solve.  The BT correction that CONSUMES
-      ! it already ran at step 7 above, so the corrector always reads the
-      ! PREVIOUS stage's γ — a one-stage (Δt/2) lag, accepted for v1 (see
+      ! `bt_visc_rem_producer` is on (D1 follow-up — decoupled from the
+      ! retired `bt_correction_visc_rem`; true whenever forcing/renorm/
+      ! bt_rem_from_visc_rem is), this (re)fills `bt_work%visc_rem_u/v`
+      ! from THIS stage's momentum solve.  Any consumer that reads it
+      ! before the NEXT stage's refresh reads the PREVIOUS stage's γ — a
+      ! one-stage (Δt/2) lag, accepted for v1 (see
       ! `vmix_apply_in_stage`'s `bt_work` docstring and PLAN_PR19 §11.1).
       ! At stage 1 of step 1, γ is still at its `source=1.0` init, so the
       ! very first correction is h-only ⇒ benign.
@@ -5293,7 +5301,7 @@ contains
       ! untouched); dt_vel = BE·dt matches MOM6's dt_pred.
       if (is_pred) then
          ! PR-1: thread `dt_remnant=dt` so the visc_rem PRODUCER (when
-         ! `bt_correction_visc_rem` is on) is built at the outer step's
+         ! `bt_visc_rem_producer` is on) is built at the outer step's
          ! full `dt`, NOT the predictor's own `dt_vel = pc_be·dt` —
          ! MOM6's `VISC_REM_TIMESTEP_BUG = .false.` default
          ! (MOM_dynamics_split_RK2.F90:777-779).  `bc` is forwarded so the

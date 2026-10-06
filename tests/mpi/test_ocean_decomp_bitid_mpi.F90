@@ -32,12 +32,17 @@
 !!   * periodic_channel_zstar — re-entrant channel over a seamount on z*
 !!     (ALE remap every step), with porous barriers;
 !!   * visc_rem_zstar — closed, cooled Cartesian spoon basin on z* (bed
-!!     fillers on the shallow rim) with the visc_rem-weighted BT corrector
-!!     (`correction_visc_rem` + the implicit bed-drag fold): the fold writes
-!!     every face, ghosts included, with a per-layer weight that is not
-!!     halo-valid, so its ghost velocities must be refreshed before the
-!!     vertical mixing reads them (closed walls, so no OBC/sponge refresh
-!!     hides it);
+!!     fillers on the shallow rim) with the visc_rem chain (`visc_rem_chain`
+!!     + the implicit bed-drag fold): av_rem/bt_rem and the wt_u/renorm
+!!     weights are per-face column sums built on the full face extent
+!!     including ghosts, so a decomposition-sensitive seam in them shows
+!!     here (D1 follow-up, 2026-10: this case used to drive the
+!!     visc_rem-WEIGHTED BT-correction fold directly via the now-retired
+!!     `correction_visc_rem`, whose ghost writes needed an explicit
+!!     refresh before the vertical mixing read them; that fold has no
+!!     MOM6 counterpart and is gone, so this specific ghost-staleness
+!!     class has no decomposition coverage any more -- same posture as
+!!     `accel_visc_rem`'s kernel, single-rank-tested only);
 !!   * periodic_sponge — re-entrant channel, periodic west/east, with a
 !!     relaxing sponge band on the closed north edge; besides the usual
 !!     bitwise field comparison, its closed-budget mass/salt/heat totals
@@ -85,10 +90,11 @@
 !!     exchange, its 1xN splits through the local kernels.
 !!   * visc_rem_chain — the island_basin topology with the visc_rem chain
 !!     live (`&ocean_vdiff_nml hvel_mom6 + bbl_glue`, `&ocean_bt_nml
-!!     correction_visc_rem + bt_rem_from_visc_rem`) -- av_rem/bt_rem are
+!!     visc_rem_chain`) -- av_rem/bt_rem and the wt_u/renorm weights are
 !!     per-face column sums built on the FULL face extent including ghosts,
 !!     so a decomposition-sensitive seam in them shows here exactly like
-!!     every other compared field.
+!!     every other compared field; the BT-correction fold itself stays
+!!     UNIFORM (D1 follow-up — MOM6 never weights it).
 !! All are stratified with a boundary-layer scheme on, so the tiles exchange real
 !! flow and real tracer structure.  26 x 18 cells (tripolar: 30 x 24),
 !! nghost = 3 (weno7_pv: 26 x 24, nghost = 5): every factorisation above is
@@ -224,12 +230,16 @@ contains
       character(len=16) :: spx, spy, snx, sny
       character(len=:), allocatable :: common, bt_extra
 
-      ! The visc_rem-weighted BT corrector rides on the common &ocean_bt_nml
-      ! group (one group per namelist).
+      ! The visc_rem chain rides on the common &ocean_bt_nml group (one
+      ! group per namelist).  D1 follow-up (2026-10): the weighted
+      ! BT-correction fold (`correction_visc_rem`) is RETIRED -- MOM6
+      ! never weights it, and it is what NaNs the 1-degree Southern Ocean
+      ! z* open-step case under bbl_glue -- so both cases below now
+      ! exercise `visc_rem_chain` (producer + bt_rem_from_av_rem + wt_u
+      ! forcing + renorm_visc_rem, UNIFORM BT-correction fold) instead.
       bt_extra = ""
-      if (label == "visc_rem_zstar") bt_extra = ", correction_visc_rem = .true."
-      if (label == "visc_rem_chain") bt_extra = ", correction_visc_rem = .true., "// &
-                                                "bt_rem_from_visc_rem = .true."
+      if (label == "visc_rem_zstar") bt_extra = ", visc_rem_chain = .true."
+      if (label == "visc_rem_chain") bt_extra = ", visc_rem_chain = .true."
       write (spx, '(i0)') px
       write (spy, '(i0)') py
       write (snx, '(i0)') NX_G
@@ -262,9 +272,11 @@ contains
                "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
       case ("visc_rem_chain")
          ! The island basin with the visc_rem chain live end to end: MOM6
-         ! BOTTOMDRAGLAW glue (hvel_mom6 + bbl_glue) feeding the BT corrector
-         ! weight (correction_visc_rem) and bt_rem = av_rem**(1/n_inner)
-         ! substep damping (bt_rem_from_visc_rem, via bt_extra above).
+         ! BOTTOMDRAGLAW glue (hvel_mom6 + bbl_glue) feeding the producer,
+         ! the wt_u BT-forcing weight, the continuity renormaliser and
+         ! bt_rem = av_rem**(1/n_inner) substep damping (all via
+         ! `visc_rem_chain`, bt_extra above) -- the BT-correction fold
+         ! itself stays UNIFORM (D1 follow-up).
          nml = common// &
                "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
                "dx = 20000.0, dy = 20000.0 /"//NL// &
@@ -307,9 +319,11 @@ contains
                "north = 'wall' /"//NL
       case ("visc_rem_zstar")
          ! Closed, cooled Cartesian spoon basin, MOM6 z* (the 300 m rim
-         ! carries bed fillers), with the visc_rem-weighted BT corrector.
-         ! visc_rem needs the implicit drag fold, which refuses an
-         ! HBBL-distributed drag: bed-only drag.
+         ! carries bed fillers), with the visc_rem chain (producer +
+         ! forcing/renorm/bt_rem_from -- D1 follow-up: no longer the
+         ! weighted BT-correction fold, which is retired).  visc_rem
+         ! needs the implicit drag fold, which refuses an HBBL-distributed
+         ! drag: bed-only drag.
          nml = common// &
                "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
                "dx = 20000.0, dy = 20000.0 /"//NL// &

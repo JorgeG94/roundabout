@@ -395,7 +395,13 @@ AXES = [
         ("wave_drag", {"ocean_bt_nml": {"wave_drag": True, "wave_drag_r_uniform": 1.0e-3}}),
         # The visc_rem family needs the implicit drag fold, which refuses an
         # HBBL-distributed drag: the value brings bed-only drag with it.
-        ("visc_rem", {"ocean_bt_nml": {"correction_visc_rem": True},
+        # D1 follow-up (2026-10): `correction_visc_rem` (the weighted
+        # BT-correction fold) is retired -- MOM6 never weights it, and it
+        # is what NaNs the 1-degree Southern Ocean z* open-step case under
+        # bbl_glue -- so this cell now exercises `visc_rem_chain` (producer
+        # + bt_rem_from_av_rem + wt_u forcing + renorm_visc_rem, uniform
+        # fold) instead.
+        ("visc_rem", {"ocean_bt_nml": {"visc_rem_chain": True},
                       "ocean_vdiff_nml": {"implicit_drag": True},
                       "ocean_bdrag_nml": {"hbbl": 0.0}}),
     ]),

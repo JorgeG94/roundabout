@@ -1327,8 +1327,12 @@ contains
       type(hgrid_t), intent(in), optional :: grid
       logical, intent(in), optional :: use_bc_pgf
       logical, intent(in), optional :: use_visc_rem
-         !! Weight the fold by `visc_rem/⟨visc_rem⟩_h` (`&ocean_bt_nml
-         !! correction_visc_rem`).  Default `.false.` ⇒ the uniform fold.
+         !! Weight the fold by `visc_rem/⟨visc_rem⟩_h`.  RETIRED as a live
+         !! namelist path (`&ocean_bt_nml correction_visc_rem` is
+         !! fail-loud at configure, D1 follow-up — MOM6's `accel_layer_u`
+         !! never weights this fold) but the kernel dispatch stays, for
+         !! its own direct unit tests.  Default `.false.` ⇒ the uniform
+         !! fold, which `visc_rem_chain` also uses.
       real(wp), intent(in), optional :: scale
          !! Multiplier on the Δu correction (default 1, bit-identical).
          !! The pred_corr PREDICTOR passes `BE` so the provisional velocity

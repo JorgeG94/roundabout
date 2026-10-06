@@ -130,7 +130,8 @@ FEATURES = {
     "substep_drag": ("BT substep drag", lambda n: bool(_g(n, "ocean_bt_nml", "substep_drag", False))),
     "wave_drag": ("BT linear wave drag", lambda n: bool(_g(n, "ocean_bt_nml", "wave_drag", False))),
     "h_weighted": ("h-weighted BT corrector", lambda n: bool(_g(n, "ocean_bt_nml", "correction_h_weighted", False))),
-    "visc_rem": ("visc_rem BT corrector", lambda n: bool(_g(n, "ocean_bt_nml", "correction_visc_rem", False))),
+    "visc_rem": ("visc_rem chain (D1 follow-up: was correction_visc_rem, "
+                 "retired 2026-10)", lambda n: bool(_g(n, "ocean_bt_nml", "visc_rem_chain", False))),
     "implicit_drag": ("implicit bottom-drag fold", lambda n: bool(_g(n, "ocean_vdiff_nml", "implicit_drag", False))),
     # geometry / grid / forcing
     "periodic_x": ("re-entrant in x", lambda n: _edges(n)[0] == "periodic"),

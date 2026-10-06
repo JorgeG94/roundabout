@@ -15,8 +15,9 @@ module rdb_ocean_setup
    use rdb_constants, only: wp, GRAVITY, LAND_DEPTH_THRESHOLD, NZ_STACK_MAX
 #endif
    use rdb_constants, only: H_VANISHED, VCOORD_ZSTAR_FULL, VCOORD_ZSTAR
-   use rdb_config, only: config_t, ocean_bt_correction_visc_rem_on, ocean_bt_forcing_visc_rem_on, &
-                         ocean_bt_renorm_visc_rem_on, ocean_bt_rem_from_visc_rem_on
+   use rdb_config, only: config_t, ocean_bt_forcing_visc_rem_on, &
+                         ocean_bt_renorm_visc_rem_on, ocean_bt_rem_from_visc_rem_on, &
+                         ocean_bt_visc_rem_producer_on
    use rdb_grid, only: hgrid_t
    use rdb_decomp, only: decomp_t
    use rdb_ocean_state, only: ocean_state_t, ocean_state_seed_land_cells, &
@@ -3830,19 +3831,26 @@ contains
                           "live ζ_bt/∇KE off, frozen copies stay in F_bt)")
       end if
 
-      ! visc_rem-weighted BT-corrector fold (wt = visc_rem/<visc_rem>_h).
-      ! visc_rem is produced every split-path stage by vdiff_apply_momentum
-      ! from the momentum tridiagonal (rdb_ocean_vdiff.F90); it is inert
-      ! (≡ 1) unless &ocean_vdiff_nml implicit_drag is also on (validate_config
-      ! warns in that case).
-      ocean_state%dyn%bt_work%bt_correction_visc_rem = ocean_bt_correction_visc_rem_on(cfg)
-      if (compute_rank == 0 .and. ocean_bt_correction_visc_rem_on(cfg)) then
+      ! RETIRED visc_rem-weighted BT-corrector fold (wt = visc_rem/<visc_rem>_h):
+      ! `correction_visc_rem` is now fail-loud at configure (D1 follow-up —
+      ! MOM6's accel_layer_u never weights this fold), so this field is
+      ! wired straight from the RAW (deprecated) knob, never from
+      ! `visc_rem_chain` — a test that constructs `cfg` directly and sets
+      ! the raw field (bypassing the nml refusal) still gets the weighted
+      ! dispatch the kernel itself supports; everyone else reads 1.
+      ocean_state%dyn%bt_work%bt_correction_visc_rem = cfg%ocean%bt%correction_visc_rem
+      if (compute_rank == 0 .and. cfg%ocean%bt%correction_visc_rem) then
          call logger%info("BT correction:    visc_rem/<visc_rem>_h weight ON "// &
                           "(visc_rem produced by vdiff)")
       end if
+      ! D1 follow-up: the visc_rem PRODUCER is decoupled from the retired
+      ! weighted fold above — it runs whenever ANY real consumer needs
+      ! visc_rem_u/v fresh (forcing/renorm/bt_rem_from, or visc_rem_chain,
+      ! which implies all three).
+      ocean_state%dyn%bt_work%bt_visc_rem_producer = ocean_bt_visc_rem_producer_on(cfg)
       ! MOM6 wt_u parity for the BT FORCING assembly (PGF_BUG.md §9):
-      ! friction-damped layers stop forcing the fast loop.  Requires
-      ! correction_visc_rem (validated at configure).
+      ! friction-damped layers stop forcing the fast loop.  Self-sufficient
+      ! (see `bt_visc_rem_producer` above).
       ocean_state%dyn%bt_work%bt_forcing_visc_rem = ocean_bt_forcing_visc_rem_on(cfg)
       if (compute_rank == 0 .and. ocean_bt_forcing_visc_rem_on(cfg)) then
          call logger%info("BT forcing:       h·visc_rem weight ON (MOM6 wt_u)")
@@ -3900,17 +3908,20 @@ contains
          call logger%info("BT renormaliser:  gamma-weighted du + u_cor (MOM6 "// &
                           "continuity inversion parity)")
       end if
-      ! PR-8: `correction_visc_rem` couples against `visc_rem_u/v`, which are
-      ! only ever filled away from their `source=1.0` default by the implicit
-      ! bottom-drag diagonal fold (`&ocean_vdiff_nml implicit_drag`) breaking
-      ! vdiff's per-row unit-sum normalisation — without it the knob is
+      ! PR-8 / D1 follow-up: every `*_visc_rem` consumer couples against
+      ! `visc_rem_u/v`, which are only ever filled away from their
+      ! `source=1.0` default by the implicit bottom-drag diagonal fold
+      ! (`&ocean_vdiff_nml implicit_drag`) or `bbl_glue` breaking vdiff's
+      ! per-row unit-sum normalisation — without either the chain is
       ! exactly gamma==1 (a x1.0). Warn rather than abort (tidal_mixing
       ! e_uniform=0 precedent): PR-19 (visc_rem) is the named owner that
-      ! fills the arrays for other configurations.
-      if (compute_rank == 0 .and. ocean_bt_correction_visc_rem_on(cfg) .and. &
+      ! fills the arrays for other configurations.  (`validate_config` also
+      ! carries this check at configure; repeated here for the rank-0 log.)
+      if (compute_rank == 0 .and. ocean_bt_visc_rem_producer_on(cfg) .and. &
           .not. (cfg%ocean%vdiff%implicit_drag .or. ocean_state%vdiff%bbl_glue)) then
-         call logger%warning("&ocean_bt_nml correction_visc_rem=.true. has no effect "// &
-                             "without &ocean_vdiff_nml implicit_drag=.true. "// &
+         call logger%warning("&ocean_bt_nml forcing_visc_rem/renorm_visc_rem/"// &
+                             "bt_rem_from_visc_rem/visc_rem_chain has no effect without "// &
+                             "&ocean_vdiff_nml implicit_drag=.true. or bbl_glue=.true. "// &
                              "(visc_rem_u/v stay at their source=1.0 default; PR-19 owns filling them)")
       end if
 

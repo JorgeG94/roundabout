@@ -89,18 +89,40 @@ module rdb_barotropic_workstate
          !! multiplication is a no-op (bit-identical).
 
       logical :: bt_correction_visc_rem = .false.
-         !! When `.true.`, `apply_bt_correction` weights the per-layer
-         !! barotropic increment by `visc_rem_*(k)/⟨visc_rem⟩_h` instead
-         !! of uniformly — biasing the Δu distribution toward layers LESS
-         !! damped by vertical viscosity, depth mean preserved
-         !! (`&ocean_bt_nml correction_visc_rem`).  Also gates the
-         !! visc_rem PRODUCER fused into `vmix_apply_in_stage`'s momentum
-         !! vdiff solve (MOM6 `vertvisc_remnant`, MOM_vert_friction.F90:
-         !! 1157-1258, sharing `vertvisc_coef`'s SAME coupling
-         !! coefficients `a_u` — includes `kv_bbl`/the BBL glue and the
-         !! Rayleigh/bed piston whenever the glue or `implicit_drag` folds
-         !! them into the matrix; the producer itself does NOT require
-         !! `implicit_drag` — see `vdiff_apply_momentum`'s `do_remnant`).
+         !! RETIRED-by-D1 (2026-10, PR-3 follow-up): when `.true.`,
+         !! `apply_bt_correction` weights the per-layer barotropic
+         !! increment by `visc_rem_*(k)/⟨visc_rem⟩_h` instead of
+         !! uniformly, biasing the Δu distribution toward layers LESS
+         !! damped by vertical viscosity (`&ocean_bt_nml
+         !! correction_visc_rem`, now fail-loud at configure outside
+         !! direct test construction of `cfg`). MOM6's `accel_layer_u`
+         !! (`MOM_barotropic.F90:3665-3675`) gives every layer the SAME
+         !! `u_accel_bt` (plus only the depth-mean-zero `pbce` baroclinic
+         !! term) — NO `visc_rem` weight — so this fold has no MOM6
+         !! counterpart, and on a 1-degree Southern Ocean z* OPEN-step
+         !! probe it is the mechanism that NaNs at step ~40 under
+         !! `bbl_glue` (the weight ratio is unbounded when a column's
+         !! glue damping is uneven across layers; MOM6 never risks this
+         !! because it never weights the fold at all).  `visc_rem_chain`
+         !! does NOT set this field — see `bt_visc_rem_producer` below for
+         !! the (now decoupled) producer gate.
+      logical :: bt_visc_rem_producer = .false.
+         !! D1 follow-up: gates the visc_rem PRODUCER fused into
+         !! `vmix_apply_in_stage`'s momentum vdiff solve (MOM6
+         !! `vertvisc_remnant`, MOM_vert_friction.F90:1157-1258, sharing
+         !! `vertvisc_coef`'s SAME coupling coefficients `a_u` — includes
+         !! `kv_bbl`/the BBL glue and the Rayleigh/bed piston whenever the
+         !! glue or `implicit_drag` folds them into the matrix; the
+         !! producer itself does NOT require `implicit_drag` — see
+         !! `vdiff_apply_momentum`'s `do_remnant`).  Decoupled from
+         !! `bt_correction_visc_rem`: the producer must run whenever ANY
+         !! consumer needs `visc_rem_u/v` fresh — `bt_forcing_visc_rem`
+         !! (wt_u), `bt_renorm_visc_rem` (continuity u_cor), or
+         !! `bt_rem_from_visc_rem` (av_rem/bt_rem) — not only the
+         !! (retired) weighted BT-correction fold.  Set to the OR of all
+         !! four (including the legacy `bt_correction_visc_rem`, so a
+         !! test that constructs `cfg` directly and sets it still gets a
+         !! live producer) by `configure_ocean_bt`.
       logical :: bt_forcing_visc_rem = .false.
          !! MOM6 `wt_u` parity for the BT forcing assembly: weight the
          !! `F_bt_u/v` depth-mean (and the PGF-projection subtraction) by
@@ -120,8 +142,8 @@ module rdb_barotropic_workstate
          !!     `visc_rem_precompute`'s pre-substep refresh in
          !!     `run_stage_split`, which always runs at the stage's `dt`
          !!     (gated `is_pc .or. bt_forcing_visc_rem .or.
-         !!     bt_renorm_visc_rem`, i.e. unconditionally once per
-         !!     `pred_corr` stage).
+         !!     bt_renorm_visc_rem .or. bt_rem_from_visc_rem`, i.e.
+         !!     unconditionally once per `pred_corr` stage).
          !!   * `:777-779` (post-predictor, full `dt`, NOT `dt_pred`) maps
          !!     to `vmix_apply_in_stage`'s stage-end producer called with
          !!     the `dt_remnant=dt` argument at the PREDICTOR stage —
@@ -139,9 +161,10 @@ module rdb_barotropic_workstate
          !! `ssp_rk2` (no predictor/corrector split): one refresh per
          !! stage, before that stage's barotropic step — the pre-substep
          !! `visc_rem_precompute` call (gated on `bt_forcing_visc_rem
-         !! .or. bt_renorm_visc_rem`) plus the stage-end producer when
-         !! `bt_correction_visc_rem` is on; `dt_vel ≡ dt` on both ssp_rk2
-         !! stages, so the split `dt_remnant` path is never taken there.
+         !! .or. bt_renorm_visc_rem .or. bt_rem_from_visc_rem`) plus the
+         !! stage-end producer when `bt_visc_rem_producer` is on; `dt_vel
+         !! ≡ dt` on both ssp_rk2 stages, so the split `dt_remnant` path
+         !! is never taken there.
 
       logical :: bt_rem_from_visc_rem = .false.
          !! PR-2 (bt-rem-from-av-rem, `&ocean_bt_nml

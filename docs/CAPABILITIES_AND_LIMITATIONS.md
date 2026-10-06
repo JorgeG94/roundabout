@@ -582,19 +582,25 @@ partial bed cell / 70 m, `python_prototypes/bt_rem`'s geometry and
 visc_rem profiles — bounded with the chain on, undamped/bounded
 without).
 
-**PR-3 (visc_rem chain audit + unification — 2026-10-05).** Audited every
+**PR-3 (visc_rem chain audit + unification — 2026-10-05, revised the same
+day once the BT-correction-fold question was settled).** Audited every
 existing `*_visc_rem` knob against MOM6 (`python_prototypes/design/
 visc_rem_bt_rem_plan.md` §3/§4, D1-D3) and exposed ONE `&ocean_bt_nml
-visc_rem_chain` switch (default off): equivalent to setting
-`correction_visc_rem` + `forcing_visc_rem` + `renorm_visc_rem` +
-`bt_rem_from_visc_rem` all at once — never a superset, never a subset
-(`ocean_bt_*_visc_rem_on(cfg)` helpers in `rdb_config.F90`, read by both
-`validate_config`'s cross-checks and `configure_ocean_bt`'s setup
-wire-up, so the chain and the four individual knobs can never disagree).
-The four knobs stay individually registered — never retired — for the
-existing fine-grained tests; `strong_drag`/`rescale_strong_drag` stay
-separate keys per D1 (MOM6's own `BT_STRONG_DRAG`/`RESCALE_STRONG_DRAG`
-params) and now require `bt_rem_from_visc_rem` OR `visc_rem_chain`.  D2
+visc_rem_chain` switch (default off): the visc_rem PRODUCER (decoupled
+from the retired `correction_visc_rem`, runs whenever ANY of the three
+consumers below is on) plus `forcing_visc_rem` (MOM6 `wt_u`),
+`renorm_visc_rem` (MOM6 continuity `u_cor = u + du·visc_rem`) and
+`bt_rem_from_visc_rem` (MOM6 `av_rem`/`bt_rem`) all at once — never a
+superset, never a subset (`ocean_bt_*_visc_rem_on(cfg)` +
+`ocean_bt_visc_rem_producer_on(cfg)` helpers in `rdb_config.F90`, read by
+both `validate_config`'s cross-checks and `configure_ocean_bt`'s setup
+wire-up). The BT-CORRECTION FOLD STAYS UNIFORM under the chain — see the
+`correction_visc_rem` bullet below for why. The three consumer knobs stay
+individually registered — never retired — for the existing fine-grained
+tests, and are each now SELF-SUFFICIENT (no longer "requires" a separate
+producer knob); `strong_drag`/`rescale_strong_drag` stay separate keys
+per D1 (MOM6's own `BT_STRONG_DRAG`/`RESCALE_STRONG_DRAG` params) and
+still require `bt_rem_from_visc_rem` OR `visc_rem_chain`. D2
 (`substep_drag` mutually exclusive with the chain) and D3 (`strong_drag`
 opt-in, default off) were already shipped by PR-2 and now read through
 the chain identically. Findings from the audit:
@@ -621,26 +627,40 @@ the chain identically. Findings from the audit:
   then weights that `k=nz` wind contribution by `visc_rem_u(:,:,nz)`
   exactly like every other layer's slow tendency — no separate wind-only
   term needed.
-- **`correction_visc_rem`/`renorm_visc_rem` ↔ MOM6's continuity `u_cor =
-  u + du·visc_rem`**: the plan's citation (`MOM_continuity_PPM.F90`'s
-  `continuity_adjust_vel`) is dead code in MOM6 (zero call sites); the
-  real mechanism is `MOM_dynamics_split_RK2.F90:793-795,1052-1054`
-  calling `continuity(... visc_rem_u=..., u_cor=u_av ...)`, with the
-  actual weighted correction in `MOM_continuity_PPM.F90`'s
-  `zonal_mass_flux`/`meridional_mass_flux` internals (`u_cor(I,j,k) = u +
-  du·visc_rem`, roughly :891/:2051). roundabout's `renorm_visc_rem`
-  targets exactly the same field MOM6 does, `ms%u_av_layer`/`v_av_layer`
-  (verified at the `continuity_tracer_step_split(..., u_cor=ms%u_av_layer,
+- **`renorm_visc_rem` ↔ MOM6's continuity `u_cor = u + du·visc_rem`**: the
+  plan's citation (`MOM_continuity_PPM.F90`'s `continuity_adjust_vel`) is
+  dead code in MOM6 (zero call sites); the real mechanism is
+  `MOM_dynamics_split_RK2.F90:793-795,1052-1054` calling `continuity(...
+  visc_rem_u=..., u_cor=u_av ...)`, with the actual weighted correction in
+  `MOM_continuity_PPM.F90`'s `zonal_mass_flux`/`meridional_mass_flux`
+  internals (`u_cor(I,j,k) = u + du·visc_rem`, roughly :891/:2051).
+  roundabout's `renorm_visc_rem` targets exactly the same field MOM6
+  does, `ms%u_av_layer`/`v_av_layer` (verified at the
+  `continuity_tracer_step_split(..., u_cor=ms%u_av_layer,
   v_cor=ms%v_av_layer)` call site) — a genuine match, not a gap.
-  `correction_visc_rem`'s OWN weighted fold (`apply_bt_correction`,
-  applied to the prognostic `ms%u_face_x_layer`/`v_face_y_layer`) has no
-  literal MOM6 twin either — MOM6's `accel_layer_u` applies `u_accel_bt`
-  UNIFORMLY there (see `accel_visc_rem` below) — but roundabout's
-  architecture does not carry MOM6's separate `up`/`u_av` split the same
-  way, so this fold is the closest roundabout analogue of the SAME
-  physics applied to the field that plays that role here. Flagged for
-  the maintainer as a design nuance the plan does not settle, not
-  reworked in this PR (no answer change; PR-3 is audit-and-unify only).
+- **`correction_visc_rem` is RETIRED (D1 revised): MOM6 settles this, it
+  is not a design decision.** MOM6's `accel_layer_u`
+  (`MOM_barotropic.F90:3665-3675`) gives every layer the SAME `u_accel_bt`
+  plus only the depth-mean-zero `pbce` baroclinic-pressure term — NO
+  `visc_rem` weight — and that unweighted acceleration is folded into
+  `up` BEFORE `vertvisc` (`MOM_dynamics_split_RK2.F90:702-704`, consumed
+  at `:763`/`:1018`), so the glue's implicit friction (which already
+  carries the BBL piston) is what then distributes it across layers —
+  ONCE. roundabout's `correction_visc_rem` ran `apply_bt_correction`
+  BEFORE that same implicit friction (`vmix_apply_in_stage`) and weighted
+  it a SECOND time by `visc_rem_k/⟨visc_rem⟩_h` on top — an unbounded
+  ratio (a column where the glue damps most layers but leaves one or two
+  undamped drives `⟨visc_rem⟩_h` toward the damped value, so the
+  undamped layer's weight blows up). Isolated by A/B probes on the
+  1-degree Southern Ocean z* open-step case
+  (`probes/pr3_{noglue,glue_nochain,producer_only,chain,chain_uniform}`):
+  `hvel_mom6`+`bbl_glue`+`implicit_drag` alone runs clean; adding ONLY
+  `correction_visc_rem` NaNs at step 38; the full OLD chain (which used to
+  include it) NaNs at step 48; `visc_rem_chain` with the fold now UNIFORM
+  runs clean — see "NaN resolution" below. Refused at configure, naming
+  this mechanism; the kernel dispatch (`apply_bt_correction`'s
+  `use_visc_rem`) and its own direct unit tests
+  (`tests/test_ocean_bt_correction_weight.F90`) are untouched.
 - **`accel_visc_rem` is RETIRED** (`&ocean_vdiff_nml`, refused at
   configure): no MOM6 state-update equivalent exists.
   `btstep_layer_accel` (`MOM_barotropic.F90:3608-3677`) and the
@@ -654,12 +674,26 @@ the chain identically. Findings from the audit:
   (which call them directly, not through `cfg`) are untouched — only the
   namelist path to reach them is refused, naming `renorm_visc_rem` and
   `rescale_strong_drag` as the real MOM6 mechanisms.
-- **frhat parity — reported, not ported.** roundabout's `av_rem`,
-  `forcing_visc_rem`'s `wt_u` and `correction_visc_rem`'s corrector all
-  share ONE face depth-mean weight, the plain two-cell arithmetic mean
-  `0.5·(h_L+h_R)`. MOM6's `frhatu`/`frhatv` come from `btcalc`
-  (`MOM_barotropic.F90:4546-4790`) and dispatch on `HVEL_SCHEME`:
-  `ARITHMETIC` (roundabout's form), `HARMONIC`
+- **The `pbce` baroclinic-pressure term — reported, not fixed.** MOM6's
+  `accel_layer_u` ALWAYS adds the depth-mean-zero `pbce` term on top of
+  the uniform `u_accel_bt` (every PGF form). roundabout only ever adds
+  the equivalent (`apply_bt_correction`'s bc-PGF `du_bc` block) when
+  `&ocean_bt_nml correction_bc_pgf = .true.`, which itself requires
+  `&ocean_pgf_nml form = 'fv_mom6'` (`compute_pbce` has no other form's
+  interface-height stack to read) — so under MONT/FV_LITE/FV_WRIGHT/
+  GPRIME, roundabout never applies this term at all, with no fail-loud
+  flag that it's missing. This is a real, general fidelity gap,
+  independent of this PR. It does NOT explain the open-step NaN:
+  none of the probes that reproduced or cleared it had `correction_bc_pgf`
+  on, and the term's magnitude is governed by baroclinic pressure
+  differences, not by the glue's drag — unrelated to the unbounded
+  `visc_rem` ratio that was the actual mechanism. Not fixed here (out of
+  PR-3's audit-and-unify scope).
+- **frhat parity — reported, not ported.** roundabout's `av_rem` and
+  `forcing_visc_rem`'s `wt_u` share ONE face depth-mean weight, the plain
+  two-cell arithmetic mean `0.5·(h_L+h_R)`. MOM6's `frhatu`/`frhatv` come
+  from `btcalc` (`MOM_barotropic.F90:4546-4790`) and dispatch on
+  `HVEL_SCHEME`: `ARITHMETIC` (roundabout's form), `HARMONIC`
   (`2·h_L·h_R/(h_L+h_R+h_neglect)`, which strongly suppresses a face
   where one side is thin — exactly the partial-bed-cell regime
   motivating this whole plan), or MOM6's practical default `HYBRID` (a
@@ -670,14 +704,22 @@ the chain identically. Findings from the audit:
   (`btcalc`'s default-arg form is a self-contained ~45-line-per-direction
   function of `h` alone, no PPM/flux coupling), but the plan requires
   porting it to EVERY depth-mean site in the chain at once (never just
-  one, or the fold stops being self-consistent) — `av_rem`,
-  `forcing_visc_rem`, AND `correction_visc_rem`'s corrector all share
-  `face_depth_mean_u/v`/`face_depth_mean_rem_u/v`, which are also the
-  GENERAL-purpose BT depth-mean used by every configuration, visc_rem
-  chain on or off. Changing their weight formula is an answer change for
-  every existing run, not a default-off opt-in one, so it is OUT OF
-  SCOPE for PR-3 (no answer changes) and deferred as a measured finding
-  for a follow-up PR, not implemented here.
+  one, or the fold stops being self-consistent) — `av_rem` and
+  `forcing_visc_rem` share `face_depth_mean_u/v`/`face_depth_mean_rem_u/v`,
+  which are also the GENERAL-purpose BT depth-mean used by every
+  configuration, visc_rem chain on or off. Changing their weight formula
+  is an answer change for every existing run, not a default-off opt-in
+  one, so it is OUT OF SCOPE for PR-3 (no answer changes) and deferred as
+  a measured finding for a follow-up PR, not implemented here.
+
+**NaN resolution (1-degree Southern Ocean, z* open steps).** The step-40ish
+NaN under `hvel_mom6`+`bbl_glue`+`visc_rem_chain` is FIXED by retiring
+`correction_visc_rem` and making the BT-correction fold UNIFORM under the
+chain (matching MOM6's `accel_layer_u` exactly) — this was not a design
+decision MOM6 left open; MOM6's own code settles it. Measured on GPU
+probes (`probes/pr3_chain_uniform`, same namelist as `pr3_chain`,
+rebuilt against the revised chain): see the gate report for the step
+count / day count reached.
 
 Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
 **continuity-PPM** — no Poisson constraint, no FFT projection.
