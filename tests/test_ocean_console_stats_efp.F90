@@ -38,7 +38,8 @@ module test_ocean_console_stats_efp
                                       efp_decompose_impl, &
                                       compute_total_h_efp, compute_total_tracer_efp, &
                                       compute_total_ke_efp, compute_ice_totals_efp, &
-                                      compute_total_h, compute_total_tracer, compute_total_ke
+                                      compute_total_h, compute_total_tracer, compute_total_ke, &
+                                      compute_ice_totals
    use rdb_efp, only: efp_t, efp_decompose, efp_to_real
    use rdb_comm_env, only: comm_env_init, comm_env_setup_roles
    implicit none
@@ -66,7 +67,9 @@ contains
                   new_unittest("console_reproducing_sums_true_agrees_with_fp", &
                                test_console_reproducing_sums_true_agrees_with_fp), &
                   new_unittest("efp_console_kernel_nan_propagates", &
-                               test_efp_console_kernel_nan_propagates) &
+                               test_efp_console_kernel_nan_propagates), &
+                  new_unittest("ice_totals_efp_many_accumulators", &
+                               test_ice_totals_efp_many_accumulators) &
                   ]
    end subroutine collect_ocean_console_stats_efp_tests
 
@@ -384,5 +387,90 @@ contains
                  "a NaN h_layer cell must reduce compute_total_h_efp to NaN, " &
                  //"never a finite (e.g. 0.000-looking) value")
    end subroutine test_efp_console_kernel_nan_propagates
+
+   subroutine test_ice_totals_efp_many_accumulators(error)
+      !! Regression for the GPU `-acc=gpu` code-generation defect fixed in
+      !! `compute_ice_totals_efp` (see its docstring): on a V100, the
+      !! original single-kernel implementation (21 combined scalar
+      !! reduction accumulators, plus an un-annotated inner `do c = 1,
+      !! ncat` category-gather loop ahead of the `efp_decompose_impl`
+      !! call) silently corrupted EVERY reduction, so `wet_area_efp%
+      !! poison` came back a nonzero, run-invariant garbage value and the
+      !! console printed "Ice: conc 0.0000 thick 0.0000" on a 100%
+      !! ice-covered run (`validation_examples/ocean/sea_ice_pack/
+      !! sea_ice_pack.nml`, `&ocean_ice_nml ncat = 5`). This test is
+      !! CPU-portable (the defect is GPU-codegen-specific and does not
+      !! reproduce on a host/multicore build -- see the GPU ctest gate for
+      !! the actual device regression check) but pins the two invariants
+      !! the fix guarantees on every backend: (1) none of
+      !! wet/ci/hi_area_efp is poisoned, and (2) the EFP totals agree with
+      !! the FP twin `compute_ice_totals` to 1e-9 relative, for an ncat=5
+      !! ITD configuration (exercises the `ncat > 1` branch, i.e. the
+      !! category-loop code path that stayed broken even after splitting
+      !! the single 21-accumulator kernel into three 7-accumulator ones --
+      !! see the docstring).
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_state_t) :: state
+      integer, parameter :: NCAT = 5
+      type(efp_t) :: wet_efp, ci_efp, hi_efp
+      real(wp) :: wet_e, ci_e, hi_e
+      real(wp) :: wet_fp, ci_fp, hi_fp
+      integer :: c
+
+      call grid%init(NX, NY, 1, DX, DX)
+      state%multilayer%nz_ml = NZ
+      state%ice%enable = .true.
+      state%ice%ncat = NCAT
+      call state%init(grid)
+      call metrics_fill_cartesian(state%metrics, grid, grid%dx, grid%dy)
+      call metrics_finalize(state%metrics)
+      call fill_test_fields(grid, state)
+      ! Non-uniform, per-category part_size/m_ice (not a uniform IC) so a
+      ! broken category-loop gather would not accidentally cancel out.
+      state%ice%part_size(:, :, 0) = 0.0_wp
+      do c = 1, NCAT
+         state%ice%part_size(:, :, c) = 0.2_wp
+         state%ice%m_ice(:, :, c) = 100.0_wp*real(c, wp)
+      end do
+
+      call ocean_state_enter_data(state)
+
+      call compute_ice_totals_efp(state%metrics%wet_T, state%metrics%areaT, &
+                                  state%ice%part_size, state%ice%m_ice, NCAT, grid%nghost, &
+                                  wet_efp, ci_efp, hi_efp)
+      call compute_ice_totals(state%metrics%wet_T, state%metrics%areaT, &
+                              state%ice%part_size, state%ice%m_ice, NCAT, grid%nghost, &
+                              wet_fp, ci_fp, hi_fp)
+
+      call ocean_state_exit_data(state)
+      call state%destroy()
+
+      wet_e = real(efp_to_real(wet_efp), wp)
+      ci_e = real(efp_to_real(ci_efp), wp)
+      hi_e = real(efp_to_real(hi_efp), wp)
+
+      call check(error, wet_efp%poison == 0_int64, &
+                 "compute_ice_totals_efp must not poison wet_area_efp on a clean, all-finite field")
+      if (allocated(error)) return
+      call check(error, ci_efp%poison == 0_int64, &
+                 "compute_ice_totals_efp must not poison ci_area_efp on a clean, all-finite field")
+      if (allocated(error)) return
+      call check(error, hi_efp%poison == 0_int64, &
+                 "compute_ice_totals_efp must not poison hi_area_efp on a clean, all-finite field")
+      if (allocated(error)) return
+      call check(error,.not. ieee_is_nan(wet_e), "wet_area_efp must reduce to a finite total")
+      if (allocated(error)) return
+      call check(error, abs(wet_e - wet_fp) <= 1.0e-9_wp*abs(wet_fp), &
+                 "compute_ice_totals_efp wet_area must agree with compute_ice_totals to 1e-9 relative")
+      if (allocated(error)) return
+      call check(error, abs(ci_e - ci_fp) <= 1.0e-9_wp*abs(ci_fp), &
+                 "compute_ice_totals_efp ci_area must agree with compute_ice_totals to 1e-9 relative " &
+                 //"(ncat>1 category-gather branch)")
+      if (allocated(error)) return
+      call check(error, abs(hi_e - hi_fp) <= 1.0e-9_wp*abs(hi_fp), &
+                 "compute_ice_totals_efp hi_area must agree with compute_ice_totals to 1e-9 relative " &
+                 //"(ncat>1 category-gather branch)")
+   end subroutine test_ice_totals_efp_many_accumulators
 
 end module test_ocean_console_stats_efp
