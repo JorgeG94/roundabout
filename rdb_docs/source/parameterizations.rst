@@ -427,7 +427,8 @@ Vanishing layers are decoupled as identity rows, so their tracer mass is
 preserved exactly. The matrix is factorised once per stage and reused for
 every registered tracer.
 
-Two optional folds, both in ``&ocean_vdiff_nml`` and both default off, put
+Two optional folds, both in ``&ocean_vdiff_nml`` and both default off (the
+MOM6 BBL glue, on by default, replaces ``implicit_drag``; see Bottom drag), put
 the boundary stresses **inside** this solve rather than applying them
 explicitly beforehand:
 
@@ -474,6 +475,27 @@ proportionally.
 
 Every branch is multiplied by the face wet-mask, so wall faces get exactly
 zero.
+
+**Default: the drag lives in the vertical viscosity** (MOM6
+``BOTTOMDRAGLAW``; ``&ocean_vdiff_nml bbl_glue`` and ``hvel_mom6``, both on
+since 2026-10-05). Once per outer step each face gets a bottom-boundary-layer
+viscosity and thickness (MOM6 ``set_viscous_BBL``):
+
+.. math::
+
+   u_* = \sqrt{C_d}\, u_{bbl}, \qquad
+   h_{bbl} = \frac{h_N}{\tfrac12 + \sqrt{\tfrac14 + (2 f h_N / u_*)^2}}, \qquad
+   \kappa_{bbl} = \sqrt{C_d}\, u_*\, h_{bbl},
+
+with :math:`u_{bbl}` the mean of :math:`\sqrt{u^2 + \bar v^2 + u_{bg}^2}`
+over the bottom ``hbbl`` metres and :math:`h_N` the stratification-limited
+thickness (Killworth & Edwards 1999). The momentum solve raises the
+near-bed interface viscosities by :math:`(\kappa_{bbl} - \kappa_{bg})\,
+f_{bot}(z/h_{bbl})` and takes the bed row as the piston
+:math:`\kappa_{bbl}/\min(h_1/2, h_{bbl})`, which replaces the explicit
+drag on the layers. Face layers below the shallower bed of a step sit inside
+that boundary layer, which is how a cliff's spurious pressure gradient is
+absorbed. Both knobs ``.false.`` restore the explicit forms above.
 
 
 Lateral closures
