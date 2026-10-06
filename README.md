@@ -1,13 +1,13 @@
 # Roundabout
 
 I had to learn about ocean dynamics so I wrote a code to do it. It runs on CPUs and GPUs
-with `do concurrent` being the way to access parallelism. MPI is availbale too.
+with `do concurrent` being the way to access parallelism. MPI is available too.
 
 It is also a way to find bugs on Intel, AMD, and NVIDIA and check for LFortran portability.
 
 The code is called Roundabout in honour of the city of Canberra, which is where I work. It is
-an inland city and has no ocea. I thought it funny to write an ocean code from a non-ocean city,
-and one can think that a roundabout is like an Eddie.
+an inland city and has no ocean. I thought it funny to write an ocean code from a non-ocean city,
+and one can think that a roundabout is like an eddy.
 
 ## Features
 
