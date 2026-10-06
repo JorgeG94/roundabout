@@ -421,14 +421,27 @@ grounding line, where the far-field sample runs coldest.
 
 **This does not match the numbers already printed in
 `ocean0_idealised_zfixed.nml`'s own header** (`En` 2.304E-04 at day 30,
-peaking the melt mean at 5.6-5.7 m yr⁻¹) — that table predates the three
-closures above. The discrepancy is a **re-baseline, not a regression**:
-En is 1.8-34× higher depending on the day (the gap narrows from day 1 to
-day 30), MaxCFL 1.03-1.7× higher, melt mean 10-25 % higher, melt max up to
-1.4× higher. Budgets stay closed at the same round-off scale either way.
-The header's measured table should be refreshed against the numbers
-above the next time that file is touched; this PR does not do it, to
-keep the diff to documentation the task asked for.
+peaking the melt mean at 5.6-5.7 m yr⁻¹). That table is **stale**: it
+predates several answer-changing fixes on this branch (the frhat-matrix
+work and the compat-matrix cliff-geometry fix among them), not just the
+three closures above, so the 1.8-34× / 10-25 % gap between it and the
+numbers measured here is **not attributable to the new defaults** — it
+is the age of the header, full stop.
+
+The new-defaults effect, isolated by itself, is much smaller. An A/B
+on the identical binary (same code as `bee159376`) with ONLY
+`hvel_mom6`/`bbl_glue`/`visc_rem_chain`/`frhat_scheme` toggled —
+everything else, including the age of the code, held fixed — measured
+`En` 4.713E-04 (old: both groups `.false.`, `frhat_scheme="arithmetic"`)
+vs 4.121E-04 (new, as shipped) at day 30, and mean melt 7.266 vs
+7.111 m yr⁻¹: **the flip moves this case by −13 % in En and −2 % in
+melt**, not by an order of magnitude. Logs:
+`/home/jorge/nci/cdx/data/runs/v010_validation/isomip_ab/{old,new}/run.log`.
+Budgets stay closed at the same round-off scale on both sides of the A/B
+and against the header. The header's measured table should be refreshed
+against the numbers above the next time that file is touched; see the
+namelist header for a pointer to this section in the meantime, rather
+than a second, divergent table.
 
 **Against the protocol (Asay-Davis et al. 2016).** The design paper fixes
 the melt-rate *target* (`⟨m_w⟩ = 30 ± 2 m yr⁻¹`, Sect. 3.2.1, Eq. 37) but
@@ -492,9 +505,11 @@ deliberately **not** in `tests/regression/stability_manifest.py` for
 that reason, and nothing here attempts to fix it (CAUTION note in the
 task: don't patch physics here). The magnitude is in the same
 neighbourhood as the file's gfortran re-measurement (`1.059E-04` at day
-30, trimmed IC) — 1.03-1.7× higher depending on the day, the same
-direction and rough size as the Ocean0 re-baseline above, consistent
-with the new defaults rather than a new defect.
+30, trimmed IC) — 1.03-1.7× higher depending on the day. Per the Ocean0
+A/B above, a gap this size is consistent with the header simply being
+older code rather than with the new defaults specifically; this file's
+own A/B was not re-run, so that is not claimed as measured here, only as
+the more likely reading given the Ocean0 case.
 
 ### `ocean0_ice_free_zfixed.nml` (bathymetry only, no ice shelf, 2 days — the cheapest closed-faces check)
 
@@ -507,18 +522,24 @@ z-level staircase case is not just bounded but effectively flat — two to
 three orders of magnitude below the stale header numbers — which is the
 direction the frhat-matrix fix (gating `frhat_scheme="hybrid"` to
 `zfixed_closed_faces`) and `compute_gtot_faces` fix on this branch are
-supposed to move it. Budgets closed at `~9e-14` relative. Consistent with
-the re-baseline direction above (the new defaults do not regress this
-case; if anything they visibly help it), but this is one short run, not
-a re-derivation of the file's own analysis.
+supposed to move it. Budgets closed at `~9e-14` relative. This gap is
+attributed to those two named bug fixes specifically, not to the
+`hvel_mom6`/`bbl_glue`/`visc_rem_chain` flip (this case does not exercise
+the bottom-drag/viscous-remnant chain at all) — but this is one short
+run, not a re-derivation of the file's own analysis.
 
 ### Bottom line for the release
 
 No refusal, no NaN, no CFL truncation anywhere in this corpus under
 `z_fixed` + the new defaults (`hvel_mom6`, `bbl_glue`, `visc_rem_chain`,
-HYBRID frhat gated to closed faces). Budgets (mass/salt/heat) stay closed
-at round-off in every run, melt included — the meltwater virtual flux is
-fully accounted for. The two things this validation did **not** produce:
+HYBRID frhat gated to closed faces). Isolated by A/B on Ocean0 (same
+binary, only those knobs toggled), the new defaults themselves move this
+case by −13 % in `En` and −2 % in mean melt at day 30 — a modest shift,
+not the order-of-magnitude gap to the namelists' own stale header
+tables, which predate this and other answer-changing fixes on this
+branch. Budgets (mass/salt/heat) stay closed at round-off in every run,
+melt included — the meltwater virtual flux is fully accounted for. The
+two things this validation did **not** produce:
 a tuned, protocol-comparable melt rate (`Γ_T` is deliberately the
 starting guess, blocker 3 in "Blockers for a publishable Ocean0" above,
 unchanged by this PR) and a file-backed Ocean0/1/2 run (blocker: the
