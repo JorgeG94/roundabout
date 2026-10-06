@@ -358,8 +358,11 @@ class ImplicitVerticalFriction:
     """-> `&ocean_vdiff_nml`
 
     ``ImplicitVerticalFriction(stress=False, drag=False,
-    harmonic_thickness=False, harmonic_visc=False, bbl_glue=False,
+    harmonic_thickness=True, harmonic_visc=False, bbl_glue=True,
     hbbl=10.0, bbl_piston=3e-4)``
+
+    `harmonic_thickness` and `bbl_glue` default ON, matching the namelist
+    defaults (MOM6's vertical-friction face treatment everywhere).
 
     `harmonic_thickness` -> `hvel_mom6` (MOM6's momentum face thickness);
     `harmonic_visc` -> `hvel_harmonic` (MOM6 `HARMONIC_VISC`: which
@@ -369,8 +372,8 @@ class ImplicitVerticalFriction:
     `harmonic_thickness`, which the composer checks.
     """
 
-    def __init__(self, stress=False, drag=False, harmonic_thickness=False,
-                 harmonic_visc=False, bbl_glue=False, hbbl=10.0,
+    def __init__(self, stress=False, drag=False, harmonic_thickness=True,
+                 harmonic_visc=False, bbl_glue=True, hbbl=10.0,
                  bbl_piston=3e-4):
         self.stress, self.drag = stress, drag
         self.harmonic_thickness, self.bbl_glue = (

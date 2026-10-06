@@ -91,7 +91,8 @@ def test_implicit_vertical_friction_bbl_glue_needs_harmonic_thickness():
                         match="harmonic_thickness=True"):
         _compose.compose(
             grid=_cart_grid(),
-            closures=[ImplicitVerticalFriction(bbl_glue=True)])
+            closures=[ImplicitVerticalFriction(
+                bbl_glue=True, harmonic_thickness=False)])
 
 
 def test_implicit_vertical_friction_bbl_glue_satisfied():

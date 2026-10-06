@@ -3601,7 +3601,7 @@ class OceanBt(Group):
         doc="PR-3 (D1): ONE switch for exactly MOM6's visc_rem/av_rem/bt_rem set -- equivalent to switching on the visc_rem producer plus forcing_visc_rem + renorm_visc_rem + bt_rem_from_visc_rem all at once (never a superset); the BT-correction fold stays UNIFORM (MOM6 accel_layer_u never weights it; correction_visc_rem, which used to, is retired). strong_drag/rescale_strong_drag stay separate keys (their own MOM6 params). Still requires ocean_vdiff_nml implicit_drag or bbl_glue, else visc_rem is inert (=1, warned).",
         units='',
         required=False,
-        default=False,
+        default=True,
     )
 
     correction_visc_rem = Bool(
@@ -4779,7 +4779,7 @@ class OceanVdiff(Group):
         doc='MOM6 HARMONIC_VISC parity: harmonic momentum face thickness with the near-bed upwind blend, and arithmetic h_shear. Suppresses grounded-sliver momentum as MOM6 does',
         units='',
         required=False,
-        default=False,
+        default=True,
     )
 
     hvel_harmonic = Bool(
@@ -4803,7 +4803,7 @@ class OceanVdiff(Group):
         doc='MOM6 BOTTOMDRAGLAW: per-face set_viscous_BBL kv_bbl/bbl_thick from the ocean_bdrag law (quadratic or linear); kv_bbl botfn glue at near-bed interfaces + piston bed row replace the bed drag apply. Requires hvel_mom6',
         units='',
         required=False,
-        default=False,
+        default=True,
     )
 
     bbl_piston = Real(

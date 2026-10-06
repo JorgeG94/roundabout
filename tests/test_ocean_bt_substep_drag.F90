@@ -251,7 +251,8 @@ contains
 
       checks: block
          ! Default bottom drag is QUADRATIC: the warning must fire.
-         call parse_case(cfg, "&ocean_bt_nml n_inner = 8, substep_drag = .true. /")
+         call parse_case(cfg, "&ocean_bt_nml n_inner = 8, substep_drag = .true., "// &
+                         "visc_rem_chain = .false. /")
          call check(error, substep_drag_ignores_bdrag_form(cfg), &
                     "substep_drag under the default (quadratic) bottom drag "// &
                     "must trip the warning")
@@ -262,14 +263,16 @@ contains
                     "substep_drag x quadratic drag must WARN, not refuse")
          if (allocated(error)) exit checks
 
-         call parse_case(cfg, "&ocean_bt_nml n_inner = 8, substep_drag = .true. /"//new_line("a")// &
+         call parse_case(cfg, "&ocean_bt_nml n_inner = 8, substep_drag = .true., "// &
+                         "visc_rem_chain = .false. /"//new_line("a")// &
                          '&ocean_bdrag_nml form = "quadratic", cd = 2.5e-3, r = 1.0e-4, '// &
                          "hbbl = 10.0 /")
          call check(error, substep_drag_ignores_bdrag_form(cfg), &
                     "a nonzero r under quadratic drag is still the wrong operator")
          if (allocated(error)) exit checks
 
-         call parse_case(cfg, "&ocean_bt_nml n_inner = 8, substep_drag = .true. /"//new_line("a")// &
+         call parse_case(cfg, "&ocean_bt_nml n_inner = 8, substep_drag = .true., "// &
+                         "visc_rem_chain = .false. /"//new_line("a")// &
                          '&ocean_bdrag_nml form = "linear", r = 1.0e-4, hbbl = 10.0 /')
          call check(error,.not. substep_drag_ignores_bdrag_form(cfg), &
                     "substep_drag under LINEAR drag is the supported pairing")
