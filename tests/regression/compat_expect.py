@@ -386,6 +386,63 @@ ROWS = [
                   "vmix_extra": "tidal", "vmix_bg": "bryan_lewis", "lateral": "kh_aniso",
                   "pgf": "fv_mom6_plm", "eos": "linear", "bt": "wave_drag",
                   "geometry": "cliff"}),
+    # Two more cliff residuals (fix/163-cliff-energy, 2026-10-06), found by
+    # the per-PR slice against origin/beta -- NEITHER is the frhat flip:
+    # none of the five cells is vcoord='z_fixed_cf', the only family
+    # frhat_scheme='hybrid' ever touches (`merge(..., metrics%use_closed_faces)`
+    # in rdb_barotropic_coupling.F90 forces FRHAT_ARITHMETIC off it), and
+    # reverting hvel_mom6/bbl_glue/visc_rem_chain to their pre-flip values on
+    # each of the five FAILing cells left four of them EQUALLY hot (c026
+    # 3.72e-2 old vs 3.52e-2 new; c032 9.22e-2 vs 8.98e-2; c053 3.21 vs
+    # 2.68e-2 -- two orders hotter old; c072 8.16e-2 vs 5.69e-2) and made the
+    # fifth (c036) CRASH outright (En diverging past 1.5 by step 18 under the
+    # old defaults, where it runs the full 24 steps at 2.46e-2 under the
+    # new ones) -- the same "BBL glue net REDUCES this cliff family's
+    # instability, it does not cause it" finding as the adjacent row, on two
+    # new mechanisms. EN_REF[cliff] itself was checked, not assumed: it was
+    # measured 2026-10-05 on the narrow `domain` sweep (base closures only,
+    # "the pairwise PASS population there is only 4 cells") before this
+    # matrix's pairwise diversity existed; the 9 cells that now PASS the
+    # ENERGY leg on cliff in a pairwise run have median En(24) 1.03e-2 (1.3x
+    # the current reference) and the 16 that pass checks 1-3 outside the
+    # already-tracked rho/zlike-linear families median 1.79e-2 (2.3x) --
+    # recalibrating to either number still leaves c032 and c072 over the
+    # 2.5x bound, so a rebased EN_REF would hide, not fix, the gap; left
+    # unchanged and the gap rows carry it instead.
+    _gap("kappa_shear_vertex_cliff_corner_noise", "runtime", ("kappa_shear_vertex", "cliff"),
+         "kappa-shear's vertex/corner solve (`at_vertex`, MOM6 VERTEX_SHEAR) builds Kv at cell "
+         "corners from the native face velocities and averages back to centres; at the cliff's "
+         "10 m shelf beside 2000 m (rx0 ~ 0.99) the corner stencil straddles the near-vanished "
+         "shelf-side layer, and the corner<->centre blend feeds noise into the momentum vdiff "
+         "that shows up as excess En. Geometry-specific (the closed-basin twin of the minimised "
+         "witness is calm, 0.89x) and NOT split- or grid-specific (an ssp_rk2 twin stays hot at "
+         "3.32x, a Cartesian twin at 3.47x) -- vcoord (sigma or lagrangian) and every other axis "
+         "drop freely in leave-one-out.",
+         "NOT TRACKED (found by this matrix's cliff geometry, 2026-10-06)",
+         expect=("ENERGY",), message=r"x the cliff PASS-population reference", scope="any",
+         # minimised 2026-10-06 from c026 (leave-one-out, every other axis at base): En(24)
+         # 2.773e-2 = 3.56x EN_REF[cliff]; the same cell on the closed geometry 6.97e-3 = 0.89x
+         witness={"vcoord": "sigma", "vmix_extra": "kappa_shear_vertex", "geometry": "cliff",
+                  "grid": "spherical"}),
+    _gap("cliff_linear_eos_shelf_filler_rho", "runtime", ("eos_linear", "cliff"),
+         "Sibling mechanism to `zlike_cliff_linear_eos_filler_rho` above, but not confined to "
+         "the open-step z-like families: the linear EOS gives ANY near-vanished shelf-side "
+         "layer the reference density (`eos_linear_impl`: h <= H_VANISHED -> rho_0) instead of "
+         "reading the filler's I1' donor T/S the way the in-situ Wright/Roquet branches do, and "
+         "the layer-mean PGF reads that `rho_layer` across the live|filler face of the cliff's "
+         "10 m shelf even on `zstar_sigma` and `lagrangian`, which carry no open-step filler "
+         "stack of their own. Geometry-specific (the closed-basin twin of the minimised witness "
+         "is calm, 1.32x) and NOT split- or grid-specific (an ssp_rk2 twin stays hot at 2.74x, a "
+         "Cartesian twin at 3.14x). On `zstar_sigma` it crosses the bound alone (3.22x, c053 / "
+         "c072); on `lagrangian` it alone sits just under it (2.12x) and needs the "
+         "`substep_drag` piston on top to cross (2.69x, c036) -- both still PRE-EXISTING per the "
+         "note above, `substep_drag` included (c036 also crashes under the pre-flip defaults).",
+         "NOT TRACKED (found by this matrix's cliff geometry, 2026-10-06)",
+         expect=("ENERGY",), message=r"x the cliff PASS-population reference", scope="any",
+         # minimised 2026-10-06 from c053/c072 (leave-one-out, every other axis at base):
+         # En(24) 2.513e-2 = 3.22x EN_REF[cliff]; the same cell on the closed geometry 1.03e-2 = 1.32x
+         witness={"vcoord": "zstar_sigma", "eos": "linear", "geometry": "cliff",
+                  "grid": "spherical"}),
     # `terrain_following_cliff_pgf` DELETED (PR-4, the flip): the full
     # visc_rem_chain (producer + av_rem + bt_rem + wt_u forcing + renorm --
     # strictly more bed friction reaching the barotropic mode than
