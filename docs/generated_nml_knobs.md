@@ -674,7 +674,7 @@ Split-explicit barotropic substep controls.
 | `cont_corr_bounds` | `.false.` |  | Use BT_cont flux limits for the eta-correction bound |
 | `upstream_h_face` | `.false.` |  | Use per-face upstream-PPM column-sum thickness in the BT chain |
 | `correction_h_weighted` | `.false.` |  | RETIRED h-weighted BT-corrector fold (refused when set) |
-| `visc_rem_chain` | `.false.` |  | PR-3 (D1): ONE switch for exactly MOM6's visc_rem/av_rem/bt_rem set -- equivalent to switching on the visc_rem producer plus forcing_visc_rem + renorm_visc_rem + bt_rem_from_visc_rem all at once (never a superset); the BT-correction fold stays UNIFORM (MOM6 accel_layer_u never weights it; correction_visc_rem, which used to, is retired). strong_drag/rescale_strong_drag stay separate keys (their own MOM6 params). Still requires ocean_vdiff_nml implicit_drag or bbl_glue, else visc_rem is inert (=1, warned). |
+| `visc_rem_chain` | `.true.` |  | PR-3 (D1): ONE switch for exactly MOM6's visc_rem/av_rem/bt_rem set -- equivalent to switching on the visc_rem producer plus forcing_visc_rem + renorm_visc_rem + bt_rem_from_visc_rem all at once (never a superset); the BT-correction fold stays UNIFORM (MOM6 accel_layer_u never weights it; correction_visc_rem, which used to, is retired). strong_drag/rescale_strong_drag stay separate keys (their own MOM6 params). Still requires ocean_vdiff_nml implicit_drag or bbl_glue, else visc_rem is inert (=1, warned). |
 | `correction_visc_rem` | `.false.` |  | RETIRED (refused when set) |
 | `bt_rem_from_visc_rem` | `.false.` |  | bt_rem_u/v = mask*av_rem**(1/n_inner), av_rem the frhat-weighted depth mean of visc_rem (MOM6's barotropic solver); self-sufficient (the producer runs whenever this is on), mutually exclusive with substep_drag and bt_halo > 0. An equivalent subset of visc_rem_chain, kept for granular testing -- prefer visc_rem_chain. |
 | `strong_drag` | `.false.` |  | MOM6 BT_STRONG_DRAG: rational-approximation bt_rem form n_inner*av_rem/(1+(n_inner-1)*av_rem) instead of the plain power; requires bt_rem_from_visc_rem (or visc_rem_chain) |
@@ -880,10 +880,10 @@ Backward-Euler vertical-friction solver knobs.
 | `accel_visc_rem` | `.false.` |  | RETIRED (refused when set) |
 | `implicit_drag` | `.false.` |  | Fold bottom drag into the vdiff bed (k=1) diagonal |
 | `implicit_top_drag` | `.false.` |  | Fold the ice-shelf top drag into the vdiff surface (k=nz) diagonal, masking the wind RHS under cover |
-| `hvel_mom6` | `.false.` |  | MOM6 HARMONIC_VISC parity: harmonic momentum face thickness with the near-bed upwind blend, and arithmetic h_shear. Suppresses grounded-sliver momentum as MOM6 does |
+| `hvel_mom6` | `.true.` |  | MOM6 HARMONIC_VISC parity: harmonic momentum face thickness with the near-bed upwind blend, and arithmetic h_shear. Suppresses grounded-sliver momentum as MOM6 does |
 | `hvel_harmonic` | `.false.` |  | MOM6 HARMONIC_VISC for the hvel_mom6 face thickness: .false. = MOM6 default (arithmetic + z_clear near-bed harmonic blend), .true. = harmonic + near-bed upwind-arithmetic blend |
 | `hbbl_visc` | `0.1000000000E+02` | m | Bottom-layer scale for the hvel_mom6 botfn blend without the BBL glue, and the glue's HBBL when ocean_bdrag hbbl = 0 (MOM6 HBBL) |
-| `bbl_glue` | `.false.` |  | MOM6 BOTTOMDRAGLAW: per-face set_viscous_BBL kv_bbl/bbl_thick from the ocean_bdrag law (quadratic or linear); kv_bbl botfn glue at near-bed interfaces + piston bed row replace the bed drag apply. Requires hvel_mom6 |
+| `bbl_glue` | `.true.` |  | MOM6 BOTTOMDRAGLAW: per-face set_viscous_BBL kv_bbl/bbl_thick from the ocean_bdrag law (quadratic or linear); kv_bbl botfn glue at near-bed interfaces + piston bed row replace the bed drag apply. Requires hvel_mom6 |
 | `bbl_piston` | `0.3000000000E-03` | m/s | Historical constant BBL piston u* (hand-built slots only; a configured glue takes its drag from ocean_bdrag) |
 | `hvel_upwind` | `.true.` |  | Near-bed upwind blend in the hvel_mom6 thickness build (.false. = pure harmonic; the u-sign blend flip-flops on roundoff at rest and collapses the BBL glue, PGF_BUG.md par.9.8) |
 
