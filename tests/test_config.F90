@@ -63,7 +63,8 @@ contains
                   new_unittest("ice_hlim_count_leading_run", test_ice_hlim_count_leading_run), &
                   new_unittest("ice_hlim_spec_validity", test_ice_hlim_spec_validity), &
                   new_unittest("nz_stack_guard_refuses_oversized_nz", test_nz_stack_guard), &
-                  new_unittest("pv_weno_nghost_gate_radius_plus_one", test_pv_weno_nghost_gate) &
+                  new_unittest("pv_weno_nghost_gate_radius_plus_one", test_pv_weno_nghost_gate), &
+                  new_unittest("implicit_drag_hbbl_needs_effective_glue", test_glue_hbbl_gate) &
                   ]
    end subroutine collect_config_tests
 
@@ -147,6 +148,48 @@ contains
       ierr = validate_pv(4, "weno5")
       call check(error, ierr == OCEAN_STATUS_OK, "weno5 at nghost = 4 must be accepted")
    end subroutine test_pv_weno_nghost_gate
+
+   subroutine test_glue_hbbl_gate(error)
+      !! `implicit_drag` + HBBL-distributed drag (`hbbl > 0`) is accepted only
+      !! while the BBL glue is EFFECTIVE (`bbl_glue_is_effective`): a
+      !! requested glue that setup turns off -- linear drag with
+      !! `bg_vel = 0`, or `cd = 0` -- would otherwise run the unsupported
+      !! fold + band.  Accepted with quadratic `cd > 0`; refused with
+      !! linear `bg_vel = 0` and with quadratic `cd = 0`.
+      type(error_type), allocatable, intent(out) :: error
+      integer :: ierr
+
+      ierr = validate_glue("form = 'quadratic', cd = 3.0e-3, hbbl = 10.0")
+      call check(error, ierr == OCEAN_STATUS_OK, &
+                 "implicit_drag + hbbl > 0 + effective glue (quadratic cd > 0) must be accepted")
+      if (allocated(error)) return
+      ierr = validate_glue("form = 'linear', r = 3.0e-4, bg_vel = 0.0, hbbl = 10.0")
+      call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
+                 "glue with linear bg_vel = 0 is turned off by setup: hbbl > 0 must be refused")
+      if (allocated(error)) return
+      ierr = validate_glue("form = 'quadratic', cd = 0.0, hbbl = 10.0")
+      call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
+                 "glue with cd = 0 is turned off by setup: hbbl > 0 must be refused")
+   end subroutine test_glue_hbbl_gate
+
+   function validate_glue(bdrag) result(ierr)
+      !! `validate_config` status of a minimal ocean namelist with
+      !! `implicit_drag` + `hvel_mom6` + `bbl_glue` and the given bottom drag.
+      character(len=*), intent(in) :: bdrag
+      integer :: ierr
+      type(config_t) :: cfg
+
+      ierr = -999
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+         new_line('a')// &
+         "&ocean_vdiff_nml implicit_drag = .true., hvel_mom6 = .true., "// &
+         "bbl_glue = .true. /"//new_line('a')// &
+         "&ocean_bdrag_nml "//bdrag//" /"//new_line('a'), cfg, ierr=ierr)
+      if (ierr /= OCEAN_STATUS_OK) return
+      call validate_config(cfg, ierr=ierr)
+   end function validate_glue
 
    function validate_pv(nghost, scheme) result(ierr)
       !! `validate_config` status of a minimal ocean namelist on the Sadourny
