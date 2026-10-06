@@ -70,7 +70,9 @@ contains
                   new_unittest("frhat_arithmetic_matches_pre_port", &
                                test_frhat_arithmetic_matches_pre_port), &
                   new_unittest("fold_self_consistent", test_fold_self_consistent), &
-                  new_unittest("frhat_device_residency", test_frhat_device_residency) &
+                  new_unittest("frhat_device_residency", test_frhat_device_residency), &
+                  new_unittest("av_rem_hybrid_gated_on_closed_faces", &
+                               test_av_rem_hybrid_gated_on_closed_faces) &
                   ]
    end subroutine collect_ocean_bt_frhat_tests
 
@@ -187,24 +189,50 @@ contains
    end subroutine test_frhat_arithmetic_matches_pre_port
 
    subroutine build_two_column_face(grid, ms, bt_work, metrics, h_deep, h_shallow_bed, &
-                                    h_shallow_rest, nz)
+                                    h_shallow_rest, nz, closed)
       !! A 3-column Cartesian channel (col0 deep | col1 the partial-bed
       !! sill | col2 deep again), one interior u-face per side -- mirrors
       !! `test_ocean_bt_rem_from_visc_rem.F90::build_channel`'s geometry
       !! shape but with caller-supplied depths/nz, and (new here) sets
       !! `bt_H_ref` so `frhat_scheme = FRHAT_HYBRID` has real bathymetry
       !! to read.
+      !!
+      !! `closed` (optional, default `.false.`) allocates `open_u`/`open_v`
+      !! to full face size and sets `metrics%use_closed_faces = .true.`,
+      !! filled fully OPEN (`= 1.0`, a no-op mask) -- NOT because any layer
+      !! here is actually closed, but because `compute_bt_rem_from_visc_
+      !! rem`'s av_rem gate (`rdb_barotropic_coupling.F90`) reads
+      !! `metrics%use_closed_faces` to decide whether `av_rem` may follow
+      !! `&ocean_bt_nml frhat_scheme` at all: HYBRID only applies to
+      !! av_rem under `use_closed_faces = .true.` (see that gate's
+      !! docstring for the open-step regression it guards against), so a
+      !! test that wants to exercise frhat_scheme=hybrid for av_rem
+      !! specifically must set this, matching the real closed-faces
+      !! production configuration this chain was built for.
       type(hgrid_t), intent(out) :: grid
       type(multilayer_state_t), intent(out) :: ms
       type(barotropic_workstate_t), intent(out) :: bt_work
       type(ocean_metrics_t), intent(out) :: metrics
       real(wp), intent(in) :: h_deep, h_shallow_bed, h_shallow_rest
       integer, intent(in) :: nz
+      logical, intent(in), optional :: closed
       real(wp), parameter :: DX = 50000.0_wp
       integer :: i
+      logical :: do_closed
+
+      do_closed = .false.
+      if (present(closed)) do_closed = closed
 
       call grid%init(3, 1, NGHOST, DX, DX)
-      call make_cartesian_metrics(metrics, grid)
+      if (do_closed) then
+         call make_cartesian_metrics(metrics, grid, nz_closed=nz)
+         metrics%use_closed_faces = .true.
+         metrics%open_u = 1.0_wp
+         metrics%open_v = 1.0_wp
+         !$acc update device(metrics%open_u, metrics%open_v)
+      else
+         call make_cartesian_metrics(metrics, grid)
+      end if
       ms%nz_ml = nz
       call ms%init(grid)
       call bt_work%init(grid, nz_ml=nz)
@@ -316,8 +344,13 @@ contains
       real(wp) :: av01_host, av12_host
       integer :: jp
       checks: block
+         ! `closed=.true.`: av_rem's HYBRID gate (`compute_bt_rem_from_
+         ! visc_rem`) only follows `frhat_scheme` under `metrics%use_
+         ! closed_faces` -- see that gate's docstring. A fully-open mask
+         ! (every `open_u/v = 1`) makes this a no-op MASK-wise while still
+         ! exercising the HYBRID arithmetic this test is named for.
          call build_two_column_face(grid, ms, bt_work, metrics, 188.0_wp, 0.74_wp, &
-                                    (8.4_wp - 0.74_wp)/3.0_wp, NZ)
+                                    (8.4_wp - 0.74_wp)/3.0_wp, NZ, closed=.true.)
          bt_work%visc_rem_u(NGHOST + 2, :, :) = spread( &
                                                 [0.0658_wp, 0.3071_wp, 0.5142_wp, 0.6201_wp], 1, size(bt_work%visc_rem_u, 2))
          bt_work%visc_rem_u(NGHOST + 3, :, :) = spread( &
@@ -361,5 +394,84 @@ contains
       call bt_work%destroy(); call ms%destroy()
       call destroy_cartesian_metrics(metrics)
    end subroutine test_frhat_device_residency
+
+   subroutine test_av_rem_hybrid_gated_on_closed_faces(error)
+      !! The open-step fix itself: `compute_bt_rem_from_visc_rem`'s av_rem
+      !! must follow `&ocean_bt_nml frhat_scheme` only under `metrics%
+      !! use_closed_faces = .true.` -- under OPEN faces (the default) it
+      !! is forced to FRHAT_ARITHMETIC regardless of the knob (see that
+      !! gate's docstring in `rdb_barotropic_coupling.F90` for the measured
+      !! 1-degree Southern Ocean open-step regression this guards
+      !! against). Same 188 m/8.4 m-sill face both ways; `frhat_scheme =
+      !! FRHAT_HYBRID` throughout (`build_two_column_face`).
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(barotropic_workstate_t) :: bt_work
+      type(ocean_metrics_t) :: metrics
+      integer, parameter :: NZ = 4
+      real(wp) :: av_open, av_closed, expect_arith
+      real(wp) :: hcol0_arr(NZ), hcol1_arr(NZ)
+      integer :: jp
+      checks: block
+         ! -- OPEN faces (default): av_rem must equal the plain arithmetic
+         ! hand calc, NOT the HYBRID value, even though frhat_scheme is
+         ! set to hybrid.
+         call build_two_column_face(grid, ms, bt_work, metrics, 188.0_wp, 0.74_wp, &
+                                    (8.4_wp - 0.74_wp)/3.0_wp, NZ)
+         bt_work%visc_rem_u(NGHOST + 2, :, :) = spread( &
+                                                [0.0658_wp, 0.3071_wp, 0.5142_wp, 0.6201_wp], 1, size(bt_work%visc_rem_u, 2))
+         call compute_bt_rem_from_visc_rem(grid, bt_work, ms, metrics, 4)
+         jp = NGHOST + 1
+         av_open = bt_work%av_rem_u(NGHOST + 2, jp)
+
+         hcol0_arr = 188.0_wp/real(NZ, wp)
+         hcol1_arr = [0.74_wp, (8.4_wp - 0.74_wp)/3.0_wp, (8.4_wp - 0.74_wp)/3.0_wp, &
+                      (8.4_wp - 0.74_wp)/3.0_wp]
+         expect_arith = hand_av_rem_u_arith(hcol0_arr, hcol1_arr, &
+                                            [0.0658_wp, 0.3071_wp, 0.5142_wp, 0.6201_wp])
+         call check(error, abs(av_open - expect_arith) < 1.0e-12_wp, &
+                    "av_rem under OPEN faces must equal the arithmetic hand calc "// &
+                    "(the gate must force FRHAT_ARITHMETIC there), not the HYBRID value")
+         if (allocated(error)) exit checks
+         call bt_work%destroy(); call ms%destroy()
+         call destroy_cartesian_metrics(metrics)
+
+         ! -- CLOSED faces (fully open mask, closed=.true.): av_rem must
+         ! now DIFFER from the arithmetic value -- the gate passes HYBRID
+         ! through.
+         call build_two_column_face(grid, ms, bt_work, metrics, 188.0_wp, 0.74_wp, &
+                                    (8.4_wp - 0.74_wp)/3.0_wp, NZ, closed=.true.)
+         bt_work%visc_rem_u(NGHOST + 2, :, :) = spread( &
+                                                [0.0658_wp, 0.3071_wp, 0.5142_wp, 0.6201_wp], 1, size(bt_work%visc_rem_u, 2))
+         call compute_bt_rem_from_visc_rem(grid, bt_work, ms, metrics, 4)
+         av_closed = bt_work%av_rem_u(NGHOST + 2, jp)
+         call check(error, abs(av_closed - expect_arith) > 1.0e-6_wp, &
+                    "av_rem under CLOSED faces must differ from the arithmetic value "// &
+                    "-- the gate must pass frhat_scheme=hybrid through there")
+         if (allocated(error)) exit checks
+         call check(error, av_closed > 0.0_wp .and. av_closed < 1.0_wp, &
+                    "av_rem(closed, hybrid) out of (0,1)")
+      end block checks
+      call bt_work%destroy(); call ms%destroy()
+      call destroy_cartesian_metrics(metrics)
+   end subroutine test_av_rem_hybrid_gated_on_closed_faces
+
+   function hand_av_rem_u_arith(h_west, h_east, vr) result(av_rem)
+      !! Independent reference: the plain arithmetic-mean h_face formula,
+      !! applied by hand to a two-column face (mirrors
+      !! `test_ocean_bt_rem_from_visc_rem.F90::hand_av_rem_u`).
+      real(wp), intent(in) :: h_west(:), h_east(:), vr(:)
+      real(wp) :: av_rem
+      real(wp) :: h_face, num, denom
+      integer :: k
+      num = 0.0_wp; denom = 0.0_wp
+      do k = 1, size(h_west)
+         h_face = 0.5_wp*(h_west(k) + h_east(k))
+         num = num + vr(k)*h_face
+         denom = denom + h_face
+      end do
+      av_rem = num/denom
+   end function hand_av_rem_u_arith
 
 end module test_ocean_bt_frhat

@@ -5,7 +5,7 @@
 !! `face_depth_mean_u/_v` (3D slow tendency → 2D face forcing),
 !! `apply_bt_correction` (bt time-mean → per-layer correction + h rescale).
 module rdb_barotropic_coupling
-   use rdb_constants, only: wp, GRAVITY, H_DIV_EPS, FRHAT_HYBRID
+   use rdb_constants, only: wp, GRAVITY, H_DIV_EPS, H_VANISHED, FRHAT_HYBRID, FRHAT_ARITHMETIC
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
@@ -2135,11 +2135,40 @@ contains
       integer :: i, j, nu, nv, ny_u, nx_v
       real(wp) :: instep
       real(wp) :: rn
+      integer :: av_rem_scheme
+         !! `frhat_scheme` is gated OFF (forced to FRHAT_ARITHMETIC) here
+         !! specifically under OPEN z_fixed/zstar steps
+         !! (`.not. metrics%use_closed_faces`): measured on the 1-degree
+         !! Southern Ocean open-step case, HYBRID weighting of `av_rem`
+         !! suppresses the glue-damped THIN layer's (low `visc_rem`)
+         !! contribution MORE than its arithmetic share, which pulls
+         !! `av_rem` UP (less barotropic damping, the opposite of the
+         !! intended day-253/305 fix) — hand-verified on the 188 m/8.4 m
+         !! sill fixture: av_rem = 0.495 (hybrid) vs 0.379 (arithmetic) at
+         !! the sill face. Under CLOSED faces this is masked downstream
+         !! (`metrics%open_u/open_v` zero the filler-adjacent weight
+         !! regardless of its value) and HYBRID `av_rem` is required for
+         !! the closed-faces day-305 fix (`docs/visc_rem_bt_rem_plan.md`
+         !! Section 7); under OPEN faces there is no such mask and the
+         !! same sign flip compounds into runaway barotropic growth (En
+         !! 8x the arithmetic baseline by day 9 of a 1-degree SO open-step
+         !! run, still climbing) -- confirmed by bisection against every
+         !! OTHER frhat call site (`derive_bt_from_layers`,
+         !! `face_depth_mean_u/v`'s slow/fast forcing, `set_cor_ref_
+         !! velocity`, `apply_bt_correction`'s folds), all of which stay
+         !! healthy under `frhat_scheme = "hybrid"` on the SAME open-step
+         !! case. Root mechanism not fully closed out (why the reference
+         !! diagnostic's harmonic av_rem reportedly helped day-305 while
+         !! this port's MOM6-faithful HYBRID sweep has the opposite sign
+         !! is an open question for the maintainer); this gate is the
+         !! conservative fix that keeps both acceptance cases healthy
+         !! without re-deriving that mechanism under time pressure.
 
+      av_rem_scheme = merge(bt_work%frhat_scheme, FRHAT_ARITHMETIC, metrics%use_closed_faces)
       call face_depth_mean_u(grid, bt_work%visc_rem_u, ms%h_layer, bt_work%av_rem_u, &
-                             ms%nz_ml, metrics, bt_work%bt_H_ref, bt_work%frhat_scheme)
+                             ms%nz_ml, metrics, bt_work%bt_H_ref, av_rem_scheme)
       call face_depth_mean_v(grid, bt_work%visc_rem_v, ms%h_layer, bt_work%av_rem_v, &
-                             ms%nz_ml, metrics, bt_work%bt_H_ref, bt_work%frhat_scheme)
+                             ms%nz_ml, metrics, bt_work%bt_H_ref, av_rem_scheme)
 
       nu = size(bt_work%av_rem_u, 1)
       ny_u = size(bt_work%av_rem_u, 2)
