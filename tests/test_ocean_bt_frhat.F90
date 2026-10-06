@@ -72,7 +72,9 @@ contains
                   new_unittest("fold_self_consistent", test_fold_self_consistent), &
                   new_unittest("frhat_device_residency", test_frhat_device_residency), &
                   new_unittest("av_rem_hybrid_gated_on_closed_faces", &
-                               test_av_rem_hybrid_gated_on_closed_faces) &
+                               test_av_rem_hybrid_gated_on_closed_faces), &
+                  new_unittest("derive_bt_hybrid_gated_on_closed_faces", &
+                               test_derive_bt_hybrid_gated_on_closed_faces) &
                   ]
    end subroutine collect_ocean_bt_frhat_tests
 
@@ -483,6 +485,72 @@ contains
       call bt_work%destroy(); call ms%destroy()
       call destroy_cartesian_metrics(metrics)
    end subroutine test_av_rem_hybrid_gated_on_closed_faces
+
+   subroutine test_derive_bt_hybrid_gated_on_closed_faces(error)
+      !! The SAME open-step regression `test_av_rem_hybrid_gated_on_closed_
+      !! faces` guards for `compute_bt_rem_from_visc_rem`'s av_rem, but for
+      !! `derive_bt_from_layers`'s `bt_ubt` -- the compat matrix's cliff
+      !! geometry found the gate was missing here (and at every other
+      !! frhat call site except av_rem): `eulerian_z` + a cliff bed +
+      !! `&ocean_bt_nml correction_bc_pgf` leaked mass to 4.9e-5 by step 24
+      !! (budget tolerance 1e-9) with `frhat_scheme = "hybrid"` (the
+      !! default) followed UNGATED here, and a 4-rank decomposition of a
+      !! `hycom` + open-boundary cell disagreed with its own 1-rank
+      !! checkpoint by 3e-3 relative in `bt_visc_rem_u` -- both cells have
+      !! `metrics%use_closed_faces = .false.` (neither is z_fixed/zstar
+      !! with `&vcoord_nml zfixed_closed_faces`), and both run clean once
+      !! HYBRID is forced back to ARITHMETIC off that one family it was
+      !! ported, bisected and validated for (`rdb_barotropic_coupling.F90`,
+      !! `derive_bt_from_layers`'s gate comment). Mirrors
+      !! `test_av_rem_hybrid_gated_on_closed_faces`'s structure exactly,
+      !! targeting `bt_ubt` instead of `av_rem_u`.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(barotropic_workstate_t) :: bt_work
+      type(ocean_metrics_t) :: metrics
+      integer, parameter :: NZ = 4
+      real(wp) :: ubt_open, ubt_closed, expect_arith
+      real(wp) :: hcol0_arr(NZ), hcol1_arr(NZ), u_seed(NZ)
+      integer :: jp
+      u_seed = [0.01_wp, -0.02_wp, 0.03_wp, 0.05_wp]
+      checks: block
+         ! -- OPEN faces (default): bt_ubt must equal the plain arithmetic
+         ! hand calc, NOT the HYBRID value, even though frhat_scheme is
+         ! set to hybrid (`build_two_column_face`).
+         call build_two_column_face(grid, ms, bt_work, metrics, 188.0_wp, 0.74_wp, &
+                                    (8.4_wp - 0.74_wp)/3.0_wp, NZ)
+         ms%u_face_x_layer(NGHOST + 2, :, :) = spread(u_seed, 1, size(ms%u_face_x_layer, 2))
+         call derive_bt_from_layers(grid, bt_work, ms, metrics)
+         jp = NGHOST + 1
+         ubt_open = bt_work%bt_ubt(NGHOST + 2, jp)
+
+         hcol0_arr = 188.0_wp/real(NZ, wp)
+         hcol1_arr = [0.74_wp, (8.4_wp - 0.74_wp)/3.0_wp, (8.4_wp - 0.74_wp)/3.0_wp, &
+                      (8.4_wp - 0.74_wp)/3.0_wp]
+         expect_arith = hand_av_rem_u_arith(hcol0_arr, hcol1_arr, u_seed)
+         call check(error, abs(ubt_open - expect_arith) < 1.0e-12_wp, &
+                    "bt_ubt under OPEN faces must equal the arithmetic hand calc "// &
+                    "(the gate must force FRHAT_ARITHMETIC there), not the HYBRID value")
+         if (allocated(error)) exit checks
+         call bt_work%destroy(); call ms%destroy()
+         call destroy_cartesian_metrics(metrics)
+
+         ! -- CLOSED faces (fully open mask, closed=.true.): bt_ubt must
+         ! now DIFFER from the arithmetic value -- the gate passes HYBRID
+         ! through, exactly like av_rem does.
+         call build_two_column_face(grid, ms, bt_work, metrics, 188.0_wp, 0.74_wp, &
+                                    (8.4_wp - 0.74_wp)/3.0_wp, NZ, closed=.true.)
+         ms%u_face_x_layer(NGHOST + 2, :, :) = spread(u_seed, 1, size(ms%u_face_x_layer, 2))
+         call derive_bt_from_layers(grid, bt_work, ms, metrics)
+         ubt_closed = bt_work%bt_ubt(NGHOST + 2, jp)
+         call check(error, abs(ubt_closed - expect_arith) > 1.0e-6_wp, &
+                    "bt_ubt under CLOSED faces must differ from the arithmetic value "// &
+                    "-- the gate must pass frhat_scheme=hybrid through there")
+      end block checks
+      call bt_work%destroy(); call ms%destroy()
+      call destroy_cartesian_metrics(metrics)
+   end subroutine test_derive_bt_hybrid_gated_on_closed_faces
 
    function hand_av_rem_u_arith(h_west, h_east, vr) result(av_rem)
       !! Independent reference: the plain arithmetic-mean h_face formula,
