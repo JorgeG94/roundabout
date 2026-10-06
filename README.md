@@ -38,6 +38,11 @@ the ice-ocean coupling. Roundabout's own work is the port: rewriting those
 methods around `do concurrent` and OpenACC so the same source runs on GPUs
 and CPUs. Full credit for the numerics goes to the MOM6 and SIS2 developers.
 
+Roundabout is a hobby project, written for fun and for learning. It runs
+in parallel to, and separately from, the GPU porting efforts at NOAA-GFDL
+and [ACCESS-NRI](https://www.access-nri.org.au/), and it is not part of
+them.
+
 **MOM6 is Roundabout's physics oracle.** Wherever Roundabout implements an
 algorithm MOM6 also has, MOM6's behaviour is the reference it is checked
 against. Deliberate divergences are documented in

@@ -38,6 +38,11 @@ licensed under the Apache License 2.0, and the ported code is used and
 modified under it. See :doc:`references` for the full acknowledgement,
 licensing and the papers the physics comes from.
 
+Roundabout is a hobby project, written for fun and for learning. It runs in
+parallel to, and separately from, the GPU porting efforts at NOAA-GFDL and
+`ACCESS-NRI <https://www.access-nri.org.au/>`_, and it is not part of
+them.
+
 The API documentation for the code itself — per-module and per-procedure
 reference generated from the source — is hosted separately:
 https://jorgeg94.github.io/roundabout/

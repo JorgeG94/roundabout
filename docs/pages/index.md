@@ -35,6 +35,11 @@ also Roundabout's **physics oracle**: its behaviour is the reference
 Roundabout is checked against, and deliberate divergences are documented in
 [`docs/CLOSURE_MATRIX.md`](https://github.com/JorgeG94/roundabout/blob/main/docs/CLOSURE_MATRIX.md).
 
+Roundabout is a hobby project, written for fun and for learning. It runs
+in parallel to, and separately from, the GPU porting efforts at NOAA-GFDL
+and [ACCESS-NRI](https://www.access-nri.org.au/), and it is not part of
+them.
+
 MOM6 and SIS2 are licensed under the Apache License 2.0, and the ported code
 is used and modified under it (see
 [`NOTICE`](https://github.com/JorgeG94/roundabout/blob/main/NOTICE)). The
