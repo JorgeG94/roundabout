@@ -1432,6 +1432,10 @@ contains
       real(wp) :: h_face, sum_h, sum_hvr, vr_bar, wt, vr_k
       real(wp) :: du_bc, dv_bc
       real(wp) :: href_l, href_r, e_prev
+      real(wp) :: hl_loc, hr_loc, h_arith_loc, h_harm_loc, e_cur_loc, d_shallow_loc, wt_arith_loc
+         !! Hand-inlined `frhat_h_face_step` locals for the visc_rem-weighted
+         !! fold's two `do concurrent` blocks below -- see the comment at
+         !! their first use for why this is inlined rather than called.
       integer :: il, ir, jl, jr, frhat_scheme
       logical :: do_rescale, do_bc_pgf, do_visc_rem, do_open, do_bt_rescale
 
@@ -1488,7 +1492,12 @@ contains
          ! exactly that (not `open·1/1`) so the no-visc_rem closed-face
          ! answer is the one this branch always gave.
          do concurrent(j=1:ny, i=1:nu) &
-            local(k, il, ir, href_l, href_r, e_prev, delta_u, sum_h, sum_hvr, h_face, vr_bar, wt, vr_k)
+            local(k, il, ir, href_l, href_r, e_prev, delta_u, sum_h, sum_hvr, h_face, vr_bar, wt, vr_k, &
+                  hl_loc, hr_loc, h_arith_loc, h_harm_loc, e_cur_loc, d_shallow_loc, wt_arith_loc)
+            ! `frhat_h_face_step` hand-inlined -- see the comment at the
+            ! visc_rem-weighted fold below (same `apply_bt_correction`
+            ! call-site miscompile under NVHPC 25.5 `-stdpar=gpu`,
+            ! reproduced here too via compute-sanitizer).
             delta_u = du_scale*(bt_work%bt_ubt_end(i, j) - bt_work%ubt_at_n(i, j) - dt*bt_work%F_bt_u(i, j))
             if (do_bt_rescale) then
                if (bt_work%av_rem_u(i, j) > 0.0_wp .and. ieee_is_finite(bt_work%av_rem_u(i, j))) then
@@ -1503,8 +1512,30 @@ contains
             sum_h = 0.0_wp
             sum_hvr = 0.0_wp
             do k = 1, nz
-               call frhat_h_face_step(ms%h_layer(il, j, k), ms%h_layer(ir, j, k), &
-                                      href_l, href_r, frhat_scheme, e_prev, h_face)
+               hl_loc = ms%h_layer(il, j, k)
+               hr_loc = ms%h_layer(ir, j, k)
+               h_arith_loc = 0.5_wp*(hl_loc + hr_loc)
+               if (frhat_scheme == FRHAT_HYBRID) then
+                  d_shallow_loc = -min(href_l, href_r)
+                  e_cur_loc = e_prev + h_arith_loc
+                  ! vanished-ok: hand-inlined frhat_h_face_step copy (NVHPC call-site miscompile, see local() comment above)
+                  if (hl_loc <= H_VANISHED .or. hr_loc <= H_VANISHED) then
+                     h_face = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
+                  else if (e_prev >= d_shallow_loc) then
+                     h_face = h_arith_loc
+                  else
+                     h_harm_loc = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
+                     if (e_cur_loc <= d_shallow_loc) then
+                        h_face = h_harm_loc
+                     else
+                        wt_arith_loc = (e_cur_loc - d_shallow_loc)/(h_arith_loc + H_DIV_EPS)
+                        h_face = wt_arith_loc*h_arith_loc + (1.0_wp - wt_arith_loc)*h_harm_loc
+                     end if
+                  end if
+                  e_prev = e_cur_loc
+               else
+                  h_face = h_arith_loc
+               end if
                h_face = h_face*metrics%open_u(i, j, k)
                if (do_visc_rem) then
                   vr_k = bt_work%visc_rem_u(i, j, k)
@@ -1528,7 +1559,9 @@ contains
             end if
          end do
          do concurrent(j=1:nv, i=1:nx) &
-            local(k, jl, jr, href_l, href_r, e_prev, delta_v, sum_h, sum_hvr, h_face, vr_bar, wt, vr_k)
+            local(k, jl, jr, href_l, href_r, e_prev, delta_v, sum_h, sum_hvr, h_face, vr_bar, wt, vr_k, &
+                  hl_loc, hr_loc, h_arith_loc, h_harm_loc, e_cur_loc, d_shallow_loc, wt_arith_loc)
+            ! See the matching comment in the u-branch above.
             delta_v = du_scale*(bt_work%bt_vbt_end(i, j) - bt_work%vbt_at_n(i, j) - dt*bt_work%F_bt_v(i, j))
             if (do_bt_rescale) then
                if (bt_work%av_rem_v(i, j) > 0.0_wp .and. ieee_is_finite(bt_work%av_rem_v(i, j))) then
@@ -1543,8 +1576,30 @@ contains
             sum_h = 0.0_wp
             sum_hvr = 0.0_wp
             do k = 1, nz
-               call frhat_h_face_step(ms%h_layer(i, jl, k), ms%h_layer(i, jr, k), &
-                                      href_l, href_r, frhat_scheme, e_prev, h_face)
+               hl_loc = ms%h_layer(i, jl, k)
+               hr_loc = ms%h_layer(i, jr, k)
+               h_arith_loc = 0.5_wp*(hl_loc + hr_loc)
+               if (frhat_scheme == FRHAT_HYBRID) then
+                  d_shallow_loc = -min(href_l, href_r)
+                  e_cur_loc = e_prev + h_arith_loc
+                  ! vanished-ok: hand-inlined frhat_h_face_step copy, same reason as the u-branch above
+                  if (hl_loc <= H_VANISHED .or. hr_loc <= H_VANISHED) then
+                     h_face = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
+                  else if (e_prev >= d_shallow_loc) then
+                     h_face = h_arith_loc
+                  else
+                     h_harm_loc = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
+                     if (e_cur_loc <= d_shallow_loc) then
+                        h_face = h_harm_loc
+                     else
+                        wt_arith_loc = (e_cur_loc - d_shallow_loc)/(h_arith_loc + H_DIV_EPS)
+                        h_face = wt_arith_loc*h_arith_loc + (1.0_wp - wt_arith_loc)*h_harm_loc
+                     end if
+                  end if
+                  e_prev = e_cur_loc
+               else
+                  h_face = h_arith_loc
+               end if
                h_face = h_face*metrics%open_v(i, j, k)
                if (do_visc_rem) then
                   vr_k = bt_work%visc_rem_v(i, j, k)
@@ -1600,7 +1655,27 @@ contains
          ! only weight with the right depth mean when `⟨vr⟩_h` is
          ! undefined.
          do concurrent(j=1:ny, i=1:nu) &
-            local(k, il, ir, href_l, href_r, e_prev, delta_u, sum_h, sum_hvr, h_face, vr_bar, wt)
+            local(k, il, ir, href_l, href_r, e_prev, delta_u, sum_h, sum_hvr, h_face, vr_bar, wt, &
+                  hl_loc, hr_loc, h_arith_loc, h_harm_loc, e_cur_loc, d_shallow_loc, wt_arith_loc)
+            ! `frhat_h_face_step` is called BY HAND here rather than via `call`
+            ! (contrast `derive_bt_from_layers`/`face_depth_mean_*`, which call
+            ! it directly and run clean on GPU): under NVHPC 25.5
+            ! `-stdpar=gpu,mem:separate` this specific call site faulted with
+            ! an "Invalid __global__ read" inside the callee (compute-
+            ! sanitizer memcheck, 2026-10-06) -- a device-codegen defect, not
+            ! a bounds bug (`il`/`ir` are always in `[1, nx]` by construction)
+            ! and not a missing-device-mapping bug (reproduced even with
+            ! `bt_work`/`ms` fully `enter_data`-mapped). Moving the `il`/`ir`
+            ! assignment out of the `ieee_is_finite` guard did not fix it
+            ! either. The inline copy below is textually identical to
+            ! `rdb_frhat_face.inc`'s body (CLAUDE.md's "Cross-TU helper
+            ! inlining" gotcha, applied one step further: inline the BODY, not
+            ! just the routine, when even an in-module call to a `!$acc
+            ! routine seq` helper miscompiles at a specific call site).
+            il = max(1, i - 1)
+            ir = min(nu - 1, i)
+            href_l = bt_work%bt_H_ref(il, j)
+            href_r = bt_work%bt_H_ref(ir, j)
             delta_u = du_scale*(bt_work%bt_ubt_end(i, j) - bt_work%ubt_at_n(i, j) - dt*bt_work%F_bt_u(i, j))
             if (do_bt_rescale) then
                if (bt_work%av_rem_u(i, j) > 0.0_wp .and. ieee_is_finite(bt_work%av_rem_u(i, j))) then
@@ -1608,16 +1683,34 @@ contains
                end if
             end if
             if (ieee_is_finite(delta_u)) then
-               il = max(1, i - 1)
-               ir = min(nu - 1, i)
-               href_l = bt_work%bt_H_ref(il, j)
-               href_r = bt_work%bt_H_ref(ir, j)
                e_prev = -0.5_wp*(href_l + href_r)
                sum_h = 0.0_wp
                sum_hvr = 0.0_wp
                do k = 1, nz
-                  call frhat_h_face_step(ms%h_layer(il, j, k), ms%h_layer(ir, j, k), &
-                                         href_l, href_r, frhat_scheme, e_prev, h_face)
+                  hl_loc = ms%h_layer(il, j, k)
+                  hr_loc = ms%h_layer(ir, j, k)
+                  h_arith_loc = 0.5_wp*(hl_loc + hr_loc)
+                  if (frhat_scheme == FRHAT_HYBRID) then
+                     d_shallow_loc = -min(href_l, href_r)
+                     e_cur_loc = e_prev + h_arith_loc
+                     ! vanished-ok: hand-inlined frhat_h_face_step copy (NVHPC call-site miscompile, see local() comment above)
+                     if (hl_loc <= H_VANISHED .or. hr_loc <= H_VANISHED) then
+                        h_face = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
+                     else if (e_prev >= d_shallow_loc) then
+                        h_face = h_arith_loc
+                     else
+                        h_harm_loc = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
+                        if (e_cur_loc <= d_shallow_loc) then
+                           h_face = h_harm_loc
+                        else
+                           wt_arith_loc = (e_cur_loc - d_shallow_loc)/(h_arith_loc + H_DIV_EPS)
+                           h_face = wt_arith_loc*h_arith_loc + (1.0_wp - wt_arith_loc)*h_harm_loc
+                        end if
+                     end if
+                     e_prev = e_cur_loc
+                  else
+                     h_face = h_arith_loc
+                  end if
                   sum_h = sum_h + h_face
                   sum_hvr = sum_hvr + h_face*bt_work%visc_rem_u(i, j, k)
                end do
@@ -1635,7 +1728,15 @@ contains
             end if
          end do
          do concurrent(j=1:nv, i=1:nx) &
-            local(k, jl, jr, href_l, href_r, e_prev, delta_v, sum_h, sum_hvr, h_face, vr_bar, wt)
+            local(k, jl, jr, href_l, href_r, e_prev, delta_v, sum_h, sum_hvr, h_face, vr_bar, wt, &
+                  hl_loc, hr_loc, h_arith_loc, h_harm_loc, e_cur_loc, d_shallow_loc, wt_arith_loc)
+            ! See the matching comment in the u-branch above -- `jl`/`jr`/
+            ! `href_l`/`href_r` computed unconditionally, and
+            ! `frhat_h_face_step` inlined by hand for the same reason.
+            jl = max(1, j - 1)
+            jr = min(nv - 1, j)
+            href_l = bt_work%bt_H_ref(i, jl)
+            href_r = bt_work%bt_H_ref(i, jr)
             delta_v = du_scale*(bt_work%bt_vbt_end(i, j) - bt_work%vbt_at_n(i, j) - dt*bt_work%F_bt_v(i, j))
             if (do_bt_rescale) then
                if (bt_work%av_rem_v(i, j) > 0.0_wp .and. ieee_is_finite(bt_work%av_rem_v(i, j))) then
@@ -1643,16 +1744,34 @@ contains
                end if
             end if
             if (ieee_is_finite(delta_v)) then
-               jl = max(1, j - 1)
-               jr = min(nv - 1, j)
-               href_l = bt_work%bt_H_ref(i, jl)
-               href_r = bt_work%bt_H_ref(i, jr)
                e_prev = -0.5_wp*(href_l + href_r)
                sum_h = 0.0_wp
                sum_hvr = 0.0_wp
                do k = 1, nz
-                  call frhat_h_face_step(ms%h_layer(i, jl, k), ms%h_layer(i, jr, k), &
-                                         href_l, href_r, frhat_scheme, e_prev, h_face)
+                  hl_loc = ms%h_layer(i, jl, k)
+                  hr_loc = ms%h_layer(i, jr, k)
+                  h_arith_loc = 0.5_wp*(hl_loc + hr_loc)
+                  if (frhat_scheme == FRHAT_HYBRID) then
+                     d_shallow_loc = -min(href_l, href_r)
+                     e_cur_loc = e_prev + h_arith_loc
+                     ! vanished-ok: hand-inlined frhat_h_face_step copy, same reason as the u-branch above
+                     if (hl_loc <= H_VANISHED .or. hr_loc <= H_VANISHED) then
+                        h_face = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
+                     else if (e_prev >= d_shallow_loc) then
+                        h_face = h_arith_loc
+                     else
+                        h_harm_loc = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
+                        if (e_cur_loc <= d_shallow_loc) then
+                           h_face = h_harm_loc
+                        else
+                           wt_arith_loc = (e_cur_loc - d_shallow_loc)/(h_arith_loc + H_DIV_EPS)
+                           h_face = wt_arith_loc*h_arith_loc + (1.0_wp - wt_arith_loc)*h_harm_loc
+                        end if
+                     end if
+                     e_prev = e_cur_loc
+                  else
+                     h_face = h_arith_loc
+                  end if
                   sum_h = sum_h + h_face
                   sum_hvr = sum_hvr + h_face*bt_work%visc_rem_v(i, j, k)
                end do
