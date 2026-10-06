@@ -505,6 +505,11 @@ contains
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
 
+      ! PR-4 (the flip): `visc_rem_chain` now defaults ON at the type level,
+      ! so this truth-table test (exercising every combination by hand,
+      ! starting from "neither set") pins it OFF explicitly first.
+      cfg%ocean%bt%visc_rem_chain = .false.
+
       ! Neither set: every helper false.
       call check(error,.not. ocean_bt_visc_rem_producer_on(cfg), "neither: producer off")
       if (allocated(error)) return
