@@ -229,7 +229,7 @@ contains
       bt_extra = ""
       if (label == "visc_rem_zstar") bt_extra = ", correction_visc_rem = .true."
       if (label == "visc_rem_chain") bt_extra = ", correction_visc_rem = .true., "// &
-                                                 "bt_rem_from_visc_rem = .true."
+                                                "bt_rem_from_visc_rem = .true."
       write (spx, '(i0)') px
       write (spy, '(i0)') py
       write (snx, '(i0)') NX_G
