@@ -1353,7 +1353,7 @@ contains
       end if
    end subroutine configure_ocean_tracers
 
-   subroutine configure_ocean_lateral(cfg, ocean_state, grid, compute_rank, ierr, warm_restart)
+   subroutine configure_ocean_lateral(cfg, ocean_state, grid, compute_rank, ierr)
       !! Flow-aware lateral-viscosity closure (Leith / Smagorinsky + biharmonic
       !! Smagorinsky_AH), the vertical coordinate (VCOORD_* code + z_fixed
       !! reference depth), and the PP81/KPP vertical-mixing switches — with
@@ -1367,19 +1367,7 @@ contains
          !! (EPBL/kappa-shear/tidal-mixing/conv/ddiff/wavespeed/Fox-Kemper)
          !! rejects the resolved configuration, when present; absent
          !! behaves as today (`error stop`).
-      logical, intent(in), optional :: warm_restart
-         !! PR-2 (bt-rem-from-av-rem): `.true.` on a warm restart (threaded
-         !! the same way `configure_ocean_land_mask` takes it).  Forwarded
-         !! to `vmix%seed_backgrounds`'s `reseed_arrays` so the mandatory
-         !! `pp81_*` config-copy re-derive does not stomp the
-         !! just-restored `vmix%kv` (tag `vmix_kv`) back to the cold
-         !! background on every resume — see that routine's docstring.
-         !! Default/absent = `.false.` (cold start -- always reseed).
       integer :: local_ierr
-      logical :: is_warm_restart
-
-      is_warm_restart = .false.
-      if (present(warm_restart)) is_warm_restart = warm_restart
 
       ! Lateral closure + background/cap coefficients.  ah_bg defaults to the
       ! MOM6 floor max(nu_h, kh_vel_scale·dx) when cfg leaves it negative.
@@ -1554,21 +1542,26 @@ contains
       ! NOT redundant with `p_top` being zero — a cavity fills `p_top`
       ! with the ice load whether or not `in_eos` is set.
       ocean_state%vmix%p_top_in_eos = cfg%ocean%psurf%in_eos
-      ! MANDATORY re-derive of the SCALAR kv_bg/kt_bg/ks_bg trackers: set
-      ! from the TYPE-DEFAULT pp81_* at `init` time (before this configure
-      ! call runs); without this, `vmix_assemble`'s background floor would
-      ! silently clamp against the old default even though the user just
-      ! set a new pp81_nu_bg/pp81_kappa_bg — see `vmix_seed_backgrounds`'s
-      ! docstring.  The full kv/kt/ks/kd_bg ARRAY reseed is part of the
-      ! same call but is SKIPPED on a warm restart (PR-2,
-      ! bt-rem-from-av-rem): `engine_setup`'s restart read already ran
-      ! (before this stage) and restored `kv` from the checkpoint (tag
-      ! `vmix_kv`) -- an unconditional array reseed here would stomp that
-      ! back to the cold background on every resume. Runs before
+      ! MANDATORY re-derive: kv_bg/kt_bg/ks_bg and the kt/ks/kd_bg arrays
+      ! were set from the TYPE-DEFAULT pp81_* at `init` time (before this
+      ! configure call runs); without this, `vmix_assemble`'s background
+      ! floor would silently clamp against the old default even though
+      ! the user just set a new pp81_nu_bg/pp81_kappa_bg, and a
+      ! Bryan-Lewis/Henyey background config would lose `kd_bg` entirely
+      ! on every warm restart (`kd_bg` is set ONLY here) — see
+      ! `vmix_seed_backgrounds`'s docstring.  `kv` alone is skipped when
+      ! `engine_setup`'s restart read actually found it in the checkpoint
+      ! (PR-2, bt-rem-from-av-rem: `vmix%kv_from_restart`, set by
+      ! `ocean_state_restart_read`) -- it is the one CARRIED field here
+      ! (`visc_rem_precompute` reads the PREVIOUS stage's `kv`), so an
+      ! unconditional reseed would stomp the just-restored value back to
+      ! the cold background on every resume; a cold start or an older
+      ! checkpoint without `vmix_kv` leaves `kv_from_restart = .false.`
+      ! and `kv` still reseeds normally.  Runs before
       ! `ocean_state_enter_data` (driver), so no `!$acc update` is needed
       ! either way -- the host array this leaves in place (restored or
       ! freshly seeded) is what the later `copyin` maps.
-      call ocean_state%vmix%seed_backgrounds(reseed_arrays=.not. is_warm_restart)
+      call ocean_state%vmix%seed_backgrounds(skip_kv=ocean_state%vmix%kv_from_restart)
 
       ! EPBL — energetics-based PBL.  Replaces the KPP overlay when
       ! enabled (mutually exclusive surface schemes); the PP81

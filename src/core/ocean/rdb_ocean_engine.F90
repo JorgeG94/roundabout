@@ -808,8 +808,7 @@ contains
       call configure_ocean_vmix(cfg, engine%state, rank, ierr=ierr)
       if (setup_failed(ierr)) return
       call configure_ocean_tracers(cfg, engine%state, rank)
-      call configure_ocean_lateral(cfg, engine%state, engine%grid, rank, ierr=ierr, &
-                                   warm_restart=did_restart)
+      call configure_ocean_lateral(cfg, engine%state, engine%grid, rank, ierr=ierr)
       if (setup_failed(ierr)) return
 
       ! Sea-ice PR 5: EVP params + the atmospheric-stress snapshot ice

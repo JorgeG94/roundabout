@@ -106,6 +106,15 @@ module rdb_ocean_state
    public :: ocean_state_build_restart_registry
    public :: ocean_state_restart_write
    public :: ocean_state_restart_read
+#ifdef RDB_ENABLE_TESTING
+   public :: ocean_state_restart_write_drop_field
+      !! PR-2 (bt-rem-from-av-rem review): exposed test-only so
+      !! `test_ocean_restart_engine` can write a checkpoint with ONE
+      !! named registered field held back under a different tag --
+      !! simulating an OLDER checkpoint schema that predates that
+      !! field (e.g. a pre-PR-2 file with no `vmix_kv`) without any
+      !! NetCDF-level file surgery.  No production call site.
+#endif
    public :: seed_eady_ic
    public :: seed_geostrophic_adjustment_ic
    public :: seed_baroclinic_jet_ic
@@ -2667,6 +2676,67 @@ contains
 #endif
    end subroutine ocean_state_restart_write
 
+   subroutine ocean_state_restart_write_drop_field(state, grid, decomp, filename, t, step, &
+                                                   drop_tag, ierr)
+      !! Test-only sibling of `ocean_state_restart_write`: identical,
+      !! except the ONE registered entry whose tag matches `drop_tag` is
+      !! written under a mangled tag instead of its real one, so a
+      !! subsequent `ocean_state_restart_read`/`ocean_restart_read_local`
+      !! -- which looks up variables by their REAL tag -- finds nothing
+      !! and takes exactly the "optional field absent" path it takes for
+      !! a genuinely older checkpoint.  `error stop`s if `drop_tag` does
+      !! not match any registered entry (a typo here must not silently
+      !! test nothing).
+      type(ocean_state_t), intent(inout), target :: state
+      type(hgrid_t), intent(in) :: grid
+      type(decomp_t), intent(in) :: decomp
+      character(len=*), intent(in) :: filename
+      real(wp), intent(in) :: t
+      integer, intent(in) :: step
+      character(len=*), intent(in) :: drop_tag
+      integer, intent(out), optional :: ierr
+#ifndef RDB_NO_NETCDF
+      type(restart_registry_t) :: reg
+      type(ocean_restart_metadata_t) :: meta
+      integer :: e
+      logical :: found
+
+      if (present(ierr)) ierr = OCEAN_STATUS_OK
+
+      call ocean_state_build_restart_registry(state, grid, reg)
+      call ocean_state_fill_restart_metadata(state, grid, meta)
+
+      found = .false.
+      do e = 1, reg%n
+         associate (en => reg%entries(e))
+            ! Device sync (same as ocean_state_restart_write): no `cycle`
+            ! here, unlike that routine, because the tag check below must
+            ! still run for every entry including host-only ones.
+            if (en%device_mapped) then
+               if (en%rank == 2) then
+                  !$acc update self(en%p2)
+               else if (en%rank == 3) then
+                  !$acc update self(en%p3)
+               end if
+            end if
+            if (trim(en%tag) == trim(drop_tag)) then
+               en%tag = trim(drop_tag)//"_DROPPED_FOR_TEST"
+               found = .true.
+            end if
+         end associate
+      end do
+      if (.not. found) then
+         error stop "ocean_state_restart_write_drop_field: drop_tag not registered"
+      end if
+
+      call ocean_restart_write_local(filename, reg, decomp, meta, t, step, &
+                                     state%dyn%outer_step_count, ierr=ierr)
+#else
+      call fail("ocean_state_restart_write_drop_field: built without NetCDF "// &
+                "(RDB_ENABLE_NETCDF=ON required)", ierr, OCEAN_STATUS_ERR_IO)
+#endif
+   end subroutine ocean_state_restart_write_drop_field
+
    subroutine ocean_state_restart_read(state, grid, decomp, filename, t, step, ierr)
       !! Read a per-rank ocean restart into the (host) prognostic arrays.
       !! MUST run BEFORE `ocean_state_enter_data` — the subsequent H->D
@@ -2715,7 +2785,15 @@ contains
                    "and then overwrite the good checkpoint; refusing.", &
                    code=restart_mismatch_status_code(local_ierr))
       end if
-      if (local_ierr == 0) state%dyn%outer_step_count = osc
+      if (local_ierr == 0) then
+         state%dyn%outer_step_count = osc
+         ! PR-2 (bt-rem-from-av-rem review): record whether THIS read
+         ! actually found vmix_kv (vs. an older checkpoint without it, or
+         ! this call never running at all on a mismatch) -- read by
+         ! `configure_ocean_lateral`'s config-copy to decide whether to
+         ! skip reseeding `kv` (see `ocean_vmix_t%kv_from_restart`).
+         state%vmix%kv_from_restart = reg%entry_found("vmix_kv")
+      end if
 #else
       t = 0.0_wp
       step = 0
