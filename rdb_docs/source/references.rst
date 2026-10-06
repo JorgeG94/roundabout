@@ -18,6 +18,11 @@ methods around Fortran ``do concurrent``, with OpenACC for data movement and
 reductions, so the same source runs on NVIDIA GPUs and on CPUs. Full credit
 for the numerics goes to the MOM6 and SIS2 developers.
 
+Roundabout is a hobby project, written for fun and for learning. It runs in
+parallel to, and separately from, the GPU porting efforts at NOAA-GFDL and
+`ACCESS-NRI <https://www.access-nri.org.au/>`_, and it is not part of
+them.
+
 * **MOM6**, the Modular Ocean Model version 6,
   https://github.com/NOAA-GFDL/MOM6. The ocean dynamical core follows it:
   the split-explicit barotropic solver, continuity-PPM, the finite-volume
