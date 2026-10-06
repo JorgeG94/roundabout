@@ -1286,14 +1286,19 @@ contains
          !! `bt_work%bt_rescale_strong_drag` is on (PR-2, MOM6
          !! `RESCALE_STRONG_DRAG`, `MOM_barotropic.F90:1989-1997`):
          !! `bt_strong_drag`'s rational-approximation `bt_rem` does not
-         !! satisfy `bt_rem**n_inner == av_rem` exactly (unlike the plain
+         !! satisfy `bt_rem**n_in == av_rem` exactly (unlike the plain
          !! power form, which does by construction), so the Δu/Δv
-         !! correction is rescaled by `min(bt_rem**n_inner/av_rem, 1.0)`
+         !! correction is rescaled by `min(bt_rem**n_in/av_rem, 1.0)`
          !! before being distributed into the layers — keeping the
          !! correction consistent with the TRUE depth-mean remnant.
          !! Ignored when `bt_rescale_strong_drag` is off.
 
       integer :: i, j, k, nu, nv, nx, ny, nz, nfin
+      integer :: n_in
+         !! Local copy of the optional `n_inner`.  Never read an absent
+         !! optional inside `do concurrent`: ifx lowers the loop to an
+         !! OpenMP region and loads every captured scalar at region entry,
+         !! so a null reference segfaults even on a branch never taken.
       real(wp) :: delta_u, delta_v, total_h_old, total_h_new, ratio
       real(wp) :: du_scale
       real(wp) :: h_face, sum_h, sum_hvr, vr_bar, wt, vr_k
@@ -1309,7 +1314,12 @@ contains
       du_scale = 1.0_wp
       if (present(scale)) du_scale = scale
       do_open = metrics%use_closed_faces
-      do_bt_rescale = bt_work%bt_rescale_strong_drag .and. present(n_inner)
+      n_in = 1
+      if (present(n_inner)) n_in = n_inner
+      do_bt_rescale = bt_work%bt_rescale_strong_drag
+      if (do_bt_rescale .and. .not. present(n_inner)) then
+         error stop "apply_bt_correction: rescale_strong_drag requires n_inner"
+      end if
       if (do_bc_pgf .and. .not. present(grid)) then
          error stop "apply_bt_correction: use_bc_pgf=.true. requires grid"
       end if
@@ -1351,7 +1361,7 @@ contains
             delta_u = du_scale*(bt_work%bt_ubt_end(i, j) - bt_work%ubt_at_n(i, j) - dt*bt_work%F_bt_u(i, j))
             if (do_bt_rescale) then
                if (bt_work%av_rem_u(i, j) > 0.0_wp .and. ieee_is_finite(bt_work%av_rem_u(i, j))) then
-                  delta_u = delta_u*min(bt_work%bt_rem_u(i, j)**n_inner/bt_work%av_rem_u(i, j), 1.0_wp)
+                  delta_u = delta_u*min(bt_work%bt_rem_u(i, j)**n_in/bt_work%av_rem_u(i, j), 1.0_wp)
                end if
             end if
             sum_h = 0.0_wp
@@ -1385,7 +1395,7 @@ contains
             delta_v = du_scale*(bt_work%bt_vbt_end(i, j) - bt_work%vbt_at_n(i, j) - dt*bt_work%F_bt_v(i, j))
             if (do_bt_rescale) then
                if (bt_work%av_rem_v(i, j) > 0.0_wp .and. ieee_is_finite(bt_work%av_rem_v(i, j))) then
-                  delta_v = delta_v*min(bt_work%bt_rem_v(i, j)**n_inner/bt_work%av_rem_v(i, j), 1.0_wp)
+                  delta_v = delta_v*min(bt_work%bt_rem_v(i, j)**n_in/bt_work%av_rem_v(i, j), 1.0_wp)
                end if
             end if
             sum_h = 0.0_wp
@@ -1422,7 +1432,7 @@ contains
             delta_u = du_scale*(bt_work%bt_ubt_end(i, j) - bt_work%ubt_at_n(i, j) - dt*bt_work%F_bt_u(i, j))
             if (do_bt_rescale) then
                if (bt_work%av_rem_u(i, j) > 0.0_wp .and. ieee_is_finite(bt_work%av_rem_u(i, j))) then
-                  delta_u = delta_u*min(bt_work%bt_rem_u(i, j)**n_inner/bt_work%av_rem_u(i, j), 1.0_wp)
+                  delta_u = delta_u*min(bt_work%bt_rem_u(i, j)**n_in/bt_work%av_rem_u(i, j), 1.0_wp)
                end if
             end if
             if (ieee_is_finite(delta_u)) then
@@ -1433,7 +1443,7 @@ contains
             delta_v = du_scale*(bt_work%bt_vbt_end(i, j) - bt_work%vbt_at_n(i, j) - dt*bt_work%F_bt_v(i, j))
             if (do_bt_rescale) then
                if (bt_work%av_rem_v(i, j) > 0.0_wp .and. ieee_is_finite(bt_work%av_rem_v(i, j))) then
-                  delta_v = delta_v*min(bt_work%bt_rem_v(i, j)**n_inner/bt_work%av_rem_v(i, j), 1.0_wp)
+                  delta_v = delta_v*min(bt_work%bt_rem_v(i, j)**n_in/bt_work%av_rem_v(i, j), 1.0_wp)
                end if
             end if
             if (ieee_is_finite(delta_v)) then
@@ -1451,7 +1461,7 @@ contains
             delta_u = du_scale*(bt_work%bt_ubt_end(i, j) - bt_work%ubt_at_n(i, j) - dt*bt_work%F_bt_u(i, j))
             if (do_bt_rescale) then
                if (bt_work%av_rem_u(i, j) > 0.0_wp .and. ieee_is_finite(bt_work%av_rem_u(i, j))) then
-                  delta_u = delta_u*min(bt_work%bt_rem_u(i, j)**n_inner/bt_work%av_rem_u(i, j), 1.0_wp)
+                  delta_u = delta_u*min(bt_work%bt_rem_u(i, j)**n_in/bt_work%av_rem_u(i, j), 1.0_wp)
                end if
             end if
             if (ieee_is_finite(delta_u)) then
@@ -1480,7 +1490,7 @@ contains
             delta_v = du_scale*(bt_work%bt_vbt_end(i, j) - bt_work%vbt_at_n(i, j) - dt*bt_work%F_bt_v(i, j))
             if (do_bt_rescale) then
                if (bt_work%av_rem_v(i, j) > 0.0_wp .and. ieee_is_finite(bt_work%av_rem_v(i, j))) then
-                  delta_v = delta_v*min(bt_work%bt_rem_v(i, j)**n_inner/bt_work%av_rem_v(i, j), 1.0_wp)
+                  delta_v = delta_v*min(bt_work%bt_rem_v(i, j)**n_in/bt_work%av_rem_v(i, j), 1.0_wp)
                end if
             end if
             if (ieee_is_finite(delta_v)) then
