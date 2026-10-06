@@ -24,6 +24,13 @@ Which closure is enabled and its tunable knobs:
 [`docs/CLOSURE_MATRIX.md`](https://github.com/JorgeG94/roundabout/blob/main/docs/CLOSURE_MATRIX.md)
 (drift-checked against the code by `tools/check_closure_matrix.py`).
 
+## Authorship
+
+Most of Roundabout's code was written by Claude, Anthropic's AI model,
+working through Claude Code. The baseline design is the author's: the
+architecture, the API, the memory model and the parallelism model, all
+designed by Jorge Luis Gálvez Vallejo.
+
 ## Acknowledgement: NOAA-GFDL, MOM6 and SIS2
 
 **The numerical methods in Roundabout were developed at NOAA's Geophysical

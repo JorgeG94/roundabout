@@ -46,6 +46,11 @@ the GPU porting efforts at NOAA-GFDL and
 `ACCESS-NRI <https://www.access-nri.org.au/>`_, and it is not part of
 them.
 
+**Authorship.** Most of Roundabout's code was written by Claude,
+Anthropic's AI model, working through Claude Code. The baseline design is the
+author's: the architecture, the API, the memory model and the parallelism
+model, all designed by Jorge Luis Gálvez Vallejo.
+
 The API documentation for the code itself — per-module and per-procedure
 reference generated from the source — is hosted separately:
 https://jorgeg94.github.io/roundabout/
