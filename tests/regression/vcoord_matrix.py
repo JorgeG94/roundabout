@@ -176,8 +176,9 @@ CAVITY_DEPTH = 720.0            # ISOMIP+ z_b,deep
 # THE TRANSLATION, and why each number is what it is:
 #
 #   * VISCOSITY.  Both codes' Laplacian coefficient is the nu of du/dt =
-#     nu * del^2 u: MOM6's `diffu = (1/h) div(h Kh strain)` (MOM_hor_visc.F90,
-#     tension dudx-dvdy + shear dvdx+dudy) and roundabout's scalar path
+#     nu * del^2 u: MOM6's thickness-weighted stress-tensor operator
+#     (Griffies & Hallberg 2000), `diffu = (1/h) div(h Kh strain)`
+#     (tension dudx-dvdy + shear dvdx+dudy), and roundabout's scalar path
 #     (`hvisc_compute_scalar_impl`, 5-point velocity Laplacian) both reduce to
 #     Kh * del^2 u on a uniform grid with uniform h -- the cross terms of the
 #     stress form cancel -- so KH maps onto `nu_h` one-for-one in DEFINITION.
@@ -577,7 +578,7 @@ XFAIL_REASONS = {
         "schemes); the scalar velocity Laplacian and no viscosity at all "
         "are clean. The one MOM6 thin-layer safeguard the port lacks is "
         "`hrat_min = min(1, h_min/h)` scaling the BOUND_KH ceiling "
-        "(MOM_hor_visc.F90) -- a hypothesis, not a measurement.",
+        "-- a hypothesis, not a measurement.",
     "z_fixed_viscous_abort":
         "The viscous z_fixed cell additionally ABORTS on the remap guard "
         "(the inviscid twin completes). z_fixed carries the scalar "

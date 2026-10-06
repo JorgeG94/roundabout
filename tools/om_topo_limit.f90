@@ -1,6 +1,10 @@
 !! Apply MOM6-style MINIMUM_DEPTH/MAXIMUM_DEPTH/MASKING_DEPTH limits, in place.
+!! The clamp/mask logic below is derived from MOM6 (Apache License 2.0;
+!! https://github.com/NOAA-GFDL/MOM6), reimplemented here for a standalone
+!! NetCDF post-processing step.
 program om_topo_limit
-   !! MOM6's `limit_topography` (`MOM_shared_initialization.F90`): every cell
+   !! Replicates MOM6's bathymetry-limiting step (its `MINIMUM_DEPTH` /
+   !! `MAXIMUM_DEPTH` / `MASKING_DEPTH` parameters): every cell
    !! with `depth > masking_depth` is wet, raised to at least `min_depth` and
    !! capped at `max_depth`; every other cell is land, `depth = 0`. A raw
    !! `topog.nc`-style file (`depth`, `wet`) — unlike the already-limited

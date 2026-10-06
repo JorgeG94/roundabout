@@ -1260,8 +1260,8 @@ contains
       if (is_pc) pc_refresh_per_stage = 2_int64
 
       ! PR-2 (bt-rem-from-av-rem): `visc_rem_precompute`'s halo refresh
-      ! (`visc_rem_halo_refresh`) is UNCONDITIONAL (MOM6 `pass_visc_rem`,
-      ! MOM_dynamics_split_RK2.F90:494 -- no consumer gate there either).
+      ! (`visc_rem_halo_refresh`) is UNCONDITIONAL (MOM6's `pass_visc_rem`
+      ! halo exchange carries no consumer gate there either).
       ! Under `is_pc` (this test's split_scheme), `visc_rem_precompute`
       ! already runs once per stage regardless of any BT-rem consumer
       ! flag (the `.or. is_pc` arm of its call-site gate), so the refresh

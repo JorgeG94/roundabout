@@ -886,8 +886,8 @@ contains
    end subroutine test_per_tracer_kt_eq_ks_bit_identical
 
    subroutine test_passive_tracer_follows_ks(error)
-      !! MOM6's `Kd_salt` is "the diapycnal diffusivity of salt AND
-      !! PASSIVE TRACERS" (`MOM_diabatic_driver.F90:579`).  Register the
+      !! MOM6's `Kd_salt` is the diapycnal diffusivity of salt AND
+      !! PASSIVE TRACERS alike.  Register the
       !! ideal-age tracer (the multilayer-C-grid registry's passive
       !! tracer) alongside T and S, seed all three with the same
       !! profile, run with `ks_source = 4*kt_source`: the passive must

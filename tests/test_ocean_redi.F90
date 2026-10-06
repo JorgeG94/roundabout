@@ -1,7 +1,8 @@
 !> Golden-vector tests for the Redi continuous neutral-surface sweep (R1).
 !!
-!! Reproduces the MOM6 `ndiff_unit_tests_continuous` fixtures
-!! (`MOM_neutral_diffusion.F90` lines ~2657-2854) to ~1e-12:
+!! Reproduces the MOM6 `ndiff_unit_tests_continuous` fixtures for the
+!! neutral-surface construction (Redi 1982; Griffies et al. 1998)
+!! to ~1e-12:
 !!   * `redi_interface_scalar` PPM edge reconstruction (line ~2657);
 !!   * `redi_interpolate_position` (lines ~2662-2682);
 !!   * `redi_neutral_positions_continuous` — identical / slightly-cooler /
