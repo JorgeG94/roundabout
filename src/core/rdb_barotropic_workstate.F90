@@ -188,7 +188,7 @@ module rdb_barotropic_workstate
          !! `parse_frhat_scheme`; default `FRHAT_ARITHMETIC`, bit-identical
          !! to the pre-port tree).  `FRHAT_HYBRID` ports MOM6's `btcalc`
          !! HVEL_SCHEME=HYBRID face-thickness closure
-         !! (`MOM_barotropic.F90:4546-4790`) into every barotropic depth
+         !! into every barotropic depth
          !! mean that reads a layer's face thickness: `derive_bt_from_
          !! layers`, `face_depth_mean_u/v`, `face_depth_mean_rem_u/v`,
          !! `apply_bt_correction`'s open/visc_rem folds, and (through

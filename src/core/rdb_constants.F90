@@ -258,8 +258,8 @@ module rdb_constants
       !! pre-frhat-port tree.
    integer, parameter :: FRHAT_HYBRID = 1
       !! `&ocean_bt_nml frhat_scheme = "hybrid"` — MOM6's
-      !! `HVEL_SCHEME = HYBRID` face-thickness closure (`btcalc`,
-      !! `MOM_barotropic.F90:4546-4790`, the default scheme there).
+      !! `HVEL_SCHEME = HYBRID` face-thickness closure (`btcalc`'s
+      !! default scheme there).
       !! Above the shallower of the two abutting columns' bed depths the
       !! face thickness is the arithmetic mean (as `FRHAT_ARITHMETIC`);
       !! below it, the harmonic mean `h_L*h_R/(h_L+h_R)` — which

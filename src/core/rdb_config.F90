@@ -820,8 +820,7 @@ module rdb_config
          !!
          !! `"hybrid"` — DEFAULT since PR-4 (the flip, 2026-10), TOGETHER
          !! with `visc_rem_chain`/`hvel_mom6`/`bbl_glue`: MOM6's `btcalc`
-         !! `HVEL_SCHEME=HYBRID` (the MOM6 default,
-         !! `MOM_barotropic.F90:4546-4790`) — arithmetic mean above the
+         !! `HVEL_SCHEME=HYBRID` (the MOM6 default) — arithmetic mean above the
          !! shallower of the two abutting columns' bed depths, harmonic
          !! mean below it (with a linear blend across the transition), so
          !! a thin partial-bed layer's weight is suppressed next to a
@@ -10405,7 +10404,7 @@ contains
                           "apply_bt_correction's open/visc_rem folds, and av_rem via "// &
                           "face_depth_mean_u/v): arithmetic (DEFAULT, bit-identical -- "// &
                           "the plain two-abutting-cell mean) or hybrid (MOM6 btcalc "// &
-                          "HVEL_SCHEME=HYBRID, MOM_barotropic.F90:4546-4790 -- arithmetic "// &
+                          "HVEL_SCHEME=HYBRID -- arithmetic "// &
                           "mean above the shallower column's bed, harmonic mean below "// &
                           "it, suppressing a thin partial-bed layer's weight next to a "// &
                           "thick abutting one)", &
