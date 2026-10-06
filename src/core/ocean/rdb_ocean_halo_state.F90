@@ -25,7 +25,7 @@ module rdb_ocean_halo_state
    use rdb_ocean_boundary_types, only: ocean_bc_state_t
    use rdb_ocean_periodic, only: ocean_periodic_wrap_face_x_2d, &
                                  ocean_periodic_wrap_face_y_2d
-   use rdb_ocean_fold_apply, only: ocean_fold_wrap_stress
+   use rdb_ocean_fold_apply, only: ocean_fold_wrap_stress, ocean_fold_wrap_centre_flat
    use rdb_ocean_surface_stress, only: ocean_surface_stress_t, &
                                        ocean_surface_stress_set_derived
    use rdb_ice_state, only: ocean_sea_ice_t
@@ -164,12 +164,13 @@ contains
       call ocean_surface_stress_set_derived(grid, ss)
    end subroutine ocean_seam_refresh_surface_stress
 
-   subroutine ocean_halo_exchange_ice_state(ice, device_resident)
+   subroutine ocean_halo_exchange_ice_state(ice, grid, bc, device_resident)
       !! Make the sea-ice CATEGORY state valid in every ghost cell (X1 of
       !! the sea-ice MPI plan): `part_size`, `m_ice`, `m_snow`,
       !! `enth_ice`, `sal_ice`, `enth_snow`, one two-pass centre exchange
       !! each, all categories (and ice layers) in one message per
-      !! direction.
+      !! direction, THEN the tripolar north fold of each (added with the
+      !! fold-seam fix below).
       !!
       !! **Why.**  Nothing inside the ice step refreshes these ghosts — the
       !! column thermodynamics, ITD and (PR 4b) transport compress write
@@ -181,12 +182,27 @@ contains
       !! the primitives' local wrap closes the seam the same way (the
       !! pre-existing "D7" stale-ghost note in `rdb_ice_evp`).
       !!
+      !! **The fold.**  On a `north = 'tripolar_fold'` grid the MPI/periodic
+      !! exchange above fills every ghost EXCEPT the north cap: the fold
+      !! seam needs its own 180-degree-rotated mirror (`rdb_ocean_fold`),
+      !! which `ocean_halo_centre` knows nothing about.  Before this fix
+      !! the north-fold ghost band of every one of these fields was stale
+      !! (uninitialised / previous-step), so the ITD/transport readers one
+      !! cell into it on the fold-seam row effectively saw an unrelated
+      !! cell — the root cause of unbounded ice growth on the seam row
+      !! (a mass source with no physical origin). Every field here is a
+      !! per-category SCALAR (mass, enthalpy, salinity, fractional area),
+      !! never a vector, so the fold is always the `negate=.false.` copy
+      !! contract (`ocean_fold_wrap_centre_flat`).
+      !!
       !! **When.**  At the end of every thermo block (the category state
       !! changes only there) and once at cold-start configure, host-side,
       !! BEFORE `enter_data` and NEVER on a warm restart (the checkpoint
       !! carries the writer's ghosts; re-deriving them resumed a different
       !! state, `8e1931f20`).  Single-rank non-periodic: a no-op.  Requires
-      !! `ocean_halo_init`; the caller skips it otherwise.
+      !! `ocean_halo_init`; the caller skips it otherwise.  The fold itself
+      !! is gated independently on `bc%north_fold` and no-ops on any
+      !! non-tripolar grid.
       !!
       !! The rank-4 `enth_ice`/`sal_ice`/`enth_snow` and the `0:ncat`
       !! `part_size` are contiguous and go out as one flat `nz` each,
@@ -194,6 +210,9 @@ contains
       !! the aggregate `ice` (CLAUDE.md: component arrays only).
       type(ocean_sea_ice_t), intent(inout) :: ice
          !! Live sea-ice slot (`ice%is_init`); a no-op otherwise.
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_bc_state_t), intent(in) :: bc
+         !! Supplies `north_fold` + the grid metrics the fold kernels need.
       logical, intent(in), optional :: device_resident
          !! Forwarded to the halo primitives; `.false.` for the host-side
          !! configure-time call.
@@ -214,9 +233,29 @@ contains
       call ice_halo_centre_flat(ice%enth_snow, nxt, nyt, ice%ncat, device_resident)
       call oh_count_suppress_off()
       call profiler_stop("ice_comms_state")
+
+      ! Tripolar north fold.  Every field above is a per-category
+      ! SCALAR (mass / enthalpy / salinity / fractional area), never a
+      ! vector, so each fold is the plain copy (`negate=.false.`)
+      ! contract — see `ocean_fold_wrap_centre_flat`.  No-op off a
+      ! tripolar grid (`bc%north_fold = .false.`).
+      if (bc%north_fold) then
+         call ocean_fold_wrap_centre_flat(grid, bc, ice%part_size, nxt, nyt, &
+                                          ice%ncat + 1, device_resident)
+         call ocean_fold_wrap_centre_flat(grid, bc, ice%m_ice, nxt, nyt, &
+                                          ice%ncat, device_resident)
+         call ocean_fold_wrap_centre_flat(grid, bc, ice%m_snow, nxt, nyt, &
+                                          ice%ncat, device_resident)
+         call ocean_fold_wrap_centre_flat(grid, bc, ice%enth_ice, nxt, nyt, &
+                                          ice%ncat*ice%nk_ice, device_resident)
+         call ocean_fold_wrap_centre_flat(grid, bc, ice%sal_ice, nxt, nyt, &
+                                          ice%ncat*ice%nk_ice, device_resident)
+         call ocean_fold_wrap_centre_flat(grid, bc, ice%enth_snow, nxt, nyt, &
+                                          ice%ncat, device_resident)
+      end if
    end subroutine ocean_halo_exchange_ice_state
 
-   subroutine ocean_halo_exchange_ice_fluxes(ice, device_resident)
+   subroutine ocean_halo_exchange_ice_fluxes(ice, grid, bc, device_resident)
       !! Seam ghosts of the three per-cell ice->ocean flux diagnostics the
       !! couplers hand to the ocean — `salt_flux_diag`, `heat_flux_diag`,
       !! `sw_thru_diag` — one two-pass centre exchange each.
@@ -230,9 +269,14 @@ contains
       !! one (measured: the first decomposed run diverged from the serial
       !! one in the outer step after the first thermo block).  Call after
       !! the last contributor and before the couplers.  Single-rank
-      !! non-periodic: a no-op; requires `ocean_halo_init`.
+      !! non-periodic: a no-op; requires `ocean_halo_init`.  Also carries
+      !! the tripolar north fold of the same three fields (plain-copy
+      !! scalar contract) — the fold-seam fix's third exchange site.
       type(ocean_sea_ice_t), intent(inout) :: ice
          !! Live sea-ice slot (`ice%is_init`); a no-op otherwise.
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_bc_state_t), intent(in) :: bc
+         !! Supplies `north_fold` + the grid metrics the fold kernels need.
       logical, intent(in), optional :: device_resident
          !! Forwarded to the halo primitives.
 
@@ -244,9 +288,21 @@ contains
       call ocean_halo_centre(ice%sw_thru_diag, device_resident)
       call oh_count_suppress_off()
       call profiler_stop("ice_comms_fluxes")
+
+      if (bc%north_fold) then
+         call ocean_fold_wrap_centre_flat(grid, bc, ice%salt_flux_diag, &
+                                          size(ice%salt_flux_diag, 1), &
+                                          size(ice%salt_flux_diag, 2), 1, device_resident)
+         call ocean_fold_wrap_centre_flat(grid, bc, ice%heat_flux_diag, &
+                                          size(ice%heat_flux_diag, 1), &
+                                          size(ice%heat_flux_diag, 2), 1, device_resident)
+         call ocean_fold_wrap_centre_flat(grid, bc, ice%sw_thru_diag, &
+                                          size(ice%sw_thru_diag, 1), &
+                                          size(ice%sw_thru_diag, 2), 1, device_resident)
+      end if
    end subroutine ocean_halo_exchange_ice_fluxes
 
-   subroutine ocean_halo_exchange_ice_transport(ice, device_resident)
+   subroutine ocean_halo_exchange_ice_transport(ice, grid, bc, device_resident)
       !! X4 of the sea-ice MPI plan: the seam ghosts every advective
       !! substep of `ice_transport_step` reads — the cell-averaged
       !! category masses `mca_ice`/`mca_snow` (the PPM donors, 5-point
@@ -255,8 +311,15 @@ contains
       !! zeroed by the IST->CAS conversion and the ride/mass updates leave
       !! the ghost band one substep old, so this runs at the top of EVERY
       !! substep.  On one rank with a periodic axis the primitives wrap.
+      !! Also carries the tripolar north fold of the same six fields
+      !! (plain-copy scalar contract) — without it the fold-seam row's
+      !! advective stencil read a stale/unrelated mirror cell every
+      !! substep, which is how ice piled up without bound on that row.
       type(ocean_sea_ice_t), intent(inout) :: ice
          !! Live sea-ice slot (`ice%is_init`); a no-op otherwise.
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_bc_state_t), intent(in) :: bc
+         !! Supplies `north_fold` + the grid metrics the fold kernels need.
       logical, intent(in), optional :: device_resident
          !! Forwarded to the halo primitives.
 
@@ -275,6 +338,21 @@ contains
       call ice_halo_centre_flat(ice%enth_snow, nxt, nyt, ice%ncat, device_resident)
       call oh_count_suppress_off()
       call profiler_stop("ice_comms_transport")
+
+      if (bc%north_fold) then
+         call ocean_fold_wrap_centre_flat(grid, bc, ice%mca_ice, nxt, nyt, &
+                                          ice%ncat, device_resident)
+         call ocean_fold_wrap_centre_flat(grid, bc, ice%mca_snow, nxt, nyt, &
+                                          ice%ncat, device_resident)
+         call ocean_fold_wrap_centre_flat(grid, bc, ice%m_ice, nxt, nyt, &
+                                          ice%ncat, device_resident)
+         call ocean_fold_wrap_centre_flat(grid, bc, ice%enth_ice, nxt, nyt, &
+                                          ice%ncat*ice%nk_ice, device_resident)
+         call ocean_fold_wrap_centre_flat(grid, bc, ice%sal_ice, nxt, nyt, &
+                                          ice%ncat*ice%nk_ice, device_resident)
+         call ocean_fold_wrap_centre_flat(grid, bc, ice%enth_snow, nxt, nyt, &
+                                          ice%ncat, device_resident)
+      end if
    end subroutine ocean_halo_exchange_ice_transport
 
    subroutine ice_halo_centre_flat(fld, nxt, nyt, nz, device_resident)

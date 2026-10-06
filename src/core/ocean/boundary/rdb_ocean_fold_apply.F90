@@ -50,6 +50,7 @@ module rdb_ocean_fold_apply
    public :: ocean_fold_wrap_time_means
    public :: ocean_fold_wrap_stress
    public :: ocean_fold_wrap_visc_rem
+   public :: ocean_fold_wrap_centre_flat
 
 contains
 
@@ -346,5 +347,40 @@ contains
       call fold_north_v_face(visc_rem_v, nxv, nyv, nz, &
                              grid%nx_phys, grid%ny_phys, grid%nghost, negate=.false.)
    end subroutine ocean_fold_wrap_visc_rem
+
+   subroutine ocean_fold_wrap_centre_flat(grid, bc, fld, nxt, nyt, nz, device_resident)
+      !! Fold the north seam of an arbitrary flat cell-centred (T-stagger)
+      !! SCALAR field — copy, no sign flip, exactly `fold_north_centre`'s
+      !! contract.  Exists so a caller holding a sequence-associated flat
+      !! view of a higher-rank array (the sea-ice category state's
+      !! `ice_halo_centre_flat` pattern — `part_size`/`m_ice`/`m_snow`/
+      !! `enth_ice`/`sal_ice`/`enth_snow`/`mca_ice`/`mca_snow`, and the
+      !! per-cell flux diagnostics `salt_flux_diag`/`heat_flux_diag`/
+      !! `sw_thru_diag`) can fold it without going through
+      !! `multilayer_state_t`.  Every one of these is a per-category mass,
+      !! enthalpy, salinity or fractional area — a scalar, not a vector
+      !! component — so `negate` is never offered here.  Call AFTER the
+      !! field's halo exchange (which also performs the single-rank
+      !! periodic wrap).  No-op when `bc%north_fold` is `.false.`.
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_bc_state_t), intent(in) :: bc
+      integer, intent(in) :: nxt, nyt, nz
+      real(wp), intent(inout) :: fld(nxt, nyt, nz)
+      logical, intent(in), optional :: device_resident
+         !! px > 1 only: `.false.` for host-side (pre-`enter_data`) calls.
+
+      if (.not. bc%north_fold) return
+
+      if (ocean_fold_is_distributed()) then
+         call ocean_fold_begin(grid%nghost*nz)
+         call ocean_fold_pack(fld, nxt, nyt, nz, FOLD_STAG_T, device_resident)
+         call ocean_fold_exchange(device_resident)
+         call ocean_fold_unpack(fld, nxt, nyt, nz, FOLD_STAG_T, .false., device_resident)
+         call ocean_fold_end()
+         return
+      end if
+
+      call fold_north_centre(fld, nxt, nyt, nz, grid%nx_phys, grid%ny_phys, grid%nghost)
+   end subroutine ocean_fold_wrap_centre_flat
 
 end module rdb_ocean_fold_apply
