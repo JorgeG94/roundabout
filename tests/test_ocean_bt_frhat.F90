@@ -50,7 +50,7 @@ module test_ocean_bt_frhat
    use rdb_barotropic_workstate, only: barotropic_workstate_t
    use rdb_barotropic_coupling, only: frhat_h_face_step, face_depth_mean_u, &
                                       derive_bt_from_layers, apply_bt_correction, &
-                                      compute_bt_rem_from_visc_rem
+                                      compute_bt_rem_from_visc_rem, compute_gtot_faces
    use rdb_ocean_metrics, only: ocean_metrics_t
    use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
    implicit none
@@ -74,7 +74,9 @@ contains
                   new_unittest("av_rem_hybrid_gated_on_closed_faces", &
                                test_av_rem_hybrid_gated_on_closed_faces), &
                   new_unittest("derive_bt_hybrid_gated_on_closed_faces", &
-                               test_derive_bt_hybrid_gated_on_closed_faces) &
+                               test_derive_bt_hybrid_gated_on_closed_faces), &
+                  new_unittest("gtot_faces_hybrid_gated_on_closed_faces", &
+                               test_gtot_faces_hybrid_gated_on_closed_faces) &
                   ]
    end subroutine collect_ocean_bt_frhat_tests
 
@@ -551,6 +553,67 @@ contains
       call bt_work%destroy(); call ms%destroy()
       call destroy_cartesian_metrics(metrics)
    end subroutine test_derive_bt_hybrid_gated_on_closed_faces
+
+   subroutine test_gtot_faces_hybrid_gated_on_closed_faces(error)
+      !! `compute_gtot_faces` (the bc-PGF correction's depth-weighted
+      !! `pbce` average) is the SECOND frhat call site the compat
+      !! matrix's cliff geometry found ungated (the first was
+      !! `derive_bt_from_layers`'s `bt_ubt`, c055's mass leak) -- it had
+      !! hand-rolled its own `h_face = 0.5*(h_L+h_R)` unconditionally,
+      !! never dispatching on `frhat_scheme` at all. Mirrors
+      !! `test_av_rem_hybrid_gated_on_closed_faces`'s structure exactly,
+      !! targeting `gtot_E` with an arbitrary `pbce` profile (the
+      !! weighted-mean formula is the same shape as `av_rem`'s, so the
+      !! hand reference reuses `hand_av_rem_u_arith`).
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(barotropic_workstate_t) :: bt_work
+      type(ocean_metrics_t) :: metrics
+      integer, parameter :: NZ = 4
+      real(wp) :: gtot_open, gtot_closed, expect_arith
+      real(wp) :: hcol0_arr(NZ), hcol1_arr(NZ), pbce_seed(NZ)
+      integer :: jp
+      pbce_seed = [0.0658_wp, 0.3071_wp, 0.5142_wp, 0.6201_wp]
+      checks: block
+         ! -- OPEN faces (default): gtot_E must equal the plain arithmetic
+         ! hand calc, NOT the HYBRID value, even though frhat_scheme is
+         ! set to hybrid (`build_two_column_face`).
+         call build_two_column_face(grid, ms, bt_work, metrics, 188.0_wp, 0.74_wp, &
+                                    (8.4_wp - 0.74_wp)/3.0_wp, NZ)
+         bt_work%pbce(NGHOST + 1, :, :) = spread(pbce_seed, 1, size(bt_work%pbce, 2))
+         bt_work%pbce(NGHOST + 2, :, :) = spread(pbce_seed, 1, size(bt_work%pbce, 2))
+         call compute_gtot_faces(grid, bt_work, ms, metrics)
+         jp = NGHOST + 1
+         gtot_open = bt_work%gtot_E(NGHOST + 1, jp)
+
+         hcol0_arr = 188.0_wp/real(NZ, wp)
+         hcol1_arr = [0.74_wp, (8.4_wp - 0.74_wp)/3.0_wp, (8.4_wp - 0.74_wp)/3.0_wp, &
+                      (8.4_wp - 0.74_wp)/3.0_wp]
+         expect_arith = hand_av_rem_u_arith(hcol0_arr, hcol1_arr, pbce_seed)
+         call check(error, abs(gtot_open - expect_arith) < 1.0e-12_wp, &
+                    "gtot_E under OPEN faces must equal the arithmetic hand calc "// &
+                    "(the gate must force FRHAT_ARITHMETIC there), not the HYBRID value")
+         if (allocated(error)) exit checks
+         call bt_work%destroy(); call ms%destroy()
+         call destroy_cartesian_metrics(metrics)
+
+         ! -- CLOSED faces (fully open mask, closed=.true.): gtot_E must
+         ! now DIFFER from the arithmetic value -- the gate passes HYBRID
+         ! through, exactly like av_rem and bt_ubt do.
+         call build_two_column_face(grid, ms, bt_work, metrics, 188.0_wp, 0.74_wp, &
+                                    (8.4_wp - 0.74_wp)/3.0_wp, NZ, closed=.true.)
+         bt_work%pbce(NGHOST + 1, :, :) = spread(pbce_seed, 1, size(bt_work%pbce, 2))
+         bt_work%pbce(NGHOST + 2, :, :) = spread(pbce_seed, 1, size(bt_work%pbce, 2))
+         call compute_gtot_faces(grid, bt_work, ms, metrics)
+         gtot_closed = bt_work%gtot_E(NGHOST + 1, jp)
+         call check(error, abs(gtot_closed - expect_arith) > 1.0e-6_wp, &
+                    "gtot_E under CLOSED faces must differ from the arithmetic value "// &
+                    "-- the gate must pass frhat_scheme=hybrid through there")
+      end block checks
+      call bt_work%destroy(); call ms%destroy()
+      call destroy_cartesian_metrics(metrics)
+   end subroutine test_gtot_faces_hybrid_gated_on_closed_faces
 
    function hand_av_rem_u_arith(h_west, h_east, vr) result(av_rem)
       !! Independent reference: the plain arithmetic-mean h_face formula,
