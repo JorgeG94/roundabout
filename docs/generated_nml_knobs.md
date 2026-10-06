@@ -675,6 +675,9 @@ Split-explicit barotropic substep controls.
 | `upstream_h_face` | `.false.` |  | Use per-face upstream-PPM column-sum thickness in the BT chain |
 | `correction_h_weighted` | `.false.` |  | RETIRED h-weighted BT-corrector fold (refused when set) |
 | `correction_visc_rem` | `.false.` |  | visc_rem/<visc_rem>_h BT-corrector weight + the visc_rem producer (visc_rem is produced by vdiff and is inert, =1, without ocean_vdiff_nml implicit_drag) |
+| `bt_rem_from_visc_rem` | `.false.` |  | bt_rem_u/v = mask*av_rem**(1/n_inner), av_rem the frhat-weighted depth mean of visc_rem (MOM6 MOM_barotropic.F90:1553-1580); requires correction_visc_rem, mutually exclusive with substep_drag and bt_halo > 0 |
+| `strong_drag` | `.false.` |  | MOM6 BT_STRONG_DRAG: rational-approximation bt_rem form n_inner*av_rem/(1+(n_inner-1)*av_rem) instead of the plain power; requires bt_rem_from_visc_rem |
+| `rescale_strong_drag` | `.false.` |  | MOM6 RESCALE_STRONG_DRAG: rescale the BT-correction increment by min(bt_rem**n_inner/av_rem, 1.0); requires strong_drag |
 | `split_scheme` | `"pred_corr"` |  | Outer split-explicit time scheme: pred_corr (DEFAULT; MOM6 predictor-corrector, slow tendencies on the u_av/h_av step time-means, forward-backward gravity-wave pairing; lifts the internal-wave dt ceiling) or ssp_rk2 (EXPERIMENTAL; two-stage SSP average, widest envelope — the only scheme wired through eulerian_z, wet/dry and dt_tracer_advect_ratio>1 — but it spuriously grows internal gravity waves out of a stratified REST state, En 2.992E-05 vs 1.739E-09 at day 25 on resting_stratified_channel.nml; a (omega*dt)^4 noise floor, so forced viscous runs sit decades above it and quiescent or long spin-up runs do not) |
 | `pc_be` | `0.6000000000E+00` |  | pred_corr predictor fraction BE (MOM6 BE, 0.6 reference) |
 | `renorm_visc_rem` | `.false.` |  | gamma-weighted continuity transport-matching inversion (MOM6 u_cor = u + du*visc_rem; requires correction_visc_rem) |

@@ -346,6 +346,7 @@ near-zero dilution in the console `[diag]` min / mean.
 | Ice-shelf cavity statics ✓ (P5.1 geometry + datum, P5.2 load; default off) | fields on `ocean_metrics_t` (`use_cavity`, `z_draft`, `cover_frac`, `p_ice_ref`) | geometry + helpers in `state/rdb_ocean_cavity.F90`; draft fill + grounding in `state/rdb_ocean_state.F90::seed_cavity_draft` (inside the IC seed, before the wet mask); load build + `ms%p_top` assembly + datum assertion in `state/rdb_ocean_setup.F90::configure_ocean_cavity`; per-step re-assembly (psurf seam live only) inline in `dynamics/split_rk2/rdb_ocean_dyn.F90::ocean_dyn_step_split` | — | `&ocean_cavity_dyn_nml`, `barotropic.b`, `pressure_force.rho_ref`, `surface_flux.p_surf` | `z_draft` (m, positive down, ghosts included) — consumed by `configure_ocean_bt_split` as the DATUM `bt_H_ref = b − z_draft` afloat and `0` where GROUNDED (`cavity_datum_impl`), by the layer/`bt_h` seed as the water column, and by `seed_wet_mask_impl` as the grounding decision; `cover_frac` (binary 0/1) — the solve mask the basal-melt slot composes with the wet mask; `p_ice_ref = (rho_ref*GRAVITY)*z_draft` (Pa) — the static half of `multilayer.p_top = p_ice_ref + sf%p_surf`, and thence the FV_MOM6 `pa(nz+1)` top BC (`&ocean_pgf_nml p_top_in_bc`, REQUIRED for a non-uniform draft) and the in-situ EOS (`&ocean_psurf_nml in_eos`). It is deliberately NOT a component of `sf%p_surf`: the datum already carries its barotropic effect and `eta_ib` is built from that total. `use_cavity=.false.` (default) ⇒ all three stay `(1,1)` placeholders and `bt_H_ref = b` byte-identically. See the **cavity datum contract** below |
 | Ice-shelf basal melt ✓ (P2b; default off) | `ocean_cavity_flux_t` | `../../parameterizations/vertical/rdb_ocean_cavity_flux.F90` (kernel: `rdb_ocean_cavity_melt.F90`) | 2b | `metrics.cover_frac`, `multilayer.h_layer` + S/T + face velocities + `wet_mask`, `multilayer.p_top` (THE interface pressure), the shared `eos` handle (the liquidus, `&ocean_eos_nml tfreeze_set="isomip"`), and its own configure-filled `f_cor` | the two OWNED surface-flux components `surface_flux.heat_cavity` (= −`q_ocean`, W/m² positive down ⇒ warm water COOLS) and `surface_flux.salt_cavity` (= −`m_mass·(S_far − s_ice)`, a VIRTUAL salt flux ⇒ melting FRESHENS); plus its own 2-D interface state (`t_far`/`s_far`/`u_far`/`v_far`/`ustar`/`t_b`/`s_b`/`melt`/`q_ocean`/`gamma_t`/`gamma_s`/`active`/`status`). `gamma_t`/`gamma_s` are the exchange VELOCITIES the solve converged on (filled by `cavity_melt_point_gamma`, which is the same `cavity_solve_melt` call, not a second solve) — stored rather than re-derived because under `hj99`/`yung25` they are implicit in the interface state, so an `exch_vel_*` diagnostic rebuilt from `u*` would report the NEUTRAL values. Thirteen derived-diag catalog entries read this slot (`melt`, `melt_m_per_yr`, `thermal_driving`, `haline_driving`, `tbdry`, `sbdry`, `tfreeze_ib`, `exch_vel_t`, `exch_vel_s`, `ustar_shelf`, `cavity_melt_status`, plus the geometry pair `z_draft`/`water_column`), NaN outside the cover and fail-loud at configure without their prerequisite knob. Far field sampled over `far_field_depth` METRES below the ice base, thickness-weighted with a partial last layer — never "layer nz". Driven once per thermo step from `engine_step_finalize`, immediately BEFORE `ocean_surface_flux_assemble`. The `do concurrent` over columns lives in the KERNEL module (`cavity_melt_columns_2d`), not here: nvlink cannot resolve an `!$acc routine seq` device symbol out of `librdb_core.so` into a `do concurrent` in another translation unit. Budgets ride the ordinary `heat_budget_surface`/`salt_budget_surface` contributors, so no new accumulator and no stage-weight decision. `enable=.false.` (default) ⇒ fourteen `(1,1)` placeholders, no kernel, byte-identical |
 | Barotropic linear wave drag ✓ (Egbert & Ray 2001; Jayne & St Laurent 2001) | fields on `barotropic_workstate_t` (`dyn.bt_work`) | kernels in `kernels/barotropic/rdb_barotropic_coupling.F90`; configure in `state/rdb_ocean_setup.F90::configure_ocean_wave_drag` | — | `lwd_drag_u/v` (static, host-filled at configure from `form="uniform"` or `"roughness_proxy"`; `barotropic.b`, `metrics.wet_T` for the proxy) | MULTIPLIES into `bt_work.bt_rem_u/v` each stage (`compute_bt_rem_wave_drag`); `lwd_enable=.false.` (default) ⇒ arrays unallocated, bit-identical |
+| BT-substep damping from the viscous remnant ✓ (PR-2, bt-rem-from-av-rem; MOM6 `MOM_barotropic.F90:1553-1580`; default off) | fields on `barotropic_workstate_t` (`dyn.bt_work`) | `compute_bt_rem_from_visc_rem` in `kernels/barotropic/rdb_barotropic_coupling.F90` | `bt_work.visc_rem_u/v` (the PR-1 producer), `ms.h_layer` | `bt_work.av_rem_u/v` (`:= Σ_k frhat_k·visc_rem_k`, reusing `face_depth_mean_u/v`'s own arithmetic-mean face weight — the PLAIN depth mean, not `forcing_visc_rem`'s `h·visc_rem` weight), RESETS `bt_work.bt_rem_u/v` to `av_rem**(1/n_inner)` (or the `strong_drag` rational form) | `&ocean_bt_nml bt_rem_from_visc_rem`; a THIRD `bt_rem` resetter alongside `compute_bt_rem`/`reset_bt_rem` — see the multiplicative-accumulator contract below. Requires `correction_visc_rem`; mutually exclusive with `substep_drag` (D2) and `bt_halo > 0` (no av_rem/visc_rem ghost-width statistics on the wide-halo clone, like porous). `rescale_strong_drag` additionally rescales `apply_bt_correction`'s Δu/Δv by `min(bt_rem**n_inner/av_rem, 1.0)`. Built on the full face extent including ghosts (halo-valid after PR-1's `visc_rem_halo_refresh`) — `test_ocean_decomp_bitid_mpi`'s `visc_rem_chain` case is bitwise identical on every split. Default off ⇒ bit-identical. Test: `test_ocean_bt_rem_from_visc_rem` |
 | River / discharge | `ocean_river_t` | `forcing/rdb_ocean_river.F90` | 5e | sources NetCDF | `q_mass`, `q_S`, `q_T` distributed fields |
 | Open boundary (parent nest) | `ocean_obc_t` | `boundary/rdb_ocean_obc.F90` | 5c | parent NetCDF | ring buffers + FRS blend into edge bands |
 | Periodic wrap ✓ | (free procedures, `rdb_ocean_periodic`) | `boundary/rdb_ocean_periodic.F90` | 5c | `bc%periodic_x/y` + prognostics | ghost cells = opposite-interior copies (seam invariant; per-substep inline wraps live in `rdb_barotropic_substep`) |
@@ -1263,20 +1264,30 @@ freezing point exactly as the ice load does, with no extra wiring.
   across kernels) — but treat it as unbuilt work, not a rule.
 - **`bt_rem_u/v` is a multiplicative accumulator — reset it exactly once
   per stage.** `barotropic_workstate_t%bt_rem_u/v` is allocated
-  `source=1.0` once at init; thereafter the ONLY thing that resets it to
-  1 is `compute_bt_rem` (`&ocean_bt_nml substep_drag`) or, when that's
-  off, `reset_bt_rem` — every other contributor (currently
+  `source=1.0` once at init; thereafter the ONLY things that reset it to
+  a fresh base value are `compute_bt_rem` (`&ocean_bt_nml substep_drag`),
+  `compute_bt_rem_from_visc_rem` (`&ocean_bt_nml bt_rem_from_visc_rem` —
+  PR-2, bt-rem-from-av-rem: `bt_rem = mask·av_rem**(1/n_inner)` or the
+  `strong_drag` rational form, built from the SAME viscous remnant the
+  layered momentum solve uses, MOM6 `MOM_barotropic.F90:1553-1580`), or,
+  when BOTH are off, `reset_bt_rem` — every other contributor (currently
   `compute_bt_rem_wave_drag`, `&ocean_bt_nml wave_drag`) MULTIPLIES into
-  it. `mask_bt_rem` (land faces, idempotent under `*=`) always runs
-  last. Skip the reset and a multiplicative contributor compounds
-  geometrically across outer steps (`bt_rem = R^n` after `n` stages),
-  silently annihilating the barotropic mode — the single most likely way
-  to ship a plausible-looking, catastrophically wrong barotropic-drag PR
-  (see `test_ocean_wave_drag::wave_drag_no_compounding`). **Any future
-  PR adding a third `bt_rem` contributor must extend the reset dispatch**
-  in `rdb_ocean_dyn.F90::run_stage_split` (or refactor to an
-  unconditional `reset_bt_rem` + N independent contributors — the
-  `vmix_assemble` contributor+single-gate idiom is the model to follow).
+  it. `compute_bt_rem` and `compute_bt_rem_from_visc_rem` are mutually
+  exclusive at configure (D2 — bed drag would be double-counted, once
+  via the linear piston, once inside `visc_rem` via the glue/
+  `implicit_drag` fold), so the `run_stage_split` dispatch still picks
+  exactly one resetter per stage. `mask_bt_rem` (land faces, idempotent
+  under `*=`) always runs last. Skip the reset and a multiplicative
+  contributor compounds geometrically across outer steps (`bt_rem = R^n`
+  after `n` stages), silently annihilating the barotropic mode — the
+  single most likely way to ship a plausible-looking, catastrophically
+  wrong barotropic-drag PR (see
+  `test_ocean_wave_drag::wave_drag_no_compounding`). **Any future PR
+  adding a fourth resetter or another multiplicative contributor must
+  extend the dispatch** in `rdb_ocean_dyn.F90::run_stage_split` (or
+  refactor to an unconditional `reset_bt_rem` + N independent
+  contributors — the `vmix_assemble` contributor+single-gate idiom is
+  the model to follow).
 - **The barotropic substep's live terms need a frozen-reference
   subtraction — never add a fast-loop term without one.** `F_bt_u/v`
   (the depth-mean slow forcing handed to the substep) already contains
