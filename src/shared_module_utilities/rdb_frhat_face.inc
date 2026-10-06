@@ -58,6 +58,39 @@
 !     == h_L(k)`, so `FRHAT_HYBRID` is byte-identical to `FRHAT_ARITHMETIC`
 !     at a wall for either scheme, matching the pre-port wall fallback.
 !
+!     VANISHED-LAYER OVERRIDE (open-step fix, 2026-10-06): the `e_prev`/
+!     `d_shallow` shelf test above is built for MOM6's intended case — ONE
+!     real partial-step transition per face.  roundabout's `z_fixed`/`zstar`
+!     vertical coordinates instead carry a WHOLE STACK of bed-side FILLER
+!     layers (`h <= H_VANISHED`, the dynamic-vanish marker) in a shallow
+!     column, each still paired against a full-thickness nominal-band layer
+!     on a deep neighbour.  `e_prev` accumulates `h_arith = 0.5*(h_L+h_R)`
+!     every step regardless of branch, so on such a face it climbs mostly
+!     off the DEEP column's real thickness and can cross `d_shallow`
+!     (`= -min(href_L, href_R)`, the shallow column's own total depth)
+!     while fillers remain — at which point a REMAINING filler would take
+!     the ARITHMETIC branch and be handed a `h_arith`-scale weight despite
+!     carrying no real water on one side.  Measured on the 1-degree
+!     Southern Ocean OPEN-step case (`&vcoord_nml zfixed_closed_faces =
+!     .false.`): `compute_bt_rem_from_visc_rem`'s `av_rem` is the one
+!     consumer this actually corrupts — a filler's `visc_rem` is ~1
+!     (uncoupled, not glue-damped), so an inflated filler weight pulls
+!     `av_rem` toward 1 (under-damped `bt_rem`) and the barotropic mode
+!     grows instead of decaying (En climbing 8x over 9 days vs the
+!     arithmetic scheme's steady decay); CLOSED faces never show it because
+!     `metrics%open_u/open_v` masks every filler-adjacent weight to zero
+!     downstream regardless of its value.  Fixed by bypassing the shelf test
+!     entirely whenever EITHER side is vanished and going straight to the
+!     harmonic value — correct unconditionally, since `h_harm -> 0` as
+!     either side does, matching MOM6's own `btcalc` reading a vanished
+!     layer's effective weight as ~Angstrom (`h_u`-scaled, not the raw
+!     bed-elevation shelf test). `e_prev` still accumulates by `h_arith`
+!     every step regardless (it is pure column-height bookkeeping for LATER
+!     layers' shelf test, not itself an answer). Never triggers on the
+!     original motivating case (a genuine partial-step cell, e.g. 0.74 m,
+!     is orders of magnitude above `H_VANISHED = 1.5e-4 m`), so the
+!     closed-form test in `tests/test_ocean_bt_frhat.F90` is unaffected.
+!
 ! `frhat_h_face_step` is a per-k STEP of the sweep above: the caller carries
 ! the running elevation `e_prev` as a `local()` scalar across its own
 ! `do k = 1, nz` loop (exactly the loop shape every consumer already has) and
@@ -68,7 +101,7 @@
 ! sweep state in a way that changes `h_face` — the branch is unconditional.
 !
 ! The consuming module must already `use rdb_constants, only: wp, H_DIV_EPS,
-! FRHAT_HYBRID`.  Everything here is `pure` and device-callable
+! H_VANISHED, FRHAT_HYBRID`.  Everything here is `pure` and device-callable
 ! (`!$acc routine seq`).
 !
 ! Do NOT add state, logging, or anything impure to this file.
@@ -103,7 +136,18 @@
       if (scheme == FRHAT_HYBRID) then
          d_shallow = -min(href_l, href_r)
          e_cur = e_prev + h_arith
-         if (e_prev >= d_shallow) then
+         if (h_l <= H_VANISHED .or. h_r <= H_VANISHED) then
+            ! A genuinely vanished layer (z_fixed/zstar bed filler) on
+            ! either side -- bypass the shelf test (see this file's header,
+            ! "VANISHED-LAYER OVERRIDE"): with many such layers stacked,
+            ! e_prev can cross d_shallow before every filler is exhausted,
+            ! which would otherwise hand a REMAINING filler the arithmetic
+            ! branch's h_arith-scale weight despite carrying no real water
+            ! on one side. The harmonic value is correct unconditionally
+            ! (-> 0 as either side does), matching MOM6's own btcalc
+            ! reading a vanished layer's weight as ~Angstrom.
+            h_face = (h_l*h_r)/(h_arith + H_DIV_EPS)
+         else if (e_prev >= d_shallow) then
             ! This layer lies wholly above the shelf formed by the
             ! shallower column's bed: both columns have real water here.
             h_face = h_arith
