@@ -583,6 +583,29 @@ contains
       call engine%state%surface_flux%set_components(engine%grid, &
                                                     cfg%ocean%forcing%enable_components)
 
+      ! c069 restart fix: the kappa-shear VERTEX corner carrier
+      ! (`kshear%kd_corner`) MUST be allocated before the restart read too,
+      ! same reason as wetdry/surface_flux above — `ocean_state_restart_read`
+      ! builds its OWN registry (`ocean_state_build_restart_registry`), and
+      ! that registry only sees a field once `allocated(...)` is true.  The
+      ! full `configure_ocean_kappa_shear` (which calls `init_vertex`) does
+      ! not run until well after the restart read (it needs `cfg%ocean%vmix`
+      ! validated first), so without this early, knob-only allocation a
+      ! warm-restarted vertex run resumes `kd_corner` at the cold `0`
+      ! `init_vertex` seeds it with — not the checkpointed value — and
+      ! `visc_rem_precompute` (called at the START of the first resumed
+      ! stage, BEFORE `configure_ocean_kappa_shear`'s later re-allocation
+      ! no-ops over the real one) reads that cold `0` as the corner Kv
+      ! source, perturbing `bt_visc_rem_u/v` at the `kappa_trunc` scale and,
+      ! from there, every downstream field (compat row c069).  `init_vertex`
+      ! is idempotent (it only allocates when not already allocated), so
+      ! this early call and `configure_ocean_kappa_shear`'s later one are
+      ! harmless duplicates on a cold start. Knob-gated directly off `cfg`
+      ! (no validation performed here) => inert whenever `at_vertex` is off.
+      if (cfg%ocean%kshear%enable .and. cfg%ocean%kshear%at_vertex) then
+         call engine%state%kshear%init_vertex(engine%grid, engine%state%multilayer%nz_ml)
+      end if
+
       ! Warm restart (optional — absent/blank restart_file => cold start,
       ! matching the API/bench callers today). NetCDF-only: filename
       ! resolution needs `output_rank_filename`.

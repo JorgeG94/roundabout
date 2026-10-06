@@ -2497,6 +2497,31 @@ contains
          call register_full_3d(reg, "kshear_tke_int", state%kshear%tke_int)
       end if
 
+      ! --- Kappa-shear VERTEX corner diffusivity (c069 restart fix):
+      !     `kd_corner` is the Pass-B -> Pass-C carrier `kappa_shear_compute`
+      !     writes and `vdiff_apply_momentum`'s `kv_corner_source` reads --
+      !     but it is only refreshed at STAGE 1 of a thermo step
+      !     (`vmix_apply_in_stage`, "stage-invariant by design"), while
+      !     `visc_rem_precompute` -- called at the START of every stage,
+      !     BEFORE that refresh -- reads it on EVERY stage, including
+      !     stage 1 itself (MOM6-order parity, PGF_BUG.md Sec.9:
+      !     `vertvisc_coef` runs before `btstep`).  On a continued run
+      !     stage 1's `visc_rem_precompute` sees the PREVIOUS step's
+      !     converged `kd_corner`, still live in process memory.  On a
+      !     warm restart `kd_corner` is a plain workspace -- allocated
+      !     zero by `init_vertex`, never written before the first resumed
+      !     stage's `visc_rem_precompute` call -- so that FIRST call
+      !     silently drops the vertex kappa-shear's corner viscosity from
+      !     the remnant matrix, perturbing `bt_visc_rem_u/v` at the
+      !     `kappa_trunc` scale (~1e-9) and from there every consumer of
+      !     the BT-correction weighting (compat row c069).  `optional
+      !     =.true.`: a pre-fix checkpoint has no such field and must
+      !     still resume (re-seeding `kd_corner` at 0 for the first
+      !     stage only, same as the pre-existing defect). ---
+      if (allocated(state%kshear%kd_corner)) then
+         call register_full_3d_opt(reg, "kshear_kd_corner", state%kshear%kd_corner)
+      end if
+
       ! --- Live persistent BC state (review #3) ---
       ! Chapman radiation corner scalars: host-side, always present.
       call reg%register_scalar("bc_eta_old_chapman_w", state%bc%eta_old_chapman_w)
