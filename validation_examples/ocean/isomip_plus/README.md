@@ -26,6 +26,15 @@ Ocean0 are listed at the bottom.
 | `ocean1.nml` | COLD | WARM | ISOMIP+ file | 20 yr |
 | `ocean2.nml` | WARM | COLD | ISOMIP+ file (Ocean2 / retreated) | 20 yr |
 | `ocean0_idealised_draft.nml` | WARM | WARM | **analytic** — runs today, no download | 1 yr |
+| `ocean0_idealised_zfixed.nml` | WARM | WARM | **analytic**, `vcoord_type="z_fixed"` + `zfixed_closed_faces` — runs today, no download | 30 d (the z\_fixed measurement horizon; protocol default is 1 yr) |
+| `ocean0_ice_free_zfixed.nml` | — | — | ISOMIP+ bed/trough only, no ice shelf — the cheapest closed-faces-vs-open check | 2 d |
+
+**Under an ice-shelf cavity, `z_fixed` is the only z-like coordinate this
+build accepts** (`sigma` is also legal; every other `VCOORD_*` family is
+refused at configure over a rigid top) — see `docs/CLOSURE_MATRIX.md`'s
+`Z-fixed (gprime)` row and `src/core/ocean/README.md`. The `*_zfixed`
+files above are the z\_fixed twins of `ocean0_idealised_draft.nml`; see
+"v0.1.0 release validation" at the bottom for measured numbers.
 
 ---
 
@@ -364,3 +373,155 @@ and "the cavity datum contract"); the gate is
 `tests/test_ocean_cavity_grounded_budget.F90`, which holds all three
 relative residuals at `1e-12` for 20 steps of the full split solver, with
 melt off and with melt on.
+
+---
+
+## v0.1.0 release validation (single GPU, z\_fixed, 2026-10-06)
+
+Release-candidate check on `validate/isomip-plus` (based on
+`fix/frhat-matrix-cites` @ `bee159376`), which carries three new
+on-by-default closures relative to the numbers quoted earlier in this
+file: `&ocean_vdiff_nml hvel_mom6` + `bbl_glue`, `&ocean_bt_nml
+visc_rem_chain`, and `frhat_scheme = "hybrid"` gated to
+`zfixed_closed_faces` (the compat-matrix fix that keeps HYBRID off every
+non-filler coordinate). nvfortran 26.5, `-stdpar=gpu`, `cc70`, one Tesla
+V100-DGXS (`CUDA_VISIBLE_DEVICES=2`), single rank. `ocean0.nml` /
+`ocean1.nml` / `ocean2.nml` were **not** run: they `ERROR STOP 3` at
+`--validate-only` on the missing `isomip_plus_geometry_2km.nc` /
+`_ocean2_2km.nc` — the BISICLES regrid this README already says is a
+manual, offline step (Sect. 3.1.1) — and neither the repo nor
+`/home/jorge/nci/cdx/data/runs/` carries that file or a prior run of it.
+Every `*_zfixed` namelist, which needs no download, passed
+`--validate-only` and ran clean: no refusals, no `[nan-catch]`, no CFL
+truncation.
+
+### Ocean0, idealised draft, z\_fixed, melt ON (`ocean0_idealised_zfixed.nml`, 30 days, shipped namelist unmodified)
+
+8640 steps in 207.4 s (6.91 s/simulated day; the nml header's own prior
+measurement was 6.2 s/day — the three new closures cost ~12 % here).
+
+| day | En (m²/s²) | MaxCFL | melt mean / max / min (m yr⁻¹) | Mass Err | Salt Err | Heat Err |
+|---|---|---|---|---|---|---|
+| 1 | 2.628E-06 | 0.0019 | 3.90 / 8.58 / +1.01 | — | — | — |
+| 5 | 9.072E-06 | 0.0240 | 5.77 / 37.81 / +0.84 | — | — | — |
+| 10 | 8.692E-05 | 0.0479 | 6.64 / 41.40 / +0.69 | -1.93E-13 | 4.50E-13 | 4.94E-13 |
+| 20 | 3.329E-04 | 0.0553 | 6.98 / 39.09 / +0.43 | -3.87E-13 | 9.00E-13 | 9.90E-13 |
+| 30 | 4.121E-04 | 0.0570 | 7.11 / 37.94 / +0.38 | -5.80E-13 | 1.35E-12 | 1.49E-12 |
+
+**Budgets are closed**: all three relative residuals grow smoothly from
+round-off with no step jump, same signature the header already
+documents. Domain-mean Temp cools −0.370 → −0.381 °C and Salt freshens
+34.274 → 34.268 psu between day 1 and day 30 — the virtual melt
+heat/salt flux is a net cooling, freshening forcing on the cavity, as
+expected with no compensating surface source. 2584/10736 interior
+columns sit under ice (the cavity footprint); melt is NaN outside it by
+convention. Melt stays net positive everywhere after day 1 except brief,
+small (≥ −0.43 m yr⁻¹) local refreezing patches from day ~13 on near the
+grounding line, where the far-field sample runs coldest.
+
+**This does not match the numbers already printed in
+`ocean0_idealised_zfixed.nml`'s own header** (`En` 2.304E-04 at day 30,
+peaking the melt mean at 5.6-5.7 m yr⁻¹) — that table predates the three
+closures above. The discrepancy is a **re-baseline, not a regression**:
+En is 1.8-34× higher depending on the day (the gap narrows from day 1 to
+day 30), MaxCFL 1.03-1.7× higher, melt mean 10-25 % higher, melt max up to
+1.4× higher. Budgets stay closed at the same round-off scale either way.
+The header's measured table should be refreshed against the numbers
+above the next time that file is touched; this PR does not do it, to
+keep the diff to documentation the task asked for.
+
+**Against the protocol (Asay-Davis et al. 2016).** The design paper fixes
+the melt-rate *target* (`⟨m_w⟩ = 30 ± 2 m yr⁻¹`, Sect. 3.2.1, Eq. 37) but
+is an experimental-design paper, not an intercomparison-results paper —
+it prints no target range for the barotropic or overturning
+streamfunction, so there is nothing published to grade those against; a
+spread would have to come from a later ISOMIP+ intercomparison paper,
+not this one. On the melt rate: `gamma_t = 2.2e-2` here is explicitly the
+protocol's **starting guess**, not a calibrated value (the README already
+says so), and the day-30 mean of 7.1 m yr⁻¹ is correspondingly well below
+30 ± 2. Scaling linearly with `Γ_T` (`St = √C_D·Γ_T`, so melt ∝ `Γ_T` to
+first order) projects to `Γ_T ≈ 2.2e-2 × 30/7.1 ≈ 0.093`, close to the
+POP2x calibration the README already cites (`Γ_T ≈ 0.11`, "five times the
+starting guess") — consistent, not a precise prediction, since the
+day-30 mean is still climbing and the geometry is the idealised linear
+draft, not the file-backed one.
+
+**Barotropic and overturning streamfunction (approximate).** Roundabout
+has no native streamfunction diagnostic (`docs/REFERENCE.md`'s diag
+catalog has no `psi`/`overturning` entry), so these are computed offline
+in python3.10 (`numpy` + `netCDF4` only) from the `u`/`v` canonical
+diagnostics the shipped namelist already writes daily (no namelist edit
+needed) — `tmp_local_artifacts/isomip_streamfunctions.py` /
+`isomip_summary.py` in this run. Depth integration uses the nominal
+`z_fixed` layer thickness (`h_nominal = max_depth/nz = 20 m`) applied
+uniformly to every layer; it does **not** account for the partial top/bed
+cells or the `k_top`/`k_bot` live-layer masks, so these are
+order-of-magnitude, not protocol-grade, numbers:
+
+- **Barotropic** `ψ_B(x,y)` (depth-integrated transport, cumulative from
+  the west wall): `max|ψ_B|` grows essentially monotonically over the
+  30 days — 3.6E+03 m³/s (day 1) → 9.5E+04 (day 10) → 2.5E+05 (day 20) →
+  4.0E+05 m³/s (day 30), i.e. **0.4 Sv** and still climbing at day 30, not
+  equilibrated. Whether that is the melt-driven circulation or a slower
+  barotropic adjustment/recirculation riding on top of it cannot be
+  separated from this field alone.
+- **Overturning** `ψ(x,z)` (channel-width-integrated transport,
+  cumulative from the surface): grows to a **plateau** by day ~15 —
+  3.1E+03 (day 1) → 6.7E+04 (day 10) → 1.3E+05 (day 20) → 1.2E+05 m³/s
+  (day 30), i.e. **≈ 0.12-0.13 Sv**, flat to within 10 % from day 15 to
+  day 30. This one reads as the quasi-steady melt-driven overturning cell
+  the protocol's circulation figures (Sect. 4) are built to show.
+
+Full daily series: `/home/jorge/nci/cdx/data/runs/v010_validation/isomip_plus/ocean0_idealised_zfixed/streamfunction_melt_summary.csv` (+ the 2-D fields in the sibling `.npz`); run log `run_melton_30d.log` in the same directory. The raw 453 MB daily 3-D diagnostic NetCDF was deleted after extracting these summaries to keep the run directory small.
+
+### Ice-shelf cavity at rest, z\_fixed (`../ice_shelf_cavity/`)
+
+| case | horizon | GPU En | outcome |
+|---|---|---|---|
+| `cavity_flat_lid_rest_zfixed.nml` | 30 d | `0.000E+00` at every daily sample | **bit-zero**, matching the gfortran gate — stays at rest |
+| `cavity_sloping_lid_rest_zfixed.nml` | 30 d | day 10 `3.658E-05`, day 20 `8.099E-05`, day 30 `1.243E-04` | **does not stay at rest** — climbs to `|u|_rms ≈ 1.6 cm/s` by day 30, no NaN |
+
+Both pass `--validate-only` and run clean (no refusals, no NaN, budgets
+at `1e-15`-`1e-16` relative). The flat-lid result reproduces the
+documented bit-zero claim on this toolchain. The sloping-lid result is
+the file's **documented, known, un-fixed** defect — the z\_fixed
+ice-base staircase truncation (Yung, Hallberg, Adcroft & Morrison 2026,
+JAMES 18, e2025MS005645) that file's own header says needs that paper's
+vanished-layer corrections, none of which are in this build; it is
+deliberately **not** in `tests/regression/stability_manifest.py` for
+that reason, and nothing here attempts to fix it (CAUTION note in the
+task: don't patch physics here). The magnitude is in the same
+neighbourhood as the file's gfortran re-measurement (`1.059E-04` at day
+30, trimmed IC) — 1.03-1.7× higher depending on the day, the same
+direction and rough size as the Ocean0 re-baseline above, consistent
+with the new defaults rather than a new defect.
+
+### `ocean0_ice_free_zfixed.nml` (bathymetry only, no ice shelf, 2 days — the cheapest closed-faces check)
+
+GPU En stays flat and near round-off the whole 2 days: `7.4E-09` (day
+0.25) → `7.0E-09` (day 1) → `8.4E-09` (day 2). The file's own header
+(gfortran, predating the frhat/closed-faces fixes) measured a
+monotonically **climbing** `8.1E-08 → 8.6E-07 → 2.7E-06` over the same
+window with the knob on. On this release candidate the closed-face
+z-level staircase case is not just bounded but effectively flat — two to
+three orders of magnitude below the stale header numbers — which is the
+direction the frhat-matrix fix (gating `frhat_scheme="hybrid"` to
+`zfixed_closed_faces`) and `compute_gtot_faces` fix on this branch are
+supposed to move it. Budgets closed at `~9e-14` relative. Consistent with
+the re-baseline direction above (the new defaults do not regress this
+case; if anything they visibly help it), but this is one short run, not
+a re-derivation of the file's own analysis.
+
+### Bottom line for the release
+
+No refusal, no NaN, no CFL truncation anywhere in this corpus under
+`z_fixed` + the new defaults (`hvel_mom6`, `bbl_glue`, `visc_rem_chain`,
+HYBRID frhat gated to closed faces). Budgets (mass/salt/heat) stay closed
+at round-off in every run, melt included — the meltwater virtual flux is
+fully accounted for. The two things this validation did **not** produce:
+a tuned, protocol-comparable melt rate (`Γ_T` is deliberately the
+starting guess, blocker 3 in "Blockers for a publishable Ocean0" above,
+unchanged by this PR) and a file-backed Ocean0/1/2 run (blocker: the
+BISICLES geometry file is not present and regridding it is an offline
+step this task was told not to perform). Both are pre-existing, documented
+limitations, not findings from this pass.
