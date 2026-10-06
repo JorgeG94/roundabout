@@ -689,28 +689,28 @@ the chain identically. Findings from the audit:
   differences, not by the glue's drag — unrelated to the unbounded
   `visc_rem` ratio that was the actual mechanism. Not fixed here (out of
   PR-3's audit-and-unify scope).
-- **frhat parity — reported, not ported.** roundabout's `av_rem` and
-  `forcing_visc_rem`'s `wt_u` share ONE face depth-mean weight, the plain
-  two-cell arithmetic mean `0.5·(h_L+h_R)`. MOM6's `frhatu`/`frhatv` come
-  from `btcalc` (`MOM_barotropic.F90:4546-4790`) and dispatch on
-  `HVEL_SCHEME`: `ARITHMETIC` (roundabout's form), `HARMONIC`
-  (`2·h_L·h_R/(h_L+h_R+h_neglect)`, which strongly suppresses a face
-  where one side is thin — exactly the partial-bed-cell regime
-  motivating this whole plan), or MOM6's practical default `HYBRID` (a
-  shape-dependent arithmetic/harmonic blend, not flow/flux-dependent).
-  At the plan's own motivating 8.4 m / 0.74 m geometry, MOM6's default
-  already suppresses the thin side before `visc_rem` is even applied —
-  roundabout's plain mean does not. The port itself would be small
-  (`btcalc`'s default-arg form is a self-contained ~45-line-per-direction
-  function of `h` alone, no PPM/flux coupling), but the plan requires
-  porting it to EVERY depth-mean site in the chain at once (never just
-  one, or the fold stops being self-consistent) — `av_rem` and
-  `forcing_visc_rem` share `face_depth_mean_u/v`/`face_depth_mean_rem_u/v`,
-  which are also the GENERAL-purpose BT depth-mean used by every
-  configuration, visc_rem chain on or off. Changing their weight formula
-  is an answer change for every existing run, not a default-off opt-in
-  one, so it is OUT OF SCOPE for PR-3 (no answer changes) and deferred as
-  a measured finding for a follow-up PR, not implemented here.
+- **frhat parity — PORTED, gated to closed faces (2026-10-06).** MOM6's
+  `btcalc` face weights (`HVEL_SCHEME=HYBRID`, `MOM_barotropic.F90:4546-4790`)
+  are ported into every barotropic depth mean (`&ocean_bt_nml frhat_scheme`,
+  default `"hybrid"`; `"arithmetic"` is the old plain two-cell mean). HYBRID is
+  APPLIED only where `&vcoord_nml zfixed_closed_faces` is on
+  (`metrics%use_closed_faces`); everywhere else every site falls back to the
+  arithmetic mean, so those configurations are unchanged from before the port.
+  That is a **known divergence from MOM6**, which uses HYBRID for every
+  coordinate:
+  - With closed faces HYBRID is what keeps the 1° Southern Ocean alive past
+    day 305 under the default glue + visc_rem chain (1-year run +1.7 % En vs
+    the old-default baseline).
+  - On OPEN step faces (z* with closed faces off) ungated HYBRID makes the
+    1° Southern Ocean ~20x more energetic within 30 days, and on
+    `eulerian_z` + cliff it broke the mass budget (5e-5). The remaining
+    inconsistency at open step faces is not yet found; a plausible suspect is
+    a barotropic quantity that still uses the arithmetic face thickness (the
+    fast loop's face depth, or the continuity transport) while the depth means
+    use HYBRID. Until it is found, the gate stays. Tracked as a follow-up in
+    `python_prototypes/design/visc_rem_bt_rem_plan.md`.
+  - `compute_gtot_faces` (the bc-PGF correction's `pbce` depth mean) now
+    dispatches on the same gated scheme; it used a hand-rolled arithmetic mean.
 
 **NaN resolution (1-degree Southern Ocean, z* open steps).** The step-40ish
 NaN under `hvel_mom6`+`bbl_glue`+`visc_rem_chain` is FIXED by retiring
