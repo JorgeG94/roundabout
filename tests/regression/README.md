@@ -1742,7 +1742,10 @@ The nightly fits its budget (one V100-hour) 18x over; the GPU t = 3 slice
 
 Every one is a `KNOWN_GAP` row now, so the committed table is green (CPU +
 MPI: 9 PASS, 10 REFUSED_PHYSICAL, 37 REFUSED_GAP, 77 XFAIL; GPU: 63 PASS, 23
-XFAIL; t = 3: 104 PASS, 216 REFUSED_GAP, 296 XFAIL; 0 FAIL, 0 XPASS):
+XFAIL; t = 3: 104 PASS, 216 REFUSED_GAP, 296 XFAIL; 0 FAIL, 0 XPASS).  Re-tallied 2026-10-05 on beta + the visc_rem
+stack (CPU + MPI, restart and decomp legs): 25 PASS, 11 REFUSED_PHYSICAL,
+22 REFUSED_GAP, 56 XFAIL, 0 FAIL, 0 XPASS.
+
 
 | row | leg | diagnosis |
 |---|---|---|
