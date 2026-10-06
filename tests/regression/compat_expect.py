@@ -315,9 +315,14 @@ ROWS = [
          "Pure isopycnal (rho) stops within 2-12 steps on the matrix domains: the remap "
          "precondition guard, or the console CFL panic.  Before the land-column fix (item C3) "
          "the same cells stopped at step 1; with it they run further and die later "
-         "(CLAUDE.md: rho is validation-grade alone, weakly stratified columns collapse).",
-         "NOT TRACKED (found by this matrix, 2026-10-05)", expect=("CRASH",),
-         message=r"remap preconditions at step \d+|console stats: CFL > panic threshold",
+         "(CLAUDE.md: rho is validation-grade alone, weakly stratified columns collapse).  "
+         "Under the visc_rem chain (bt=visc_rem) the barotropic friction keeps some of these "
+         "cells alive the full 24 steps, at ~190x the channel PASS energy instead of stopping "
+         "(c042: chain off stops on the remap guard; chain on reaches En 1.5; the same cell "
+         "under ssp_rk2 runs at 1.7e-2): the same rho collapse, a later symptom.",
+         "NOT TRACKED (found by this matrix, 2026-10-05)", expect=("CRASH", "ENERGY"),
+         message=r"remap preconditions at step \d+|console stats: CFL > panic threshold"
+                 r"|x the \w+ PASS-population reference",
          scope="any",
          # c045 of the 2026-10-05 train run (as generated, not minimised)
          witness={"vcoord": "rho", "split": "pred_corr", "vmix_bl": "epbl",
