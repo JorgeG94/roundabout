@@ -90,11 +90,17 @@
 !!     exchange, its 1xN splits through the local kernels.
 !!   * visc_rem_chain — the island_basin topology with the visc_rem chain
 !!     live (`&ocean_vdiff_nml hvel_mom6 + bbl_glue`, `&ocean_bt_nml
-!!     visc_rem_chain`) -- av_rem/bt_rem and the wt_u/renorm weights are
-!!     per-face column sums built on the FULL face extent including ghosts,
-!!     so a decomposition-sensitive seam in them shows here exactly like
-!!     every other compared field; the BT-correction fold itself stays
-!!     UNIFORM (D1 follow-up — MOM6 never weights it).
+!!     visc_rem_chain`) AND the frhat port's `frhat_scheme = "hybrid"`
+!!     explicit (MOM6 `btcalc` HVEL_SCHEME=HYBRID; both now the PR-4
+!!     defaults, spelled out here anyway so the case stays a decomp-bitid
+!!     gate on the combination regardless of future default changes) --
+!!     av_rem/bt_rem and the wt_u/renorm weights are per-face column sums
+!!     built on the FULL face extent including ghosts, now via the HYBRID
+!!     face-thickness closure instead of the plain arithmetic mean, so a
+!!     decomposition-sensitive seam in EITHER the chain or the frhat sweep
+!!     shows here exactly like every other compared field; the
+!!     BT-correction fold itself stays UNIFORM (D1 follow-up — MOM6 never
+!!     weights it).
 !! All are stratified with a boundary-layer scheme on, so the tiles exchange real
 !! flow and real tracer structure.  26 x 18 cells (tripolar: 30 x 24),
 !! nghost = 3 (weno7_pv: 26 x 24, nghost = 5): every factorisation above is
@@ -239,7 +245,9 @@ contains
       ! forcing + renorm_visc_rem, UNIFORM BT-correction fold) instead.
       bt_extra = ""
       if (label == "visc_rem_zstar") bt_extra = ", visc_rem_chain = .true."
-      if (label == "visc_rem_chain") bt_extra = ", visc_rem_chain = .true."
+      if (label == "visc_rem_chain") then
+         bt_extra = ", visc_rem_chain = .true., frhat_scheme = 'hybrid'"
+      end if
       write (spx, '(i0)') px
       write (spy, '(i0)') py
       write (snx, '(i0)') NX_G
