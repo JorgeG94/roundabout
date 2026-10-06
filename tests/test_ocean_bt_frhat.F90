@@ -292,12 +292,33 @@ contains
          ms%u_face_x_layer(NGHOST + 3, :, :) = spread( &
                                                [-0.01_wp, 0.04_wp, -0.015_wp, 0.02_wp], 1, size(ms%u_face_x_layer, 2))
 
+         ! GPU `mem:separate`: every array these kernels touch must be
+         ! device-present (see CLAUDE.md's `do concurrent` gotcha). `ms`/
+         ! `bt_work` are mapped here, AFTER the host-side seeding above and
+         ! BEFORE the first kernel call; `metrics` is already mapped by
+         ! `build_two_column_face`/`make_cartesian_metrics`.
+         call ms%enter_data()
+         call bt_work%enter_data()
+
          call derive_bt_from_layers(grid, bt_work, ms, metrics)
+         ! `bt_ubt` is DEVICE-computed by the kernel above; the two host-side
+         ! reads right below (`ubt_at_n = bt_ubt`, `bt_ubt_end = bt_ubt +
+         ! 0.2`) need the device value pulled back first, or `mem:separate`
+         ! silently hands them the host array's stale `init` zeros -- which
+         ! on GPU manifested as `bt_ubt_end` coming out exactly `0.2` (zero
+         ! plus the offset) instead of the true nonzero hybrid-weighted mean
+         ! of the seeded shear velocity, failing this test's self-consistency
+         ! check with the SEEDED velocity's own depth mean as the "diff"
+         ! (measured 2.83E-02 / 1.49E-02 at the two faces -- exactly the
+         ! magnitude of the thing that went missing, not round-off).
+         !$acc update self(bt_work%bt_ubt)
          bt_work%ubt_at_n = bt_work%bt_ubt
          ! Choose an arbitrary end state and ZERO forcing -- Delta = ubt_end
-         ! - ubt_at_n exactly.
+         ! - ubt_at_n exactly. Host-side writes to already-mapped arrays
+         ! need `update device` to reach the kernels below.
          bt_work%bt_ubt_end = bt_work%bt_ubt + 0.2_wp
          bt_work%F_bt_u = 0.0_wp
+         !$acc update device(bt_work%bt_ubt_end, bt_work%F_bt_u, bt_work%ubt_at_n)
          dt = 1.0_wp
 
          call apply_bt_correction(bt_work, ms, dt, metrics, use_visc_rem=.true.)
@@ -307,8 +328,14 @@ contains
          ! reference) must reproduce bt_ubt_end to round-off.
          nu = size(bt_work%bt_ubt_end, 1)
          allocate (f_mean(nu, size(bt_work%bt_ubt_end, 2)))
+         !$acc enter data create(f_mean)
          call face_depth_mean_u(grid, ms%u_face_x_layer, ms%h_layer, f_mean, NZ, metrics, &
                                 bt_work%bt_H_ref, bt_work%frhat_scheme)
+         !$acc update self(f_mean)
+         !$acc exit data delete(f_mean)
+
+         call bt_work%exit_data()
+         call ms%exit_data()
 
          jp = NGHOST + 1
          call check(error, abs(f_mean(NGHOST + 2, jp) - bt_work%bt_ubt_end(NGHOST + 2, jp)) &
