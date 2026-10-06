@@ -72,6 +72,11 @@ In the author's words:
    form. It is human error, and it will be addressed when someone brings it
    up.
 
+   Because of this, the licensing of this code is MIT.
+
+The parts ported from MOM6 and SIS2 are used and modified under the Apache
+License 2.0, as set out in ``NOTICE``.
+
 The API documentation for the code itself — per-module and per-procedure
 reference generated from the source — is hosted separately:
 https://jorgeg94.github.io/roundabout/
