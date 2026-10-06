@@ -71,6 +71,12 @@ FEATURES = {
     "vc_eulerian_z": ("eulerian z (H*dsig)", lambda n: _vtype(n) == "eulerian_z"),
     "vc_lagrangian": ("pure Lagrangian", lambda n: _vtype(n) == "lagrangian"),
     "vc_zsigma": ("smoothstep sigma->z", lambda n: _vtype(n) == "zsigma"),
+    "vc_zlike_open": ("a z-like / hybrid stack with open steps (zstar, hycom)",
+                      lambda n: _vtype(n) in ("zstar", "hycom")),
+    "vc_terrain_following": ("a terrain-following stack (sigma, zstar_sigma, eulerian_z, "
+                             "lagrangian from its sigma IC)",
+                             lambda n: _vtype(n) in ("sigma", "zstar_sigma", "eulerian_z",
+                                                     "lagrangian")),
     # outer split
     "pred_corr": ("predictor-corrector split",
                   lambda n: _g(n, "ocean_bt_nml", "split_scheme", "pred_corr") == "pred_corr"),
@@ -140,6 +146,8 @@ FEATURES = {
     "walls_only": ("closed basin", lambda n: all(e == "wall" for e in _edges(n))),
     "tripolar": ("tripolar fold", lambda n: _edges(n)[3] == "tripolar_fold"),
     "cavity": ("ice-shelf cavity", lambda n: bool(_g(n, "ocean_cavity_dyn_nml", "enable", False))),
+    "cliff": ("10 m shelf beside 2000 m (rx0 ~ 0.99)",
+              lambda n: _g(n, "output_nml", "bathymetry_file", "") == "compat_bathy_cliff.nc"),
     "cartesian": ("Cartesian grid", lambda n: _g(n, "ocean_grid_nml", "grid_config", "cartesian") == "cartesian"),
     "spherical": ("spherical sector", lambda n: _g(n, "ocean_grid_nml", "grid_config", "cartesian") == "spherical"),
     "sw_pen": ("penetrating shortwave", lambda n: float(_g(n, "ocean_thermo_nml", "sw_pen_frac", 0.0)) > 0.0),
@@ -330,8 +338,36 @@ ROWS = [
                   "eddy": "mle", "tracers": "pseudo_salt", "pgf": "fv_mom6_plm", "eos": "linear",
                   "coriolis": "sadourny", "pv_adv": "weno7", "bt": "correction_bc_pgf",
                   "geometry": "closed", "grid": "spherical", "forcing": "cool"}),
+    # `zstar_open_steps_stress_tensor` and `hycom_runtime_crash` (staircase / OBC
+    # witnesses, pre-PR-4) are DELETED here: PR-4's flip (`hvel_mom6` + `bbl_glue` +
+    # `visc_rem_chain` default ON together) makes both witnesses run clean (the BBL
+    # glue couples the filler faces; verified against this matrix before commit), the
+    # same outcome `e7feb1447`/`75f2aa6cc` recorded for the single-knob glue flip.
+    # Re-pinned onto the CLIFF geometry below, where they still fail.
+    _gap("zlike_cliff_linear_eos_filler_rho", "runtime", ("vc_zlike_open", "cliff", "eos_linear"),
+         "zstar / hycom over the cliff with the LINEAR EOS: 3x EN_REF[cliff] against 1.2x with "
+         "Wright or Roquet.  The linear EOS gives a vanished layer the reference density "
+         "(`eos_linear_impl`: h <= H_VANISHED -> T_ref/S_ref, i.e. rho_0), and the layer-mean "
+         "PGF paths (mont, fv_mom6 PCM) read that `rho_layer` across every live|filler face of "
+         "the cliff; the in-situ Wright/Roquet branch reads the filler's I1' donor T/S instead "
+         "(FV-MOM6 Pass C, 2026-10-04) and the PPM reconstruction halves it.  The BBL glue "
+         "absorbs most of it (old defaults: CFL panic).  Fix: the donor concentration in the "
+         "linear EOS (or in the layer-mean PGF), an answer change of its own.",
+         "NOT TRACKED (found by this matrix's cliff geometry, 2026-10-05)",
+         expect=("ENERGY",), message=r"x the cliff PASS-population reference", scope="any",
+         # minimised 2026-10-05 from c000 (leave-one-out; every other axis at base):
+         # En(24) 2.43e-2 = 3.1x EN_REF[cliff]; the same cell on the closed geometry 8.8e-3
+         witness={"vcoord": "hycom", "geometry": "cliff", "eos": "linear",
+                  "coriolis": "sadourny"}),
+    # `terrain_following_cliff_pgf` DELETED (PR-4, the flip): the full
+    # visc_rem_chain (producer + av_rem + bt_rem + wt_u forcing + renorm --
+    # strictly more bed friction reaching the barotropic mode than
+    # hvel_mom6 + bbl_glue alone) runs its minimised witness (lagrangian +
+    # kappa-shear on the cliff) clean. XPASS under this matrix; deleted
+    # rather than re-pinned since leave-one-out found no other cliff
+    # witness in this family that still fails.
     _gap("zstar_open_steps_stress_tensor", "runtime", ("vc_zstar", "stress_tensor"),
-         "zstar's open stepped bed (closed faces off: a live layer faces a 1e-4 m filler) "
+         "zstar's open steps (closed faces off: a live layer faces a 1e-4 m filler) "
          "with the MOM6 stress-tensor viscosity drives a layer negative and stops on the remap "
          "guard at step 2-3.  The corner shear stress is weighted by the ARITHMETIC 4-cell "
          "mean h_q (`hvisc_compute_stress`, Phase 2) while the divergence divides by the face "
@@ -342,56 +378,33 @@ ROWS = [
          "face is vanished; substituting it runs this witness clean (En 6.46e-3 against the "
          "sigma twin's 6.73e-3).  The same operator defect is the vcoord matrix's FINDING A "
          "(thin density-space layers driven negative); the port changes every stress_tensor "
-         "answer, so it is its own PR.",
+         "answer, so it is its own PR.  Since the MOM6 BBL glue became the default "
+         "(2026-10-05) the staircase witness runs clean (the glue couples the filler faces); "
+         "the cliff under ssp_rk2 still crashes at step 3.",
          "NOT TRACKED (found by this matrix, 2026-10-04; vcoord matrix FINDING A)",
          expect=("CRASH",), message=r"remap preconditions at step \d+", scope="any",
-         # minimised 2026-10-04 from c011 (greedy; every other axis at base)
-         witness={"vcoord": "zstar", "lateral": "stress_tensor"}),
-    _gap("zstar_open_steps_stress_tensor_gm", "runtime", ("vc_zstar", "stress_tensor", "gm"),
-         "The zstar_open_steps_stress_tensor defect (arithmetic corner h_q against the face "
-         "divisor on a filler face) with GM on: the cell runs 24 steps with GM off and dies "
-         "with GM on.  Folded into continuity, GM's bolus drove a layer negative at step 2-3 "
-         "(remap guard); as its own operator on the current h it lasts to step 11-19 and then "
-         "trips the remap guard (sequential only) or the CFL panic (with MOM6 bottom-blocking). "
-         "Lifts with the h_q port.",
-         "NOT TRACKED (found by this matrix, 2026-10-05; GM sequential operator)",
-         expect=("CRASH",),
-         message=r"console stats: CFL > panic threshold|remap preconditions at step \d+",
-         scope="any",
-         # c010 of the 2026-10-05 train run, bt re-pinned visc_rem -> default
-         # (2026-10-06): the visc_rem chain's uniform fold + bt_rem keeps the
-         # cell alive 24 steps (En 1.0e-2); without it the stress-tensor h_q
-         # defect still stops it on the remap guard at step 3.
-         witness={"vcoord": "zstar", "split": "ssp_rk2", "vmix_bl": "pp81",
-                  "vmix_extra": "tidal", "vmix_bg": "scalar", "lateral": "kh_aniso",
-                  "eddy": "gm_meke", "tracers": "ideal_age", "pgf": "mont", "eos": "linear",
-                  "coriolis": "sadourny_hk", "pv_adv": "centered", "bt": "default",
-                  "geometry": "closed", "grid": "cartesian", "forcing": "warm_sw"}),
-    _gap("rho_gm_energy", "runtime", ("vc_rho", "gm"),
-         "Pure isopycnal (rho) with GM: cells that stopped within a few steps under "
-         "rho_runtime_crash (GM folded into continuity) now run all 24 steps with GM as its own "
-         "operator on the current h, but at 13-200x the PASS-population energy -- the same "
-         "validation-grade collapse of weakly stratified rho columns, reached later.",
-         "NOT TRACKED (found by this matrix, 2026-10-05; GM sequential operator)",
-         expect=("ENERGY",), message=r"x the \w+ PASS-population reference", scope="any",
-         # c044 of the 2026-10-05 train run (as generated, not minimised)
-         witness={"vcoord": "rho", "split": "pred_corr", "vmix_bl": "epbl",
-                  "vmix_extra": "conv", "vmix_bg": "bryan_lewis", "lateral": "leith_biharm",
-                  "eddy": "gm_meke", "tracers": "pseudo_salt", "pgf": "fv_mom6_plm",
-                  "eos": "linear", "coriolis": "sadourny", "pv_adv": "weno5",
-                  "bt": "substep_drag", "geometry": "obc", "grid": "spherical",
-                  "forcing": "cool"}),
+         # re-pinned 2026-10-05 (leave-one-out from c010): the staircase witness
+         # {zstar, stress_tensor} passes under the BBL glue default; this one stops at
+         # step 3 (its staircase twin and its pred_corr twin both run 24 steps)
+         witness={"vcoord": "zstar", "lateral": "stress_tensor", "geometry": "cliff",
+                  "split": "ssp_rk2"}),
     _gap("hycom_runtime_crash", "runtime", ("vc_hycom",),
-         "hycom with an open boundary stops at step 4 (remap precondition guard + nan-catch) "
-         "now that the land-column crash (item C3) no longer stops it at step 1.",
+         "hycom stops on the remap precondition guard within a few steps in some "
+         "compositions.  The first witness (an open boundary + kh_aniso + MLE, step 4) runs "
+         "24 steps since the MOM6 BBL glue became the default (2026-10-05).  The cliff with "
+         "MEKE backscatter + Fox-Kemper MLE still stops at step 5 (step 4 before the glue): "
+         "both lateral terms are needed (leave-one-out), the staircase twin runs clean, the "
+         "zstar twin runs clean -- a thin hycom layer on the 10 m shelf is driven negative by "
+         "a lateral transport the vertical glue cannot reach.  Not diagnosed further.",
          "NOT TRACKED (found by this matrix, 2026-10-05)", expect=("CRASH",),
          message=r"remap preconditions at step \d+", scope="any",
-         # c002 of the 2026-10-05 train run (as generated, not minimised)
-         witness={"vcoord": "hycom", "split": "pred_corr", "vmix_bl": "epbl",
-                  "vmix_extra": "none", "vmix_bg": "henyey", "lateral": "kh_aniso",
-                  "eddy": "mle", "tracers": "ts", "pgf": "fv_mom6", "eos": "roquet",
-                  "coriolis": "sadourny_hk", "pv_adv": "centered", "bt": "substep_drag",
-                  "geometry": "obc", "grid": "spherical", "forcing": "warm_sw"}),
+         # re-pinned 2026-10-05, minimised from c070 (leave-one-out)
+         witness={"vcoord": "hycom", "geometry": "cliff", "lateral": "meke_backscatter",
+                  "eddy": "mle", "vmix_bl": "epbl"}),
+    # `hycom_decomp_run_fails` DELETED (PR-4, the flip): its pinned witness
+    # (hycom + ssp_rk2 + kpp/ddiff/henyey/const_nu_h/gm/ideal_age/fv_mom6_plm/
+    # linear/sadourny_energy/centered/correction_bc_pgf/channel/spherical/
+    # cool) now runs the decomposed leg clean under the new defaults.
 
     # ===================================================================
     # KNOWN_GAP -- the legs (phase 3, 2026-10-04): RESTART, DECOMP.
@@ -410,6 +423,60 @@ ROWS = [
          "re-seeds it from the instantaneous MLD and the restratification flux changes.",
          "NOT TRACKED (found by this matrix, 2026-10-04)", expect=("RESTART",),
          message=r"differ after a warm restart"),
+    _gap("decomp_hycom_ssp_rk2_chain_crash", "runtime", ("vc_hycom", "ssp_rk2"),
+         "PR-4 (the flip): hycom + ssp_rk2 cells that run clean on one rank fail outright "
+         "decomposed (2x2 and 4x1, rc 1) now that visc_rem_chain is the default -- the "
+         "decomposed run itself, not a bitwise mismatch. Two independent witnesses from the "
+         "pairwise covering array hit this (c003: kpp/kappa_shear_vertex/stress_tensor/"
+         "gm_meke/obc; c006: pp81/tidal/leith_biharm/gm_varmix_resscaled/channel), sharing "
+         "only {vcoord=hycom, split=ssp_rk2} -- not minimised further (leave-one-out not run "
+         "for time). Not root-caused: candidate mechanism is the chain's av_rem/bt_rem "
+         "n_inner**-th root on a hycom column under the two-stage ssp_rk2 average, which may "
+         "see a different av_rem than pred_corr's single corrector update.",
+         "NOT TRACKED (found by this matrix, 2026-10-06, PR-4 the flip)", expect=("DECOMP",),
+         message=r"the decomposed run failed", scope="any",
+         # as-generated from c003 (every other axis at base), not minimised
+         witness={"vcoord": "hycom", "split": "ssp_rk2", "vmix_bl": "kpp",
+                  "vmix_extra": "kappa_shear_vertex", "vmix_bg": "scalar",
+                  "lateral": "stress_tensor", "eddy": "gm_meke", "tracers": "ts",
+                  "pgf": "fv_mom6_ppm", "eos": "linear", "coriolis": "sadourny",
+                  "pv_adv": "weno7", "bt": "default", "geometry": "obc", "grid": "cartesian",
+                  "forcing": "cool"}),
+    _gap("restart_kappa_shear_vertex_chain", "runtime", ("kappa_shear_vertex",),
+         "PR-4 (the flip): three independent pairwise witnesses that all select "
+         "vmix_extra=kappa_shear_vertex (and nothing else in common -- vcoord sigma/"
+         "lagrangian/eulerian_z, geometry cliff/cliff/obc, split pred_corr/pred_corr/ssp_rk2) "
+         "fail the RESTART leg at step 12 under the now-default visc_rem_chain: "
+         "bt_visc_rem_u/v differ first, then kshear_kd_int, then every downstream field "
+         "(ml_h_layer, ml_rho_layer, hvisc_du_visc/dv_visc, tracer_hTr_*, vmix_kv, ...). "
+         "Not root-caused in the time available: kshear_kd_int (the vertex-mode corner Kd "
+         "carrier) is a candidate for a restart-registry gap, OR the vertex solve's corner "
+         "f_corner/kd_corner state reacts to the chain's av_rem/bt_rem differently pre- vs "
+         "post-restart. restart_visc_rem itself (the PR-2 bt_rem_from_av_rem bit-exactness "
+         "fix) is NOT reopened -- no witness here omits kappa_shear_vertex.",
+         "NOT TRACKED (found by this matrix, 2026-10-06, PR-4 the flip)", expect=("RESTART",),
+         message=r"differ after a warm restart", scope="any",
+         # as-generated from c026 (every other axis at base except vmix_extra), not minimised
+         witness={"vcoord": "sigma", "split": "pred_corr", "vmix_bl": "pp81",
+                  "vmix_extra": "kappa_shear_vertex", "vmix_bg": "bryan_lewis",
+                  "lateral": "const_nu_h", "eddy": "gm_varmix_resscaled",
+                  "tracers": "ideal_age", "pgf": "fv_mom6", "eos": "roquet",
+                  "coriolis": "sadourny", "pv_adv": "weno3", "bt": "visc_rem",
+                  "geometry": "cliff", "grid": "spherical", "forcing": "cool"}),
+    _gap("decomp_zstar_ssp_rk2_gm", "runtime", ("vc_zstar", "ssp_rk2", "gm"),
+         "zstar's open stepped bed with GM under ssp_rk2 runs clean on one rank and on 1x2, "
+         "but a split in x (2x1, 2x2, 4x1) drives one column negative and stops on the remap "
+         "guard at step 3; pred_corr at 2x2, z_fixed with closed faces and sigma are clean. "
+         "Independent of the PGF form and the Coriolis scheme (mont + sadourny_energy fails "
+         "the same way, and runs none of the code the zstar open-step fixes touched), so it "
+         "predates them: the cells only reach the DECOMP leg now that they pass checks 1-3.",
+         "NOT TRACKED (found by this matrix, 2026-10-04)", expect=("DECOMP",),
+         message=r"the decomposed run failed", scope="any",
+         # minimised 2026-10-04 from c015 (greedy over the decomposed run)
+         witness={"vcoord": "zstar", "split": "ssp_rk2", "eddy": "gm"}),
+    # `decomp_hycom_visc_rem` DELETED (PR-4, the flip): its witness
+    # (hycom + bt=visc_rem) now decomposes bitwise -- the visc_rem halo
+    # refresh (PR-1 of the plan) already closes it on this base.
     _gap("decomp_eulerian_z_ssp_rk2", "runtime", ("vc_eulerian_z", "ssp_rk2", "epbl", "mle"),
          "eulerian_z under ssp_rk2 (its legacy per-stage vertical-advection + h-rescale path) "
          "with EPBL + Fox-Kemper MLE is not decomposition-invariant: last-bit differences in "
