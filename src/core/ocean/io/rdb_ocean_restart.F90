@@ -72,6 +72,18 @@ module rdb_ocean_restart
          !! .true. => write path pulls host-ward via `!$acc update self`
          !! first.  Host-only state sets .false. so `update self` is never
          !! issued on an unmapped array (crashes on GPU).
+      logical :: found = .false.
+         !! PR-2 (bt-rem-from-av-rem review): set by `ocean_restart_read_local`
+         !! when THIS entry's variable was actually present in the file
+         !! being read (always `.false.` before a read, and on a WRITE
+         !! path registry this field is simply never consulted). Lets a
+         !! caller distinguish "optional field restored from the
+         !! checkpoint" from "optional field missing, left at its seeded
+         !! value" for an entry whose downstream setup behaviour must
+         !! differ between the two (see `registry_entry_found`,
+         !! `ocean_vmix_t%kv_from_restart`) — `optional` alone only says
+         !! whether a MISSING entry is fatal, not whether THIS read found
+         !! it.
    end type restart_entry_t
 
    type :: restart_registry_t
@@ -84,6 +96,7 @@ module rdb_ocean_restart
       procedure, non_overridable :: register_2d => registry_register_2d
       procedure, non_overridable :: register_3d => registry_register_3d
       procedure, non_overridable :: clear => registry_clear
+      procedure, non_overridable :: entry_found => registry_entry_found
    end type restart_registry_t
 
    type :: ocean_restart_t
@@ -121,9 +134,32 @@ contains
          this%entries(i)%rank = 0
          this%entries(i)%optional = .false.
          this%entries(i)%device_mapped = .true.
+         this%entries(i)%found = .false.
       end do
       this%n = 0
    end subroutine registry_clear
+
+   pure function registry_entry_found(this, tag) result(found)
+      !! Was `tag` actually present in the file the last time this
+      !! registry was passed to `ocean_restart_read_local`? `.false.`
+      !! before any read, and `.false.` for an unknown tag (a caller
+      !! typo is a silent cold-seed, not a crash — callers that care
+      !! should assert the tag exists via a successful `register_*`
+      !! first). See `restart_entry_t%found`'s docstring for why this is
+      !! not the same question as `optional`.
+      class(restart_registry_t), intent(in) :: this
+      character(len=*), intent(in) :: tag
+      logical :: found
+      integer :: i
+
+      found = .false.
+      do i = 1, this%n
+         if (trim(this%entries(i)%tag) == trim(tag)) then
+            found = this%entries(i)%found
+            return
+         end if
+      end do
+   end function registry_entry_found
 
    subroutine registry_register_scalar(this, tag, scal, optional)
       !! Register a host scalar (rank-0 persistent state, e.g. the Chapman

@@ -446,6 +446,7 @@ contains
                call nc_close(ncid)
                error stop "ocean_restart_read_local: missing required field"
             end if
+            en%found = .true.
             select case (en%rank)
             case (0)
                call nc_check(nf90_get_var(ncid, varid, en%p0), &

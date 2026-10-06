@@ -182,6 +182,18 @@ module rdb_ocean_vmix
       logical :: is_init = .false.
          !! True between `init` and `destroy`.  Prefer this to
          !! `allocated(...)` — tracks GPU device attachment too.
+      logical :: kv_from_restart = .false.
+         !! PR-2 (bt-rem-from-av-rem review): set by `ocean_state_restart_read`
+         !! (`rdb_ocean_state.F90`) immediately after a restart read, from
+         !! the registry's `entry_found("vmix_kv")` — `.true.` iff THIS
+         !! read actually found `vmix_kv` in the checkpoint (an older
+         !! checkpoint without the field, or a cold start, both leave it
+         !! `.false.`).  `configure_ocean_lateral`'s mandatory `pp81_*`
+         !! config-copy (`vmix_seed_backgrounds`) reads it to decide
+         !! whether to skip reseeding `kv` — see that routine's docstring.
+         !! Pure host bookkeeping: never device-mapped, never itself in
+         !! the restart registry (it describes a read that already
+         !! happened, not state to carry forward).
 
       ! ---- Scheme selection ----
       logical :: use_closure = .false.
@@ -625,7 +637,7 @@ contains
       this%is_init = .true.
    end subroutine ocean_vmix_init
 
-   pure subroutine vmix_seed_backgrounds(this, reseed_arrays)
+   pure subroutine vmix_seed_backgrounds(this, skip_kv)
       !! Seed `kv_bg`/`kt_bg`/`ks_bg` and the `kv`/`kt`/`ks`/`kd_bg` arrays
       !! from the current `pp81_nu_bg`/`pp81_kappa_bg` fields, then zero
       !! the closed-BC boundary interfaces on `kv`/`ks`.  Extracted out of
@@ -639,48 +651,65 @@ contains
       !! `kv`/`kt`/`ks`/`kd_bg` already allocated (true after `init`; the
       !! config-copy call runs strictly after `init_from_config`).
       class(ocean_vmix_t), intent(inout) :: this
-      logical, intent(in), optional :: reseed_arrays
-         !! PR-2 (bt-rem-from-av-rem): default `.true.` (the historical
-         !! behaviour — `kv`/`kt`/`ks`/`kd_bg` are pure parameters at cold
-         !! start, so re-deriving them from the configured
-         !! `pp81_nu_bg`/`pp81_kappa_bg` is correct and necessary).  The
-         !! config-copy call site (`configure_ocean_lateral`, AFTER
-         !! `engine_setup`'s restart read) passes `.false.` on a WARM
-         !! restart: `kv` is now a CARRIED, checkpointed field (tag
-         !! `vmix_kv`, closing compat row `restart_visc_rem`) because
-         !! `visc_rem_precompute` reads the PREVIOUS stage's `kv` before
-         !! this stage recomputes it — an unconditional array reseed here
-         !! would silently stomp the just-restored value back to the
-         !! background on EVERY warm restart (found by
-         !! `test_engine_bit_exact_visc_rem` once `vmix_kv` was
-         !! registered: the resumed `kv` read back as the pure background
-         !! `pp81_nu_bg`, not the spun-up checkpoint).  The SCALAR
-         !! trackers `kv_bg`/`kt_bg`/`ks_bg` are always re-derived
-         !! regardless — they are nml-configured parameters, identical on
-         !! a continued and a resumed run, never restart-registry state.
-      logical :: do_arrays
+      logical, intent(in), optional :: skip_kv
+         !! PR-2 (bt-rem-from-av-rem, fixed per review): default `.false.`
+         !! — the FULL seed always runs (scalars + `kv`/`kt`/`ks`/`kd_bg`
+         !! arrays + the `kv`/`ks` boundary zero), exactly the historical
+         !! behaviour.  The config-copy call site
+         !! (`configure_ocean_lateral`, AFTER `engine_setup`'s restart
+         !! read) passes `skip_kv = state%vmix%kv_from_restart` — `.true.`
+         !! ONLY when THIS read actually found `vmix_kv` in the checkpoint
+         !! (an older checkpoint without the field, or a cold start, both
+         !! leave `kv_from_restart = .false.`, so the array still reseeds
+         !! normally and the run is never left with an uninitialised
+         !! `kv`).  When skipped, `kv` is left EXACTLY as the restart read
+         !! wrote it — no reseed, no boundary re-zero — because a
+         !! checkpointed `kv` is a CARRIED field (`visc_rem_precompute`
+         !! reads the PREVIOUS stage's `kv` before this stage recomputes
+         !! it) and re-zeroing its boundary rows is not provably
+         !! idempotent: nothing in this tree asserts every `kv`-writing
+         !! closure (PP81/KPP/EPBL/kappa-shear/tidal-mixing/convective
+         !! adjustment, `vmix_assemble`) keeps `kv(:,:,1)` /
+         !! `kv(:,:,nz+1)` at exactly 0 throughout a run, so re-asserting
+         !! it here could diverge a restored run from the continued one
+         !! it must match bitwise. Restoring the checkpoint verbatim is
+         !! the only choice that is unconditionally correct.
+         !!
+         !! The FIRST bug report on this knob (then named `reseed_arrays`)
+         !! was wrong in a different way: it skipped `kt`/`ks`/`kd_bg` and
+         !! the boundary zero TOO, so a warm restart lost the background
+         !! diffusivity entirely (`kd_bg` is set ONLY here) whenever a
+         !! user ran with `bt_rem_from_visc_rem` and a Bryan-Lewis/Henyey
+         !! background or a closed-BC config.  `kt`/`ks`/`kd_bg` are
+         !! never restart-registry state (no cross-stage read lags them,
+         !! unlike `kv`), so they — and the scalar trackers — always
+         !! reseed from the nml-configured `pp81_*`, cold or warm,
+         !! unconditionally.
+      logical :: do_skip_kv
       integer :: nz1
 
-      do_arrays = .true.
-      if (present(reseed_arrays)) do_arrays = reseed_arrays
+      do_skip_kv = .false.
+      if (present(skip_kv)) do_skip_kv = skip_kv
 
       this%kv_bg = this%pp81_nu_bg
       this%kt_bg = this%pp81_kappa_bg
       this%ks_bg = this%pp81_kappa_bg
 
-      if (.not. do_arrays) return
-
-      this%kv = this%pp81_nu_bg
       this%kt = this%pp81_kappa_bg
       this%ks = this%pp81_kappa_bg
       this%kd_bg = this%pp81_kappa_bg
 
-      ! Zero boundary interfaces (closed BC contract).
-      nz1 = size(this%kv, 3)
-      this%kv(:, :, 1) = 0.0_wp
-      this%kv(:, :, nz1) = 0.0_wp
+      ! Zero the closed-BC boundary interfaces on ks unconditionally (ks
+      ! is never restart state).
+      nz1 = size(this%ks, 3)
       this%ks(:, :, 1) = 0.0_wp
       this%ks(:, :, nz1) = 0.0_wp
+
+      if (do_skip_kv) return
+
+      this%kv = this%pp81_nu_bg
+      this%kv(:, :, 1) = 0.0_wp
+      this%kv(:, :, nz1) = 0.0_wp
    end subroutine vmix_seed_backgrounds
 
    subroutine ocean_vmix_destroy(this)

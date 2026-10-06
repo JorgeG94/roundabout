@@ -58,7 +58,8 @@ module test_ocean_restart_engine
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_step, engine_step_ice, engine_step_finalize, &
                                engine_exit_data, engine_teardown
-   use rdb_ocean_state, only: ocean_state_restart_write, ocean_state_build_restart_registry
+   use rdb_ocean_state, only: ocean_state_restart_write, ocean_state_build_restart_registry, &
+                              ocean_state_restart_write_drop_field
    use rdb_ocean_restart, only: restart_registry_t
    use rdb_ocean_status, only: OCEAN_STATUS_OK
    use rdb_comm_env, only: comm_env_init, comm_env_setup_roles
@@ -101,7 +102,13 @@ contains
                   new_unittest("restart_engine_bit_exact_gm_meke_varmix_therm2", &
                                test_engine_bit_exact_gm), &
                   new_unittest("restart_engine_bit_exact_visc_rem_chain", &
-                               test_engine_bit_exact_visc_rem) &
+                               test_engine_bit_exact_visc_rem), &
+                  new_unittest("restart_engine_bit_exact_bkgnd_profile", &
+                               test_engine_bit_exact_bkgnd_profile), &
+                  new_unittest("restart_engine_bkgnd_full_reseed_on_restart", &
+                               test_engine_bkgnd_full_reseed_on_restart), &
+                  new_unittest("restart_engine_cold_seeds_kv_without_checkpoint", &
+                               test_engine_cold_seeds_kv_without_checkpoint) &
                   ]
    end subroutine collect_ocean_restart_engine_tests
 
@@ -162,6 +169,39 @@ contains
                "smag_ah = .true. /"//NL// &
                "&ocean_bdrag_nml form = 'linear', r = 2.0e-4, hbbl = 0.0, bg_vel = 0.1 /"//NL// &
                "&ocean_vdiff_nml implicit_drag = .true. /"//NL// &
+               "&ocean_diag_nml enabled = .false. /"//NL// &
+               "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 10000.0, dy = 10000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.08 /"//NL// &
+               "&vcoord_nml vcoord_type = 'z_fixed', z_fixed_profile = 'tanh', "// &
+               "z_fixed_dz_top = 20.0, z_fixed_tanh_center = 0.5, "// &
+               "z_fixed_tanh_width = 0.25 /"//NL// &
+               "&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, "// &
+               "slope_scale = 0.25 /"//NL// &
+               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+               "north = 'wall' /"//NL// &
+               "&output_nml output_to_file = .false. /"//NL
+      case ("island_periodic_zfixed_bkgnd")
+         ! PR-2 review: the SAME island/periodic/z_fixed/pred_corr/
+         ! visc_rem-chain case as `island_periodic_zfixed_visc_rem`
+         ! (closed-BC: south/north = 'wall'), PLUS `&ocean_vmix_nml
+         ! bkgnd_profile` (Bryan-Lewis) -- `kd_bg` is set ONLY by
+         ! `vmix_seed_backgrounds`, so a warm restart that wrongly skips
+         ! the FULL seed (the bug this case was added to catch: the
+         ! first `reseed_arrays` fix skipped kt/ks/kd_bg too, not just
+         ! kv) loses the background diffusivity entirely post-resume.
+         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
+               "&time_nml t_end = 86400.0, dt_fixed = 600.0 /"//NL// &
+               "&nonhydrostatic_nml nz_layers = 6 /"//NL// &
+               "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0, "// &
+               "T_init_surface = 20.0, T_init_bottom = 4.0 /"//NL// &
+               "&ocean_bt_nml auto_n_inner = .true., correction_visc_rem = .true. /"//NL// &
+               "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
+               "smag_ah = .true. /"//NL// &
+               "&ocean_bdrag_nml form = 'linear', r = 2.0e-4, hbbl = 0.0, bg_vel = 0.1 /"//NL// &
+               "&ocean_vdiff_nml implicit_drag = .true. /"//NL// &
+               "&ocean_vmix_nml bkgnd_profile = .true., bkgnd_kd_sfc = 2.0e-5, "// &
+               "bkgnd_kd_deep = 3.0e-4, bkgnd_z0 = 1500.0, "// &
+               "pp81_kappa_bg = 4.0e-5 /"//NL// &
                "&ocean_diag_nml enabled = .false. /"//NL// &
                "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 10000.0, dy = 10000.0 /"//NL// &
                "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.08 /"//NL// &
@@ -501,6 +541,153 @@ contains
       integer :: n_ice
       call run_round_trip(error, "island_periodic_zfixed_visc_rem", 6, 3, n_ice)
    end subroutine test_engine_bit_exact_visc_rem
+
+   subroutine test_engine_bit_exact_bkgnd_profile(error)
+      !! PR-2 review fix: `vmix_seed_backgrounds`'s FULL round trip under
+      !! a `kd_bg`-dependent config.  The first `reseed_arrays` version
+      !! of the warm-restart fix returned before seeding `kt`/`ks`/
+      !! `kd_bg` and the `kv`/`ks` boundary zero -- `kd_bg` is set ONLY
+      !! in that routine, so a Bryan-Lewis background (`&ocean_vmix_nml
+      !! bkgnd_profile`) silently lost its depth-varying floor on every
+      !! warm restart of a `correction_visc_rem`/`implicit_drag` (closed
+      !! south/north wall) case.  Full round trip (not resume-point-only)
+      !! on `island_periodic_zfixed_bkgnd`.
+      type(error_type), allocatable, intent(out) :: error
+      integer :: n_ice
+      call run_round_trip(error, "island_periodic_zfixed_bkgnd", 6, 3, n_ice)
+   end subroutine test_engine_bit_exact_bkgnd_profile
+
+   subroutine test_engine_bkgnd_full_reseed_on_restart(error)
+      !! Narrower companion to `test_engine_bit_exact_bkgnd_profile`:
+      !! asserts the array values THEMSELVES, right at the resume point
+      !! (before any post-restart step runs `vmix_assemble`, which would
+      !! otherwise recompute `kd_bg` from scratch every stage and mask a
+      !! stale seed within one step -- confirmed empirically: the
+      !! bitwise round-trip test above does NOT, by itself, distinguish
+      !! a correct full reseed from the original bug, because
+      !! `vmix_bkgnd_fill_impl` self-heals `kd_bg` on the very first
+      !! `vmix_assemble` call either way).  `island_periodic_zfixed_bkgnd`
+      !! sets `pp81_kappa_bg = 4.0e-5`, distinct from the 1.0e-5 type
+      !! default `ocean_vmix_init`'s COLD seed would leave `kt`/`ks`/
+      !! `kd_bg` at if the warm-restart config-copy wrongly skipped them
+      !! (the original bug) -- so reading back the type default here
+      !! instead of 4.0e-5 is the direct, trajectory-independent
+      !! signature of that bug.
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_engine_t), target :: ea, eb
+      type(config_t) :: cfg_a, cfg_b
+      real(wp) :: t_a, t_b
+      integer :: step_b, ierr
+      logical :: ok
+      integer :: ip, jp
+
+      checks: block
+         call make_engine(ea, cfg_a, case_nml("island_periodic_zfixed_bkgnd"), ok)
+         call check(error, ok, "engine A setup failed")
+         if (allocated(error)) exit checks
+         t_a = 0.0_wp
+         call advance(ea, cfg_a, t_a, 6, ok)
+         call check(error, ok, "engine A failed before the checkpoint")
+         if (allocated(error)) exit checks
+         call ocean_state_restart_write(ea%state, ea%grid, ea%decomp, FN, t_a, 6, ierr=ierr)
+         call check(error, ierr == OCEAN_STATUS_OK, "checkpoint write failed")
+         if (allocated(error)) exit checks
+         call engine_exit_data(ea)
+         call engine_teardown(ea)
+
+         call make_engine(eb, cfg_b, case_nml("island_periodic_zfixed_bkgnd"), ok, &
+                          restart_file=FN, t0=t_b, step0=step_b)
+         call check(error, ok, "engine B (warm restart) setup failed")
+         if (allocated(error)) exit checks
+         call check(error, eb%state%vmix%kv_from_restart, &
+                    "kv_from_restart must be .true. -- vmix_kv WAS in this checkpoint")
+         if (allocated(error)) exit checks
+
+         ip = ea%grid%nghost + 3; jp = ea%grid%nghost + 3
+         call check(error, eb%state%vmix%kd_bg(ip, jp, 3) == 4.0e-5_wp, &
+                    "kd_bg at the resume point was not fully reseeded to the "// &
+                    "configured pp81_kappa_bg (4.0e-5) -- the original bug read "// &
+                    "back the 1.0e-5 type default instead")
+         if (allocated(error)) exit checks
+         call check(error, eb%state%vmix%kt(ip, jp, 3) == 4.0e-5_wp, &
+                    "kt at the resume point was not fully reseeded to the "// &
+                    "configured pp81_kappa_bg")
+         if (allocated(error)) exit checks
+         call check(error, eb%state%vmix%ks(ip, jp, 3) == 4.0e-5_wp, &
+                    "ks at the resume point was not fully reseeded to the "// &
+                    "configured pp81_kappa_bg")
+      end block checks
+      call engine_exit_data(eb)
+      call engine_teardown(eb)
+      call delete_file(FN)
+   end subroutine test_engine_bkgnd_full_reseed_on_restart
+
+   subroutine test_engine_cold_seeds_kv_without_checkpoint(error)
+      !! PR-2 review: a restart from a checkpoint that does NOT carry
+      !! `vmix_kv` (simulating an older checkpoint schema, before
+      !! `vmix_kv` was registered) must cold-seed `kv` from the
+      !! configured `pp81_nu_bg` background -- not crash, not leave `kv`
+      !! at whatever the allocator handed back, and `kv_from_restart`
+      !! must read back `.false.` (the signal `configure_ocean_lateral`
+      !! uses to decide whether to skip the reseed).  Uses
+      !! `ocean_state_restart_write_drop_field` (test-only,
+      !! `RDB_ENABLE_TESTING`) to write a checkpoint with `vmix_kv`
+      !! stashed under a mangled tag, so the read genuinely cannot find
+      !! it -- not a hand-set flag standing in for the file contents.
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_engine_t), target :: ea, eb
+      type(config_t) :: cfg_a, cfg_b
+      real(wp) :: t_a, t_b
+      integer :: step_b, ierr
+      logical :: ok
+      real(wp) :: kv_interior, kv_bed, expect_bg
+      integer :: ip, jp
+
+      checks: block
+         call make_engine(ea, cfg_a, case_nml("island_periodic_zfixed_bkgnd"), ok)
+         call check(error, ok, "engine A setup failed")
+         if (allocated(error)) exit checks
+         t_a = 0.0_wp
+         call advance(ea, cfg_a, t_a, 6, ok)
+         call check(error, ok, "engine A failed before the checkpoint")
+         if (allocated(error)) exit checks
+         call ocean_state_restart_write_drop_field(ea%state, ea%grid, ea%decomp, FN, t_a, &
+                                                   6, "vmix_kv", ierr=ierr)
+         call check(error, ierr == OCEAN_STATUS_OK, "checkpoint write (drop vmix_kv) failed")
+         if (allocated(error)) exit checks
+         call engine_exit_data(ea)
+         call engine_teardown(ea)
+
+         call make_engine(eb, cfg_b, case_nml("island_periodic_zfixed_bkgnd"), ok, &
+                          restart_file=FN, t0=t_b, step0=step_b)
+         call check(error, ok, "engine B (warm restart without vmix_kv) setup failed")
+         if (allocated(error)) exit checks
+         call check(error,.not. eb%state%vmix%kv_from_restart, &
+                    "kv_from_restart must be .false. when vmix_kv was absent from the file")
+         if (allocated(error)) exit checks
+
+         ! kv must be the COLD-SEEDED background (pp81_nu_bg), interior
+         ! AND the closed-BC boundary interfaces zeroed -- i.e. the full
+         ! array reseed ran, not a half-applied one.
+         ip = ea%grid%nghost + 3; jp = ea%grid%nghost + 3
+         expect_bg = eb%state%vmix%pp81_nu_bg
+         kv_interior = eb%state%vmix%kv(ip, jp, 3)
+         kv_bed = eb%state%vmix%kv(ip, jp, 1)
+         call check(error, kv_interior == expect_bg, &
+                    "kv was not cold-seeded to pp81_nu_bg without the checkpoint field")
+         if (allocated(error)) exit checks
+         call check(error, kv_bed == 0.0_wp, &
+                    "kv's closed-BC boundary interface was not zeroed on cold-seed")
+         if (allocated(error)) exit checks
+
+         ! "still runs": advance a few more steps with no error.
+         call advance(eb, cfg_b, t_b, 3, ok)
+         call check(error, ok, "engine B failed to advance after a cold-seeded kv resume")
+      end block checks
+      call engine_exit_data(eb)
+      call engine_teardown(eb)
+      call delete_file(FN)
+   end subroutine test_engine_cold_seeds_kv_without_checkpoint
 
    subroutine test_engine_bit_exact_ice(error)
       type(error_type), allocatable, intent(out) :: error
