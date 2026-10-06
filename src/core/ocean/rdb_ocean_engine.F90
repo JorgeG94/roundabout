@@ -426,13 +426,33 @@ contains
          end if
          ! Sea ice runs on the ocean's decomposition: the category state,
          ! the EVP ice velocity, the transport's CAS state and the blended
-         ! surface stress are halo-exchanged (`engine_step_ice`).  The ice
-         ! fields are not yet folded across a tripolar north seam.
+         ! surface stress are halo-exchanged (`engine_step_ice`).  The
+         ! category state (part_size/m_ice/m_snow/enth_ice/sal_ice/
+         ! enth_snow/mca_ice/mca_snow) IS now folded across the tripolar
+         ! north seam (`ocean_fold_wrap_centre_flat`, fold-seam fix) --
+         ! on `px = 1` this is exercised and tested
+         ! (`test_ocean_ice_fold`).  The refusal below stays for `px > 1`
+         ! only: the ice fold rides the SAME px-aware dispatcher as the
+         ! ocean prognostics (`ocean_fold_is_distributed`), but that path
+         ! has (a) no MPI test coverage for ice (no decomp-bitid case),
+         ! and (b) `ocean_fold_exchange_reserve` below is sized for the
+         ! ml_state group only (`nz_layers*(3+ntr)`), not for the ice
+         ! category group (up to `ncat*nk_ice`/`ncat+1` levels) -- an
+         ! under-reservation `ocean_fold_begin` only warns and grows
+         ! mid-run, not a correctness bug, but it does defeat the
+         ! CUDA-aware-MPI IPC-handle-reuse this reserve exists for.  EVP
+         ! (`&ocean_ice_nml dynamics`) additionally has no fold of its
+         ! own at any rank count and stays out of scope here.  Lifting
+         ! this for `px > 1` needs both the reserve sizing and a
+         ! `test_ocean_decomp_bitid_mpi` ice+fold case; tracked as a
+         ! follow-up, not done in this PR.
          if (cfg%ocean%ice%enable .and. &
              ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD) then
-            call fail("&ocean_ice_nml enable = .true. with north = 'tripolar_fold' is "// &
-                      "single-rank ("//to_string(csize)//" ranks requested): the ice "// &
-                      "fields are not folded across the north seam.  Run on 1 rank.", &
+            call fail("&ocean_ice_nml enable = .true. with north = 'tripolar_fold' on "// &
+                      to_string(csize)//" ranks: the ice category fold is untested under "// &
+                      "MPI (no decomp-bitid coverage) and its fold-exchange buffers are "// &
+                      "not reserved for the ice group.  Run on 1 rank (px=1 is fully "// &
+                      "folded and tested).", &
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
@@ -1212,7 +1232,8 @@ contains
             ! right as the inputs' ghosts — make the category state the
             ! owner's by construction.  Never on a warm restart: the
             ! checkpoint carries the writer's ghosts (8e1931f20).
-            call ocean_halo_exchange_ice_state(engine%state%ice, device_resident=.false.)
+            call ocean_halo_exchange_ice_state(engine%state%ice, engine%grid, engine%state%bc, &
+                                               device_resident=.false.)
             if (rank == 0 .and. engine%ic_par%conc_config /= ICE_IC_CONC_ZERO) then
                call logger%info("Sea-ice IC:       conc_config='"// &
                                 trim(cfg%ocean%ice_ic%conc_config)// &
@@ -1751,7 +1772,7 @@ contains
          ! Every contributor above wrote the per-cell flux diags on
          ! PHYSICAL cells; the couplers below copy the FULL array into the
          ! ocean's surface fluxes, whose seam ghosts the ocean reads.
-         call ocean_halo_exchange_ice_fluxes(engine%state%ice)
+         call ocean_halo_exchange_ice_fluxes(engine%state%ice, engine%grid, engine%state%bc)
          call ice_ocean_brine_flux(engine%state%surface_flux, engine%state%ice)
          call ice_ocean_heat_flux(engine%state%surface_flux, engine%state%ice)
          call ice_ocean_sw_flux(engine%state%surface_flux, engine%state%ice)
@@ -1763,7 +1784,7 @@ contains
          ! thermo window is what keeps the ghosts the next EVP gather and
          ! stress blend read equal to the neighbour's (or, on one rank, to
          ! the periodic partner's) owned cells.
-         call ocean_halo_exchange_ice_state(engine%state%ice)
+         call ocean_halo_exchange_ice_state(engine%state%ice, engine%grid, engine%state%bc)
       end if
    end subroutine engine_step_ice
 

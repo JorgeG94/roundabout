@@ -207,7 +207,17 @@ contains
          wall_w = bc%has_west .and. .not. bc%periodic_x
          wall_e = bc%has_east .and. .not. bc%periodic_x
          wall_s = bc%has_south .and. .not. bc%periodic_y
-         wall_n = bc%has_north .and. .not. bc%periodic_y
+         ! A tripolar north edge is topologically connected (folded), not
+         ! a solid boundary -- `bc%north_fold` is the fold-seam twin of
+         ! `periodic_y` here, and must be excluded from the wall test the
+         ! same way.  Missing this made `vhtot_work` at the exact
+         ! fold-line face (`nghost+ny_phys+1`) get force-zeroed every
+         ! substep regardless of the (now fold-exchanged) ghost data, so
+         ! category transport could never cross the seam at all: any
+         ! poleward convergence simply piled up against this phantom wall
+         ! with no outlet, which is the dominant mechanism behind the
+         ! fold-row ice growing without bound (CLAUDE.md fold-seam fix).
+         wall_n = bc%has_north .and. .not. bc%periodic_y .and. .not. bc%north_fold
          x4 = ocean_halo_is_init()
       end if
 
@@ -243,7 +253,7 @@ contains
       do n = 1, adv_substeps
          ! X4: seam ghosts of the CAS masses + riding tracers (and, on one
          ! periodic rank, the wrap) before this substep's stencils read them.
-         if (x4) call ocean_halo_exchange_ice_transport(ice)
+         if (x4) call ocean_halo_exchange_ice_transport(ice, grid, bc)
          call ice_pass_x(grid, metrics, ice, dt_adv, wall_w, wall_e, ok)
          call ok_all_ranks(ok)
          if (.not. ok) return
