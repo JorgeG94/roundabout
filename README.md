@@ -24,6 +24,13 @@ and one can think that a roundabout is like an Eddie.
 
 See [`docs/CAPABILITIES_AND_LIMITATIONS.md`](docs/CAPABILITIES_AND_LIMITATIONS.md) for the full feature/limitation list, [`docs/CLOSURE_MATRIX.md`](docs/CLOSURE_MATRIX.md) for the enabled-closure ground truth + tunable knobs.
 
+## Authorship
+
+Most of Roundabout's code was written by Claude, Anthropic's AI model,
+working through Claude Code. The baseline design is the author's: the
+architecture, the API, the memory model and the parallelism model, all
+designed by Jorge Luis Gálvez Vallejo.
+
 ## Acknowledgement: NOAA-GFDL, MOM6 and SIS2
 
 **The numerical methods in Roundabout were developed at NOAA's Geophysical
