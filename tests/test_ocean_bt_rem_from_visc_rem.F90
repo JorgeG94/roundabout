@@ -337,13 +337,13 @@ contains
          bt_work%bt_ubt = U0
          allocate (f_corner(grid%nx_total + 1, grid%ny_total + 1), source=0.0_wp)
 
-         !$acc enter data copyin(bt_work, f_corner)
+         !$acc enter data copyin(f_corner)
          call bt_work%enter_data()
          call barotropic_substep_nonlinear_interior(grid, metrics, bt_work, f_corner, &
                                                     1, DT_INNER)
          !$acc update self(bt_work%bt_ubt, bt_work%av_rem_u, bt_work%bt_rem_u)
          call bt_work%exit_data()
-         !$acc exit data delete(bt_work, f_corner)
+         !$acc exit data delete(f_corner)
 
          jp = NGHOST + 1
          call check(error, bt_work%bt_ubt(NGHOST + 2, jp) == av01*U0, &
@@ -393,11 +393,11 @@ contains
       peak_early = 0.0_wp
       peak_late = 0.0_wp
 
-      ! GPU device-residency: map bt_work + f_corner before the repeated
-      ! substep calls, update the host copy of bt_ubt back only where
-      ! it is actually read, exactly as `test_substep_applies_bt_rem`
-      ! (`tests/test_ocean_bt_substep_drag.F90`) does for a single call.
-      !$acc enter data copyin(bt_work, f_corner)
+      ! GPU device-residency: map f_corner and bt_work's components
+      ! (`bt_work%enter_data()`, never the whole derived type) before the repeated
+      ! substep calls, and update the host copy of bt_ubt back only
+      ! where it is actually read.
+      !$acc enter data copyin(f_corner)
       call bt_work%enter_data()
       do step = 1, n_outer
          call barotropic_substep_nonlinear_interior(grid, metrics, bt_work, f_corner, &
@@ -410,7 +410,7 @@ contains
          end if
       end do
       call bt_work%exit_data()
-      !$acc exit data delete(bt_work, f_corner)
+      !$acc exit data delete(f_corner)
    end subroutine run_slosh
 
    subroutine test_slosh_bounded_with_chain(error)
