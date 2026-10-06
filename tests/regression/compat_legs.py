@@ -86,8 +86,12 @@ BUDGET_RO_RATE = 1.0e-14
 # the z_fixed open-staircase PGF sits at 5-61x.  EN_REF is that median
 # (m2/s2, En at step 24, gfortran, measured 2026-10-04, z_fixed_open cells
 # excluded); the tripolar ring is 15 x 1 degree at 59-70 N, a different flow.
+# "cliff" (2026-10-05, with MOM6's BBL glue the default): the median of the
+# `domain` sweep's PASS population on the cliff geometry (every coordinate x
+# both splits x both grids, base closures) -- 7.8e-3 against that sweep's
+# closed-geometry 6.5e-3; the pairwise PASS population there is only 4 cells.
 EN_REF = {"closed": 6.9e-3, "channel": 7.9e-3, "obc": 7.6e-3, "tripolar": 1.7e-4,
-          "cavity": 9.5e-3}
+          "cavity": 9.5e-3, "cliff": 7.8e-3}
 ENERGY_RATIO_MAX = 2.5
 # ... and its growth over the last third of the run: from rest a wind
 # spin-up grows En like t^2 at most (En(24)/En(16) <= 2.25) and the PASS
