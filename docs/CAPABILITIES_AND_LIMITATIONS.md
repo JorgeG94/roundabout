@@ -541,6 +541,47 @@ independent of `implicit_drag` (gated only on whether a caller supplies
   trip (resume + N more steps), not just the at-resume-point snapshot,
   and the compat row is deleted (`tests/regression/compat_expect.py`).
 
+**PR-2 (bt_rem from av_rem — 2026-10-05).** `&ocean_bt_nml
+bt_rem_from_visc_rem` (default off) builds `bt_rem_u/v` — the
+multiplicative damping the barotropic substep applies each inner
+step — from the SAME viscous remnant the layered momentum solve uses,
+instead of the linear-piston `substep_drag` law or the static `1.0`
+no-op: `av_rem_u/v = Σ_k frhat_k·visc_rem_k` (MOM6
+`MOM_barotropic.F90:1553-1559`, reusing `face_depth_mean_u/v`'s own
+arithmetic-mean face weight) then `bt_rem = mask·av_rem**(1/n_inner)`
+(`:1572-1580`), built once per barotropic call after the visc_rem
+producer and before the substeps. This is the fix for the MOM6
+BOTTOMDRAGLAW glue's (`&ocean_vdiff_nml bbl_glue`) day-253 1° Southern
+Ocean instability (`python_prototypes/design/visc_rem_bt_rem_plan.md`
+§1): without it the barotropic solver sees only the weak explicit
+drag carried in `F_slow` while the layers are strongly glued, so the
+2Δx barotropic mode is undamped where the layered mode is heavily
+damped. `strong_drag` (MOM6 `BT_STRONG_DRAG`, default off) swaps in
+the rational approximation `n_inner·av_rem/(1+(n_inner−1)·av_rem)`;
+`rescale_strong_drag` (MOM6 `RESCALE_STRONG_DRAG`, default off,
+requires `strong_drag`) corrects `apply_bt_correction`'s Δu/Δv by
+`min(bt_rem**n_inner/av_rem, 1.0)` for the rational form's
+`bt_rem**n_inner ≠ av_rem` gap (the plain power form has no such gap
+by construction). Fail-loud at configure: requires
+`correction_visc_rem` (the producer); mutually exclusive with
+`substep_drag` (D2 — bed drag would be double-counted, once inside
+`visc_rem` via the glue/`implicit_drag` fold, once via the linear
+piston) and with `bt_halo > 0` (the wide-halo BT clone carries no
+`av_rem`/`visc_rem` ghost-width statistics, same posture as porous).
+`av_rem`/`bt_rem` are built on the FULL face extent including ghosts
+(halo-valid after PR-1's `visc_rem_halo_refresh`), verified
+decomposition-invariant: `test_ocean_decomp_bitid_mpi`'s
+`visc_rem_chain` case (`hvel_mom6`+`bbl_glue`+`correction_visc_rem`+
+`bt_rem_from_visc_rem`) is bitwise IDENTICAL on every split of 1/2/4
+ranks under both `pred_corr` and `ssp_rk2`. Default off ⇒ no answer
+change. Test: `test_ocean_bt_rem_from_visc_rem` (closed-form
+`bt_rem**n_inner == av_rem`, both forms; the `av_rem ≤ 0` mask; a
+column spin-down identity through the real substep kernel; a
+two-cell thin-channel slosh — 188 m / 8.4 m sill with a 0.74 m
+partial bed cell / 70 m, `python_prototypes/bt_rem`'s geometry and
+visc_rem profiles — bounded with the chain on, undamped/bounded
+without).
+
 Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
 **continuity-PPM** — no Poisson constraint, no FFT projection.
 
