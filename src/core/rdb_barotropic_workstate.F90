@@ -95,9 +95,10 @@ module rdb_barotropic_workstate
          !! uniformly, biasing the Δu distribution toward layers LESS
          !! damped by vertical viscosity (`&ocean_bt_nml
          !! correction_visc_rem`, now fail-loud at configure outside
-         !! direct test construction of `cfg`). MOM6's `accel_layer_u`
-         !! (`MOM_barotropic.F90:3665-3675`) gives every layer the SAME
-         !! `u_accel_bt` (plus only the depth-mean-zero `pbce` baroclinic
+         !! direct test construction of `cfg`). MOM6's split-explicit
+         !! barotropic solver (Hallberg 1997; Hallberg & Adcroft 2009)
+         !! gives every layer the SAME `u_accel_bt` via `accel_layer_u`
+         !! (plus only the depth-mean-zero `pbce` baroclinic
          !! term) — NO `visc_rem` weight — so this fold has no MOM6
          !! counterpart, and on a 1-degree Southern Ocean z* OPEN-step
          !! probe it is the mechanism that NaNs at step ~40 under
@@ -109,7 +110,7 @@ module rdb_barotropic_workstate
       logical :: bt_visc_rem_producer = .false.
          !! D1 follow-up: gates the visc_rem PRODUCER fused into
          !! `vmix_apply_in_stage`'s momentum vdiff solve (MOM6
-         !! `vertvisc_remnant`, MOM_vert_friction.F90:1157-1258, sharing
+         !! `vertvisc_remnant`, sharing
          !! `vertvisc_coef`'s SAME coupling coefficients `a_u` — includes
          !! `kv_bbl`/the BBL glue and the Rayleigh/bed piston whenever the
          !! glue or `implicit_drag` folds them into the matrix; the
@@ -134,17 +135,17 @@ module rdb_barotropic_workstate
          !! continuity so `u_cor = u + du·γ_k` and the fluxes carry the
          !! same weights.
          !!
-         !! **PR-1 call-point / dt mapping to MOM6
-         !! `MOM_dynamics_split_RK2.F90`** (the three `vertvisc_remnant`
-         !! call sites, all at the OUTER step's `dt` — `VISC_REM_TIMESTEP_
+         !! **PR-1 call-point / dt mapping to MOM6's three
+         !! `vertvisc_remnant` call sites** (all at the OUTER step's
+         !! `dt` — `VISC_REM_TIMESTEP_
          !! BUG` defaults `.false.`, so none of them use `dt_pred`):
-         !!   * `:619-620` (pre-predictor, `dt`) maps to
+         !!   * The pre-predictor call (`dt`) maps to
          !!     `visc_rem_precompute`'s pre-substep refresh in
          !!     `run_stage_split`, which always runs at the stage's `dt`
          !!     (gated `is_pc .or. bt_forcing_visc_rem .or.
          !!     bt_renorm_visc_rem .or. bt_rem_from_visc_rem`, i.e.
          !!     unconditionally once per `pred_corr` stage).
-         !!   * `:777-779` (post-predictor, full `dt`, NOT `dt_pred`) maps
+         !!   * The post-predictor call (full `dt`, NOT `dt_pred`) maps
          !!     to `vmix_apply_in_stage`'s stage-end producer called with
          !!     the `dt_remnant=dt` argument at the PREDICTOR stage —
          !!     decoupled from the predictor's own velocity-apply `dt_vel
@@ -155,7 +156,7 @@ module rdb_barotropic_workstate
          !!     dt/h/kv/drag), so they agree exactly — mirroring MOM6,
          !!     where both calls reuse the SAME `vertvisc_coef` output and
          !!     so are identical by construction.
-         !!   * `:1031` (corrector, `dt`) maps to the stage-end producer's
+         !!   * The corrector call (`dt`) maps to the stage-end producer's
          !!     existing fused call at the CORRECTOR stage, where `dt_vel
          !!     ≡ dt` already (no predictor off-centring) — unchanged.
          !! `ssp_rk2` (no predictor/corrector split): one refresh per
@@ -171,15 +172,15 @@ module rdb_barotropic_workstate
          !! bt_rem_from_visc_rem`): `compute_bt_rem_from_visc_rem` builds
          !! `bt_rem_u/v` from `av_rem_u/v` (`:= Σ_k frhat_k·visc_rem_k`,
          !! `frhat_k` the face layer fraction `derive_bt_from_layers`
-         !! uses) instead of the linear-piston law — MOM6
-         !! `MOM_barotropic.F90:1553-1580`.  Mutually exclusive with
+         !! uses) instead of the linear-piston law — MOM6's barotropic
+         !! solver.  Mutually exclusive with
          !! `bt_substep_drag` (double-counted bed drag) and `bt_halo > 0`
          !! (checked in `validate_config`).
       logical :: bt_strong_drag = .false.
-         !! MOM6 `BT_STRONG_DRAG` (`:1561-1570`): the rational-
+         !! MOM6 `BT_STRONG_DRAG`: the rational-
          !! approximation `bt_rem` form.  Requires `bt_rem_from_visc_rem`.
       logical :: bt_rescale_strong_drag = .false.
-         !! MOM6 `RESCALE_STRONG_DRAG` (`:1989-1997`).  Requires
+         !! MOM6 `RESCALE_STRONG_DRAG`.  Requires
          !! `bt_strong_drag`.
 
       integer :: frhat_scheme = FRHAT_ARITHMETIC
@@ -187,7 +188,7 @@ module rdb_barotropic_workstate
          !! `parse_frhat_scheme`; default `FRHAT_ARITHMETIC`, bit-identical
          !! to the pre-port tree).  `FRHAT_HYBRID` ports MOM6's `btcalc`
          !! HVEL_SCHEME=HYBRID face-thickness closure
-         !! (`MOM_barotropic.F90:4546-4790`) into every barotropic depth
+         !! into every barotropic depth
          !! mean that reads a layer's face thickness: `derive_bt_from_
          !! layers`, `face_depth_mean_u/v`, `face_depth_mean_rem_u/v`,
          !! `apply_bt_correction`'s open/visc_rem folds, and (through
@@ -421,7 +422,7 @@ module rdb_barotropic_workstate
       ! `face_depth_mean_rem_u`'s `wt_u`) depth mean of the viscous
       ! remnant, built once per barotropic call by
       ! `compute_bt_rem_from_visc_rem` when `bt_rem_from_visc_rem` is on
-      ! (MOM6 `MOM_barotropic.F90:1553-1559`).  Allocated unconditionally
+      ! (MOM6's barotropic solver).  Allocated unconditionally
       ! (cheap, 2D, same class as `bt_rem_u/v`); default 1.0 so an
       ! unused array is still well-defined if ever read.
       real(wp), allocatable :: av_rem_u(:, :)

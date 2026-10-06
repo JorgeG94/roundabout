@@ -19,9 +19,10 @@ module test_ocean_bt_baroclinic_forcing
    !! Passage at 0.2 Sv on day 1 where MOM6, forced by the same density
    !! field alone, surges to -188 Sv and settles near 160 Sv.
    !!
-   !! MOM6 keeps the full `PFu` in `BT_force` (`MOM_barotropic.F90`,
-   !! `BT_force_u += wt_u*bc_accel_u`, `bc_accel = CAu + PFu + diffu` from
-   !! `MOM_dynamics_split_RK2.F90`) and lets the barotropic loop see only
+   !! MOM6 keeps the full `PFu` in `BT_force` (`BT_force_u += wt_u*
+   !! bc_accel_u`, where the slow-step acceleration `bc_accel` sums the
+   !! Coriolis, pressure-gradient and horizontal-viscosity terms,
+   !! `CAu + PFu + diffu`) and lets the barotropic loop see only
    !! the ANOMALY `-gtot*grad(eta - eta_PF)` about the free surface the
    !! slow PGF was built on (`btloop_find_PF`).  `&ocean_bt_nml
    !! bc_pgf_forcing` (default on) is that split: the forcing sheds only

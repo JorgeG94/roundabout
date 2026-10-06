@@ -1,6 +1,7 @@
 !! Unit tests for the GFS_scale knob on the FV_MOM6 PGF kernel.
 !!
-!! MOM6's reduced-free-surface-gravity setup (`MOM_PressureForce_FV.F90:1922`)
+!! MOM6's reduced-free-surface-gravity setup, part of the finite-volume
+!! pressure gradient force (Adcroft, Hallberg & Harrison 2008),
 !! adds a depth-independent Montgomery correction `dM(i,j) =
 !! (GFS_scale − 1)·(g/ρ₀)·ρ_surf·η` to the per-layer PGF when
 !! `GFS_scale < 1`.  This scales the SURFACE contribution of the slow PGF

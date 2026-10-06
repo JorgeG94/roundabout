@@ -1404,7 +1404,7 @@ contains
    end subroutine test_energy_beta_plane_discriminator
 
    ! -----------------------------------------------------------------
-   ! BOUND_CORIOLIS (MOM6 :896-909) — velocity-form clamp on the energy PV flux
+   ! BOUND_CORIOLIS (MOM6) — velocity-form clamp on the energy PV flux
    ! -----------------------------------------------------------------
 
    pure function recon_h_corner(ic, jc, k, nx, ny, h, wet_T, areaT) result(hc)

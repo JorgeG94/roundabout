@@ -1500,7 +1500,7 @@ contains
          !! of the velocity solve and re-run as its own remnant-only call
          !! at `dt_remnant` — matching MOM6's `VISC_REM_TIMESTEP_BUG =
          !! .false.` default (`vertvisc_remnant` always at the outer
-         !! step's `dt`, MOM_dynamics_split_RK2.F90:777-779), never at
+         !! step's `dt`), never at
          !! `dt_pred`.  Absent ⇒ the historical fused behaviour (remnant
          !! built from the SAME matrix as the velocity solve, at `dt`).
          !! See `bt_forcing_visc_rem`'s docstring in
@@ -1776,8 +1776,7 @@ contains
          !! Forwarded ONLY for the post-production halo/periodic/fold
          !! refresh of `visc_rem_u/v` (`visc_rem_halo_refresh`, PR-1) —
          !! MOM6's `pass_visc_rem` group pass, run after every
-         !! `vertvisc_remnant` call (MOM_dynamics_split_RK2.F90:494,
-         !! 628-651/783/1041).
+         !! `vertvisc_remnant` call.
 
       logical :: vertex_kv
 
@@ -1855,9 +1854,9 @@ contains
       ! just later/rarer); it recovers the finite answer either way and
       ! is not evidence of poisoning.
       !
-      ! MOM6 semantics settle it anyway: `pass_visc_rem`
-      ! (MOM_dynamics_split_RK2.F90:494) runs UNCONDITIONALLY after every
-      ! `vertvisc_remnant` call, with no consumer gate -- a face field
+      ! MOM6 semantics settle it anyway: `pass_visc_rem` runs
+      ! UNCONDITIONALLY after every `vertvisc_remnant` call, with no
+      ! consumer gate -- a face field
       ! that starts at 1.0 and is only ever READ by an opt-in consumer
       ! cannot be "poisoned" by being exchanged.  So: drop the gate, keep
       ! the halo refresh unconditional, exactly like MOM6.
@@ -1866,9 +1865,8 @@ contains
 
    subroutine visc_rem_halo_refresh(grid, bt_work, bc)
       !! Exchange `bt_work%visc_rem_u/v` face halos right after
-      !! production — MOM6's `pass_visc_rem` group pass
-      !! (MOM_dynamics_split_RK2.F90:494, run after every one of the
-      !! three `vertvisc_remnant` calls: :628-651, :783, :1041).  MPI
+      !! production — MOM6's `pass_visc_rem` group pass, run after
+      !! every one of the three `vertvisc_remnant` calls.  MPI
       !! halo first, then the periodic wrap, then the tripolar fold —
       !! the same ordering contract every other seam fill in this module
       !! follows (`ocean_halo_exchange_ml_state` then
@@ -3362,8 +3360,8 @@ contains
       call probe_dS(grid, ms, "after rk2_average", 3, dyn%outer_step_count + 1)
 
       ! ---- Gent-McWilliams thickness diffusion: its OWN sequential operator
-      ! on the CURRENT thickness, after the dynamics (MOM6 `thickness_diffuse`,
-      ! MOM.F90:1388), every outer step.  See `run_gm_step`.
+      ! on the CURRENT thickness, after the dynamics (MOM6 `thickness_diffuse`),
+      ! every outer step.  See `run_gm_step`.
       call run_gm_step(grid, metrics, dyn, ct, va, ms, dt, gm, slopes, varmix, &
                        wavespeed, vcoord, bc)
 
@@ -3851,16 +3849,14 @@ contains
       !! Gent-McWilliams thickness diffusion as its OWN sequential operator,
       !! run once per outer step AFTER the dynamics (the stage loop and, under
       !! ssp_rk2, the stage average) — where MOM6 calls `thickness_diffuse`
-      !! (MOM.F90:1379-1395, after `step_MOM_dyn_split_RK2`, every dynamics
-      !! step):
+      !! after `step_MOM_dyn_split_RK2`, every dynamics step:
       !!
       !!   1. `gm_compute_transports` fills `uhD`/`vhD` + `gm_src` from the
       !!      thickness the dynamics LEFT, with the stored slopes and the
       !!      VarMix/MEKE base KhTh refreshed at the top of the step;
       !!   2. `continuity_gm_apply` moves `h_layer` and every tracer by them
       !!      with the same `dt` — so the per-face availability cap
-      !!      `A·(h − H_VANISHED)/(4·dt)` bounds what is actually there
-      !!      (MOM_thickness_diffuse.F90:896-906, applied at :639-641);
+      !!      `A·(h − H_VANISHED)/(4·dt)` bounds what is actually there;
       !!   3. `eulerian_z` only: the bolus divergence is cancelled per layer by
       !!      the vertical advection, exactly as the resolved one is;
       !!   4. the h / tracer ghosts are refreshed (exchange, periodic wrap,
@@ -4924,7 +4920,7 @@ contains
       ! dispatches to exactly one resetter per stage, never more than
       ! one, preserving the multiplicative-accumulator contract (`src/
       ! core/ocean/README.md`).  Built from the SAME visc_rem producer
-      ! the BT corrector reads (MOM6 MOM_barotropic.F90:1553-1580), once
+      ! the BT corrector reads (MOM6's barotropic solver), once
       ! per barotropic call, BEFORE the substeps below.
       if (dyn%bt_work%bt_rem_from_visc_rem) then
          call compute_bt_rem_from_visc_rem(grid, dyn%bt_work, ms, metrics, n_inner)
@@ -5307,9 +5303,8 @@ contains
          ! PR-1: thread `dt_remnant=dt` so the visc_rem PRODUCER (when
          ! `bt_visc_rem_producer` is on) is built at the outer step's
          ! full `dt`, NOT the predictor's own `dt_vel = pc_be·dt` —
-         ! MOM6's `VISC_REM_TIMESTEP_BUG = .false.` default
-         ! (MOM_dynamics_split_RK2.F90:777-779).  `bc` is forwarded so the
-         ! split remnant-only refresh can re-wrap the ghosts.
+         ! MOM6's `VISC_REM_TIMESTEP_BUG = .false.` default.  `bc` is
+         ! forwarded so the split remnant-only refresh can re-wrap the ghosts.
          if (fold_top) then
             call vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt_vel, stage, sf, epbl=epbl, &
                                      kshear=kshear, vmix_tidal=vmix_tidal, bt_work=dyn%bt_work, &

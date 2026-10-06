@@ -543,8 +543,9 @@ contains
    subroutine test_pr1_single_layer_closed_form(error)
       !! PR-1 plan §3 "Tests": a single layer with linear drag gives
       !! `visc_rem = h/(h + r·dt)` (MOM6's un-normalized convention,
-      !! `MOM_vert_friction.F90:1157-1258` — `b_denom_1 = h_u(1) +
-      !! dt·Ray`, `visc_rem_u(1) = h_u(1)/b1`).  Roundabout's rows are
+      !! where the backward-Euler denominator carries the full layer
+      !! thickness: `b_denom_1 = h_u(1) + dt·Ray`, `visc_rem_u(1) =
+      !! h_u(1)/b1`).  Roundabout's rows are
       !! pre-normalized by h (see the module docstring), so `lambda_bot`
       !! is already the RATE `Ray/h`, and the SAME formula becomes
       !! `visc_rem = 1/(1 + dt·lambda_bot)` — algebraically identical
@@ -696,8 +697,8 @@ contains
       !! from the velocity-apply `dt` (the `pred_corr` PREDICTOR, which
       !! calls it at `dt_vel = pc_be·dt`), builds the remnant from the
       !! OUTER step's full `dt` — matching MOM6's `VISC_REM_TIMESTEP_BUG
-      !! = .false.` default (`vertvisc_remnant` always at `dt`, NEVER
-      !! `dt_pred`, MOM_dynamics_split_RK2.F90:777-779) — and NOT from
+      !! = .false.` default (`vertvisc_remnant` always evaluated at the
+      !! outer `dt`, NEVER the predictor sub-step `dt_pred`) — and NOT from
       !! `dt_vel`, which is what the historical fused call (no
       !! `dt_remnant`) used and is a DIFFERENT, wrong number whenever
       !! `dt_vel /= dt`.

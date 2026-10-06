@@ -2833,8 +2833,7 @@ contains
       !! same, untouched `h_layer` with this same `dt`.
       !!
       !! MOM6 parity: `thickness_diffuse` runs after `step_MOM_dyn_split_RK2`
-      !! (MOM.F90:1388) and updates `h` in place,
-      !! `h -= dt·IareaT·(div uhD)` (MOM_thickness_diffuse.F90:639-641), while
+      !! and updates `h` in place, `h -= dt·IareaT·(div uhD)`, while
       !! adding `uhD·dt` to `uhtr` so the SAME tracer advection that carries
       !! the resolved transport carries the bolus one.  Here:
       !!
@@ -2860,10 +2859,9 @@ contains
       !! Edges: the bolus transport is ZEROED on every physical edge face
       !! that is not periodic or a tripolar fold — walls, sponges and every
       !! open-boundary type — as MOM6 masks the GM slopes / KhTh by
-      !! `OBCmaskCu/Cv` (MOM_thickness_diffuse.F90:1121, 1161-1169): no GM
-      !! flux leaves the domain, so no budget term and no ghost fill is
-      !! needed.  An MPI seam (`has_*` false) is interior and keeps its
-      !! transport.
+      !! `OBCmaskCu/Cv`: no GM flux leaves the domain, so no budget term
+      !! and no ghost fill is needed.  An MPI seam (`has_*` false) is
+      !! interior and keeps its transport.
       !!
       !! I1′: fillers keep their donor's concentration through this operator
       !! — the PPM kernel reads a filler's `hTr/h`, which IS `c_live` under

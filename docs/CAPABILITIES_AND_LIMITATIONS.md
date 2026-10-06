@@ -490,8 +490,7 @@ independent of `implicit_drag` (gated only on whether a caller supplies
   stage-end producer used to be fused with the PREDICTOR's own
   velocity-apply call at `dt_vel = pc_be·dt` — MOM6's
   `VISC_REM_TIMESTEP_BUG` (default `.false.`) always builds the remnant
-  at the OUTER step's full `dt`, never `dt_pred`
-  (`MOM_dynamics_split_RK2.F90:777-779`). `vmix_apply_in_stage` now
+  at the OUTER step's full `dt`, never `dt_pred`. `vmix_apply_in_stage` now
   takes an optional `dt_remnant`; the predictor's two call sites pass
   `dt_remnant = dt`, which splits the remnant off into its own
   `visc_rem_precompute` call (run AFTER the velocity-apply, since the
@@ -546,10 +545,10 @@ bt_rem_from_visc_rem` (default off) builds `bt_rem_u/v` — the
 multiplicative damping the barotropic substep applies each inner
 step — from the SAME viscous remnant the layered momentum solve uses,
 instead of the linear-piston `substep_drag` law or the static `1.0`
-no-op: `av_rem_u/v = Σ_k frhat_k·visc_rem_k` (MOM6
-`MOM_barotropic.F90:1553-1559`, reusing `face_depth_mean_u/v`'s own
-arithmetic-mean face weight) then `bt_rem = mask·av_rem**(1/n_inner)`
-(`:1572-1580`), built once per barotropic call after the visc_rem
+no-op: `av_rem_u/v = Σ_k frhat_k·visc_rem_k` (matching MOM6's own
+barotropic viscous-remnant depth mean, reusing `face_depth_mean_u/v`'s own
+arithmetic-mean face weight) then `bt_rem = mask·av_rem**(1/n_inner)`,
+built once per barotropic call after the visc_rem
 producer and before the substeps. This is the fix for the MOM6
 BOTTOMDRAGLAW glue's (`&ocean_vdiff_nml bbl_glue`) day-253 1° Southern
 Ocean instability (`python_prototypes/design/visc_rem_bt_rem_plan.md`
@@ -604,8 +603,7 @@ still require `bt_rem_from_visc_rem` OR `visc_rem_chain`. D2
 (`substep_drag` mutually exclusive with the chain) and D3 (`strong_drag`
 opt-in, default off) were already shipped by PR-2 and now read through
 the chain identically. Findings from the audit:
-- **`forcing_visc_rem`'s `wt_u` floor fixed to MOM6 exactly**
-  (`MOM_barotropic.F90:1082-1101`): `vr = min(visc_rem, 1)`, `vr =
+- **`forcing_visc_rem`'s `wt_u` floor fixed to MOM6 exactly**: `vr = min(visc_rem, 1)`, `vr =
   max(vr, 1 − 0.5·Instep/(vr + subroundoff))`, `vr = max(vr, 0)`,
   `Instep = 1/n_inner`, `subroundoff = 1e-30` — `face_depth_mean_rem_u/v`
   previously ran a plain `[0,1]` clamp instead, which (per the plan's own
@@ -618,7 +616,7 @@ the chain identically. Findings from the audit:
   an optional `n_inner` defaulting to 1 — inert unless
   `bt_forcing_visc_rem` is also on). Default off ⇒ no answer change for
   any run that does not set `forcing_visc_rem`/`visc_rem_chain`.
-- **Wind × surface `visc_rem` (MOM6 `MOM_barotropic.F90:1354,1380`,
+- **Wind × surface `visc_rem` (MOM6's own
   `BT_force_u = taux·IDatu·visc_rem_u(surface)`) was already covered**,
   not missing: `sum_slow_tendencies_into_F_slow` folds the wind-stress
   tendency (`ss%du_stress`, nonzero only at the surface layer `k=nz`,
@@ -628,23 +626,23 @@ the chain identically. Findings from the audit:
   exactly like every other layer's slow tendency — no separate wind-only
   term needed.
 - **`renorm_visc_rem` ↔ MOM6's continuity `u_cor = u + du·visc_rem`**: the
-  plan's citation (`MOM_continuity_PPM.F90`'s `continuity_adjust_vel`) is
-  dead code in MOM6 (zero call sites); the real mechanism is
-  `MOM_dynamics_split_RK2.F90:793-795,1052-1054` calling `continuity(...
+  plan's citation (MOM6's `continuity_adjust_vel`) is
+  dead code in MOM6 (zero call sites); the real mechanism is the
+  split-explicit RK2 driver calling `continuity(...
   visc_rem_u=..., u_cor=u_av ...)`, with the actual weighted correction in
-  `MOM_continuity_PPM.F90`'s `zonal_mass_flux`/`meridional_mass_flux`
-  internals (`u_cor(I,j,k) = u + du·visc_rem`, roughly :891/:2051).
+  MOM6's continuity `zonal_mass_flux`/`meridional_mass_flux`
+  internals (`u_cor(I,j,k) = u + du·visc_rem`).
   roundabout's `renorm_visc_rem` targets exactly the same field MOM6
   does, `ms%u_av_layer`/`v_av_layer` (verified at the
   `continuity_tracer_step_split(..., u_cor=ms%u_av_layer,
   v_cor=ms%v_av_layer)` call site) — a genuine match, not a gap.
 - **`correction_visc_rem` is RETIRED (D1 revised): MOM6 settles this, it
   is not a design decision.** MOM6's `accel_layer_u`
-  (`MOM_barotropic.F90:3665-3675`) gives every layer the SAME `u_accel_bt`
+  gives every layer the SAME `u_accel_bt`
   plus only the depth-mean-zero `pbce` baroclinic-pressure term — NO
   `visc_rem` weight — and that unweighted acceleration is folded into
-  `up` BEFORE `vertvisc` (`MOM_dynamics_split_RK2.F90:702-704`, consumed
-  at `:763`/`:1018`), so the glue's implicit friction (which already
+  `up` BEFORE `vertvisc` (in the split-explicit RK2 corrector),
+  so the glue's implicit friction (which already
   carries the BBL piston) is what then distributes it across layers —
   ONCE. roundabout's `correction_visc_rem` ran `apply_bt_correction`
   BEFORE that same implicit friction (`vmix_apply_in_stage`) and weighted
@@ -663,8 +661,8 @@ the chain identically. Findings from the audit:
   (`tests/test_ocean_bt_correction_weight.F90`) are untouched.
 - **`accel_visc_rem` is RETIRED** (`&ocean_vdiff_nml`, refused at
   configure): no MOM6 state-update equivalent exists.
-  `btstep_layer_accel` (`MOM_barotropic.F90:3608-3677`) and the
-  corrector's `up`/`vp` update (`MOM_dynamics_split_RK2.F90:702-704`)
+  `btstep_layer_accel` and the
+  split-explicit RK2 corrector's `up`/`vp` update
   apply the depth-mean barotropic acceleration `u_accel_bt` UNIFORMLY
   across every layer — the only `visc_rem x u_accel_bt` products in MOM6
   are a diagnostic-only post-product (never fed back into state) and
@@ -690,7 +688,7 @@ the chain identically. Findings from the audit:
   `visc_rem` ratio that was the actual mechanism. Not fixed here (out of
   PR-3's audit-and-unify scope).
 - **frhat parity — PORTED, gated to closed faces (2026-10-06).** MOM6's
-  `btcalc` face weights (`HVEL_SCHEME=HYBRID`, `MOM_barotropic.F90:4546-4790`)
+  `btcalc` face weights (`HVEL_SCHEME=HYBRID`)
   are ported into every barotropic depth mean (`&ocean_bt_nml frhat_scheme`,
   default `"hybrid"`; `"arithmetic"` is the old plain two-cell mean). HYBRID is
   APPLIED only where `&vcoord_nml zfixed_closed_faces` is on

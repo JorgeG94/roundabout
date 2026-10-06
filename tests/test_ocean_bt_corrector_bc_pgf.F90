@@ -3,8 +3,8 @@
 !! supporting `compute_pbce / compute_gtot_faces / compute_e_anom`
 !! kernels in `rdb_barotropic_coupling`).
 !!
-!! The bc-PGF correction is MOM6's `btstep_layer_accel` analogue
-!! (`MOM_barotropic.F90:3720-3789`).  It adds a per-layer
+!! The bc-PGF correction is MOM6's `btstep_layer_accel` analogue.
+!! It adds a per-layer
 !! baroclinic-PGF retro-correction on top of the uniform / visc_rem-weighted
 !! BT Δu, accounting for the η evolution during the BT substep that
 !! the slow PGF didn't see.

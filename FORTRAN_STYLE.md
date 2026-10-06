@@ -509,8 +509,9 @@ end type ocean_sponge_t
 ### Citing Algorithms
 
 - Cite the **paper**, not another model's source file: `!! Wright (1997)
-  nonlinear EOS`, not `!! ported from MOM_EOS_Wright.F90`. Source paths rot,
-  read as "we copied this", and bury the provenance a reader needs.
+  nonlinear EOS`, not a comment naming the file it was ported from. Source
+  paths rot, read as "we copied this", and bury the provenance a reader
+  needs.
 - Reading a non-GPL reference implementation (MOM6, ROMS, ...) to understand
   an algorithm is fine; implement it from the maths and cite the paper it
   cites. **GPL code is off-limits** (e.g. GOTM): don't read, port or

@@ -1,6 +1,6 @@
 !! Unit tests for the frhat port (`&ocean_bt_nml frhat_scheme`): MOM6
-!! `btcalc`'s HVEL_SCHEME=HYBRID face-thickness closure
-!! (`MOM_barotropic.F90:4546-4790`), ported bottom-up as
+!! `btcalc`'s HVEL_SCHEME=HYBRID face-thickness closure,
+!! ported bottom-up as
 !! `rdb_barotropic_coupling::frhat_h_face_step`
 !! (`src/shared_module_utilities/rdb_frhat_face.inc`) into every barotropic
 !! depth mean that reads a layer's face thickness.  See

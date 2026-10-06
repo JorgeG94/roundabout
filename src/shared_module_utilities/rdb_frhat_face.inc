@@ -16,7 +16,7 @@
 !     h_face(k) = 0.5*(h_L(k) + h_R(k)).
 !
 !   FRHAT_HYBRID — MOM6's HVEL_SCHEME=HYBRID (the MOM6 default), ported from
-!     `btcalc` (`MOM_barotropic.F90:4546-4790`).  MOM6 is top-down (k=1
+!     its `btcalc` routine.  MOM6 is top-down (k=1
 !     surface, k=nz bed) and sweeps k=nz downto 1 (bed to surface), building
 !     an elevation `e_u` from a shared mean-bed datum upward using the
 !     arithmetic-mean thickness of each layer in turn, and comparing it

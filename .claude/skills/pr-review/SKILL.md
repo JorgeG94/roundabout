@@ -205,8 +205,8 @@ three counts still agree.
   include already holds.
 - **No emojis** in `.F90` files, comments and strings included.
 - **Cite the paper, not another codebase** (`!! Wright (1997)`, not
-  `!! ported from MOM_EOS_Wright.F90`). GPL code is off-limits — flag anything
-  that reads as ported from a GPL model.
+  `!! ported from another model's source file`). GPL code is off-limits —
+  flag anything that reads as ported from a GPL model.
 
 ### 3h. Naming
 
