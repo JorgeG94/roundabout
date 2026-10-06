@@ -51,6 +51,10 @@ Anthropic's AI model, working through Claude Code. The baseline design is the
 author's: the architecture, the API, the memory model and the parallelism
 model, all designed by Jorge Luis Gálvez Vallejo.
 
+Roundabout makes no claim to be a novel implementation of a general
+circulation model. It is an LLM-driven, human-supervised experiment in
+taking a general circulation model to GPUs.
+
 The API documentation for the code itself — per-module and per-procedure
 reference generated from the source — is hosted separately:
 https://jorgeg94.github.io/roundabout/
