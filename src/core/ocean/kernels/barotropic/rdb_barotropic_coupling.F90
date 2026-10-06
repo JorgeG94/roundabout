@@ -1042,7 +1042,10 @@ contains
                   h_face = 0.5_wp*(h_layer(i - 1, j, k) + h_layer(i, j, k))
                end if
                if (ieee_is_finite(rem(i, j, k))) then
-                  vr = min(rem(i, j, k), 1.0_wp)
+                  ! Clamp to [0, 1] BEFORE MOM6's floor: MOM6's remnant is
+                  ! non-negative by construction, but a round-off -1e-17 here
+                  ! would make 1 - 0.5*Instep/vr ~ +5e15 and survive max(., 0).
+                  vr = max(min(rem(i, j, k), 1.0_wp), 0.0_wp)
                   vr = max(vr, 1.0_wp - 0.5_wp*instep/(vr + VISC_REM_SUBROUNDOFF))
                   vr = max(vr, 0.0_wp)
                else
@@ -1071,7 +1074,10 @@ contains
                   h_face = 0.5_wp*(h_layer(i - 1, j, k) + h_layer(i, j, k))
                end if
                if (ieee_is_finite(rem(i, j, k))) then
-                  vr = min(rem(i, j, k), 1.0_wp)
+                  ! Clamp to [0, 1] BEFORE MOM6's floor: MOM6's remnant is
+                  ! non-negative by construction, but a round-off -1e-17 here
+                  ! would make 1 - 0.5*Instep/vr ~ +5e15 and survive max(., 0).
+                  vr = max(min(rem(i, j, k), 1.0_wp), 0.0_wp)
                   vr = max(vr, 1.0_wp - 0.5_wp*instep/(vr + VISC_REM_SUBROUNDOFF))
                   vr = max(vr, 0.0_wp)
                else
@@ -1136,7 +1142,10 @@ contains
                   h_face = 0.5_wp*(h_layer(i, j - 1, k) + h_layer(i, j, k))
                end if
                if (ieee_is_finite(rem(i, j, k))) then
-                  vr = min(rem(i, j, k), 1.0_wp)
+                  ! Clamp to [0, 1] BEFORE MOM6's floor: MOM6's remnant is
+                  ! non-negative by construction, but a round-off -1e-17 here
+                  ! would make 1 - 0.5*Instep/vr ~ +5e15 and survive max(., 0).
+                  vr = max(min(rem(i, j, k), 1.0_wp), 0.0_wp)
                   vr = max(vr, 1.0_wp - 0.5_wp*instep/(vr + VISC_REM_SUBROUNDOFF))
                   vr = max(vr, 0.0_wp)
                else
@@ -1165,7 +1174,10 @@ contains
                   h_face = 0.5_wp*(h_layer(i, j - 1, k) + h_layer(i, j, k))
                end if
                if (ieee_is_finite(rem(i, j, k))) then
-                  vr = min(rem(i, j, k), 1.0_wp)
+                  ! Clamp to [0, 1] BEFORE MOM6's floor: MOM6's remnant is
+                  ! non-negative by construction, but a round-off -1e-17 here
+                  ! would make 1 - 0.5*Instep/vr ~ +5e15 and survive max(., 0).
+                  vr = max(min(rem(i, j, k), 1.0_wp), 0.0_wp)
                   vr = max(vr, 1.0_wp - 0.5_wp*instep/(vr + VISC_REM_SUBROUNDOFF))
                   vr = max(vr, 0.0_wp)
                else
