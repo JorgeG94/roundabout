@@ -329,9 +329,29 @@ contains
       mass0 = global_ice_mass(grid, ice, i_lo, i_hi, j_lo, j_hi)
       h_max0 = max_fold_row_thickness(grid, ice, i_lo, i_hi, j_hi)
 
+      ! GPU mem:separate discipline (CLAUDE.md "Writing GPU tests"): every
+      ! array `ice_transport_step` touches must be device-present BEFORE
+      ! the first call, or its `do concurrent`/`!$acc` kernels silently
+      ! read/write stale host memory -- no crash, just a wrong answer
+      ! (this is exactly what happened here before this map was added:
+      ! host-only, the case passed; on the GPU build it failed on mass
+      ! conservation, not because the fix is wrong, but because the test
+      ! never mapped `ms`/`ice`). Map once, after the IC/velocity seed
+      ! above (setup-time host edits must precede the map), pull the
+      ! touched arrays back every step for the per-step symmetry check,
+      ! unmap once at the end.
+      !$acc enter data copyin(ms)
+      call ms%enter_data()
+      call ice%enter_data()
+
       do n = 1, NSTEPS
          call ice_transport_step(grid, metrics, ms, ice, DT, 1, 0.0_wp, ok, bc)
          call check(error, ok, "ice_transport_step reported not-ok")
+         if (.not. allocated(error)) then
+            associate (ps => ice%part_size, mi => ice%m_ice)
+               !$acc update self(ps, mi)
+            end associate
+         end if
          if (allocated(error)) exit
 
          ! Mirror symmetry: c(p, j) == c(mirror p, j) for EVERY physical
@@ -354,10 +374,16 @@ contains
          if (allocated(error)) exit
       end do
       if (allocated(error)) then
+         call ice%exit_data(); call ms%exit_data()
+         !$acc exit data delete(ms)
          call ice%destroy(); call ms%destroy(); call ocean_bc_state_destroy(bc)
          call destroy_cartesian_metrics(metrics); call ocean_halo_destroy()
          return
       end if
+
+      call ice%exit_data()
+      call ms%exit_data()
+      !$acc exit data delete(ms)
 
       mass1 = global_ice_mass(grid, ice, i_lo, i_hi, j_lo, j_hi)
       h_max1 = max_fold_row_thickness(grid, ice, i_lo, i_hi, j_hi)
