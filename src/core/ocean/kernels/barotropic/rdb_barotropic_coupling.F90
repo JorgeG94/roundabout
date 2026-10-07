@@ -2053,6 +2053,20 @@ contains
       !! class and would bite the moment `correction_bc_pgf` composes with
       !! a closed-faces z_fixed/zstar run (currently refused at configure,
       !! `closed_faces_bc_pgf`), so it is fixed here too, independently.
+      !!
+      !! `frhat_h_face_step` is hand-inlined into all four face loops below
+      !! rather than `call`ed -- the SAME NVHPC `-stdpar=gpu` call-site
+      !! miscompile `apply_bt_correction`'s visc_rem-weighted fold already
+      !! documents (see that routine's comment for the original
+      !! compute-sanitizer evidence): the plain `call` version of this
+      !! routine crashed with an "Invalid __global__ read" inside this
+      !! kernel's launch (compute-sanitizer memcheck, 2026-10-06,
+      !! `gtot_faces_hybrid_gated_on_closed_faces` /
+      !! `gtot_depth_mean_zero_invariant`), reproduced with `ms`/`bt_work`
+      !! unmapped (this routine's normal calling convention -- see
+      !! `apply_bt_correction`'s matching comment) and not a bounds bug
+      !! (`i`/`j` neighbours are always in range by construction). The
+      !! inline copy is textually identical to `rdb_frhat_face.inc`'s body.
       type(hgrid_t), intent(in) :: grid
       type(barotropic_workstate_t), intent(inout) :: bt_work
       type(multilayer_state_t), intent(in) :: ms
@@ -2063,6 +2077,9 @@ contains
 
       integer :: i, j, k, nx, ny, nz, scheme
       real(wp) :: h_face, h_sum, p_sum, href_l, href_r, e_prev
+      real(wp) :: hl_loc, hr_loc, h_arith_loc, h_harm_loc, e_cur_loc, d_shallow_loc, wt_arith_loc
+         !! Hand-inlined `frhat_h_face_step` locals -- see the docstring
+         !! above for why this routine inlines rather than calls.
 
       nx = grid%nx_total
       ny = grid%ny_total
@@ -2071,15 +2088,41 @@ contains
       ! see `derive_bt_from_layers`'s matching comment.
       scheme = merge(bt_work%frhat_scheme, FRHAT_ARITHMETIC, metrics%use_closed_faces)
 
-      do concurrent(j=1:ny, i=1:nx - 1) local(k, h_face, h_sum, p_sum, href_l, href_r, e_prev)
+      do concurrent(j=1:ny, i=1:nx - 1) &
+         local(k, h_face, h_sum, p_sum, href_l, href_r, e_prev, &
+               hl_loc, hr_loc, h_arith_loc, h_harm_loc, e_cur_loc, d_shallow_loc, wt_arith_loc)
          href_l = bt_work%bt_H_ref(i, j)
          href_r = bt_work%bt_H_ref(i + 1, j)
          e_prev = -0.5_wp*(href_l + href_r)
          h_sum = 0.0_wp
          p_sum = 0.0_wp
          do k = 1, nz
-            call frhat_h_face_step(ms%h_layer(i, j, k), ms%h_layer(i + 1, j, k), &
-                                   href_l, href_r, scheme, e_prev, h_face)
+            ! `frhat_h_face_step` hand-inlined -- see this routine's
+            ! docstring above (NVHPC call-site miscompile).
+            hl_loc = ms%h_layer(i, j, k)
+            hr_loc = ms%h_layer(i + 1, j, k)
+            h_arith_loc = 0.5_wp*(hl_loc + hr_loc)
+            if (scheme == FRHAT_HYBRID) then
+               d_shallow_loc = -min(href_l, href_r)
+               e_cur_loc = e_prev + h_arith_loc
+               ! vanished-ok: hand-inlined frhat_h_face_step copy (NVHPC call-site miscompile, see docstring above)
+               if (hl_loc <= H_VANISHED .or. hr_loc <= H_VANISHED) then
+                  h_face = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
+               else if (e_prev >= d_shallow_loc) then
+                  h_face = h_arith_loc
+               else
+                  h_harm_loc = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
+                  if (e_cur_loc <= d_shallow_loc) then
+                     h_face = h_harm_loc
+                  else
+                     wt_arith_loc = (e_cur_loc - d_shallow_loc)/(h_arith_loc + H_DIV_EPS)
+                     h_face = wt_arith_loc*h_arith_loc + (1.0_wp - wt_arith_loc)*h_harm_loc
+                  end if
+               end if
+               e_prev = e_cur_loc
+            else
+               h_face = h_arith_loc
+            end if
             h_sum = h_sum + h_face
             p_sum = p_sum + h_face*bt_work%pbce(i, j, k)
          end do
@@ -2093,15 +2136,40 @@ contains
          bt_work%gtot_E(nx, j) = bt_work%pbce(nx, j, nz)
       end do
 
-      do concurrent(j=1:ny, i=2:nx) local(k, h_face, h_sum, p_sum, href_l, href_r, e_prev)
+      do concurrent(j=1:ny, i=2:nx) &
+         local(k, h_face, h_sum, p_sum, href_l, href_r, e_prev, &
+               hl_loc, hr_loc, h_arith_loc, h_harm_loc, e_cur_loc, d_shallow_loc, wt_arith_loc)
          href_l = bt_work%bt_H_ref(i - 1, j)
          href_r = bt_work%bt_H_ref(i, j)
          e_prev = -0.5_wp*(href_l + href_r)
          h_sum = 0.0_wp
          p_sum = 0.0_wp
          do k = 1, nz
-            call frhat_h_face_step(ms%h_layer(i - 1, j, k), ms%h_layer(i, j, k), &
-                                   href_l, href_r, scheme, e_prev, h_face)
+            ! See the matching comment in the E-face loop above.
+            hl_loc = ms%h_layer(i - 1, j, k)
+            hr_loc = ms%h_layer(i, j, k)
+            h_arith_loc = 0.5_wp*(hl_loc + hr_loc)
+            if (scheme == FRHAT_HYBRID) then
+               d_shallow_loc = -min(href_l, href_r)
+               e_cur_loc = e_prev + h_arith_loc
+               ! vanished-ok: hand-inlined frhat_h_face_step copy, same reason as the E-face loop above
+               if (hl_loc <= H_VANISHED .or. hr_loc <= H_VANISHED) then
+                  h_face = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
+               else if (e_prev >= d_shallow_loc) then
+                  h_face = h_arith_loc
+               else
+                  h_harm_loc = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
+                  if (e_cur_loc <= d_shallow_loc) then
+                     h_face = h_harm_loc
+                  else
+                     wt_arith_loc = (e_cur_loc - d_shallow_loc)/(h_arith_loc + H_DIV_EPS)
+                     h_face = wt_arith_loc*h_arith_loc + (1.0_wp - wt_arith_loc)*h_harm_loc
+                  end if
+               end if
+               e_prev = e_cur_loc
+            else
+               h_face = h_arith_loc
+            end if
             h_sum = h_sum + h_face
             p_sum = p_sum + h_face*bt_work%pbce(i, j, k)
          end do
@@ -2115,15 +2183,40 @@ contains
          bt_work%gtot_W(1, j) = bt_work%pbce(1, j, nz)
       end do
 
-      do concurrent(j=1:ny - 1, i=1:nx) local(k, h_face, h_sum, p_sum, href_l, href_r, e_prev)
+      do concurrent(j=1:ny - 1, i=1:nx) &
+         local(k, h_face, h_sum, p_sum, href_l, href_r, e_prev, &
+               hl_loc, hr_loc, h_arith_loc, h_harm_loc, e_cur_loc, d_shallow_loc, wt_arith_loc)
          href_l = bt_work%bt_H_ref(i, j)
          href_r = bt_work%bt_H_ref(i, j + 1)
          e_prev = -0.5_wp*(href_l + href_r)
          h_sum = 0.0_wp
          p_sum = 0.0_wp
          do k = 1, nz
-            call frhat_h_face_step(ms%h_layer(i, j, k), ms%h_layer(i, j + 1, k), &
-                                   href_l, href_r, scheme, e_prev, h_face)
+            ! See the matching comment in the E-face loop above.
+            hl_loc = ms%h_layer(i, j, k)
+            hr_loc = ms%h_layer(i, j + 1, k)
+            h_arith_loc = 0.5_wp*(hl_loc + hr_loc)
+            if (scheme == FRHAT_HYBRID) then
+               d_shallow_loc = -min(href_l, href_r)
+               e_cur_loc = e_prev + h_arith_loc
+               ! vanished-ok: hand-inlined frhat_h_face_step copy, same reason as the E-face loop above
+               if (hl_loc <= H_VANISHED .or. hr_loc <= H_VANISHED) then
+                  h_face = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
+               else if (e_prev >= d_shallow_loc) then
+                  h_face = h_arith_loc
+               else
+                  h_harm_loc = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
+                  if (e_cur_loc <= d_shallow_loc) then
+                     h_face = h_harm_loc
+                  else
+                     wt_arith_loc = (e_cur_loc - d_shallow_loc)/(h_arith_loc + H_DIV_EPS)
+                     h_face = wt_arith_loc*h_arith_loc + (1.0_wp - wt_arith_loc)*h_harm_loc
+                  end if
+               end if
+               e_prev = e_cur_loc
+            else
+               h_face = h_arith_loc
+            end if
             h_sum = h_sum + h_face
             p_sum = p_sum + h_face*bt_work%pbce(i, j, k)
          end do
@@ -2137,15 +2230,40 @@ contains
          bt_work%gtot_N(i, ny) = bt_work%pbce(i, ny, nz)
       end do
 
-      do concurrent(j=2:ny, i=1:nx) local(k, h_face, h_sum, p_sum, href_l, href_r, e_prev)
+      do concurrent(j=2:ny, i=1:nx) &
+         local(k, h_face, h_sum, p_sum, href_l, href_r, e_prev, &
+               hl_loc, hr_loc, h_arith_loc, h_harm_loc, e_cur_loc, d_shallow_loc, wt_arith_loc)
          href_l = bt_work%bt_H_ref(i, j - 1)
          href_r = bt_work%bt_H_ref(i, j)
          e_prev = -0.5_wp*(href_l + href_r)
          h_sum = 0.0_wp
          p_sum = 0.0_wp
          do k = 1, nz
-            call frhat_h_face_step(ms%h_layer(i, j - 1, k), ms%h_layer(i, j, k), &
-                                   href_l, href_r, scheme, e_prev, h_face)
+            ! See the matching comment in the E-face loop above.
+            hl_loc = ms%h_layer(i, j - 1, k)
+            hr_loc = ms%h_layer(i, j, k)
+            h_arith_loc = 0.5_wp*(hl_loc + hr_loc)
+            if (scheme == FRHAT_HYBRID) then
+               d_shallow_loc = -min(href_l, href_r)
+               e_cur_loc = e_prev + h_arith_loc
+               ! vanished-ok: hand-inlined frhat_h_face_step copy, same reason as the E-face loop above
+               if (hl_loc <= H_VANISHED .or. hr_loc <= H_VANISHED) then
+                  h_face = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
+               else if (e_prev >= d_shallow_loc) then
+                  h_face = h_arith_loc
+               else
+                  h_harm_loc = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
+                  if (e_cur_loc <= d_shallow_loc) then
+                     h_face = h_harm_loc
+                  else
+                     wt_arith_loc = (e_cur_loc - d_shallow_loc)/(h_arith_loc + H_DIV_EPS)
+                     h_face = wt_arith_loc*h_arith_loc + (1.0_wp - wt_arith_loc)*h_harm_loc
+                  end if
+               end if
+               e_prev = e_cur_loc
+            else
+               h_face = h_arith_loc
+            end if
             h_sum = h_sum + h_face
             p_sum = p_sum + h_face*bt_work%pbce(i, j, k)
          end do
