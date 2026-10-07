@@ -1,0 +1,65 @@
+#!/bin/bash
+#PBS -N global_025_om3
+#PBS -P PROJECT_CODE
+#PBS -q H200_QUEUE_NAME
+#PBS -l ngpus=8
+#PBS -l ncpus=16
+#PBS -l mem=256GB
+#PBS -l walltime=01:00:00
+#PBS -l wd
+#PBS -l storage=gdata/vk83+gdata/qv56+scratch/PROJECT_CODE
+#PBS -j oe
+
+# ---------------------------------------------------------------------------
+# Global 0.25 degree OM3 ocean-only, wind-forced, first scaling/feasibility
+# test: 2 Gadi nodes x 4 H200 GPUs, 8 MPI ranks, one rank per GPU. 10
+# simulated days.
+#
+# EVERYTHING MARKED "check:" below is a PLACEHOLDER -- fill in / verify on
+# Gadi before submitting. Nothing here was run or confirmed from this
+# session (no Gadi access). See ../README.md for the full assumption
+# table.
+#
+#   check: PROJECT_CODE (#PBS -P and the storage= line, twice)
+#   check: H200_QUEUE_NAME -- the Gadi queue name for the H200 GPU nodes
+#          (NOT "gpuvolta", which is V100; `qstat -Q` / NCI docs on Gadi
+#          will have the real name once H200 nodes are in service there)
+#   check: ncpus=16 -- Gadi's GPU queues fix a cpu:gpu ratio (gpuvolta is
+#          12 CPUs/GPU); the H200 queue's ratio is unknown from here --
+#          16 (= 2/GPU, a common newer-node ratio) is a GUESS, not sourced
+#   check: mem=256GB -- scaled from 2 CPUs/GPU x the gpuvolta queue's
+#          ~32GB/GPU-core default; verify against the H200 queue's actual
+#          per-node memory
+# ---------------------------------------------------------------------------
+set -euo pipefail
+
+RUN_DIR="$PBS_O_WORKDIR"
+cd "$RUN_DIR"
+
+BUILD_DIR="${BUILD_DIR:-$RUN_DIR/../../../../build_nvhpc_cc90_mpi}"   # from gadi/build.sh
+RDB_DATA_DIR="${RDB_DATA_DIR:?set RDB_DATA_DIR (same value prepare_inputs.sh used)}"
+
+# check: module names/versions -- same stack build.sh used.
+module unload openmpi/5.0.5 2>/dev/null || true
+module load nvhpc
+module load misc/nvhpc-build/25.5/netcdf-c misc/nvhpc-build/25.5/netcdf-fortran
+module load hdf5
+
+ln -sfn "$RDB_DATA_DIR/OM3_025" INPUT
+cp -f "$(dirname "$0")/../global_025_om3_wind.nml" .
+cp -f "$(dirname "$0")/pin_gpu.sh" .
+chmod +x pin_gpu.sh
+
+export OMP_NUM_THREADS=1
+
+# px=4 (within-node, east-west) x py=2 (across nodes, north-south) = 8
+# ranks -- respects the tripolar-fold minimums (north tile ny/py=576 >=
+# nghost+1=4 rows; every tile nx/px=360 >= nghost+1=4 columns) and maps
+# naturally onto 2 nodes x 4 GPUs, one rank per GPU. See ../README.md
+# "Decomposition" -- this has NOT been through the empirical timing test
+# southern_ocean_025/README.md Sec. 6 used; re-run that on Gadi before
+# trusting px/py for anything beyond this feasibility check.
+mpirun -np 8 ./pin_gpu.sh "$BUILD_DIR/rdb" global_025_om3_wind.nml > run.log 2>&1
+
+echo "Exit: $?"
+tail -50 run.log

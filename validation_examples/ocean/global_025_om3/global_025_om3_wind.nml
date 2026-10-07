@@ -1,0 +1,234 @@
+! Global 0.25-degree ocean-only, WIND-FORCED, 2-node / 8-GPU MPI -- a
+! first scaling/feasibility test on the ACCESS-OM3 25 km JRA55-do IAF grid
+! (release-MC_25km_jra_iaf, github.com/ACCESS-NRI/access-om3-configs).
+! OCEAN ONLY -- no sea ice, no atmosphere coupling: wind stress forcing
+! exactly like ../southern_ocean_025/southern_ocean_025_wind.nml and
+! ../global_1deg/global_1deg_wind.nml, scaled up to OM3's full global
+! tripolar grid and NK=75. See gadi/README.md for the 3-step recipe and
+! every assumption the maintainer must check on Gadi before running this.
+!
+! GRID      ACCESS-OM3 25 km supergrid ocean_hgrid.nc (OM3's own grid, NOT
+!           MOM6 OM4_025 -- different mesh at a similar nominal resolution),
+!           NIGLOBAL x NJGLOBAL = 1440 x 1152 T points (source:
+!           release-MC_25km_jra_iaf MOM_input). Periodic east-west, tripolar
+!           north fold -- the full global cap, unlike southern_ocean_025's
+!           Antarctic-to-30S cut.
+! BATHY     OM3's own topog.nc, MOM6 limits applied in place by the
+!           generalised tools/om_prepare_bathy.py (MINIMUM_DEPTH: UNKNOWN,
+!           not stated in release-MC_25km_jra_iaf's MOM_input -- reusing
+!           OM4_025's 9.5 m per the task brief's "closest known analogue";
+!           MAXIMUM_DEPTH 6000.0 m, read from MOM_input; MASKING_DEPTH:
+!           UNKNOWN, not stated -- MOM6 default 0.0 assumed). See
+!           tmp_local_artifacts/global025/OM3_25KM_INPUTS.md for the
+!           source citations and every UNKNOWN.
+! VERTICAL  roundabout's "zstar" family (VCOORD_ZSTAR, the actual MOM6 z*
+!           dilation path -- CLAUDE.md "Vertical Coordinates") is the
+!           closest supported match to OM3's own
+!           REGRIDDING_COORDINATE_MODE = "ZSTAR". OM3's own vertical grid
+!           (ALE_COORDINATE_CONFIG = "FILE:./INPUT/ocean_vgrid.nc",
+!           NK = 75 non-uniform interfaces) is NOT representable directly
+!           -- roundabout's zstar nominal-profile table only takes
+!           "uniform" / "list" / "tanh", not an arbitrary interfaces file
+!           -- so, same choice southern_ocean_025 made for ITS vertical
+!           grid, a tanh-stretched nominal profile approximates it: 75
+!           levels, 2 m at the surface stretching to ~160 m at depth
+!           (max_depth/nz average, tanh-concentrated near the surface).
+!           This is a DEVIATION from OM3's exact layering, stated here per
+!           the task brief ("else z_fixed tanh ... state the choice") --
+!           except this picks "zstar" over "z_fixed" specifically because
+!           zstar is the dilating MOM6 z* family, not the sigma-like
+!           z_fixed family, which is the closer physical match to
+!           OM3's own ZSTAR choice.
+! IC        OM3 ships woa23_ts_01_mom.nc ALREADY on its own 25 km model
+!           grid (MOM6 TEMP_SALT_Z_INIT_FILE convention: z-level T/S, no
+!           horizontal interpolation needed) -- the SAME layout
+!           tools/om_zclim_to_zinit.f90 already consumes generically (it
+!           auto-detects a 3-D or 4-D source variable and the temp/salt/
+!           level axis names via --temp-var/--salt-var/--level-var; no
+!           source change needed, see gadi/README.md and
+!           gadi/prepare_inputs.sh). Variable names inside that file are
+!           UNKNOWN (not probed -- no Gadi access from here); the prep
+!           script accepts --temp-var/--salt-var/--level-var overrides
+!           for whatever `ncdump -h` on Gadi shows.
+! FORCING   JRA55-do 1958 daily-mean wind stress, regridded directly onto
+!           OM3's own supergrid by tools/om1deg_wind_regrid.f90 (already
+!           grid-size-generic, no source change needed -- same recipe as
+!           southern_ocean_025 Sec. 2/5) from the MRI-JRA55-do-1-6-0
+!           input4MIPs files at /g/data/qv56/... (see
+!           tmp_local_artifacts/global025/OM3_25KM_INPUTS.md) -- wind
+!           stress only, no heat/freshwater flux, NO sea ice.
+! TIME      t_end = 10 days -- a first scaling/feasibility test, not a
+!           spin-up. dt_fixed = 900.0 s, OM3's own MOM_input DT (baroclinic).
+!           OM3's DT_THERM = 7200.0 s has no roundabout equivalent knob at
+!           this layer (thermo cadence is internal); not carried over.
+! MPI       8 ranks total, 2 Gadi nodes x 4 H200 GPUs, one rank per GPU,
+!           px=4 (within-node, east-west) x py=2 (across nodes,
+!           north-south) -- see gadi/README.md Sec. "Decomposition" for the
+!           tripolar-fold row/column constraints this respects
+!           (docs/CAPABILITIES_AND_LIMITATIONS.md: north tile >= nghost+1
+!           rows, every tile >= nghost+1 columns when px > 1; nghost = 3
+!           here, so >= 4 both ways -- 1152/2 = 576 rows, 1440/4 = 360
+!           columns, comfortably clear).
+!
+! INPUT FILES are read from ./INPUT/ relative to the run directory --
+! link it to the prepared OM3 25 km data directory (gadi/prepare_inputs.sh
+! writes there):
+!
+!     ln -s "$RDB_DATA_DIR/OM3_025" INPUT
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&mpi_nml
+   px = 4                    ! within-node (east-west); UNVERIFIED on this
+   py = 2                    ! grid -- no decomposition timing test was run
+                               ! (no Gadi access from here); chosen to respect
+                               ! the tripolar-fold row/column minimums and to
+                               ! map naturally onto 2 nodes x 4 GPUs (px
+                               ! within a node, py across nodes). Maintainer
+                               ! should re-run the empirical timing test
+                               ! (southern_ocean_025/README.md Sec. 6 pattern)
+                               ! before trusting this for anything beyond a
+                               ! feasibility check.
+/
+
+&grid_nml
+   nx     = 1440
+   ny     = 1152
+   nghost = 3
+/
+
+&ocean_grid_nml
+   grid_config     = "supergrid"
+   supergrid_file  = "INPUT/ocean_hgrid.nc"
+   coriolis_scheme = "planetary"
+   rad_earth       = 6.371e6
+/
+
+&time_nml
+   t_end        = 10.0
+   time_unit    = "day"
+   dt_fixed     = 900.0        ! OM3 release-MC_25km_jra_iaf MOM_input DT
+   cfl_interval = 1
+/
+
+&physics_nml
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&ocean_dataovr_nml
+   ! JRA55-do 1958 daily-mean wind stress, regridded directly onto OM3's
+   ! own supergrid (no separate windowing step needed).
+   enable       = .true.
+   time_mode    = "cyclic"
+   cycle_period = 31536000.0   ! 365 days
+   t_offset     = 0.0
+   tau_x_file   = "INPUT/wind_jra55do_1958_24h.nc"
+   tau_x_var    = "taux"
+   tau_y_file   = "INPUT/wind_jra55do_1958_24h.nc"
+   tau_y_var    = "tauy"
+/
+
+&nonhydrostatic_nml
+   nz_layers = 75               ! OM3 release-MC_25km_jra_iaf MOM_input NK
+/
+
+&vcoord_nml
+   vcoord_type            = "zstar"   ! MOM6 z* -- OM3's own REGRIDDING_COORDINATE_MODE
+   zfixed_closed_faces    = .true.
+   z_fixed_profile        = "tanh"
+   z_fixed_dz_top         = 2.0
+   z_fixed_tanh_center    = 0.5
+   z_fixed_tanh_width     = 0.25
+   check_vanished_content = .true.
+/
+
+&ocean_topo_nml
+   topo_config    = "file"
+   max_depth      = 6000.0      ! OM3 release-MC_25km_jra_iaf MOM_input MAXIMUM_DEPTH
+   wind_config    = "constant"
+   taux_magnitude = 0.0
+/
+
+&output_nml
+   bathymetry_file  = "INPUT/topog_limited.nc"
+   output_dir       = "./output"
+   output_to_file   = .false.
+   restart_interval = 0.0       ! none -- first feasibility test, not a spin-up
+/
+
+&ocean_bc_nml
+   west  = "periodic"
+   east  = "periodic"
+   south = "wall"
+   north = "tripolar_fold"
+/
+
+&ocean_zinit_nml
+   enable = .true.
+   source = "file"
+   file   = "INPUT/ic_om3_zinit.nc"
+/
+
+&ocean_pgf_nml
+   form   = "fv_mom6"
+   maxvel = 6.0                 ! UNKNOWN for OM3 (MOM_input MAXVEL not fetched);
+                                  ! reused from southern_ocean_025 / global_1deg
+/
+
+&ocean_coriolis_nml
+   form = "sadourny"            ! UNKNOWN for OM3 (CORIOLIS_SCHEME not fetched);
+                                  ! reused from southern_ocean_025 (OM4_025 SADOURNY75_ENSTRO)
+/
+
+&ocean_hvisc_nml
+   ! Following southern_ocean_025 unchanged: OM3 25 km and OM4_025's 1/4
+   ! degree are comparable nominal resolutions, and OM3's own
+   ! LAPLACIAN/SMAGORINSKY/SMAG_BI_CONST settings were not fetched (UNKNOWN).
+   nu_h            = 150.0
+   lateral_closure = "smagorinsky"
+   c_smag          = 0.15
+   smag_ah         = .true.
+   smag_bi_const   = 0.06
+   bound_kh        = .true.
+/
+
+&ocean_bdrag_nml
+   ! UNKNOWN for OM3 (BOTTOMDRAGLAW CDRAG/HBBL/DRAG_BG_VEL not fetched);
+   ! reused from southern_ocean_025 / global_1deg (MOM6 defaults).
+   form   = "quadratic"
+   cd     = 3.0e-3
+   hbbl   = 10.0
+   bg_vel = 0.1
+/
+
+&ocean_bt_nml
+   auto_n_inner = .true.        ! per-wet-cell barotropic CFL (MOM6 set_dtbt)
+/
+
+&ocean_eos_nml
+   eos = "wright"                ! UNKNOWN for OM3 (EQN_OF_STATE not fetched);
+                                   ! reused from southern_ocean_025 / global_1deg
+/
+
+&ocean_gm_nml
+   enable = .false.              ! kept off -- ocean-only wind-forced feasibility
+                                    ! test, same deviation southern_ocean_025 documents
+/
+
+&ocean_diag_nml
+   ! Minimal 2-D diagnostics for a feasibility/scaling test: SSH only.
+   ! `diags` MODIFIES the default set (SSH, temperature, salinity, u, v,
+   ! KE) -- explicitly turn off everything except SSH.
+   enabled          = .true.
+   filename         = "global_025_om3_wind"
+   dt_out           = 1.0        ! day (time_unit)
+   output_precision = "single"
+   diags            = "temperature:off  salinity:off  u:off  v:off  KE:off"
+/
+
+&logging_nml
+   status_interval = 1.0        ! day (time_unit) -- daily console stats
+/
