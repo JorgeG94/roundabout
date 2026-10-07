@@ -343,7 +343,7 @@ with a message naming the knob; keyed on the ACTUAL rank count in
 |---|---|
 | `&ocean_cavity_dyn_nml enable` (and the melt / top-drag paths that require it) | the grounding statistics are global reductions the configure does not take; `draft_config="file"` has no windowed reader |
 | `&ocean_wetdry_nml enable` | the wet-mask / outflow-limiter halo exchange is not implemented |
-| `&ocean_ice_nml enable` with a tripolar north fold | the ice fields are not folded across the north seam |
+| `&ocean_ice_nml enable` with a tripolar north fold | the single-rank fold ships (the ice category state is folded across the north seam), but the multi-rank ice fold is not wired: the fold-exchange reserve is not sized for the ice group and there is no decomposition bit-identity case for it (#143) |
 | `&ocean_bc_nml` `'chapman'` edges | the edge-uniform eta target is a per-rank partial mean |
 | `&ocean_vmix_nml dt_tracer_advect_ratio > 1` | the windowed drain's halo is not wired |
 | tripolar fold with a north tile shorter than `nghost + 1` rows (`ny/py`), or tiles narrower than `nghost + 1` columns (`nx/px`, when `px > 1`) | the fold mirrors `nghost` rows below the fold line from the north tile itself; the width rule keeps every tile wider than its own ghost band |
@@ -1720,9 +1720,12 @@ writer's ghosts). On
 ONE rank the same calls close a periodic seam, so `transport` now runs
 with periodic edges and a periodic + `dynamics` run no longer reads stale
 category ghosts there (an answer change against older builds on such
-configurations). Still refused: the ice with `north="tripolar_fold"` on
-more than one rank (the ice fields are not folded), and `dynamics` with a
-tripolar fold at all;
+configurations). On ONE rank the ice category state is also folded across a
+tripolar north seam (`ocean_fold_wrap_centre_flat`, applied in the ice state,
+flux and transport exchanges), and ice transport no longer treats the fold
+line as a wall. Still refused: the ice with `north="tripolar_fold"` on
+more than one rank (the multi-rank ice fold is not wired, #143), and
+`dynamics` with a tripolar fold at all (#164);
 `dynamics` with any OBC/tidal/sponge/clamped/Chapman edge — there is no
 open-boundary support for ice at all.
 
