@@ -19,7 +19,7 @@
 !! step adds `dt * tendency` to `u_face_x_layer` / `v_face_y_layer`,
 !! matching the additive-tendency pattern of Coriolis, PGF, and hvisc.
 module rdb_ocean_bottom_drag
-   use rdb_constants, only: wp
+   use rdb_constants, only: wp, H_VANISHED, NZ_STACK_MAX
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_ocean_metrics, only: ocean_metrics_t
@@ -102,6 +102,15 @@ module rdb_ocean_bottom_drag
          !! `1.0` keeps the historical drag bit-identical.  Driver
          !! writes from `cfg%ocean%bdrag%bed_factor` at init.  See
          !! `compute_distributed_drag` for the kernel-side application.
+      logical :: zlevel_faces = .false.
+         !! `&vcoord_nml zfixed_closed_faces` — mirrors
+         !! `ocean_vdiff_t%zlevel_faces`, which `diffuse_velocity_columns_impl`
+         !! uses to place its own bed-BC row.  Fed into the shared
+         !! `rdb_blf_is_live` `kb_live` search (#178) so both modules walk a
+         !! vanished static `kb` up to the same first-live row for the same
+         !! face.  Driver writes it alongside `ocean_state%vdiff%zlevel_faces`
+         !! at the point closed faces latch ON (`rdb_ocean_setup.F90`).
+         !! Default `.false.` ⇒ bit-identical.
       logical :: implicit = .false.
          !! Backward-Euler (implicit) bottom drag when `.true.`:
          !! `u^{n+1} = u/(1 + dt·λ)`, unconditionally stable for any
@@ -257,7 +266,7 @@ contains
       real(wp), intent(in) :: dt
          !! Outer-step length (s); only read when `this%implicit`.
 
-      integer :: i, j, k, nx, ny, nz, kb
+      integer :: i, j, k, nx, ny, nz, kb, kb_live
       real(wp) :: r, c_d, h_floor, u_bot, v_bot, h_face, u_at_v, v_at_u
       real(wp) :: speed_at_u, speed_at_v, lam, dt_imp
       real(wp) :: hbbl, bg_vel, bbl_min
@@ -310,24 +319,51 @@ contains
                this%lambda_bot_v(i, j) = min(ms%wet_mask(i, j - 1), ms%wet_mask(i, j))*r
             end do
          else if (this%variant == BDRAG_QUADRATIC .and. c_d > 0.0_wp) then
-            do concurrent(j=1:ny, i=2:nx) local(kb, u_bot, v_at_u, h_face, speed_at_u)
+            ! #178: the static `kb = k_bot_u/v` (filled once at configure
+            ! from the η=0 target) can be a vanished z_fixed bed filler
+            ! once a free-surface drawdown eats the nominal bed sliver on
+            ! the live run — `u_bot`/`v_bot` read there come back ~0, so
+            ! the fold rate `lambda_bot` built from them is ~0 too (no
+            ! drag) regardless of where vdiff applies it.  `kb_live` is
+            ! the first k >= kb whose face thickness is LIVE by the
+            ! shared `rdb_blf_is_live` criterion (`rdb_bed_live_face.inc`)
+            ! — the SAME search `diffuse_velocity_columns_impl` runs to
+            ! place its bed-BC row, so the rate sampled here lands on the
+            ! row the solver actually glues the drag to.  Falls back to
+            ! `kb` when every row at/above it is vanished.
+            ! `kb_live = kb` ⇒ bit-identical to the pre-#178 path.
+            do concurrent(j=1:ny, i=2:nx) local(kb, kb_live, k, u_bot, v_at_u, h_face, speed_at_u)
                kb = ms%k_bot_u(i, j)
-               u_bot = ms%u_face_x_layer(i, j, kb)
+               kb_live = kb
+               do k = kb, nz
+                  if (rdb_blf_is_live(ms%h_layer(i - 1, j, k), ms%h_layer(i, j, k), this%zlevel_faces)) then
+                     kb_live = k
+                     exit
+                  end if
+               end do
+               u_bot = ms%u_face_x_layer(i, j, kb_live)
                v_at_u = 0.25_wp*( &
-                        ms%v_face_y_layer(i - 1, j, kb) + ms%v_face_y_layer(i, j, kb) + &
-                        ms%v_face_y_layer(i - 1, j + 1, kb) + ms%v_face_y_layer(i, j + 1, kb))
-               h_face = max(0.5_wp*(ms%h_layer(i - 1, j, kb) + ms%h_layer(i, j, kb)), h_floor)
+                        ms%v_face_y_layer(i - 1, j, kb_live) + ms%v_face_y_layer(i, j, kb_live) + &
+                        ms%v_face_y_layer(i - 1, j + 1, kb_live) + ms%v_face_y_layer(i, j + 1, kb_live))
+               h_face = max(0.5_wp*(ms%h_layer(i - 1, j, kb_live) + ms%h_layer(i, j, kb_live)), h_floor)
                speed_at_u = sqrt(u_bot*u_bot + v_at_u*v_at_u)
                this%lambda_bot_u(i, j) = min(ms%wet_mask(i - 1, j), ms%wet_mask(i, j))* &
                                          c_d*speed_at_u/h_face
             end do
-            do concurrent(j=2:ny, i=1:nx) local(kb, v_bot, u_at_v, h_face, speed_at_v)
+            do concurrent(j=2:ny, i=1:nx) local(kb, kb_live, k, v_bot, u_at_v, h_face, speed_at_v)
                kb = ms%k_bot_v(i, j)
-               v_bot = ms%v_face_y_layer(i, j, kb)
+               kb_live = kb
+               do k = kb, nz
+                  if (rdb_blf_is_live(ms%h_layer(i, j - 1, k), ms%h_layer(i, j, k), this%zlevel_faces)) then
+                     kb_live = k
+                     exit
+                  end if
+               end do
+               v_bot = ms%v_face_y_layer(i, j, kb_live)
                u_at_v = 0.25_wp*( &
-                        ms%u_face_x_layer(i, j - 1, kb) + ms%u_face_x_layer(i + 1, j - 1, kb) + &
-                        ms%u_face_x_layer(i, j, kb) + ms%u_face_x_layer(i + 1, j, kb))
-               h_face = max(0.5_wp*(ms%h_layer(i, j - 1, kb) + ms%h_layer(i, j, kb)), h_floor)
+                        ms%u_face_x_layer(i, j - 1, kb_live) + ms%u_face_x_layer(i + 1, j - 1, kb_live) + &
+                        ms%u_face_x_layer(i, j, kb_live) + ms%u_face_x_layer(i + 1, j, kb_live))
+               h_face = max(0.5_wp*(ms%h_layer(i, j - 1, kb_live) + ms%h_layer(i, j, kb_live)), h_floor)
                speed_at_v = sqrt(v_bot*v_bot + u_at_v*u_at_v)
                this%lambda_bot_v(i, j) = min(ms%wet_mask(i, j - 1), ms%wet_mask(i, j))* &
                                          c_d*speed_at_v/h_face
@@ -341,7 +377,7 @@ contains
                                        ms%u_face_x_layer, ms%v_face_y_layer, &
                                        ms%h_layer, ms%wet_mask, ms%k_bot_u, ms%k_bot_v, &
                                        this%variant, r, c_d, hbbl, bg_vel, bbl_min, &
-                                       this%bed_factor, dt_imp, &
+                                       this%bed_factor, dt_imp, this%zlevel_faces, &
                                        size(ms%u_face_x_layer, 1), size(ms%u_face_x_layer, 2), &
                                        size(ms%v_face_y_layer, 1), size(ms%v_face_y_layer, 2), &
                                        nx, ny, nz)
@@ -354,54 +390,90 @@ contains
 
       ! ---- Linear branch ----
       ! Implicit (dt_imp>0): u^{n+1}=u/(1+dt·r) via tendency -r·u/(1+dt·r).
+      ! #178: write/read at `kb_live`, not the static `kb` — see the
+      ! quadratic-fold block above for the shared-criterion rationale.
+      ! This explicit tendency feeds `F_slow` unconditionally (even under
+      ! `bbl_glue`, which replaces only the IMPLICIT fold), so it needs the
+      ! same live-row fix independent of `fold`.  `kb_live = kb` ⇒
+      ! bit-identical to the pre-#178 path.
       if (this%variant == BDRAG_LINEAR .and. r > 0.0_wp) then
-         do concurrent(j=1:ny, i=2:nx) local(kb, u_bot)
+         do concurrent(j=1:ny, i=2:nx) local(kb, kb_live, k, u_bot)
             kb = ms%k_bot_u(i, j)
-            u_bot = ms%u_face_x_layer(i, j, kb)
-            this%du_drag%data(i, j, kb) = &
+            kb_live = kb
+            do k = kb, nz
+               if (rdb_blf_is_live(ms%h_layer(i - 1, j, k), ms%h_layer(i, j, k), this%zlevel_faces)) then
+                  kb_live = k
+                  exit
+               end if
+            end do
+            u_bot = ms%u_face_x_layer(i, j, kb_live)
+            this%du_drag%data(i, j, kb_live) = &
                min(ms%wet_mask(i - 1, j), ms%wet_mask(i, j))*(-r*u_bot/(1.0_wp + dt_imp*r))
          end do
-         do concurrent(j=2:ny, i=1:nx) local(kb, v_bot)
+         do concurrent(j=2:ny, i=1:nx) local(kb, kb_live, k, v_bot)
             kb = ms%k_bot_v(i, j)
-            v_bot = ms%v_face_y_layer(i, j, kb)
-            this%dv_drag%data(i, j, kb) = &
+            kb_live = kb
+            do k = kb, nz
+               if (rdb_blf_is_live(ms%h_layer(i, j - 1, k), ms%h_layer(i, j, k), this%zlevel_faces)) then
+                  kb_live = k
+                  exit
+               end if
+            end do
+            v_bot = ms%v_face_y_layer(i, j, kb_live)
+            this%dv_drag%data(i, j, kb_live) = &
                min(ms%wet_mask(i, j - 1), ms%wet_mask(i, j))*(-r*v_bot/(1.0_wp + dt_imp*r))
          end do
          return
       end if
 
       ! ---- Quadratic branch ----
+      ! #178: same `kb_live` fix as the linear branch above — this is the
+      ! "always-on explicit path" that feeds `F_slow` regardless of `fold`.
       if (this%variant == BDRAG_QUADRATIC .and. c_d > 0.0_wp) then
          ! du/dt = -C_d * |U| * u / h_bot, where |U| = sqrt(u^2 + v^2)
          ! evaluated at the same face.  For u-faces we average v from
          ! the four surrounding v-faces (standard C-grid stencil); for
          ! v-faces we average u from the four surrounding u-faces.
          do concurrent(j=1:ny, i=2:nx) &
-            local(kb, u_bot, v_at_u, h_face, speed_at_u)
+            local(kb, kb_live, k, u_bot, v_at_u, h_face, speed_at_u)
             kb = ms%k_bot_u(i, j)
-            u_bot = ms%u_face_x_layer(i, j, kb)
+            kb_live = kb
+            do k = kb, nz
+               if (rdb_blf_is_live(ms%h_layer(i - 1, j, k), ms%h_layer(i, j, k), this%zlevel_faces)) then
+                  kb_live = k
+                  exit
+               end if
+            end do
+            u_bot = ms%u_face_x_layer(i, j, kb_live)
             v_at_u = 0.25_wp*( &
-                     ms%v_face_y_layer(i - 1, j, kb) + ms%v_face_y_layer(i, j, kb) + &
-                     ms%v_face_y_layer(i - 1, j + 1, kb) + ms%v_face_y_layer(i, j + 1, kb))
-            h_face = 0.5_wp*(ms%h_layer(i - 1, j, kb) + ms%h_layer(i, j, kb))
+                     ms%v_face_y_layer(i - 1, j, kb_live) + ms%v_face_y_layer(i, j, kb_live) + &
+                     ms%v_face_y_layer(i - 1, j + 1, kb_live) + ms%v_face_y_layer(i, j + 1, kb_live))
+            h_face = 0.5_wp*(ms%h_layer(i - 1, j, kb_live) + ms%h_layer(i, j, kb_live))
             h_face = max(h_face, h_floor)
             speed_at_u = sqrt(u_bot*u_bot + v_at_u*v_at_u)
             ! Implicit: denom h_face → h_face + dt·c_d·|U| ⇒ u/(1+dt·c_d·|U|/h).
-            this%du_drag%data(i, j, kb) = &
+            this%du_drag%data(i, j, kb_live) = &
                min(ms%wet_mask(i - 1, j), ms%wet_mask(i, j))* &
                (-c_d*speed_at_u*u_bot/(h_face + dt_imp*c_d*speed_at_u))
          end do
          do concurrent(j=2:ny, i=1:nx) &
-            local(kb, v_bot, u_at_v, h_face, speed_at_v)
+            local(kb, kb_live, k, v_bot, u_at_v, h_face, speed_at_v)
             kb = ms%k_bot_v(i, j)
-            v_bot = ms%v_face_y_layer(i, j, kb)
+            kb_live = kb
+            do k = kb, nz
+               if (rdb_blf_is_live(ms%h_layer(i, j - 1, k), ms%h_layer(i, j, k), this%zlevel_faces)) then
+                  kb_live = k
+                  exit
+               end if
+            end do
+            v_bot = ms%v_face_y_layer(i, j, kb_live)
             u_at_v = 0.25_wp*( &
-                     ms%u_face_x_layer(i, j - 1, kb) + ms%u_face_x_layer(i + 1, j - 1, kb) + &
-                     ms%u_face_x_layer(i, j, kb) + ms%u_face_x_layer(i + 1, j, kb))
-            h_face = 0.5_wp*(ms%h_layer(i, j - 1, kb) + ms%h_layer(i, j, kb))
+                     ms%u_face_x_layer(i, j - 1, kb_live) + ms%u_face_x_layer(i + 1, j - 1, kb_live) + &
+                     ms%u_face_x_layer(i, j, kb_live) + ms%u_face_x_layer(i + 1, j, kb_live))
+            h_face = 0.5_wp*(ms%h_layer(i, j - 1, kb_live) + ms%h_layer(i, j, kb_live))
             h_face = max(h_face, h_floor)
             speed_at_v = sqrt(v_bot*v_bot + u_at_v*u_at_v)
-            this%dv_drag%data(i, j, kb) = &
+            this%dv_drag%data(i, j, kb_live) = &
                min(ms%wet_mask(i, j - 1), ms%wet_mask(i, j))* &
                (-c_d*speed_at_v*v_bot/(h_face + dt_imp*c_d*speed_at_v))
          end do
@@ -411,7 +483,7 @@ contains
    pure subroutine compute_distributed_drag(du_drag, dv_drag, u_face, v_face, &
                                             h_layer, wet_mask, k_bot_u, k_bot_v, &
                                             variant, r, c_d, hbbl, bg_vel, bbl_min, &
-                                            bed_factor, dt_imp, &
+                                            bed_factor, dt_imp, zlevel_faces, &
                                             nx_u, ny_u, nx_v, ny_v, nx, ny, nz)
       !! HBBL-distributed bottom drag.  Mirrors MOM6's LINEAR_DRAG
       !! and quadratic-with-HBBL formulations: the drag stress is
@@ -432,13 +504,21 @@ contains
       !!      du_k/dt = -c_d · |U_eff| · u_k · (h_in_bbl_k / h_face_k) · f_k /
       !!                 max(h_in_bbl_total, bbl_min)
       !!
-      !! The band walk starts at the face's first LIVE layer counting up
-      !! from the bed, `kb = k_bot_u/v` (`≡ 1` off `z_fixed` ⇒ the
-      !! historical `k = 1` walk), so under `z_fixed` the inert bed
-      !! fillers below it neither take a share of the drag nor count
-      !! toward the band thickness.
+      !! The band walk starts at `kb_live`, the first LIVE layer at/above
+      !! the static bed index `kb = k_bot_u/v` (`≡ 1` off `z_fixed` ⇒ the
+      !! historical `k = 1` walk) — #178: a free-surface drawdown can
+      !! vanish the nominal bed sliver `kb` points at without moving `kb`
+      !! itself, and the pre-fix per-face loop below `exit`s the moment it
+      !! sees `h_face_k <= 0` at `k = kb`, so a vanished `kb` zeroed the
+      !! WHOLE band, not just its own share.  `kb_live` search uses the
+      !! shared `rdb_blf_is_live` criterion (`rdb_bed_live_face.inc`), the
+      !! same one `diffuse_velocity_columns_impl` and the bed-only
+      !! branches above use; falls back to `kb` when every row at/above it
+      !! is vanished.  `kb_live = kb` ⇒ bit-identical to the pre-#178 path.
+      !! Under `z_fixed` the inert fillers below `kb_live` neither take a
+      !! share of the drag nor count toward the band thickness.
       !!
-      !! `f_k = bed_factor` for `k = kb` and `f_k = 1` otherwise — lets
+      !! `f_k = bed_factor` for `k = kb_live` and `f_k = 1` otherwise — lets
       !! the bed layer carry stronger drag than the rest of the BBL
       !! while preserving HBBL-distribution shape for layers k>=2.
       !! Default `bed_factor = 1.0` ⇒ `f_k ≡ 1` ⇒ bit-identical to
@@ -450,6 +530,9 @@ contains
       real(wp), intent(in) :: r, c_d, hbbl, bg_vel, bbl_min, bed_factor
       real(wp), intent(in) :: dt_imp
          !! Implicit timestep: dt for backward-Euler drag, 0 for explicit.
+      logical, intent(in) :: zlevel_faces
+         !! `&vcoord_nml zfixed_closed_faces` — fed into the shared
+         !! `rdb_blf_is_live` `kb_live` search (#178).
       real(wp), intent(in)    :: u_face(nx_u, ny_u, nz), v_face(nx_v, ny_v, nz)
       real(wp), intent(in)    :: h_layer(nx, ny, nz)
       real(wp), intent(in)    :: wet_mask(nx, ny)
@@ -457,26 +540,33 @@ contains
          !! `ms%k_bot_u/v` — first live layer of the face, counting up.
       real(wp), intent(inout) :: du_drag(nx_u, ny_u, nz), dv_drag(nx_v, ny_v, nz)
 
-      integer :: i, j, k, kb
+      integer :: i, j, k, kb, kb_live
       real(wp) :: cumul_h, h_face_k, h_in_bbl, mask_face, f_k
       real(wp) :: h_in_bbl_total, u_bbl_int, v_bbl_int, u_bbl, v_bbl
       real(wp) :: u_at_v, v_at_u, abs_U_eff, h_eff_denom
 
-      ! Linear: per-layer independent — single pass walks k=kb upward,
+      ! Linear: per-layer independent — single pass walks k=kb_live upward,
       ! accumulating BBL thickness and applying the per-layer drag.
-      ! Bed layer (k=kb) scaled by `bed_factor`; layers above unchanged.
+      ! Bed layer (k=kb_live) scaled by `bed_factor`; layers above unchanged.
       if (variant == BDRAG_LINEAR .and. r > 0.0_wp) then
          do concurrent(j=1:ny, i=2:nx) &
-            local(k, kb, cumul_h, h_face_k, h_in_bbl, mask_face, f_k)
+            local(k, kb, kb_live, cumul_h, h_face_k, h_in_bbl, mask_face, f_k)
             mask_face = min(wet_mask(i - 1, j), wet_mask(i, j))
             kb = k_bot_u(i, j)
-            cumul_h = 0.0_wp
+            kb_live = kb
             do k = kb, nz
+               if (rdb_blf_is_live(h_layer(i - 1, j, k), h_layer(i, j, k), zlevel_faces)) then
+                  kb_live = k
+                  exit
+               end if
+            end do
+            cumul_h = 0.0_wp
+            do k = kb_live, nz
                if (cumul_h >= hbbl) exit
                h_face_k = 0.5_wp*(h_layer(i - 1, j, k) + h_layer(i, j, k))
                if (h_face_k > 0.0_wp) then
                   h_in_bbl = max(0.0_wp, min(h_face_k, hbbl - cumul_h))
-                  if (k == kb) then
+                  if (k == kb_live) then
                      f_k = bed_factor
                   else
                      f_k = 1.0_wp
@@ -490,16 +580,23 @@ contains
             end do
          end do
          do concurrent(j=2:ny, i=1:nx) &
-            local(k, kb, cumul_h, h_face_k, h_in_bbl, mask_face, f_k)
+            local(k, kb, kb_live, cumul_h, h_face_k, h_in_bbl, mask_face, f_k)
             mask_face = min(wet_mask(i, j - 1), wet_mask(i, j))
             kb = k_bot_v(i, j)
-            cumul_h = 0.0_wp
+            kb_live = kb
             do k = kb, nz
+               if (rdb_blf_is_live(h_layer(i, j - 1, k), h_layer(i, j, k), zlevel_faces)) then
+                  kb_live = k
+                  exit
+               end if
+            end do
+            cumul_h = 0.0_wp
+            do k = kb_live, nz
                if (cumul_h >= hbbl) exit
                h_face_k = 0.5_wp*(h_layer(i, j - 1, k) + h_layer(i, j, k))
                if (h_face_k > 0.0_wp) then
                   h_in_bbl = max(0.0_wp, min(h_face_k, hbbl - cumul_h))
-                  if (k == kb) then
+                  if (k == kb_live) then
                      f_k = bed_factor
                   else
                      f_k = 1.0_wp
@@ -520,17 +617,24 @@ contains
       ! does both passes (sum then write).
       if (variant == BDRAG_QUADRATIC .and. c_d > 0.0_wp) then
          do concurrent(j=2:ny, i=2:nx) &
-            local(k, kb, cumul_h, h_face_k, h_in_bbl, mask_face, f_k, &
+            local(k, kb, kb_live, cumul_h, h_face_k, h_in_bbl, mask_face, f_k, &
                   h_in_bbl_total, u_bbl_int, v_bbl_int, u_bbl, v_bbl, &
                   v_at_u, abs_U_eff, h_eff_denom)
             mask_face = min(wet_mask(i - 1, j), wet_mask(i, j))
             kb = k_bot_u(i, j)
+            kb_live = kb
+            do k = kb, nz
+               if (rdb_blf_is_live(h_layer(i - 1, j, k), h_layer(i, j, k), zlevel_faces)) then
+                  kb_live = k
+                  exit
+               end if
+            end do
             ! Pass 1: integrate u_face * h_in_bbl over the BBL band.
             cumul_h = 0.0_wp
             u_bbl_int = 0.0_wp
             v_bbl_int = 0.0_wp
             h_in_bbl_total = 0.0_wp
-            do k = kb, nz
+            do k = kb_live, nz
                if (cumul_h >= hbbl) exit
                h_face_k = 0.5_wp*(h_layer(i - 1, j, k) + h_layer(i, j, k))
                if (h_face_k <= 0.0_wp) exit
@@ -547,15 +651,15 @@ contains
             u_bbl = u_bbl_int/h_eff_denom
             v_bbl = v_bbl_int/h_eff_denom
             abs_U_eff = max(bg_vel, sqrt(u_bbl*u_bbl + v_bbl*v_bbl))
-            ! Pass 2: apply stress per-layer.  Bed layer (k=kb) scaled
+            ! Pass 2: apply stress per-layer.  Bed layer (k=kb_live) scaled
             ! by `bed_factor`; layers above unchanged.
             cumul_h = 0.0_wp
-            do k = kb, nz
+            do k = kb_live, nz
                if (cumul_h >= hbbl) exit
                h_face_k = 0.5_wp*(h_layer(i - 1, j, k) + h_layer(i, j, k))
                if (h_face_k <= 0.0_wp) exit
                h_in_bbl = max(0.0_wp, min(h_face_k, hbbl - cumul_h))
-               if (k == kb) then
+               if (k == kb_live) then
                   f_k = bed_factor
                else
                   f_k = 1.0_wp
@@ -568,16 +672,23 @@ contains
             end do
          end do
          do concurrent(j=2:ny, i=2:nx) &
-            local(k, kb, cumul_h, h_face_k, h_in_bbl, mask_face, f_k, &
+            local(k, kb, kb_live, cumul_h, h_face_k, h_in_bbl, mask_face, f_k, &
                   h_in_bbl_total, u_bbl_int, v_bbl_int, u_bbl, v_bbl, &
                   u_at_v, abs_U_eff, h_eff_denom)
             mask_face = min(wet_mask(i, j - 1), wet_mask(i, j))
             kb = k_bot_v(i, j)
+            kb_live = kb
+            do k = kb, nz
+               if (rdb_blf_is_live(h_layer(i, j - 1, k), h_layer(i, j, k), zlevel_faces)) then
+                  kb_live = k
+                  exit
+               end if
+            end do
             cumul_h = 0.0_wp
             u_bbl_int = 0.0_wp
             v_bbl_int = 0.0_wp
             h_in_bbl_total = 0.0_wp
-            do k = kb, nz
+            do k = kb_live, nz
                if (cumul_h >= hbbl) exit
                h_face_k = 0.5_wp*(h_layer(i, j - 1, k) + h_layer(i, j, k))
                if (h_face_k <= 0.0_wp) exit
@@ -595,12 +706,12 @@ contains
             v_bbl = v_bbl_int/h_eff_denom
             abs_U_eff = max(bg_vel, sqrt(u_bbl*u_bbl + v_bbl*v_bbl))
             cumul_h = 0.0_wp
-            do k = kb, nz
+            do k = kb_live, nz
                if (cumul_h >= hbbl) exit
                h_face_k = 0.5_wp*(h_layer(i, j - 1, k) + h_layer(i, j, k))
                if (h_face_k <= 0.0_wp) exit
                h_in_bbl = max(0.0_wp, min(h_face_k, hbbl - cumul_h))
-               if (k == kb) then
+               if (k == kb_live) then
                   f_k = bed_factor
                else
                   f_k = 1.0_wp
@@ -859,5 +970,8 @@ contains
                + this%lambda_side_u%bytes() &
                + this%lambda_side_v%bytes()
    end function ocean_bottom_drag_bytes
+
+#include "rdb_vanished_layer.inc"
+#include "rdb_bed_live_face.inc"
 
 end module rdb_ocean_bottom_drag

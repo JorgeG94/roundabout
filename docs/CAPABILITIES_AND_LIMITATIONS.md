@@ -945,6 +945,32 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   `hbbl > 0` stays refused — not a `k = 1` problem any more: the fold is
   ONE 2-D rate on the bed-row diagonal and cannot represent a band; that
   needs a per-layer `lambda_bot` added to the interior diagonals.
+  **`z_fixed` RUNTIME drawdown (#178, closed 2026-10-07):** `k_bot_u/v`
+  is static — filled once at configure from the `η = 0` target — so a
+  free-surface drawdown during the run can thin the nominal bed sliver
+  it points at below `H_VANISHED` WITHOUT moving the index. Before the
+  fix this glued the bed-only/HBBL/implicit-fold drag and the vdiff
+  bed-BC row to that now-massless filler; `zlevel_faces` then decoupled
+  it from the live rows above, so `visc_rem` sat at exactly `1.0` and no
+  bottom drag reached the water (measured on a global 1° ice run: a
+  grounding shelf jet ran away and the run died by `ERROR STOP` at step
+  8296). Every bed-row consumer in the drag/BBL path (bottom drag's
+  bed-only, HBBL-band and implicit-fold-rate kernels; the vdiff bed-BC
+  row placement; MEKE's bed speed) now walks `kb_live`, the first row
+  at/above the static `kb` whose face thickness is still live by the
+  shared `rdb_blf_is_live` criterion (`src/shared_module_utilities/rdb_bed_live_face.inc`)
+  — the same search in every consumer, so the drag law samples the row
+  the solver actually glues the BC to. `kb_live = kb` (the common case)
+  is bit-identical. On the same global 1° ice reproducer the fix drops
+  `visc_rem` to 0.05-0.13 at the hot faces from the first post-drawdown
+  step, the jet decays within half a day, and the run completes to
+  `t_end` instead of crashing. Geothermal, the two-band shortwave
+  penetration deposit and EPBL's penetrating-SW ledger are NOT changed:
+  they already treat `k_bot` as an opaque-bed CUTOFF for a sweep over
+  the whole column (a vanished row there contributes zero to the sum
+  with no decoupling), which is the case that genuinely wants the
+  static, configure-time bed rather than a runtime search. Gate:
+  `tests/test_ocean_bottom_drag_live_kbot.F90`.
 - **Side-wall (channel) drag** (`&ocean_bdrag_nml channel_drag`,
   `cdrag_side`; default off ⇒ bit-identical): a per-layer lateral
   Rayleigh rate at every face whose cross-stream perimeter is blocked by

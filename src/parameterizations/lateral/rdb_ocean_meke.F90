@@ -484,7 +484,8 @@ contains
       ! Resolved bed-layer eddy velocity (MOM6 drag_rate_visc); 0 when off.
       if (this%use_bbl_drag) then
          call meke_bbl_speed2(nx, ny, nz, ms%u_face_x_layer, ms%v_face_y_layer, &
-                              ms%k_bot_u, ms%k_bot_v, this%u_bbl2)
+                              ms%h_layer, ms%k_bot_u, ms%k_bot_v, &
+                              metrics%use_closed_faces, this%u_bbl2)
       end if
       call meke_drag(nx, ny, sdt_damp, this%damping, this%cdrag, this%uscale, gm%rho0, &
                      this%i_mass, this%bottom_fac2, this%u_bbl2, this%meke)
@@ -908,26 +909,81 @@ contains
       end do
    end subroutine meke_drag
 
-   pure subroutine meke_bbl_speed2(nx, ny, nz, u_face, v_face, k_bot_u, k_bot_v, u_bbl2)
+   pure subroutine meke_bbl_speed2(nx, ny, nz, u_face, v_face, h_layer, k_bot_u, k_bot_v, &
+                                   zlevel_faces, u_bbl2)
       !! Resolved bed-layer speed² at cell centres:
       !! `u_bbl2 = u_c² + v_c²` with `u_c = ½(u_face(i)+u_face(i+1))`,
-      !! `v_c = ½(v_face(j)+v_face(j+1))`, each face read on ITS OWN bed
-      !! layer `k_bot_u/v` (the first layer live on both sides counting up;
-      !! `1` off `z_fixed` ⇒ the historical k=1 read).  Under `z_fixed` the
-      !! layers below are inert fillers whose velocity the closed-face mask
-      !! has zeroed, so a `k = 1` read reported a motionless bed.  The
-      !! bottom eddy velocity the MEKE drag law needs (MOM6 `drag_rate_visc`).
+      !! `v_c = ½(v_face(j)+v_face(j+1))`, each face read on ITS OWN LIVE
+      !! bed layer `kb_live` (`1` off `z_fixed` ⇒ the historical k=1 read).
+      !! `kb_live` is the first row at/above the static `k_bot_u/v` (filled
+      !! once at configure from the η=0 target) whose face thickness is
+      !! LIVE by the shared `rdb_blf_is_live` criterion (`rdb_bed_live_face.inc`
+      !! — the same search `rdb_ocean_vdiff`'s bed-BC placement and
+      !! `rdb_ocean_bottom_drag` run).  #178: without it, a free-surface
+      !! drawdown that vanishes the nominal bed sliver `k_bot_u/v` points at
+      !! (its velocity zeroed by the closed-face mask, or just never
+      !! updated) reports a motionless bed to the MEKE drag law even while
+      !! the live layer above carries the resolved bed eddy velocity (MOM6
+      !! `drag_rate_visc`) — understating the backscatter damping exactly
+      !! where it is needed most.  `kb_live = k_bot_u/v` ⇒ bit-identical.
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: u_face(nx + 1, ny, nz)
       real(wp), intent(in) :: v_face(nx, ny + 1, nz)
+      real(wp), intent(in) :: h_layer(nx, ny, nz)
       integer, intent(in) :: k_bot_u(nx + 1, ny)
       integer, intent(in) :: k_bot_v(nx, ny + 1)
+      logical, intent(in) :: zlevel_faces
+         !! `&vcoord_nml zfixed_closed_faces` (`metrics%use_closed_faces`).
       real(wp), intent(inout) :: u_bbl2(nx, ny)
-      integer :: i, j
+      integer :: i, j, k, i_lo, i_hi, j_lo, j_hi
+      integer :: kb_w, kb_e, kb_s, kb_n, kbl_w, kbl_e, kbl_s, kbl_n
       real(wp) :: u_c, v_c
-      do concurrent(j=1:ny, i=1:nx) local(u_c, v_c)
-         u_c = 0.5_wp*(u_face(i, j, k_bot_u(i, j)) + u_face(i + 1, j, k_bot_u(i + 1, j)))
-         v_c = 0.5_wp*(v_face(i, j, k_bot_v(i, j)) + v_face(i, j + 1, k_bot_v(i, j + 1)))
+      ! Each of the 4 faces bounding cell (i,j) gets its OWN kb_live search
+      ! against ITS OWN two abutting columns, clamped at the domain edge the
+      ! same way `ocean_vcoord_k_bot_from_target` built the static index
+      ! (`ia = max(1, i-1)`, `ib = min(nx, i)`) — `k_bot_u(1,j)`/`k_bot_u(nx+1,j)`
+      ! already read column 1/nx on both sides there, so the clamp here just
+      ! keeps the h_layer probe in bounds at the same faces.
+      do concurrent(j=1:ny, i=1:nx) &
+         local(k, i_lo, i_hi, j_lo, j_hi, kb_w, kb_e, kb_s, kb_n, kbl_w, kbl_e, kbl_s, kbl_n, u_c, v_c)
+         i_lo = max(1, i - 1)
+         i_hi = min(nx, i + 1)
+         j_lo = max(1, j - 1)
+         j_hi = min(ny, j + 1)
+         kb_w = k_bot_u(i, j)
+         kbl_w = kb_w
+         do k = kb_w, nz
+            if (rdb_blf_is_live(h_layer(i_lo, j, k), h_layer(i, j, k), zlevel_faces)) then
+               kbl_w = k
+               exit
+            end if
+         end do
+         kb_e = k_bot_u(i + 1, j)
+         kbl_e = kb_e
+         do k = kb_e, nz
+            if (rdb_blf_is_live(h_layer(i, j, k), h_layer(i_hi, j, k), zlevel_faces)) then
+               kbl_e = k
+               exit
+            end if
+         end do
+         kb_s = k_bot_v(i, j)
+         kbl_s = kb_s
+         do k = kb_s, nz
+            if (rdb_blf_is_live(h_layer(i, j_lo, k), h_layer(i, j, k), zlevel_faces)) then
+               kbl_s = k
+               exit
+            end if
+         end do
+         kb_n = k_bot_v(i, j + 1)
+         kbl_n = kb_n
+         do k = kb_n, nz
+            if (rdb_blf_is_live(h_layer(i, j, k), h_layer(i, j_hi, k), zlevel_faces)) then
+               kbl_n = k
+               exit
+            end if
+         end do
+         u_c = 0.5_wp*(u_face(i, j, kbl_w) + u_face(i + 1, j, kbl_e))
+         v_c = 0.5_wp*(v_face(i, j, kbl_s) + v_face(i, j + 1, kbl_n))
          u_bbl2(i, j) = u_c*u_c + v_c*v_c
       end do
    end subroutine meke_bbl_speed2
@@ -1265,5 +1321,8 @@ contains
                + arr_bytes(this%baro_hu) &
                + arr_bytes(this%baro_hv)
    end function ocean_meke_bytes
+
+#include "rdb_vanished_layer.inc"
+#include "rdb_bed_live_face.inc"
 
 end module rdb_ocean_meke

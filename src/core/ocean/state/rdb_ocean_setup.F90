@@ -3103,6 +3103,10 @@ contains
       ocean_state%metrics%use_closed_faces = .true.
       ocean_state%vcoord%zfixed_closed_faces = .true.
       ocean_state%vdiff%zlevel_faces = .true.
+      ! #178: `ocean_bottom_drag_t%zlevel_faces` mirrors `vdiff`'s so the two
+      ! modules' `kb_live` searches (shared `rdb_blf_is_live` criterion) agree
+      ! on which row is the live bed row of a given face.
+      ocean_state%bdrag%zlevel_faces = .true.
 
       if (compute_rank == 0) then
          call logger%info(trim(vcoord_label)//" closed faces: ON (partial steps, "// &
