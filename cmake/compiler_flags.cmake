@@ -97,6 +97,21 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     set_source_files_properties(
       ${PROJECT_SOURCE_DIR}/src/parameterizations/lateral/rdb_ocean_horizontal_viscosity.F90
       PROPERTIES COMPILE_OPTIONS "-Mnofma")
+    # Same class of bug, same fix, different kernel (compat cell c023, 2026-10):
+    # compute_gtot_faces's hand-inlined frhat_h_face_step body (PR #179 -- the
+    # GPU call-site miscompile fix, see that routine's docstring) accumulates
+    # `p_sum = p_sum + h_face*pbce(i,j,k)` inside a `do k` loop nested in the
+    # outer `do concurrent(j,i)` face loop. On the CPU build nvfortran
+    # vectorises the OUTER loop and FMA-contracts the vector body differently
+    # from the scalar remainder, so a face's rounding depends on where it falls
+    # relative to the vector width -- exactly the tile-width-dependent drift the
+    # hvisc line above already guards against. Caught by the pairwise compat
+    # matrix's DECOMP leg (1 rank vs 4x1 MPI, ~7e-15 relative on
+    # `bt_visc_rem_u/v`, `epbl_kd_int`) under `vcoord=sigma split=ssp_rk2 ...
+    # bt=correction_bc_pgf`.
+    set_source_files_properties(
+      ${PROJECT_SOURCE_DIR}/src/core/ocean/kernels/barotropic/rdb_barotropic_coupling.F90
+      PROPERTIES COMPILE_OPTIONS "-Mnofma")
   endif()
 
 elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
@@ -104,6 +119,20 @@ elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
       "${CMAKE_Fortran_FLAGS} -ffree-form -std=gnu -O3 -ffree-line-length-none")
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -fcheck=all -fbacktrace -Wall -Wextra")
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -march=native -funroll-loops")
+  # Decomposition bit-identity on the GNU CPU build (compat cell c023, 2026-10).
+  # `compute_gtot_faces`'s hand-inlined `frhat_h_face_step` body (PR #179's GPU
+  # call-site-miscompile fix) accumulates `p_sum = p_sum + h_face*pbce(i,j,k)`
+  # inside a `do k` loop nested in the outer `do concurrent(j,i)` face loop. At
+  # `-O3 -march=x86-64-v3` gfortran vectorises that outer loop and FMA-contracts
+  # the vector body differently from the scalar remainder, so a face's rounding
+  # depends on where it falls relative to the vector width -- the same shape of
+  # bug the NVHPC `-Mnofma` line on `rdb_ocean_horizontal_viscosity.F90`
+  # documents, now hit on GNU instead. Caught by the pairwise compat matrix's
+  # DECOMP leg (1 rank vs 4x1 MPI, ~7e-15 relative on `bt_visc_rem_u/v`,
+  # `epbl_kd_int`) under `vcoord=sigma split=ssp_rk2 ... bt=correction_bc_pgf`.
+  set_source_files_properties(
+    ${PROJECT_SOURCE_DIR}/src/core/ocean/kernels/barotropic/rdb_barotropic_coupling.F90
+    PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
   if(RDB_ENABLE_COVERAGE)
     # gcov instrumentation: disable optimisation so line counts map cleanly,
     # apply --coverage to both compile and link (gcc driver expands it to
