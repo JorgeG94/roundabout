@@ -691,11 +691,16 @@ dynamic-ice showcases are the regional `validation_examples/ocean/sea_ice/`
 and `sea_ice_pack/` cases, which run EVP on a plain wall/periodic domain
 with no tripolar fold.
 
-Measured on one V100 (nvfortran 26.5, `-gpu=cc70,mem:separate`), 2026-10-06,
-branch `validate/global-1deg-ice` off `fix/frhat-matrix-cites` (bee159376):
-365 days, 17 520 steps, **2721 s wall (7.45 s/simulated day)**, 10.58 GB of
-device memory (throughput 0.742 Mcells/s). No NaN and no CFL truncation
-anywhere in the run.
+Measured on one V100 (nvfortran 26.5, `-gpu=cc70,mem:separate`), 2026-10-07,
+branch `validate/global-1deg-ice-v010` off `beta` at `4fe9e6464` — the #178
+bottom-drag fix (apply bottom drag on the live bed row when `z_fixed`
+drawdown vanishes the setup bed layer) — cold start, against the committed
+namelist (verified identical to the one used here, ignoring comments):
+365 days, 17 520 steps, **2654 s wall (7.27 s/simulated day)**, 10.57 GB of
+device memory (throughput 0.760 Mcells/s). Exit 0; `grep -i 'nan\|trunc'
+run.log` finds nothing — no NaN and no CFL truncation anywhere in the run.
+This re-measures a run originally taken before #178 (and before #181's
+fold-row conservation review); see §7.3/§7.5/§7.6 for what changed.
 
 ### 7.1 Configure-time refusal: EVP dynamics is incompatible with the fold
 
@@ -742,67 +747,56 @@ in the branch history for the check).
 
 ### 7.3 Stability and budgets — measured, not round-off at year end
 
+Re-measured on the #178-fixed binary (day-sampled directly from `run.log`,
+same cadence as §4):
+
 | day | En (m²/s²) | MaxCFL | Mass Error | Salt Error | Heat Error |
 |---:|---:|---:|---:|---:|---:|
-| 1 | 5.612e-04 | 0.036 | -1.80e-14 | -5.2e-16 | -4.1e-16 |
-| 10 | 4.347e-04 | 0.040 | -1.80e-13 | -3.9e-15 | -2.8e-15 |
-| 30 | 4.197e-04 | 0.039 | -5.41e-13 | -1.2e-14 | -8.8e-15 |
-| 60 | 4.061e-04 | 0.145 | -1.08e-12 | -2.4e-14 | -1.8e-14 |
-| 90 | 4.114e-04 | 0.164 | -1.62e-12 | -3.5e-14 | -2.8e-14 |
-| 169 | 4.759e-04 | 0.175 | **+2.09e-09** | **+1.56e-09** | **-8.17e-10** |
-| 173 | 4.749e-04 | 0.268 | **+2.54e-09** | **+1.88e-09** | **-9.84e-10** |
-| 180 | 4.943e-04 | 0.260 | +2.54e-09 | +1.88e-09 | -9.84e-10 |
-| 240 | 5.009e-04 | 0.263 | +2.54e-09 | +1.88e-09 | -9.84e-10 |
-| 260 (MaxCFL peak) | 4.762e-04 | **0.372** | +2.54e-09 | +1.88e-09 | -9.84e-10 |
-| 300 | 4.591e-04 | 0.251 | +2.54e-09 | +1.88e-09 | -9.84e-10 |
-| 365 | 4.540e-04 | 0.251 | +2.54e-09 | +1.88e-09 | -9.84e-10 |
+| 1 | 5.611e-04 | 0.028 | -1.80e-14 | -4.12e-16 | -3.64e-16 |
+| 10 | 4.345e-04 | 0.040 | -1.80e-13 | -3.83e-15 | -2.86e-15 |
+| 30 | 4.194e-04 | 0.039 | -5.41e-13 | -1.16e-14 | -8.74e-15 |
+| 60 | 4.057e-04 | 0.039 | -1.08e-12 | -2.35e-14 | -1.83e-14 |
+| 90 | 4.114e-04 | 0.039 | -1.62e-12 | -3.53e-14 | -2.77e-14 |
+| 180 | 4.941e-04 | 0.044 | -3.25e-12 | -7.16e-14 | -5.62e-14 |
+| 240 | 5.003e-04 | 0.038 | -4.33e-12 | -9.63e-14 | -7.46e-14 |
+| 300 | 4.586e-04 | 0.030 | -5.41e-12 | -1.21e-13 | -9.29e-14 |
+| 365 | 4.538e-04 | 0.028 | -6.58e-12 | -1.48e-13 | -1.13e-13 |
 
-**The budget residual is a known ice-coupling issue, but it is not a
-continuous leak growing roughly linearly with time — it is two discrete,
-silent jumps.** Through day 90 `Error` is ordinary round-off (1e-12 to
-1e-15, the same shape as the unforced/wind-only runs in §4/§6). Between
-step 8064 (day 168) and step 8112 (day 169) `Mass`/`Salt`/`Heat Error` all
-jump simultaneously, three orders of magnitude, from round-off to ~1e-9 —
-with **no warning, truncation, limiter or NaN-catch logged anywhere**
-around it (checked directly in `run.log`). A second, smaller jump follows
-at step 8304 (day 173). After day 173 every budget is **flat to the
-printed digits through day 365** (`Salt Error` and `Heat Error` literally
-unchanged; `Mass Error` drifts by 2e-12 of its own 2.5e-09, i.e. ordinary
-round-off resumes on top of the new level). Neither tracked term (`out`,
-the boundary flux; `src`, the ice virtual-salt/heat source) accounts for
-either jump — `Mass`'s `src` reads exactly `0.000E+00` throughout, since
-sea ice carries no real mass/freshwater coupling by design (§7.5). At
-1035 kg/m³ and a 1.381e21 kg total ocean mass, the final relative residual
-is **2.5 parts per billion** — physically negligible — but a silent,
-untracked discontinuity is still a bug signature worth bisecting, filed as
-a follow-up.
+**The day-168/169 and day-172/173 jumps reported for the pre-#178 run are
+gone.** On this run `Mass`/`Salt`/`Heat Error` grow smoothly and
+monotonically from ordinary round-off at day 1 through **-6.58e-12 /
+-1.48e-13 / -1.13e-13** at day 365 — a relative residual under 5 parts per
+trillion of the 1.381e21 kg ocean mass — with no discrete jump anywhere:
+checked step-by-step across the whole log (every printed day, not just the
+sampled rows above), the day-168→169 and day-172→173 transitions show the
+same ordinary round-off growth as every other day. `grep -i 'nan\|trunc'
+run.log` finds nothing. `Mass`'s `src` still reads exactly `0.000E+00`
+throughout, since sea ice carries no real mass/freshwater coupling by
+design (§7.5/§7.7).
 
-**Correlation with the ice series.** The two jumps (days 169 and 173) fall
-inside the 30-day diagnostic window centred on day 165–195, which is
-exactly the window of the **steepest Antarctic sea-ice collapse of the
-whole year** (§7.4: Antarctic ice volume falls from 35.9 to 14.4 km³ across
-days 135–165, the single largest drop in the series, continuing to decay
-afterward). The Arctic series shows no corresponding discontinuity in the
-same window — it grows smoothly throughout. This is a coincidence in
-*timing*, not a demonstrated cause: the 30-day diagnostic cadence cannot
-resolve which step or which column triggered the jump, and `Mass`'s `src`
-being exactly zero means whatever happened did not go through the
-instrumented ice-ocean coupling path. Stated as what the data show, not
-more.
+The two silent, three-orders-of-magnitude jumps reported for the earlier
+run — day 168→169 (`+2.1e-9`/`+1.6e-9`/`-8.2e-10`) and day 172→173
+(`+4.5e-10`/`+3.2e-10`/`-1.7e-10`) — are **issue #168, a symptom of the
+#178 shelf runaway**: bottom drag was not applied on the live bed row when
+`z_fixed` column drawdown vanished the setup-time bed layer, so a shelf
+column could pick up an unphysical velocity that fed through into the
+budget bookkeeping. #178 applies bottom drag on the live bed row in that
+case instead, and with the fix in, the jump does not occur on an otherwise
+identical configuration.
 
-MaxCFL's peak for the year is **0.372 at day 260** — not the final day's
-0.251. That is above the wind-only reference's measured peak (0.244, day
-28, §6) and well above this same namelist's own early-year plateau
-(0.13–0.17, days 60–165). It coincides with the same general period as the
-Antarctic ice collapse and the aftermath of the two budget jumps, without
-a demonstrated causal link (same caveat as above). It stays comfortably
-under the 0.5 operational ceiling the rest of the suite uses, and nothing
-was truncated or clamped.
+MaxCFL's peak for the year is **0.0535 at day 15** — not the final day's
+0.028 — and now sits comfortably *below* the wind-only reference's
+measured peak (0.244, day 28, §6), a reversal from the pre-#178 run (whose
+own peak, 0.372 at day 260, exceeded even the wind-only reference and
+coincided with the shelf-runaway window). The whole year stays under 0.054
+after day 15, well inside the 0.5 operational ceiling, and nothing was
+truncated or clamped.
 
 ### 7.4 Regional ice series — is there a plausible seasonal cycle? No.
 
 Computed from the run's monthly `ice_conc`/`ice_thick` diagnostic frames
-with an independent script (`tmp_local_artifacts/ice_seasonal_analysis.py`)
+with an independent script (`tmp_local_artifacts/showcase/ice_seasonal_analysis.py`,
+re-run against this run's output)
 that builds its own wet mask and area weights from `ocean_hgrid.nc` +
 `bathy_om1deg.nc` and reduces the raw field array directly — **not** the
 console's own ice summary line or the `[diag]` console mean, both of which
@@ -812,25 +806,29 @@ stamped at the window midpoint (day 15, 45, …, 345):
 
 | day (window mid) | Arctic mean conc | Arctic mean thick (m) | Arctic volume (km³) | Antarctic mean conc | Antarctic mean thick (m) | Antarctic volume (km³) |
 |---:|---:|---:|---:|---:|---:|---:|
-| 15 | 0.297 | 0.127 | 2 097 | 0.00184 | 0.00078 | 15.9 |
-| 45 | 0.294 | 0.252 | 4 164 | 0.00248 | 0.00161 | 32.7 |
-| 75 | 0.288 | 0.332 | 5 487 | 0.00292 | 0.00195 | 39.6 |
-| 105 | 0.282 | 0.395 | 6 529 | 0.00311 | 0.00200 | 40.7 |
-| 135 | 0.276 | 0.446 | 7 370 | 0.00235 | 0.00177 | 35.9 |
-| 165 | 0.272 | 0.495 | 8 181 | 0.00097 | 0.00071 | 14.4 |
-| 195 | 0.266 | 0.541 | 8 940 | 0.00061 | 0.00050 | 10.1 |
-| 255 | 0.256 | 0.619 | 10 222 | 0.00025 | 0.00016 | 3.3 |
-| 315 | 0.244 | 0.676 | 11 171 | 0.00010 | 0.00007 | 1.5 |
-| 345 | 0.239 | 0.698 | 11 520 | 0.00007 | 0.00004 | 0.9 |
+| 15 | 0.297 | 0.127 | 2 098 | 0.00183 | 0.00078 | 15.8 |
+| 45 | 0.295 | 0.252 | 4 166 | 0.00248 | 0.00160 | 32.5 |
+| 75 | 0.292 | 0.333 | 5 506 | 0.00294 | 0.00196 | 39.9 |
+| 105 | 0.287 | 0.398 | 6 576 | 0.00317 | 0.00202 | 41.1 |
+| 135 | 0.282 | 0.449 | 7 423 | 0.00235 | 0.00174 | 35.3 |
+| 165 | 0.278 | 0.499 | 8 233 | 0.00092 | 0.00068 | 13.8 |
+| 195 | 0.275 | 0.545 | 9 009 | 0.00058 | 0.00044 | 8.9 |
+| 225 | 0.272 | 0.588 | 9 711 | 0.00035 | 0.00021 | 4.3 |
+| 255 | 0.268 | 0.625 | 10 322 | 0.00015 | 0.00007 | 1.3 |
+| 285 | 0.265 | 0.657 | 10 859 | 0.00004 | 0.00002 | 0.3 |
+| 315 | 0.260 | 0.684 | 11 294 | 0.00001 | 0.00000 | 0.1 |
+| 345 | 0.257 | 0.706 | 11 653 | 0.00000 | 0.00000 | 0.03 |
 
 (Arctic = wet cells north of 60°N, area ≈ 1.65e13 m²; Antarctic = wet cells
 south of 60°S, area ≈ 2.03e13 m². Volume = `Σ area·thickness` over the
 region, the one quantity immune to a Simpson's-paradox mismatch between the
-separately area-averaged concentration and thickness columns above. See the
-next subsection — **7.9% of the final Arctic volume (912 of 11 520 km³) is
-a tripolar-fold-row artifact**, not real ice; excluding the fold row the
-Arctic volume series is 2 088 → 7 949 → 10 608 km³ at days 15/165/345,
-still substantial but short of the uncorrected number.)
+separately area-averaged concentration and thickness columns above. **On
+the #178-fixed run the fold row holds only 1.46% of the final Arctic
+volume (170 of 11 653 km³)**, not the 7.9% measured on the pre-#178 run —
+see §7.5, which the fold-row pileup finding no longer describes as it did
+before. Excluding the fold row the Arctic volume series is 2 090 → 8 114 →
+11 483 km³ at days 15/165/345 — now a small correction, kept here only for
+continuity with the earlier write-up.)
 
 **No — there is no plausible seasonal cycle, and there cannot be one with
 this forcing.** `air_temp`/`restore_lambda`/`sw_down` are constant in time
@@ -839,17 +837,17 @@ ice column switch from growing to melting partway through the year. What
 the data show instead:
 
 - **Arctic: monotonic growth, no melt season.** Mean concentration slowly
-  *falls* (0.297 → 0.239, as thin ice compacts into fewer, thicker cells —
+  *falls* (0.297 → 0.257, as thin ice compacts into fewer, thicker cells —
   consistent with the documented "no ridging" limitation, §7.5) while mean
   thickness and total volume climb all year with no reversal (0.127 m /
-  2 097 km³ at day 15 to 0.698 m / 11 520 km³ at day 345) — a Stefan-type
+  2 098 km³ at day 15 to 0.706 m / 11 653 km³ at day 345) — a Stefan-type
   conductive growth curve under a constant deep-winter atmosphere, exactly
   as expected from the forcing, and exactly *not* what a real Arctic does
   over a year.
 - **Antarctic: a transient pulse, not a season.** The small patch of ice
   the already-supercooled January IC seeds near Antarctica grows for about
-  3.5 months (15.9 → 40.7 km³, days 15–105) and then collapses toward
-  extinction for the rest of the year (40.7 → 0.9 km³, days 105–345) — the
+  3.5 months (15.8 → 41.1 km³, days 15–105) and then collapses toward
+  extinction for the rest of the year (41.1 → 0.03 km³, days 105–345) — the
   opposite of the real Southern Ocean's autumn-to-spring growth cycle,
   because January is Southern-Hemisphere summer and nothing in this
   forcing knows that. The decay is consistent with the small patch sitting
@@ -858,69 +856,101 @@ the data show instead:
   and mixing heat erodes it rather than any seasonal atmospheric melt term
   (there is none).
 
-### 7.5 A new finding: unbounded ice-thickness pileup at the tripolar fold row
+### 7.5 Re-measured: the fold-row pileup is gone; an unbounded single-cell growth is not
 
-**This is the headline finding of this validation run and is reported in
-full rather than summarized away.** The `[diag]` console line for
-`ice_thick` prints a **maximum of 194.7 m** at the final (day 345) frame —
-physically absurd for any real ice pack. Tracing the `max` across all
-twelve monthly frames shows it is not noise: 1.36 m (day 15) → 5.70 m (day
-45) → 9.16 m (day 105) → 19.98 m (day 165) → 55.78 m (day 225) → 194.74 m
-(day 345), i.e. **unbounded growth that accelerates through the year**, not
-a bounded, physically-capped ice pack.
+The pre-#178 write-up of this section reported the `[diag]` `ice_thick`
+`max` growing unboundedly across the year (1.36 m → 194.7 m), with 82.5% of
+the cells exceeding 10 m at year end sitting on the tripolar fold row — the
+grid's last physical row, `j=320` — and attributed that concentration to
+the fold row's duplicated degrees of freedom having no fold-aware
+ice-transport exchange. Re-measured on the #178-fixed run, from the same
+twelve monthly `ice_thick` diagnostic frames
+(`tmp_local_artifacts/showcase/find_ice_thick_max.py`, an extension of the
+branch-history script that adds a fold-row volume accounting, built on the
+same `ocean_hgrid.nc` + `bathy_om1deg.nc`):
 
-Locating it directly (`tmp_local_artifacts/find_ice_thick_max.py`): the
-final frame's maximum sits at tracer-grid cell `(j=320, i=227)` (1-based),
-77.6°N, 119.6°W, 83.5 m bathymetric depth. Of the 40 cells exceeding 10 m
-at the final frame, **33 (82.5%) sit exactly on row `j=320`** — the **last
-physical row of the grid, the north tripolar fold seam** — and the
-remaining 7 are scattered elsewhere in the high Arctic (66.7–76.3°N), so
-the pathology is concentrated at, but not perfectly confined to, the fold
-row. The
-worst cell's own thickness history (0 → 0.0003 → 0.37 → 2.76 → 6.56 → 4.77
-→ 14.00 → 17.16 → 2.59 → 4.81 → 9.17 → **194.74 m**) is erratic
-month-to-month until the final frame's jump, consistent with a transport
-artifact at the seam rather than smooth thermodynamic growth. Quantified:
-the fold row (242 of 12 192 Arctic wet cells) holds **7.9% of the total
-Arctic ice volume** at year end despite being under 2% of the Arctic's
-wet-cell count or area — a mean thickness there of 5.8 m against 0.65 m
-for the rest of the Arctic.
+**The `max` still grows without bound, an order of magnitude smaller.**
+0.78 m (day 15) → 2.04 (day 45) → 3.11 (day 75) → 6.19 (day 105) → 7.93
+(day 135) → 9.10 (day 165) → 12.38 (day 195) → 15.31 (day 225) → 16.13 (day
+255) → 18.09 (day 285) → 17.61 (day 315) → **19.01 m** (day 345) — not
+noise, and still not a bounded, physically-capped ice pack, but roughly
+10× smaller than the pre-#178 run's final 194.7 m.
 
-This is consistent with, but a more serious and specific instance of, the
-already-documented gap in `docs/CAPABILITIES_AND_LIMITATIONS.md`/
-`docs/CLOSURE_MATRIX.md`: *"the ice fields are NOT folded across a tripolar
-north seam"* and *"[no ridging —] `compress_ice` thickens ice in its own
-category at zero energetic cost... category 5 is unbounded above."* The
-fold row carries duplicated degrees of freedom that the ocean dynamics
-correctly project antisymmetric (`rdb_ocean_fold`), but sea-ice transport
-has no equivalent fold-aware exchange; if that leaves a spurious
-convergence (or an inconsistent duplicate value) right at the seam,
-`compress_ice`'s uncapped thickest category has nowhere to go but up, all
-year. **This is not fixed here** (no physics was patched for this task) —
-it is filed as a follow-up alongside the EVP-on-the-fold issue, and is the
-reason the regional Arctic volume numbers in §7.4 are reported both
-including and excluding the fold row.
+**The fold-row concentration described previously does not reproduce.** Of
+the six cells exceeding 10 m at the final frame, **zero** sit on row
+`j=320` (1-based); they are scattered from 68.8°N to 82.2°N at depths from
+9.5 m to 3775 m, with no bathymetric or fold-proximity pattern evident.
+Quantified: the fold row (242 of 12 192 Arctic wet cells, 1.98% of the
+Arctic's wet-cell count) holds **1.46%** of the total Arctic ice volume at
+year end (170 of 11 653 km³) — a mean thickness there of 1.08 m against
+0.70 m for the rest of the Arctic, nowhere near the 8.9× disparity (5.8 m
+vs 0.65 m) measured on the pre-#178 run. The fold row's share stayed small
+all year (0.4% at day 15, rising to and holding near 1.4–1.5% from
+mid-year on) rather than growing
+into the outsized contributor it was before.
 
-### 7.6 A separate, pre-existing display bug (not from this run)
+The year's worst cell is now tracer-grid cell `(j=295, i=63)` (1-based),
+79.5°N, 100.1°E (grid lon -259.9°, wrapped), 182 m bathymetric depth — not at the fold, not at a
+boundary, and not the same cell the pre-#178 run's `max` traced through
+(which sat at `j=320`). Its own thickness history (0.17 → 0.54 → 0.66 →
+1.27 → 4.96 → 9.10 → 12.38 → 15.31 → 16.13 → 18.09 → 17.61 → **19.01 m**)
+grows smoothly from month 5 onward, unlike the pre-#178 cell's erratic
+month-to-month history culminating in a final-frame jump — consistent with
+a persistent local compaction imbalance rather than a one-off transport
+event at the seam.
 
-The console's own `Ice: conc 0.0000 thick 0.0000 m (ocean-area mean)`
-status line reads exactly zero for the entire year, even though ice
-plainly exists (§7.2–7.4). **This is a known bug, not an area-weighting
-effect** (`compute_ice_totals`/`compute_ice_totals_efp` in
-`rdb_ocean_console_stats.F90` reads zero even at step 0 with a
-100%-covered analytic IC, per the parallel sea-ice validation that found
-it) — a fix is in progress elsewhere. Separately, the `[diag]` console
-line's own `mean=` scalar for `ice_conc`/`ice_thick` is diluted by ghost
-cells (`fill_ice_conc_thick_impl` does not NaN-sentinel them, so they
-average in as zero); its `min`/`max` are unaffected and the 194.7 m value
-in §7.5 is read from `max`, which is reliable. **Every number in §7.3–7.5
-of this section comes from this run's own masked, area-weighted reduction
-over the raw field array** (`tmp_local_artifacts/ice_seasonal_analysis.py`),
-built from `ocean_hgrid.nc` + `bathy_om1deg.nc`, after explicitly slicing
-off the `nghost=3` ghost ring the single-rank diagnostic write does **not**
-trim (measured directly: the written field is `(326, 366)`, not the
-physical `(320, 360)`) — none of it depends on the two known-buggy console
-paths above.
+**What this changes, and what it doesn't.** #178 removed the fold-row
+instance of this pathology — the duplicated-DOF explanation in the earlier
+write-up no longer accounts for the dominant failure mode, because the
+dominant failure mode has moved off the fold entirely. What remains is the
+already-documented, generic gap in `docs/CAPABILITIES_AND_LIMITATIONS.md`/
+`docs/CLOSURE_MATRIX.md`: *"[no ridging —] `compress_ice` thickens ice in
+its own category at zero energetic cost... category 5 is unbounded
+above."* That alone is sufficient to explain a handful of scattered cells
+growing without bound over a year, independent of the fold. **This is not
+fixed here** (no physics was patched for this task); it is filed as a
+follow-up alongside the EVP-on-the-fold issue, and the fold-row-excluded
+Arctic volume numbers in §7.4 are kept for continuity with the prior
+write-up even though the fold's own contribution is now minor.
+
+### 7.6 The console status-line bug is gone; the `[diag]` mean-dilution concern does not reproduce either
+
+The pre-#178 write-up reported two separate console-output problems: the
+`Ice: conc 0.0000 thick 0.0000 m (ocean-area mean)` status line reading
+exactly zero for the entire year, and the `[diag]` line's own `mean=`
+scalar for `ice_conc`/`ice_thick` being diluted toward zero by unmasked
+ghost cells.
+
+**The status-line bug is fixed, checked directly against this run's
+`run.log`.** The line (`Ice  :` — note the two-space field name, not
+`Ice:`) reads `0.0000 / 0.0000` only at step 0, before any ice has
+nucleated, which is correct; by day 1 it already reads `conc 0.0134 thick
+0.0010 m` and tracks the ice cover's growth all year, through the
+final-step value at day 365 (`conc 0.0120 thick 0.0336 m`, the
+whole-ocean-area mean including ice-free cells, hence small relative to
+the Arctic-only numbers in §7.4). Whatever fixed `compute_ice_totals`/
+`compute_ice_totals_efp` was not part of this task's own work, so the
+mechanism isn't re-derived here — only the observed behaviour, which is
+no longer the bug.
+
+**The `[diag]` mean-dilution concern also does not reproduce.** Checked
+directly: the day-345 `ice_conc` `[diag]` line prints `mean=5.11786E-02`;
+computing the field's own NaN-excluding arithmetic mean over the same raw
+`(326, 366)` array (treating the written `1e20` fill value as missing)
+gives `0.051179` — the same value to the printed precision. If ghost cells
+were being averaged in as zero, this comparison would show the `[diag]`
+mean systematically low relative to the masked mean; it does not. `min`/
+`max` were already reliable in the earlier write-up and remain so — the
+19.01 m value in §7.5 is read from `max`. **Every number in §7.3–7.5 of
+this section still comes from this run's own masked, area-weighted
+reduction over the raw field array**
+(`tmp_local_artifacts/showcase/ice_seasonal_analysis.py`, rewritten from
+the branch-history script against this run's output), built from
+`ocean_hgrid.nc` + `bathy_om1deg.nc`, after explicitly slicing off the
+`nghost=3` ghost ring the single-rank diagnostic write does **not** trim
+(measured again on this run: the written field is `(326, 366)`, not the
+physical `(320, 360)`) — independent of either console path, which this
+run's own measurements now also happen to agree with.
 
 ### 7.7 What's physically missing
 
@@ -932,16 +962,20 @@ paths above.
 - **No EVP dynamics on this grid** (§7.1) — ice drifts only by sampling the
   ocean surface current; no independent rheology, no ice-ocean stress
   blend, no ridging-relevant internal stress. Filed as a post-v0.1.0 issue.
-- **The tripolar-fold-row thickness pileup** (§7.5) — a new finding from
-  this run, filed as a follow-up.
+- **An unbounded single-cell ice-thickness growth** (§7.5) — no longer
+  concentrated at the tripolar fold row on the #178-fixed model (the fold
+  row's share of final Arctic ice volume dropped from 7.9% to 1.46%), but
+  the underlying `compress_ice`/category-5-unbounded-above gap is still
+  unfixed and still grows a handful of scattered Arctic cells without
+  bound over a year. Filed as a follow-up.
 - **Momentum is not conserved at fractional ice cover** (documented
   divergence D7) — the ice feels the full wind-stress snapshot rather than
   a concentration-weighted bulk drag law, more consequential here than in
   the regional cases since dynamics is off.
 - **No freshwater/mass coupling at all** — sea ice carries no weight and
   exchanges no real mass with the ocean (only the virtual-salt and heat
-  paths are closed); this is also why the budget jumps in §7.3 cannot be
-  real mass added by the ice itself.
+  paths are closed); `Mass`'s `src` reads exactly `0.000E+00` throughout
+  this run for that reason (§7.3).
 - **No ridging, melt ponds, or lateral melt** (documented, `compress_ice`
   is area compaction only — directly implicated in §7.5's unbounded
   category-5 growth), and the usual 1° limits already documented in §5 for
