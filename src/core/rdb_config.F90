@@ -124,8 +124,19 @@ module rdb_config
 
    integer, parameter :: MAX_TIDAL_CONSTITUENTS = 10
       !! Maximum number of tidal constituents
-   integer, parameter :: MAX_OCEAN_DIAG_Z_LEVELS = 64
-      !! Maximum number of z-levels for ocean-diag z_fixed output vgrid
+   integer, parameter :: MAX_OCEAN_DIAG_Z_LEVELS = 128
+      !! Maximum number of z-levels for ocean-diag z_fixed output vgrid.
+      !! [C1] Raised 64 -> 128 for ACCESS-OM3 parity: the 75-level OM3
+      !! z* grid needs every model interface available as a z_fixed/
+      !! sigma/zstar/density diag level.  Sizes four fixed `config_t`
+      !! arrays only (`z_levels`, `sigma_levels`, `zstar_levels`,
+      !! `rho_levels`, all host-side namelist storage, never mapped to
+      !! device); the diag manager's actual output buffers are
+      !! allocated to the USED count (`n_z_levels`, ...), not this bound,
+      !! and are independently capped by `NZ_STACK_MAX` (128 by default,
+      !! `rdb_constants`) which already covered 128 before this change.
+      !! Existing namelists are unaffected: `n_z_levels` (etc.) they set
+      !! stays <= 64 <= 128, so this is bit-identical for them.
    integer, parameter :: MAX_OCEAN_LAYER_RHO_INIT = 64
       !! Maximum number of per-layer density init entries.
    integer, parameter :: MAX_Z_FIXED_DZ = 128
@@ -8611,7 +8622,11 @@ contains
       pra => cfg%z_fixed_dz
       call g%add(nml_real_array("z_fixed_dz", pra, &
                                 "z_fixed_profile='list': nominal layer thicknesses, "// &
-                                "surface first (exactly nz_layers entries)", units="m"))
+                                "surface first (exactly nz_layers entries). "// &
+                                "tools/vgrid_to_dz.py converts a MOM6 ocean_vgrid.nc "// &
+                                "(or a plain interface-depth list) into a ready-to-paste "// &
+                                "block of this knob -- e.g. ACCESS-OM3's 75-level z* "// &
+                                "grid, used with vcoord_type='zstar'", units="m"))
       pr => cfg%z_fixed_dz_top
       call g%add(nml_real("z_fixed_dz_top", pr, &
                           "z_fixed_profile='tanh': surface-layer nominal thickness", &

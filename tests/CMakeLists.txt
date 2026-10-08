@@ -242,6 +242,7 @@ set(RDB_TESTS
     "test_ocean_vcoord|test_ocean_vcoord|collect_ocean_vcoord_tests|ocean_vcoord|ocean"
     "test_ocean_vcoord_rho|test_ocean_vcoord_rho|collect_ocean_vcoord_rho_tests|ocean_vcoord_rho|ocean"
     "test_ocean_vcoord_hycom|test_ocean_vcoord_hycom|collect_ocean_vcoord_hycom_tests|ocean_vcoord_hycom|ocean"
+    "test_ocean_vgrid_om3|test_ocean_vgrid_om3|collect_ocean_vgrid_om3_tests|ocean_vgrid_om3|ocean"
     "test_ocean_vcoord_wright_device|test_ocean_vcoord_wright_device|collect_ocean_vcoord_wright_device_tests|ocean_vcoord_wright_device|ocean"
     "test_ocean_vcoord_interface_depths|test_ocean_vcoord_interface_depths|collect_ocean_vcoord_interface_depths_tests|ocean_vcoord_interface_depths|ocean"
     "test_ocean_vcoord_invariants|test_ocean_vcoord_invariants|collect_ocean_vcoord_invariants_tests|ocean_vcoord_invariants|ocean"
@@ -803,6 +804,30 @@ if(Python3_EXECUTABLE)
                                    "OMP_NUM_THREADS=1")
   endif()
 endif()
+
+# [C1] tools/vgrid_to_dz.py self-test: builds a synthetic MOM6 vgrid in memory
+# (known 75-level thickness profile), converts it through both input paths --
+# the stdlib-only --text-interfaces fallback (always exercised) and the netCDF4
+# 'zeta'/'dz' readers (exercised, not failed, only when netCDF4 is importable)
+# -- and checks the recovered thicknesses. No model is run. Prefers python3.10,
+# this project's netCDF4-capable interpreter (see CLAUDE.md); degrades to
+# whatever Python3_EXECUTABLE find_package found, then plain "python3", without
+# ever calling pip.
+find_program(RDB_PYTHON310_EXECUTABLE python3.10)
+if(RDB_PYTHON310_EXECUTABLE)
+  set(_rdb_vgrid_to_dz_python "${RDB_PYTHON310_EXECUTABLE}")
+elseif(Python3_EXECUTABLE)
+  set(_rdb_vgrid_to_dz_python "${Python3_EXECUTABLE}")
+else()
+  set(_rdb_vgrid_to_dz_python "python3")
+endif()
+add_test(
+  NAME rdb_vgrid_to_dz_selftest
+  COMMAND "${_rdb_vgrid_to_dz_python}"
+          "${PROJECT_SOURCE_DIR}/tools/vgrid_to_dz.py" --self-test
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
+set_tests_properties(rdb_vgrid_to_dz_selftest PROPERTIES LABELS "ocean;python")
+
 list(APPEND _rdb_python_candidates "python3")
 
 set(RDB_PYTHON_EXECUTABLE "")
