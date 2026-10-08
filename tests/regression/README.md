@@ -809,8 +809,26 @@ the lagrangian re-pin: `rx0_060 × lagrangian` and its twin).
 2. **`sigma` ≡ `zstar`** to every printed digit, in both legs, on both
    toolchains (as it had to be: until 2026-10 `zstar` WAS the sigma branch;
    it is now MOM6 z\* with closed faces and this record no longer describes
-   it — the `zstar` rows await a re-pin); `zstar_sigma` now differs from them on the ladder (it is the
-   only place its z* branch engages).
+   it); `zstar_sigma` now differs from them on the ladder (it is the
+   only place its z* branch engages). The `zstar` rows were re-pinned
+   2026-10-07 on fix/zstar-matrix-repin (gfortran 15.1.0 CPU only;
+   nvfortran/GPU-side pin pending): all 12 FAIL cells (`rx0_020/060/080`,
+   `seamount_gentle/steep`, `slope`, both legs) are `z_fixed`'s own
+   staircase residual — MOM6 z\* lays exactly `z_fixed`'s staircase at
+   `eta = 0`, so `Z_STAIRCASE` already routes them to the
+   `z_fixed_staircase` reason. Confirmed, not assumed: the 12 numbers are
+   identical to the `z_fixed` twins to every printed digit and the
+   salinity `[diag]` series diffs zero lines (toolchain-independent, H1);
+   with `remap_boundary_extrap = .false.` the salinity-minimum drift
+   vanishes completely (pinned at the initial surface-cell mean for the
+   whole run, En +2.8%) and comes back once it is re-enabled, so the
+   mechanism is the unlimited boundary-cell reconstruction, not spurious
+   mixing (H2); extended to 60 days it saturates by day 10 and holds flat
+   (no constant-rate drift, no crossing of the physical floor), and halving
+   `dz` (`nz_layers` 15→30) roughly halves the overshoot — a bounded,
+   dz-scaling representation effect (H3 excluded). The `zstar` viscous-leg
+   envelope drops `0.8 → 0.0` to match `z_fixed`'s (same staircase, same
+   floor).
 3. **`z_fixed` is clean only without fillers** (`flat`, `lid_flat`). Wherever
    layers vanish it used to leak salt and heat at 1e-7 … 1e-6 relative; the
    vanished-layer content rule I1′ closed that to round-off in every cell.
