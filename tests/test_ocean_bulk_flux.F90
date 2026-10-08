@@ -31,12 +31,21 @@
 !!     reproduces `bulk_flux_column` cell-by-cell, including through a
 !!     `!$acc` device data region (inert on a non-OpenACC build) —
 !!     the `mem:separate` GPU parity gate.
+!!   * T7 land cells — a land cell whose raw inputs are a mix of 0 and
+!!     NaN (`ieee_value(..., ieee_quiet_nan)`) must produce ALL EIGHT
+!!     driver outputs exactly 0.0 and finite (`bulk_flux_column` is
+!!     never even called there), while an adjacent wet cell's outputs
+!!     are unaffected.
+!!   * T8 longwave — `bulk_flux_longwave_up` at `SST = 300 K`,
+!!     `emissivity = 1` matches `sigma*300**4` to 1e-12 relative, and
+!!     the result scales linearly with `emissivity`.
 module test_ocean_bulk_flux
+   use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan, ieee_is_finite
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
    use rdb_ocean_bulk_flux, only: bulk_flux_column, bulk_flux_driver_2d, &
-                                  bulk_flux_cdn10_neutral, &
-                                  BULK_WIND_MIN, BULK_T0_KELVIN
+                                  bulk_flux_cdn10_neutral, bulk_flux_longwave_up, &
+                                  BULK_WIND_MIN, BULK_T0_KELVIN, BULK_STEFAN_BOLTZMANN
    implicit none
    private
 
@@ -64,7 +73,11 @@ contains
                   new_unittest("bulk_flux_unstable_ch_exceeds_stable", &
                                test_stability_ordering), &
                   new_unittest("bulk_flux_driver_matches_column_gpu", &
-                               test_driver_matches_column) &
+                               test_driver_matches_column), &
+                  new_unittest("bulk_flux_land_cells_zero_with_nan_inputs", &
+                               test_land_cells_zero_with_nan_inputs), &
+                  new_unittest("bulk_flux_longwave_up_matches_stefan_boltzmann", &
+                               test_longwave_up_matches_stefan_boltzmann) &
                   ]
    end subroutine collect_ocean_bulk_flux_tests
 
@@ -79,13 +92,12 @@ contains
       !!       `cd/ch/ce` are exactly the PRE-LOOP neutral-at-10m values
       !!       (`bulk_flux_cdn10_neutral` + the fixed 18.0/32.7 Stanton
       !!       and 34.6 Dalton multipliers).  `stab` at this point is
-      !!       decided purely by the SIGN of `-dtemp`, which is IEEE
-      !!       `-0.0` here (`dtemp` is `x - x = +0.0`, negated); this
-      !!       toolchain's `SIGN` reads the copysign bit and lands on
-      !!       the "32.7" branch (see the comment at the call site) —
-      !!       a deterministic, hand-computable value either way, which
-      !!       is the "hand-computed case with neutral stability" the
-      !!       work package asks for.
+      !!       `merge(0.0_wp, 1.0_wp, dtemp > 0.0_wp)` -- `dtemp` is
+      !!       exactly `+0.0` here (`x - x`), which is NOT `> 0`, so
+      !!       `stab = 1.0` deterministically on every compiler, landing
+      !!       on the "18.0" branch (see the comment at the call site) —
+      !!       the "hand-computed case with neutral stability" the work
+      !!       package asks for.
       !!       NOT testing this at the knife-edge of the FULL iteration:
       !!       `dqr` is not pinned to exact zero there (no closed-form,
       !!       bit-exact saturation humidity is available), and at true
@@ -117,16 +129,12 @@ contains
                             taux, tauy, sensible, latent, evap, cd, ch, ce, ustar)
 
       cdn10_expected = bulk_flux_cdn10_neutral(U10)
-      ! `dtemp = sst_k - t_air` is `x - x`, i.e. EXACTLY `+0.0`, so
-      ! `-dtemp` is IEEE `-0.0`.  `SIGN(0.5, -0.0)` is a genuine
-      ! cross-compiler edge case: the Fortran standard's "B >= 0" test
-      ! treats `-0.0 == +0.0` as non-negative (=> `+0.5`), but a
-      ! processor that lowers SIGN to a hardware `copysign` reads the
-      ! SIGN BIT instead (=> `-0.5`).  gfortran 15.1 (this test's
-      ! toolchain) takes the copysign reading, landing on the "32.7"
-      ! branch, not "18.0" -- re-verify this constant on the NVHPC/ifx
-      ! legs (see RESULT_C3.md).
-      ch_expected = 32.7e-3_wp*sqrt(cdn10_expected)
+      ! `dtemp = sst_k - t_air` is `x - x`, i.e. EXACTLY `+0.0`: exact
+      ! neutrality.  The kernel's stability split lands this on the
+      ! STABLE (18.0e-3) branch deterministically, on every compiler
+      ! (`merge` on `dtemp > 0.0_wp`, never `sign` of a value that can
+      ! carry a signed zero).
+      ch_expected = 18.0e-3_wp*sqrt(cdn10_expected)
       ce_expected = 34.6e-3_wp*sqrt(cdn10_expected)
 
       call check(error, abs(cd - cdn10_expected) < 1.0e-12_wp*cdn10_expected, &
@@ -345,5 +353,104 @@ contains
          end do
       end do
    end subroutine test_driver_matches_column
+
+   ! -----------------------------------------------------------------
+   ! T7 — land cells: explicit zero outputs, never a masked NaN
+   ! -----------------------------------------------------------------
+   subroutine test_land_cells_zero_with_nan_inputs(error)
+      !! A land cell (`wet_mask == 0`) with raw inputs that are a mix
+      !! of 0 and NaN must come back with ALL EIGHT driver outputs
+      !! exactly 0.0 and finite -- `bulk_flux_driver_2d` must branch on
+      !! `wet_mask` and skip the `bulk_flux_column` call outright
+      !! rather than multiply a (possibly NaN) column result by a zero
+      !! mask (`NaN*0.0 == NaN`).  The adjacent wet cell's outputs must
+      !! be unaffected and must match a direct `bulk_flux_column` call.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NX = 2, NY = 1
+      real(wp) :: u_w(NX, NY), v_w(NX, NY), u_c(NX, NY), v_c(NX, NY)
+      real(wp) :: ta(NX, NY), qa(NX, NY), slp(NX, NY), sst(NX, NY), wet(NX, NY)
+      real(wp) :: taux_c(NX, NY), tauy_c(NX, NY), qsens(NX, NY), qlat(NX, NY)
+      real(wp) :: evapm(NX, NY), cd(NX, NY), ch(NX, NY), ce(NX, NY)
+      real(wp) :: taux_h, tauy_h, sens_h, lat_h, evap_h, cd_h, ch_h, ce_h, ustar_h
+      real(wp) :: nan_val
+      real(wp), parameter :: U10 = 7.0_wp
+      real(wp), parameter :: SST_WET = 19.0_wp
+      real(wp), parameter :: TA_WET = 17.0_wp + BULK_T0_KELVIN
+      real(wp), parameter :: QA_WET = 0.009_wp
+
+      nan_val = ieee_value(1.0_wp, ieee_quiet_nan)
+
+      ! Cell 1: land, inputs a mix of 0 and NaN.
+      u_w(1, 1) = nan_val; v_w(1, 1) = 0.0_wp
+      u_c(1, 1) = nan_val; v_c(1, 1) = 0.0_wp
+      ta(1, 1) = nan_val; qa(1, 1) = 0.0_wp
+      slp(1, 1) = nan_val; sst(1, 1) = nan_val
+      wet(1, 1) = 0.0_wp
+
+      ! Cell 2: wet, ordinary inputs.
+      u_w(2, 1) = U10; v_w(2, 1) = 0.0_wp
+      u_c(2, 1) = 0.0_wp; v_c(2, 1) = 0.0_wp
+      ta(2, 1) = TA_WET; qa(2, 1) = QA_WET
+      slp(2, 1) = SLP_STD; sst(2, 1) = SST_WET
+      wet(2, 1) = 1.0_wp
+
+      call bulk_flux_driver_2d(NX, NY, u_w, v_w, u_c, v_c, ta, qa, slp, sst, wet, &
+                               Z_WIND, Z_TA, N_ITER, &
+                               taux_c, tauy_c, qsens, qlat, evapm, cd, ch, ce)
+
+      call check(error, taux_c(1, 1) == 0.0_wp .and. ieee_is_finite(taux_c(1, 1)), &
+                 "land taux_cell must be exactly 0 and finite")
+      if (allocated(error)) return
+      call check(error, tauy_c(1, 1) == 0.0_wp .and. ieee_is_finite(tauy_c(1, 1)), &
+                 "land tauy_cell must be exactly 0 and finite")
+      if (allocated(error)) return
+      call check(error, qsens(1, 1) == 0.0_wp .and. ieee_is_finite(qsens(1, 1)), &
+                 "land q_sens must be exactly 0 and finite")
+      if (allocated(error)) return
+      call check(error, qlat(1, 1) == 0.0_wp .and. ieee_is_finite(qlat(1, 1)), &
+                 "land q_lat must be exactly 0 and finite")
+      if (allocated(error)) return
+      call check(error, evapm(1, 1) == 0.0_wp .and. ieee_is_finite(evapm(1, 1)), &
+                 "land evap_massflux must be exactly 0 and finite")
+      if (allocated(error)) return
+      call check(error, cd(1, 1) == 0.0_wp .and. ieee_is_finite(cd(1, 1)), &
+                 "land cd must be exactly 0 and finite")
+      if (allocated(error)) return
+      call check(error, ch(1, 1) == 0.0_wp .and. ieee_is_finite(ch(1, 1)), &
+                 "land ch must be exactly 0 and finite")
+      if (allocated(error)) return
+      call check(error, ce(1, 1) == 0.0_wp .and. ieee_is_finite(ce(1, 1)), &
+                 "land ce must be exactly 0 and finite")
+      if (allocated(error)) return
+
+      ! The wet cell must be unaffected by the land neighbour.
+      call bulk_flux_column(U10, 0.0_wp, 0.0_wp, 0.0_wp, TA_WET, QA_WET, SLP_STD, SST_WET, &
+                            Z_WIND, Z_TA, N_ITER, &
+                            taux_h, tauy_h, sens_h, lat_h, evap_h, cd_h, ch_h, ce_h, ustar_h)
+      call check(error, abs(taux_c(2, 1) - taux_h) < 1.0e-12_wp*max(abs(taux_h), 1.0e-30_wp), &
+                 "wet cell taux must be unaffected by a land neighbour")
+      if (allocated(error)) return
+      call check(error, abs(ch(2, 1) - ch_h) < 1.0e-12_wp*max(abs(ch_h), 1.0e-30_wp), &
+                 "wet cell ch must be unaffected by a land neighbour")
+   end subroutine test_land_cells_zero_with_nan_inputs
+
+   ! -----------------------------------------------------------------
+   ! T8 — longwave: Stefan-Boltzmann law + linear emissivity scaling
+   ! -----------------------------------------------------------------
+   subroutine test_longwave_up_matches_stefan_boltzmann(error)
+      type(error_type), allocatable, intent(out) :: error
+      real(wp), parameter :: SST_K = 300.0_wp
+      real(wp) :: lw_full, lw_half, expected
+
+      lw_full = bulk_flux_longwave_up(SST_K, 1.0_wp)
+      expected = BULK_STEFAN_BOLTZMANN*SST_K**4
+      call check(error, abs(lw_full - expected) < 1.0e-12_wp*expected, &
+                 "longwave_up at emissivity=1 must match sigma*SST**4 to 1e-12 relative")
+      if (allocated(error)) return
+
+      lw_half = bulk_flux_longwave_up(SST_K, 0.5_wp)
+      call check(error, abs(lw_half - 0.5_wp*lw_full) < 1.0e-12_wp*lw_full, &
+                 "longwave_up must scale linearly with emissivity")
+   end subroutine test_longwave_up_matches_stefan_boltzmann
 
 end module test_ocean_bulk_flux
