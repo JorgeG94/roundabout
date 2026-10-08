@@ -839,6 +839,26 @@ over the CAVITY and the console line reports `missing=n/total`.
 Requesting one whose prerequisite knob is off is a **fail-loud**
 configure error.
 
+**ACCESS-OM3-parity diagnostics** (derived catalog, opt in through
+`diags`; C7 part 1 — roundabout's own names, a later converter maps
+them to the MOM6/CMOR names noted below): `umo` / `vmo` (kg/s, 3-D,
+MOM6 `umo`/`vmo`) are `rho_0 ·` the per-layer face flux continuity
+ITSELF differences to advance `h_layer` (`mass_flux_x_layer` /
+`mass_flux_y_layer`) — not a re-derived cell-centre reconstruction —
+so they are registered `is_extensive=.true.` (a target layer/density
+bin SUMS the source layers it spans, matching the physical meaning of
+a flux) and remap through every output vcoord including
+`DIAG_VGRID_DENSITY` (needed for overturning in density space).
+`tauuo` / `tauvo` (N/m², 2-D, MOM6 `tauuo`/`tauvo`) are the stress the
+momentum solve actually applied (`surface_stress%tau_x`/`tau_y`), face
+values reported as-is. `Kd_interface` (m²/s, 3-D, MOM6 `difvho`) is
+the single post-`vmix_assemble` diffusivity `vmix%kt` every interior +
+boundary-layer closure contributes into and `vdiff_apply_tracers`
+consumes for temperature — not one closure's own piece (cf.
+`Kd_EPBL`/`Kd_KSHEAR`). All five report their native face/interface
+value at the T-cell's WEST/SOUTH/bottom-interface index (the `u`/`KE`
+face→T-cell convention), unaveraged.
+
 ### `&boundary_nml`
 
 | Parameter | Default | Description |
