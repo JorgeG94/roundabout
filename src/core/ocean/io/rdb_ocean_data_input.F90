@@ -781,7 +781,7 @@ contains
       !! record — `ryf_start_date` must then land exactly on the first
       !! file's first record (the registration does not re-slice a
       !! bigger interannual axis down to the window; that composition
-      !! is a later wave's concern, see `RESULT_C2a.md`).
+      !! is left to the C2c atmospheric-forcing provider PR).
       class(ocean_data_input_t), intent(inout) :: this
       character(len=*), intent(in) :: files(:)
       character(len=*), intent(in) :: var
@@ -990,10 +990,12 @@ contains
 
          do k = 2, fld%nt
             if (fld%t_axis(k) <= fld%t_axis(k - 1)) then
-               call logger%error("ocean_data_input: '"//trim(var)//"' concatenated "// &
-                                 "file-list time axis not monotonically increasing at "// &
-                                 "record "//to_string(k)//" — check file ordering")
-               error stop "ocean_data_input: non-monotonic multi-file time axis"
+               call filelist_close_partial(fld, nfiles)
+               call fail("ocean_data_input: '"//trim(var)//"' concatenated "// &
+                         "file-list time axis not monotonically increasing at "// &
+                         "record "//to_string(k)//" — check file ordering", &
+                         ierr, OCEAN_STATUS_ERR_IO)
+               return
             end if
          end do
 
@@ -1022,16 +1024,27 @@ contains
    end subroutine ocean_data_input_register_2d_filelist
 
    subroutine filelist_close_partial(fld, n_opened)
-      !! Close the first `n_opened` file handles of a `multifile` field
-      !! whose registration aborted partway through the file loop — a
-      !! failed `register_2d_filelist` must not leak NetCDF handles.
+      !! Undo a `register_2d_filelist` that aborted after claiming its
+      !! slot's storage: close the first `n_opened` NetCDF handles and
+      !! release the slot's per-file arrays and time axis.  The registry
+      !! count was never incremented, so the slot is reused by the next
+      !! registration — which must not find these arrays still allocated.
       type(data_input_field_t), intent(inout) :: fld
       integer, intent(in) :: n_opened
       integer :: k, discard_ierr
-      if (.not. allocated(fld%file_ncid)) return
-      do k = 1, min(n_opened, size(fld%file_ncid))
-         call nc_close(fld%file_ncid(k), ierr=discard_ierr)
-      end do
+      if (allocated(fld%file_ncid)) then
+         do k = 1, min(n_opened, size(fld%file_ncid))
+            call nc_close(fld%file_ncid(k), ierr=discard_ierr)
+         end do
+      end if
+      if (allocated(fld%file_ncid)) deallocate (fld%file_ncid)
+      if (allocated(fld%file_varid)) deallocate (fld%file_varid)
+      if (allocated(fld%file_nrec)) deallocate (fld%file_nrec)
+      if (allocated(fld%file_rec_start)) deallocate (fld%file_rec_start)
+      if (allocated(fld%t_axis)) deallocate (fld%t_axis)
+      fld%nt = 0
+      fld%nfiles = 0
+      fld%multifile = .false.
    end subroutine filelist_close_partial
 
    subroutine segment_geometry(grid, edge, i0, j0, nx, ny, dest_i0, dest_j0, ierr)

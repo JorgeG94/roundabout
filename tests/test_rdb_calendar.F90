@@ -120,6 +120,23 @@ contains
       call parse_date("", date, ok)
       call check(error,.not. ok, "parse_date: empty string must report ok=.false.")
       if (allocated(error)) return
+
+      ! Impossible days must be refused, not rolled into the next month.
+      call parse_date("2023-02-29", date, ok)
+      call check(error,.not. ok, "parse_date: 2023-02-29 (not a leap year) must be refused")
+      if (allocated(error)) return
+      call parse_date("2024-04-31", date, ok)
+      call check(error,.not. ok, "parse_date: 2024-04-31 (April has 30 days) must be refused")
+      if (allocated(error)) return
+      call parse_date("1900-02-29", date, ok)
+      call check(error,.not. ok, "parse_date: 1900-02-29 (century, not /400) must be refused")
+      if (allocated(error)) return
+      call parse_date("2024-02-29", date, ok)
+      call check(error, ok, "parse_date: 2024-02-29 (leap year) must be accepted")
+      if (allocated(error)) return
+      call parse_date("2000-02-29", date, ok)
+      call check(error, ok, "parse_date: 2000-02-29 (divisible by 400) must be accepted")
+      if (allocated(error)) return
    end subroutine test_parse_date
 
    subroutine test_parse_time_units(error)

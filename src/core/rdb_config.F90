@@ -3403,13 +3403,13 @@ module rdb_config
          !! `rdb_calendar::parse_date`); consumed by the absolute-date
          !! forcing readers of later OM3 waves, not by anything in this
          !! wave.
-      character(len=16) :: calendar = "gregorian"
+      character(len=24) :: calendar = "gregorian"
          !! `&time_nml`: calendar backing `start_date`. Only proleptic
          !! Gregorian is implemented
          !! (`rdb_calendar::calendar_name_is_implemented` --
          !! gregorian/standard/proleptic_gregorian all mean the same day
-         !! count here); `noleap`/`360_day` fail loud at
-         !! `validate_config` rather than silently aliasing to Gregorian.
+         !! count here). `noleap`/`360_day` are not offered: the enum
+         !! refuses them rather than silently aliasing them to Gregorian.
       character(len=8) :: time_unit = "s"
          !! Unit applied to the long-time fields: `t_end`,
          !! `status_interval` (logging cadence), `ocean_diag_dt_out`
@@ -8504,8 +8504,8 @@ contains
                             "('' = plain relative clock, bit-identical)"))
       ps => cfg%calendar
       call g%add(nml_enum("calendar", ps, "Calendar backing start_date", &
-                          allowed=[character(len=17) :: "gregorian", "standard", &
-                                   "proleptic_gregorian", "noleap", "360_day"]))
+                          allowed=[character(len=19) :: "gregorian", "standard", &
+                                   "proleptic_gregorian"]))
       call schema%add_group(g)
    end subroutine register_time
 
