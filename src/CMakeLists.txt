@@ -49,6 +49,10 @@ set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/vertical/rdb_ocean_top_drag.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/vertical/rdb_ocean_surface_stress.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/vertical/rdb_ocean_surface_flux.F90
+    # C3 (OM3 forcing plan): Large & Yeager bulk air-sea flux column kernel + 2D
+    # driver.  Standalone -- no dependency on the state types above, so it sits
+    # wherever alphabetically convenient.
+    ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/vertical/rdb_ocean_bulk_flux.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/vertical/rdb_ocean_geothermal.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/vertical/rdb_ocean_cavity_melt.F90
     # P2b ice-shelf basal-melt COUPLING: the slot, the far-field sampler (metres

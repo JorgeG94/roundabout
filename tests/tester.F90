@@ -123,6 +123,7 @@ program rdb_tests
    use test_ocean_dyn_split, only: ocean_dyn_split_collect => collect_ocean_dyn_split_tests
    use test_ocean_sponge, only: ocean_sponge_collect => collect_ocean_sponge_tests
    use test_ocean_surface_flux, only: ocean_surface_flux_collect => collect_ocean_surface_flux_tests
+   use test_ocean_bulk_flux, only: ocean_bulk_flux_collect => collect_ocean_bulk_flux_tests
    use test_ocean_surface_forcing_type, only: ocean_surface_forcing_type_collect => &
                                               collect_ocean_surface_forcing_type_tests
    use test_ocean_frazil, only: ocean_frazil_collect => collect_ocean_frazil_tests
@@ -344,6 +345,7 @@ program rdb_tests
                 new_testsuite("ocean_dyn_split", ocean_dyn_split_collect), &
                 new_testsuite("ocean_sponge", ocean_sponge_collect), &
                 new_testsuite("ocean_surface_flux", ocean_surface_flux_collect), &
+                new_testsuite("ocean_bulk_flux", ocean_bulk_flux_collect), &
                 new_testsuite("ocean_surface_forcing_type", ocean_surface_forcing_type_collect), &
                 new_testsuite("ocean_frazil", ocean_frazil_collect), &
                 new_testsuite("ocean_ice_enthalpy", ocean_ice_enthalpy_collect), &
