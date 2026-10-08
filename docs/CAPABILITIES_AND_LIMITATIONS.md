@@ -56,7 +56,7 @@ The full operator-by-operator surface, with knobs and limits, is in the [Ocean p
 - **GLS, k-ω / MY2.5** turbulence closures. Shipped instead: PP81 interior, KPP boundary layer (default on), EPBL (`&ocean_epbl_nml`), kappa-shear (`&ocean_kappa_shear_nml`), tidal mixing, convective adjustment, double diffusion, and two mutually exclusive background schemes.
 - **TEOS-10 GSW in-situ EOS branch.** Wright (1997) and a Roquet et al. (2015) polynomial ship; a full GSW branch does not.
 - **Sediment transport, biogeochemistry, vegetation drag.** No source terms beyond the surface/bottom flux set.
-- **Online bulk aerodynamic flux formulae** (Zeng / COARE). Forcing must be pre-computed to model-grid `τ`, `Q_net`, `E−P` — there is no in-model conversion from `(U10, T_air, q_air, SST, SLP)`.
+- **Online bulk aerodynamic flux formulae.** The Large & Yeager (2004, 2009) CORE/OMIP column algorithm ships as a standalone, GPU-safe kernel (`rdb_ocean_bulk_flux`: `bulk_flux_column` + the `bulk_flux_driver_2d` 2D driver) — `(U10, T_air, q_air, SST, SLP)` → `(τ, Q_sens, Q_lat, evap, C_d/C_h/C_e)` via the stability-iterated Monin-Obukhov correction. It is **not wired to a forcing source or a namelist yet**: there is no atmospheric-state reader/regridder (`atm_state_t`, planned) and no `&ocean_bulk_flux_nml` registered on `cfg%ocean`, so production forcing is still pre-computed to model-grid `τ`, `Q_net`, `E−P` through `&ocean_dataovr_nml`. COARE / Zeng alternatives remain unshipped.
 - **Sea ice** is a dynamical core + column model, not a complete ice model — no ridging, melt ponds or lateral melt; see the [Sea ice](#sea-ice) subsection and "What Roundabout is not".
 
 ---
@@ -1030,8 +1030,11 @@ Continuity is a transport equation (`∂h/∂t = -∇·(hu)`) solved with
   wind seam is correct under decomposition (the flux tags need no ghost
   fill: they are applied column-locally).  The stress file is C-grid
   staggered and must carry `nx_phys+1` x-face values / `ny_phys+1`
-  y-face values. Online bulk formulae are out of scope: v1 consumes
-  offline-preprocessed, model-grid fluxes. The sea-ice `tau_a`
+  y-face values. Online bulk formulae are not wired into this reader:
+  v1 consumes offline-preprocessed, model-grid fluxes; the Large &
+  Yeager column kernel (`rdb_ocean_bulk_flux`, above) is a standalone
+  building block for a future atmospheric-state consumer, not a
+  `&ocean_dataovr_nml` tag. The sea-ice `tau_a`
   atmospheric-stress snapshot is still taken once at configure, so it
   does **not** follow a time-varying wind.
 - **Dynamic wetting/drying** (`&ocean_wetdry_nml enable`, default off ⇒
