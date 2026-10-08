@@ -99,6 +99,12 @@ contains
                   new_unittest("derived_ke_total_uniform_flow", test_derived_ke_total), &
                   new_unittest("derived_transport_x_uniform_flow", test_derived_transport_x), &
                   new_unittest("derived_transport_y_uniform_flow", test_derived_transport_y), &
+                  new_unittest("derived_umo_uniform_flow", test_derived_umo), &
+                  new_unittest("derived_vmo_uniform_flow", test_derived_vmo), &
+                  new_unittest("derived_umo_density_remap_smoke", test_derived_umo_density_remap_smoke), &
+                  new_unittest("derived_tauuo_matches_applied_stress", test_derived_tauuo), &
+                  new_unittest("derived_tauvo_matches_applied_stress", test_derived_tauvo), &
+                  new_unittest("derived_kd_interface_matches_vmix_kt", test_derived_kd_interface), &
                   new_unittest("derived_mld_density_step_profile", test_derived_mld), &
                   new_unittest("derived_mld_density_ignores_vanished_filler", &
                                test_derived_mld_vanished), &
@@ -1351,15 +1357,16 @@ contains
    ! ---------------------------------------------------------------------
 
    subroutine test_derived_catalog_size(error)
-      !! Catalog ships 23 entries: 7 base + 3 sea-ice velocity diags +
+      !! Catalog ships 28 entries: 7 base + 3 sea-ice velocity diags +
       !! 13 ice-shelf-cavity diags (11 melt-interface, gated on
       !! `&ocean_cavity_melt_nml`, and 2 geometry, gated on
-      !! `&ocean_cavity_dyn_nml`).  Locks the count so we notice if an
-      !! entry is accidentally dropped.
+      !! `&ocean_cavity_dyn_nml`) + 5 ACCESS-OM3-parity diags (C7 part 1:
+      !! umo, vmo, tauuo, tauvo, Kd_interface).  Locks the count so we
+      !! notice if an entry is accidentally dropped.
       type(error_type), allocatable, intent(out) :: error
       integer :: n
       n = derived_catalog_size()
-      call check(error, n == 23, "derived catalog should hold 23 entries")
+      call check(error, n == 28, "derived catalog should hold 28 entries")
    end subroutine test_derived_catalog_size
 
    subroutine test_derived_h_layer(error)
@@ -1729,6 +1736,183 @@ contains
       end block checks
       call state%destroy()
    end subroutine test_derived_transport_y
+
+   subroutine test_derived_umo(error)
+      !! Uniform flow + uniform thickness on a Cartesian grid (dy_cu ==
+      !! DX == 1): umo(i,j,k) = rho0 · mass_flux_x_layer(i,j,k)
+      !!                       = rho0 · U0 · H_LAYER · dy_cu = rho0·U0·H_LAYER.
+      !! Summed over k, divided by (rho0·dy_cu), it must equal the
+      !! depth-integrated `transport_x` diag (= U0·H_LAYER·NZ) — the two
+      !! diagnostics read different state (the continuity-consistent
+      !! face flux vs. a cell-centre average), so this equality only
+      !! holds because the flow is spatially uniform.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_state_t) :: state
+      real(wp), parameter :: U0 = 0.1_wp, H_LAYER = 100.0_wp
+      real(wp) :: expected, err, sum_over_k
+      integer :: k
+      checks: block
+         call setup_state(grid, state)
+         state%multilayer%mass_flux_x_layer = U0*H_LAYER*DX
+         call register_derived(state, "umo", time_op=DIAG_OP_INSTANT, dt_out=1.0_wp)
+         call ocean_state_enter_data(state)
+         !$acc update device(state%multilayer%mass_flux_x_layer)
+         call state%diag%step(state, dt=1.0_wp, t=1.0_wp)
+         call ocean_state_exit_data(state)
+
+         expected = state%eos%rho0*U0*H_LAYER*DX
+         err = abs(state%diag%vars(1)%output_buffer(3, 2, 1) - expected)
+         call check(error, err < 1.0e-9_wp, &
+                    "umo on uniform flow should equal rho0·u·h·dy per layer to FP")
+         if (allocated(error)) exit checks
+
+         sum_over_k = 0.0_wp
+         do k = 1, NZ
+            sum_over_k = sum_over_k + state%diag%vars(1)%output_buffer(3, 2, k)
+         end do
+         sum_over_k = sum_over_k/(state%eos%rho0*DX)
+         call check(error, abs(sum_over_k - U0*H_LAYER*real(NZ, wp)) < 1.0e-9_wp, &
+                    "sum_k umo / (rho0·dy) should equal the depth-integrated transport_x")
+      end block checks
+      call state%destroy()
+   end subroutine test_derived_umo
+
+   subroutine test_derived_vmo(error)
+      !! Mirror of `test_derived_umo` for the meridional face.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_state_t) :: state
+      real(wp), parameter :: V0 = 0.05_wp, H_LAYER = 200.0_wp
+      real(wp) :: expected, err
+      checks: block
+         call setup_state(grid, state)
+         state%multilayer%mass_flux_y_layer = V0*H_LAYER*DX
+         call register_derived(state, "vmo", time_op=DIAG_OP_INSTANT, dt_out=1.0_wp)
+         call ocean_state_enter_data(state)
+         !$acc update device(state%multilayer%mass_flux_y_layer)
+         call state%diag%step(state, dt=1.0_wp, t=1.0_wp)
+         call ocean_state_exit_data(state)
+
+         expected = state%eos%rho0*V0*H_LAYER*DX
+         err = abs(state%diag%vars(1)%output_buffer(3, 2, 1) - expected)
+         call check(error, err < 1.0e-9_wp, &
+                    "vmo on uniform flow should equal rho0·v·h·dx per layer to FP")
+      end block checks
+      call state%destroy()
+   end subroutine test_derived_vmo
+
+   subroutine test_derived_umo_density_remap_smoke(error)
+      !! C7: umo must wire through the SAME rho-coordinate remap used
+      !! for overturning-in-density-space diagnostics (is_extensive=
+      !! .true., so bins SUM rather than average the per-layer
+      !! transport). Registers umo on DIAG_VGRID_DENSITY and checks the
+      !! step does not fail loud and produces the right output shape —
+      !! the remap arithmetic itself (intensive vs extensive dispatch)
+      !! is covered generically by test_ocean_diag_remap's
+      !! diag_dispatch_honors_is_extensive.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_state_t) :: state
+      real(wp), parameter :: RHO_OUT(3) = [1024.0_wp, 1025.0_wp, 1026.0_wp]
+      integer :: it, is_, k
+      checks: block
+         call setup_state(grid, state)
+         state%multilayer%h_layer = 10.0_wp
+         state%multilayer%mass_flux_x_layer = 1.0_wp
+         it = state%multilayer%idx_temperature
+         is_ = state%multilayer%idx_salinity
+         do k = 1, NZ
+            state%multilayer%tracers(it)%hTr(:, :, k) = 10.0_wp*(10.0_wp - real(k, wp))
+            state%multilayer%tracers(is_)%hTr(:, :, k) = 10.0_wp*35.0_wp
+         end do
+
+         call state%diag%set_output_density_levels(RHO_OUT)
+         call register_derived(state, "umo", time_op=DIAG_OP_INSTANT, dt_out=1.0_wp, &
+                               coord=DIAG_VGRID_DENSITY)
+         call ocean_state_enter_data(state)
+         !$acc update device(state%multilayer%mass_flux_x_layer)
+         call state%diag%step(state, dt=1.0_wp, t=1.0_wp)
+         call ocean_state_exit_data(state)
+
+         call check(error, size(state%diag%vars(1)%output_buffer, 3) == size(RHO_OUT), &
+                    "umo on DIAG_VGRID_DENSITY should size its output to the density levels")
+      end block checks
+      call state%destroy()
+   end subroutine test_derived_umo_density_remap_smoke
+
+   subroutine test_derived_tauuo(error)
+      !! tauuo is a direct, unaveraged read of the applied stress
+      !! `surface_stress%tau_x` (copyin-mapped: set BEFORE enter_data so
+      !! the map carries the host value to device).
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_state_t) :: state
+      real(wp), parameter :: TAUX0 = 0.07_wp
+      real(wp) :: err
+      checks: block
+         call setup_state(grid, state)
+         state%surface_stress%tau_x = TAUX0
+         call register_derived(state, "tauuo", time_op=DIAG_OP_INSTANT, dt_out=1.0_wp)
+         call ocean_state_enter_data(state)
+         call state%diag%step(state, dt=1.0_wp, t=1.0_wp)
+         call ocean_state_exit_data(state)
+
+         err = abs(state%diag%vars(1)%output_buffer(3, 2, 1) - TAUX0)
+         call check(error, err < 1.0e-12_wp, &
+                    "tauuo should equal the applied tau_x to FP")
+      end block checks
+      call state%destroy()
+   end subroutine test_derived_tauuo
+
+   subroutine test_derived_tauvo(error)
+      !! Mirror of `test_derived_tauuo` for tau_y.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_state_t) :: state
+      real(wp), parameter :: TAUY0 = -0.03_wp
+      real(wp) :: err
+      checks: block
+         call setup_state(grid, state)
+         state%surface_stress%tau_y = TAUY0
+         call register_derived(state, "tauvo", time_op=DIAG_OP_INSTANT, dt_out=1.0_wp)
+         call ocean_state_enter_data(state)
+         call state%diag%step(state, dt=1.0_wp, t=1.0_wp)
+         call ocean_state_exit_data(state)
+
+         err = abs(state%diag%vars(1)%output_buffer(3, 2, 1) - TAUY0)
+         call check(error, err < 1.0e-12_wp, &
+                    "tauvo should equal the applied tau_y to FP")
+      end block checks
+      call state%destroy()
+   end subroutine test_derived_tauvo
+
+   subroutine test_derived_kd_interface(error)
+      !! Kd_interface is a direct read of the post-vmix_assemble `kt`
+      !! (copyin-mapped: set BEFORE enter_data). Stamp a k-varying
+      !! pattern and verify the buffer matches the first NZ interfaces.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_state_t) :: state
+      integer :: k
+      real(wp) :: err, expected
+      checks: block
+         call setup_state(grid, state)
+         do k = 1, NZ + 1
+            state%vmix%kt(:, :, k) = 1.0e-4_wp*real(k, wp)
+         end do
+         call register_derived(state, "Kd_interface", time_op=DIAG_OP_INSTANT, dt_out=1.0_wp)
+         call ocean_state_enter_data(state)
+         call state%diag%step(state, dt=1.0_wp, t=1.0_wp)
+         call ocean_state_exit_data(state)
+
+         expected = 1.0e-4_wp*real(2, wp)
+         err = abs(state%diag%vars(1)%output_buffer(3, 2, 2) - expected)
+         call check(error, err < 1.0e-12_wp, &
+                    "Kd_interface should be a direct copy of vmix%kt on its first NZ interfaces")
+      end block checks
+      call state%destroy()
+   end subroutine test_derived_kd_interface
 
    subroutine test_derived_mld(error)
       !! 3-layer column, surface (k=NZ=3) and middle (k=2) at the

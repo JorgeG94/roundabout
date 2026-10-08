@@ -40,6 +40,7 @@ module rdb_ocean_diag_derived
    public :: fill_h_layer, fill_rho_layer, fill_vorticity_z, fill_vorticity_z_impl
    public :: fill_ke_total, fill_transport_x, fill_transport_y
    public :: fill_mld_density
+   public :: fill_umo, fill_vmo, fill_tauuo, fill_tauvo, fill_kd_interface
    public :: fill_ice_speed, fill_ice_u, fill_ice_v
    public :: fill_melt, fill_melt_m_per_yr, fill_thermal_driving
    public :: fill_haline_driving, fill_tbdry, fill_sbdry, fill_tfreeze_ib
@@ -75,9 +76,17 @@ module rdb_ocean_diag_derived
          !! The fill writes `DIAG_MISSING_VALUE` at land T-cells, so the
          !! NetCDF variable advertises `_FillValue` on BOTH registration
          !! paths, independent of `requires` and `mask_vanished_layers`.
+      logical :: is_extensive = .false.
+         !! Forwarded to `state%diag%register`'s `is_extensive` on the
+         !! remap path (C7): `.false.` (default) is the catalog's existing
+         !! behaviour — INTENSIVE, weighted-average remap (right for a
+         !! layer-mean quantity like `rho_layer`/`vorticity_z`). A
+         !! per-layer FLUX (umo/vmo) is physically EXTENSIVE — combining
+         !! two source layers into one target bin must SUM their
+         !! transports, not average them — so those entries set `.true.`.
    end type derived_entry_t
 
-   integer, parameter :: N_CATALOG = 23
+   integer, parameter :: N_CATALOG = 28
    type(derived_entry_t) :: CATALOG(N_CATALOG)
    logical :: catalog_initialised = .false.
 
@@ -259,6 +268,46 @@ contains
                     standard_name="sea_water_column_thickness", &
                     fill=fill_water_column, is_layered=.false., &
                     requires=DERIVED_REQ_CAVITY_DYN)
+      ! ---- ACCESS-OM3 parity (C7 part 1): 3-D layer mass transports,
+      ! the applied wind stress and the total interior+boundary-layer
+      ! diapycnal diffusivity for heat.  Intended MOM6/CMOR names noted
+      ! per entry — a later converter (C8) does the rename; this catalog
+      ! keeps roundabout's own naming (REFERENCE.md documents the map).
+      CATALOG(24) = derived_entry_t( &
+                    name="umo", &
+                    long_name="ocean_mass_x_transport_per_layer", &
+                    units="kg s-1", &
+                    standard_name="ocean_mass_x_transport", &
+                    fill=fill_umo, is_layered=.true., is_extensive=.true.)
+      ! MOM6/CMOR name: umo.
+      CATALOG(25) = derived_entry_t( &
+                    name="vmo", &
+                    long_name="ocean_mass_y_transport_per_layer", &
+                    units="kg s-1", &
+                    standard_name="ocean_mass_y_transport", &
+                    fill=fill_vmo, is_layered=.true., is_extensive=.true.)
+      ! MOM6/CMOR name: vmo.
+      CATALOG(26) = derived_entry_t( &
+                    name="tauuo", &
+                    long_name="surface_downward_eastward_wind_stress_on_u_face", &
+                    units="N m-2", &
+                    standard_name="surface_downward_x_stress", &
+                    fill=fill_tauuo, is_layered=.false.)
+      ! MOM6/CMOR name: tauuo.
+      CATALOG(27) = derived_entry_t( &
+                    name="tauvo", &
+                    long_name="surface_downward_northward_wind_stress_on_v_face", &
+                    units="N m-2", &
+                    standard_name="surface_downward_y_stress", &
+                    fill=fill_tauvo, is_layered=.false.)
+      ! MOM6/CMOR name: tauvo.
+      CATALOG(28) = derived_entry_t( &
+                    name="Kd_interface", &
+                    long_name="total_interior_plus_boundary_layer_diapycnal_diffusivity_for_heat", &
+                    units="m2 s-1", &
+                    standard_name="ocean_vertical_heat_diffusivity", &
+                    fill=fill_kd_interface, is_layered=.true.)
+      ! MOM6/CMOR name: difvho.
       catalog_initialised = .true.
    end subroutine ensure_catalog_initialised
 
@@ -365,7 +414,7 @@ contains
                                   long_name=trim(entry%long_name), &
                                   standard_name=trim(entry%standard_name), &
                                   time_op=time_op, dt_out=dt_out, &
-                                  output_vgrid=ocoord, remap=remap, is_extensive=.false., &
+                                  output_vgrid=ocoord, remap=remap, is_extensive=entry%is_extensive, &
                                   ! A `masks_land` entry (`vorticity_z`) writes
                                   ! `DIAG_MISSING_VALUE` at every land T-cell on this
                                   ! (remapped, layered) path too, so it must advertise
@@ -803,6 +852,150 @@ contains
          buf(i, j, 1) = col
       end do
    end subroutine fill_transport_y_impl
+
+   subroutine fill_umo(state_handle, buf)
+      !! 3-D layer mass transport through the zonal (u) face, kg/s —
+      !! MOM6/CMOR `umo`.  Reads `ms%mass_flux_x_layer`, the SAME
+      !! per-layer volume flux (`u · h_face · dy_cu`, m^3/s) continuity
+      !! differences to advance `h_layer` each step — not a re-derived
+      !! cell-centre reconstruction (cf. `transport_x`, which averages
+      !! the two bounding faces onto the T-cell for a depth-integrated
+      !! VELOCITY diagnostic). `umo = rho_0 · mass_flux_x_layer`
+      !! (Boussinesq: mass flux through a face is the reference density
+      !! times the volume flux). See `fill_mass_transport_x_impl` for
+      !! the face/T-cell index convention.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call fill_mass_transport_x_impl(state%multilayer%mass_flux_x_layer, &
+                                         state%eos%rho0, buf)
+      end select
+   end subroutine fill_umo
+
+   pure subroutine fill_mass_transport_x_impl(mass_flux_x, rho0, buf)
+      !! `buf(i,j,k) = rho0 * mass_flux_x(i,j,k)` — the WEST-face mass
+      !! transport of T-cell (i,j,k) (face array index `i` is the west
+      !! face of T-cell `i`, `i+1` the east face — the same convention
+      !! `fill_ke_total_impl`/`fill_transport_x_impl` use to bracket a
+      !! T-cell, except here the face value is reported AS-IS, not
+      !! averaged: MOM6's `umo` is itself a face quantity). The
+      !! eastmost domain face (`i = nx+1`) has no T-cell slot in a
+      !! (nx,ny,nz)-shaped buffer and is dropped, same as `u`/`KE`.
+      ! assumed-shape-ok: diag fill — fires once per output frame (cadence-bounded).
+      real(wp), intent(in)    :: mass_flux_x(:, :, :)
+      real(wp), intent(in)    :: rho0
+      real(wp), intent(inout) :: buf(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      integer :: i, j, k, nx, ny, nz
+      nx = min(size(buf, 1), size(mass_flux_x, 1) - 1)
+      ny = min(size(buf, 2), size(mass_flux_x, 2))
+      nz = min(size(buf, 3), size(mass_flux_x, 3))
+      do concurrent(k=1:nz, j=1:ny, i=1:nx)
+         buf(i, j, k) = rho0*mass_flux_x(i, j, k)
+      end do
+   end subroutine fill_mass_transport_x_impl
+
+   subroutine fill_vmo(state_handle, buf)
+      !! 3-D layer mass transport through the meridional (v) face, kg/s
+      !! — MOM6/CMOR `vmo`.  Mirror of `fill_umo`: reads
+      !! `ms%mass_flux_y_layer`, the time-consistent flux continuity
+      !! actually used to advance `h_layer`.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call fill_mass_transport_y_impl(state%multilayer%mass_flux_y_layer, &
+                                         state%eos%rho0, buf)
+      end select
+   end subroutine fill_vmo
+
+   pure subroutine fill_mass_transport_y_impl(mass_flux_y, rho0, buf)
+      !! `buf(i,j,k) = rho0 * mass_flux_y(i,j,k)` — SOUTH-face mass
+      !! transport of T-cell (i,j,k); mirror of `fill_mass_transport_x_impl`.
+      ! assumed-shape-ok: diag fill — fires once per output frame (cadence-bounded).
+      real(wp), intent(in)    :: mass_flux_y(:, :, :)
+      real(wp), intent(in)    :: rho0
+      real(wp), intent(inout) :: buf(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      integer :: i, j, k, nx, ny, nz
+      nx = min(size(buf, 1), size(mass_flux_y, 1))
+      ny = min(size(buf, 2), size(mass_flux_y, 2) - 1)
+      nz = min(size(buf, 3), size(mass_flux_y, 3))
+      do concurrent(k=1:nz, j=1:ny, i=1:nx)
+         buf(i, j, k) = rho0*mass_flux_y(i, j, k)
+      end do
+   end subroutine fill_mass_transport_y_impl
+
+   subroutine fill_tauuo(state_handle, buf)
+      !! Applied zonal wind stress on the u face (N/m^2) — MOM6/CMOR
+      !! `tauuo`. Direct read of `surface_stress%tau_x`, the stress the
+      !! momentum solve actually applies (not re-derived from a wind
+      !! profile), so it reflects whatever `&ocean_vdiff_nml
+      !! implicit_stress` / cover masking did to it upstream.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call fill_tau_x_impl(state%surface_stress%tau_x, buf)
+      end select
+   end subroutine fill_tauuo
+
+   pure subroutine fill_tau_x_impl(tau_x, buf)
+      !! `buf(i,j,1) = tau_x(i,j)` — WEST-face stress of T-cell (i,j),
+      !! same face/T-cell index convention as `fill_mass_transport_x_impl`.
+      ! assumed-shape-ok: diag fill — fires once per output frame (cadence-bounded).
+      real(wp), intent(in)    :: tau_x(:, :)
+      real(wp), intent(inout) :: buf(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      integer :: i, j, nx, ny
+      nx = min(size(buf, 1), size(tau_x, 1) - 1)
+      ny = min(size(buf, 2), size(tau_x, 2))
+      do concurrent(j=1:ny, i=1:nx)
+         buf(i, j, 1) = tau_x(i, j)
+      end do
+   end subroutine fill_tau_x_impl
+
+   subroutine fill_tauvo(state_handle, buf)
+      !! Applied meridional wind stress on the v face (N/m^2) — MOM6/CMOR
+      !! `tauvo`. Mirror of `fill_tauuo`.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call fill_tau_y_impl(state%surface_stress%tau_y, buf)
+      end select
+   end subroutine fill_tauvo
+
+   pure subroutine fill_tau_y_impl(tau_y, buf)
+      !! `buf(i,j,1) = tau_y(i,j)` — SOUTH-face stress of T-cell (i,j).
+      ! assumed-shape-ok: diag fill — fires once per output frame (cadence-bounded).
+      real(wp), intent(in)    :: tau_y(:, :)
+      real(wp), intent(inout) :: buf(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      integer :: i, j, nx, ny
+      nx = min(size(buf, 1), size(tau_y, 1))
+      ny = min(size(buf, 2), size(tau_y, 2) - 1)
+      do concurrent(j=1:ny, i=1:nx)
+         buf(i, j, 1) = tau_y(i, j)
+      end do
+   end subroutine fill_tau_y_impl
+
+   subroutine fill_kd_interface(state_handle, buf)
+      !! Total diapycnal diffusivity actually applied to temperature
+      !! (m^2/s) — MOM6/CMOR `difvho`. Direct read of `vmix%kt`, the
+      !! single post-`vmix_assemble` field every interior + boundary-layer
+      !! closure (PP81, KPP/EPBL, kappa-shear, tidal mixing, convective
+      !! adjustment, background, double diffusion) contributes into and
+      !! `vdiff_apply_tracers` consumes as `kt_source` — NOT one closure's
+      !! own contribution (cf. `Kd_EPBL`/`Kd_KSHEAR`, which are
+      !! single-closure diagnostics). `kt` is interface-shaped
+      !! (nx,ny,nz+1); `copy3_impl`'s shape-min clips to the first `nz`
+      !! interfaces (same "drop the identically-zero surface interface"
+      !! convention `fill_kd_epbl_impl` documents).
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call copy3_impl(state%vmix%kt, buf)
+      end select
+   end subroutine fill_kd_interface
 
    subroutine fill_mld_density(state_handle, buf)
       !! Mixed-layer depth via the de Boyer Montégut threshold.
