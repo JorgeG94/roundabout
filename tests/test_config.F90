@@ -64,7 +64,8 @@ contains
                   new_unittest("ice_hlim_spec_validity", test_ice_hlim_spec_validity), &
                   new_unittest("nz_stack_guard_refuses_oversized_nz", test_nz_stack_guard), &
                   new_unittest("pv_weno_nghost_gate_radius_plus_one", test_pv_weno_nghost_gate), &
-                  new_unittest("implicit_drag_hbbl_needs_effective_glue", test_glue_hbbl_gate) &
+                  new_unittest("implicit_drag_hbbl_needs_effective_glue", test_glue_hbbl_gate), &
+                  new_unittest("calendar_names_fit_and_validate", test_calendar_names) &
                   ]
    end subroutine collect_config_tests
 
@@ -802,6 +803,41 @@ contains
       open (newunit=io_unit, file="test_all.nml", status="old")
       close (io_unit, status="delete")
    end subroutine test_read_all
+
+   subroutine test_calendar_names(error)
+      !! `&time_nml calendar`: the longest accepted name
+      !! ("proleptic_gregorian", 19 characters) survives both the config
+      !! field and the enum without truncation and validates; a calendar
+      !! that is not implemented ("noleap") is refused.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+      integer :: ierr
+
+      ierr = -999
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+         new_line('a')// &
+         "&time_nml calendar = 'proleptic_gregorian', start_date = '1958-01-01' /"// &
+         new_line('a'), cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "calendar=proleptic_gregorian must parse")
+      if (allocated(error)) return
+      call check(error, trim(cfg%calendar) == "proleptic_gregorian", &
+                 "calendar name truncated: '"//trim(cfg%calendar)//"'")
+      if (allocated(error)) return
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "calendar=proleptic_gregorian must validate")
+      if (allocated(error)) return
+
+      ierr = OCEAN_STATUS_OK
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+         new_line('a')// &
+         "&time_nml calendar = 'noleap' /"//new_line('a'), cfg, ierr=ierr)
+      if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr=ierr)
+      call check(error, ierr /= OCEAN_STATUS_OK, "calendar=noleap must be refused")
+   end subroutine test_calendar_names
 
    subroutine test_missing_file(error)
       !! Missing file should not crash, defaults should be preserved

@@ -158,7 +158,8 @@ contains
       if (ios /= 0) return
       read (t(p2 + 1:), *, iostat=ios, iomsg=emsg) date%d
       if (ios /= 0) return
-      if (date%m < 1 .or. date%m > 12 .or. date%d < 1 .or. date%d > 31) return
+      if (date%m < 1 .or. date%m > 12) return
+      if (date%d < 1 .or. date%d > days_in_month(date%y, date%m)) return
 
       if (len(time_part) > 0) then
          call parse_time_of_day(time_part, date%h, date%mi, date%s, ok)
@@ -166,6 +167,20 @@ contains
       end if
       ok = .true.
    end subroutine parse_date
+
+   pure integer function days_in_month(y, m) result(nd)
+      !! Days in month `m` of proleptic-Gregorian year `y` (leap year:
+      !! divisible by 4, except centuries not divisible by 400), so
+      !! `parse_date` refuses impossible dates such as 2023-02-29 or
+      !! 2024-04-31 instead of rolling them into the next month.
+      integer, intent(in) :: y, m
+      integer, parameter :: n_months = 12
+      integer, parameter :: mdays(n_months) = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+      nd = mdays(m)
+      if (m == 2) then
+         if ((mod(y, 4) == 0 .and. mod(y, 100) /= 0) .or. mod(y, 400) == 0) nd = 29
+      end if
+   end function days_in_month
 
    pure subroutine parse_time_of_day(str, h, mi, s, ok)
       !! "hh:mm:ss[.sss]" -> (h, mi, s). Helper for `parse_date`.

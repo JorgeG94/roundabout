@@ -154,7 +154,7 @@ class Time(Group):
         units='',
         required=False,
         default='gregorian',
-        allowed=('gregorian', 'standard', 'proleptic_gregori', 'noleap', '360_day'),
+        allowed=('gregorian', 'standard', 'proleptic_gregorian'),
     )
 
 
