@@ -18,8 +18,8 @@ module rdb_ocean_tide_astro
    !!   * Cartwright & Tayler (1971) / Cartwright & Edden (1973) (amplitudes).
    !!   * Kowalik & Luick (2019), "Modern Theory and Practice of Tide
    !!     Analysis and Prediction" (Tables I.4 argument, I.6 nodal).
-   use, intrinsic :: iso_fortran_env, only: int64
    use rdb_constants, only: wp
+   use rdb_calendar, only: gregorian_day_number, days_since_1900
    implicit none
    private
 
@@ -60,27 +60,6 @@ module rdb_ocean_tide_astro
       !! Angular frequencies omega_c (rad/s).
 
 contains
-
-   pure function gregorian_day_number(y, m, d) result(jdn)
-      !! Proleptic-Gregorian Julian Day Number (integer, at 00:00 UT).
-      !! Fliegel & Van Flandern algorithm.
-      integer, intent(in) :: y, m, d
-      integer(int64) :: jdn
-      integer(int64) :: a, yy, mm
-      a = int((14 - m)/12, int64)
-      yy = int(y, int64) + 4800_int64 - a
-      mm = int(m, int64) + 12_int64*a - 3_int64
-      jdn = int(d, int64) + (153_int64*mm + 2_int64)/5_int64 + 365_int64*yy &
-            + yy/4_int64 - yy/100_int64 + yy/400_int64 - 32045_int64
-   end function gregorian_day_number
-
-   pure function days_since_1900(y, m, d) result(dnum)
-      !! Days since the astronomical origin 1900-01-01 00:00 UT.
-      integer, intent(in) :: y, m, d
-      real(wp) :: dnum
-      dnum = real(gregorian_day_number(y, m, d) &
-                  - gregorian_day_number(1900, 1, 1), wp)
-   end function days_since_1900
 
    pure subroutine mean_longitudes(dnum, s_deg, h_deg, p_deg, n_deg)
       !! Mean longitudes at day number `dnum` (Schureman polynomials).

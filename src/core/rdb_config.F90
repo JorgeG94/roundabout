@@ -3394,6 +3394,22 @@ module rdb_config
          !! as `dt_max` — always seconds.
       integer :: cfl_interval = 1
          !! Recompute CFL timestep every N steps (1 = every step)
+      character(len=32) :: start_date = ""
+         !! `&time_nml`: proleptic-Gregorian calendar date the model
+         !! clock's `t=0` corresponds to ("YYYY-MM-DD" or "YYYY-MM-DD
+         !! hh:mm:ss"). Empty (the default) leaves `t` a plain relative
+         !! clock -- bit-identical to every namelist shipped before this
+         !! knob existed. Validated at `validate_config` (parsed via
+         !! `rdb_calendar::parse_date`); consumed by the absolute-date
+         !! forcing readers of later OM3 waves, not by anything in this
+         !! wave.
+      character(len=16) :: calendar = "gregorian"
+         !! `&time_nml`: calendar backing `start_date`. Only proleptic
+         !! Gregorian is implemented
+         !! (`rdb_calendar::calendar_name_is_implemented` --
+         !! gregorian/standard/proleptic_gregorian all mean the same day
+         !! count here); `noleap`/`360_day` fail loud at
+         !! `validate_config` rather than silently aliasing to Gregorian.
       character(len=8) :: time_unit = "s"
          !! Unit applied to the long-time fields: `t_end`,
          !! `status_interval` (logging cadence), `ocean_diag_dt_out`
@@ -4282,6 +4298,7 @@ contains
                                        CAVITY_FW_INVALID, CAVITY_FW_VIRTUAL, CAVITY_FW_MASS, &
                                        CAVITY_VC_INVALID, CAVITY_VC_NONE, CAVITY_VC_UNIFORM_OPEN
       use rdb_ocean_cavity, only: parse_cavity_draft_sign, CAVITY_SIGN_INVALID
+      use rdb_calendar, only: date_t, parse_date, calendar_name_is_implemented
       type(config_t), intent(in) :: cfg
       integer, intent(out), optional :: ierr
          !! Non-zero on any cross-knob semantic validation failure when
@@ -4289,6 +4306,8 @@ contains
 
       logical :: has_error
       integer :: lateral_closure_code
+      type(date_t) :: start_date_parsed
+      logical :: start_date_ok
 
       has_error = .false.
 
@@ -4330,6 +4349,20 @@ contains
       if (cfg%t_end <= 0.0_wp) then
          call logger%error("Invalid t_end = "//to_string(cfg%t_end)//": must be > 0")
          has_error = .true.
+      end if
+      if (.not. calendar_name_is_implemented(cfg%calendar)) then
+         call logger%error("Invalid calendar = '"//trim(cfg%calendar)// &
+                           "': only gregorian/standard/proleptic_gregorian are "// &
+                           "implemented (noleap/360_day are a different day-count rule)")
+         has_error = .true.
+      end if
+      if (len_trim(cfg%start_date) > 0) then
+         call parse_date(cfg%start_date, start_date_parsed, start_date_ok)
+         if (.not. start_date_ok) then
+            call logger%error("Invalid start_date = '"//trim(cfg%start_date)// &
+                              "': want 'YYYY-MM-DD' or 'YYYY-MM-DD hh:mm:ss'")
+            has_error = .true.
+         end if
       end if
 
       ! Multilayer parameters
@@ -8465,6 +8498,14 @@ contains
       ps => cfg%time_unit
       call g%add(nml_string("time_unit", ps, &
                             "Unit for the long-time fields: s/min/hr/day/year"))
+      ps => cfg%start_date
+      call g%add(nml_string("start_date", ps, &
+                            "Proleptic-Gregorian date t=0 corresponds to "// &
+                            "('' = plain relative clock, bit-identical)"))
+      ps => cfg%calendar
+      call g%add(nml_enum("calendar", ps, "Calendar backing start_date", &
+                          allowed=[character(len=17) :: "gregorian", "standard", &
+                                   "proleptic_gregorian", "noleap", "360_day"]))
       call schema%add_group(g)
    end subroutine register_time
 

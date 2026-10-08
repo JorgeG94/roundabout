@@ -1,6 +1,11 @@
 # Core infrastructure sources
 set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/core/rdb_constants.F90
+    # Leaf module (only dep: rdb_constants): proleptic-Gregorian calendar
+    # arithmetic (date<->seconds-since-epoch, CF time-units parsing, RYF
+    # date-arithmetic wrap). Used by rdb_ocean_tide_astro, rdb_config,
+    # rdb_ocean_data_input (OM3 C2a).
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/rdb_calendar.F90
     # Leaf module (no deps): named ierr status codes for the ocean
     # solver-creation path (Python API plan P0). Used by rdb_eos,
     # rdb_ocean_boundary_types, rdb_config, rdb_ocean_metrics, rdb_ocean_setup,

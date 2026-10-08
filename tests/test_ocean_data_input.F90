@@ -54,6 +54,7 @@ module test_ocean_data_input
    use rdb_ocean_data_input, only: ocean_data_input_t, &
                                    ocean_data_input_register_2d, &
                                    ocean_data_input_register_3d, &
+                                   ocean_data_input_register_2d_filelist, &
                                    ocean_data_input_update_2d, &
                                    ocean_data_input_update_3d, &
                                    ocean_data_input_update_all, &
@@ -61,6 +62,7 @@ module test_ocean_data_input
                                    data_input_locate, &
                                    data_input_time_mode_is_implemented, &
                                    data_input_dims_ok, &
+                                   data_input_oor_from_iaf, &
                                    DATA_TIME_LINEAR, DATA_TIME_CYCLIC, DATA_TIME_STATIC, &
                                    DATA_OOR_ERROR, DATA_OOR_CLAMP
    use rdb_io_netcdf, only: nc_create_file, nc_close, nc_def_dim, nc_def_var_3d, &
@@ -91,7 +93,10 @@ contains
                   new_unittest("data_input_dim_mismatch", test_dim_mismatch), &
                   new_unittest("data_input_locate_pure", test_locate_pure), &
                   new_unittest("data_input_gpu_resident", test_gpu_resident), &
-                  new_unittest("data_input_fill_static_host", test_fill_static_host) &
+                  new_unittest("data_input_fill_static_host", test_fill_static_host), &
+                  new_unittest("data_input_filelist_year_boundary", test_filelist_year_boundary), &
+                  new_unittest("data_input_filelist_ryf_wrap", test_filelist_ryf_wrap), &
+                  new_unittest("data_input_filelist_oor_mapping", test_filelist_oor_mapping) &
                   ]
    end subroutine collect_ocean_data_input_tests
 
@@ -855,5 +860,164 @@ contains
 
       call reader%destroy()
    end subroutine test_fill_static_host
+
+   ! =================================================================
+   ! OM3 PR-C2a — absolute-date multi-file time axis.
+   ! =================================================================
+
+   subroutine test_filelist_year_boundary(error)
+      !! Two synthetic "yearly" files, each with its OWN CF time-units
+      !! reference date (so the test exercises the per-file calendar
+      !! conversion, not just plain concatenation). File 1 ("days since
+      !! 1958-01-01") holds absolute days 0,1,2; file 2 ("days since
+      !! 1958-01-04") holds raw days 0,1,2 == absolute days 3,4,5.
+      !! Querying t = 2.5 days (since start_date = 1958-01-01) must
+      !! bracket across the file boundary (file 1's last record, file
+      !! 2's first record) with weight 0.5.
+      type(error_type), allocatable, intent(out) :: error
+
+      integer, parameter :: NX = 2, NY = 2, NT1 = 3, NT2 = 3
+      type(ocean_data_input_t) :: reader
+      type(hgrid_t) :: grid
+      character(len=256) :: f1, f2
+      character(len=256) :: files(2)
+      real(wp) :: t1(NT1), t2(NT2), field1(NX, NY, NT1), field2(NX, NY, NT2)
+      real(wp) :: dest(NX, NY), tq, expect
+      integer :: k, id
+
+      t1 = [0.0_wp, 1.0_wp, 2.0_wp]
+      t2 = [0.0_wp, 1.0_wp, 2.0_wp]
+      do k = 1, NT1
+         field1(:, :, k) = 100.0_wp + real(k, wp)
+      end do
+      do k = 1, NT2
+         field2(:, :, k) = 200.0_wp + real(k, wp)
+      end do
+
+      f1 = "tmp_local_artifacts/test_data_input_filelist_1958.nc"
+      f2 = "tmp_local_artifacts/test_data_input_filelist_1959.nc"
+      call write_2d_time_file(trim(f1), NX, NY, NT1, t1, field1, tunits="days since 1958-01-01 00:00:00")
+      call write_2d_time_file(trim(f2), NX, NY, NT2, t2, field2, tunits="days since 1958-01-04 00:00:00")
+      files(1) = f1
+      files(2) = f2
+
+      grid = make_grid(NX, NY)
+      call reader%init()
+      call ocean_data_input_register_2d_filelist(reader, files, "field", grid, &
+                                                 NX, NY, 1, 1, "1958-01-01", id)
+
+      tq = 2.5_wp*86400.0_wp
+      dest = -999.0_wp
+      !$acc enter data copyin(reader)
+      call reader%enter_data()
+      !$acc enter data copyin(dest)
+      call ocean_data_input_update_all(reader, tq)
+      call ocean_data_input_update_2d(reader, id, tq, NX, NY, dest)
+      !$acc update self(dest)
+      !$acc exit data delete(dest)
+      call reader%exit_data()
+      !$acc exit data delete(reader)
+
+      ! Record 3 of file 1 (value 103, absolute day 2) blended 50/50
+      ! with record 1 of file 2 (value 201, absolute day 3).
+      expect = 0.5_wp*103.0_wp + 0.5_wp*201.0_wp
+      call check(error, abs(dest(1, 1) - expect) < 1.0e-9_wp, &
+                 "filelist: bracket did not cross the file boundary with the right weight")
+      if (allocated(error)) return
+
+      call reader%destroy()
+   end subroutine test_filelist_year_boundary
+
+   subroutine test_filelist_ryf_wrap(error)
+      !! One file, 4 records at absolute days 0,100,200,300 (values
+      !! 10,20,30,40), registered `time_mode="repeat_year"` with
+      !! `ryf_start_date` == the file's own first record and
+      !! `ryf_period_days = 400` (a 100-day wrap-seam gap past the last
+      !! record). Querying at the seam (day 350) must blend the last
+      !! record (day 300) with the FIRST record of the next cycle (day
+      !! 0, == day 400) — and querying one full period later must
+      !! reproduce the identical value (the RYF date-arithmetic wrap).
+      type(error_type), allocatable, intent(out) :: error
+
+      integer, parameter :: NX = 1, NY = 1, NT = 4
+      type(ocean_data_input_t) :: reader
+      type(hgrid_t) :: grid
+      character(len=256) :: fname
+      character(len=256) :: files(1)
+      real(wp) :: t_axis(NT), field(NX, NY, NT), dest(NX, NY)
+      real(wp) :: tq, expect
+      integer :: k, id
+
+      t_axis = [0.0_wp, 100.0_wp, 200.0_wp, 300.0_wp]
+      do k = 1, NT
+         field(1, 1, k) = 10.0_wp*real(k, wp)
+      end do
+
+      fname = "tmp_local_artifacts/test_data_input_filelist_ryf.nc"
+      call write_2d_time_file(trim(fname), NX, NY, NT, t_axis, field, &
+                              tunits="days since 1958-01-01 00:00:00")
+      files(1) = fname
+
+      grid = make_grid(NX, NY)
+      call reader%init()
+      call ocean_data_input_register_2d_filelist(reader, files, "field", grid, &
+                                                 NX, NY, 1, 1, "1958-01-01", id, &
+                                                 time_mode="repeat_year", &
+                                                 ryf_start_date="1958-01-01", &
+                                                 ryf_period_days=400.0_wp)
+
+      !$acc enter data copyin(reader)
+      call reader%enter_data()
+      !$acc enter data copyin(dest)
+
+      ! Seam: day 350 is halfway between day 300 (value 40) and the
+      ! NEXT cycle's day 0/400 (value 10).
+      tq = 350.0_wp*86400.0_wp
+      dest = -999.0_wp
+      call ocean_data_input_update_all(reader, tq)
+      call ocean_data_input_update_2d(reader, id, tq, NX, NY, dest)
+      !$acc update self(dest)
+      expect = 0.5_wp*40.0_wp + 0.5_wp*10.0_wp
+      call check(error, abs(dest(1, 1) - expect) < 1.0e-9_wp, &
+                 "ryf: wrap-seam interpolation (last record <-> next cycle's first) wrong")
+      if (allocated(error)) return
+
+      ! Exactly one RYF period later must reproduce the SAME value
+      ! (the date-arithmetic wrap, not a coincidence of the file axis).
+      tq = (350.0_wp + 400.0_wp)*86400.0_wp
+      dest = -999.0_wp
+      call ocean_data_input_update_all(reader, tq)
+      call ocean_data_input_update_2d(reader, id, tq, NX, NY, dest)
+      !$acc update self(dest)
+      call check(error, abs(dest(1, 1) - expect) < 1.0e-6_wp, &
+                 "ryf: one period later must reproduce the same wrapped value")
+      if (allocated(error)) return
+
+      !$acc exit data delete(dest)
+      call reader%exit_data()
+      !$acc exit data delete(reader)
+      call reader%destroy()
+   end subroutine test_filelist_ryf_wrap
+
+   subroutine test_filelist_oor_mapping(error)
+      !! `data_input_oor_from_iaf`: the IAF taxmode naming ("limit"/
+      !! "extend") maps onto the existing `DATA_OOR_ERROR`/`_CLAMP`
+      !! codes; anything else is `ok = .false.`.
+      type(error_type), allocatable, intent(out) :: error
+      integer :: oor
+      logical :: ok
+
+      call data_input_oor_from_iaf("limit", oor, ok)
+      call check(error, ok .and. oor == DATA_OOR_ERROR, "oor_from_iaf: 'limit' must map to DATA_OOR_ERROR")
+      if (allocated(error)) return
+
+      call data_input_oor_from_iaf("EXTEND", oor, ok)
+      call check(error, ok .and. oor == DATA_OOR_CLAMP, "oor_from_iaf: 'extend' (any case) must map to DATA_OOR_CLAMP")
+      if (allocated(error)) return
+
+      call data_input_oor_from_iaf("bogus", oor, ok)
+      call check(error,.not. ok, "oor_from_iaf: unknown tag must report ok=.false.")
+      if (allocated(error)) return
+   end subroutine test_filelist_oor_mapping
 
 end module test_ocean_data_input

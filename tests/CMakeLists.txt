@@ -268,6 +268,7 @@ set(RDB_TESTS
     "test_ocean_remap_e2e|test_ocean_remap_e2e|collect_ocean_remap_e2e_tests|ocean_remap_e2e|ocean"
     "test_ocean_ppm_h4_remap|test_ocean_ppm_h4_remap|collect_ocean_ppm_h4_remap_tests|ocean_ppm_h4_remap|ocean+core"
     "test_safe_math|test_safe_math|collect_safe_math_tests|safe_math|core"
+    "test_rdb_calendar|test_rdb_calendar|collect_rdb_calendar_tests|rdb_calendar|core"
     "test_scratch_3d_device|test_scratch_3d_device|collect_scratch_3d_device_tests|scratch_3d_device|core"
     "test_remap|test_remap|collect_remap_tests|remap|core"
     "test_remap_pqm|test_remap_pqm|collect_remap_pqm_tests|remap_pqm|core"
