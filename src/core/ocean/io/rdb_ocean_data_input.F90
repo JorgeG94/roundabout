@@ -73,6 +73,8 @@ module rdb_ocean_data_input
    use pic_ascii, only: to_lower
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_SETUP, OCEAN_STATUS_ERR_IO
    use rdb_error_ring, only: fail
+   use rdb_calendar, only: date_t, parse_date, parse_time_units, seconds_to_date, &
+                           date_to_seconds_since, calendar_ryf_wrap_time
    implicit none
    private
 
@@ -90,6 +92,7 @@ module rdb_ocean_data_input
    public :: ocean_data_input_register_3d
    public :: ocean_data_input_register_segment_2d
    public :: ocean_data_input_register_segment_3d
+   public :: ocean_data_input_register_2d_filelist
    public :: ocean_data_input_update_2d
    public :: ocean_data_input_update_3d
    public :: ocean_data_input_fill_static_host
@@ -102,6 +105,7 @@ module rdb_ocean_data_input
    public :: data_input_time_mode_is_implemented
    public :: data_input_time_mode_from_string
    public :: data_input_dims_ok
+   public :: data_input_oor_from_iaf
 
    integer, parameter :: DATA_TIME_LINEAR = 1
    integer, parameter :: DATA_TIME_CYCLIC = 2
@@ -168,6 +172,31 @@ module rdb_ocean_data_input
       integer :: nreads = 0
          !! Slab-read counter (test hook — T4 asserts exactly one read
          !! for a STATIC field's whole run).
+
+      ! --- multi-file absolute-date time axis (OM3 PR-C2a) ---
+      logical :: multifile = .false.
+         !! `.true.` for a field registered via `register_2d_filelist`:
+         !! `t_axis` is absolute seconds since that call's `start_date`,
+         !! concatenated across `nfiles` files, and reads route through
+         !! `file_ncid(:)`/`file_varid(:)` (picked per record by
+         !! `file_rec_start(:)`/`file_nrec(:)`) instead of the single
+         !! `ncid`/`varid` above.
+      integer :: nfiles = 0
+      integer, allocatable :: file_ncid(:), file_varid(:)
+      integer, allocatable :: file_nrec(:)
+         !! Record count owned by each file.
+      integer, allocatable :: file_rec_start(:)
+         !! 1-based global-record index of each file's first record
+         !! (i.e. its offset into the concatenated `t_axis`).
+      logical :: ryf_enabled = .false.
+         !! Repeat-year forcing: the query time is folded into
+         !! `[ryf_start_t, ryf_start_t + cycle_period)` by
+         !! `calendar_ryf_wrap_time` before the (then ordinary) CYCLIC
+         !! bracket search — `time_mode`/`cycle_period` are set to
+         !! `DATA_TIME_CYCLIC`/the RYF period by the registration call,
+         !! so the seam between the window's last and first record
+         !! interpolates through the SAME machinery T3 already tests.
+      real(wp) :: ryf_start_t = 0.0_wp
    end type data_input_field_t
 
    type :: ocean_data_input_t
@@ -339,6 +368,66 @@ contains
       end select
    end function data_input_time_mode_from_string
 
+   pure subroutine data_input_oor_from_iaf(tag, oor, ok)
+      !! IAF out-of-range taxonomy (OM3 taxmode naming, "limit"/"extend")
+      !! mapped onto the existing `DATA_OOR_*` codes — no new
+      !! out-of-range machinery for the multi-file path. `"limit"`
+      !! aborts outside the concatenated axis (taxmode LIMIT, the
+      !! interannual states' policy); `"extend"` clamps at either end
+      !! (taxmode EXTEND, the interannual fluxes' policy).
+      !! `ok = .false.` on anything else; `oor` then defaults to
+      !! `DATA_OOR_ERROR` (fail loud is the safer fallback).
+      character(len=*), intent(in) :: tag
+      integer, intent(out) :: oor
+      logical, intent(out) :: ok
+      ok = .true.
+      select case (to_lower(trim(tag)))
+      case ("limit")
+         oor = DATA_OOR_ERROR
+      case ("extend")
+         oor = DATA_OOR_CLAMP
+      case default
+         oor = DATA_OOR_ERROR
+         ok = .false.
+      end select
+   end subroutine data_input_oor_from_iaf
+
+   pure subroutine data_input_axis_append(axis, n, new_vals, nnew)
+      !! Grow the concatenated multi-file time axis by one file's worth
+      !! of (already absolute-seconds-since-start_date) records.
+      !! Automatic-reallocation-on-assignment (F2003) — no `move_alloc`
+      !! needed, and legal in a `pure` procedure.
+      real(wp), allocatable, intent(inout) :: axis(:)
+      integer, intent(inout) :: n
+      integer, intent(in) :: nnew
+      real(wp), intent(in) :: new_vals(nnew)
+      if (.not. allocated(axis)) then
+         axis = new_vals
+      else
+         axis = [axis, new_vals]
+      end if
+      n = n + nnew
+   end subroutine data_input_axis_append
+
+   pure subroutine data_input_locate_file(fld, global_rec, ifile, local_rec)
+      !! Which file (and which record within it) owns global record
+      !! index `global_rec` of a `multifile` field's concatenated axis.
+      !! `nfiles` is always small (one per forcing variable per
+      !! decade-ish chunking) so a linear scan is simplest and cheap.
+      type(data_input_field_t), intent(in) :: fld
+      integer, intent(in) :: global_rec
+      integer, intent(out) :: ifile, local_rec
+      integer :: k
+      ifile = fld%nfiles
+      do k = 1, fld%nfiles
+         if (global_rec < fld%file_rec_start(k) + fld%file_nrec(k)) then
+            ifile = k
+            exit
+         end if
+      end do
+      local_rec = global_rec - fld%file_rec_start(ifile) + 1
+   end subroutine data_input_locate_file
+
    pure logical function dims_geometry_ok(nd, expect_nd, d_horiz1, d_horiz2, &
                                           expect1, expect2) result(ok)
       !! Low-level geometry check used inline by `register_common`:
@@ -461,6 +550,8 @@ contains
       if (allocated(this%fields)) then
          do i = 1, this%nfields
             if (this%fields(i)%ncid >= 0) call nc_close(this%fields(i)%ncid)
+            if (this%fields(i)%multifile) call filelist_close_partial(this%fields(i), &
+                                                                      this%fields(i)%nfiles)
          end do
          deallocate (this%fields)
       end if
@@ -658,6 +749,290 @@ contains
                            time_mode, cycle_period, t_offset, t_scale, scale, add_offset, oor, id, &
                            edge=edge, ierr=ierr)
    end subroutine ocean_data_input_register_segment_3d
+
+   subroutine ocean_data_input_register_2d_filelist(this, files, var, grid, dest_n1, dest_n2, &
+                                                    dest_i0, dest_j0, start_date, id, &
+                                                    oor_mode, time_mode, ryf_start_date, &
+                                                    ryf_period_days, scale, add_offset, &
+                                                    t_offset, ierr)
+      !! Register a 2-D time-varying field backed by an ORDERED LIST of
+      !! files sharing one variable name — the JRA55-do-style "one file
+      !! per variable per year" layout a glob-free Fortran reader needs
+      !! a precomputed list for (`tools/jra_filelist.py` writes one).
+      !! Builds ONE absolute time axis across every file by converting
+      !! each file's own CF `units` reference date through `rdb_calendar`
+      !! into seconds-since-`start_date` — files are free to carry
+      !! different (but all Gregorian) reference dates; every file's
+      !! `units` attribute is REQUIRED (there is no seconds-default
+      !! fallback here, unlike `register_2d` — an absolute-date axis
+      !! with no reference date is a contradiction).
+      !!
+      !! `oor_mode` (`"limit"`/`"extend"`, default `"limit"`) is the IAF
+      !! out-of-range taxonomy, mapped onto `DATA_OOR_ERROR`/`_CLAMP` by
+      !! `data_input_oor_from_iaf` — no new out-of-range machinery.
+      !!
+      !! `time_mode="repeat_year"` (RYF; default `"interannual"`) wraps
+      !! the query time into `[ryf_start_date, ryf_start_date +
+      !! ryf_period_days)` by DATE arithmetic
+      !! (`rdb_calendar::calendar_ryf_wrap_time`) before the bracket
+      !! search, and reuses the EXISTING `DATA_TIME_CYCLIC` machinery
+      !! (already covered by T3 in `test_ocean_data_input`) for the
+      !! wrap-seam interpolation between the window's last and first
+      !! record — `ryf_start_date` must then land exactly on the first
+      !! file's first record (the registration does not re-slice a
+      !! bigger interannual axis down to the window; that composition
+      !! is a later wave's concern, see `RESULT_C2a.md`).
+      class(ocean_data_input_t), intent(inout) :: this
+      character(len=*), intent(in) :: files(:)
+      character(len=*), intent(in) :: var
+      type(hgrid_t), intent(in) :: grid
+      integer, intent(in) :: dest_n1, dest_n2, dest_i0, dest_j0
+      character(len=*), intent(in) :: start_date
+      integer, intent(out) :: id
+      character(len=*), intent(in), optional :: oor_mode
+      character(len=*), intent(in), optional :: time_mode
+      character(len=*), intent(in), optional :: ryf_start_date
+      real(wp), intent(in), optional :: ryf_period_days
+      real(wp), intent(in), optional :: scale, add_offset, t_offset
+      integer, intent(out), optional :: ierr
+
+      type(date_t) :: epoch_date, file_epoch, file_date, ryf_date
+      integer :: nfiles, ifile, ncid, varid, var_ndims
+      integer :: var_dimids(4)
+      integer :: d1, d2, dt, tvarid, tdimid, status, local_ierr, k, cum, oor_code
+      real(wp) :: t_scale_eff
+      character(len=:), allocatable :: units_str
+      logical :: units_ok, date_ok, is_ryf
+      real(wp), allocatable :: raw_axis(:), abs_axis(:)
+
+      if (present(ierr)) ierr = OCEAN_STATUS_OK
+
+      nfiles = size(files)
+      if (nfiles < 1) then
+         call fail("ocean_data_input: register_2d_filelist needs at least one file", &
+                   ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+      if (this%nfields >= this%nfields_max) then
+         call fail("ocean_data_input: registry full (max_fields = "// &
+                   to_string(this%nfields_max)//"); raise &ocean_data_nml max_fields", &
+                   ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+
+      call parse_date(start_date, epoch_date, date_ok)
+      if (.not. date_ok) then
+         call fail("ocean_data_input: bad start_date '"//trim(start_date)// &
+                   "' (want 'YYYY-MM-DD' or 'YYYY-MM-DD hh:mm:ss')", ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+
+      oor_code = DATA_OOR_ERROR
+      if (present(oor_mode)) then
+         call data_input_oor_from_iaf(oor_mode, oor_code, date_ok)
+         if (.not. date_ok) then
+            call fail("ocean_data_input: unknown oor_mode '"//trim(oor_mode)// &
+                      "' (expected 'limit' or 'extend')", ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+      end if
+
+      is_ryf = .false.
+      if (present(time_mode)) then
+         if (to_lower(trim(time_mode)) == "repeat_year") then
+            is_ryf = .true.
+         else if (to_lower(trim(time_mode)) /= "interannual") then
+            call fail("ocean_data_input: unknown time_mode '"//trim(time_mode)// &
+                      "' (expected 'interannual' or 'repeat_year')", ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+      end if
+      if (is_ryf .and. (.not. present(ryf_start_date) .or. .not. present(ryf_period_days))) then
+         call fail("ocean_data_input: time_mode='repeat_year' requires "// &
+                   "ryf_start_date + ryf_period_days", ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+
+      id = this%nfields + 1
+      associate (fld => this%fields(id))
+         fld%multifile = .true.
+         fld%is_3d = .false.
+         fld%nz = 1
+         fld%oor = oor_code
+         fld%dest_i0 = dest_i0
+         fld%dest_j0 = dest_j0
+         fld%dest_n1 = dest_n1
+         fld%dest_n2 = dest_n2
+         fld%dest_n3 = 1
+         fld%scale = 1.0_wp
+         if (present(scale)) fld%scale = scale
+         fld%add_offset = 0.0_wp
+         if (present(add_offset)) fld%add_offset = add_offset
+         fld%t_offset = 0.0_wp
+         if (present(t_offset)) fld%t_offset = t_offset
+         fld%i0 = grid%i_offset_global + 1
+         fld%j0 = grid%j_offset_global + 1
+         fld%nx = grid%nx_phys
+         fld%ny = grid%ny_phys
+         fld%nfiles = nfiles
+         fld%nt = 0
+         allocate (fld%file_ncid(nfiles), fld%file_varid(nfiles), &
+                   fld%file_nrec(nfiles), fld%file_rec_start(nfiles))
+
+         cum = 0
+         do ifile = 1, nfiles
+            call nc_open_read(trim(files(ifile)), ncid, ierr=local_ierr)
+            if (.not. reg_io_ok(local_ierr, ierr)) then
+               call filelist_close_partial(fld, ifile - 1)
+               return
+            end if
+            call nc_check(nf90_inq_varid(ncid, trim(var), varid), &
+                          "ocean_data_input: finding variable '"//trim(var)//"' in "// &
+                          trim(files(ifile)), local_ierr)
+            if (.not. reg_io_ok(local_ierr, ierr, ncid)) then
+               call filelist_close_partial(fld, ifile - 1)
+               return
+            end if
+            call nc_check(nf90_inquire_variable(ncid, varid, ndims=var_ndims, &
+                                                dimids=var_dimids(1:3)), &
+                          "ocean_data_input: querying variable '"//trim(var)//"'", local_ierr)
+            if (.not. reg_io_ok(local_ierr, ierr, ncid)) then
+               call filelist_close_partial(fld, ifile - 1)
+               return
+            end if
+            if (var_ndims /= 3) then
+               call nc_close(ncid)
+               call filelist_close_partial(fld, ifile - 1)
+               call fail("ocean_data_input: '"//trim(var)//"' in "//trim(files(ifile))// &
+                         " has "//to_string(var_ndims)//" dims; expected 3 (x,y,t) — "// &
+                         "register_2d_filelist is 2-D only", ierr, OCEAN_STATUS_ERR_IO)
+               return
+            end if
+            call nc_check(nf90_inquire_dimension(ncid, var_dimids(1), len=d1), &
+                          "ocean_data_input: dim 1", local_ierr)
+            if (.not. reg_io_ok(local_ierr, ierr, ncid)) then
+               call filelist_close_partial(fld, ifile - 1)
+               return
+            end if
+            call nc_check(nf90_inquire_dimension(ncid, var_dimids(2), len=d2), &
+                          "ocean_data_input: dim 2", local_ierr)
+            if (.not. reg_io_ok(local_ierr, ierr, ncid)) then
+               call filelist_close_partial(fld, ifile - 1)
+               return
+            end if
+            if (.not. dims_geometry_ok(var_ndims, 3, d1, d2, fld%i0 + fld%nx - 1, fld%j0 + fld%ny - 1)) then
+               call nc_close(ncid)
+               call filelist_close_partial(fld, ifile - 1)
+               call fail("ocean_data_input: '"//trim(var)//"' in "//trim(files(ifile))// &
+                         " horizontal dims too small for this rank's slab", ierr, OCEAN_STATUS_ERR_IO)
+               return
+            end if
+            call nc_check(nf90_inquire_dimension(ncid, var_dimids(3), len=dt), &
+                          "ocean_data_input: dim 3 (t)", local_ierr)
+            if (.not. reg_io_ok(local_ierr, ierr, ncid)) then
+               call filelist_close_partial(fld, ifile - 1)
+               return
+            end if
+            if (dt < 1) then
+               call nc_close(ncid)
+               call filelist_close_partial(fld, ifile - 1)
+               call fail("ocean_data_input: '"//trim(var)//"' in "//trim(files(ifile))// &
+                         " has no time records", ierr, OCEAN_STATUS_ERR_IO)
+               return
+            end if
+
+            tdimid = var_dimids(3)
+            call resolve_time_var(ncid, tdimid, tvarid, status)
+            if (status /= nf90_noerr) then
+               call nc_close(ncid)
+               call filelist_close_partial(fld, ifile - 1)
+               call fail("ocean_data_input: no time coordinate variable found for '"// &
+                         trim(var)//"' in "//trim(files(ifile)), ierr, OCEAN_STATUS_ERR_IO)
+               return
+            end if
+
+            call nc_get_att_text(ncid, tvarid, "units", units_str, units_ok)
+            if (.not. units_ok) then
+               call nc_close(ncid)
+               call filelist_close_partial(fld, ifile - 1)
+               call fail("ocean_data_input: '"//trim(files(ifile))//"' has no CF time "// &
+                         "'units' attribute — register_2d_filelist requires one "// &
+                         "(absolute-date axis)", ierr, OCEAN_STATUS_ERR_IO)
+               return
+            end if
+            call parse_time_units(trim(units_str), t_scale_eff, file_epoch, units_ok)
+            if (.not. units_ok) then
+               call nc_close(ncid)
+               call filelist_close_partial(fld, ifile - 1)
+               call fail("ocean_data_input: unparsable time units '"//trim(units_str)// &
+                         "' in "//trim(files(ifile)), ierr, OCEAN_STATUS_ERR_IO)
+               return
+            end if
+
+            if (allocated(raw_axis)) deallocate (raw_axis)
+            allocate (raw_axis(dt))
+            call nc_get_var_1d(ncid, tvarid, raw_axis)
+
+            if (allocated(abs_axis)) deallocate (abs_axis)
+            allocate (abs_axis(dt))
+            do k = 1, dt
+               call seconds_to_date(raw_axis(k)*t_scale_eff, file_epoch, file_date)
+               abs_axis(k) = date_to_seconds_since(file_date, epoch_date)
+            end do
+            call data_input_axis_append(fld%t_axis, fld%nt, abs_axis, dt)
+
+            fld%file_ncid(ifile) = ncid
+            fld%file_varid(ifile) = varid
+            fld%file_nrec(ifile) = dt
+            fld%file_rec_start(ifile) = cum + 1
+            cum = cum + dt
+         end do
+
+         do k = 2, fld%nt
+            if (fld%t_axis(k) <= fld%t_axis(k - 1)) then
+               call logger%error("ocean_data_input: '"//trim(var)//"' concatenated "// &
+                                 "file-list time axis not monotonically increasing at "// &
+                                 "record "//to_string(k)//" — check file ordering")
+               error stop "ocean_data_input: non-monotonic multi-file time axis"
+            end if
+         end do
+
+         if (is_ryf) then
+            call parse_date(ryf_start_date, ryf_date, date_ok)
+            if (.not. date_ok) then
+               call filelist_close_partial(fld, nfiles)
+               call fail("ocean_data_input: bad ryf_start_date '"//trim(ryf_start_date)// &
+                         "'", ierr, OCEAN_STATUS_ERR_SETUP)
+               return
+            end if
+            fld%ryf_enabled = .true.
+            fld%ryf_start_t = date_to_seconds_since(ryf_date, epoch_date)
+            fld%time_mode = DATA_TIME_CYCLIC
+            fld%cycle_period = ryf_period_days*86400.0_wp
+         else
+            fld%time_mode = DATA_TIME_LINEAR
+            fld%cycle_period = 0.0_wp
+         end if
+
+         allocate (fld%f0(fld%nx, fld%ny, 1))
+         allocate (fld%f1(fld%nx, fld%ny, 1))
+         fld%active = .true.
+      end associate
+      this%nfields = id
+   end subroutine ocean_data_input_register_2d_filelist
+
+   subroutine filelist_close_partial(fld, n_opened)
+      !! Close the first `n_opened` file handles of a `multifile` field
+      !! whose registration aborted partway through the file loop — a
+      !! failed `register_2d_filelist` must not leak NetCDF handles.
+      type(data_input_field_t), intent(inout) :: fld
+      integer, intent(in) :: n_opened
+      integer :: k, discard_ierr
+      if (.not. allocated(fld%file_ncid)) return
+      do k = 1, min(n_opened, size(fld%file_ncid))
+         call nc_close(fld%file_ncid(k), ierr=discard_ierr)
+      end do
+   end subroutine filelist_close_partial
 
    subroutine segment_geometry(grid, edge, i0, j0, nx, ny, dest_i0, dest_j0, ierr)
       !! Degenerate-axis + along-edge slab geometry for an OBC-segment
@@ -980,7 +1355,7 @@ contains
       integer, intent(in) :: id
       real(wp), intent(in) :: t
       integer :: n0, n1
-      real(wp) :: w, t_query
+      real(wp) :: w, t_query, t_eff
       logical :: oor
 
       associate (fld => this%fields(id))
@@ -990,8 +1365,19 @@ contains
          end if
 
          t_query = t + fld%t_offset
+         t_eff = t_query
+         if (fld%ryf_enabled) then
+            ! RYF date arithmetic: fold the absolute query time into the
+            ! window `[ryf_start_t, ryf_start_t + cycle_period)` BEFORE
+            ! the ordinary bracket search — `time_mode` was set to
+            ! `DATA_TIME_CYCLIC` at registration, so the already-wrapped
+            ! `t_eff` lands inside `data_input_locate`'s normal range and
+            ! its (nt, 1) seam branch handles the wrap-seam interpolation
+            ! (same machinery T3 covers for a plain climatology).
+            call calendar_ryf_wrap_time(t_query, fld%ryf_start_t, fld%cycle_period, t_eff)
+         end if
          call data_input_locate(fld%t_axis, fld%nt, fld%time_mode, fld%cycle_period, &
-                                t_query, n0, n1, w, oor)
+                                t_eff, n0, n1, w, oor)
 
          if (oor) then
             if (fld%oor == DATA_OOR_ERROR) then
@@ -1018,12 +1404,19 @@ contains
          ! before anything is device-mapped (CLAUDE.md gotcha: an
          ! `update device` on an unmapped array is undefined).
          if (n0 /= fld%rec0) then
-            call data_input_read_slab_impl(fld, n0, into_f1=.false.)
+            if (fld%multifile) then
+               call data_input_read_slab_multifile_impl(fld, n0, into_f1=.false.)
+            else
+               call data_input_read_slab_impl(fld, n0, into_f1=.false.)
+            end if
             !$acc update device(fld%f0)
          end if
          if (n1 /= fld%rec1) then
             if (n1 == n0) then
                fld%f1 = fld%f0
+               !$acc update device(fld%f1)
+            else if (fld%multifile) then
+               call data_input_read_slab_multifile_impl(fld, n1, into_f1=.true.)
                !$acc update device(fld%f1)
             else
                call data_input_read_slab_impl(fld, n1, into_f1=.true.)
@@ -1085,6 +1478,40 @@ contains
       end if
       fld%nreads = fld%nreads + 1
    end subroutine data_input_read_slab_impl
+
+   subroutine data_input_read_slab_multifile_impl(fld, global_rec, into_f1)
+      !! `multifile` twin of `data_input_read_slab_impl`: `global_rec`
+      !! indexes the field's CONCATENATED axis — translate to
+      !! (owning file, local record) via `data_input_locate_file`, then
+      !! read from THAT file's handle. 2-D only (`register_2d_filelist`
+      !! is 2-D only; see its docstring).
+      type(data_input_field_t), intent(inout) :: fld
+      integer, intent(in) :: global_rec
+      logical, intent(in), optional :: into_f1
+      integer :: ifile, local_rec
+      integer :: start3(3), count3(3)
+      logical :: to_f1
+
+      to_f1 = .false.
+      if (present(into_f1)) to_f1 = into_f1
+
+      call data_input_locate_file(fld, global_rec, ifile, local_rec)
+      call data_input_workspace_ensure(fld%nx, fld%ny, fld%nz)
+
+      start3 = [fld%i0, fld%j0, local_rec]
+      count3 = [fld%nx, fld%ny, 1]
+      call nc_get_var_slab_3d(fld%file_ncid(ifile), fld%file_varid(ifile), start3, count3, &
+                              data_input_ws)
+
+      data_input_ws = fld%scale*data_input_ws + fld%add_offset
+
+      if (to_f1) then
+         fld%f1 = data_input_ws(1:fld%nx, 1:fld%ny, 1:fld%nz)
+      else
+         fld%f0 = data_input_ws(1:fld%nx, 1:fld%ny, 1:fld%nz)
+      end if
+      fld%nreads = fld%nreads + 1
+   end subroutine data_input_read_slab_multifile_impl
 
    subroutine data_input_workspace_ensure(nx, ny, nz)
       integer, intent(in) :: nx, ny, nz

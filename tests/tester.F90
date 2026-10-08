@@ -188,6 +188,7 @@ program rdb_tests
    use test_ocean_remap_e2e, only: ocean_remap_e2e_collect => collect_ocean_remap_e2e_tests
    use test_ocean_ppm_h4_remap, only: ocean_ppm_h4_remap_collect => collect_ocean_ppm_h4_remap_tests
    use test_safe_math, only: safe_math_collect => collect_safe_math_tests
+   use test_rdb_calendar, only: rdb_calendar_collect => collect_rdb_calendar_tests
    use test_ocean_tracer_adv, only: ocean_tracer_adv_collect => collect_ocean_tracer_adv_tests
    use test_ocean_conservation_salt_heat, only: ocean_conservation_salt_heat_collect => &
                                                 collect_ocean_conservation_salt_heat_tests
@@ -395,6 +396,7 @@ program rdb_tests
                 new_testsuite("ocean_remap_e2e", ocean_remap_e2e_collect), &
                 new_testsuite("ocean_ppm_h4_remap", ocean_ppm_h4_remap_collect), &
                 new_testsuite("safe_math", safe_math_collect), &
+                new_testsuite("rdb_calendar", rdb_calendar_collect), &
                 new_testsuite("ocean_tracer_adv", ocean_tracer_adv_collect), &
                 new_testsuite("ocean_conservation_salt_heat", ocean_conservation_salt_heat_collect), &
                 new_testsuite("ocean_redi_obc_budget", ocean_redi_obc_budget_collect), &

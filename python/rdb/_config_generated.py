@@ -139,6 +139,24 @@ class Time(Group):
         max_len=8,
     )
 
+    start_date = Str(
+        'start_date',
+        doc="Proleptic-Gregorian date t=0 corresponds to ('' = plain relative clock, bit-identical)",
+        units='',
+        required=False,
+        default='',
+        max_len=32,
+    )
+
+    calendar = Enum(
+        'calendar',
+        doc='Calendar backing start_date',
+        units='',
+        required=False,
+        default='gregorian',
+        allowed=('gregorian', 'standard', 'proleptic_gregori', 'noleap', '360_day'),
+    )
+
 
 class Mpi(Group):
     """`&mpi_nml` -- MPI domain decomposition."""
@@ -6307,4 +6325,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 60
-N_KNOBS = 691
+N_KNOBS = 693

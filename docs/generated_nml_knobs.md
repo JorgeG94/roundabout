@@ -30,6 +30,8 @@ Time-integration controls.
 | `dt_fixed` | `0.0000000000E+00` | s | Fixed timestep (0 = adaptive CFL) |
 | `cfl_interval` | `1` |  | Recompute CFL timestep every N steps |
 | `time_unit` | `"s"` |  | Unit for the long-time fields: s/min/hr/day/year |
+| `start_date` | `""` |  | Proleptic-Gregorian date t=0 corresponds to ('' = plain relative clock, bit-identical) |
+| `calendar` | `"gregorian"` |  | Calendar backing start_date |
 
 ### &mpi_nml
 
