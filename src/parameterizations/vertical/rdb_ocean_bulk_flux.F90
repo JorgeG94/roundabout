@@ -95,6 +95,7 @@ module rdb_ocean_bulk_flux
    private
 
    public :: bulk_flux_config_t
+   public :: bulk_flux_config_n_iter_ok
    public :: bulk_flux_qsat_seawater
    public :: bulk_flux_cdn10_neutral
    public :: bulk_flux_longwave_up
@@ -132,15 +133,52 @@ module rdb_ocean_bulk_flux
    real(wp), parameter, public :: BULK_EMISSIVITY_SEAWATER = 0.97_wp
       !! Longwave emissivity of seawater.  Commonly cited value for
       !! bulk air-sea flux formulations (e.g. Konda et al. 1994); kept
-      !! as a named default, overridable by the caller — see the
-      !! module's `RESULT_C3.md` companion note on this constant's
-      !! provenance.
+      !! as a named default, overridable by the caller.
    real(wp), parameter :: BULK_CDN10_HIGH_WIND = 2.34e-3_wp
       !! Constant neutral drag coefficient above the 33 m/s cap
       !! (Large & Yeager 2009 eq. 11b).
    real(wp), parameter :: BULK_CDN10_CAP_WIND = 33.0_wp
       !! Wind speed (m/s) above which `bulk_flux_cdn10_neutral` switches
       !! to the constant high-wind value.
+   real(wp), parameter :: BULK_Z_REF10 = 10.0_wp
+      !! Fixed 10 m reference height used throughout the Large & Yeager
+      !! (2004/2009) neutral-coefficient fits and the height-adjustment
+      !! log terms -- distinct from `bulk_flux_config_t%z_wind`, which
+      !! is the ACTUAL measurement height of the wind input.
+   real(wp), parameter :: BULK_QSAT_SALINITY_FACTOR = 0.98_wp
+      !! Large & Pond (1982) salinity-depression factor applied to the
+      !! fresh-water saturation vapour pressure to get the value over
+      !! seawater.
+   real(wp), parameter :: BULK_QSAT_COEF_A = 640380.0_wp
+      !! Saturation-humidity prefactor, kg/m^3 (Large & Pond 1982 /
+      !! CORE-OMIP `bulk_flux_qsat_seawater` fit).
+   real(wp), parameter :: BULK_QSAT_COEF_B = 5107.4_wp
+      !! Saturation-humidity Clausius-Clapeyron-like exponent constant,
+      !! K (Large & Pond 1982 / CORE-OMIP `bulk_flux_qsat_seawater` fit).
+   real(wp), parameter :: BULK_CDN10_FIT_A = 2.7_wp
+      !! Large & Yeager (2009) eq. 11a neutral-drag polynomial: 1/u term
+      !! coefficient.
+   real(wp), parameter :: BULK_CDN10_FIT_B = 0.142_wp
+      !! Large & Yeager (2009) eq. 11a neutral-drag polynomial: constant
+      !! term.
+   real(wp), parameter :: BULK_CDN10_FIT_C = 0.0764_wp
+      !! Large & Yeager (2009) eq. 11a neutral-drag polynomial: linear
+      !! (`u`) term coefficient.
+   real(wp), parameter :: BULK_CDN10_FIT_D = 3.14807e-10_wp
+      !! Large & Yeager (2009) eq. 11a neutral-drag polynomial: `u**6`
+      !! term coefficient.
+   real(wp), parameter :: BULK_CDN10_FIT_SCALE = 1.0e-3_wp
+      !! Large & Yeager (2009) eq. 11a neutral-drag polynomial: overall
+      !! 1e-3 scale.
+   real(wp), parameter :: BULK_CEN10_COEF = 34.6e-3_wp
+      !! Large & Yeager (2004) neutral Dalton-number (moisture transfer)
+      !! coefficient, `cen10 = BULK_CEN10_COEF * sqrt(cdn10)`.
+   real(wp), parameter :: BULK_CTN10_STABLE_COEF = 18.0e-3_wp
+      !! Large & Yeager (2004) neutral Stanton-number (heat transfer)
+      !! coefficient on the STABLE branch (`dtemp <= 0`).
+   real(wp), parameter :: BULK_CTN10_UNSTABLE_COEF = 32.7e-3_wp
+      !! Large & Yeager (2004) neutral Stanton-number (heat transfer)
+      !! coefficient on the UNSTABLE branch (`dtemp > 0`).
 
    type :: bulk_flux_config_t
       !! Free-standing configuration bundle for the bulk-flux kernel.
@@ -167,6 +205,22 @@ module rdb_ocean_bulk_flux
 
 contains
 
+   pure function bulk_flux_config_n_iter_ok(cfg) result(ok)
+      !! Validates `bulk_flux_config_t%n_iter`: the Monin-Obukhov
+      !! iteration count must be `>= 1` (`bulk_flux_column`'s
+      !! unchecked precondition -- it runs the fixed-point loop at
+      !! least once).  No `&ocean_bulk_flux_nml` reader / `validate_
+      !! config` call site exists yet (see the module's "Seam for
+      !! C2c" note); this is the check that wiring must call, fail
+      !! loud on `.false.`, before ever passing `cfg%n_iter` into
+      !! `bulk_flux_column` / `bulk_flux_driver_2d`.  A caller that
+      !! builds `cfg` directly (a test or a bench) should call this
+      !! too rather than relying on the type's `n_iter = 5` default.
+      type(bulk_flux_config_t), intent(in) :: cfg
+      logical :: ok
+      ok = (cfg%n_iter >= 1)
+   end function bulk_flux_config_n_iter_ok
+
    pure function bulk_flux_qsat_seawater(sst_k, rho_air) result(qsat)
       !! Saturation specific humidity over seawater (kg/kg) — the
       !! Large & Pond (1982) / CORE-OMIP formula, with the 0.98 factor
@@ -178,7 +232,7 @@ contains
       real(wp), intent(in) :: rho_air
          !! Ambient air density, kg/m^3.
       real(wp) :: qsat
-      qsat = 0.98_wp*640380.0_wp/rho_air*exp(-5107.4_wp/sst_k)
+      qsat = BULK_QSAT_SALINITY_FACTOR*BULK_QSAT_COEF_A/rho_air*exp(-BULK_QSAT_COEF_B/sst_k)
    end function bulk_flux_qsat_seawater
 
    pure function bulk_flux_cdn10_neutral(u10n) result(cdn10)
@@ -193,21 +247,30 @@ contains
       if (u10n >= BULK_CDN10_CAP_WIND) then
          cdn10 = BULK_CDN10_HIGH_WIND
       else
-         cdn10 = (2.7_wp/u10n + 0.142_wp + 0.0764_wp*u10n &
-                  - 3.14807e-10_wp*u10n**6)*1.0e-3_wp
+         cdn10 = (BULK_CDN10_FIT_A/u10n + BULK_CDN10_FIT_B + BULK_CDN10_FIT_C*u10n &
+                  - BULK_CDN10_FIT_D*u10n**6)*BULK_CDN10_FIT_SCALE
       end if
    end function bulk_flux_cdn10_neutral
 
    pure function bulk_flux_longwave_up(sst_k, emissivity) result(lw_up)
-      !! Upward longwave emission from the sea surface, Stefan-Boltzmann
-      !! law with a seawater emissivity (W/m^2, positive = radiating
-      !! away from the ocean — the caller forms a NET longwave by
-      !! subtracting this from the downward longwave input, `q_lw =
-      !! rlds - lw_up`, before writing the positive-down `q_lw`
-      !! component).
+      !! Upward longwave emission from the sea surface: the
+      !! Stefan-Boltzmann law, `lw_up = emissivity * sigma * sst_k**4`,
+      !! with `sigma = BULK_STEFAN_BOLTZMANN` (W/(m^2*K^4)) and a
+      !! seawater `emissivity` (see `BULK_EMISSIVITY_SEAWATER`).
+      !!
+      !! Units: W/m^2.  Sign convention: POSITIVE, radiating AWAY from
+      !! the ocean (upward) — the OPPOSITE of this module's "positive
+      !! down into the ocean" convention for `sensible`/`latent`.  A
+      !! caller forms a NET longwave flux in the positive-down
+      !! convention by subtracting this from the downward longwave
+      !! input, `q_lw = rlds - lw_up`, before writing the
+      !! `ocean_surface_flux_t%q_lw` component.
       !$acc routine seq
       real(wp), intent(in) :: sst_k
+         !! SST in Kelvin.
       real(wp), intent(in) :: emissivity
+         !! Longwave emissivity of the sea surface (dimensionless,
+         !! [0, 1]) -- the result scales linearly with this factor.
       real(wp) :: lw_up
       lw_up = emissivity*BULK_STEFAN_BOLTZMANN*sst_k**4
    end function bulk_flux_longwave_up
@@ -245,7 +308,8 @@ contains
       !!
       !! `n_iter` must be `>= 1` (an unchecked precondition — this is a
       !! `pure` hot-loop kernel, not a validating entry point; the
-      !! namelist-facing caller validates `bulk_flux_config_t%n_iter`).
+      !! namelist-facing caller validates `bulk_flux_config_t%n_iter`
+      !! via `bulk_flux_config_n_iter_ok` before calling here).
       !$acc routine seq
       real(wp), intent(in) :: u_wind, v_wind
          !! Wind components at `z_wind` (m/s), earth-relative.
@@ -308,18 +372,24 @@ contains
       qs = bulk_flux_qsat_seawater(sst_k, rho_air)
 
       dtemp = sst_k - t_air
-         !! > 0 <=> SST warmer than air <=> convectively UNSTABLE.
+      ! > 0 <=> SST warmer than air <=> convectively UNSTABLE.
       dqr = qs - q_air
       tv = t_air*(1.0_wp + BULK_TVQ_AIR*q_air)
       ta_use = t_air
       qa_use = q_air
 
       wv10n = wv
-      stab = 0.5_wp + sign(0.5_wp, -dtemp)
+      ! `stab` selects the Stanton-number branch from the SIGN of
+      ! `dtemp` alone -- never `sign()` of a value that can be a signed
+      ! zero (see the git history for the cross-compiler hazard this
+      ! replaced).  `merge` puts exact neutrality (`dtemp == 0`, as at
+      ! `SST == T_air`) on the STABLE (18e-3) branch, identically on
+      ! every compiler.
+      stab = merge(0.0_wp, 1.0_wp, dtemp > 0.0_wp)
       cdn10 = bulk_flux_cdn10_neutral(wv10n)
       cdn10_rt = sqrt(cdn10)
-      cen10 = 34.6_wp*cdn10_rt*1.0e-3_wp
-      ctn10 = (18.0_wp*stab + 32.7_wp*(1.0_wp - stab))*cdn10_rt*1.0e-3_wp
+      cen10 = BULK_CEN10_COEF*cdn10_rt
+      ctn10 = (BULK_CTN10_STABLE_COEF*stab + BULK_CTN10_UNSTABLE_COEF*(1.0_wp - stab))*cdn10_rt
       cdn = cdn10
       ctn = ctn10
       cen = cen10
@@ -339,7 +409,7 @@ contains
          ! co-locates tas/huss at 2 m), so psi_h at the humidity height
          ! is the same psi_ht just computed -- no third stability branch.
 
-         wv10n = wv/(1.0_wp + cdn10_rt*(log(z_wind/10.0_wp) - psi_mu)/BULK_VON_KARMAN)
+         wv10n = wv/(1.0_wp + cdn10_rt*(log(z_wind/BULK_Z_REF10) - psi_mu)/BULK_VON_KARMAN)
          wv10n = max(wv10n, BULK_WIND_MIN)
 
          ta_use = t_air - tstar*(log(z_ta/z_wind) + psi_hu - psi_ht)/BULK_VON_KARMAN
@@ -348,13 +418,17 @@ contains
 
          cdn10 = bulk_flux_cdn10_neutral(wv10n)
          cdn10_rt = sqrt(cdn10)
-         cen10 = 34.6_wp*cdn10_rt*1.0e-3_wp
-         stab = 0.5_wp + sign(0.5_wp, zetau)
-         ctn10 = (18.0_wp*stab + 32.7_wp*(1.0_wp - stab))*cdn10_rt*1.0e-3_wp
+         cen10 = BULK_CEN10_COEF*cdn10_rt
+         ! Same signed-zero hazard as the pre-loop `stab` above, this
+         ! time keyed on the stability parameter `zetau` (MO convention:
+         ! `zeta >= 0` <=> stable); `>=` keeps exact neutrality
+         ! (`zetau == 0`, e.g. `bstar == 0`) on the STABLE branch too.
+         stab = merge(1.0_wp, 0.0_wp, zetau >= 0.0_wp)
+         ctn10 = (BULK_CTN10_STABLE_COEF*stab + BULK_CTN10_UNSTABLE_COEF*(1.0_wp - stab))*cdn10_rt
 
-         xx = (log(z_wind/10.0_wp) - psi_mu)/BULK_VON_KARMAN
+         xx = (log(z_wind/BULK_Z_REF10) - psi_mu)/BULK_VON_KARMAN
          cdn = cdn10/(1.0_wp + cdn10_rt*xx)**2
-         xx = (log(z_wind/10.0_wp) - psi_hu)/BULK_VON_KARMAN
+         xx = (log(z_wind/BULK_Z_REF10) - psi_hu)/BULK_VON_KARMAN
          ctn = ctn10/(1.0_wp + ctn10*xx/cdn10_rt)*sqrt(cdn/cdn10)
          cen = cen10/(1.0_wp + cen10*xx/cdn10_rt)*sqrt(cdn/cdn10)
 
@@ -398,9 +472,14 @@ contains
       !! this driver has no dependency on `ocean_surface_stress_t`'s
       !! face-shaped arrays.
       !!
-      !! `wet_mask` zeroes every output over land (`wet_mask(i,j) ==
-      !! 0`), matching the convention of every other surface-forcing
-      !! apply kernel in the tree (`apply_surface_src_2d_impl` et al.).
+      !! `wet_mask` gates every output over land (`wet_mask(i,j) <= 0`):
+      !! ALL EIGHT outputs are written as explicit zero on a land cell,
+      !! and `bulk_flux_column` is never called there -- land `t_air`/
+      !! `q_air`/`slp`/`sst_degc`/`u_wind`/`v_wind` may legitimately be
+      !! fill values (including NaN), and MULTIPLYING a column result
+      !! by a zero mask does not scrub a NaN (`NaN*0.0 == NaN`), so the
+      !! branch must skip the call outright rather than mask its
+      !! result.
       integer, intent(in) :: nx, ny
       real(wp), intent(in) :: u_wind(nx, ny), v_wind(nx, ny)
       real(wp), intent(in) :: u_cur(nx, ny), v_cur(nx, ny)
@@ -418,18 +497,29 @@ contains
       real(wp) :: taux, tauy, sens, lat, evp, cd, ch, ce, ustar
 
       do concurrent(j=1:ny, i=1:nx) local(taux, tauy, sens, lat, evp, cd, ch, ce, ustar)
-         call bulk_flux_column(u_wind(i, j), v_wind(i, j), u_cur(i, j), v_cur(i, j), &
-                               t_air(i, j), q_air(i, j), slp(i, j), sst_degc(i, j), &
-                               z_wind, z_ta, n_iter, &
-                               taux, tauy, sens, lat, evp, cd, ch, ce, ustar)
-         taux_cell(i, j) = taux*wet_mask(i, j)
-         tauy_cell(i, j) = tauy*wet_mask(i, j)
-         q_sens(i, j) = sens*wet_mask(i, j)
-         q_lat(i, j) = lat*wet_mask(i, j)
-         evap_massflux(i, j) = -evp*wet_mask(i, j)
-         cd_out(i, j) = cd
-         ch_out(i, j) = ch
-         ce_out(i, j) = ce
+         if (wet_mask(i, j) > 0.0_wp) then
+            call bulk_flux_column(u_wind(i, j), v_wind(i, j), u_cur(i, j), v_cur(i, j), &
+                                  t_air(i, j), q_air(i, j), slp(i, j), sst_degc(i, j), &
+                                  z_wind, z_ta, n_iter, &
+                                  taux, tauy, sens, lat, evp, cd, ch, ce, ustar)
+            taux_cell(i, j) = taux
+            tauy_cell(i, j) = tauy
+            q_sens(i, j) = sens
+            q_lat(i, j) = lat
+            evap_massflux(i, j) = -evp
+            cd_out(i, j) = cd
+            ch_out(i, j) = ch
+            ce_out(i, j) = ce
+         else
+            taux_cell(i, j) = 0.0_wp
+            tauy_cell(i, j) = 0.0_wp
+            q_sens(i, j) = 0.0_wp
+            q_lat(i, j) = 0.0_wp
+            evap_massflux(i, j) = 0.0_wp
+            cd_out(i, j) = 0.0_wp
+            ch_out(i, j) = 0.0_wp
+            ce_out(i, j) = 0.0_wp
+         end if
       end do
    end subroutine bulk_flux_driver_2d
 
