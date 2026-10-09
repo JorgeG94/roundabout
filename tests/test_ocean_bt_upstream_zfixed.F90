@@ -202,7 +202,7 @@ contains
       call make_cartesian_metrics(metrics, grid, nz_closed=NZ)
       metrics%use_closed_faces = .true.
 
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
       call bt_work%enter_data()
       ! Both builders are device kernels on device-present arrays.
@@ -213,7 +213,7 @@ contains
                                          metrics%open_u, metrics%open_v, &
                                          metrics%open_u, metrics%open_v, &
                                          metrics%dy_cu_bt, metrics%dx_cv_bt)
-      !$acc update self(metrics%open_u, metrics%open_v, metrics%dy_cu_bt, metrics%dx_cv_bt)
+      !$omp target update from(metrics%open_u, metrics%open_v, metrics%dy_cu_bt, metrics%dx_cv_bt)
    end subroutine build_step_face
 
    subroutine teardown_step_face(metrics, ms, bt_work)
@@ -222,7 +222,7 @@ contains
       type(barotropic_workstate_t), intent(inout) :: bt_work
       call bt_work%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call destroy_cartesian_metrics(metrics)
       call bt_work%destroy()
       call ms%destroy()
@@ -250,7 +250,7 @@ contains
       call build_step_face(grid, metrics, ms, bt_work, h_w, h_e, u_k)
 
       call compute_h_face_upstream(grid, bt_work, ms, metrics)
-      !$acc update self(bt_work%h_face_up_x)
+      !$omp target update from(bt_work%h_face_up_x)
 
       if (u_sign > 0.0_wp) then
          h_up = h_w
@@ -334,7 +334,7 @@ contains
 
       ! ---- substep_drag ----
       call compute_bt_rem(grid, bt_work, ms, metrics, R_LIN, HBBL, DT_IN)
-      !$acc update self(bt_work%bt_rem_u)
+      !$omp target update from(bt_work%bt_rem_u)
       rem_bt = bt_work%bt_rem_u(2, 1)
       expect = h_open/(h_open + R_LIN*HBBL*DT_IN)
       full_ans = h_full/(h_full + R_LIN*HBBL*DT_IN)
@@ -350,13 +350,13 @@ contains
       ! ---- wave_drag (MULTIPLIES into bt_rem: reset to 1 first) ----
       allocate (bt_work%lwd_drag_u(grid%nx_total + 1, grid%ny_total), source=R_H)
       allocate (bt_work%lwd_drag_v(grid%nx_total, grid%ny_total + 1), source=R_H)
-      !$acc enter data copyin(bt_work%lwd_drag_u, bt_work%lwd_drag_v)
+      !$omp target enter data map(to: bt_work%lwd_drag_u, bt_work%lwd_drag_v)
       bt_work%bt_rem_u = 1.0_wp
       bt_work%bt_rem_v = 1.0_wp
-      !$acc update device(bt_work%bt_rem_u, bt_work%bt_rem_v)
+      !$omp target update to(bt_work%bt_rem_u, bt_work%bt_rem_v)
       call compute_bt_rem_wave_drag(grid, bt_work, ms, metrics, DT_IN)
-      !$acc update self(bt_work%bt_rem_u)
-      !$acc exit data delete(bt_work%lwd_drag_u, bt_work%lwd_drag_v)
+      !$omp target update from(bt_work%bt_rem_u)
+      !$omp target exit data map(delete: bt_work%lwd_drag_u, bt_work%lwd_drag_v)
       rem_bt = bt_work%bt_rem_u(2, 1)
       expect = h_open/(h_open + R_H*DT_IN)
       full_ans = h_full/(h_full + R_H*DT_IN)
@@ -478,7 +478,7 @@ contains
       metrics%use_closed_faces = .true.
       ! The mask kernel wrote the DEVICE copy (masks are mapped); pull it
       ! back for the host census and scans.  Inert on host builds.
-      !$acc update self(metrics%open_u, metrics%open_v)
+      !$omp target update from(metrics%open_u, metrics%open_v)
 
       n_closed = 0
       do k = 1, NZ
@@ -526,9 +526,9 @@ contains
 
       energy0 = basin_energy(ms, dyn, i0, i1, j0, j1)
 
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+      !$omp target enter data map(to: ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
       call ct%enter_data(); call cor%enter_data(); call pgf%enter_data()
       call hv%enter_data(); call bd%enter_data(); call ss%enter_data()
       call va%enter_data(); call hd%enter_data()
@@ -550,7 +550,7 @@ contains
          call ocean_porous_refresh(grid, metrics, ms)
          call ocean_dyn_step_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
                                    va, hd, vd, vmix, ms, DT, N_INNER, vcoord=vc)
-         !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
+         !$omp target update from(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
          call scan_faces(ms, metrics, i0, i1, j0, j1, closed_u_max, u_max)
          d_now = ssh_tilt(ms, dyn, i0, i1, j0, j1)
          if (d_prev*d_now < 0.0_wp) then
@@ -590,9 +590,9 @@ contains
       call hd%exit_data(); call va%exit_data()
       call ss%exit_data(); call bd%exit_data(); call hv%exit_data()
       call pgf%exit_data(); call cor%exit_data(); call ct%exit_data()
-      !$acc exit data delete(ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+      !$omp target exit data map(delete: ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call destroy_cartesian_metrics(metrics)
       call ms%destroy()
       deallocate (tgt, tot_h, eta0f, z_top)

@@ -148,17 +148,17 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_sea_ice_t), intent(inout) :: ice
 
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
       call ice%enter_data()
       call ice_adjust_categories(grid, ms, ice)
       associate (ps => ice%part_size, mi => ice%m_ice, msn => ice%m_snow, &
                  ei => ice%enth_ice, es => ice%enth_snow, si => ice%sal_ice)
-         !$acc update self(ps, mi, msn, ei, es, si)
+         !$omp target update from(ps, mi, msn, ei, es, si)
       end associate
       call ice%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine run_adjust
 
    subroutine teardown(ms, eos, ice)
@@ -640,7 +640,7 @@ contains
                        *(ice%m_ice(ip, jp, cat) + ice%m_snow(ip, jp, cat))
          end do
 
-         !$acc enter data copyin(ms, sf)
+         !$omp target enter data map(to: ms, sf)
          call ms%enter_data()
          call ice%enter_data()
          call sf%enter_data()
@@ -659,7 +659,7 @@ contains
          ! behind (it may fully collapse a melted-out cell to open water).
          allocate (part_pre_adjust(0:ice%ncat))
          associate (ps_pre => ice%part_size)
-            !$acc update self(ps_pre)
+            !$omp target update from(ps_pre)
          end associate
          part_pre_adjust(:) = ice%part_size(ip, jp, :)
 
@@ -673,13 +673,13 @@ contains
                     h2o => ice%h2o_ocn_to_ice, h2i => ice%h2o_ice_to_ocn, &
                     hto => ice%heat_to_ocn, qh => sf%Q_heat, qs => sf%Q_salt, &
                     ssurf => ice%ssurf_seam)
-            !$acc update self(ps, mi, msn, ei, es, si, md, mf, hf, sd, fb, fps, h2o, h2i, hto, qh, qs, ssurf)
+            !$omp target update from(ps, mi, msn, ei, es, si, md, mf, hf, sd, fb, fps, h2o, h2i, hto, qh, qs, ssurf)
          end associate
 
          call sf%exit_data()
          call ice%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, sf)
+         !$omp target exit data map(delete: ms, sf)
 
          m_after = 0.0_wp
          do cat = 1, ice%ncat

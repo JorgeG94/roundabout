@@ -56,11 +56,11 @@ contains
    subroutine run_eos(ms, eos)
       type(multilayer_state_t), intent(inout) :: ms
       type(eos_t), intent(inout) :: eos
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
       call ocean_eos_compute(eos, ms)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine run_eos
 
    ! -----------------------------------------------------------------

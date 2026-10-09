@@ -916,7 +916,7 @@ contains
       !! Transcribed from the verified prototype roquet_spv_eos.py.  One
       !! sqrt for zs (shared by SV and both derivatives) + one sqrt for
       !! the ct_from_pt poly normalisation.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: T_pt, S_sp, p
       real(wp), intent(out) :: sv, dsv_dt_model, dsv_ds_model
 
@@ -1073,7 +1073,7 @@ contains
       !! The body is `rdb_roq_ts_coeffs` (`rdb_roquet_spv.inc`, included
       !! here): kernel modules include the same file for a local, inlinable
       !! copy rather than calling this out-of-line entry point.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in)  :: T_pt
          !! Potential temperature (degC).
       real(wp), intent(in)  :: S_sp
@@ -1092,7 +1092,7 @@ contains
       !! `roquet_spv_point`'s `sv` without the dSV/dT, dSV/dS and PT->CT
       !! chain-rule work that a density-only consumer (`rho_layer`,
       !! `eos_density_point`) would discard -- roughly half the arithmetic.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: T_pt, S_sp, p
       real(wp) :: sv
 
@@ -1127,7 +1127,7 @@ contains
       !! The `else` is unreachable-by-contract: `eos_validate`
       !! guarantees `eos%variant` is in the device-callable set at
       !! configure time (device code cannot `error stop`).
-      !$acc routine seq
+      !$omp declare target
       type(eos_t), intent(in) :: eos
          !! Shared EOS handle (variant + scalar coeffs), by value.
       real(wp), intent(in) :: T, S
@@ -1224,7 +1224,7 @@ contains
       !! host-side sweep can evaluate whole arrays in one reference, and
       !! `!$acc routine seq` so a `do concurrent` kernel can call it —
       !! the same shape `eos_freezing_point` already ships.
-      !$acc routine seq
+      !$omp declare target
       type(eos_t), intent(in) :: eos
          !! Shared EOS handle (variant + scalar coeffs), by value.
       real(wp), intent(in) :: T, S
@@ -1297,7 +1297,7 @@ contains
       !! that genuinely works in SPECIFIC VOLUME (EPBL's PE weights,
       !! kappa-shear's `dbuoy = g·ρ₀·dSV/dX`); this routine is the density
       !! form, not a duplicate of it.
-      !$acc routine seq
+      !$omp declare target
       type(eos_t), intent(in) :: eos
       real(wp), intent(in) :: T, S
       real(wp), intent(in) :: p
@@ -1320,7 +1320,7 @@ contains
       !! diagnostics.  Takes the shared `eos_t` handle by value.
       !! The `else` is unreachable-by-contract (see
       !! `eos_validate`).
-      !$acc routine seq
+      !$omp declare target
       type(eos_t), intent(in) :: eos
       real(wp), intent(in) :: T, S, p
       real(wp) :: rho
@@ -1353,7 +1353,7 @@ contains
       !! of which threw its derivatives away.  Each branch uses the same
       !! expressions as the two routines it fuses, so `rho`, `dsv_dt` and
       !! `dsv_ds` are the numbers they return.
-      !$acc routine seq
+      !$omp declare target
       type(eos_t), intent(in) :: eos
          !! Shared EOS handle (variant + scalar coeffs), by value.
       real(wp), intent(in) :: T, S
@@ -1484,7 +1484,7 @@ contains
       !! 1 ulp).  That is a rounding-mode difference in a more accurate
       !! direction, not a change of formula.
       !! `test_default_set_bit_identical` pins both arms.
-      !$acc routine seq
+      !$omp declare target
       type(eos_t), intent(in) :: eos
          !! Shared EOS handle, by value — carries the liquidus
          !! coefficient set (`tfr_s`/`tfr_0`/`tfr_p`) written at configure

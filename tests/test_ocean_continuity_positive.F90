@@ -104,18 +104,18 @@ contains
          ! Domain mass BEFORE (interior cells only; areaT = DX*DX uniform).
          mass0 = sum(ms%h_layer(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :))*DX*DX
 
-         !$acc enter data copyin(ms, ct)
+         !$omp target enter data map(to: ms, ct)
          call ms%enter_data()
          call ct%enter_data()
-         !$acc enter data copyin(uhbt)
+         !$omp target enter data map(to: uhbt)
 
          call continuity_tracer_step_split(grid, metrics, ct, ms, DT, uhbt=uhbt)
 
-         !$acc update self(ms%h_layer, ms%tracers(ms%idx_temperature)%hTr)
-         !$acc exit data delete(uhbt)
+         !$omp target update from(ms%h_layer, ms%tracers(ms%idx_temperature)%hTr)
+         !$omp target exit data map(delete: uhbt)
          call ct%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, ct)
+         !$omp target exit data map(delete: ms, ct)
 
          ! Domain mass AFTER.
          mass1 = sum(ms%h_layer(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :))*DX*DX
@@ -201,7 +201,7 @@ contains
          ms_b%tracers(ms_b%idx_salinity)%hTr = T0*H0
          ms_b%tracers(ms_b%idx_temperature)%hTr = T0*H0
 
-         !$acc enter data copyin(ms_a, ms_b, ct_a, ct_b)
+         !$omp target enter data map(to: ms_a, ms_b, ct_a, ct_b)
          call ms_a%enter_data()
          call ms_b%enter_data()
          call ct_a%enter_data()
@@ -210,13 +210,13 @@ contains
          call continuity_tracer_step_split(grid, metrics, ct_a, ms_a, DT)
          call continuity_tracer_step_split(grid, metrics, ct_b, ms_b, DT)
 
-         !$acc update self(ms_a%h_layer, ms_a%tracers(ms_a%idx_temperature)%hTr)
-         !$acc update self(ms_b%h_layer, ms_b%tracers(ms_b%idx_temperature)%hTr)
+         !$omp target update from(ms_a%h_layer, ms_a%tracers(ms_a%idx_temperature)%hTr)
+         !$omp target update from(ms_b%h_layer, ms_b%tracers(ms_b%idx_temperature)%hTr)
          call ct_a%exit_data()
          call ct_b%exit_data()
          call ms_a%exit_data()
          call ms_b%exit_data()
-         !$acc exit data delete(ms_a, ms_b, ct_a, ct_b)
+         !$omp target exit data map(delete: ms_a, ms_b, ct_a, ct_b)
 
          ! Bit-identity (==, not tolerance): the knob-ON untriggered path must
          ! not perturb a single bit relative to knob-OFF.
@@ -282,16 +282,16 @@ contains
          ms%tracers(ms%idx_salinity)%hTr = T0*ms%h_layer
          ms%tracers(ms%idx_temperature)%hTr = T0*ms%h_layer
 
-         !$acc enter data copyin(ms, ct)
+         !$omp target enter data map(to: ms, ct)
          call ms%enter_data()
          call ct%enter_data()
 
          call continuity_tracer_step_split(grid, metrics, ct, ms, DT)
 
-         !$acc update self(ms%h_layer, ms%mass_flux_x_layer)
+         !$omp target update from(ms%h_layer, ms%mass_flux_x_layer)
          call ct%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, ct)
+         !$omp target exit data map(delete: ms, ct)
 
          ! Frozen column's OUTflux (east face i0+1, donor = frozen cell, theta=0).
          flux_out = maxval(abs(ms%mass_flux_x_layer(i0 + 1, j0, :)))
@@ -360,16 +360,16 @@ contains
          allocate (flux_pre(nx + 1, ny, NZ), flux_post(nx + 1, ny, NZ))
          allocate (ucor_pre(nx + 1, ny, NZ), ucor_post(nx + 1, ny, NZ))
 
-         !$acc enter data copyin(ms, ct)
+         !$omp target enter data map(to: ms, ct)
          call ms%enter_data()
          call ct%enter_data()
-         !$acc enter data copyin(uhbt)
-         !$acc enter data create(u_cor)
+         !$omp target enter data map(to: uhbt)
+         !$omp target enter data map(alloc: u_cor)
 
          ! Renorm fill: captures the transport-matched u_cor + renormalised
          ! mass_flux_x_layer BEFORE the limiter (the mom6-scheme capture point).
          call continuity_zonal_flux(grid, metrics, ct, ms, DT, uhbt=uhbt, u_cor=u_cor)
-         !$acc update self(ms%mass_flux_x_layer, u_cor)
+         !$omp target update from(ms%mass_flux_x_layer, u_cor)
          flux_pre = ms%mass_flux_x_layer
          ucor_pre = u_cor
 
@@ -377,14 +377,14 @@ contains
          call pd_limit_zonal_impl(nx, ny, NZ, DT, ct%h_lim, metrics%iareaT, &
                                   ms%h_layer, ms%mass_flux_x_layer, &
                                   ct%pd_theta%data, ct%n_limited_step, u_cor=u_cor)
-         !$acc update self(ms%mass_flux_x_layer, u_cor)
+         !$omp target update from(ms%mass_flux_x_layer, u_cor)
          flux_post = ms%mass_flux_x_layer
          ucor_post = u_cor
 
-         !$acc exit data delete(u_cor, uhbt)
+         !$omp target exit data map(delete: u_cor, uhbt)
          call ct%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, ct)
+         !$omp target exit data map(delete: ms, ct)
 
          ! On every touched face (flux_pre /= 0), the velocity ratio must equal
          ! the flux ratio (both = the same θ_face); walls (flux_pre = 0) skipped.

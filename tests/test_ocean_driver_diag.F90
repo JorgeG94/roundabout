@@ -108,7 +108,7 @@ contains
       call sf%set_surface_flux_const(0.0_wp, 0.0_wp)
 
       call ocean_state_enter_data(state)
-      !$acc enter data copyin(sf)
+      !$omp target enter data map(to: sf)
       call sf%enter_data()
 
       t = 0.0_wp
@@ -125,7 +125,7 @@ contains
       end do
 
       call sf%exit_data()
-      !$acc exit data delete(sf)
+      !$omp target exit data map(delete: sf)
       call ocean_state_exit_data(state)
       call close_stream(state%diag)
    end subroutine run_driver_hook_sequence

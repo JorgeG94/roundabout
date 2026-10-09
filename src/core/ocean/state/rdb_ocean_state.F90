@@ -799,7 +799,7 @@ contains
       !! own bound methods.
       type(ocean_state_t), intent(inout) :: state
 
-      !$acc enter data copyin(state)
+      !$omp target enter data map(to: state)
       call profiler_start("ed_barotropic", nvtx_only=.true.)
       call state%barotropic%enter_data()
       call profiler_stop("ed_barotropic")
@@ -1030,7 +1030,7 @@ contains
       call profiler_start("xd_barotropic", nvtx_only=.true.)
       call state%barotropic%exit_data()
       call profiler_stop("xd_barotropic")
-      !$acc exit data delete(state)
+      !$omp target exit data map(delete: state)
    end subroutine ocean_state_exit_data
 
    subroutine ocean_state_destroy(this)
@@ -2688,9 +2688,9 @@ contains
          associate (en => reg%entries(e))
             if (.not. en%device_mapped) cycle
             if (en%rank == 2) then
-               !$acc update self(en%p2)
+               !$omp target update from(en%p2)
             else if (en%rank == 3) then
-               !$acc update self(en%p3)
+               !$omp target update from(en%p3)
             end if
          end associate
       end do
@@ -2741,9 +2741,9 @@ contains
             ! still run for every entry including host-only ones.
             if (en%device_mapped) then
                if (en%rank == 2) then
-                  !$acc update self(en%p2)
+                  !$omp target update from(en%p2)
                else if (en%rank == 3) then
-                  !$acc update self(en%p3)
+                  !$omp target update from(en%p3)
                end if
             end if
             if (trim(en%tag) == trim(drop_tag)) then

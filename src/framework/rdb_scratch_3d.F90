@@ -157,7 +157,7 @@ contains
       ! `do concurrent` on the host array itself), so the first
       ! post-restart predictor ran with no lateral viscosity in any column.
       ! One H2D of each buffer at setup; nothing per step.
-      !$acc enter data copyin(this%data)
+      !$omp target enter data map(to: this%data)
    end subroutine scratch_3d_buffer_enter_data_impl
 
    subroutine scratch_3d_buffer_exit_data(this)
@@ -176,7 +176,7 @@ contains
       !! `scratch_3d_buffer_enter_data_impl`'s gate).
       type(scratch_3d_buffer_t), intent(inout) :: this
       if (.not. allocated(this%data)) return
-      !$acc exit data delete(this%data)
+      !$omp target exit data map(delete: this%data)
    end subroutine scratch_3d_buffer_exit_data_impl
 
    pure function scratch_3d_buffer_bytes(this) result(nbytes)

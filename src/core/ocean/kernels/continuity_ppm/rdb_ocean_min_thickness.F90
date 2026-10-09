@@ -57,7 +57,6 @@ module rdb_ocean_min_thickness
 contains
 
    pure subroutine min_thickness_target_column(nz, h_old, h_floor, h_new, grounded)
-      !$acc routine seq
       !$omp declare target
       !! Build the floor-only conservative target thickness column.
       !!

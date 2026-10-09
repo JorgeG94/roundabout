@@ -256,18 +256,18 @@ contains
       a_hb(1, 1, 1) = hb
       a_ktop(1, 1) = 1
 
-      !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, &
-      !$acc&                  a_hps, a_sb, a_hb, a_ktop)
-      !$acc update device(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, &
-      !$acc&              a_hps, a_sb, a_hb, a_ktop)
+      !$omp target enter data map(to: a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, &
+      !$omp&                  a_hps, a_sb, a_hb, a_ktop)
+      !$omp target update to(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, &
+      !$omp&              a_hps, a_sb, a_hb, a_ktop)
       call cavity_mass_apply_impl(1, 1, 1, DTC/RHO0, DTC/RHO0, 0.0_wp, &
                                   a_h, a_melt, a_sfar, a_tb, &
                                   a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop, n_thin)
       call cavity_mass_salt_mirror_impl(1, 1, 1, DTC/RHO0, DTC/RHO0, 0.0_wp, &
                                         a_h, a_melt, a_sfar, a_hps, a_ktop)
-      !$acc update self(a_hl, a_hs, a_ht, a_hps, a_sb, a_hb)
-      !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, &
-      !$acc&                 a_hps, a_sb, a_hb, a_ktop)
+      !$omp target update from(a_hl, a_hs, a_ht, a_hps, a_sb, a_hb)
+      !$omp target exit data map(delete: a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, &
+      !$omp&                 a_hps, a_sb, a_hb, a_ktop)
 
       h = a_hl(1, 1, 1)
       hs = a_hs(1, 1, 1)
@@ -465,13 +465,13 @@ contains
       a_hb(1, 1, 1) = 0.0_wp
       a_ktop(1, 1) = 1
 
-      !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
-      !$acc update device(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
+      !$omp target enter data map(to: a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
+      !$omp target update to(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
       call cavity_mass_apply_impl(1, 1, 1, DTC/RHO0, DTC/RHO0, 0.0_wp, &
                                   a_h, a_melt, a_sfar, a_tb, &
                                   a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop, n_thin)
-      !$acc update self(a_hl)
-      !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
+      !$omp target update from(a_hl)
+      !$omp target exit data map(delete: a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
 
       call check(error, n_thin == 1, "the starved column is counted")
       if (allocated(error)) return
@@ -526,13 +526,13 @@ contains
       a_hb(1, 1, 1) = 0.0_wp
       a_ktop(1, 1) = 1
 
-      !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
-      !$acc update device(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
+      !$omp target enter data map(to: a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
+      !$omp target update to(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
       call cavity_mass_apply_impl(1, 1, 1, DTC/RHO0, DTC/RHO0, 0.0_wp, &
                                   a_h, a_melt, a_sfar, a_tb, &
                                   a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop, n_thin)
-      !$acc update self(a_hl, a_hs, a_ht)
-      !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
+      !$omp target update from(a_hl, a_hs, a_ht)
+      !$omp target exit data map(delete: a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
 
       call check(error, n_thin == 1, "the fixture must actually clamp")
       if (allocated(error)) return
@@ -586,13 +586,13 @@ contains
       a_hb(1, 1, 1) = 0.0_wp
       a_ktop(1, 1) = 1
 
-      !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
-      !$acc update device(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
+      !$omp target enter data map(to: a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
+      !$omp target update to(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
       call cavity_mass_apply_impl(1, 1, 1, DTC/RHO0, DTC/RHO0, 0.0_wp, &
                                   a_h, a_melt, a_sfar, a_tb, &
                                   a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop, n_thin)
-      !$acc update self(a_hl, a_hs, a_ht, a_sb, a_hb)
-      !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
+      !$omp target update from(a_hl, a_hs, a_ht, a_sb, a_hb)
+      !$omp target exit data map(delete: a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
 
       dh_applied = a_hl(1, 1, 1) - h_small
       d_hs = a_hs(1, 1, 1) - h_small*S0
@@ -653,13 +653,13 @@ contains
       a_hb(1, 1, 1) = 0.0_wp
       a_ktop(1, 1) = 1
 
-      !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
-      !$acc update device(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
+      !$omp target enter data map(to: a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
+      !$omp target update to(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
       call cavity_mass_apply_impl(1, 1, 1, DTC/RHO0, DTC/RHO0, 0.0_wp, &
                                   a_h, a_melt, a_sfar, a_tb, &
                                   a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop, n_thin)
-      !$acc update self(a_hl, a_hb)
-      !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
+      !$omp target update from(a_hl, a_hb)
+      !$omp target exit data map(delete: a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
 
       call check(error, n_thin == 1, "the refusal is still counted (and so still fatal)")
       if (allocated(error)) return
@@ -698,12 +698,12 @@ contains
       sb = 0.0_wp
       hb = 0.0_wp
 
-      !$acc enter data copyin(wet, cov, scal, hl, hs, ht, sb, hb)
-      !$acc update device(wet, cov, scal, hl, hs, ht, sb, hb)
+      !$omp target enter data map(to: wet, cov, scal, hl, hs, ht, sb, hb)
+      !$omp target update to(wet, cov, scal, hl, hs, ht, sb, hb)
       call cavity_comp_apply_impl(2, 1, 1, dw, wet, cov, hl, hs, ht, sb, hb, &
                                   scal, n_thin)
-      !$acc update self(hl, hs, scal)
-      !$acc exit data delete(wet, cov, scal, hl, hs, ht, sb, hb)
+      !$omp target update from(hl, hs, scal)
+      !$omp target exit data map(delete: wet, cov, scal, hl, hs, ht, sb, hb)
 
       call check(error, n_thin == 1, "only the starved column is counted")
       if (allocated(error)) return
@@ -808,13 +808,13 @@ contains
       t_before = ht(2, 2, 1)/hl(2, 2, 1)
       c_before = hc(2, 2, 1)/hl(2, 2, 1)
 
-      !$acc enter data copyin(wet, cover, scale, hl, hs, ht, hc, sb, hb)
-      !$acc update device(wet, cover, hl, hs, ht, hc, sb, hb)
+      !$omp target enter data map(to: wet, cover, scale, hl, hs, ht, hc, sb, hb)
+      !$omp target update to(wet, cover, hl, hs, ht, hc, sb, hb)
       call cavity_comp_apply_impl(NX, NY, 1, dw, wet, cover, hl, hs, ht, sb, hb, &
                                   scale, n_thin)
       call cavity_comp_scale_tracer_impl(NX, NY, 1, scale, hc)
-      !$acc update self(hl, hs, ht, hc, sb, hb, scale)
-      !$acc exit data delete(wet, cover, scale, hl, hs, ht, hc, sb, hb)
+      !$omp target update from(hl, hs, ht, hc, sb, hb, scale)
+      !$omp target exit data map(delete: wet, cover, scale, hl, hs, ht, hc, sb, hb)
 
       call check(error, n_thin == 0, "no clamping on a 50 m top layer")
       if (allocated(error)) return
@@ -1262,7 +1262,7 @@ contains
       real(wp), allocatable, intent(out) :: h(:, :, :), hs(:, :, :)
       associate (ms => engine%state%multilayer)
          associate (hl => ms%h_layer, hsal => ms%tracers(ms%idx_salinity)%hTr)
-            !$acc update self(hl, hsal) if_present
+            !$omp target update from(hl, hsal)
             allocate (h, source=hl)
             allocate (hs, source=hsal)
          end associate
@@ -1276,7 +1276,7 @@ contains
       real(wp), allocatable, intent(out) :: q_salt(:, :), salt_cavity(:, :)
       associate (sf => engine%state%surface_flux)
          associate (qs => sf%Q_salt, sc => sf%salt_cavity)
-            !$acc update self(qs, sc) if_present
+            !$omp target update from(qs, sc)
             allocate (q_salt, source=qs)
             allocate (salt_cavity, source=sc)
          end associate

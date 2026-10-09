@@ -85,7 +85,7 @@ contains
 
       if (.not. ke_probe_active(probe, step)) return
 
-      !$acc wait
+      ! [acc->omp] dropped CUDA-graph wrapper: wait
       call ke_regions_impl(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer, &
                            grid%nx_total, grid%ny_total, ms%nz_ml, &
                            grid%nghost, grid%nx_phys, grid%ny_phys, &
@@ -147,7 +147,7 @@ contains
 
       if (.not. ke_probe_active(probe, step)) return
 
-      !$acc wait
+      ! [acc->omp] dropped CUDA-graph wrapper: wait
       call coradv_split_impl(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer, &
                              cor%pv_flux_x%data, cor%pv_flux_y%data, &
                              cor%ke_centre%data, metrics%idxCu, metrics%idyCv, &

@@ -101,13 +101,13 @@ contains
       type(ocean_slopes_t), intent(inout) :: sl
       type(ocean_wave_speed_t), intent(inout) :: ws
       type(ocean_varmix_t), intent(inout) :: vm
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(sl)
+      !$omp target enter data map(to: sl)
       call sl%enter_data()
-      !$acc enter data copyin(ws)
+      !$omp target enter data map(to: ws)
       call ws%enter_data()
-      !$acc enter data copyin(vm)
+      !$omp target enter data map(to: vm)
       call vm%enter_data()
    end subroutine map_in
 
@@ -116,16 +116,16 @@ contains
       type(ocean_slopes_t), intent(inout) :: sl
       type(ocean_wave_speed_t), intent(inout) :: ws
       type(ocean_varmix_t), intent(inout) :: vm
-      !$acc update self(vm%res_fn_u, vm%res_fn_v, vm%sn_u, vm%sn_v)
-      !$acc update self(vm%khth_u, vm%khth_v, vm%khtr_u, vm%khtr_v)
+      !$omp target update from(vm%res_fn_u, vm%res_fn_v, vm%sn_u, vm%sn_v)
+      !$omp target update from(vm%khth_u, vm%khth_v, vm%khtr_u, vm%khtr_v)
       call vm%exit_data()
-      !$acc exit data delete(vm)
+      !$omp target exit data map(delete: vm)
       call ws%exit_data()
-      !$acc exit data delete(ws)
+      !$omp target exit data map(delete: ws)
       call sl%exit_data()
-      !$acc exit data delete(sl)
+      !$omp target exit data map(delete: sl)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out
 
    ! ------------------------------------------------------------------
@@ -573,17 +573,17 @@ contains
          call setup_gm(gm_on, grid, NZ)
          call setup_gm(gm_off, grid, NZ)
 
-         !$acc enter data copyin(ms)
+         !$omp target enter data map(to: ms)
          call ms%enter_data()
-         !$acc enter data copyin(sl)
+         !$omp target enter data map(to: sl)
          call sl%enter_data()
-         !$acc enter data copyin(ws)
+         !$omp target enter data map(to: ws)
          call ws%enter_data()
-         !$acc enter data copyin(vm)
+         !$omp target enter data map(to: vm)
          call vm%enter_data()
-         !$acc enter data copyin(gm_on)
+         !$omp target enter data map(to: gm_on)
          call gm_on%enter_data()
-         !$acc enter data copyin(gm_off)
+         !$omp target enter data map(to: gm_off)
          call gm_off%enter_data()
 
          call varmix_compute(grid, metrics, vm, sl, ws, ms)
@@ -593,19 +593,19 @@ contains
          ! GM with the constant khth (VarMix off path).
          call gm_compute_transports(grid, metrics, gm_off, sl, ms, DTT)
 
-         !$acc update self(vm%khth_u, gm_on%khth_u, gm_off%khth_u)
+         !$omp target update from(vm%khth_u, gm_on%khth_u, gm_off%khth_u)
          call gm_on%exit_data()
-         !$acc exit data delete(gm_on)
+         !$omp target exit data map(delete: gm_on)
          call gm_off%exit_data()
-         !$acc exit data delete(gm_off)
+         !$omp target exit data map(delete: gm_off)
          call vm%exit_data()
-         !$acc exit data delete(vm)
+         !$omp target exit data map(delete: vm)
          call ws%exit_data()
-         !$acc exit data delete(ws)
+         !$omp target exit data map(delete: ws)
          call sl%exit_data()
-         !$acc exit data delete(sl)
+         !$omp target exit data map(delete: sl)
          call ms%exit_data()
-         !$acc exit data delete(ms)
+         !$omp target exit data map(delete: ms)
 
          ! VarMix base capped at 300; gm_max_cfl is huge so no CFL bind:
          !   GM-on  face = min(CFL, base)  = base    (~300, the VarMix cap)

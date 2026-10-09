@@ -68,9 +68,9 @@ contains
       type(ocean_metrics_t), intent(inout) :: metrics
       type(hgrid_t), intent(in) :: grid
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(hd)
+      !$omp target enter data map(to: hd)
       call hd%enter_data()
    end subroutine map_in
 
@@ -79,9 +79,9 @@ contains
       type(ocean_hdiff_tracer_t), intent(inout) :: hd
       type(ocean_metrics_t), intent(inout) :: metrics
       call hd%exit_data()
-      !$acc exit data delete(hd)
+      !$omp target exit data map(delete: hd)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call destroy_cartesian_metrics(metrics)
    end subroutine map_out
 

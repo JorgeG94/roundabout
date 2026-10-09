@@ -164,7 +164,7 @@ contains
       type(ocean_vdiff_t), intent(inout) :: vd
       type(ocean_vmix_t), intent(inout) :: vmix
       type(ocean_dyn_t), intent(inout) :: dyn
-      !$acc enter data copyin(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+      !$omp target enter data map(to: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
       call ms%enter_data()
       call ct%enter_data()
       call cor%enter_data()
@@ -204,7 +204,7 @@ contains
       call cor%exit_data()
       call ct%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+      !$omp target exit data map(delete: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
    end subroutine map_out
 
    subroutine destroy_all(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, eos, dyn)
@@ -293,7 +293,7 @@ contains
                                       bd, ss, va, hd, vd, vmix, ms, 600.0_wp, 20, bc=bc)
          end do
 
-         !$acc update self(ms%u_face_x_layer, ms%v_face_y_layer)
+         !$omp target update from(ms%u_face_x_layer, ms%v_face_y_layer)
          maxu = maxval(abs(ms%u_face_x_layer))
          maxv = maxval(abs(ms%v_face_y_layer))
 
@@ -369,7 +369,7 @@ contains
                                       bd, ss, va, hd, vd, vmix, ms, 600.0_wp, 20, bc=bc)
          end do
 
-         !$acc update self(ms%v_face_y_layer)
+         !$omp target update from(ms%v_face_y_layer)
          ! After the stage-entry fold of the NEXT step would re-project; but
          ! the post-continuity fold inside the LAST step already left the
          ! fold row antisymmetric.  Check v(i,j_fold) = -v(i',j_fold).
@@ -475,7 +475,7 @@ contains
                                       bd, ss, va, hd, vd, vmix, ms, 300.0_wp, 20, bc=bc)
          end do
 
-         !$acc update self(ms%tracers(idxS)%hTr)
+         !$omp target update from(ms%tracers(idxS)%hTr)
          salt1 = interior_sum(ms%tracers(idxS)%hTr, grid)
          ! No anomalous extrema growth (no seam doubling): interior salinity
          ! concentration must stay within the seeded [35, 36.5] band.
@@ -777,7 +777,7 @@ contains
                                       bd, ss, va, hd, vd, vmix, ms, 600.0_wp, 20, bc=bc)
          end do
 
-         !$acc update self(ms%u_face_x_layer, ms%v_face_y_layer)
+         !$omp target update from(ms%u_face_x_layer, ms%v_face_y_layer)
          maxu = maxval(abs(ms%u_face_x_layer))
          maxv = maxval(abs(ms%v_face_y_layer))
 
@@ -904,8 +904,8 @@ contains
          do step = 1, NSTEP
             call ocean_dyn_step_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, &
                                       bd, ss, va, hd, vd, vmix, ms, 600.0_wp, 20, bc=bc)
-            !$acc update self(ms%v_face_y_layer, ms%mass_flux_y_layer, ms%h_layer)
-            !$acc update self(ms%tracers(idxS)%hTr)
+            !$omp target update from(ms%v_face_y_layer, ms%mass_flux_y_layer, ms%h_layer)
+            !$omp target update from(ms%tracers(idxS)%hTr)
             do k = 1, NZ
                do i = ng + 1, ng + ni
                   p = i - ng
@@ -1040,7 +1040,7 @@ contains
          call metrics_finalize(metrics)
          call metrics_apply_land_mask(metrics, wet, grid, periodic_x=.true., &
                                       periodic_y=.false., north_fold=.true.)
-         !$acc enter data copyin(metrics)
+         !$omp target enter data map(to: metrics)
          call metrics%enter_data()
 
          call seed_rest(grid, ms, dyn)
@@ -1062,7 +1062,7 @@ contains
                                       bd, ss, va, hd, vd, vmix, ms, 600.0_wp, 20, bc=bc)
          end do
 
-         !$acc update self(ms%u_face_x_layer, ms%v_face_y_layer, ms%h_layer)
+         !$omp target update from(ms%u_face_x_layer, ms%v_face_y_layer, ms%h_layer)
          maxu = maxval(abs(ms%u_face_x_layer(ng + 1:ng + ni + 1, ng + 1:ng + nj, :)))
          maxv = maxval(abs(ms%v_face_y_layer(ng + 1:ng + ni, ng + 1:ng + nj + 1, :)))
          dh_top = maxval(abs(ms%h_layer(ng + 1:ng + ni, ng + 1:ng + nj, NZ) - &
@@ -1103,7 +1103,7 @@ contains
       allocate (wet(grid%nx_total, grid%ny_total), source=1.0_wp)
       call metrics_apply_land_mask(metrics, wet, grid, periodic_x=.true., &
                                    periodic_y=.false., north_fold=.true.)
-      !$acc enter data copyin(metrics)
+      !$omp target enter data map(to: metrics)
       call metrics%enter_data()
    end subroutine make_open_tripolar
 
@@ -1272,8 +1272,8 @@ contains
                                       bd, ss, va, hd, vd, vmix, ms, 600.0_wp, 20, bc=bc)
          end do
 
-         !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
-         !$acc update self(ms%u_av_layer, dyn%bt_work%bt_ubt)
+         !$omp target update from(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
+         !$omp target update from(ms%u_av_layer, dyn%bt_work%bt_ubt)
          e1 = cap_energy(ms, metrics, grid)
          ratio = huge(1.0_wp)
          if (ieee_is_finite(e1) .and. e0 > 0.0_wp) ratio = e1/e0
@@ -1391,24 +1391,24 @@ contains
             end do
          end do
       end do
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(cor)
+      !$omp target enter data map(to: cor)
       call cor%enter_data()
 
       call coriolis_adv_compute_tendencies_sadourny_energy(grid, metrics, cor, ms, &
                                                            ms%u_face_x_layer, &
                                                            ms%v_face_y_layer, ms%h_layer)
-      !$acc update self(cor%pv_flux_x%data, cor%pv_flux_y%data)
+      !$omp target update from(cor%pv_flux_x%data, cor%pv_flux_y%data)
       cau = cor%pv_flux_x%data
       cav = cor%pv_flux_y%data
       cor%f_corner = 0.0_wp
-      !$acc update device(cor%f_corner)
+      !$omp target update to(cor%f_corner)
       call coriolis_adv_compute_tendencies_sadourny_energy(grid, metrics, cor, ms, &
                                                            ms%u_face_x_layer, &
                                                            ms%v_face_y_layer, ms%h_layer)
-      !$acc update self(cor%pv_flux_x%data, cor%pv_flux_y%data)
-      !$acc update self(cor%mass_flux_u%data, cor%mass_flux_v%data)
+      !$omp target update from(cor%pv_flux_x%data, cor%pv_flux_y%data)
+      !$omp target update from(cor%mass_flux_u%data, cor%mass_flux_v%data)
       cau = cau - cor%pv_flux_x%data
       cav = cav - cor%pv_flux_y%data
 
@@ -1432,9 +1432,9 @@ contains
       end do
 
       call cor%exit_data()
-      !$acc exit data delete(cor)
+      !$omp target exit data map(delete: cor)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call cor%destroy()
       call ms%destroy()
       call destroy_cartesian_metrics(metrics)

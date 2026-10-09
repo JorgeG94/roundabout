@@ -179,7 +179,7 @@ contains
    subroutine ocean_p_surf_enter_data_impl(this)
       type(ocean_p_surf_t), intent(inout) :: this
       if (allocated(this%eta_ib)) then
-         !$acc enter data copyin(this%eta_ib, this%eta_seam)
+         !$omp target enter data map(to: this%eta_ib, this%eta_seam)
       end if
    end subroutine ocean_p_surf_enter_data_impl
 
@@ -195,7 +195,7 @@ contains
    subroutine ocean_p_surf_exit_data_impl(this)
       type(ocean_p_surf_t), intent(inout) :: this
       if (allocated(this%eta_ib)) then
-         !$acc exit data delete(this%eta_seam, this%eta_ib)
+         !$omp target exit data map(delete: this%eta_seam, this%eta_ib)
       end if
    end subroutine ocean_p_surf_exit_data_impl
 

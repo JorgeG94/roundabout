@@ -213,7 +213,7 @@ contains
       if (present(use_components)) comps = use_components
       if (comps) call sf%set_components(grid, .true.)
 
-      !$acc enter data copyin(ms, sf)
+      !$omp target enter data map(to: ms, sf)
       call ms%enter_data()
       call ice%enter_data()
       call sf%enter_data()
@@ -237,17 +237,17 @@ contains
                  hto => ice%heat_to_ocn, qs => sf%Q_salt, qh => sf%Q_heat, &
                  fz => ice%frazil_heat, ssurf => ice%ssurf_seam, &
                  swd => ice%sw_thru_diag, swc => ice%sw_thru)
-         !$acc update self(hT, hS, mi, ei, si, mf, sd, hf, md, fb, h2o, h2i, hto, qs, qh, &
-         !$acc              fz, ssurf, swd, swc)
+         !$omp target update from(hT, hS, mi, ei, si, mf, sd, hf, md, fb, h2o, h2i, hto, qs, qh, &
+         !$omp              fz, ssurf, swd, swc)
       end associate
       if (comps) then
-         !$acc update self(sf%q_sw)
+         !$omp target update from(sf%q_sw)
       end if
 
       call sf%exit_data()
       call ice%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, sf)
+      !$omp target exit data map(delete: ms, sf)
    end subroutine run_chain
 
    subroutine teardown(ms, eos, ice, sf)

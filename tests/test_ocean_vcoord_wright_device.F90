@@ -132,16 +132,16 @@ contains
                     label//": premise — p matters for this target")
          if (allocated(error)) exit checks
 
-         !$acc enter data copyin(vc)
+         !$omp target enter data map(to: vc)
          call vc%enter_data()
-         !$acc enter data copyin(eta)
+         !$omp target enter data map(to: eta)
          call vc%compute_target_h_rho(vc%remap_h_ref, eta, vc%remap_conc_t, &
                                       vc%remap_conc_s, eos, &
                                       hybrid=(coord_type == VCOORD_HYCOM))
-         !$acc update self(vc%target_h)
-         !$acc exit data delete(eta)
+         !$omp target update from(vc%target_h)
+         !$omp target exit data map(delete: eta)
          call vc%exit_data()
-         !$acc exit data delete(vc)
+         !$omp target exit data map(delete: vc)
 
          tol = 1.0e-9_wp*(H_BED + H_TOP)
          err_max = max(maxval(abs(vc%target_h(:, :, 1) - H_BED)), &

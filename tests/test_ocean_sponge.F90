@@ -140,16 +140,16 @@ contains
             sp%ref_tracer(:, :, k, ms%idx_salinity) = 30.0_wp + real(k, wp)
          end do
 
-         !$acc enter data copyin(ms, sp)
+         !$omp target enter data map(to: ms, sp)
          call ms%enter_data()
          call sp%enter_data()
          do step = 1, NSTEPS
             call ocean_sponge_apply_maps(grid, sp, ms, DT)
          end do
-         !$acc update self(ms%tracers(ms%idx_salinity)%hTr)
+         !$omp target update from(ms%tracers(ms%idx_salinity)%hTr)
          call sp%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, sp)
+         !$omp target exit data map(delete: ms, sp)
 
          i0 = grid%nghost + 1; i1 = grid%nghost + NX_PHYS
          j0 = grid%nghost + 1; j1 = grid%nghost + NY_PHYS
@@ -207,16 +207,16 @@ contains
          sp%idamp_u = LAMBDA
          sp%u_ref = U_REF
 
-         !$acc enter data copyin(ms, sp)
+         !$omp target enter data map(to: ms, sp)
          call ms%enter_data()
          call sp%enter_data()
          do step = 1, NSTEPS
             call ocean_sponge_apply_maps(grid, sp, ms, DT)
          end do
-         !$acc update self(ms%u_face_x_layer)
+         !$omp target update from(ms%u_face_x_layer)
          call sp%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, sp)
+         !$omp target exit data map(delete: ms, sp)
 
          i_probe = grid%nghost + 2
          j_probe = grid%nghost + 2
@@ -280,19 +280,19 @@ contains
          allocate (t0, source=ms%tracers(ms%idx_temperature)%hTr)
          allocate (h0, source=ms%h_layer)
 
-         !$acc enter data copyin(ms, sp)
+         !$omp target enter data map(to: ms, sp)
          call ms%enter_data()
          call sp%enter_data()
          do step = 1, NSTEPS
             call ocean_sponge_apply_maps(grid, sp, ms, DT)
          end do
-         !$acc update self(ms%u_face_x_layer, ms%v_face_y_layer, ms%h_layer)
-         !$acc update self(ms%tracers(ms%idx_salinity)%hTr)
-         !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
-         !$acc update self(ms%salt_budget_sponge, ms%heat_budget_sponge)
+         !$omp target update from(ms%u_face_x_layer, ms%v_face_y_layer, ms%h_layer)
+         !$omp target update from(ms%tracers(ms%idx_salinity)%hTr)
+         !$omp target update from(ms%tracers(ms%idx_temperature)%hTr)
+         !$omp target update from(ms%salt_budget_sponge, ms%heat_budget_sponge)
          call sp%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, sp)
+         !$omp target exit data map(delete: ms, sp)
 
          call check(error, all(ms%u_face_x_layer == u0), &
                     "u_face_x_layer must be bit-for-bit unchanged when idamp_u==0 everywhere")
@@ -490,15 +490,15 @@ contains
          ! the surface flux): budget accumulates the raw sum over both
          ! stages via `+=`; RK2_STAGE_WEIGHT=0.5 (inside `ocean_budget_src`)
          ! is the correct weight (§3.5 of the plan).
-         !$acc enter data copyin(ms, sp)
+         !$omp target enter data map(to: ms, sp)
          call ms%enter_data()
          call sp%enter_data()
          call ocean_sponge_apply_maps(grid, sp, ms, DT)
          call ocean_sponge_apply_maps(grid, sp, ms, DT)
-         !$acc update self(ms%tracers(ms%idx_temperature)%hTr, ms%heat_budget_sponge)
+         !$omp target update from(ms%tracers(ms%idx_temperature)%hTr, ms%heat_budget_sponge)
          call sp%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, sp)
+         !$omp target exit data map(delete: ms, sp)
 
          ! Manual RK2 average (physics 0.5) — matches the production
          ! rk2_average step (§3.5: the accumulator itself is NOT averaged).
@@ -676,14 +676,14 @@ contains
          call seed_linear_z_case(grid, ms, sp, NX_PHYS, NY_PHYS, 1.0e-4_wp, &
                                  T_REF, DT_DZ, S_REF, DS_DZ, 0.05_wp)
 
-         !$acc enter data copyin(ms, sp)
+         !$omp target enter data map(to: ms, sp)
          call ms%enter_data()
          call sp%enter_data()
          call ocean_sponge_refresh_target(grid, sp, ms)
-         !$acc update self(sp%ref_tracer)
+         !$omp target update from(sp%ref_tracer)
          call sp%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, sp)
+         !$omp target exit data map(delete: ms, sp)
 
          worst = 0.0_wp
          do k = 1, NZ
@@ -736,20 +736,20 @@ contains
          ip = grid%nghost + 2
          jp = grid%nghost + 2
 
-         !$acc enter data copyin(ms, sp)
+         !$omp target enter data map(to: ms, sp)
          call ms%enter_data()
          call sp%enter_data()
          call ocean_sponge_refresh_target(grid, sp, ms)
-         !$acc update self(sp%ref_tracer)
+         !$omp target update from(sp%ref_tracer)
          before = sp%ref_tracer(ip, jp, 1, ms%idx_temperature)
 
          ms%h_layer = 1.5_wp*ms%h_layer
-         !$acc update device(ms%h_layer)
+         !$omp target update to(ms%h_layer)
          call ocean_sponge_refresh_target(grid, sp, ms)
-         !$acc update self(sp%ref_tracer)
+         !$omp target update from(sp%ref_tracer)
          call sp%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, sp)
+         !$omp target exit data map(delete: ms, sp)
 
          k = 1
          z = expected_z_ctr(ms%h_layer(ip, jp, :), sp%z_top(ip, jp), k, NZ)
@@ -783,14 +783,14 @@ contains
          sp%ref_tracer(grid%nghost + 2, grid%nghost + 2, :, ms%idx_temperature) = SENTINEL
          sp%ref_tracer(1, 1, :, ms%idx_temperature) = SENTINEL
 
-         !$acc enter data copyin(ms, sp)
+         !$omp target enter data map(to: ms, sp)
          call ms%enter_data()
          call sp%enter_data()
          call ocean_sponge_refresh_target(grid, sp, ms)
-         !$acc update self(sp%ref_tracer)
+         !$omp target update from(sp%ref_tracer)
          call sp%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, sp)
+         !$omp target exit data map(delete: ms, sp)
 
          call check(error, all(sp%ref_tracer(grid%nghost + 2, grid%nghost + 2, :, &
                                              ms%idx_temperature) == SENTINEL), &
@@ -833,25 +833,25 @@ contains
          call seed_linear_z_case(grid, ms, sp, NX_PHYS, NY_PHYS, LAMBDA, &
                                  -1.9_wp, -4.0e-3_wp, 34.2_wp, 0.0_wp, 0.02_wp)
 
-         !$acc enter data copyin(ms, sp)
+         !$omp target enter data map(to: ms, sp)
          call ms%enter_data()
          call sp%enter_data()
          call ocean_sponge_refresh_target(grid, sp, ms)
-         !$acc update self(sp%ref_tracer)
+         !$omp target update from(sp%ref_tracer)
          ! Seed the state exactly T_OFFSET above the analytic target.
          do k = 1, NZ
             ms%tracers(ms%idx_temperature)%hTr(:, :, k) = &
                (sp%ref_tracer(:, :, k, ms%idx_temperature) + T_OFFSET)*ms%h_layer(:, :, k)
          end do
-         !$acc update device(ms%tracers(ms%idx_temperature)%hTr)
+         !$omp target update to(ms%tracers(ms%idx_temperature)%hTr)
 
          do step = 1, NSTEPS
             call ocean_sponge_apply_maps(grid, sp, ms, DT)
          end do
-         !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
+         !$omp target update from(ms%tracers(ms%idx_temperature)%hTr)
          call sp%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, sp)
+         !$omp target exit data map(delete: ms, sp)
 
          want_dev = T_OFFSET*exp(-real(NSTEPS, wp)*DT/TAU)
          worst = 0.0_wp
@@ -905,18 +905,18 @@ contains
          ms%tracers(ms%idx_temperature)%hTr = T_COLD*ms%h_layer
          t_bed_before = T_COLD
 
-         !$acc enter data copyin(ms, sp)
+         !$omp target enter data map(to: ms, sp)
          call ms%enter_data()
          call sp%enter_data()
          call ocean_sponge_refresh_target(grid, sp, ms)
          do step = 1, NSTEPS
             call ocean_sponge_apply_maps(grid, sp, ms, DT)
          end do
-         !$acc update self(sp%ref_tracer)
-         !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
+         !$omp target update from(sp%ref_tracer)
+         !$omp target update from(ms%tracers(ms%idx_temperature)%hTr)
          call sp%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, sp)
+         !$omp target exit data map(delete: ms, sp)
 
          tgt_bed = sp%ref_tracer(ip, jp, 1, ms%idx_temperature)
          t_bed_after = ms%tracers(ms%idx_temperature)%hTr(ip, jp, 1)/ms%h_layer(ip, jp, 1)
@@ -952,14 +952,14 @@ contains
          sp%ref_tracer = 7.25_wp
          before = sp%ref_tracer
 
-         !$acc enter data copyin(ms, sp)
+         !$omp target enter data map(to: ms, sp)
          call ms%enter_data()
          call sp%enter_data()
          call ocean_sponge_refresh_target(grid, sp, ms)
-         !$acc update self(sp%ref_tracer)
+         !$omp target update from(sp%ref_tracer)
          call sp%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, sp)
+         !$omp target exit data map(delete: ms, sp)
 
          call check(error, all(sp%ref_tracer == before), &
                     "target_source='ic' must make the refresh a bit-for-bit no-op")

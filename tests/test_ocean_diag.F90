@@ -1757,7 +1757,7 @@ contains
          state%multilayer%mass_flux_x_layer = U0*H_LAYER*DX
          call register_derived(state, "umo", time_op=DIAG_OP_INSTANT, dt_out=1.0_wp)
          call ocean_state_enter_data(state)
-         !$acc update device(state%multilayer%mass_flux_x_layer)
+         !$omp target update to(state%multilayer%mass_flux_x_layer)
          call state%diag%step(state, dt=1.0_wp, t=1.0_wp)
          call ocean_state_exit_data(state)
 
@@ -1790,7 +1790,7 @@ contains
          state%multilayer%mass_flux_y_layer = V0*H_LAYER*DX
          call register_derived(state, "vmo", time_op=DIAG_OP_INSTANT, dt_out=1.0_wp)
          call ocean_state_enter_data(state)
-         !$acc update device(state%multilayer%mass_flux_y_layer)
+         !$omp target update to(state%multilayer%mass_flux_y_layer)
          call state%diag%step(state, dt=1.0_wp, t=1.0_wp)
          call ocean_state_exit_data(state)
 
@@ -1831,7 +1831,7 @@ contains
          call register_derived(state, "umo", time_op=DIAG_OP_INSTANT, dt_out=1.0_wp, &
                                coord=DIAG_VGRID_DENSITY)
          call ocean_state_enter_data(state)
-         !$acc update device(state%multilayer%mass_flux_x_layer)
+         !$omp target update to(state%multilayer%mass_flux_x_layer)
          call state%diag%step(state, dt=1.0_wp, t=1.0_wp)
          call ocean_state_exit_data(state)
 

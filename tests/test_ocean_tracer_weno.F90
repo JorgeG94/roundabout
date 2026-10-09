@@ -115,17 +115,17 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       integer, intent(in) :: ratio
       type(ocean_bc_state_t), intent(inout) :: bc
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(ct)
+      !$omp target enter data map(to: ct)
       call ct%enter_data()
-      !$acc enter data copyin(bc)
+      !$omp target enter data map(to: bc)
       call continuity_tracer_drain(grid, metrics, ct, ms, ratio, bc=bc)
-      !$acc exit data delete(bc)
+      !$omp target exit data map(delete: bc)
       call ct%exit_data()
-      !$acc exit data delete(ct)
+      !$omp target exit data map(delete: ct)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine one_window
 
    ! ---------------------------------------------------------------------
@@ -573,7 +573,7 @@ contains
       iland = i0 + grid%nx_phys/2
       jland = j0 + grid%ny_phys/2
       metrics%wet_T(iland, jland) = 0.0_wp
-      !$acc update device(metrics%wet_T)
+      !$omp target update to(metrics%wet_T)
       xc = real(iland, wp)
       do k = 1, NZ
          do j = 1, ny

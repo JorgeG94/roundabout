@@ -158,11 +158,11 @@ contains
       ! caller-owned scratch h_new; the kernel runs on-device. exit_data copies
       ! h_layer/faces/tracers%hTr back to the host for the checks below.
       call ms%enter_data()
-      !$acc enter data create(h_new, gmask)
+      !$omp target enter data map(alloc: h_new, gmask)
 
       call ocean_apply_conservative_min_thickness(grid, ms, h_new, gmask, FLOOR)
 
-      !$acc exit data delete(h_new, gmask)
+      !$omp target exit data map(delete: h_new, gmask)
       call ms%exit_data()
 
       ! (a) Total thickness of the grounded column conserved.
@@ -300,11 +300,11 @@ contains
       hTrT0 = ms%tracers(ms%idx_temperature)%hTr
 
       call ms%enter_data()
-      !$acc enter data create(h_new, gmask)
+      !$omp target enter data map(alloc: h_new, gmask)
 
       call ocean_apply_conservative_min_thickness(grid, ms, h_new, gmask, FLOOR)
 
-      !$acc exit data delete(h_new, gmask)
+      !$omp target exit data map(delete: h_new, gmask)
       call ms%exit_data()
 
       call check(error, all(ms%h_layer == h0), "h_layer must be byte-identical (no-op)")

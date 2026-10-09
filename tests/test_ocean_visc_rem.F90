@@ -100,9 +100,9 @@ contains
    subroutine map_in(ms, vd)
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_vdiff_t), intent(inout) :: vd
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(vd)
+      !$omp target enter data map(to: vd)
       call vd%enter_data()
    end subroutine map_in
 
@@ -110,9 +110,9 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_vdiff_t), intent(inout) :: vd
       call vd%exit_data()
-      !$acc exit data delete(vd)
+      !$omp target exit data map(delete: vd)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out
 
    ! -----------------------------------------------------------------
@@ -774,10 +774,10 @@ contains
             ms_fused%u_face_x_layer(:, :, k) = 0.1_wp*real(k, wp)
          end do
 
-         !$acc enter data copyin(ms_split, ms_ref, ms_fused)
+         !$omp target enter data map(to: ms_split, ms_ref, ms_fused)
          call ms_split%enter_data(); call ms_ref%enter_data(); call ms_fused%enter_data()
-         !$acc enter data copyin(vd_split, vd_ref, vd_fused, vmix_split, vmix_fused)
-         !$acc enter data copyin(ss_split, ss_fused, bd_split, bd_fused, dyn_split, dyn_fused)
+         !$omp target enter data map(to: vd_split, vd_ref, vd_fused, vmix_split, vmix_fused)
+         !$omp target enter data map(to: ss_split, ss_fused, bd_split, bd_fused, dyn_split, dyn_fused)
          call vd_split%enter_data(); call vd_ref%enter_data(); call vd_fused%enter_data()
          call vmix_split%enter_data(); call vmix_fused%enter_data()
          call ss_split%enter_data(); call ss_fused%enter_data()
@@ -802,14 +802,14 @@ contains
                                   ms_fused, DT_VEL, 1, bt_work=bt_fused)
 
          call ms_split%exit_data(); call ms_ref%exit_data(); call ms_fused%exit_data()
-         !$acc exit data delete(ms_split, ms_ref, ms_fused)
+         !$omp target exit data map(delete: ms_split, ms_ref, ms_fused)
          call vd_split%exit_data(); call vd_ref%exit_data(); call vd_fused%exit_data()
          call vmix_split%exit_data(); call vmix_fused%exit_data()
          call ss_split%exit_data(); call ss_fused%exit_data()
          call bd_split%exit_data(); call bd_fused%exit_data()
          call dyn_split%exit_data(); call dyn_fused%exit_data()
-         !$acc exit data delete(vd_split, vd_ref, vd_fused, vmix_split, vmix_fused)
-         !$acc exit data delete(ss_split, ss_fused, bd_split, bd_fused, dyn_split, dyn_fused)
+         !$omp target exit data map(delete: vd_split, vd_ref, vd_fused, vmix_split, vmix_fused)
+         !$omp target exit data map(delete: ss_split, ss_fused, bd_split, bd_fused, dyn_split, dyn_fused)
 
          max_dev_split_vs_ref = max(maxval(abs(bt_split%visc_rem_u - bt_ref%visc_rem_u)), &
                                     maxval(abs(bt_split%visc_rem_v - bt_ref%visc_rem_v)))

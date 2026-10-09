@@ -93,18 +93,18 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_sea_ice_t), intent(inout) :: ice
 
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
       call ice%enter_data()
       call ice_frazil_accumulate(grid, eos, ms, ice%frazil_heat, &
                                  ice%heat_budget_frazil)
       associate (hT => ms%tracers(ms%idx_temperature)%hTr, &
                  fz => ice%frazil_heat, fb => ice%heat_budget_frazil)
-         !$acc update self(hT, fz, fb)
+         !$omp target update from(hT, fz, fb)
       end associate
       call ice%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine run_frazil
 
    subroutine teardown(ms, eos, ice)

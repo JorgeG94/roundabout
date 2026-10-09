@@ -61,11 +61,11 @@ contains
       type(barotropic_state_t), intent(inout) :: bs
       type(continuity_t), intent(inout) :: ct
       type(coriolis_adv_t), intent(inout) :: cor
-      !$acc enter data copyin(bs)
+      !$omp target enter data map(to: bs)
       call bs%enter_data()
-      !$acc enter data copyin(ct)
+      !$omp target enter data map(to: ct)
       call ct%enter_data()
-      !$acc enter data copyin(cor)
+      !$omp target enter data map(to: cor)
       call cor%enter_data()
    end subroutine map_in
 
@@ -74,11 +74,11 @@ contains
       type(continuity_t), intent(inout) :: ct
       type(coriolis_adv_t), intent(inout) :: cor
       call cor%exit_data()
-      !$acc exit data delete(cor)
+      !$omp target exit data map(delete: cor)
       call ct%exit_data()
-      !$acc exit data delete(ct)
+      !$omp target exit data map(delete: ct)
       call bs%exit_data()
-      !$acc exit data delete(bs)
+      !$omp target exit data map(delete: bs)
    end subroutine map_out
 
    ! -----------------------------------------------------------------

@@ -846,14 +846,14 @@ contains
       sp%idamp_h = 1.0e-4_wp          ! every cell in the band
       sp%z_top = z_draft
 
-      !$acc enter data copyin(ms, sp)
+      !$omp target enter data map(to: ms, sp)
       call ms%enter_data()
       call sp%enter_data()
       call ocean_sponge_refresh_target(grid, sp, ms)
-      !$acc update self(sp%ref_tracer)
+      !$omp target update from(sp%ref_tracer)
       call sp%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, sp)
+      !$omp target exit data map(delete: ms, sp)
 
       worst = 0.0_wp
       do k = 1, NZM

@@ -101,9 +101,9 @@ contains
    subroutine map_in(ms, ct)
       type(multilayer_state_t), intent(inout) :: ms
       type(continuity_t), intent(inout) :: ct
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(ct)
+      !$omp target enter data map(to: ct)
       call ct%enter_data()
    end subroutine map_in
 
@@ -115,11 +115,11 @@ contains
       ! copyout fields), so on -stdpar=gpu the host would otherwise keep its
       ! stale (zero) values — fine on gfortran (host==device), but the
       ! flux-reading vol_cfl subtests need the real device result.
-      !$acc update self(ms%mass_flux_x_layer, ms%mass_flux_y_layer)
+      !$omp target update from(ms%mass_flux_x_layer, ms%mass_flux_y_layer)
       call ct%exit_data()
-      !$acc exit data delete(ct)
+      !$omp target exit data map(delete: ct)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out
 
    subroutine run_step(grid, metrics, ct, ms, dt)
@@ -848,10 +848,10 @@ contains
       ! First pass: the unconstrained PPM edges, to size the gap.
       if (along_x) then
          call continuity_zonal_flux(grid, metrics, ct, ms, DT)
-         !$acc update self(ct%h_face_left_x%data, ct%h_face_right_x%data)
+         !$omp target update from(ct%h_face_left_x%data, ct%h_face_right_x%data)
       else
          call continuity_meridional_flux(grid, metrics, ct, ms, DT)
-         !$acc update self(ct%h_face_left_y%data, ct%h_face_right_y%data)
+         !$omp target update from(ct%h_face_left_y%data, ct%h_face_right_y%data)
       end if
       gap = 0.0_wp
       do k = 1, NZ
@@ -866,13 +866,13 @@ contains
       end do
       target = target_frac*gap
       tr = target
-      !$acc enter data copyin(tr)
+      !$omp target enter data map(to: tr)
       if (along_x) then
          call continuity_zonal_flux(grid, metrics, ct, ms, DT, uhbt=tr)
       else
          call continuity_meridional_flux(grid, metrics, ct, ms, DT, vhbt=tr)
       end if
-      !$acc exit data delete(tr)
+      !$omp target exit data map(delete: tr)
       call map_out(ms, ct)
       sum_flux = 0.0_wp
       do k = 1, NZ
@@ -985,11 +985,11 @@ contains
       u_cor = 0.0_wp
 
       call map_in(ms, ct)
-      !$acc enter data copyin(uhbt, vr, u_cor)
+      !$omp target enter data map(to: uhbt, vr, u_cor)
       call continuity_zonal_flux(grid, metrics, ct, ms, dt, uhbt=uhbt, &
                                  visc_rem=vr, u_cor=u_cor)
-      !$acc update self(u_cor)
-      !$acc exit data delete(uhbt, vr, u_cor)
+      !$omp target update from(u_cor)
+      !$omp target exit data map(delete: uhbt, vr, u_cor)
       call map_out(ms, ct)
    end subroutine setup_renorm_vr_case
 
@@ -1154,10 +1154,10 @@ contains
       real(wp), intent(inout) :: uhbt(:, :), vhbt(:, :)
       real(wp), intent(in) :: dt
       call map_in(ms, ct)
-      !$acc enter data copyin(uhbt, vhbt)
+      !$omp target enter data map(to: uhbt, vhbt)
       call continuity_zonal_flux(grid, metrics, ct, ms, dt, uhbt=uhbt)
       call continuity_meridional_flux(grid, metrics, ct, ms, dt, vhbt=vhbt)
-      !$acc exit data delete(uhbt, vhbt)
+      !$omp target exit data map(delete: uhbt, vhbt)
       call map_out(ms, ct)
    end subroutine run_land_channel
 

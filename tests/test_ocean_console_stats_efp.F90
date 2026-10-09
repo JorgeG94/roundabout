@@ -373,7 +373,7 @@ contains
       ! re-reduce.
       state%multilayer%h_layer(grid%nghost + 2, grid%nghost + 2, 1) = &
          ieee_value(1.0_wp, ieee_quiet_nan)
-      !$acc update device(state%multilayer%h_layer)
+      !$omp target update to(state%multilayer%h_layer)
       h_efp_nan = compute_total_h_efp(state%multilayer%h_layer, state%metrics%areaT, grid%nghost)
       r = real(efp_to_real(h_efp_nan), wp)
 

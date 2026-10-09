@@ -127,7 +127,7 @@ contains
       end do
       call ocean_vcoord_closed_face_masks(metrics%open_u, metrics%open_v, ms%h_layer, &
                                           nx_t, ny_t, NZ, H_VANISHED)
-      !$acc update device(metrics%open_u, metrics%open_v)
+      !$omp target update to(metrics%open_u, metrics%open_v)
       metrics%use_closed_faces = .true.
    end subroutine build_staircase
 
@@ -182,20 +182,20 @@ contains
       cor%pv_variant = PV_VARIANT_SADOURNY_HK
       if (present(pair_floor)) cor%hk_pair_floor = pair_floor
       call cor%init(grid, nz_ml=NZ)
-      !$acc enter data copyin(ms, cor)
+      !$omp target enter data map(to: ms, cor)
       call ms%enter_data(); call cor%enter_data()
       call coriolis_adv_compute_tendencies_hk(grid, metrics, cor, ms, &
                                               ms%u_face_x_layer, ms%v_face_y_layer, &
                                               ms%h_layer)
-      !$acc update self(cor%pv_flux_x%data, cor%pv_flux_y%data, cor%ke_centre%data)
-      !$acc update self(cor%mass_flux_u%data, cor%mass_flux_v%data)
+      !$omp target update from(cor%pv_flux_x%data, cor%pv_flux_y%data, cor%ke_centre%data)
+      !$omp target update from(cor%mass_flux_u%data, cor%mass_flux_v%data)
       pvx = cor%pv_flux_x%data
       pvy = cor%pv_flux_y%data
       kec = cor%ke_centre%data
       mfu = cor%mass_flux_u%data
       mfv = cor%mass_flux_v%data
       call cor%exit_data(); call ms%exit_data()
-      !$acc exit data delete(ms, cor)
+      !$omp target exit data map(delete: ms, cor)
       call cor%destroy()
    end subroutine run_hk
 
@@ -395,7 +395,7 @@ contains
          metrics%use_closed_faces = .false.
          metrics%open_u = 1.0_wp
          metrics%open_v = 1.0_wp
-         !$acc update device(metrics%open_u, metrics%open_v)
+         !$omp target update to(metrics%open_u, metrics%open_v)
          call set_open_velocities(grid, ms, metrics, U0, V0, .false.)
          call run_hk(grid, metrics, ms, pvx, pvy, kec, mfu, mfv, pair_floor=(ilatch == 1))
          worst(ilatch) = max_pv_tendency(grid, pvx, pvy, kec)

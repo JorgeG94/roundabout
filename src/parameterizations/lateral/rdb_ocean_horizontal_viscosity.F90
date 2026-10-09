@@ -314,7 +314,7 @@ contains
       call scratch_3d_buffer_enter_data_impl(this%str_xy)
       call scratch_3d_buffer_enter_data_impl(this%ah_t)
       call scratch_3d_buffer_enter_data_impl(this%ah_q)
-      !$acc enter data copyin(this%ke_diss)
+      !$omp target enter data map(to: this%ke_diss)
    end subroutine ocean_hvisc_enter_data_impl
 
    subroutine ocean_hvisc_exit_data(this)
@@ -335,7 +335,7 @@ contains
       call scratch_3d_buffer_exit_data_impl(this%str_xy)
       call scratch_3d_buffer_exit_data_impl(this%ah_t)
       call scratch_3d_buffer_exit_data_impl(this%ah_q)
-      !$acc exit data delete(this%ke_diss)
+      !$omp target exit data map(delete: this%ke_diss)
    end subroutine ocean_hvisc_exit_data_impl
 
    subroutine ocean_horizontal_viscosity_compute_tendencies(grid, metrics, this, ms, lateral_mix, dt, u_src, v_src, h_src)
@@ -1474,7 +1474,7 @@ contains
          !! Reciprocal time step `1/dt`.
       real(wp) :: kh_max_cfl
       real(wp) :: k2
-      !$acc routine seq
+      !$omp declare target
       k2 = idx*idx + idy*idy
       if (k2 > 0.0_wp) then
          kh_max_cfl = bound_coef*0.125_wp*idt/k2
@@ -1507,7 +1507,7 @@ contains
          !! Reciprocal time step `1/dt`.
       real(wp) :: nu4_max_cfl
       real(wp) :: k2
-      !$acc routine seq
+      !$omp declare target
       k2 = (PI*idx)*(PI*idx) + (PI*idy)*(PI*idy)
       if (k2 > 0.0_wp) then
          nu4_max_cfl = bound_coef*2.0_wp*idt/(k2*k2)
@@ -1523,7 +1523,7 @@ contains
       !! anisotropic cross term where the all-wet reduction is exact).
       !! `!$acc routine seq` so the stress-assembly `do concurrent` can
       !! call it on-device.
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: i, j, k, nx, ny, nz
       real(wp), intent(in) :: u_face(nx + 1, ny, nz), v_face(nx, ny + 1, nz)
       real(wp), intent(in) :: idxCu(nx + 1, ny), idyCu(nx + 1, ny), idxCv(nx, ny + 1)
@@ -1538,7 +1538,7 @@ contains
       !! Raw shear strain `sh_xy = dv/dx + du/dy` at Bu corner (i,j),
       !! mirroring Phase-2's gradient form.  `!$acc routine seq` for the
       !! on-device cross-term loop.
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: i, j, k, nx, ny, nz
       real(wp), intent(in) :: u_face(nx + 1, ny, nz), v_face(nx, ny + 1, nz)
       real(wp), intent(in) :: idxCu(nx + 1, ny), idyCv(nx, ny + 1)
@@ -1751,16 +1751,16 @@ contains
       logical, intent(in)    :: lwait
          !! .false. ⇒ leave the apply on queue 1 without syncing (batched).
       integer :: i, j, k
-      !$acc kernels async(1)
+      ! [acc->omp] dropped CUDA-graph wrapper: kernels async(1)
       do concurrent(k=1:nz, j=1:ny, i=1:nx + 1)
          u_face(i, j, k) = u_face(i, j, k) + dt*du_visc(i, j, k)
       end do
       do concurrent(k=1:nz, j=1:ny + 1, i=1:nx)
          v_face(i, j, k) = v_face(i, j, k) + dt*dv_visc(i, j, k)
       end do
-      !$acc end kernels
+      ! [acc->omp] dropped CUDA-graph wrapper: end kernels
       if (lwait) then
-         !$acc wait(1)
+         ! [acc->omp] dropped CUDA-graph wrapper: wait (1)
       end if
    end subroutine hvisc_apply_impl
 

@@ -77,9 +77,9 @@ contains
    subroutine map_in(ms, vd)
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_vdiff_t), intent(inout) :: vd
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(vd)
+      !$omp target enter data map(to: vd)
       call vd%enter_data()
    end subroutine map_in
 
@@ -87,9 +87,9 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_vdiff_t), intent(inout) :: vd
       call vd%exit_data()
-      !$acc exit data delete(vd)
+      !$omp target exit data map(delete: vd)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out
 
    ! -----------------------------------------------------------------
@@ -761,9 +761,9 @@ contains
          sum_S_before = sum(ms%tracers(ms%idx_salinity)%hTr)
 
          call map_in(ms, vd)
-         !$acc enter data copyin(kt3, ks3)
+         !$omp target enter data map(to: kt3, ks3)
          call vdiff_apply_tracers(grid, vd, ms, DT, kt_source=kt3, ks_source=ks3)
-         !$acc exit data delete(kt3, ks3)
+         !$omp target exit data map(delete: kt3, ks3)
          call map_out(ms, vd)
 
          ! Independent analytical reference, one representative interior
@@ -859,10 +859,10 @@ contains
 
          call map_in(ms_case1, vd_case1)
          call map_in(ms_case3, vd_case3)
-         !$acc enter data copyin(k3)
+         !$omp target enter data map(to: k3)
          call vdiff_apply_tracers(grid, vd_case1, ms_case1, DT, kt_source=k3)
          call vdiff_apply_tracers(grid, vd_case3, ms_case3, DT, kt_source=k3, ks_source=k3)
-         !$acc exit data delete(k3)
+         !$omp target exit data map(delete: k3)
          call map_out(ms_case1, vd_case1)
          call map_out(ms_case3, vd_case3)
 
@@ -929,9 +929,9 @@ contains
          end do
 
          call map_in(ms, vd)
-         !$acc enter data copyin(kt3, ks3)
+         !$omp target enter data map(to: kt3, ks3)
          call vdiff_apply_tracers(grid, vd, ms, DT, kt_source=kt3, ks_source=ks3)
-         !$acc exit data delete(kt3, ks3)
+         !$omp target exit data map(delete: kt3, ks3)
          call map_out(ms, vd)
 
          ic = grid%nghost + 2

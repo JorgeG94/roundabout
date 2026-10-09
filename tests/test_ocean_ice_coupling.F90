@@ -113,7 +113,7 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_sea_ice_t), intent(inout) :: ice
 
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
       call ice%enter_data()
       call ice_frazil_uptake(grid, eos, ms, ice, DT_THERM)
@@ -121,11 +121,11 @@ contains
                  hS => ms%tracers(ms%idx_salinity)%hTr, &
                  fz => ice%frazil_heat, mi => ice%m_ice, ei => ice%enth_ice, &
                  si => ice%sal_ice, mf => ice%m_frozen_diag, sd => ice%salt_flux_diag)
-         !$acc update self(hT, hS, fz, mi, ei, si, mf, sd)
+         !$omp target update from(hT, hS, fz, mi, ei, si, mf, sd)
       end associate
       call ice%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine run_uptake
 
    subroutine run_chain(grid, eos, ms, ice, sf, do_accumulate)
@@ -141,7 +141,7 @@ contains
       type(ocean_surface_flux_t), intent(inout) :: sf
       logical, intent(in) :: do_accumulate
 
-      !$acc enter data copyin(ms, sf)
+      !$omp target enter data map(to: ms, sf)
       call ms%enter_data()
       call ice%enter_data()
       call sf%enter_data()
@@ -158,13 +158,13 @@ contains
                  fz => ice%frazil_heat, mi => ice%m_ice, ei => ice%enth_ice, &
                  si => ice%sal_ice, mf => ice%m_frozen_diag, sd => ice%salt_flux_diag, &
                  qs => sf%Q_salt)
-         !$acc update self(hT, hS, fz, mi, ei, si, mf, sd, qs)
+         !$omp target update from(hT, hS, fz, mi, ei, si, mf, sd, qs)
       end associate
 
       call sf%exit_data()
       call ice%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, sf)
+      !$omp target exit data map(delete: ms, sf)
    end subroutine run_chain
 
    subroutine teardown(ms, eos, ice, sf)

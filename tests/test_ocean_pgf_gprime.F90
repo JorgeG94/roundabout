@@ -71,9 +71,9 @@ contains
       type(ocean_pressure_force_t), intent(inout) :: pgf
       type(ocean_metrics_t), intent(inout) :: metrics
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(pgf)
+      !$omp target enter data map(to: pgf)
       call pgf%enter_data()
    end subroutine map_in
 
@@ -82,9 +82,9 @@ contains
       type(ocean_pressure_force_t), intent(inout) :: pgf
       type(ocean_metrics_t), intent(inout) :: metrics
       call pgf%exit_data()
-      !$acc exit data delete(pgf)
+      !$omp target exit data map(delete: pgf)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call destroy_cartesian_metrics(metrics)
    end subroutine map_out
 
@@ -103,7 +103,7 @@ contains
 
       call map_in(grid, ms, pgf, metrics)
       call ocean_pressure_force_compute(grid, metrics, pgf, ms)
-      !$acc update self(pgf%dpdx_face%data, pgf%dpdy_face%data)
+      !$omp target update from(pgf%dpdx_face%data, pgf%dpdy_face%data)
       call map_out(ms, pgf, metrics)
 
       max_dpdx = maxval(abs(pgf%dpdx_face%data))
@@ -145,7 +145,7 @@ contains
 
       call map_in(grid, ms, pgf, metrics)
       call ocean_pressure_force_compute(grid, metrics, pgf, ms)
-      !$acc update self(pgf%dpdx_face%data, pgf%dpdy_face%data)
+      !$omp target update from(pgf%dpdx_face%data, pgf%dpdy_face%data)
       call map_out(ms, pgf, metrics)
 
       a_expected = -GFS*SLOPE
@@ -195,7 +195,7 @@ contains
 
       call map_in(grid, ms, pgf, metrics)
       call ocean_pressure_force_compute(grid, metrics, pgf, ms)
-      !$acc update self(pgf%dpdx_face%data, pgf%dpdy_face%data)
+      !$omp target update from(pgf%dpdx_face%data, pgf%dpdy_face%data)
       call map_out(ms, pgf, metrics)
 
       i_int = nx/2

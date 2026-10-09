@@ -444,8 +444,8 @@ contains
 
          ! Enter data onto device (production path, same pattern as
          ! test_ocean_remap and test_ocean_remap_e2e use).
-         !$acc enter data copyin(ms_ppm, ms_h4, vc_ppm, vc_h4)
-         !$acc enter data copyin(bt_eta_ppm, bt_H_ref_ppm, bt_eta_h4, bt_H_ref_h4)
+         !$omp target enter data map(to: ms_ppm, ms_h4, vc_ppm, vc_h4)
+         !$omp target enter data map(to: bt_eta_ppm, bt_H_ref_ppm, bt_eta_h4, bt_H_ref_h4)
          call ms_ppm%enter_data()
          call ms_h4%enter_data()
          call vc_ppm%enter_data()
@@ -462,8 +462,8 @@ contains
          call vc_h4%exit_data()
          call ms_ppm%exit_data()
          call ms_h4%exit_data()
-         !$acc exit data delete(bt_eta_h4, bt_H_ref_h4, bt_eta_ppm, bt_H_ref_ppm)
-         !$acc exit data delete(vc_h4, vc_ppm, ms_h4, ms_ppm)
+         !$omp target exit data map(delete: bt_eta_h4, bt_H_ref_h4, bt_eta_ppm, bt_H_ref_ppm)
+         !$omp target exit data map(delete: vc_h4, vc_ppm, ms_h4, ms_ppm)
 
          ! Assertion 1: PPM and PPM_H4 must give DIFFERENT tracer results
          ! (proving vcoord%remap_method is read by the production entry point).
@@ -599,8 +599,8 @@ contains
          allocate (bt_eta_pqm(nx_tot, ny_tot), source=0.0_wp)
          allocate (bt_H_ref_pqm(nx_tot, ny_tot), source=H_TOTAL)
 
-         !$acc enter data copyin(ms_ppm, ms_pqm, vc_ppm, vc_pqm)
-         !$acc enter data copyin(bt_eta_ppm, bt_H_ref_ppm, bt_eta_pqm, bt_H_ref_pqm)
+         !$omp target enter data map(to: ms_ppm, ms_pqm, vc_ppm, vc_pqm)
+         !$omp target enter data map(to: bt_eta_ppm, bt_H_ref_ppm, bt_eta_pqm, bt_H_ref_pqm)
          call ms_ppm%enter_data()
          call ms_pqm%enter_data()
          call vc_ppm%enter_data()
@@ -618,8 +618,8 @@ contains
          call vc_pqm%exit_data()
          call ms_ppm%exit_data()
          call ms_pqm%exit_data()
-         !$acc exit data delete(bt_eta_pqm, bt_H_ref_pqm, bt_eta_ppm, bt_H_ref_ppm)
-         !$acc exit data delete(vc_pqm, vc_ppm, ms_pqm, ms_ppm)
+         !$omp target exit data map(delete: bt_eta_pqm, bt_H_ref_pqm, bt_eta_ppm, bt_H_ref_ppm)
+         !$omp target exit data map(delete: vc_pqm, vc_ppm, ms_pqm, ms_ppm)
 
          ! Assertion 1: PPM and PQM must give DIFFERENT tracer results
          ! (proving vcoord%remap_method="pqm" is read by the production

@@ -578,10 +578,10 @@ contains
       if (.not. this%is_init) return
       do i = 1, this%nfields
          if (.not. allocated(this%fields(i)%f0)) cycle
-         !$acc enter data copyin(this%fields(i)%f0, this%fields(i)%f1)
+         !$omp target enter data map(to: this%fields(i)%f0, this%fields(i)%f1)
          ! Rule (2): create-mapped arrays do NOT carry the host values
          ! read at registration time — push them explicitly.
-         !$acc update device(this%fields(i)%f0, this%fields(i)%f1)
+         !$omp target update to(this%fields(i)%f0, this%fields(i)%f1)
       end do
    end subroutine ocean_data_input_enter_data_impl
 
@@ -599,7 +599,7 @@ contains
       if (.not. this%is_init) return
       do i = 1, this%nfields
          if (.not. allocated(this%fields(i)%f0)) cycle
-         !$acc exit data delete(this%fields(i)%f0, this%fields(i)%f1)
+         !$omp target exit data map(delete: this%fields(i)%f0, this%fields(i)%f1)
       end do
    end subroutine ocean_data_input_exit_data_impl
 
@@ -1422,18 +1422,18 @@ contains
             else
                call data_input_read_slab_impl(fld, n0, into_f1=.false.)
             end if
-            !$acc update device(fld%f0)
+            !$omp target update to(fld%f0)
          end if
          if (n1 /= fld%rec1) then
             if (n1 == n0) then
                fld%f1 = fld%f0
-               !$acc update device(fld%f1)
+               !$omp target update to(fld%f1)
             else if (fld%multifile) then
                call data_input_read_slab_multifile_impl(fld, n1, into_f1=.true.)
-               !$acc update device(fld%f1)
+               !$omp target update to(fld%f1)
             else
                call data_input_read_slab_impl(fld, n1, into_f1=.true.)
-               !$acc update device(fld%f1)
+               !$omp target update to(fld%f1)
             end if
          end if
          if (n0 /= fld%rec0 .or. n1 /= fld%rec1) then

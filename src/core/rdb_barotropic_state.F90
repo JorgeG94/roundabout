@@ -171,12 +171,12 @@ contains
    subroutine barotropic_state_enter_data_impl(this)
       type(barotropic_state_t), intent(inout) :: this
 
-      !$acc enter data copyin(this%h, this%b, &
-      !$acc&                  this%u_face_x, this%hu_face_x, &
-      !$acc&                  this%v_face_y, this%hv_face_y, &
-      !$acc&                  this%h0, this%u_face_x0, this%v_face_y0)
-      !$acc enter data create(this%mass_flux_x, this%mass_flux_y, &
-      !$acc&                  this%flux_h)
+      !$omp target enter data map(to: this%h, this%b, &
+      !$omp&                  this%u_face_x, this%hu_face_x, &
+      !$omp&                  this%v_face_y, this%hv_face_y, &
+      !$omp&                  this%h0, this%u_face_x0, this%v_face_y0)
+      !$omp target enter data map(alloc: this%mass_flux_x, this%mass_flux_y, &
+      !$omp&                  this%flux_h)
    end subroutine barotropic_state_enter_data_impl
 
    subroutine barotropic_state_exit_data(this)
@@ -192,10 +192,10 @@ contains
    subroutine barotropic_state_exit_data_impl(this)
       type(barotropic_state_t), intent(inout) :: this
 
-      !$acc exit data copyout(this%h, this%u_face_x, this%v_face_y, &
-      !$acc&                  this%hu_face_x, this%hv_face_y)
-      !$acc exit data delete(this%b, this%h0, this%u_face_x0, this%v_face_y0, &
-      !$acc&                 this%mass_flux_x, this%mass_flux_y, this%flux_h)
+      !$omp target exit data map(from: this%h, this%u_face_x, this%v_face_y, &
+      !$omp&                  this%hu_face_x, this%hv_face_y)
+      !$omp target exit data map(delete: this%b, this%h0, this%u_face_x0, this%v_face_y0, &
+      !$omp&                 this%mass_flux_x, this%mass_flux_y, this%flux_h)
    end subroutine barotropic_state_exit_data_impl
 
 end module rdb_barotropic_state

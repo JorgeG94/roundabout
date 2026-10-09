@@ -109,8 +109,8 @@ contains
          ! Real path: fill du_visc/dv_visc, then the KE-dissipation rate.
          call ocean_horizontal_viscosity_compute_tendencies(grid, metrics, hv, ms)
          call ocean_horizontal_viscosity_compute_ke_diss(hv, ms)
-         !$acc update self(hv%ke_diss, hv%du_visc%data, hv%dv_visc%data)
-         !$acc update self(ms%u_face_x_layer, ms%v_face_y_layer)
+         !$omp target update from(hv%ke_diss, hv%du_visc%data, hv%dv_visc%data)
+         !$omp target update from(ms%u_face_x_layer, ms%v_face_y_layer)
          call map_out(ms, hv, metrics)
          ! Independent host re-derivation at every interior cell.
          max_rel = 0.0_wp
@@ -153,9 +153,9 @@ contains
       type(ocean_metrics_t), intent(inout) :: metrics
       type(hgrid_t), intent(in) :: grid
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(hv)
+      !$omp target enter data map(to: hv)
       call hv%enter_data()
    end subroutine map_in
 
@@ -164,9 +164,9 @@ contains
       type(ocean_horizontal_viscosity_t), intent(inout) :: hv
       type(ocean_metrics_t), intent(inout) :: metrics
       call hv%exit_data()
-      !$acc exit data delete(hv)
+      !$omp target exit data map(delete: hv)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call destroy_cartesian_metrics(metrics)
    end subroutine map_out
 
@@ -395,7 +395,7 @@ contains
          do step = 1, N_STEPS
             call ocean_horizontal_viscosity_compute_tendencies(grid, metrics, hv, ms)
             call ocean_horizontal_viscosity_apply_tendencies(hv, ms, DT)
-            !$acc update self(ms%u_face_x_layer, ms%v_face_y_layer)
+            !$omp target update from(ms%u_face_x_layer, ms%v_face_y_layer)
             ke_now = sum(ms%u_face_x_layer**2) + sum(ms%v_face_y_layer**2)
             if (ke_now >= ke_prev) exit
             ke_prev = ke_now
@@ -485,7 +485,7 @@ contains
 
          call map_in(ms, hv, metrics, grid)
          call ocean_horizontal_viscosity_compute_tendencies(grid, metrics, hv, ms)
-         !$acc update self(hv%du_visc%data, hv%dv_visc%data)
+         !$omp target update from(hv%du_visc%data, hv%dv_visc%data)
          call map_out(ms, hv, metrics)
 
          ! Compare interior tendencies (the boundary rows are zeroed by
@@ -575,27 +575,27 @@ contains
          end do
 
          call make_cartesian_metrics(metrics, grid)
-         !$acc enter data copyin(ms)
+         !$omp target enter data map(to: ms)
          call ms%enter_data()
-         !$acc enter data copyin(hv_lap)
+         !$omp target enter data map(to: hv_lap)
          call hv_lap%enter_data()
-         !$acc enter data copyin(hv_m6)
+         !$omp target enter data map(to: hv_m6)
          call hv_m6%enter_data()
 
          call ocean_horizontal_viscosity_compute_tendencies(grid, metrics, hv_lap, ms)
          call ocean_horizontal_viscosity_compute_tendencies(grid, metrics, hv_m6, ms, dt=DT)
-         !$acc update self(hv_lap%du_visc%data, hv_lap%dv_visc%data)
-         !$acc update self(hv_m6%du_visc%data, hv_m6%dv_visc%data)
+         !$omp target update from(hv_lap%du_visc%data, hv_lap%dv_visc%data)
+         !$omp target update from(hv_m6%du_visc%data, hv_m6%dv_visc%data)
 
          allocate (du_lap, source=hv_lap%du_visc%data)
          allocate (dv_lap, source=hv_lap%dv_visc%data)
 
          call hv_m6%exit_data()
-         !$acc exit data delete(hv_m6)
+         !$omp target exit data map(delete: hv_m6)
          call hv_lap%exit_data()
-         !$acc exit data delete(hv_lap)
+         !$omp target exit data map(delete: hv_lap)
          call ms%exit_data()
-         !$acc exit data delete(ms)
+         !$omp target exit data map(delete: ms)
          call destroy_cartesian_metrics(metrics)
 
          max_du = 0.0_wp
@@ -684,16 +684,16 @@ contains
          end do
 
          call make_cartesian_metrics(metrics, grid)
-         !$acc enter data copyin(ms)
+         !$omp target enter data map(to: ms)
          call ms%enter_data()
-         !$acc enter data copyin(hv)
+         !$omp target enter data map(to: hv)
          call hv%enter_data()
          call ocean_horizontal_viscosity_compute_tendencies(grid, metrics, hv, ms, dt=DT)
-         !$acc update self(hv%du_visc%data, hv%dv_visc%data)
+         !$omp target update from(hv%du_visc%data, hv%dv_visc%data)
          call hv%exit_data()
-         !$acc exit data delete(hv)
+         !$omp target exit data map(delete: hv)
          call ms%exit_data()
-         !$acc exit data delete(ms)
+         !$omp target exit data map(delete: ms)
          call destroy_cartesian_metrics(metrics)
 
          ! Thickness-weighted momentum change per face = h_u·area·diffu.
@@ -775,19 +775,19 @@ contains
          end do
 
          call make_cartesian_metrics(metrics, grid)
-         !$acc enter data copyin(ms)
+         !$omp target enter data map(to: ms)
          call ms%enter_data()
-         !$acc enter data copyin(hv)
+         !$omp target enter data map(to: hv)
          call hv%enter_data()
          do step = 1, N_STEPS
             call ocean_horizontal_viscosity_compute_tendencies(grid, metrics, hv, ms, dt=DT)
             call ocean_horizontal_viscosity_apply_tendencies(hv, ms, DT)
          end do
-         !$acc update self(ms%u_face_x_layer, ms%v_face_y_layer)
+         !$omp target update from(ms%u_face_x_layer, ms%v_face_y_layer)
          call hv%exit_data()
-         !$acc exit data delete(hv)
+         !$omp target exit data map(delete: hv)
          call ms%exit_data()
-         !$acc exit data delete(ms)
+         !$omp target exit data map(delete: ms)
          call destroy_cartesian_metrics(metrics)
 
          max_abs = max(maxval(abs(ms%u_face_x_layer)), maxval(abs(ms%v_face_y_layer)))
@@ -875,19 +875,19 @@ contains
             end do
          end do
          call metrics_apply_land_mask(metrics, wet_mask, grid, .false., .false., .false.)
-         !$acc enter data copyin(metrics)
+         !$omp target enter data map(to: metrics)
          call metrics%enter_data()
 
-         !$acc enter data copyin(ms)
+         !$omp target enter data map(to: ms)
          call ms%enter_data()
-         !$acc enter data copyin(hv)
+         !$omp target enter data map(to: hv)
          call hv%enter_data()
          call ocean_horizontal_viscosity_compute_tendencies(grid, metrics, hv, ms, dt=DT)
-         !$acc update self(hv%du_visc%data)
+         !$omp target update from(hv%du_visc%data)
          call hv%exit_data()
-         !$acc exit data delete(hv)
+         !$omp target exit data map(delete: hv)
          call ms%exit_data()
-         !$acc exit data delete(ms)
+         !$omp target exit data map(delete: ms)
          call destroy_cartesian_metrics(metrics)
 
          ! u-faces strictly INSIDE the land block (both adjacent T-cells

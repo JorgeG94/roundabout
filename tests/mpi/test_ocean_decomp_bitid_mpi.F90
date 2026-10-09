@@ -662,9 +662,9 @@ contains
             if (en%rank == 0) cycle     ! rank-local host scalars (Chapman corners)
             if (en%device_mapped) then
                if (en%rank == 2) then
-                  !$acc update self(en%p2)
+                  !$omp target update from(en%p2)
                else
-                  !$acc update self(en%p3)
+                  !$omp target update from(en%p3)
                end if
             end if
             s%n = s%n + 1
@@ -678,7 +678,7 @@ contains
             end if
          end associate
       end do
-      !$acc update self(engine%state%dyn%bt_work%bt_eta_end)
+      !$omp target update from(engine%state%dyn%bt_work%bt_eta_end)
       s%n = s%n + 1
       s%f(s%n)%tag = "bt_eta_end"
       allocate (s%f(s%n)%a(size(engine%state%dyn%bt_work%bt_eta_end, 1), &

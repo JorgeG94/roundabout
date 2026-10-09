@@ -710,7 +710,7 @@ contains
       ! and gate on allocation — symmetric with the setup allocation and the
       ! exit_data delete.
       if (allocated(this%avr_u0)) then
-         !$acc enter data copyin(this%avr_u0, this%avr_v0)
+         !$omp target enter data map(to: this%avr_u0, this%avr_v0)
       end if
       ! bt_wide is attached by ocean_dyn_enable_bt_wide (AFTER enter_data
       ! for the rest of dyn); no attach here — see ocean_dyn_enable_bt_wide.
@@ -731,7 +731,7 @@ contains
       ! accel_visc_rem knob is on), so guard the delete on allocation —
       ! symmetric with the enter_data copyin.
       if (allocated(this%avr_u0)) then
-         !$acc exit data delete(this%avr_u0, this%avr_v0)
+         !$omp target exit data map(delete: this%avr_u0, this%avr_v0)
       end if
       call barotropic_workstate_exit_data_impl(this%bt_work)
    end subroutine ocean_dyn_exit_data_impl
@@ -1302,7 +1302,7 @@ contains
          end if
       end if
 
-      !$acc wait(1)
+      ! [acc->omp] dropped CUDA-graph wrapper: wait (1)
       ! No `bt_work` here: the unsplit path has no BT correction at all,
       ! so there is no consumer for visc_rem — do_remnant stays .false.
       ! The top-drag fold arrays are handed over as ARRAYS, not as the
@@ -2159,7 +2159,7 @@ contains
       ny_uface = size(ms%u_face_x_layer, 2)
       nx_vface = size(ms%v_face_y_layer, 1)
       ny_vface = size(ms%v_face_y_layer, 2)
-      !$acc parallel loop collapse(3) reduction(+:n_nan) present(ms%u_face_x_layer)
+      !$omp target teams distribute parallel do collapse(3) reduction(+:n_nan)
       do k = 1, nz
          do j = 1, ny_uface
             do i = 1, nx_uface
@@ -2167,7 +2167,7 @@ contains
             end do
          end do
       end do
-      !$acc parallel loop collapse(3) reduction(+:n_nan) present(ms%v_face_y_layer)
+      !$omp target teams distribute parallel do collapse(3) reduction(+:n_nan)
       do k = 1, nz
          do j = 1, ny_vface
             do i = 1, nx_vface
@@ -2198,7 +2198,7 @@ contains
          nxv64 = int(nx_vface, int64)
          nyv64 = int(ny_vface, int64)
          lin_u_min = huge(1_int64)
-         !$acc parallel loop collapse(3) reduction(min:lin_u_min) present(ms%u_face_x_layer)
+         !$omp target teams distribute parallel do collapse(3) reduction(min:lin_u_min)
          do k = 1, nz
             do j = 1, ny_uface
                do i = 1, nx_uface
@@ -2210,7 +2210,7 @@ contains
             end do
          end do
          lin_v_min = huge(1_int64)
-         !$acc parallel loop collapse(3) reduction(min:lin_v_min) present(ms%v_face_y_layer)
+         !$omp target teams distribute parallel do collapse(3) reduction(min:lin_v_min)
          do k = 1, nz
             do j = 1, ny_vface
                do i = 1, nx_vface
@@ -2342,8 +2342,7 @@ contains
          ! ⇒ bit-identical.
          nx_centre = size(ms%h_layer, 1)
          ny_centre = size(ms%h_layer, 2)
-         !$acc parallel loop collapse(3) reduction(+:n_u) private(idx_use) &
-         !$acc   present(ms%u_face_x_layer, metrics%idxCu, metrics%idxT)
+         !$omp target teams distribute parallel do collapse(3) reduction(+:n_u) private(idx_use)
          do k = 1, nz
             do j = 1, ny_uface
                do i = 1, nx_uface
@@ -2374,8 +2373,7 @@ contains
          end do
 
          ! v-faces (Cv): same two-pass split as the u-faces above.
-         !$acc parallel loop collapse(3) reduction(+:n_v) private(idy_use) &
-         !$acc   present(ms%v_face_y_layer, metrics%idyCv, metrics%idyT)
+         !$omp target teams distribute parallel do collapse(3) reduction(+:n_v) private(idy_use)
          do k = 1, nz
             do j = 1, ny_vface
                do i = 1, nx_vface
@@ -2494,7 +2492,7 @@ contains
       j_lo = nghost + 1
       j_hi = ny - nghost
       acc = 0.0_wp
-      !$acc parallel loop collapse(3) reduction(+:acc) present(flux_h_layer, areaT)
+      !$omp target teams distribute parallel do collapse(3) reduction(+:acc)
       do k = 1, nz
          do j = j_lo, j_hi
             do i = i_lo, i_hi
@@ -2520,8 +2518,8 @@ contains
          e5 = 0_int64
          e6 = 0_int64
          epoison = 0_int64
-         !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
-         !$acc&  private(val, colsum, d1, d2, d3, d4, d5, d6, dpoison) present(flux_h_layer, areaT)
+         !$omp target teams distribute parallel do collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
+         !$omp&  private(val, colsum, d1, d2, d3, d4, d5, d6, dpoison)
          do j = j_lo, j_hi
             do i = i_lo, i_hi
                colsum = 0.0_real64
@@ -4048,8 +4046,8 @@ contains
       ! uniformly over every layer, poisoning the whole column silently.
       ! Catching the total here names the stage that evacuated the column.
       col_min = huge(1.0_wp)
-      !$acc parallel loop collapse(2) reduction(min:col_min) &
-      !$acc   private(k, col_sum) present(ms%h_layer)
+      !$omp target teams distribute parallel do collapse(2) reduction(min:col_min) &
+      !$omp   private(k, col_sum)
       do j = j0, j1
          do i = i0, i1
             col_sum = 0.0_wp
@@ -4062,7 +4060,7 @@ contains
 
       h_min = huge(1.0_wp)
       if (check_layers) then
-         !$acc parallel loop collapse(3) reduction(min:h_min) present(ms%h_layer)
+         !$omp target teams distribute parallel do collapse(3) reduction(min:h_min)
          do k = 1, ms%nz_ml
             do j = j0, j1
                do i = i0, i1
@@ -4076,7 +4074,7 @@ contains
       ! Abort path.  Pull the COMPONENT array, never the aggregate `ms` — an
       ! aggregate D->H copy overwrites the host allocatable descriptors with
       ! DEVICE addresses and the next host read segfaults.
-      !$acc update self(ms%h_layer)
+      !$omp target update from(ms%h_layer)
 
       ! Locate the worst column: if a column total went non-positive that is
       ! the primary failure, so report the most-negative TOTAL.  Otherwise
@@ -4230,7 +4228,7 @@ contains
       if (.not. allocated(ms%tracers)) return
 
       iS = ms%idx_salinity
-      !$acc update self(ms%h_layer, ms%tracers(iS)%hTr)
+      !$omp target update from(ms%h_layer, ms%tracers(iS)%hTr)
 
       ig = grid%nghost
       i0 = ig + 1
@@ -4275,7 +4273,7 @@ contains
       if (.not. bcdiag_enabled) return
       if (outer_step > bcdiag_step_limit) return
 
-      !$acc update self(ms%h_layer, bt_work%bt_eta_end, bt_work%bt_H_ref)
+      !$omp target update from(ms%h_layer, bt_work%bt_eta_end, bt_work%bt_H_ref)
 
       ig = grid%nghost
       i0 = ig + 1
@@ -4757,14 +4755,14 @@ contains
       ! Fortran loops + writes to stdout).  Gated on the namelist knob
       ! so production runs pay nothing.
       if (dyn%debug_bt_budget) then
-         !$acc update self(ms%h_layer)
-         !$acc update self(ms%u_face_x_layer, ms%v_face_y_layer)
-         !$acc update self(dyn%bt_work%bt_eta, dyn%bt_work%bt_ubt, dyn%bt_work%bt_vbt)
-         !$acc update self(pgf%dpdx_face%data, pgf%dpdy_face%data)
-         !$acc update self(cor%pv_flux_x%data, cor%pv_flux_y%data)
-         !$acc update self(hv%du_visc%data, hv%dv_visc%data)
-         !$acc update self(bd%du_drag%data, bd%dv_drag%data)
-         !$acc update self(ss%du_stress%data, ss%dv_stress%data)
+         !$omp target update from(ms%h_layer)
+         !$omp target update from(ms%u_face_x_layer, ms%v_face_y_layer)
+         !$omp target update from(dyn%bt_work%bt_eta, dyn%bt_work%bt_ubt, dyn%bt_work%bt_vbt)
+         !$omp target update from(pgf%dpdx_face%data, pgf%dpdy_face%data)
+         !$omp target update from(cor%pv_flux_x%data, cor%pv_flux_y%data)
+         !$omp target update from(hv%du_visc%data, hv%dv_visc%data)
+         !$omp target update from(bd%du_drag%data, bd%dv_drag%data)
+         !$omp target update from(ss%du_stress%data, ss%dv_stress%data)
          call print_bt_budget(grid, ms, dyn%bt_work, pgf, cor, hv, bd, ss, &
                               real(step_id, wp), "step", "S"//achar(48 + stage_id), &
                               header=(step_id == 1 .and. stage_id == 1))
@@ -4969,7 +4967,7 @@ contains
          ! Copy wide outputs back to normal-width bt_work fields.
          ! The copy_out DC loops are synchronous (no acc async); drain async(1)
          ! first so copy_out reads the completed time-mean arrays.
-         !$acc wait(1)
+         ! [acc->omp] dropped CUDA-graph wrapper: wait (1)
          call dyn%bt_wide%copy_out(grid, &
                                    dyn%bt_work%bt_eta, dyn%bt_work%bt_ubt, dyn%bt_work%bt_vbt, &
                                    dyn%bt_work%bt_uhbt, dyn%bt_work%bt_vhbt, &
@@ -5049,7 +5047,7 @@ contains
       ! orders the snapshot against any still-in-flight async producer of
       ! u_face/v_face (the q1 chain convention).
       if (dyn%accel_visc_rem) then
-         !$acc wait
+         ! [acc->omp] dropped CUDA-graph wrapper: wait
          call accel_visc_rem_snapshot(grid%nx_total + 1, grid%ny_total, ms%nz_ml, &
                                       ms%u_face_x_layer, dyn%avr_u0)
          call accel_visc_rem_snapshot(grid%nx_total, grid%ny_total + 1, ms%nz_ml, &
@@ -5123,7 +5121,7 @@ contains
       ! device consumer reads the applied u_face/v_face.  apply_bt_correction
       ! reads u_face_x_layer / v_face_y_layer on the default queue, so the
       ! whole coriolis→pgf→hvisc→bdrag→surfstress chain must have landed.
-      !$acc wait(1)
+      ! [acc->omp] dropped CUDA-graph wrapper: wait (1)
       ! accel_visc_rem reweight: `u = u_entry + visc_rem·(u − u_entry)` —
       ! friction-dominated near-massless layers cannot keep a
       ! full-strength explicit dt·F kick (MOM6 MOM_dynamics_split_RK2:

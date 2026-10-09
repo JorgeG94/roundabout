@@ -101,14 +101,14 @@ contains
 
          ! use_components stays .false. (never touched) — the assembler
          ! must be a plain early return.
-         !$acc enter data copyin(ms, sf)
+         !$omp target enter data map(to: ms, sf)
          call ms%enter_data()
          call sf%enter_data()
          call ocean_surface_flux_assemble(grid, sf, ms)
-         !$acc update self(sf%Q_heat, sf%Q_salt)
+         !$omp target update from(sf%Q_heat, sf%Q_salt)
          call sf%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, sf)
+         !$omp target exit data map(delete: ms, sf)
 
          call check(error, maxval(abs(sf%Q_heat - Q_heat_before)) == 0.0_wp, &
                     "assemble() with use_components=.false. must not touch Q_heat")
@@ -122,16 +122,16 @@ contains
          if (allocated(error)) exit checks
 
          ! The pre-PR-12 apply_tracers analytic must still hold exactly.
-         !$acc enter data copyin(ms, sf)
+         !$omp target enter data map(to: ms, sf)
          call ms%enter_data()
          call sf%enter_data()
          call ocean_surface_flux_apply_tracers(grid, sf, ms, DT)
          associate (hT => ms%tracers(ms%idx_temperature)%hTr)
-            !$acc update self(hT)
+            !$omp target update from(hT)
          end associate
          call sf%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, sf)
+         !$omp target exit data map(delete: ms, sf)
 
          ip = grid%nx_total/2
          jp = grid%ny_total/2
@@ -177,14 +177,14 @@ contains
          sf%heat_added = 5.0_wp
          ! evap / mass fluxes stay zero => heat_content_massin/massout = 0.
 
-         !$acc enter data copyin(ms, sf)
+         !$omp target enter data map(to: ms, sf)
          call ms%enter_data()
          call sf%enter_data()
          call ocean_surface_flux_assemble(grid, sf, ms)
-         !$acc update self(sf%Q_heat)
+         !$omp target update from(sf%Q_heat)
          call sf%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, sf)
+         !$omp target exit data map(delete: ms, sf)
 
          expected_uniform = Q_HEAT_CONST + 25.0_wp   ! 200-60-90-30+5
          call check(error, maxval(abs(sf%Q_heat - expected_uniform)) < 1.0e-9_wp, &
@@ -199,14 +199,14 @@ contains
             end do
          end do
 
-         !$acc enter data copyin(ms, sf)
+         !$omp target enter data map(to: ms, sf)
          call ms%enter_data()
          call sf%enter_data()
          call ocean_surface_flux_assemble(grid, sf, ms)
-         !$acc update self(sf%Q_heat)
+         !$omp target update from(sf%Q_heat)
          call sf%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, sf)
+         !$omp target exit data map(delete: ms, sf)
 
          do j = 1, grid%ny_total
             do i = 1, nx
@@ -255,14 +255,14 @@ contains
          sf%lprec = E
          sf%heat_content_lprec = SEAWATER_CP*T_S*E   !! isothermal: rain at T_s
 
-         !$acc enter data copyin(ms, sf)
+         !$omp target enter data map(to: ms, sf)
          call ms%enter_data()
          call sf%enter_data()
          call ocean_surface_flux_assemble(grid, sf, ms)
-         !$acc update self(sf%Q_heat, sf%heat_content_massin, sf%heat_content_massout)
+         !$omp target update from(sf%Q_heat, sf%heat_content_massin, sf%heat_content_massout)
          call sf%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, sf)
+         !$omp target exit data map(delete: ms, sf)
 
          ip = grid%nx_total/2
          jp = grid%ny_total/2
@@ -315,14 +315,14 @@ contains
          sf2%lprec = E
          sf2%heat_content_lprec = SEAWATER_CP*(T_S + DT_WARM)*E
 
-         !$acc enter data copyin(ms2, sf2)
+         !$omp target enter data map(to: ms2, sf2)
          call ms2%enter_data()
          call sf2%enter_data()
          call ocean_surface_flux_assemble(grid2, sf2, ms2)
-         !$acc update self(sf2%Q_heat)
+         !$omp target update from(sf2%Q_heat)
          call sf2%exit_data()
          call ms2%exit_data()
-         !$acc exit data delete(ms2, sf2)
+         !$omp target exit data map(delete: ms2, sf2)
 
          ip2 = grid2%nx_total/2
          jp2 = grid2%ny_total/2
@@ -368,7 +368,7 @@ contains
          call sf_on%set_components(grid, .true.)
          call sf_on%set_surface_flux_const(Q_HEAT_CONST, Q_SALT_CONST)
 
-         !$acc enter data copyin(ms, ice, sf_off, sf_on)
+         !$omp target enter data map(to: ms, ice, sf_off, sf_on)
          call ms%enter_data()
          call ice%enter_data()
          call sf_off%enter_data()
@@ -380,14 +380,14 @@ contains
          call ice_ocean_heat_flux(sf_on, ice)
          call ocean_surface_flux_assemble(grid, sf_on, ms)
 
-         !$acc update self(sf_off%Q_heat, sf_off%Q_salt, sf_on%Q_heat, sf_on%Q_salt, &
-         !$acc&            sf_on%heat_added, sf_on%salt_flux)
+         !$omp target update from(sf_off%Q_heat, sf_off%Q_salt, sf_on%Q_heat, sf_on%Q_salt, &
+         !$omp&            sf_on%heat_added, sf_on%salt_flux)
 
          call sf_on%exit_data()
          call sf_off%exit_data()
          call ice%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, ice, sf_off, sf_on)
+         !$omp target exit data map(delete: ms, ice, sf_off, sf_on)
 
          call check(error, sf_off%has_heat .and. sf_on%has_heat, &
                     "has_heat must be latched true on both paths")
@@ -480,20 +480,20 @@ contains
          call sf%set_surface_flux_const(Q_HEAT_CONST, 0.0_wp)
          call seed_uniform(ms, 10.0_wp, 35.0_wp)
 
-         !$acc enter data copyin(ms, sf)
+         !$omp target enter data map(to: ms, sf)
          call ms%enter_data()
          call sf%enter_data()
 
          ! Post-map host write — the exact scenario the contract covers.
          sf%q_sw = Q_SW_VAL
-         !$acc update device(sf%q_sw)
+         !$omp target update to(sf%q_sw)
 
          call ocean_surface_flux_assemble(grid, sf, ms)
-         !$acc update self(sf%Q_heat)
+         !$omp target update from(sf%Q_heat)
 
          call sf%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, sf)
+         !$omp target exit data map(delete: ms, sf)
 
          ip = grid%nx_total/2
          jp = grid%ny_total/2
