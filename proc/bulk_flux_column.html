@@ -1,0 +1,1588 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>bulk_flux_column &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>bulk_flux_column
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">86 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_bulk_flux.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_bulk_flux.f90.html'>rdb_ocean_bulk_flux.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_bulk_flux.html'>rdb_ocean_bulk_flux</a></li>
+            <li class="breadcrumb-item active" aria-current="page">bulk_flux_column</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-bstar">bstar</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-cd_rt">cd_rt</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-cdn">cdn</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-cdn10~2">cdn10</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-cdn10_rt">cdn10_rt</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-cen">cen</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-cen10">cen10</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-ctn">ctn</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-ctn10">ctn10</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-dqr">dqr</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-dtemp">dtemp</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-du">du</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-dv">dv</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-n~54">n</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-psi_ht">psi_ht</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-psi_hu">psi_hu</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-psi_mt">psi_mt</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-psi_mu">psi_mu</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-qa_use">qa_use</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-qs~2">qs</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-qstar">qstar</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-rho_air~2">rho_air</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-sst_k~3">sst_k</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-stab">stab</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-ta_use">ta_use</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-tstar">tstar</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-tv~2">tv</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-ustar~11">ustar</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-wv">wv</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-wv10n">wv10n</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-xx~2">xx</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-zetat">zetat</a>
+            <a class="list-group-item" href="../proc/bulk_flux_column.html#variable-zetau">zetau</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/bulk_flux_column.html#src">bulk_flux_column</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public pure subroutine bulk_flux_column(u_wind, v_wind, u_cur, v_cur, t_air, q_air, slp, sst_degc, z_wind, z_ta, n_iter, taux, tauy, sensible, latent, evap, cd, ch, ce, ustar_out)  
+</h2>
+    
+
+    <p>Large &amp; Yeager (2004, 2009) bulk air-sea flux column kernel.
+See the module docstring for the algorithm outline and the
+SIGN CONVENTIONS a caller must honour.</p>
+<p><code>n_iter</code> must be <code>&gt;= 1</code> (an unchecked precondition — this is a
+<code>pure</code> hot-loop kernel, not a validating entry point; the
+namelist-facing caller validates <code>bulk_flux_config_t%n_iter</code>
+via <code>bulk_flux_config_n_iter_ok</code> before calling here).</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-u_wind"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>u_wind</strong></td>
+            <td>
+                <p>Wind components at <code>z_wind</code> (m/s), earth-relative.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-v_wind"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>v_wind</strong></td>
+            <td>
+                <p>Wind components at <code>z_wind</code> (m/s), earth-relative.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-u_cur~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>u_cur</strong></td>
+            <td>
+                <p>Ocean surface current components (m/s).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-v_cur~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>v_cur</strong></td>
+            <td>
+                <p>Ocean surface current components (m/s).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_air"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t_air</strong></td>
+            <td>
+                <p>Air temperature at <code>z_ta</code> (K).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_air"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_air</strong></td>
+            <td>
+                <p>Air specific humidity at <code>z_ta</code> (kg/kg).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-slp~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>slp</strong></td>
+            <td>
+                <p>Sea-level pressure (Pa).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sst_degc"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sst_degc</strong></td>
+            <td>
+                <p>Sea surface temperature (degC) — the ocean model&rsquo;s native
+temperature unit.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_wind~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z_wind</strong></td>
+            <td>
+                <p>Reference heights (m) for the wind and the air temperature
+/ specific humidity pair (assumed co-located).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_ta~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z_ta</strong></td>
+            <td>
+                <p>Reference heights (m) for the wind and the air temperature
+/ specific humidity pair (assumed co-located).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_iter~3"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_iter</strong></td>
+            <td>
+                <p>Fixed Monin-Obukhov iteration count (OM3: 5).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-taux"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>taux</strong></td>
+            <td>
+                <p>Wind stress (N/m^2), along the wind-minus-current vector —
+same sign convention as <code>ocean_surface_stress_t%tau_x/y</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tauy"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tauy</strong></td>
+            <td>
+                <p>Wind stress (N/m^2), along the wind-minus-current vector —
+same sign convention as <code>ocean_surface_stress_t%tau_x/y</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sensible"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sensible</strong></td>
+            <td>
+                <p>Sensible heat flux (W/m^2), POSITIVE DOWN into the ocean.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-latent"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>latent</strong></td>
+            <td>
+                <p>Latent heat flux (W/m^2), POSITIVE DOWN into the ocean.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-evap~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>evap</strong></td>
+            <td>
+                <p>Evaporative mass flux (kg/m^2/s), POSITIVE = evaporation
+(mass leaving the ocean upward) — the OPPOSITE sign of
+<code>ocean_surface_flux_t%evap</code>&rsquo;s MOM6 convention; negate at
+the call site writing into that component.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cd~7"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cd</strong></td>
+            <td>
+                <p>Converged (height- and stability-corrected) drag / Stanton
+(heat) / Dalton (moisture) transfer coefficients.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ch"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ch</strong></td>
+            <td>
+                <p>Converged (height- and stability-corrected) drag / Stanton
+(heat) / Dalton (moisture) transfer coefficients.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ce~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ce</strong></td>
+            <td>
+                <p>Converged (height- and stability-corrected) drag / Stanton
+(heat) / Dalton (moisture) transfer coefficients.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ustar_out"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ustar_out</strong></td>
+            <td>
+                <p>Friction velocity (m/s), <code>sqrt(cd)*|relative wind|</code>.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~bulk_flux_column~~CallsGraph Pages: 1 -->
+<svg id="procbulk_flux_columnCallsGraph" width="291pt" height="116pt"
+ viewBox="0.00 0.00 291.00 116.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~bulk_flux_column~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 112)">
+<title>proc~~bulk_flux_column~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-112 287,-112 287,4 -4,4"/>
+<!-- proc~bulk_flux_column -->
+<g id="proc~~bulk_flux_column~~CallsGraph_node1" class="node">
+<title>proc~bulk_flux_column</title>
+<polygon fill="none" stroke="black" points="105,-66 0,-66 0,-42 105,-42 105,-66"/>
+<text text-anchor="middle" x="52.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50">bulk_flux_column</text>
+</g>
+<!-- proc~bulk_flux_cdn10_neutral -->
+<g id="proc~~bulk_flux_column~~CallsGraph_node2" class="node">
+<title>proc~bulk_flux_cdn10_neutral</title>
+<g id="a_proc~~bulk_flux_column~~CallsGraph_node2"><a xlink:href="../proc/bulk_flux_cdn10_neutral.html" xlink:title="bulk_flux_cdn10_neutral">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="283,-108 141,-108 141,-84 283,-84 283,-108"/>
+<text text-anchor="middle" x="212" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bulk_flux_cdn10_neutral</text>
+</a>
+</g>
+</g>
+<!-- proc~bulk_flux_column&#45;&gt;proc~bulk_flux_cdn10_neutral -->
+<g id="proc~~bulk_flux_column~~CallsGraph_edge1" class="edge">
+<title>proc~bulk_flux_column&#45;&gt;proc~bulk_flux_cdn10_neutral</title>
+<path fill="none" stroke="#ff0000" d="M98.63,-66.04C116.51,-70.8 137.23,-76.33 155.97,-81.33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="155.3,-84.77 165.86,-83.96 157.1,-78 155.3,-84.77"/>
+</g>
+<!-- proc~bulk_flux_psi -->
+<g id="proc~~bulk_flux_column~~CallsGraph_node3" class="node">
+<title>proc~bulk_flux_psi</title>
+<g id="a_proc~~bulk_flux_column~~CallsGraph_node3"><a xlink:href="../proc/bulk_flux_psi.html" xlink:title="bulk_flux_psi">
+<polygon fill="#d9534f" stroke="#d9534f" points="252,-66 172,-66 172,-42 252,-42 252,-66"/>
+<text text-anchor="middle" x="212" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bulk_flux_psi</text>
+</a>
+</g>
+</g>
+<!-- proc~bulk_flux_column&#45;&gt;proc~bulk_flux_psi -->
+<g id="proc~~bulk_flux_column~~CallsGraph_edge2" class="edge">
+<title>proc~bulk_flux_column&#45;&gt;proc~bulk_flux_psi</title>
+<path fill="none" stroke="#ff0000" d="M105.07,-54C123.31,-54 143.75,-54 161.79,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="161.81,-57.5 171.81,-54 161.81,-50.5 161.81,-57.5"/>
+</g>
+<!-- proc~bulk_flux_qsat_seawater -->
+<g id="proc~~bulk_flux_column~~CallsGraph_node4" class="node">
+<title>proc~bulk_flux_qsat_seawater</title>
+<g id="a_proc~~bulk_flux_column~~CallsGraph_node4"><a xlink:href="../proc/bulk_flux_qsat_seawater.html" xlink:title="bulk_flux_qsat_seawater">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="283,-24 141,-24 141,0 283,0 283,-24"/>
+<text text-anchor="middle" x="212" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bulk_flux_qsat_seawater</text>
+</a>
+</g>
+</g>
+<!-- proc~bulk_flux_column&#45;&gt;proc~bulk_flux_qsat_seawater -->
+<g id="proc~~bulk_flux_column~~CallsGraph_edge3" class="edge">
+<title>proc~bulk_flux_column&#45;&gt;proc~bulk_flux_qsat_seawater</title>
+<path fill="none" stroke="#ff0000" d="M98.63,-41.96C116.51,-37.2 137.23,-31.67 155.97,-26.67"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="157.1,-30 165.86,-24.04 155.3,-23.23 157.1,-30"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~bulk_flux_column~~CalledByGraph Pages: 1 -->
+<svg id="procbulk_flux_columnCalledByGraph" width="264pt" height="32pt"
+ viewBox="0.00 0.00 264.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~bulk_flux_column~~CalledByGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>proc~~bulk_flux_column~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 260,-28 260,4 -4,4"/>
+<!-- proc~bulk_flux_column -->
+<g id="proc~~bulk_flux_column~~CalledByGraph_node1" class="node">
+<title>proc~bulk_flux_column</title>
+<polygon fill="none" stroke="black" points="256,-24 151,-24 151,0 256,0 256,-24"/>
+<text text-anchor="middle" x="203.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">bulk_flux_column</text>
+</g>
+<!-- proc~bulk_flux_driver_2d -->
+<g id="proc~~bulk_flux_column~~CalledByGraph_node2" class="node">
+<title>proc~bulk_flux_driver_2d</title>
+<g id="a_proc~~bulk_flux_column~~CalledByGraph_node2"><a xlink:href="../proc/bulk_flux_driver_2d.html" xlink:title="bulk_flux_driver_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="115,-24 0,-24 0,0 115,0 115,-24"/>
+<text text-anchor="middle" x="57.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bulk_flux_driver_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~bulk_flux_driver_2d&#45;&gt;proc~bulk_flux_column -->
+<g id="proc~~bulk_flux_column~~CalledByGraph_edge1" class="edge">
+<title>proc~bulk_flux_driver_2d&#45;&gt;proc~bulk_flux_column</title>
+<path fill="none" stroke="#ff0000" d="M115.41,-12C123.68,-12 132.23,-12 140.6,-12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="140.68,-15.5 150.68,-12 140.68,-8.5 140.68,-15.5"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bstar"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bstar</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cd_rt"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cd_rt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cdn"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cdn</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cdn10~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cdn10</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cdn10_rt"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cdn10_rt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cen"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cen</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cen10"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cen10</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ctn"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ctn</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ctn10"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ctn10</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dqr"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dqr</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dtemp"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dtemp</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-du"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>du</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dv"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dv</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n~54"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-psi_ht"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>psi_ht</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-psi_hu"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>psi_hu</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-psi_mt"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>psi_mt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-psi_mu"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>psi_mu</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qa_use"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qa_use</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qs~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qs</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qstar"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qstar</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rho_air~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rho_air</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sst_k~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sst_k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-stab"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>stab</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ta_use"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ta_use</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tstar"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tstar</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tv~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tv</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ustar~11"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ustar</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wv"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wv</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wv10n"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wv10n</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-xx~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>xx</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zetat"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zetat</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zetau"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zetau</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">bulk_flux_column</span><span class="p">(</span><span class="n">u_wind</span><span class="p">,</span><span class="w"> </span><span class="n">v_wind</span><span class="p">,</span><span class="w"> </span><span class="n">u_cur</span><span class="p">,</span><span class="w"> </span><span class="n">v_cur</span><span class="p">,</span><span class="w"> </span><span class="n">t_air</span><span class="p">,</span><span class="w"> </span><span class="n">q_air</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">slp</span><span class="p">,</span><span class="w"> </span><span class="n">sst_degc</span><span class="p">,</span><span class="w"> </span><span class="n">z_wind</span><span class="p">,</span><span class="w"> </span><span class="n">z_ta</span><span class="p">,</span><span class="w"> </span><span class="n">n_iter</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">taux</span><span class="p">,</span><span class="w"> </span><span class="n">tauy</span><span class="p">,</span><span class="w"> </span><span class="n">sensible</span><span class="p">,</span><span class="w"> </span><span class="n">latent</span><span class="p">,</span><span class="w"> </span><span class="n">evap</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">cd</span><span class="p">,</span><span class="w"> </span><span class="n">ch</span><span class="p">,</span><span class="w"> </span><span class="n">ce</span><span class="p">,</span><span class="w"> </span><span class="n">ustar_out</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Large &amp; Yeager (2004, 2009) bulk air-sea flux column kernel.</span>
+<span class="w">      </span><span class="c">!! See the module docstring for the algorithm outline and the</span>
+<span class="w">      </span><span class="c">!! SIGN CONVENTIONS a caller must honour.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! `n_iter` must be `&gt;= 1` (an unchecked precondition — this is a</span>
+<span class="w">      </span><span class="c">!! `pure` hot-loop kernel, not a validating entry point; the</span>
+<span class="w">      </span><span class="c">!! namelist-facing caller validates `bulk_flux_config_t%n_iter`</span>
+<span class="w">      </span><span class="c">!! via `bulk_flux_config_n_iter_ok` before calling here).</span>
+<span class="w">      </span><span class="c">!$acc routine seq</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u_wind</span><span class="p">,</span><span class="w"> </span><span class="n">v_wind</span>
+<span class="w">         </span><span class="c">!! Wind components at `z_wind` (m/s), earth-relative.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u_cur</span><span class="p">,</span><span class="w"> </span><span class="n">v_cur</span>
+<span class="w">         </span><span class="c">!! Ocean surface current components (m/s).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">t_air</span>
+<span class="w">         </span><span class="c">!! Air temperature at `z_ta` (K).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">q_air</span>
+<span class="w">         </span><span class="c">!! Air specific humidity at `z_ta` (kg/kg).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">slp</span>
+<span class="w">         </span><span class="c">!! Sea-level pressure (Pa).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sst_degc</span>
+<span class="w">         </span><span class="c">!! Sea surface temperature (degC) — the ocean model's native</span>
+<span class="w">         </span><span class="c">!! temperature unit.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">z_wind</span><span class="p">,</span><span class="w"> </span><span class="n">z_ta</span>
+<span class="w">         </span><span class="c">!! Reference heights (m) for the wind and the air temperature</span>
+<span class="w">         </span><span class="c">!! / specific humidity pair (assumed co-located).</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n_iter</span>
+<span class="w">         </span><span class="c">!! Fixed Monin-Obukhov iteration count (OM3: 5).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">taux</span><span class="p">,</span><span class="w"> </span><span class="n">tauy</span>
+<span class="w">         </span><span class="c">!! Wind stress (N/m^2), along the wind-minus-current vector —</span>
+<span class="w">         </span><span class="c">!! same sign convention as `ocean_surface_stress_t%tau_x/y`.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sensible</span>
+<span class="w">         </span><span class="c">!! Sensible heat flux (W/m^2), POSITIVE DOWN into the ocean.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">latent</span>
+<span class="w">         </span><span class="c">!! Latent heat flux (W/m^2), POSITIVE DOWN into the ocean.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">evap</span>
+<span class="w">         </span><span class="c">!! Evaporative mass flux (kg/m^2/s), POSITIVE = evaporation</span>
+<span class="w">         </span><span class="c">!! (mass leaving the ocean upward) — the OPPOSITE sign of</span>
+<span class="w">         </span><span class="c">!! `ocean_surface_flux_t%evap`'s MOM6 convention; negate at</span>
+<span class="w">         </span><span class="c">!! the call site writing into that component.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cd</span><span class="p">,</span><span class="w"> </span><span class="n">ch</span><span class="p">,</span><span class="w"> </span><span class="n">ce</span>
+<span class="w">         </span><span class="c">!! Converged (height- and stability-corrected) drag / Stanton</span>
+<span class="w">         </span><span class="c">!! (heat) / Dalton (moisture) transfer coefficients.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ustar_out</span>
+<span class="w">         </span><span class="c">!! Friction velocity (m/s), `sqrt(cd)*|relative wind|`.</span>
+
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">du</span><span class="p">,</span><span class="w"> </span><span class="n">dv</span><span class="p">,</span><span class="w"> </span><span class="n">wv</span><span class="p">,</span><span class="w"> </span><span class="n">sst_k</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rho_air</span><span class="p">,</span><span class="w"> </span><span class="n">qs</span><span class="p">,</span><span class="w"> </span><span class="n">dtemp</span><span class="p">,</span><span class="w"> </span><span class="n">dqr</span><span class="p">,</span><span class="w"> </span><span class="n">tv</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ta_use</span><span class="p">,</span><span class="w"> </span><span class="n">qa_use</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wv10n</span><span class="p">,</span><span class="w"> </span><span class="n">stab</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cdn10</span><span class="p">,</span><span class="w"> </span><span class="n">cdn10_rt</span><span class="p">,</span><span class="w"> </span><span class="n">cen10</span><span class="p">,</span><span class="w"> </span><span class="n">ctn10</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cdn</span><span class="p">,</span><span class="w"> </span><span class="n">ctn</span><span class="p">,</span><span class="w"> </span><span class="n">cen</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cd_rt</span><span class="p">,</span><span class="w"> </span><span class="n">ustar</span><span class="p">,</span><span class="w"> </span><span class="n">tstar</span><span class="p">,</span><span class="w"> </span><span class="n">qstar</span><span class="p">,</span><span class="w"> </span><span class="n">bstar</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">zetau</span><span class="p">,</span><span class="w"> </span><span class="n">zetat</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">psi_mu</span><span class="p">,</span><span class="w"> </span><span class="n">psi_hu</span><span class="p">,</span><span class="w"> </span><span class="n">psi_mt</span><span class="p">,</span><span class="w"> </span><span class="n">psi_ht</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">xx</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n</span>
+
+<span class="w">      </span><span class="n">sst_k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sst_degc</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">BULK_T0_KELVIN</span>
+<span class="w">      </span><span class="n">du</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">u_wind</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">u_cur</span>
+<span class="w">      </span><span class="n">dv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v_wind</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">v_cur</span>
+<span class="w">      </span><span class="n">wv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="nb">sqrt</span><span class="p">(</span><span class="n">du</span><span class="o">*</span><span class="n">du</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dv</span><span class="o">*</span><span class="n">dv</span><span class="p">),</span><span class="w"> </span><span class="n">BULK_WIND_MIN</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! Ambient-level air density + the (fixed) saturation humidity at</span>
+<span class="w">      </span><span class="c">! SST — both evaluated once, upstream of the height-adjustment</span>
+<span class="w">      </span><span class="c">! iteration (Large &amp; Yeager hold `qs` fixed through the loop; only</span>
+<span class="w">      </span><span class="c">! the AMBIENT temperature/humidity get shifted to the wind height).</span>
+<span class="w">      </span><span class="n">rho_air</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">slp</span><span class="o">/</span><span class="p">(</span><span class="n">BULK_GAS_CONST_AIR</span><span class="o">*</span><span class="n">t_air</span><span class="o">*</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">BULK_TVQ_AIR</span><span class="o">*</span><span class="n">q_air</span><span class="p">))</span>
+<span class="w">      </span><span class="n">qs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bulk_flux_qsat_seawater</span><span class="p">(</span><span class="n">sst_k</span><span class="p">,</span><span class="w"> </span><span class="n">rho_air</span><span class="p">)</span>
+
+<span class="w">      </span><span class="n">dtemp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sst_k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">t_air</span>
+<span class="w">      </span><span class="c">! &gt; 0 &lt;=&gt; SST warmer than air &lt;=&gt; convectively UNSTABLE.</span>
+<span class="w">      </span><span class="n">dqr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">qs</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">q_air</span>
+<span class="w">      </span><span class="n">tv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">t_air</span><span class="o">*</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">BULK_TVQ_AIR</span><span class="o">*</span><span class="n">q_air</span><span class="p">)</span>
+<span class="w">      </span><span class="n">ta_use</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">t_air</span>
+<span class="w">      </span><span class="n">qa_use</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">q_air</span>
+
+<span class="w">      </span><span class="n">wv10n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">wv</span>
+<span class="w">      </span><span class="c">! `stab` selects the Stanton-number branch from the SIGN of</span>
+<span class="w">      </span><span class="c">! `dtemp` alone -- never `sign()` of a value that can be a signed</span>
+<span class="w">      </span><span class="c">! zero (see the git history for the cross-compiler hazard this</span>
+<span class="w">      </span><span class="c">! replaced).  `merge` puts exact neutrality (`dtemp == 0`, as at</span>
+<span class="w">      </span><span class="c">! `SST == T_air`) on the STABLE (18e-3) branch, identically on</span>
+<span class="w">      </span><span class="c">! every compiler.</span>
+<span class="w">      </span><span class="n">stab</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">merge</span><span class="p">(</span><span class="mf">0.0_wp</span><span class="p">,</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="p">,</span><span class="w"> </span><span class="n">dtemp</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span>
+<span class="w">      </span><span class="n">cdn10</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bulk_flux_cdn10_neutral</span><span class="p">(</span><span class="n">wv10n</span><span class="p">)</span>
+<span class="w">      </span><span class="n">cdn10_rt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">sqrt</span><span class="p">(</span><span class="n">cdn10</span><span class="p">)</span>
+<span class="w">      </span><span class="n">cen10</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">BULK_CEN10_COEF</span><span class="o">*</span><span class="n">cdn10_rt</span>
+<span class="w">      </span><span class="n">ctn10</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">BULK_CTN10_STABLE_COEF</span><span class="o">*</span><span class="n">stab</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">BULK_CTN10_UNSTABLE_COEF</span><span class="o">*</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">stab</span><span class="p">))</span><span class="o">*</span><span class="n">cdn10_rt</span>
+<span class="w">      </span><span class="n">cdn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cdn10</span>
+<span class="w">      </span><span class="n">ctn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ctn10</span>
+<span class="w">      </span><span class="n">cen</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cen10</span>
+
+<span class="w">      </span><span class="k">do </span><span class="n">n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">n_iter</span>
+<span class="w">         </span><span class="n">cd_rt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">sqrt</span><span class="p">(</span><span class="n">cdn</span><span class="p">)</span>
+<span class="w">         </span><span class="n">ustar</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cd_rt</span><span class="o">*</span><span class="n">wv</span>
+<span class="w">         </span><span class="n">tstar</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">ctn</span><span class="o">/</span><span class="n">cd_rt</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="o">-</span><span class="n">dtemp</span><span class="p">)</span>
+<span class="w">         </span><span class="n">qstar</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">cen</span><span class="o">/</span><span class="n">cd_rt</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="o">-</span><span class="n">dqr</span><span class="p">)</span>
+<span class="w">         </span><span class="n">bstar</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">GRAVITY</span><span class="o">*</span><span class="p">(</span><span class="n">tstar</span><span class="o">/</span><span class="n">tv</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">qstar</span><span class="o">/</span><span class="p">(</span><span class="n">qa_use</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="n">BULK_TVQ_AIR</span><span class="p">))</span>
+
+<span class="w">         </span><span class="n">zetau</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">BULK_VON_KARMAN</span><span class="o">*</span><span class="n">bstar</span><span class="o">*</span><span class="n">z_wind</span><span class="o">/</span><span class="p">(</span><span class="n">ustar</span><span class="o">*</span><span class="n">ustar</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">bulk_flux_psi</span><span class="p">(</span><span class="n">zetau</span><span class="p">,</span><span class="w"> </span><span class="n">psi_mu</span><span class="p">,</span><span class="w"> </span><span class="n">psi_hu</span><span class="p">)</span>
+<span class="w">         </span><span class="n">zetat</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">BULK_VON_KARMAN</span><span class="o">*</span><span class="n">bstar</span><span class="o">*</span><span class="n">z_ta</span><span class="o">/</span><span class="p">(</span><span class="n">ustar</span><span class="o">*</span><span class="n">ustar</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">bulk_flux_psi</span><span class="p">(</span><span class="n">zetat</span><span class="p">,</span><span class="w"> </span><span class="n">psi_mt</span><span class="p">,</span><span class="w"> </span><span class="n">psi_ht</span><span class="p">)</span>
+<span class="w">         </span><span class="c">! Humidity reference height assumed == z_ta (JRA55-do</span>
+<span class="w">         </span><span class="c">! co-locates tas/huss at 2 m), so psi_h at the humidity height</span>
+<span class="w">         </span><span class="c">! is the same psi_ht just computed -- no third stability branch.</span>
+
+<span class="w">         </span><span class="n">wv10n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">wv</span><span class="o">/</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">cdn10_rt</span><span class="o">*</span><span class="p">(</span><span class="nb">log</span><span class="p">(</span><span class="n">z_wind</span><span class="o">/</span><span class="n">BULK_Z_REF10</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">psi_mu</span><span class="p">)</span><span class="o">/</span><span class="n">BULK_VON_KARMAN</span><span class="p">)</span>
+<span class="w">         </span><span class="n">wv10n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">wv10n</span><span class="p">,</span><span class="w"> </span><span class="n">BULK_WIND_MIN</span><span class="p">)</span>
+
+<span class="w">         </span><span class="n">ta_use</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">t_air</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">tstar</span><span class="o">*</span><span class="p">(</span><span class="nb">log</span><span class="p">(</span><span class="n">z_ta</span><span class="o">/</span><span class="n">z_wind</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">psi_hu</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">psi_ht</span><span class="p">)</span><span class="o">/</span><span class="n">BULK_VON_KARMAN</span>
+<span class="w">         </span><span class="n">qa_use</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">q_air</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">qstar</span><span class="o">*</span><span class="p">(</span><span class="nb">log</span><span class="p">(</span><span class="n">z_ta</span><span class="o">/</span><span class="n">z_wind</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">psi_hu</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">psi_ht</span><span class="p">)</span><span class="o">/</span><span class="n">BULK_VON_KARMAN</span>
+<span class="w">         </span><span class="n">tv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ta_use</span><span class="o">*</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">BULK_TVQ_AIR</span><span class="o">*</span><span class="n">qa_use</span><span class="p">)</span>
+
+<span class="w">         </span><span class="n">cdn10</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bulk_flux_cdn10_neutral</span><span class="p">(</span><span class="n">wv10n</span><span class="p">)</span>
+<span class="w">         </span><span class="n">cdn10_rt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">sqrt</span><span class="p">(</span><span class="n">cdn10</span><span class="p">)</span>
+<span class="w">         </span><span class="n">cen10</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">BULK_CEN10_COEF</span><span class="o">*</span><span class="n">cdn10_rt</span>
+<span class="w">         </span><span class="c">! Same signed-zero hazard as the pre-loop `stab` above, this</span>
+<span class="w">         </span><span class="c">! time keyed on the stability parameter `zetau` (MO convention:</span>
+<span class="w">         </span><span class="c">! `zeta &gt;= 0` &lt;=&gt; stable); `&gt;=` keeps exact neutrality</span>
+<span class="w">         </span><span class="c">! (`zetau == 0`, e.g. `bstar == 0`) on the STABLE branch too.</span>
+<span class="w">         </span><span class="n">stab</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">merge</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="p">,</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">,</span><span class="w"> </span><span class="n">zetau</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span>
+<span class="w">         </span><span class="n">ctn10</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">BULK_CTN10_STABLE_COEF</span><span class="o">*</span><span class="n">stab</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">BULK_CTN10_UNSTABLE_COEF</span><span class="o">*</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">stab</span><span class="p">))</span><span class="o">*</span><span class="n">cdn10_rt</span>
+
+<span class="w">         </span><span class="n">xx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="nb">log</span><span class="p">(</span><span class="n">z_wind</span><span class="o">/</span><span class="n">BULK_Z_REF10</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">psi_mu</span><span class="p">)</span><span class="o">/</span><span class="n">BULK_VON_KARMAN</span>
+<span class="w">         </span><span class="n">cdn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cdn10</span><span class="o">/</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">cdn10_rt</span><span class="o">*</span><span class="n">xx</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span>
+<span class="w">         </span><span class="n">xx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="nb">log</span><span class="p">(</span><span class="n">z_wind</span><span class="o">/</span><span class="n">BULK_Z_REF10</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">psi_hu</span><span class="p">)</span><span class="o">/</span><span class="n">BULK_VON_KARMAN</span>
+<span class="w">         </span><span class="n">ctn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ctn10</span><span class="o">/</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ctn10</span><span class="o">*</span><span class="n">xx</span><span class="o">/</span><span class="n">cdn10_rt</span><span class="p">)</span><span class="o">*</span><span class="nb">sqrt</span><span class="p">(</span><span class="n">cdn</span><span class="o">/</span><span class="n">cdn10</span><span class="p">)</span>
+<span class="w">         </span><span class="n">cen</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cen10</span><span class="o">/</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">cen10</span><span class="o">*</span><span class="n">xx</span><span class="o">/</span><span class="n">cdn10_rt</span><span class="p">)</span><span class="o">*</span><span class="nb">sqrt</span><span class="p">(</span><span class="n">cdn</span><span class="o">/</span><span class="n">cdn10</span><span class="p">)</span>
+
+<span class="w">         </span><span class="n">dtemp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sst_k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ta_use</span>
+<span class="w">         </span><span class="n">dqr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">qs</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">qa_use</span>
+<span class="w">         </span><span class="n">rho_air</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">slp</span><span class="o">/</span><span class="p">(</span><span class="n">BULK_GAS_CONST_AIR</span><span class="o">*</span><span class="n">tv</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end do</span>
+
+<span class="k">      </span><span class="n">cd</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cdn</span>
+<span class="w">      </span><span class="n">ch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ctn</span>
+<span class="w">      </span><span class="n">ce</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cen</span>
+<span class="w">      </span><span class="n">cd_rt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">sqrt</span><span class="p">(</span><span class="n">cd</span><span class="p">)</span>
+<span class="w">      </span><span class="n">ustar_out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cd_rt</span><span class="o">*</span><span class="n">wv</span>
+
+<span class="w">      </span><span class="n">sensible</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="n">rho_air</span><span class="o">*</span><span class="n">BULK_CP_AIR</span><span class="o">*</span><span class="n">ch</span><span class="o">*</span><span class="n">dtemp</span><span class="o">*</span><span class="n">wv</span>
+<span class="w">      </span><span class="n">latent</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="n">rho_air</span><span class="o">*</span><span class="n">BULK_LATENT_VAPORIZATION</span><span class="o">*</span><span class="n">ce</span><span class="o">*</span><span class="n">dqr</span><span class="o">*</span><span class="n">wv</span>
+<span class="w">      </span><span class="n">evap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rho_air</span><span class="o">*</span><span class="n">wv</span><span class="o">*</span><span class="n">ce</span><span class="o">*</span><span class="n">dqr</span>
+
+<span class="w">      </span><span class="n">taux</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rho_air</span><span class="o">*</span><span class="n">cd</span><span class="o">*</span><span class="n">wv</span><span class="o">*</span><span class="n">du</span>
+<span class="w">      </span><span class="n">tauy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rho_air</span><span class="o">*</span><span class="n">cd</span><span class="o">*</span><span class="n">wv</span><span class="o">*</span><span class="n">dv</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">bulk_flux_column</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-09 01:37 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

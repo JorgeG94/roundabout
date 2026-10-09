@@ -1,0 +1,1223 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>rdb_ocean_fold_plan.F90 &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>rdb_ocean_fold_plan.F90
+      <small>Source File</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.4% of total for source files.">282 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_fold_plan.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+            <li class="breadcrumb-item active" aria-current="page">rdb_ocean_fold_plan.F90</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#mods-0"
+         aria-expanded="false" aria-controls="mods-0">
+         <h4 class="card-header bg-primary text-white">Modules</h4>
+      </a>
+      <div id="mods-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_fold_plan.html">rdb_ocean_fold_plan</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../sourcefile/rdb_ocean_fold_plan.f90.html#src">rdb_ocean_fold_plan.F90</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    <div class="col-md-9" id='text'>
+      <p>Routing plan for the DISTRIBUTED tripolar north fold (<code>px &gt; 1</code>).</p>
+      <br>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Files dependent on this one</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph Pages: 1 -->
+<svg id="sourcefilerdb_ocean_fold_planf90AfferentGraph" width="641pt" height="147pt"
+ viewBox="0.00 0.00 641.00 147.02" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph" class="graph" transform="scale(0.33 0.33) rotate(0) translate(4 447.14)">
+<title>sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-447.14 1963,-447.14 1963,4 -4,4"/>
+<!-- sourcefile~rdb_ocean_fold_plan.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node1" class="node">
+<title>sourcefile~rdb_ocean_fold_plan.f90</title>
+<polygon fill="none" stroke="black" points="145,-224.94 0,-224.94 0,-200.94 145,-200.94 145,-224.94"/>
+<text text-anchor="middle" x="72.5" y="-210.54" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ocean_fold_plan.F90</text>
+</g>
+<!-- sourcefile~rdb_ocean_fold_exchange.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node2" class="node">
+<title>sourcefile~rdb_ocean_fold_exchange.f90</title>
+<g id="a_sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node2"><a xlink:href="../sourcefile/rdb_ocean_fold_exchange.f90.html" xlink:title="rdb_ocean_fold_exchange.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="355,-224.94 181,-224.94 181,-200.94 355,-200.94 355,-224.94"/>
+<text text-anchor="middle" x="268" y="-210.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_fold_exchange.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_fold_exchange.f90&#45;&gt;sourcefile~rdb_ocean_fold_plan.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge1" class="edge">
+<title>sourcefile~rdb_ocean_fold_exchange.f90&#45;&gt;sourcefile~rdb_ocean_fold_plan.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M180.72,-212.94C172.26,-212.94 163.7,-212.94 155.29,-212.94"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="155.13,-209.44 145.13,-212.94 155.13,-216.44 155.13,-209.44"/>
+</g>
+<!-- sourcefile~rdb_barotropic_substep.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node3" class="node">
+<title>sourcefile~rdb_barotropic_substep.f90</title>
+<g id="a_sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node3"><a xlink:href="../sourcefile/rdb_barotropic_substep.f90.html" xlink:title="rdb_barotropic_substep.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="550,-124.94 391,-124.94 391,-100.94 550,-100.94 550,-124.94"/>
+<text text-anchor="middle" x="470.5" y="-110.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_barotropic_substep.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_barotropic_substep.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge2" class="edge">
+<title>sourcefile~rdb_barotropic_substep.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M445.32,-125C409.64,-142.79 342.78,-176.14 302.43,-196.26"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="300.66,-193.24 293.27,-200.83 303.78,-199.5 300.66,-193.24"/>
+</g>
+<!-- sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node4" class="node">
+<title>sourcefile~rdb_continuity.f90</title>
+<g id="a_sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node4"><a xlink:href="../sourcefile/rdb_continuity.f90.html" xlink:title="rdb_continuity.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="716,-204.94 607,-204.94 607,-180.94 716,-180.94 716,-204.94"/>
+<text text-anchor="middle" x="661.5" y="-190.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_continuity.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge3" class="edge">
+<title>sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M606.88,-195.68C544.85,-198.84 441.51,-204.12 365.42,-208.01"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="365.15,-204.52 355.34,-208.53 365.5,-211.51 365.15,-204.52"/>
+</g>
+<!-- sourcefile~rdb_ocean_fold_apply.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node6" class="node">
+<title>sourcefile~rdb_ocean_fold_apply.f90</title>
+<g id="a_sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node6"><a xlink:href="../sourcefile/rdb_ocean_fold_apply.f90.html" xlink:title="rdb_ocean_fold_apply.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="545.5,-244.94 395.5,-244.94 395.5,-220.94 545.5,-220.94 545.5,-244.94"/>
+<text text-anchor="middle" x="470.5" y="-230.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_fold_apply.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge15" class="edge">
+<title>sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M606.85,-204.29C585.46,-208.82 560.61,-214.08 538.09,-218.84"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="537.32,-215.43 528.26,-220.92 538.77,-222.28 537.32,-215.43"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node5" class="node">
+<title>sourcefile~rdb_ocean_engine.f90</title>
+<g id="a_sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node5"><a xlink:href="../sourcefile/rdb_ocean_engine.f90.html" xlink:title="rdb_ocean_engine.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1679,-225.94 1546,-225.94 1546,-201.94 1679,-201.94 1679,-225.94"/>
+<text text-anchor="middle" x="1612.5" y="-211.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge4" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1049.5,-390.94C877.63,-408.32 835.24,-425.93 662.5,-426.94"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge18" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M1581.9,-225.98C1546.11,-239.94 1483.73,-262.38 1428,-272.94"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M1426,-272.94C1405.1,-276.9 1072.51,-196.26 1051.5,-192.94"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M1049.5,-192.94C927.82,-173.38 884.97,-120.44 773,-171.94 750.66,-182.21 757.88,-200.96 737,-213.94 707.98,-231.97 696.48,-229.28 662.5,-232.94"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M660.5,-232.94C626.32,-236.27 588.49,-236.88 555.71,-236.43"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="555.77,-232.93 545.71,-236.26 555.65,-239.93 555.77,-232.93"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node7" class="node">
+<title>sourcefile~rdb_ocean_setup.f90</title>
+<g id="a_sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node7"><a xlink:href="../sourcefile/rdb_ocean_setup.f90.html" xlink:title="rdb_ocean_setup.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1299.5,-284.94 1173.5,-284.94 1173.5,-260.94 1299.5,-260.94 1299.5,-284.94"/>
+<text text-anchor="middle" x="1236.5" y="-270.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge21" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M1426,-272.94C1388.1,-280.11 1345.14,-280.68 1309.82,-279.21"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="1309.75,-275.7 1299.59,-278.71 1309.41,-282.69 1309.75,-275.7"/>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node10" class="node">
+<title>sourcefile~rdb_ice_transport.f90</title>
+<g id="a_sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node10"><a xlink:href="../sourcefile/rdb_ice_transport.f90.html" xlink:title="rdb_ice_transport.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="918.5,-204.94 790.5,-204.94 790.5,-180.94 918.5,-180.94 918.5,-204.94"/>
+<text text-anchor="middle" x="854.5" y="-190.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_transport.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_transport.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge23" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_transport.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M1049.5,-192.94C1009.97,-186.69 965.34,-186.24 928.86,-187.55"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="928.64,-184.06 918.8,-187.97 928.93,-191.05 928.64,-184.06"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node13" class="node">
+<title>sourcefile~rdb_ocean_dyn.f90</title>
+<g id="a_sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node13"><a xlink:href="../sourcefile/rdb_ocean_dyn.f90.html" xlink:title="rdb_ocean_dyn.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="912.5,-86.94 796.5,-86.94 796.5,-62.94 912.5,-62.94 912.5,-86.94"/>
+<text text-anchor="middle" x="854.5" y="-72.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_dyn.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge27" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M1599.13,-201.93C1554.48,-159.89 1395.88,-21.94 1237.5,-21.94"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node14" class="node">
+<title>sourcefile~rdb_ocean_halo_state.f90</title>
+<g id="a_sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node14"><a xlink:href="../sourcefile/rdb_ocean_halo_state.f90.html" xlink:title="rdb_ocean_halo_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="737,-284.94 586,-284.94 586,-260.94 737,-260.94 737,-284.94"/>
+<text text-anchor="middle" x="661.5" y="-270.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_halo_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge34" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1235.5,-350.94C1153.42,-367.24 1134.76,-382.51 1051.5,-390.94"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1049.5,-390.94C1005.71,-395.37 898.23,-361.52 855.5,-350.94"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node15" class="node">
+<title>sourcefile~rdb_ocean_state.f90</title>
+<g id="a_sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node15"><a xlink:href="../sourcefile/rdb_ocean_state.f90.html" xlink:title="rdb_ocean_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1112,-126.94 989,-126.94 989,-102.94 1112,-102.94 1112,-126.94"/>
+<text text-anchor="middle" x="1050.5" y="-112.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge40" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1557.35,-201.91C1520.83,-193.85 1471.56,-183.09 1428,-173.94"/>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1426,-173.94C1388.84,-166.13 1379.65,-163.01 1344,-149.94 1327.56,-143.91 1324.5,-139.79 1308,-133.94 1277.41,-123.09 1269.95,-114.57 1237.5,-114.94"/>
+</g>
+<!-- sourcefile~rdb_ice_ocean_coupler.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node16" class="node">
+<title>sourcefile~rdb_ice_ocean_coupler.f90</title>
+<g id="a_sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node16"><a xlink:href="../sourcefile/rdb_ice_ocean_coupler.f90.html" xlink:title="rdb_ice_ocean_coupler.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1129,-362.94 972,-362.94 972,-338.94 1129,-338.94 1129,-362.94"/>
+<text text-anchor="middle" x="1050.5" y="-348.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_ocean_coupler.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_ocean_coupler.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge42" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_ocean_coupler.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1235.5,-350.94C1204.48,-355.95 1170.12,-357.11 1139.58,-356.64"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1139.45,-353.14 1129.38,-356.42 1139.3,-360.14 1139.45,-353.14"/>
+</g>
+<!-- sourcefile~rdb_ocean_data_forcing.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node17" class="node">
+<title>sourcefile~rdb_ocean_data_forcing.f90</title>
+<g id="a_sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node17"><a xlink:href="../sourcefile/rdb_ocean_data_forcing.f90.html" xlink:title="rdb_ocean_data_forcing.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="936,-284.94 773,-284.94 773,-260.94 936,-260.94 936,-284.94"/>
+<text text-anchor="middle" x="854.5" y="-270.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_data_forcing.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge43" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M1426,-272.94C1336.92,-289.81 1327,-336.46 1237.5,-350.94"/>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M1235.5,-350.94C1231.62,-351.56 1030.83,-309.69 922.74,-287.05"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="923.4,-283.61 912.89,-284.99 921.96,-290.46 923.4,-283.61"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node18" class="node">
+<title>sourcefile~rdb_ocean_diag_derived.f90</title>
+<g id="a_sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node18"><a xlink:href="../sourcefile/rdb_ocean_diag_derived.f90.html" xlink:title="rdb_ocean_diag_derived.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1510,-225.94 1344,-225.94 1344,-201.94 1510,-201.94 1510,-225.94"/>
+<text text-anchor="middle" x="1427" y="-211.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_derived.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge46" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1545.77,-213.94C1537.49,-213.94 1528.91,-213.94 1520.31,-213.94"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1520.24,-210.44 1510.24,-213.94 1520.24,-217.44 1520.24,-210.44"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node19" class="node">
+<title>sourcefile~rdb_ocean_diag_fills.f90</title>
+<g id="a_sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node19"><a xlink:href="../sourcefile/rdb_ocean_diag_fills.f90.html" xlink:title="rdb_ocean_diag_fills.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1308,-166.94 1165,-166.94 1165,-142.94 1308,-142.94 1308,-166.94"/>
+<text text-anchor="middle" x="1236.5" y="-152.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_fills.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge49" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1426,-173.94C1391.14,-166.61 1352.04,-162.08 1318.53,-159.3"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1318.56,-155.79 1308.32,-158.49 1318.01,-162.77 1318.56,-155.79"/>
+</g>
+<!-- sourcefile~rdb_ocean_fold_apply.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge5" class="edge">
+<title>sourcefile~rdb_ocean_fold_apply.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M395.41,-225.55C385.62,-224.57 375.48,-223.56 365.38,-222.55"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="365.62,-219.06 355.32,-221.55 364.92,-226.02 365.62,-219.06"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge6" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M853.5,-312.94C755.72,-327.52 760.34,-412.79 662.5,-426.94"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M660.5,-426.94C499.02,-450.28 338.22,-290.33 286.31,-232.91"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="288.72,-230.35 279.45,-225.22 283.49,-235.01 288.72,-230.35"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge20" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M1173.49,-261.64C1068.24,-244.03 848.01,-213.92 662.5,-232.94"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge28" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M1222.44,-260.81C1196.41,-236.73 1139.63,-184.68 1129,-178.94 1065.34,-144.55 1039.32,-162.42 972,-135.94 941,-123.74 907.5,-105.63 884.41,-92.31"/>
+<polygon fill="#003fff" stroke="#003fff" points="885.9,-89.13 875.5,-87.11 882.37,-95.17 885.9,-89.13"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge35" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1173.32,-279.68C1098.08,-287.79 967.55,-301.72 855.5,-312.94"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M853.5,-312.94C799.67,-320.97 738.19,-303.17 699.85,-288.79"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="700.74,-285.38 690.15,-285.04 698.22,-291.91 700.74,-285.38"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge41" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1219.17,-260.82C1203.83,-248.86 1180.92,-229.43 1165,-208.94 1144.03,-181.93 1155.07,-163.07 1129,-140.94 1124.56,-137.17 1119.56,-133.94 1114.29,-131.18"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="1115.75,-128 1105.21,-126.96 1112.79,-134.35 1115.75,-128"/>
+</g>
+<!-- sourcefile~rdb_driver.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node8" class="node">
+<title>sourcefile~rdb_driver.f90</title>
+<g id="a_sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node8"><a xlink:href="../sourcefile/rdb_driver.f90.html" xlink:title="rdb_driver.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1806.5,-90.94 1718.5,-90.94 1718.5,-66.94 1806.5,-66.94 1806.5,-90.94"/>
+<text text-anchor="middle" x="1762.5" y="-76.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge12" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M1748.1,-91.15C1722.24,-114.75 1665.25,-166.73 1634.37,-194.9"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="1631.79,-192.52 1626.76,-201.84 1636.5,-197.69 1631.79,-192.52"/>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge25" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M1728.52,-66.87C1668.84,-46.46 1538.81,-8.61 1428,-21.94"/>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M1426,-21.94C1342.49,-28.58 1321.26,-23.55 1237.5,-21.94"/>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge36" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1426,-21.94C1333.25,-33.09 1330.91,-113.87 1237.5,-114.94"/>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1235.5,-114.94C1198.3,-115.36 1156.87,-115.4 1122.76,-115.31"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="1122.43,-111.81 1112.42,-115.28 1122.41,-118.81 1122.43,-111.81"/>
+</g>
+<!-- sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node9" class="node">
+<title>sourcefile~rdb_handle.f90</title>
+<g id="a_sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node9"><a xlink:href="../sourcefile/rdb_handle.f90.html" xlink:title="rdb_handle.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1810,-225.94 1715,-225.94 1715,-201.94 1810,-201.94 1810,-225.94"/>
+<text text-anchor="middle" x="1762.5" y="-211.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge13" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M1714.67,-213.94C1706.58,-213.94 1697.98,-213.94 1689.34,-213.94"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="1689.22,-210.44 1679.22,-213.94 1689.22,-217.44 1689.22,-210.44"/>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge37" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1725.1,-201.9C1640.49,-175.06 1423.58,-112.82 1237.5,-114.94"/>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge9" class="edge">
+<title>sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_continuity.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M790.43,-192.94C769.89,-192.94 747.07,-192.94 726.46,-192.94"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="726.23,-189.44 716.23,-192.94 726.23,-196.44 726.23,-189.44"/>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge31" class="edge">
+<title>sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M829.26,-205.02C805.91,-216.46 769.44,-233.79 737,-246.94 728.05,-250.56 718.38,-254.16 709.06,-257.48"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="707.8,-254.21 699.52,-260.82 710.12,-260.82 707.8,-254.21"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node11" class="node">
+<title>sourcefile~rdb_ocean_api.f90</title>
+<g id="a_sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node11"><a xlink:href="../sourcefile/rdb_ocean_api.f90.html" xlink:title="rdb_ocean_api.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1959,-205.94 1846,-205.94 1846,-181.94 1959,-181.94 1959,-205.94"/>
+<text text-anchor="middle" x="1902.5" y="-191.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge14" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M1900,-206.23C1893.68,-251.55 1864.7,-407.81 1763.5,-428.94"/>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M1761.5,-428.94C1669.4,-448.17 1629.34,-294.79 1617.49,-236.13"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="1620.88,-235.2 1615.55,-226.04 1614,-236.52 1620.88,-235.2"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge16" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M1761.5,-428.94C1616.41,-459.23 1576.22,-428.94 1428,-428.94 1428,-428.94 1428,-428.94 1235.5,-428.94 940.66,-428.94 854.46,-415.82 586,-293.94 556.44,-280.52 523.87,-262.87 501.05,-250.01"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="502.63,-246.88 492.2,-244.99 499.17,-252.97 502.63,-246.88"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge22" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M1845.77,-202.01C1837.37,-203.23 1828.69,-204.49 1820.27,-205.71"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="1819.54,-202.28 1810.15,-207.18 1820.55,-209.21 1819.54,-202.28"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge26" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M1896.71,-181.68C1885.66,-154.98 1855.74,-91.32 1810,-57.94 1761.03,-22.2 1738.68,-30.59 1679,-19.94 1532.33,6.24 1492.67,1.79 1344,-7.94 1296.36,-11.05 1285.23,-22.85 1237.5,-21.94"/>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M1235.5,-21.94C1120.11,-17.6 986.76,-43.44 912.67,-60.57"/>
+<polygon fill="#003fff" stroke="#003fff" points="911.56,-57.24 902.62,-62.93 913.16,-64.06 911.56,-57.24"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge45" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1761.5,-173.94C1660.49,-153.99 1540.18,-180.58 1475.24,-199.01"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1473.93,-195.74 1465.3,-201.89 1475.88,-202.46 1473.93,-195.74"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge47" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1845.88,-187.19C1820.64,-183.8 1790.46,-179.26 1763.5,-173.94"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1761.5,-173.94C1607.01,-143.42 1422.04,-145.47 1318.32,-150.01"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1318.07,-146.52 1308.24,-150.47 1318.39,-153.51 1318.07,-146.52"/>
+</g>
+<!-- sourcefile~rdb_ocean_bt_wide.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node12" class="node">
+<title>sourcefile~rdb_ocean_bt_wide.f90</title>
+<g id="a_sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_node12"><a xlink:href="../sourcefile/rdb_ocean_bt_wide.f90.html" xlink:title="rdb_ocean_bt_wide.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="730,-124.94 593,-124.94 593,-100.94 730,-100.94 730,-124.94"/>
+<text text-anchor="middle" x="661.5" y="-110.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_bt_wide.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge7" class="edge">
+<title>sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M592.8,-112.94C582.37,-112.94 571.46,-112.94 560.64,-112.94"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="560.32,-109.44 550.32,-112.94 560.32,-116.44 560.32,-109.44"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge8" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M796.44,-76.61C742.16,-78.67 658.28,-83.04 586,-91.94 570.86,-93.8 554.7,-96.39 539.43,-99.11"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="538.75,-95.68 529.54,-100.92 540.01,-102.57 538.75,-95.68"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge10" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_continuity.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M796.96,-87.09C788.35,-90.61 780.01,-95.13 773,-100.94 747.27,-122.25 762.48,-145.32 737,-166.94 732.69,-170.59 727.84,-173.75 722.72,-176.46"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="720.86,-173.47 713.31,-180.9 723.84,-179.8 720.86,-173.47"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge17" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M815.19,-87.08C801.48,-92.1 786.17,-98.5 773,-105.94 755.35,-115.91 755.22,-125.05 737,-133.94 674.8,-164.27 650.57,-147.04 586,-171.94 555.15,-183.83 522.04,-202.14 499.4,-215.59"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="497.43,-212.69 490.67,-220.85 501.04,-218.69 497.43,-212.69"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_bt_wide.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge24" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_bt_wide.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M796.45,-86.29C776.43,-90.27 753.7,-94.79 732.72,-98.97"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="732.03,-95.53 722.91,-100.92 733.4,-102.4 732.03,-95.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge33" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M841.77,-87.03C825.08,-104.67 794.14,-138.96 773,-171.94 753.04,-203.06 764.56,-222.29 737,-246.94 732.91,-250.59 728.29,-253.73 723.39,-256.44"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="721.78,-253.33 714.33,-260.86 724.85,-259.62 721.78,-253.33"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo_state.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge19" class="edge">
+<title>sourcefile~rdb_ocean_halo_state.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M603.79,-260.94C583.24,-256.58 559.82,-251.63 538.47,-247.11"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="539,-243.64 528.49,-245 537.55,-250.49 539,-243.64"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge11" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_continuity.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M988.75,-110.52C931.18,-108.55 843.31,-111.36 773,-138.94 754.13,-146.34 754.8,-157.25 737,-166.94 729.9,-170.8 722.11,-174.26 714.34,-177.31"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="713.06,-174.05 704.9,-180.81 715.49,-180.61 713.06,-174.05"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge29" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M991.29,-102.94C969.71,-98.48 945.06,-93.4 922.74,-88.8"/>
+<polygon fill="#003fff" stroke="#003fff" points="923.16,-85.31 912.66,-86.72 921.75,-92.17 923.16,-85.31"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge44" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M1034.05,-127.09C1018.18,-139.71 992.92,-160.18 972,-178.94 955.38,-193.83 953.04,-199.53 936,-213.94 918.7,-228.57 898.06,-243.65 882.02,-254.9"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="879.84,-252.15 873.63,-260.73 883.84,-257.9 879.84,-252.15"/>
+</g>
+<!-- sourcefile~rdb_ice_ocean_coupler.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge30" class="edge">
+<title>sourcefile~rdb_ice_ocean_coupler.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M971.99,-359.41C936.06,-361.2 893.1,-360.25 855.5,-350.94"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M853.5,-350.94C817.26,-341.96 807.78,-340.51 773,-326.94 745.45,-316.18 715.37,-301.26 693.55,-289.82"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="694.92,-286.59 684.45,-285 691.65,-292.78 694.92,-286.59"/>
+</g>
+<!-- sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge32" class="edge">
+<title>sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M772.78,-272.94C764.38,-272.94 755.83,-272.94 747.39,-272.94"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="747.16,-269.44 737.16,-272.94 747.16,-276.44 747.16,-269.44"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge38" class="edge">
+<title>sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1343.95,-214.84C1290.51,-212.41 1220.65,-203.37 1165,-175.94 1144.98,-166.07 1148.05,-152.55 1129,-140.94 1122.59,-137.03 1115.51,-133.62 1108.32,-130.68"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="1109.09,-127.23 1098.5,-126.95 1106.61,-133.77 1109.09,-127.23"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge48" class="edge">
+<title>sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1387.4,-201.85C1358.05,-192.67 1317.48,-179.97 1285.94,-170.1"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1286.64,-166.65 1276.05,-167 1284.55,-173.33 1286.64,-166.65"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_fold_plan.f90~~AfferentGraph_edge39" class="edge">
+<title>sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1180.29,-142.94C1160.37,-138.6 1137.69,-133.67 1116.98,-129.17"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="1117.5,-125.7 1106.98,-127 1116.01,-132.54 1117.5,-125.7"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefilerdb_ocean_fold_planf90AfferentGraph = svgPanZoom('#sourcefilerdb_ocean_fold_planf90AfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#AfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="AfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+<br>
+      <section>
+        <h2><span class="anchor" id="src"></span>Source Code</h2>
+        <div class="hl codehilite"><pre><span></span><a id="ln-1" name="ln-1" href="#ln-1"></a><span class="c">!! Routing plan for the DISTRIBUTED tripolar north fold (`px &gt; 1`).</span>
+<a id="ln-2" name="ln-2" href="#ln-2"></a><span class="k">module </span><span class="n">rdb_ocean_fold_plan</span>
+<a id="ln-3" name="ln-3" href="#ln-3"></a><span class="w">   </span><span class="c">!! Pure index math for the owner-routed north-fold exchange — no MPI,</span>
+<a id="ln-4" name="ln-4" href="#ln-4"></a><span class="w">   </span><span class="c">!! no field data.  Given the global fold-row width `ni`, the x process</span>
+<a id="ln-5" name="ln-5" href="#ln-5"></a><span class="w">   </span><span class="c">!! count `px`, the ghost width `ng` and a north-row tile `rx`, it lists,</span>
+<a id="ln-6" name="ln-6" href="#ln-6"></a><span class="w">   </span><span class="c">!! per peer tile and per column FAMILY, which local storage columns this</span>
+<a id="ln-7" name="ln-7" href="#ln-7"></a><span class="w">   </span><span class="c">!! tile sends and which it receives.  The exchange engine</span>
+<a id="ln-8" name="ln-8" href="#ln-8"></a><span class="w">   </span><span class="c">!! (`rdb_ocean_fold_exchange`) moves the values; this module only says</span>
+<a id="ln-9" name="ln-9" href="#ln-9"></a><span class="w">   </span><span class="c">!! where they come from and where they go, so the routing is testable</span>
+<a id="ln-10" name="ln-10" href="#ln-10"></a><span class="w">   </span><span class="c">!! serially (`tests/test_ocean_fold_plan.F90`).</span>
+<a id="ln-11" name="ln-11" href="#ln-11"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-12" name="ln-12" href="#ln-12"></a><span class="w">   </span><span class="c">!! ## Mirror (see the `rdb_ocean_fold` header for the derivation)</span>
+<a id="ln-13" name="ln-13" href="#ln-13"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-14" name="ln-14" href="#ln-14"></a><span class="w">   </span><span class="c">!! Global physical columns, reduced periodically into `1..ni`:</span>
+<a id="ln-15" name="ln-15" href="#ln-15"></a><span class="w">   </span><span class="c">!!   * T and v (cell columns, family `FOLD_FAM_T`): column `c` mirrors</span>
+<a id="ln-16" name="ln-16" href="#ln-16"></a><span class="w">   </span><span class="c">!!     to `ni+1-c`.</span>
+<a id="ln-17" name="ln-17" href="#ln-17"></a><span class="w">   </span><span class="c">!!   * u and corner (WEST-face / SW-vertex columns, family</span>
+<a id="ln-18" name="ln-18" href="#ln-18"></a><span class="w">   </span><span class="c">!!     `FOLD_FAM_U`): face `f` (`f = 1 ≡ ni+1`) mirrors to `ni+2-f`.</span>
+<a id="ln-19" name="ln-19" href="#ln-19"></a><span class="w">   </span><span class="c">!! Rows: the receiver's north ghost row `d` (and, for v / corner, the</span>
+<a id="ln-20" name="ln-20" href="#ln-20"></a><span class="w">   </span><span class="c">!! fold-line row itself) reads the sender's row `d` below the fold line;</span>
+<a id="ln-21" name="ln-21" href="#ln-21"></a><span class="w">   </span><span class="c">!! both are north-row tiles of the same height, so the row map needs no</span>
+<a id="ln-22" name="ln-22" href="#ln-22"></a><span class="w">   </span><span class="c">!! global j offset (`fold_row_map`).</span>
+<a id="ln-23" name="ln-23" href="#ln-23"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-24" name="ln-24" href="#ln-24"></a><span class="w">   </span><span class="c">!! ## Owner routing (plan §2.3)</span>
+<a id="ln-25" name="ln-25" href="#ln-25"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-26" name="ln-26" href="#ln-26"></a><span class="w">   </span><span class="c">!! Every value comes from the tile that OWNS the mirror point, never</span>
+<a id="ln-27" name="ln-27" href="#ln-27"></a><span class="w">   </span><span class="c">!! from a halo copy, so the fold needs no preceding x exchange:</span>
+<a id="ln-28" name="ln-28" href="#ln-28"></a><span class="w">   </span><span class="c">!!   * T / v column `m`: the tile whose cells contain `m`.</span>
+<a id="ln-29" name="ln-29" href="#ln-29"></a><span class="w">   </span><span class="c">!!   * u / corner face `mf`: the EAST face of cell `mf-1`, which under</span>
+<a id="ln-30" name="ln-30" href="#ln-30"></a><span class="w">   </span><span class="c">!!     the halo's D1 rule (the west/south rank owns a seam face) belongs</span>
+<a id="ln-31" name="ln-31" href="#ln-31"></a><span class="w">   </span><span class="c">!!     to the tile holding cell `mf-1`.  The sender reads its owned faces</span>
+<a id="ln-32" name="ln-32" href="#ln-32"></a><span class="w">   </span><span class="c">!!     `ng+2 .. ng+w+1`, never the west-seam copy at `ng+1`.</span>
+<a id="ln-33" name="ln-33" href="#ln-33"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-34" name="ln-34" href="#ln-34"></a><span class="w">   </span><span class="c">!! ## Lists</span>
+<a id="ln-35" name="ln-35" href="#ln-35"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-36" name="ln-36" href="#ln-36"></a><span class="w">   </span><span class="c">!! A receiver's destination columns are EVERY storage column of its</span>
+<a id="ln-37" name="ln-37" href="#ln-37"></a><span class="w">   </span><span class="c">!! window: `1..w+2ng` (family T) or `1..w+2ng+1` (family U).  The</span>
+<a id="ln-38" name="ln-38" href="#ln-38"></a><span class="w">   </span><span class="c">!! canonical entry order of a (sender, receiver) pair is the receiver's</span>
+<a id="ln-39" name="ln-39" href="#ln-39"></a><span class="w">   </span><span class="c">!! destination columns in increasing order, filtered to that sender;</span>
+<a id="ln-40" name="ln-40" href="#ln-40"></a><span class="w">   </span><span class="c">!! both ends evaluate the same pure function, so their lists agree with</span>
+<a id="ln-41" name="ln-41" href="#ln-41"></a><span class="w">   </span><span class="c">!! no handshake.  Lists are index lists, not ranges: a peer's columns</span>
+<a id="ln-42" name="ln-42" href="#ln-42"></a><span class="w">   </span><span class="c">!! can wrap modulo `ni`.</span>
+<a id="ln-43" name="ln-43" href="#ln-43"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-44" name="ln-44" href="#ln-44"></a><span class="w">   </span><span class="c">!! ## Fold-line row (v and corner)</span>
+<a id="ln-45" name="ln-45" href="#ln-45"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-46" name="ln-46" href="#ln-46"></a><span class="w">   </span><span class="c">!! Each receive entry carries the fold-row class of its destination</span>
+<a id="ln-47" name="ln-47" href="#ln-47"></a><span class="w">   </span><span class="c">!! column (the serial projection rule of `fold_north_v_face_*` /</span>
+<a id="ln-48" name="ln-48" href="#ln-48"></a><span class="w">   </span><span class="c">!! `fold_north_corner_2d`): `FOLD_ROW_WEST` takes the (sign-applied)</span>
+<a id="ln-49" name="ln-49" href="#ln-49"></a><span class="w">   </span><span class="c">!! mirror value, `FOLD_ROW_SELF` is zeroed for a true vector and left</span>
+<a id="ln-50" name="ln-50" href="#ln-50"></a><span class="w">   </span><span class="c">!! for a scalar, `FOLD_ROW_EAST` is the authoritative half and is never</span>
+<a id="ln-51" name="ln-51" href="#ln-51"></a><span class="w">   </span><span class="c">!! written.  The v class uses the T-family columns, the corner class the</span>
+<a id="ln-52" name="ln-52" href="#ln-52"></a><span class="w">   </span><span class="c">!! U-family columns, so each family carries exactly one class.</span>
+<a id="ln-53" name="ln-53" href="#ln-53"></a><span class="w">   </span><span class="k">implicit none</span>
+<a id="ln-54" name="ln-54" href="#ln-54"></a><span class="k">   private</span>
+<a id="ln-55" name="ln-55" href="#ln-55"></a>
+<a id="ln-56" name="ln-56" href="#ln-56"></a><span class="k">   public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fold_plan_t</span>
+<a id="ln-57" name="ln-57" href="#ln-57"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fold_plan_build</span>
+<a id="ln-58" name="ln-58" href="#ln-58"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fold_tile_extent</span>
+<a id="ln-59" name="ln-59" href="#ln-59"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fold_tile_owner</span>
+<a id="ln-60" name="ln-60" href="#ln-60"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fold_receiver_entries</span>
+<a id="ln-61" name="ln-61" href="#ln-61"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fold_stagger_family</span>
+<a id="ln-62" name="ln-62" href="#ln-62"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fold_stagger_nrows</span>
+<a id="ln-63" name="ln-63" href="#ln-63"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fold_row_map</span>
+<a id="ln-64" name="ln-64" href="#ln-64"></a>
+<a id="ln-65" name="ln-65" href="#ln-65"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">parameter</span><span class="p">,</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">FOLD_STAG_T</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-66" name="ln-66" href="#ln-66"></a><span class="w">      </span><span class="c">!! Cell centre (h, η, tracers): T columns, `ng` halo rows.</span>
+<a id="ln-67" name="ln-67" href="#ln-67"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">parameter</span><span class="p">,</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">FOLD_STAG_U</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span>
+<a id="ln-68" name="ln-68" href="#ln-68"></a><span class="w">      </span><span class="c">!! West face (u): U columns, `ng` halo rows.</span>
+<a id="ln-69" name="ln-69" href="#ln-69"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">parameter</span><span class="p">,</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">FOLD_STAG_V</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">3</span>
+<a id="ln-70" name="ln-70" href="#ln-70"></a><span class="w">      </span><span class="c">!! South face (v): T columns, `ng` halo rows + the fold-line row.</span>
+<a id="ln-71" name="ln-71" href="#ln-71"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">parameter</span><span class="p">,</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">FOLD_STAG_CORNER</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">4</span>
+<a id="ln-72" name="ln-72" href="#ln-72"></a><span class="w">      </span><span class="c">!! SW vertex: U columns, `ng` halo rows + the fold-line row.</span>
+<a id="ln-73" name="ln-73" href="#ln-73"></a>
+<a id="ln-74" name="ln-74" href="#ln-74"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">parameter</span><span class="p">,</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">FOLD_FAM_T</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-75" name="ln-75" href="#ln-75"></a><span class="w">      </span><span class="c">!! Column family of T and v (mirror `ni+1-c`).</span>
+<a id="ln-76" name="ln-76" href="#ln-76"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">parameter</span><span class="p">,</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">FOLD_FAM_U</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span>
+<a id="ln-77" name="ln-77" href="#ln-77"></a><span class="w">      </span><span class="c">!! Column family of u and corner (mirror `ni+2-f`).</span>
+<a id="ln-78" name="ln-78" href="#ln-78"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">parameter</span><span class="p">,</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">FOLD_NFAM</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span>
+<a id="ln-79" name="ln-79" href="#ln-79"></a><span class="w">      </span><span class="c">!! Number of column families.</span>
+<a id="ln-80" name="ln-80" href="#ln-80"></a>
+<a id="ln-81" name="ln-81" href="#ln-81"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">parameter</span><span class="p">,</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">FOLD_ROW_EAST</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span>
+<a id="ln-82" name="ln-82" href="#ln-82"></a><span class="w">      </span><span class="c">!! Fold-row slot in the authoritative (east) half: never written.</span>
+<a id="ln-83" name="ln-83" href="#ln-83"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">parameter</span><span class="p">,</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">FOLD_ROW_SELF</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-84" name="ln-84" href="#ln-84"></a><span class="w">      </span><span class="c">!! Self-conjugate fold-row slot: zeroed for vectors, left for scalars.</span>
+<a id="ln-85" name="ln-85" href="#ln-85"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">parameter</span><span class="p">,</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">FOLD_ROW_WEST</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-86" name="ln-86" href="#ln-86"></a><span class="w">      </span><span class="c">!! Fold-row slot in the west half: takes the sign-applied mirror.</span>
+<a id="ln-87" name="ln-87" href="#ln-87"></a>
+<a id="ln-88" name="ln-88" href="#ln-88"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">parameter</span><span class="p">,</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">FOLD_PLAN_OK</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-89" name="ln-89" href="#ln-89"></a><span class="w">      </span><span class="c">!! `fold_plan_build` status: plan built.</span>
+<a id="ln-90" name="ln-90" href="#ln-90"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">parameter</span><span class="p">,</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">FOLD_PLAN_ERR_ARGS</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-91" name="ln-91" href="#ln-91"></a><span class="w">      </span><span class="c">!! `fold_plan_build` status: `ni &lt; px`, `px &lt; 1`, `ng &lt; 1` or `rx`</span>
+<a id="ln-92" name="ln-92" href="#ln-92"></a><span class="w">      </span><span class="c">!! outside `0..px-1`.</span>
+<a id="ln-93" name="ln-93" href="#ln-93"></a>
+<a id="ln-94" name="ln-94" href="#ln-94"></a><span class="w">   </span><span class="k">type</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fold_plan_t</span>
+<a id="ln-95" name="ln-95" href="#ln-95"></a><span class="w">      </span><span class="c">!! One north-row tile's routing for the distributed fold.  Entries of</span>
+<a id="ln-96" name="ln-96" href="#ln-96"></a><span class="w">      </span><span class="c">!! family `f` for peer `p` live at `start(p,f)+1 .. start(p,f)+n(p,f)`</span>
+<a id="ln-97" name="ln-97" href="#ln-97"></a><span class="w">      </span><span class="c">!! of the flat entry arrays (send and receive separately).</span>
+<a id="ln-98" name="ln-98" href="#ln-98"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ni</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-99" name="ln-99" href="#ln-99"></a><span class="w">         </span><span class="c">!! Global physical width of the fold row.</span>
+<a id="ln-100" name="ln-100" href="#ln-100"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">px</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-101" name="ln-101" href="#ln-101"></a><span class="w">         </span><span class="c">!! Tiles along the fold row.</span>
+<a id="ln-102" name="ln-102" href="#ln-102"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-103" name="ln-103" href="#ln-103"></a><span class="w">         </span><span class="c">!! Ghost width.</span>
+<a id="ln-104" name="ln-104" href="#ln-104"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span>
+<a id="ln-105" name="ln-105" href="#ln-105"></a><span class="w">         </span><span class="c">!! This tile's x-coordinate (0-based).</span>
+<a id="ln-106" name="ln-106" href="#ln-106"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">npeer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-107" name="ln-107" href="#ln-107"></a><span class="w">         </span><span class="c">!! Peer tiles this tile sends to or receives from (self included</span>
+<a id="ln-108" name="ln-108" href="#ln-108"></a><span class="w">         </span><span class="c">!! when its own mirror falls in its window).</span>
+<a id="ln-109" name="ln-109" href="#ln-109"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">self_peer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-110" name="ln-110" href="#ln-110"></a><span class="w">         </span><span class="c">!! Index into `peer_rx` of this tile itself (0 if not a peer).</span>
+<a id="ln-111" name="ln-111" href="#ln-111"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nmax</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-112" name="ln-112" href="#ln-112"></a><span class="w">         </span><span class="c">!! Largest entry count of any (peer, family) list, send or receive.</span>
+<a id="ln-113" name="ln-113" href="#ln-113"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">peer_rx</span><span class="p">(:)</span>
+<a id="ln-114" name="ln-114" href="#ln-114"></a><span class="w">         </span><span class="c">!! Peer tile x-coordinates, ascending, shape (npeer).</span>
+<a id="ln-115" name="ln-115" href="#ln-115"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">send_n</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<a id="ln-116" name="ln-116" href="#ln-116"></a><span class="w">         </span><span class="c">!! Send entry counts, shape (npeer, FOLD_NFAM).</span>
+<a id="ln-117" name="ln-117" href="#ln-117"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">send_start</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<a id="ln-118" name="ln-118" href="#ln-118"></a><span class="w">         </span><span class="c">!! Offsets into the flat send arrays, shape (npeer, FOLD_NFAM).</span>
+<a id="ln-119" name="ln-119" href="#ln-119"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">recv_n</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<a id="ln-120" name="ln-120" href="#ln-120"></a><span class="w">         </span><span class="c">!! Receive entry counts, shape (npeer, FOLD_NFAM).</span>
+<a id="ln-121" name="ln-121" href="#ln-121"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">recv_start</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<a id="ln-122" name="ln-122" href="#ln-122"></a><span class="w">         </span><span class="c">!! Offsets into the flat receive arrays, shape (npeer, FOLD_NFAM).</span>
+<a id="ln-123" name="ln-123" href="#ln-123"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nsend</span><span class="p">(</span><span class="n">FOLD_NFAM</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-124" name="ln-124" href="#ln-124"></a><span class="w">         </span><span class="c">!! Total send entries per family.</span>
+<a id="ln-125" name="ln-125" href="#ln-125"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nrecv</span><span class="p">(</span><span class="n">FOLD_NFAM</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-126" name="ln-126" href="#ln-126"></a><span class="w">         </span><span class="c">!! Total receive entries per family.</span>
+<a id="ln-127" name="ln-127" href="#ln-127"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">send_col</span><span class="p">(:)</span>
+<a id="ln-128" name="ln-128" href="#ln-128"></a><span class="w">         </span><span class="c">!! Local storage column this tile reads, flat (all families).</span>
+<a id="ln-129" name="ln-129" href="#ln-129"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">send_peer</span><span class="p">(:)</span>
+<a id="ln-130" name="ln-130" href="#ln-130"></a><span class="w">         </span><span class="c">!! Peer index of each send entry, flat.</span>
+<a id="ln-131" name="ln-131" href="#ln-131"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">send_e</span><span class="p">(:)</span>
+<a id="ln-132" name="ln-132" href="#ln-132"></a><span class="w">         </span><span class="c">!! 1-based position of each send entry within its (peer, family)</span>
+<a id="ln-133" name="ln-133" href="#ln-133"></a><span class="w">         </span><span class="c">!! list, flat.</span>
+<a id="ln-134" name="ln-134" href="#ln-134"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">recv_col</span><span class="p">(:)</span>
+<a id="ln-135" name="ln-135" href="#ln-135"></a><span class="w">         </span><span class="c">!! Local storage column this tile writes, flat (all families).</span>
+<a id="ln-136" name="ln-136" href="#ln-136"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">recv_peer</span><span class="p">(:)</span>
+<a id="ln-137" name="ln-137" href="#ln-137"></a><span class="w">         </span><span class="c">!! Peer index of each receive entry, flat.</span>
+<a id="ln-138" name="ln-138" href="#ln-138"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">recv_e</span><span class="p">(:)</span>
+<a id="ln-139" name="ln-139" href="#ln-139"></a><span class="w">         </span><span class="c">!! 1-based position within its (peer, family) list, flat.</span>
+<a id="ln-140" name="ln-140" href="#ln-140"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">recv_cls</span><span class="p">(:)</span>
+<a id="ln-141" name="ln-141" href="#ln-141"></a><span class="w">         </span><span class="c">!! Fold-row class of each receive entry (`FOLD_ROW_*`), flat.</span>
+<a id="ln-142" name="ln-142" href="#ln-142"></a><span class="w">   </span><span class="k">contains</span>
+<a id="ln-143" name="ln-143" href="#ln-143"></a><span class="k">      procedure</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">destroy</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">fold_plan_destroy</span>
+<a id="ln-144" name="ln-144" href="#ln-144"></a><span class="w">   </span><span class="k">end type </span><span class="n">fold_plan_t</span>
+<a id="ln-145" name="ln-145" href="#ln-145"></a>
+<a id="ln-146" name="ln-146" href="#ln-146"></a><span class="k">contains</span>
+<a id="ln-147" name="ln-147" href="#ln-147"></a>
+<a id="ln-148" name="ln-148" href="#ln-148"></a><span class="k">   pure subroutine </span><span class="n">fold_tile_extent</span><span class="p">(</span><span class="n">ni</span><span class="p">,</span><span class="w"> </span><span class="n">px</span><span class="p">,</span><span class="w"> </span><span class="n">rx</span><span class="p">,</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">w</span><span class="p">)</span>
+<a id="ln-149" name="ln-149" href="#ln-149"></a><span class="w">      </span><span class="c">!! First global cell `a` and width `w` of tile `rx` — the</span>
+<a id="ln-150" name="ln-150" href="#ln-150"></a><span class="w">      </span><span class="c">!! `decomp_init` split (remainder to the WEST tiles), restated here so</span>
+<a id="ln-151" name="ln-151" href="#ln-151"></a><span class="w">      </span><span class="c">!! the plan stays pure and dependency-free (cross-checked against</span>
+<a id="ln-152" name="ln-152" href="#ln-152"></a><span class="w">      </span><span class="c">!! `decomp_init` by the unit test).</span>
+<a id="ln-153" name="ln-153" href="#ln-153"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ni</span>
+<a id="ln-154" name="ln-154" href="#ln-154"></a><span class="w">         </span><span class="c">!! Global physical width of the fold row (cells).</span>
+<a id="ln-155" name="ln-155" href="#ln-155"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">px</span>
+<a id="ln-156" name="ln-156" href="#ln-156"></a><span class="w">         </span><span class="c">!! Tiles along the fold row.</span>
+<a id="ln-157" name="ln-157" href="#ln-157"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rx</span>
+<a id="ln-158" name="ln-158" href="#ln-158"></a><span class="w">         </span><span class="c">!! Tile x-coordinate (0-based, `0..px-1`).</span>
+<a id="ln-159" name="ln-159" href="#ln-159"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">a</span>
+<a id="ln-160" name="ln-160" href="#ln-160"></a><span class="w">         </span><span class="c">!! First global cell of the tile (1-based).</span>
+<a id="ln-161" name="ln-161" href="#ln-161"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">w</span>
+<a id="ln-162" name="ln-162" href="#ln-162"></a><span class="w">         </span><span class="c">!! Tile width (cells).</span>
+<a id="ln-163" name="ln-163" href="#ln-163"></a>
+<a id="ln-164" name="ln-164" href="#ln-164"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">base</span><span class="p">,</span><span class="w"> </span><span class="n">rem</span>
+<a id="ln-165" name="ln-165" href="#ln-165"></a>
+<a id="ln-166" name="ln-166" href="#ln-166"></a><span class="w">      </span><span class="n">base</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ni</span><span class="o">/</span><span class="n">px</span>
+<a id="ln-167" name="ln-167" href="#ln-167"></a><span class="w">      </span><span class="n">rem</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">mod</span><span class="p">(</span><span class="n">ni</span><span class="p">,</span><span class="w"> </span><span class="n">px</span><span class="p">)</span>
+<a id="ln-168" name="ln-168" href="#ln-168"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">rx</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">rem</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-169" name="ln-169" href="#ln-169"></a><span class="k">         </span><span class="n">w</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">base</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-170" name="ln-170" href="#ln-170"></a><span class="w">         </span><span class="n">a</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rx</span><span class="o">*</span><span class="p">(</span><span class="n">base</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-171" name="ln-171" href="#ln-171"></a><span class="w">      </span><span class="k">else</span>
+<a id="ln-172" name="ln-172" href="#ln-172"></a><span class="k">         </span><span class="n">w</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">base</span>
+<a id="ln-173" name="ln-173" href="#ln-173"></a><span class="w">         </span><span class="n">a</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rem</span><span class="o">*</span><span class="p">(</span><span class="n">base</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">rx</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">rem</span><span class="p">)</span><span class="o">*</span><span class="n">base</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-174" name="ln-174" href="#ln-174"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-175" name="ln-175" href="#ln-175"></a><span class="k">   end subroutine </span><span class="n">fold_tile_extent</span>
+<a id="ln-176" name="ln-176" href="#ln-176"></a>
+<a id="ln-177" name="ln-177" href="#ln-177"></a><span class="w">   </span><span class="k">pure function </span><span class="n">fold_tile_owner</span><span class="p">(</span><span class="n">ni</span><span class="p">,</span><span class="w"> </span><span class="n">px</span><span class="p">,</span><span class="w"> </span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">rx</span><span class="p">)</span>
+<a id="ln-178" name="ln-178" href="#ln-178"></a><span class="w">      </span><span class="c">!! Tile holding global cell `c` (1..ni), closed form of the</span>
+<a id="ln-179" name="ln-179" href="#ln-179"></a><span class="w">      </span><span class="c">!! `decomp_init` split.</span>
+<a id="ln-180" name="ln-180" href="#ln-180"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ni</span>
+<a id="ln-181" name="ln-181" href="#ln-181"></a><span class="w">         </span><span class="c">!! Global physical width of the fold row (cells).</span>
+<a id="ln-182" name="ln-182" href="#ln-182"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">px</span>
+<a id="ln-183" name="ln-183" href="#ln-183"></a><span class="w">         </span><span class="c">!! Tiles along the fold row.</span>
+<a id="ln-184" name="ln-184" href="#ln-184"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">c</span>
+<a id="ln-185" name="ln-185" href="#ln-185"></a><span class="w">         </span><span class="c">!! Global cell index (1-based, `1..ni`).</span>
+<a id="ln-186" name="ln-186" href="#ln-186"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rx</span>
+<a id="ln-187" name="ln-187" href="#ln-187"></a><span class="w">         </span><span class="c">!! Owning tile x-coordinate (0-based).</span>
+<a id="ln-188" name="ln-188" href="#ln-188"></a>
+<a id="ln-189" name="ln-189" href="#ln-189"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">base</span><span class="p">,</span><span class="w"> </span><span class="n">rem</span>
+<a id="ln-190" name="ln-190" href="#ln-190"></a>
+<a id="ln-191" name="ln-191" href="#ln-191"></a><span class="w">      </span><span class="n">base</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ni</span><span class="o">/</span><span class="n">px</span>
+<a id="ln-192" name="ln-192" href="#ln-192"></a><span class="w">      </span><span class="n">rem</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">mod</span><span class="p">(</span><span class="n">ni</span><span class="p">,</span><span class="w"> </span><span class="n">px</span><span class="p">)</span>
+<a id="ln-193" name="ln-193" href="#ln-193"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">rem</span><span class="o">*</span><span class="p">(</span><span class="n">base</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-194" name="ln-194" href="#ln-194"></a><span class="k">         </span><span class="n">rx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">base</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<a id="ln-195" name="ln-195" href="#ln-195"></a><span class="w">      </span><span class="k">else</span>
+<a id="ln-196" name="ln-196" href="#ln-196"></a><span class="k">         </span><span class="n">rx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rem</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">c</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">rem</span><span class="o">*</span><span class="p">(</span><span class="n">base</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span><span class="o">/</span><span class="n">base</span>
+<a id="ln-197" name="ln-197" href="#ln-197"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-198" name="ln-198" href="#ln-198"></a><span class="k">   end function </span><span class="n">fold_tile_owner</span>
+<a id="ln-199" name="ln-199" href="#ln-199"></a>
+<a id="ln-200" name="ln-200" href="#ln-200"></a><span class="w">   </span><span class="k">pure </span><span class="kt">integer </span><span class="k">function </span><span class="n">fold_stagger_family</span><span class="p">(</span><span class="n">stagger</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">fam</span><span class="p">)</span>
+<a id="ln-201" name="ln-201" href="#ln-201"></a><span class="w">      </span><span class="c">!! Column family of a stagger (`FOLD_FAM_T` for T/v, `FOLD_FAM_U` for</span>
+<a id="ln-202" name="ln-202" href="#ln-202"></a><span class="w">      </span><span class="c">!! u/corner).</span>
+<a id="ln-203" name="ln-203" href="#ln-203"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">stagger</span>
+<a id="ln-204" name="ln-204" href="#ln-204"></a><span class="w">         </span><span class="c">!! `FOLD_STAG_*` stagger.</span>
+<a id="ln-205" name="ln-205" href="#ln-205"></a>
+<a id="ln-206" name="ln-206" href="#ln-206"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">stagger</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">FOLD_STAG_U</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">stagger</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">FOLD_STAG_CORNER</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-207" name="ln-207" href="#ln-207"></a><span class="k">         </span><span class="n">fam</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">FOLD_FAM_U</span>
+<a id="ln-208" name="ln-208" href="#ln-208"></a><span class="w">      </span><span class="k">else</span>
+<a id="ln-209" name="ln-209" href="#ln-209"></a><span class="k">         </span><span class="n">fam</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">FOLD_FAM_T</span>
+<a id="ln-210" name="ln-210" href="#ln-210"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-211" name="ln-211" href="#ln-211"></a><span class="k">   end function </span><span class="n">fold_stagger_family</span>
+<a id="ln-212" name="ln-212" href="#ln-212"></a>
+<a id="ln-213" name="ln-213" href="#ln-213"></a><span class="w">   </span><span class="k">pure </span><span class="kt">integer </span><span class="k">function </span><span class="n">fold_stagger_nrows</span><span class="p">(</span><span class="n">stagger</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">nrow</span><span class="p">)</span>
+<a id="ln-214" name="ln-214" href="#ln-214"></a><span class="w">      </span><span class="c">!! Rows a stagger moves per column: `ng` (T, u) or `ng+1` (v, corner:</span>
+<a id="ln-215" name="ln-215" href="#ln-215"></a><span class="w">      </span><span class="c">!! the fold-line row is always sent, the receiver uses it only where</span>
+<a id="ln-216" name="ln-216" href="#ln-216"></a><span class="w">      </span><span class="c">!! `recv_cls == FOLD_ROW_WEST`).</span>
+<a id="ln-217" name="ln-217" href="#ln-217"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">stagger</span>
+<a id="ln-218" name="ln-218" href="#ln-218"></a><span class="w">         </span><span class="c">!! `FOLD_STAG_*` stagger.</span>
+<a id="ln-219" name="ln-219" href="#ln-219"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ng</span>
+<a id="ln-220" name="ln-220" href="#ln-220"></a><span class="w">         </span><span class="c">!! Ghost width.</span>
+<a id="ln-221" name="ln-221" href="#ln-221"></a>
+<a id="ln-222" name="ln-222" href="#ln-222"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">stagger</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">FOLD_STAG_V</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">stagger</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">FOLD_STAG_CORNER</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-223" name="ln-223" href="#ln-223"></a><span class="k">         </span><span class="n">nrow</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-224" name="ln-224" href="#ln-224"></a><span class="w">      </span><span class="k">else</span>
+<a id="ln-225" name="ln-225" href="#ln-225"></a><span class="k">         </span><span class="n">nrow</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ng</span>
+<a id="ln-226" name="ln-226" href="#ln-226"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-227" name="ln-227" href="#ln-227"></a><span class="k">   end function </span><span class="n">fold_stagger_nrows</span>
+<a id="ln-228" name="ln-228" href="#ln-228"></a>
+<a id="ln-229" name="ln-229" href="#ln-229"></a><span class="w">   </span><span class="k">pure subroutine </span><span class="n">fold_row_map</span><span class="p">(</span><span class="n">stagger</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">nyl</span><span class="p">,</span><span class="w"> </span><span class="n">r</span><span class="p">,</span><span class="w"> </span><span class="n">src_row</span><span class="p">,</span><span class="w"> </span><span class="n">dst_row</span><span class="p">)</span>
+<a id="ln-230" name="ln-230" href="#ln-230"></a><span class="w">      </span><span class="c">!! Storage rows of message row `r` (1..`fold_stagger_nrows`) on a</span>
+<a id="ln-231" name="ln-231" href="#ln-231"></a><span class="w">      </span><span class="c">!! north-row tile of `nyl` physical rows: the sender reads</span>
+<a id="ln-232" name="ln-232" href="#ln-232"></a><span class="w">      </span><span class="c">!! `src_row`, the receiver writes `dst_row`.</span>
+<a id="ln-233" name="ln-233" href="#ln-233"></a><span class="w">      </span><span class="c">!!   * T, u:  r = d = 1..ng:   src ng+nyl+1-d, dst ng+nyl+d.</span>
+<a id="ln-234" name="ln-234" href="#ln-234"></a><span class="w">      </span><span class="c">!!   * v, corner: r = d+1, d = 0..ng: src ng+nyl+1-d, dst ng+nyl+1+d</span>
+<a id="ln-235" name="ln-235" href="#ln-235"></a><span class="w">      </span><span class="c">!!     (d = 0 is the fold-line row, src = dst = ng+nyl+1).</span>
+<a id="ln-236" name="ln-236" href="#ln-236"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">stagger</span>
+<a id="ln-237" name="ln-237" href="#ln-237"></a><span class="w">         </span><span class="c">!! `FOLD_STAG_*` stagger.</span>
+<a id="ln-238" name="ln-238" href="#ln-238"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ng</span>
+<a id="ln-239" name="ln-239" href="#ln-239"></a><span class="w">         </span><span class="c">!! Ghost width.</span>
+<a id="ln-240" name="ln-240" href="#ln-240"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nyl</span>
+<a id="ln-241" name="ln-241" href="#ln-241"></a><span class="w">         </span><span class="c">!! Physical rows of the north-row tile.</span>
+<a id="ln-242" name="ln-242" href="#ln-242"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">r</span>
+<a id="ln-243" name="ln-243" href="#ln-243"></a><span class="w">         </span><span class="c">!! Message row (1-based, `1..fold_stagger_nrows(stagger, ng)`).</span>
+<a id="ln-244" name="ln-244" href="#ln-244"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">src_row</span>
+<a id="ln-245" name="ln-245" href="#ln-245"></a><span class="w">         </span><span class="c">!! Local storage row the sender reads.</span>
+<a id="ln-246" name="ln-246" href="#ln-246"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dst_row</span>
+<a id="ln-247" name="ln-247" href="#ln-247"></a><span class="w">         </span><span class="c">!! Local storage row the receiver writes.</span>
+<a id="ln-248" name="ln-248" href="#ln-248"></a>
+<a id="ln-249" name="ln-249" href="#ln-249"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">d</span>
+<a id="ln-250" name="ln-250" href="#ln-250"></a>
+<a id="ln-251" name="ln-251" href="#ln-251"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">stagger</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">FOLD_STAG_V</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">stagger</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">FOLD_STAG_CORNER</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-252" name="ln-252" href="#ln-252"></a><span class="k">         </span><span class="n">d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">r</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-253" name="ln-253" href="#ln-253"></a><span class="w">         </span><span class="n">src_row</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nyl</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">d</span>
+<a id="ln-254" name="ln-254" href="#ln-254"></a><span class="w">         </span><span class="n">dst_row</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nyl</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">d</span>
+<a id="ln-255" name="ln-255" href="#ln-255"></a><span class="w">      </span><span class="k">else</span>
+<a id="ln-256" name="ln-256" href="#ln-256"></a><span class="k">         </span><span class="n">d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">r</span>
+<a id="ln-257" name="ln-257" href="#ln-257"></a><span class="w">         </span><span class="n">src_row</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nyl</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">d</span>
+<a id="ln-258" name="ln-258" href="#ln-258"></a><span class="w">         </span><span class="n">dst_row</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nyl</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">d</span>
+<a id="ln-259" name="ln-259" href="#ln-259"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-260" name="ln-260" href="#ln-260"></a><span class="k">   end subroutine </span><span class="n">fold_row_map</span>
+<a id="ln-261" name="ln-261" href="#ln-261"></a>
+<a id="ln-262" name="ln-262" href="#ln-262"></a><span class="w">   </span><span class="k">pure subroutine </span><span class="n">fold_receiver_entries</span><span class="p">(</span><span class="n">ni</span><span class="p">,</span><span class="w"> </span><span class="n">px</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">fam</span><span class="p">,</span><span class="w"> </span><span class="n">rx</span><span class="p">,</span><span class="w"> </span><span class="n">ncol</span><span class="p">,</span><span class="w"> </span><span class="n">own</span><span class="p">,</span><span class="w"> </span><span class="n">src</span><span class="p">,</span><span class="w"> </span><span class="n">cls</span><span class="p">)</span>
+<a id="ln-263" name="ln-263" href="#ln-263"></a><span class="w">      </span><span class="c">!! Every destination column `i = 1..ncol` of tile `rx`'s window for a</span>
+<a id="ln-264" name="ln-264" href="#ln-264"></a><span class="w">      </span><span class="c">!! column family: the owning tile `own(i)` of its mirror, the owner's</span>
+<a id="ln-265" name="ln-265" href="#ln-265"></a><span class="w">      </span><span class="c">!! local storage column `src(i)` to read, and the fold-row class</span>
+<a id="ln-266" name="ln-266" href="#ln-266"></a><span class="w">      </span><span class="c">!! `cls(i)`.  `ncol` = `w+2ng` (T) or `w+2ng+1` (U); the arrays must</span>
+<a id="ln-267" name="ln-267" href="#ln-267"></a><span class="w">      </span><span class="c">!! hold at least that many entries.</span>
+<a id="ln-268" name="ln-268" href="#ln-268"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ni</span>
+<a id="ln-269" name="ln-269" href="#ln-269"></a><span class="w">         </span><span class="c">!! Global physical width of the fold row (cells).</span>
+<a id="ln-270" name="ln-270" href="#ln-270"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">px</span>
+<a id="ln-271" name="ln-271" href="#ln-271"></a><span class="w">         </span><span class="c">!! Tiles along the fold row.</span>
+<a id="ln-272" name="ln-272" href="#ln-272"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ng</span>
+<a id="ln-273" name="ln-273" href="#ln-273"></a><span class="w">         </span><span class="c">!! Ghost width.</span>
+<a id="ln-274" name="ln-274" href="#ln-274"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fam</span>
+<a id="ln-275" name="ln-275" href="#ln-275"></a><span class="w">         </span><span class="c">!! Column family (`FOLD_FAM_T` or `FOLD_FAM_U`).</span>
+<a id="ln-276" name="ln-276" href="#ln-276"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rx</span>
+<a id="ln-277" name="ln-277" href="#ln-277"></a><span class="w">         </span><span class="c">!! Receiving tile x-coordinate (0-based).</span>
+<a id="ln-278" name="ln-278" href="#ln-278"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ncol</span>
+<a id="ln-279" name="ln-279" href="#ln-279"></a><span class="w">         </span><span class="c">!! Destination columns filled (`w+2ng` for T, `w+2ng+1` for U).</span>
+<a id="ln-280" name="ln-280" href="#ln-280"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">own</span><span class="p">(:)</span>
+<a id="ln-281" name="ln-281" href="#ln-281"></a><span class="w">         </span><span class="c">!! Owning tile x-coordinate (0-based) of each column's mirror.</span>
+<a id="ln-282" name="ln-282" href="#ln-282"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">src</span><span class="p">(:)</span>
+<a id="ln-283" name="ln-283" href="#ln-283"></a><span class="w">         </span><span class="c">!! Owner's local storage column to read (1-based, ghosts included).</span>
+<a id="ln-284" name="ln-284" href="#ln-284"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cls</span><span class="p">(:)</span>
+<a id="ln-285" name="ln-285" href="#ln-285"></a><span class="w">         </span><span class="c">!! Fold-row class of each column (`FOLD_ROW_*`).</span>
+<a id="ln-286" name="ln-286" href="#ln-286"></a>
+<a id="ln-287" name="ln-287" href="#ln-287"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">w</span><span class="p">,</span><span class="w"> </span><span class="n">a_o</span><span class="p">,</span><span class="w"> </span><span class="n">w_o</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">g</span><span class="p">,</span><span class="w"> </span><span class="n">c</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">,</span><span class="w"> </span><span class="n">p</span><span class="p">,</span><span class="w"> </span><span class="n">pm</span>
+<a id="ln-288" name="ln-288" href="#ln-288"></a>
+<a id="ln-289" name="ln-289" href="#ln-289"></a><span class="w">      </span><span class="k">call </span><span class="n">fold_tile_extent</span><span class="p">(</span><span class="n">ni</span><span class="p">,</span><span class="w"> </span><span class="n">px</span><span class="p">,</span><span class="w"> </span><span class="n">rx</span><span class="p">,</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">w</span><span class="p">)</span>
+<a id="ln-290" name="ln-290" href="#ln-290"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">fam</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">FOLD_FAM_U</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-291" name="ln-291" href="#ln-291"></a><span class="k">         </span><span class="n">ncol</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">w</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="o">*</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-292" name="ln-292" href="#ln-292"></a><span class="w">      </span><span class="k">else</span>
+<a id="ln-293" name="ln-293" href="#ln-293"></a><span class="k">         </span><span class="n">ncol</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">w</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="o">*</span><span class="n">ng</span>
+<a id="ln-294" name="ln-294" href="#ln-294"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-295" name="ln-295" href="#ln-295"></a>
+<a id="ln-296" name="ln-296" href="#ln-296"></a><span class="k">      do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ncol</span>
+<a id="ln-297" name="ln-297" href="#ln-297"></a><span class="w">         </span><span class="c">! Global column of storage slot i, reduced into 1..ni.</span>
+<a id="ln-298" name="ln-298" href="#ln-298"></a><span class="w">         </span><span class="n">g</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-299" name="ln-299" href="#ln-299"></a><span class="w">         </span><span class="n">c</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">modulo</span><span class="p">(</span><span class="n">g</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ni</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-300" name="ln-300" href="#ln-300"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">fam</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">FOLD_FAM_U</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-301" name="ln-301" href="#ln-301"></a><span class="w">            </span><span class="c">! Face c (west face of cell c, c = 1 ≡ ni+1) mirrors to face</span>
+<a id="ln-302" name="ln-302" href="#ln-302"></a><span class="w">            </span><span class="c">! m = ni+2-c in 2..ni+1: the EAST face of cell m-1, owned (D1)</span>
+<a id="ln-303" name="ln-303" href="#ln-303"></a><span class="w">            </span><span class="c">! by the tile holding that cell.</span>
+<a id="ln-304" name="ln-304" href="#ln-304"></a><span class="w">            </span><span class="n">m</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ni</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">c</span>
+<a id="ln-305" name="ln-305" href="#ln-305"></a><span class="w">            </span><span class="n">own</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fold_tile_owner</span><span class="p">(</span><span class="n">ni</span><span class="p">,</span><span class="w"> </span><span class="n">px</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<a id="ln-306" name="ln-306" href="#ln-306"></a><span class="w">            </span><span class="k">call </span><span class="n">fold_tile_extent</span><span class="p">(</span><span class="n">ni</span><span class="p">,</span><span class="w"> </span><span class="n">px</span><span class="p">,</span><span class="w"> </span><span class="n">own</span><span class="p">(</span><span class="n">i</span><span class="p">),</span><span class="w"> </span><span class="n">a_o</span><span class="p">,</span><span class="w"> </span><span class="n">w_o</span><span class="p">)</span>
+<a id="ln-307" name="ln-307" href="#ln-307"></a><span class="w">            </span><span class="n">src</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">m</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">a_o</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-308" name="ln-308" href="#ln-308"></a><span class="w">            </span><span class="c">! Corner projection rule (`fold_north_corner_2d`).</span>
+<a id="ln-309" name="ln-309" href="#ln-309"></a><span class="w">            </span><span class="n">p</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span>
+<a id="ln-310" name="ln-310" href="#ln-310"></a><span class="w">            </span><span class="n">pm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">modulo</span><span class="p">(</span><span class="n">ni</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">p</span><span class="p">,</span><span class="w"> </span><span class="n">ni</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-311" name="ln-311" href="#ln-311"></a><span class="w">         </span><span class="k">else</span>
+<a id="ln-312" name="ln-312" href="#ln-312"></a><span class="k">            </span><span class="n">m</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ni</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">c</span>
+<a id="ln-313" name="ln-313" href="#ln-313"></a><span class="w">            </span><span class="n">own</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fold_tile_owner</span><span class="p">(</span><span class="n">ni</span><span class="p">,</span><span class="w"> </span><span class="n">px</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">)</span>
+<a id="ln-314" name="ln-314" href="#ln-314"></a><span class="w">            </span><span class="k">call </span><span class="n">fold_tile_extent</span><span class="p">(</span><span class="n">ni</span><span class="p">,</span><span class="w"> </span><span class="n">px</span><span class="p">,</span><span class="w"> </span><span class="n">own</span><span class="p">(</span><span class="n">i</span><span class="p">),</span><span class="w"> </span><span class="n">a_o</span><span class="p">,</span><span class="w"> </span><span class="n">w_o</span><span class="p">)</span>
+<a id="ln-315" name="ln-315" href="#ln-315"></a><span class="w">            </span><span class="n">src</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">m</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">a_o</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-316" name="ln-316" href="#ln-316"></a><span class="w">            </span><span class="c">! v projection rule (`fold_north_v_face_*`).</span>
+<a id="ln-317" name="ln-317" href="#ln-317"></a><span class="w">            </span><span class="n">p</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span>
+<a id="ln-318" name="ln-318" href="#ln-318"></a><span class="w">            </span><span class="n">pm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ni</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">p</span>
+<a id="ln-319" name="ln-319" href="#ln-319"></a><span class="w">         </span><span class="k">end if</span>
+<a id="ln-320" name="ln-320" href="#ln-320"></a><span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">p</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">pm</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-321" name="ln-321" href="#ln-321"></a><span class="k">            </span><span class="n">cls</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">FOLD_ROW_WEST</span>
+<a id="ln-322" name="ln-322" href="#ln-322"></a><span class="w">         </span><span class="k">else if</span><span class="w"> </span><span class="p">(</span><span class="n">p</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">pm</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-323" name="ln-323" href="#ln-323"></a><span class="k">            </span><span class="n">cls</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">FOLD_ROW_SELF</span>
+<a id="ln-324" name="ln-324" href="#ln-324"></a><span class="w">         </span><span class="k">else</span>
+<a id="ln-325" name="ln-325" href="#ln-325"></a><span class="k">            </span><span class="n">cls</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">FOLD_ROW_EAST</span>
+<a id="ln-326" name="ln-326" href="#ln-326"></a><span class="w">         </span><span class="k">end if</span>
+<a id="ln-327" name="ln-327" href="#ln-327"></a><span class="k">      end do</span>
+<a id="ln-328" name="ln-328" href="#ln-328"></a><span class="k">   end subroutine </span><span class="n">fold_receiver_entries</span>
+<a id="ln-329" name="ln-329" href="#ln-329"></a>
+<a id="ln-330" name="ln-330" href="#ln-330"></a><span class="w">   </span><span class="k">pure subroutine </span><span class="n">fold_plan_build</span><span class="p">(</span><span class="n">plan</span><span class="p">,</span><span class="w"> </span><span class="n">ni</span><span class="p">,</span><span class="w"> </span><span class="n">px</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">rx</span><span class="p">,</span><span class="w"> </span><span class="n">status</span><span class="p">)</span>
+<a id="ln-331" name="ln-331" href="#ln-331"></a><span class="w">      </span><span class="c">!! Build tile `rx`'s send/receive lists for every peer and both</span>
+<a id="ln-332" name="ln-332" href="#ln-332"></a><span class="w">      </span><span class="c">!! column families.  Pure: every north-row rank computes every tile's</span>
+<a id="ln-333" name="ln-333" href="#ln-333"></a><span class="w">      </span><span class="c">!! receive lists itself (`decomp_init` arithmetic), so no handshake.</span>
+<a id="ln-334" name="ln-334" href="#ln-334"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">fold_plan_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">plan</span>
+<a id="ln-335" name="ln-335" href="#ln-335"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ni</span>
+<a id="ln-336" name="ln-336" href="#ln-336"></a><span class="w">         </span><span class="c">!! Global physical width of the fold row.</span>
+<a id="ln-337" name="ln-337" href="#ln-337"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">px</span>
+<a id="ln-338" name="ln-338" href="#ln-338"></a><span class="w">         </span><span class="c">!! Tiles along the fold row.</span>
+<a id="ln-339" name="ln-339" href="#ln-339"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ng</span>
+<a id="ln-340" name="ln-340" href="#ln-340"></a><span class="w">         </span><span class="c">!! Ghost width.</span>
+<a id="ln-341" name="ln-341" href="#ln-341"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rx</span>
+<a id="ln-342" name="ln-342" href="#ln-342"></a><span class="w">         </span><span class="c">!! This tile's x-coordinate (0-based).</span>
+<a id="ln-343" name="ln-343" href="#ln-343"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">status</span>
+<a id="ln-344" name="ln-344" href="#ln-344"></a><span class="w">         </span><span class="c">!! `FOLD_PLAN_OK`, or `FOLD_PLAN_ERR_ARGS`.</span>
+<a id="ln-345" name="ln-345" href="#ln-345"></a>
+<a id="ln-346" name="ln-346" href="#ln-346"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">own</span><span class="p">(:),</span><span class="w"> </span><span class="n">src</span><span class="p">(:),</span><span class="w"> </span><span class="n">cls</span><span class="p">(:)</span>
+<a id="ln-347" name="ln-347" href="#ln-347"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sn</span><span class="p">(:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="n">rn</span><span class="p">(:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="n">pidx</span><span class="p">(:)</span>
+<a id="ln-348" name="ln-348" href="#ln-348"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ncap</span><span class="p">,</span><span class="w"> </span><span class="n">ncol</span><span class="p">,</span><span class="w"> </span><span class="n">fam</span><span class="p">,</span><span class="w"> </span><span class="n">r</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">p</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">ks</span><span class="p">,</span><span class="w"> </span><span class="n">kr</span>
+<a id="ln-349" name="ln-349" href="#ln-349"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wmax</span><span class="p">,</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">w</span>
+<a id="ln-350" name="ln-350" href="#ln-350"></a>
+<a id="ln-351" name="ln-351" href="#ln-351"></a><span class="w">      </span><span class="n">status</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">FOLD_PLAN_OK</span>
+<a id="ln-352" name="ln-352" href="#ln-352"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">px</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">ng</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">ni</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">px</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">rx</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">rx</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">px</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-353" name="ln-353" href="#ln-353"></a><span class="k">         </span><span class="n">status</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">FOLD_PLAN_ERR_ARGS</span>
+<a id="ln-354" name="ln-354" href="#ln-354"></a><span class="w">         </span><span class="k">return</span>
+<a id="ln-355" name="ln-355" href="#ln-355"></a><span class="k">      end if</span>
+<a id="ln-356" name="ln-356" href="#ln-356"></a>
+<a id="ln-357" name="ln-357" href="#ln-357"></a><span class="k">      </span><span class="n">plan</span><span class="p">%</span><span class="n">ni</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ni</span>
+<a id="ln-358" name="ln-358" href="#ln-358"></a><span class="w">      </span><span class="n">plan</span><span class="p">%</span><span class="n">px</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">px</span>
+<a id="ln-359" name="ln-359" href="#ln-359"></a><span class="w">      </span><span class="n">plan</span><span class="p">%</span><span class="n">ng</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ng</span>
+<a id="ln-360" name="ln-360" href="#ln-360"></a><span class="w">      </span><span class="n">plan</span><span class="p">%</span><span class="n">rx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rx</span>
+<a id="ln-361" name="ln-361" href="#ln-361"></a>
+<a id="ln-362" name="ln-362" href="#ln-362"></a><span class="w">      </span><span class="k">call </span><span class="n">fold_tile_extent</span><span class="p">(</span><span class="n">ni</span><span class="p">,</span><span class="w"> </span><span class="n">px</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">wmax</span><span class="p">)</span><span class="w">   </span><span class="c">! tile 0 is the widest</span>
+<a id="ln-363" name="ln-363" href="#ln-363"></a><span class="w">      </span><span class="n">ncap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">wmax</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="o">*</span><span class="n">ng</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-364" name="ln-364" href="#ln-364"></a><span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">own</span><span class="p">(</span><span class="n">ncap</span><span class="p">),</span><span class="w"> </span><span class="n">src</span><span class="p">(</span><span class="n">ncap</span><span class="p">),</span><span class="w"> </span><span class="n">cls</span><span class="p">(</span><span class="n">ncap</span><span class="p">))</span>
+<a id="ln-365" name="ln-365" href="#ln-365"></a><span class="w">      </span><span class="c">! Per-tile counts, indexed by tile x-coordinate 0..px-1.</span>
+<a id="ln-366" name="ln-366" href="#ln-366"></a><span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">sn</span><span class="p">(</span><span class="mi">0</span><span class="p">:</span><span class="n">px</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">FOLD_NFAM</span><span class="p">),</span><span class="w"> </span><span class="n">rn</span><span class="p">(</span><span class="mi">0</span><span class="p">:</span><span class="n">px</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">FOLD_NFAM</span><span class="p">))</span>
+<a id="ln-367" name="ln-367" href="#ln-367"></a><span class="w">      </span><span class="n">sn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-368" name="ln-368" href="#ln-368"></a><span class="w">      </span><span class="n">rn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-369" name="ln-369" href="#ln-369"></a>
+<a id="ln-370" name="ln-370" href="#ln-370"></a><span class="w">      </span><span class="c">! Pass 1: counts.  Receive: my own window, by owner.  Send: every</span>
+<a id="ln-371" name="ln-371" href="#ln-371"></a><span class="w">      </span><span class="c">! receiver's window, the entries whose owner is me.</span>
+<a id="ln-372" name="ln-372" href="#ln-372"></a><span class="w">      </span><span class="k">do </span><span class="n">fam</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">FOLD_NFAM</span>
+<a id="ln-373" name="ln-373" href="#ln-373"></a><span class="w">         </span><span class="k">do </span><span class="n">r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">px</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-374" name="ln-374" href="#ln-374"></a><span class="w">            </span><span class="k">call </span><span class="n">fold_receiver_entries</span><span class="p">(</span><span class="n">ni</span><span class="p">,</span><span class="w"> </span><span class="n">px</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">fam</span><span class="p">,</span><span class="w"> </span><span class="n">r</span><span class="p">,</span><span class="w"> </span><span class="n">ncol</span><span class="p">,</span><span class="w"> </span><span class="n">own</span><span class="p">,</span><span class="w"> </span><span class="n">src</span><span class="p">,</span><span class="w"> </span><span class="n">cls</span><span class="p">)</span>
+<a id="ln-375" name="ln-375" href="#ln-375"></a><span class="w">            </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ncol</span>
+<a id="ln-376" name="ln-376" href="#ln-376"></a><span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">r</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">rx</span><span class="p">)</span><span class="w"> </span><span class="n">rn</span><span class="p">(</span><span class="n">own</span><span class="p">(</span><span class="n">i</span><span class="p">),</span><span class="w"> </span><span class="n">fam</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rn</span><span class="p">(</span><span class="n">own</span><span class="p">(</span><span class="n">i</span><span class="p">),</span><span class="w"> </span><span class="n">fam</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-377" name="ln-377" href="#ln-377"></a><span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">own</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">rx</span><span class="p">)</span><span class="w"> </span><span class="n">sn</span><span class="p">(</span><span class="n">r</span><span class="p">,</span><span class="w"> </span><span class="n">fam</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sn</span><span class="p">(</span><span class="n">r</span><span class="p">,</span><span class="w"> </span><span class="n">fam</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-378" name="ln-378" href="#ln-378"></a><span class="w">            </span><span class="k">end do</span>
+<a id="ln-379" name="ln-379" href="#ln-379"></a><span class="k">         end do</span>
+<a id="ln-380" name="ln-380" href="#ln-380"></a><span class="k">      end do</span>
+<a id="ln-381" name="ln-381" href="#ln-381"></a>
+<a id="ln-382" name="ln-382" href="#ln-382"></a><span class="w">      </span><span class="c">! Peers: ascending tile order, union of send and receive partners.</span>
+<a id="ln-383" name="ln-383" href="#ln-383"></a><span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">pidx</span><span class="p">(</span><span class="mi">0</span><span class="p">:</span><span class="n">px</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span>
+<a id="ln-384" name="ln-384" href="#ln-384"></a><span class="w">      </span><span class="n">pidx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-385" name="ln-385" href="#ln-385"></a><span class="w">      </span><span class="n">plan</span><span class="p">%</span><span class="n">npeer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-386" name="ln-386" href="#ln-386"></a><span class="w">      </span><span class="k">do </span><span class="n">r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">px</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-387" name="ln-387" href="#ln-387"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">sn</span><span class="p">(</span><span class="n">r</span><span class="p">,</span><span class="w"> </span><span class="p">:))</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nb">sum</span><span class="p">(</span><span class="n">rn</span><span class="p">(</span><span class="n">r</span><span class="p">,</span><span class="w"> </span><span class="p">:))</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-388" name="ln-388" href="#ln-388"></a><span class="k">            </span><span class="n">plan</span><span class="p">%</span><span class="n">npeer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">plan</span><span class="p">%</span><span class="n">npeer</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-389" name="ln-389" href="#ln-389"></a><span class="w">            </span><span class="n">pidx</span><span class="p">(</span><span class="n">r</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">plan</span><span class="p">%</span><span class="n">npeer</span>
+<a id="ln-390" name="ln-390" href="#ln-390"></a><span class="w">         </span><span class="k">end if</span>
+<a id="ln-391" name="ln-391" href="#ln-391"></a><span class="k">      end do</span>
+<a id="ln-392" name="ln-392" href="#ln-392"></a><span class="k">      allocate</span><span class="w"> </span><span class="p">(</span><span class="n">plan</span><span class="p">%</span><span class="n">peer_rx</span><span class="p">(</span><span class="n">plan</span><span class="p">%</span><span class="n">npeer</span><span class="p">))</span>
+<a id="ln-393" name="ln-393" href="#ln-393"></a><span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">plan</span><span class="p">%</span><span class="n">send_n</span><span class="p">(</span><span class="n">plan</span><span class="p">%</span><span class="n">npeer</span><span class="p">,</span><span class="w"> </span><span class="n">FOLD_NFAM</span><span class="p">),</span><span class="w"> </span><span class="n">plan</span><span class="p">%</span><span class="n">send_start</span><span class="p">(</span><span class="n">plan</span><span class="p">%</span><span class="n">npeer</span><span class="p">,</span><span class="w"> </span><span class="n">FOLD_NFAM</span><span class="p">))</span>
+<a id="ln-394" name="ln-394" href="#ln-394"></a><span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">plan</span><span class="p">%</span><span class="n">recv_n</span><span class="p">(</span><span class="n">plan</span><span class="p">%</span><span class="n">npeer</span><span class="p">,</span><span class="w"> </span><span class="n">FOLD_NFAM</span><span class="p">),</span><span class="w"> </span><span class="n">plan</span><span class="p">%</span><span class="n">recv_start</span><span class="p">(</span><span class="n">plan</span><span class="p">%</span><span class="n">npeer</span><span class="p">,</span><span class="w"> </span><span class="n">FOLD_NFAM</span><span class="p">))</span>
+<a id="ln-395" name="ln-395" href="#ln-395"></a><span class="w">      </span><span class="k">do </span><span class="n">r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">px</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-396" name="ln-396" href="#ln-396"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">pidx</span><span class="p">(</span><span class="n">r</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-397" name="ln-397" href="#ln-397"></a><span class="k">            </span><span class="n">plan</span><span class="p">%</span><span class="n">peer_rx</span><span class="p">(</span><span class="n">pidx</span><span class="p">(</span><span class="n">r</span><span class="p">))</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">r</span>
+<a id="ln-398" name="ln-398" href="#ln-398"></a><span class="w">            </span><span class="n">plan</span><span class="p">%</span><span class="n">send_n</span><span class="p">(</span><span class="n">pidx</span><span class="p">(</span><span class="n">r</span><span class="p">),</span><span class="w"> </span><span class="p">:)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sn</span><span class="p">(</span><span class="n">r</span><span class="p">,</span><span class="w"> </span><span class="p">:)</span>
+<a id="ln-399" name="ln-399" href="#ln-399"></a><span class="w">            </span><span class="n">plan</span><span class="p">%</span><span class="n">recv_n</span><span class="p">(</span><span class="n">pidx</span><span class="p">(</span><span class="n">r</span><span class="p">),</span><span class="w"> </span><span class="p">:)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rn</span><span class="p">(</span><span class="n">r</span><span class="p">,</span><span class="w"> </span><span class="p">:)</span>
+<a id="ln-400" name="ln-400" href="#ln-400"></a><span class="w">         </span><span class="k">end if</span>
+<a id="ln-401" name="ln-401" href="#ln-401"></a><span class="k">      end do</span>
+<a id="ln-402" name="ln-402" href="#ln-402"></a><span class="k">      </span><span class="n">plan</span><span class="p">%</span><span class="n">self_peer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pidx</span><span class="p">(</span><span class="n">rx</span><span class="p">)</span>
+<a id="ln-403" name="ln-403" href="#ln-403"></a>
+<a id="ln-404" name="ln-404" href="#ln-404"></a><span class="w">      </span><span class="c">! Offsets: family-major, then peer, into one flat array per side.</span>
+<a id="ln-405" name="ln-405" href="#ln-405"></a><span class="w">      </span><span class="n">ks</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-406" name="ln-406" href="#ln-406"></a><span class="w">      </span><span class="n">kr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-407" name="ln-407" href="#ln-407"></a><span class="w">      </span><span class="k">do </span><span class="n">fam</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">FOLD_NFAM</span>
+<a id="ln-408" name="ln-408" href="#ln-408"></a><span class="w">         </span><span class="k">do </span><span class="n">p</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">plan</span><span class="p">%</span><span class="n">npeer</span>
+<a id="ln-409" name="ln-409" href="#ln-409"></a><span class="w">            </span><span class="n">plan</span><span class="p">%</span><span class="n">send_start</span><span class="p">(</span><span class="n">p</span><span class="p">,</span><span class="w"> </span><span class="n">fam</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ks</span>
+<a id="ln-410" name="ln-410" href="#ln-410"></a><span class="w">            </span><span class="n">plan</span><span class="p">%</span><span class="n">recv_start</span><span class="p">(</span><span class="n">p</span><span class="p">,</span><span class="w"> </span><span class="n">fam</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kr</span>
+<a id="ln-411" name="ln-411" href="#ln-411"></a><span class="w">            </span><span class="n">ks</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ks</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">plan</span><span class="p">%</span><span class="n">send_n</span><span class="p">(</span><span class="n">p</span><span class="p">,</span><span class="w"> </span><span class="n">fam</span><span class="p">)</span>
+<a id="ln-412" name="ln-412" href="#ln-412"></a><span class="w">            </span><span class="n">kr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kr</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">plan</span><span class="p">%</span><span class="n">recv_n</span><span class="p">(</span><span class="n">p</span><span class="p">,</span><span class="w"> </span><span class="n">fam</span><span class="p">)</span>
+<a id="ln-413" name="ln-413" href="#ln-413"></a><span class="w">         </span><span class="k">end do</span>
+<a id="ln-414" name="ln-414" href="#ln-414"></a><span class="k">         </span><span class="n">plan</span><span class="p">%</span><span class="n">nsend</span><span class="p">(</span><span class="n">fam</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">sum</span><span class="p">(</span><span class="n">plan</span><span class="p">%</span><span class="n">send_n</span><span class="p">(:,</span><span class="w"> </span><span class="n">fam</span><span class="p">))</span>
+<a id="ln-415" name="ln-415" href="#ln-415"></a><span class="w">         </span><span class="n">plan</span><span class="p">%</span><span class="n">nrecv</span><span class="p">(</span><span class="n">fam</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">sum</span><span class="p">(</span><span class="n">plan</span><span class="p">%</span><span class="n">recv_n</span><span class="p">(:,</span><span class="w"> </span><span class="n">fam</span><span class="p">))</span>
+<a id="ln-416" name="ln-416" href="#ln-416"></a><span class="w">      </span><span class="k">end do</span>
+<a id="ln-417" name="ln-417" href="#ln-417"></a><span class="k">      </span><span class="n">plan</span><span class="p">%</span><span class="n">nmax</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-418" name="ln-418" href="#ln-418"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">plan</span><span class="p">%</span><span class="n">npeer</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="n">plan</span><span class="p">%</span><span class="n">nmax</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="nb">maxval</span><span class="p">(</span><span class="n">plan</span><span class="p">%</span><span class="n">send_n</span><span class="p">),</span><span class="w"> </span><span class="nb">maxval</span><span class="p">(</span><span class="n">plan</span><span class="p">%</span><span class="n">recv_n</span><span class="p">))</span>
+<a id="ln-419" name="ln-419" href="#ln-419"></a><span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">plan</span><span class="p">%</span><span class="n">send_col</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">ks</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)),</span><span class="w"> </span><span class="n">plan</span><span class="p">%</span><span class="n">send_peer</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">ks</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)),</span><span class="w"> </span><span class="n">plan</span><span class="p">%</span><span class="n">send_e</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">ks</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)))</span>
+<a id="ln-420" name="ln-420" href="#ln-420"></a><span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">plan</span><span class="p">%</span><span class="n">recv_col</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">kr</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)),</span><span class="w"> </span><span class="n">plan</span><span class="p">%</span><span class="n">recv_peer</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">kr</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)),</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-421" name="ln-421" href="#ln-421"></a><span class="w">                </span><span class="n">plan</span><span class="p">%</span><span class="n">recv_e</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">kr</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)),</span><span class="w"> </span><span class="n">plan</span><span class="p">%</span><span class="n">recv_cls</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">kr</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)))</span>
+<a id="ln-422" name="ln-422" href="#ln-422"></a>
+<a id="ln-423" name="ln-423" href="#ln-423"></a><span class="w">      </span><span class="c">! Pass 2: fill, in the canonical order (receiver's destination</span>
+<a id="ln-424" name="ln-424" href="#ln-424"></a><span class="w">      </span><span class="c">! columns ascending).  `sn`/`rn` are reused as running cursors.</span>
+<a id="ln-425" name="ln-425" href="#ln-425"></a><span class="w">      </span><span class="n">sn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-426" name="ln-426" href="#ln-426"></a><span class="w">      </span><span class="n">rn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-427" name="ln-427" href="#ln-427"></a><span class="w">      </span><span class="k">do </span><span class="n">fam</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">FOLD_NFAM</span>
+<a id="ln-428" name="ln-428" href="#ln-428"></a><span class="w">         </span><span class="k">do </span><span class="n">r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">px</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-429" name="ln-429" href="#ln-429"></a><span class="w">            </span><span class="k">call </span><span class="n">fold_receiver_entries</span><span class="p">(</span><span class="n">ni</span><span class="p">,</span><span class="w"> </span><span class="n">px</span><span class="p">,</span><span class="w"> </span><span class="n">ng</span><span class="p">,</span><span class="w"> </span><span class="n">fam</span><span class="p">,</span><span class="w"> </span><span class="n">r</span><span class="p">,</span><span class="w"> </span><span class="n">ncol</span><span class="p">,</span><span class="w"> </span><span class="n">own</span><span class="p">,</span><span class="w"> </span><span class="n">src</span><span class="p">,</span><span class="w"> </span><span class="n">cls</span><span class="p">)</span>
+<a id="ln-430" name="ln-430" href="#ln-430"></a><span class="w">            </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ncol</span>
+<a id="ln-431" name="ln-431" href="#ln-431"></a><span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">r</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">rx</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-432" name="ln-432" href="#ln-432"></a><span class="k">                  </span><span class="n">p</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pidx</span><span class="p">(</span><span class="n">own</span><span class="p">(</span><span class="n">i</span><span class="p">))</span>
+<a id="ln-433" name="ln-433" href="#ln-433"></a><span class="w">                  </span><span class="n">rn</span><span class="p">(</span><span class="n">own</span><span class="p">(</span><span class="n">i</span><span class="p">),</span><span class="w"> </span><span class="n">fam</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rn</span><span class="p">(</span><span class="n">own</span><span class="p">(</span><span class="n">i</span><span class="p">),</span><span class="w"> </span><span class="n">fam</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-434" name="ln-434" href="#ln-434"></a><span class="w">                  </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">plan</span><span class="p">%</span><span class="n">recv_start</span><span class="p">(</span><span class="n">p</span><span class="p">,</span><span class="w"> </span><span class="n">fam</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">rn</span><span class="p">(</span><span class="n">own</span><span class="p">(</span><span class="n">i</span><span class="p">),</span><span class="w"> </span><span class="n">fam</span><span class="p">)</span>
+<a id="ln-435" name="ln-435" href="#ln-435"></a><span class="w">                  </span><span class="n">plan</span><span class="p">%</span><span class="n">recv_col</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i</span>
+<a id="ln-436" name="ln-436" href="#ln-436"></a><span class="w">                  </span><span class="n">plan</span><span class="p">%</span><span class="n">recv_peer</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">p</span>
+<a id="ln-437" name="ln-437" href="#ln-437"></a><span class="w">                  </span><span class="n">plan</span><span class="p">%</span><span class="n">recv_e</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rn</span><span class="p">(</span><span class="n">own</span><span class="p">(</span><span class="n">i</span><span class="p">),</span><span class="w"> </span><span class="n">fam</span><span class="p">)</span>
+<a id="ln-438" name="ln-438" href="#ln-438"></a><span class="w">                  </span><span class="n">plan</span><span class="p">%</span><span class="n">recv_cls</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cls</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+<a id="ln-439" name="ln-439" href="#ln-439"></a><span class="w">               </span><span class="k">end if</span>
+<a id="ln-440" name="ln-440" href="#ln-440"></a><span class="k">               if</span><span class="w"> </span><span class="p">(</span><span class="n">own</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">rx</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-441" name="ln-441" href="#ln-441"></a><span class="k">                  </span><span class="n">p</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pidx</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+<a id="ln-442" name="ln-442" href="#ln-442"></a><span class="w">                  </span><span class="n">sn</span><span class="p">(</span><span class="n">r</span><span class="p">,</span><span class="w"> </span><span class="n">fam</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sn</span><span class="p">(</span><span class="n">r</span><span class="p">,</span><span class="w"> </span><span class="n">fam</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-443" name="ln-443" href="#ln-443"></a><span class="w">                  </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">plan</span><span class="p">%</span><span class="n">send_start</span><span class="p">(</span><span class="n">p</span><span class="p">,</span><span class="w"> </span><span class="n">fam</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">sn</span><span class="p">(</span><span class="n">r</span><span class="p">,</span><span class="w"> </span><span class="n">fam</span><span class="p">)</span>
+<a id="ln-444" name="ln-444" href="#ln-444"></a><span class="w">                  </span><span class="n">plan</span><span class="p">%</span><span class="n">send_col</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">src</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+<a id="ln-445" name="ln-445" href="#ln-445"></a><span class="w">                  </span><span class="n">plan</span><span class="p">%</span><span class="n">send_peer</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">p</span>
+<a id="ln-446" name="ln-446" href="#ln-446"></a><span class="w">                  </span><span class="n">plan</span><span class="p">%</span><span class="n">send_e</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sn</span><span class="p">(</span><span class="n">r</span><span class="p">,</span><span class="w"> </span><span class="n">fam</span><span class="p">)</span>
+<a id="ln-447" name="ln-447" href="#ln-447"></a><span class="w">               </span><span class="k">end if</span>
+<a id="ln-448" name="ln-448" href="#ln-448"></a><span class="k">            end do</span>
+<a id="ln-449" name="ln-449" href="#ln-449"></a><span class="k">         end do</span>
+<a id="ln-450" name="ln-450" href="#ln-450"></a><span class="k">      end do</span>
+<a id="ln-451" name="ln-451" href="#ln-451"></a><span class="k">   end subroutine </span><span class="n">fold_plan_build</span>
+<a id="ln-452" name="ln-452" href="#ln-452"></a>
+<a id="ln-453" name="ln-453" href="#ln-453"></a><span class="w">   </span><span class="k">pure subroutine </span><span class="n">fold_plan_destroy</span><span class="p">(</span><span class="n">this</span><span class="p">)</span>
+<a id="ln-454" name="ln-454" href="#ln-454"></a><span class="w">      </span><span class="c">!! Free the plan's lists and reset it to the empty default.  Safe on</span>
+<a id="ln-455" name="ln-455" href="#ln-455"></a><span class="w">      </span><span class="c">!! a plan that was never built.</span>
+<a id="ln-456" name="ln-456" href="#ln-456"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">fold_plan_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<a id="ln-457" name="ln-457" href="#ln-457"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">peer_rx</span><span class="p">))</span><span class="w"> </span><span class="k">deallocate</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">peer_rx</span><span class="p">)</span>
+<a id="ln-458" name="ln-458" href="#ln-458"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">send_n</span><span class="p">))</span><span class="w"> </span><span class="k">deallocate</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">send_n</span><span class="p">)</span>
+<a id="ln-459" name="ln-459" href="#ln-459"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">send_start</span><span class="p">))</span><span class="w"> </span><span class="k">deallocate</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">send_start</span><span class="p">)</span>
+<a id="ln-460" name="ln-460" href="#ln-460"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">recv_n</span><span class="p">))</span><span class="w"> </span><span class="k">deallocate</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">recv_n</span><span class="p">)</span>
+<a id="ln-461" name="ln-461" href="#ln-461"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">recv_start</span><span class="p">))</span><span class="w"> </span><span class="k">deallocate</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">recv_start</span><span class="p">)</span>
+<a id="ln-462" name="ln-462" href="#ln-462"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">send_col</span><span class="p">))</span><span class="w"> </span><span class="k">deallocate</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">send_col</span><span class="p">)</span>
+<a id="ln-463" name="ln-463" href="#ln-463"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">send_peer</span><span class="p">))</span><span class="w"> </span><span class="k">deallocate</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">send_peer</span><span class="p">)</span>
+<a id="ln-464" name="ln-464" href="#ln-464"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">send_e</span><span class="p">))</span><span class="w"> </span><span class="k">deallocate</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">send_e</span><span class="p">)</span>
+<a id="ln-465" name="ln-465" href="#ln-465"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">recv_col</span><span class="p">))</span><span class="w"> </span><span class="k">deallocate</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">recv_col</span><span class="p">)</span>
+<a id="ln-466" name="ln-466" href="#ln-466"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">recv_peer</span><span class="p">))</span><span class="w"> </span><span class="k">deallocate</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">recv_peer</span><span class="p">)</span>
+<a id="ln-467" name="ln-467" href="#ln-467"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">recv_e</span><span class="p">))</span><span class="w"> </span><span class="k">deallocate</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">recv_e</span><span class="p">)</span>
+<a id="ln-468" name="ln-468" href="#ln-468"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">recv_cls</span><span class="p">))</span><span class="w"> </span><span class="k">deallocate</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">recv_cls</span><span class="p">)</span>
+<a id="ln-469" name="ln-469" href="#ln-469"></a><span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">ni</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-470" name="ln-470" href="#ln-470"></a><span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">px</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-471" name="ln-471" href="#ln-471"></a><span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">ng</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-472" name="ln-472" href="#ln-472"></a><span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">rx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span>
+<a id="ln-473" name="ln-473" href="#ln-473"></a><span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">npeer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-474" name="ln-474" href="#ln-474"></a><span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">self_peer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-475" name="ln-475" href="#ln-475"></a><span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">nmax</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-476" name="ln-476" href="#ln-476"></a><span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">nsend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-477" name="ln-477" href="#ln-477"></a><span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">nrecv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-478" name="ln-478" href="#ln-478"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">fold_plan_destroy</span>
+<a id="ln-479" name="ln-479" href="#ln-479"></a>
+<a id="ln-480" name="ln-480" href="#ln-480"></a><span class="k">end module </span><span class="n">rdb_ocean_fold_plan</span>
+</pre></div>
+
+      </section>
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-09 01:37 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

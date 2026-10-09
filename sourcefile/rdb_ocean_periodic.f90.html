@@ -1,0 +1,1498 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>rdb_ocean_periodic.F90 &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>rdb_ocean_periodic.F90
+      <small>Source File</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.4% of total for source files.">243 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_periodic.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+            <li class="breadcrumb-item active" aria-current="page">rdb_ocean_periodic.F90</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#mods-0"
+         aria-expanded="false" aria-controls="mods-0">
+         <h4 class="card-header bg-primary text-white">Modules</h4>
+      </a>
+      <div id="mods-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_periodic.html">rdb_ocean_periodic</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../sourcefile/rdb_ocean_periodic.f90.html#src">rdb_ocean_periodic.F90</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    <div class="col-md-9" id='text'>
+      <p>Periodic-boundary ghost-wrap helpers for the ocean dyn-core.</p>
+      <br>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">This file depends on</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph Pages: 1 -->
+<svg id="sourcefilerdb_ocean_periodicf90EfferentGraph" width="641pt" height="323pt"
+ viewBox="0.00 0.00 641.00 323.07" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph" class="graph" transform="scale(0.75 0.75) rotate(0) translate(4 426.42)">
+<title>sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-426.42 850,-426.42 850,4 -4,4"/>
+<!-- sourcefile~rdb_ocean_periodic.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_node1" class="node">
+<title>sourcefile~rdb_ocean_periodic.f90</title>
+<polygon fill="none" stroke="black" points="846,-284 706,-284 706,-260 846,-260 846,-284"/>
+<text text-anchor="middle" x="776" y="-269.6" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ocean_periodic.F90</text>
+</g>
+<!-- sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_node2" class="node">
+<title>sourcefile~rdb_constants.f90</title>
+<g id="a_sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_node2"><a xlink:href="../sourcefile/rdb_constants.f90.html" xlink:title="rdb_constants.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="109,-166 0,-166 0,-142 109,-142 109,-166"/>
+<text text-anchor="middle" x="54.5" y="-151.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_constants.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_periodic.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_edge1" class="edge">
+<title>sourcefile~rdb_ocean_periodic.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M378,-410C303.76,-395.94 275.69,-443.56 208,-410"/>
+</g>
+<!-- sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_node3" class="node">
+<title>sourcefile~rdb_grid.f90</title>
+<g id="a_sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_node3"><a xlink:href="../sourcefile/rdb_grid.f90.html" xlink:title="rdb_grid.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="246.5,-226 167.5,-226 167.5,-202 246.5,-202 246.5,-226"/>
+<text text-anchor="middle" x="207" y="-211.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_grid.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_periodic.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_edge2" class="edge">
+<title>sourcefile~rdb_ocean_periodic.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M759.83,-284.28C707.79,-324.89 531.32,-450.08 380,-410"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M378,-410C289.35,-393.22 235.35,-282.7 216.05,-235.41"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="219.29,-234.1 212.36,-226.09 212.79,-236.67 219.29,-234.1"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_node4" class="node">
+<title>sourcefile~rdb_multilayer_state.f90</title>
+<g id="a_sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_node4"><a xlink:href="../sourcefile/rdb_multilayer_state.f90.html" xlink:title="rdb_multilayer_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="651.5,-284 507.5,-284 507.5,-260 651.5,-260 651.5,-284"/>
+<text text-anchor="middle" x="579.5" y="-269.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_multilayer_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_periodic.f90&#45;&gt;sourcefile~rdb_multilayer_state.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_edge3" class="edge">
+<title>sourcefile~rdb_ocean_periodic.f90&#45;&gt;sourcefile~rdb_multilayer_state.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M705.88,-272C691.6,-272 676.43,-272 661.76,-272"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="661.7,-268.5 651.7,-272 661.7,-275.5 661.7,-268.5"/>
+</g>
+<!-- sourcefile~rdb_ocean_boundary_types.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_node5" class="node">
+<title>sourcefile~rdb_ocean_boundary_types.f90</title>
+<g id="a_sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_node5"><a xlink:href="../sourcefile/rdb_ocean_boundary_types.f90.html" xlink:title="rdb_ocean_boundary_types.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="670,-106 489,-106 489,-82 670,-82 670,-106"/>
+<text text-anchor="middle" x="579.5" y="-91.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_boundary_types.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_periodic.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_edge4" class="edge">
+<title>sourcefile~rdb_ocean_periodic.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M761.63,-259.77C728.31,-229.27 641.37,-149.7 601.29,-113.03"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="603.45,-110.25 593.71,-106.08 598.72,-115.42 603.45,-110.25"/>
+</g>
+<!-- sourcefile~rdb_grid.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_edge5" class="edge">
+<title>sourcefile~rdb_grid.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M175.54,-201.86C152.42,-192.64 120.41,-179.88 95.27,-169.85"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="96.24,-166.47 85.65,-166.02 93.65,-172.98 96.24,-166.47"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_edge6" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M563.62,-284.07C541.06,-301.78 496.22,-334.68 453,-353 440.13,-358.45 220.51,-416.23 208,-410"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M206,-410C112.01,-363.4 72.35,-229.14 60.04,-176.02"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="63.45,-175.25 57.87,-166.25 56.62,-176.77 63.45,-175.25"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_edge9" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M507.38,-282.76C451.32,-288.75 371.75,-291.71 305,-273 276.86,-265.11 248.77,-246.57 230.12,-232.36"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="232.28,-229.6 222.25,-226.19 227.96,-235.11 232.28,-229.6"/>
+</g>
+<!-- sourcefile~rdb_efp.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_node6" class="node">
+<title>sourcefile~rdb_efp.f90</title>
+<g id="a_sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_node6"><a xlink:href="../sourcefile/rdb_efp.f90.html" xlink:title="rdb_efp.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="417,-264 341,-264 341,-240 417,-240 417,-264"/>
+<text text-anchor="middle" x="379" y="-249.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_efp.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_efp.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_edge7" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_efp.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M507.4,-264.84C480.85,-262.16 451.36,-259.19 427.45,-256.78"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="427.53,-253.27 417.23,-255.75 426.83,-260.24 427.53,-253.27"/>
+</g>
+<!-- sourcefile~rdb_error_ring.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_node7" class="node">
+<title>sourcefile~rdb_error_ring.f90</title>
+<g id="a_sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_node7"><a xlink:href="../sourcefile/rdb_error_ring.f90.html" xlink:title="rdb_error_ring.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="434.5,-344 323.5,-344 323.5,-320 434.5,-320 434.5,-344"/>
+<text text-anchor="middle" x="379" y="-329.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_error_ring.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_error_ring.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_edge8" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_error_ring.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M538.33,-284.14C506.88,-293.65 462.99,-306.91 429.4,-317.07"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="428.33,-313.73 419.77,-319.98 430.36,-320.44 428.33,-313.73"/>
+</g>
+<!-- sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_node8" class="node">
+<title>sourcefile~rdb_mem_report.f90</title>
+<g id="a_sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_node8"><a xlink:href="../sourcefile/rdb_mem_report.f90.html" xlink:title="rdb_mem_report.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="269,-146 145,-146 145,-122 269,-122 269,-146"/>
+<text text-anchor="middle" x="207" y="-131.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_mem_report.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_edge10" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_mem_report.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M570.53,-259.93C552.89,-234.41 507.76,-175.34 453,-151 398.32,-126.7 329.97,-123.93 279.37,-126.39"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="278.95,-122.91 269.17,-126.97 279.35,-129.9 278.95,-122.91"/>
+</g>
+<!-- sourcefile~rdb_tracer.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_node11" class="node">
+<title>sourcefile~rdb_tracer.f90</title>
+<g id="a_sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_node11"><a xlink:href="../sourcefile/rdb_tracer.f90.html" xlink:title="rdb_tracer.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="423.5,-184 334.5,-184 334.5,-160 423.5,-160 423.5,-184"/>
+<text text-anchor="middle" x="379" y="-169.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_tracer.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_tracer.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_edge11" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_tracer.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M554.56,-259.94C519.24,-242.14 453.05,-208.8 413.1,-188.68"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="414.53,-185.48 404.03,-184.11 411.38,-191.73 414.53,-185.48"/>
+</g>
+<!-- sourcefile~rdb_ocean_boundary_types.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_edge12" class="edge">
+<title>sourcefile~rdb_ocean_boundary_types.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M488.52,-91.8C454.49,-91.55 415.44,-91.95 380,-94"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M378,-94C302.57,-98.37 280.08,-71.35 208,-94"/>
+</g>
+<!-- sourcefile~rdb_ocean_boundary_types.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_edge13" class="edge">
+<title>sourcefile~rdb_ocean_boundary_types.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M567.87,-106.13C547.89,-127.99 502.29,-173.5 453,-193 388.75,-218.42 307.81,-220.09 256.97,-217.88"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="257.07,-214.38 246.9,-217.38 256.72,-221.37 257.07,-214.38"/>
+</g>
+<!-- sourcefile~rdb_ocean_boundary_types.f90&#45;&gt;sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_edge14" class="edge">
+<title>sourcefile~rdb_ocean_boundary_types.f90&#45;&gt;sourcefile~rdb_mem_report.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M378,-94C334.75,-96.51 286.81,-108.68 252.9,-118.94"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="251.81,-115.62 243.29,-121.92 253.87,-122.31 251.81,-115.62"/>
+</g>
+<!-- sourcefile~rdb_ocean_status.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_node9" class="node">
+<title>sourcefile~rdb_ocean_status.f90</title>
+<g id="a_sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_node9"><a xlink:href="../sourcefile/rdb_ocean_status.f90.html" xlink:title="rdb_ocean_status.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="443,-66 315,-66 315,-42 443,-42 443,-66"/>
+<text text-anchor="middle" x="379" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_status.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_boundary_types.f90&#45;&gt;sourcefile~rdb_ocean_status.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_edge15" class="edge">
+<title>sourcefile~rdb_ocean_boundary_types.f90&#45;&gt;sourcefile~rdb_ocean_status.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M518.94,-82C497.16,-77.61 472.32,-72.6 449.72,-68.05"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="450.35,-64.61 439.86,-66.06 448.97,-71.47 450.35,-64.61"/>
+</g>
+<!-- sourcefile~rdb_ocean_tide_astro.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_node10" class="node">
+<title>sourcefile~rdb_ocean_tide_astro.f90</title>
+<g id="a_sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_node10"><a xlink:href="../sourcefile/rdb_ocean_tide_astro.f90.html" xlink:title="rdb_ocean_tide_astro.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="453,-24 305,-24 305,0 453,0 453,-24"/>
+<text text-anchor="middle" x="379" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_tide_astro.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_boundary_types.f90&#45;&gt;sourcefile~rdb_ocean_tide_astro.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_edge16" class="edge">
+<title>sourcefile~rdb_ocean_boundary_types.f90&#45;&gt;sourcefile~rdb_ocean_tide_astro.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M556.35,-81.78C531.67,-68.52 490.32,-47.32 453,-33 447.56,-30.91 441.82,-28.92 436.05,-27.05"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="436.94,-23.66 426.35,-24.03 434.86,-30.35 436.94,-23.66"/>
+</g>
+<!-- sourcefile~rdb_mem_report.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_edge17" class="edge">
+<title>sourcefile~rdb_mem_report.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M144.79,-142.13C136.45,-143.24 127.89,-144.38 119.51,-145.49"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="118.86,-142.05 109.41,-146.84 119.78,-148.99 118.86,-142.05"/>
+</g>
+<!-- sourcefile~rdb_ocean_tide_astro.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_edge19" class="edge">
+<title>sourcefile~rdb_ocean_tide_astro.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M329.02,-24.02C320.86,-26.61 312.58,-29.61 305,-33 258.51,-53.8 256.59,-78.73 208,-94"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M206,-94C178.91,-102.51 171.52,-102.84 145,-113 126.19,-120.2 105.73,-129.47 89.12,-137.36"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="87.33,-134.34 79.83,-141.83 90.36,-140.65 87.33,-134.34"/>
+</g>
+<!-- sourcefile~rdb_calendar.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_node12" class="node">
+<title>sourcefile~rdb_calendar.f90</title>
+<g id="a_sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_node12"><a xlink:href="../sourcefile/rdb_calendar.f90.html" xlink:title="rdb_calendar.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="259,-45 155,-45 155,-21 259,-21 259,-45"/>
+<text text-anchor="middle" x="207" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_calendar.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_tide_astro.f90&#45;&gt;sourcefile~rdb_calendar.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_edge18" class="edge">
+<title>sourcefile~rdb_ocean_tide_astro.f90&#45;&gt;sourcefile~rdb_calendar.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M304.92,-21.03C293.02,-22.5 280.8,-24.01 269.22,-25.44"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="268.72,-21.97 259.23,-26.67 269.58,-28.92 268.72,-21.97"/>
+</g>
+<!-- sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_edge20" class="edge">
+<title>sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M334.17,-169.55C278.78,-166.46 183.03,-161.12 119.47,-157.57"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="119.35,-154.06 109.17,-157 118.96,-161.05 119.35,-154.06"/>
+</g>
+<!-- sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_edge21" class="edge">
+<title>sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M334.22,-182.82C310.44,-188.69 280.99,-195.97 256.51,-202.01"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="255.58,-198.64 246.71,-204.44 257.25,-205.44 255.58,-198.64"/>
+</g>
+<!-- sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_edge22" class="edge">
+<title>sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_mem_report.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M334.22,-162.21C315.28,-157.98 292.74,-152.94 271.99,-148.3"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="272.49,-144.83 261.96,-146.06 270.96,-151.66 272.49,-144.83"/>
+</g>
+<!-- sourcefile~rdb_calendar.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~EfferentGraph_edge23" class="edge">
+<title>sourcefile~rdb_calendar.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M190.09,-45.02C177.71,-54.43 160.15,-67.91 145,-80 121.77,-98.54 95.62,-120.27 77.61,-135.36"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="75.35,-132.69 69.95,-141.8 79.85,-138.05 75.35,-132.69"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefilerdb_ocean_periodicf90EfferentGraph = svgPanZoom('#sourcefilerdb_ocean_periodicf90EfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#EfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="EfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Files dependent on this one</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph Pages: 1 -->
+<svg id="sourcefilerdb_ocean_periodicf90AfferentGraph" width="641pt" height="137pt"
+ viewBox="0.00 0.00 641.00 136.94" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph" class="graph" transform="scale(0.34 0.34) rotate(0) translate(4 403.39)">
+<title>sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-403.39 1903,-403.39 1903,4 -4,4"/>
+<!-- sourcefile~rdb_ocean_periodic.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node1" class="node">
+<title>sourcefile~rdb_ocean_periodic.f90</title>
+<polygon fill="none" stroke="black" points="140,-196.86 0,-196.86 0,-172.86 140,-172.86 140,-196.86"/>
+<text text-anchor="middle" x="70" y="-182.46" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ocean_periodic.F90</text>
+</g>
+<!-- sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node2" class="node">
+<title>sourcefile~rdb_continuity.f90</title>
+<g id="a_sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node2"><a xlink:href="../sourcefile/rdb_continuity.f90.html" xlink:title="rdb_continuity.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="656,-156.86 547,-156.86 547,-132.86 656,-132.86 656,-156.86"/>
+<text text-anchor="middle" x="601.5" y="-142.46" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_continuity.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge1" class="edge">
+<title>sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M570.24,-132.86C506.53,-109.43 354.68,-63.39 236.5,-104.86"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node7" class="node">
+<title>sourcefile~rdb_ocean_halo.f90</title>
+<g id="a_sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node7"><a xlink:href="../sourcefile/rdb_ocean_halo.f90.html" xlink:title="rdb_ocean_halo.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="295,-196.86 176,-196.86 176,-172.86 295,-172.86 295,-196.86"/>
+<text text-anchor="middle" x="235.5" y="-182.46" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_halo.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge22" class="edge">
+<title>sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M562.61,-156.94C524.8,-168.02 464.8,-183 411.5,-184.86"/>
+</g>
+<!-- sourcefile~rdb_ice_evp.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node3" class="node">
+<title>sourcefile~rdb_ice_evp.f90</title>
+<g id="a_sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node3"><a xlink:href="../sourcefile/rdb_ice_evp.f90.html" xlink:title="rdb_ice_evp.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="460,-314.86 361,-314.86 361,-290.86 460,-290.86 460,-314.86"/>
+<text text-anchor="middle" x="410.5" y="-300.46" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_evp.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_evp.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge2" class="edge">
+<title>sourcefile~rdb_ice_evp.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M360.93,-310.64C325.56,-314.45 276.98,-315.81 236.5,-302.86"/>
+</g>
+<!-- sourcefile~rdb_ice_evp.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge23" class="edge">
+<title>sourcefile~rdb_ice_evp.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M391.64,-290.68C361,-269.78 298.29,-227.01 262.69,-202.73"/>
+<polygon fill="#003fff" stroke="#003fff" points="264.5,-199.72 254.27,-196.98 260.55,-205.51 264.5,-199.72"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node4" class="node">
+<title>sourcefile~rdb_ocean_api.f90</title>
+<g id="a_sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node4"><a xlink:href="../sourcefile/rdb_ocean_api.f90.html" xlink:title="rdb_ocean_api.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1899,-175.86 1786,-175.86 1786,-151.86 1899,-151.86 1899,-175.86"/>
+<text text-anchor="middle" x="1842.5" y="-161.46" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge3" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1701.5,-380.86C1559.13,-422.1 1516.22,-380.86 1368,-380.86 1368,-380.86 1368,-380.86 989.5,-380.86 732.06,-380.86 668.44,-359.01 411.5,-342.86"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node5" class="node">
+<title>sourcefile~rdb_ocean_dyn.f90</title>
+<g id="a_sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node5"><a xlink:href="../sourcefile/rdb_ocean_dyn.f90.html" xlink:title="rdb_ocean_dyn.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="852.5,-78.86 736.5,-78.86 736.5,-54.86 852.5,-54.86 852.5,-78.86"/>
+<text text-anchor="middle" x="794.5" y="-64.46" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_dyn.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge14" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M1835.92,-151.82C1823.96,-127.45 1793.35,-72.36 1750,-45.86 1674.18,0.49 1642.37,-8.86 1553.5,-8.86 1553.5,-8.86 1553.5,-8.86 1366,-8.86 1199.56,-8.86 1157.23,6.59 991.5,-8.86"/>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M989.5,-8.86C933.46,-14.39 871.59,-35.71 833.13,-50.89"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="831.38,-47.82 823.41,-54.8 833.99,-54.32 831.38,-47.82"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node6" class="node">
+<title>sourcefile~rdb_ocean_engine.f90</title>
+<g id="a_sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node6"><a xlink:href="../sourcefile/rdb_ocean_engine.f90.html" xlink:title="rdb_ocean_engine.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1619,-253.86 1486,-253.86 1486,-229.86 1619,-229.86 1619,-253.86"/>
+<text text-anchor="middle" x="1552.5" y="-239.46" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge20" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1839.23,-176.13C1830.69,-217.99 1796.13,-354.03 1703.5,-380.86"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1701.5,-380.86C1634.59,-400.24 1582.79,-306.88 1562.64,-263.28"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1565.8,-261.77 1558.52,-254.08 1559.41,-264.63 1565.8,-261.77"/>
+</g>
+<!-- sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node12" class="node">
+<title>sourcefile~rdb_handle.f90</title>
+<g id="a_sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node12"><a xlink:href="../sourcefile/rdb_handle.f90.html" xlink:title="rdb_handle.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1750,-213.86 1655,-213.86 1655,-189.86 1750,-189.86 1750,-213.86"/>
+<text text-anchor="middle" x="1702.5" y="-199.46" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge44" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M1797.84,-175.89C1784.87,-179.45 1770.53,-183.41 1757.01,-187.13"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="1756.07,-183.76 1747.35,-189.79 1757.92,-190.51 1756.07,-183.76"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node17" class="node">
+<title>sourcefile~rdb_ocean_diag_derived.f90</title>
+<g id="a_sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node17"><a xlink:href="../sourcefile/rdb_ocean_diag_derived.f90.html" xlink:title="rdb_ocean_diag_derived.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1450,-136.86 1284,-136.86 1284,-112.86 1450,-112.86 1450,-136.86"/>
+<text text-anchor="middle" x="1367" y="-122.46" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_derived.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge50" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90</title>
+<path fill="none" stroke="#3200ff" stroke-dasharray="5,2" d="M1551.5,-124.86C1521.91,-123.27 1489.59,-122.84 1460.43,-122.93"/>
+<polygon fill="#3200ff" stroke="#3200ff" points="1460.24,-119.43 1450.26,-122.98 1460.28,-126.43 1460.24,-119.43"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node18" class="node">
+<title>sourcefile~rdb_ocean_diag_fills.f90</title>
+<g id="a_sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node18"><a xlink:href="../sourcefile/rdb_ocean_diag_fills.f90.html" xlink:title="rdb_ocean_diag_fills.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1248,-98.86 1105,-98.86 1105,-74.86 1248,-74.86 1248,-98.86"/>
+<text text-anchor="middle" x="1176.5" y="-84.46" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_fills.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge52" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M1785.74,-153.58C1727.9,-143.57 1634.74,-129.23 1553.5,-124.86"/>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M1551.5,-124.86C1505.68,-120.1 1495.66,-109.98 1450,-103.86 1385.89,-95.27 1312.7,-91.01 1258.33,-88.9"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="1258.18,-85.4 1248.06,-88.52 1257.92,-92.39 1258.18,-85.4"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge4" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M755.95,-54.83C717.79,-43.51 656.74,-27.85 602.5,-24.86"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M600.5,-24.86C516.63,-20.25 492.59,-2.95 411.5,-24.86"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge10" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_continuity.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M747.8,-78.89C736.16,-82.68 723.87,-87.35 713,-92.86 695.39,-101.78 694.5,-109.74 677,-118.86 669.58,-122.73 661.46,-126.23 653.39,-129.33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="652.18,-126.04 643.99,-132.76 654.59,-132.62 652.18,-126.04"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge26" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M736.33,-78.92C728.49,-80.57 720.54,-82.26 713,-83.86 629.87,-101.53 605.84,-94.71 526,-123.86 471.84,-143.64 469.13,-182.85 411.5,-184.86"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node8" class="node">
+<title>sourcefile~rdb_ocean_halo_state.f90</title>
+<g id="a_sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node8"><a xlink:href="../sourcefile/rdb_ocean_halo_state.f90.html" xlink:title="rdb_ocean_halo_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="677,-236.86 526,-236.86 526,-212.86 677,-212.86 677,-236.86"/>
+<text text-anchor="middle" x="601.5" y="-222.46" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_halo_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge33" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M783.4,-79C757.54,-109.96 690.06,-190.08 677,-198.86 671.27,-202.71 664.91,-206.05 658.39,-208.94"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="656.72,-205.84 648.78,-212.84 659.36,-212.32 656.72,-205.84"/>
+</g>
+<!-- sourcefile~rdb_barotropic_substep.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node10" class="node">
+<title>sourcefile~rdb_barotropic_substep.f90</title>
+<g id="a_sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node10"><a xlink:href="../sourcefile/rdb_barotropic_substep.f90.html" xlink:title="rdb_barotropic_substep.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="490,-76.86 331,-76.86 331,-52.86 490,-52.86 490,-76.86"/>
+<text text-anchor="middle" x="410.5" y="-62.46" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_barotropic_substep.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge43" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M600.5,-24.86C574.68,-23.44 511.4,-38.24 465.15,-50.24"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="464.06,-46.91 455.27,-52.83 465.83,-53.68 464.06,-46.91"/>
+</g>
+<!-- sourcefile~rdb_ocean_bt_wide.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node15" class="node">
+<title>sourcefile~rdb_ocean_bt_wide.f90</title>
+<g id="a_sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node15"><a xlink:href="../sourcefile/rdb_ocean_bt_wide.f90.html" xlink:title="rdb_ocean_bt_wide.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="670,-76.86 533,-76.86 533,-52.86 670,-52.86 670,-76.86"/>
+<text text-anchor="middle" x="601.5" y="-62.46" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_bt_wide.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_bt_wide.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge47" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_bt_wide.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M736.45,-66.26C718.75,-66.08 698.93,-65.87 680.07,-65.67"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="680.06,-62.17 670.02,-65.57 679.98,-69.17 680.06,-62.17"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge5" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M600.5,-304.86C515.88,-291.43 497.01,-348.24 411.5,-342.86"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M409.5,-342.86C330.74,-337.91 311.62,-327.06 236.5,-302.86"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_evp.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge12" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_evp.f90</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M600.5,-304.86C557.34,-297.45 507.82,-297.23 470.29,-298.71"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="469.88,-295.22 460.04,-299.16 470.19,-302.21 469.88,-295.22"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge15" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M1175.5,-164.86C1118.99,-140.69 953.38,-101.91 860.52,-81.12"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="861.19,-77.69 850.67,-78.92 859.67,-84.52 861.19,-77.69"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge27" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M1175.5,-262.86C1121.31,-269.12 1121.71,-309.83 1069,-323.86 868.47,-377.22 807.01,-339.96 602.5,-304.86"/>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M600.5,-304.86C502.23,-289.26 510.94,-181.48 411.5,-184.86"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge34" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M989.5,-262.86C901.42,-267.79 882.85,-317.22 795.5,-304.86"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M793.5,-304.86C757.1,-299.71 747.3,-299.09 713,-285.86 683.12,-274.34 651.35,-256.1 629.58,-242.56"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="631.22,-239.46 620.9,-237.08 627.49,-245.38 631.22,-239.46"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node9" class="node">
+<title>sourcefile~rdb_ocean_state.f90</title>
+<g id="a_sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node9"><a xlink:href="../sourcefile/rdb_ocean_state.f90.html" xlink:title="rdb_ocean_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1052,-60.86 929,-60.86 929,-36.86 1052,-36.86 1052,-60.86"/>
+<text text-anchor="middle" x="990.5" y="-46.46" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge40" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1485.61,-243.41C1450.63,-243.75 1406.94,-243.41 1368,-240.86"/>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1366,-240.86C1275.86,-234.96 1260.55,-200.38 1177.5,-164.86"/>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1175.5,-164.86C1145.07,-151.85 1132.19,-159.73 1105,-140.86 1084.24,-126.46 1088,-113.52 1069,-96.86 1055.53,-85.05 1038.82,-74.3 1024.36,-65.98"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="1025.69,-62.71 1015.25,-60.88 1022.27,-68.82 1025.69,-62.71"/>
+</g>
+<!-- sourcefile~rdb_ice_ocean_coupler.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node13" class="node">
+<title>sourcefile~rdb_ice_ocean_coupler.f90</title>
+<g id="a_sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node13"><a xlink:href="../sourcefile/rdb_ice_ocean_coupler.f90.html" xlink:title="rdb_ice_ocean_coupler.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1069,-314.86 912,-314.86 912,-290.86 1069,-290.86 1069,-314.86"/>
+<text text-anchor="middle" x="990.5" y="-300.46" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_ocean_coupler.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_ocean_coupler.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge45" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_ocean_coupler.f90</title>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M1175.5,-262.86C1129.81,-266.85 1078.93,-278.48 1042.27,-288.18"/>
+<polygon fill="#33ff00" stroke="#33ff00" points="1041.08,-284.88 1032.33,-290.86 1042.9,-291.64 1041.08,-284.88"/>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node14" class="node">
+<title>sourcefile~rdb_ice_transport.f90</title>
+<g id="a_sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node14"><a xlink:href="../sourcefile/rdb_ice_transport.f90.html" xlink:title="rdb_ice_transport.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="858.5,-196.86 730.5,-196.86 730.5,-172.86 858.5,-172.86 858.5,-196.86"/>
+<text text-anchor="middle" x="794.5" y="-182.46" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_transport.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_transport.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge46" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_transport.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M1366,-240.86C1281.83,-235.35 1261.53,-255.53 1177.5,-262.86"/>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M1175.5,-262.86C1144.04,-265.61 954.7,-222.46 855.71,-199.19"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="856.38,-195.76 845.84,-196.87 854.78,-202.57 856.38,-195.76"/>
+</g>
+<!-- sourcefile~rdb_ocean_data_forcing.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node16" class="node">
+<title>sourcefile~rdb_ocean_data_forcing.f90</title>
+<g id="a_sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node16"><a xlink:href="../sourcefile/rdb_ocean_data_forcing.f90.html" xlink:title="rdb_ocean_data_forcing.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="876,-276.86 713,-276.86 713,-252.86 876,-252.86 876,-276.86"/>
+<text text-anchor="middle" x="794.5" y="-262.46" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_data_forcing.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge48" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M1175.5,-262.86C1094.03,-269.97 1073.15,-258.29 991.5,-262.86"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M989.5,-262.86C955.97,-264.74 919.13,-265.46 886.64,-265.63"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="886.24,-262.13 876.26,-265.67 886.27,-269.13 886.24,-262.13"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge51" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90</title>
+<path fill="none" stroke="#3200ff" stroke-dasharray="5,2" d="M1541.18,-229.76C1524.09,-210.43 1488.02,-172.58 1450,-150.86 1442.99,-146.86 1435.29,-143.39 1427.5,-140.4"/>
+<polygon fill="#3200ff" stroke="#3200ff" points="1428.59,-137.07 1417.99,-137 1426.23,-143.66 1428.59,-137.07"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge54" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M1499.78,-229.85C1443.84,-215.41 1353.38,-187.75 1284,-145.86 1265.42,-134.64 1266.53,-124.16 1248,-112.86 1241.8,-109.08 1234.96,-105.71 1228.05,-102.76"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="1229.23,-99.46 1218.65,-98.99 1226.62,-105.96 1229.23,-99.46"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node19" class="node">
+<title>sourcefile~rdb_ocean_setup.f90</title>
+<g id="a_sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node19"><a xlink:href="../sourcefile/rdb_ocean_setup.f90.html" xlink:title="rdb_ocean_setup.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1239.5,-234.86 1113.5,-234.86 1113.5,-210.86 1239.5,-210.86 1239.5,-234.86"/>
+<text text-anchor="middle" x="1176.5" y="-220.46" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge55" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#ff0098" stroke-dasharray="5,2" d="M1366,-240.86C1327.63,-238.35 1284.98,-234.38 1249.96,-230.8"/>
+<polygon fill="#ff0098" stroke="#ff0098" points="1250.14,-227.3 1239.83,-229.76 1249.42,-234.26 1250.14,-227.3"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge6" class="edge">
+<title>sourcefile~rdb_ocean_halo.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M175.93,-184.86C167.57,-184.86 158.85,-184.86 150.18,-184.86"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="150.03,-181.36 140.03,-184.86 150.03,-188.36 150.03,-181.36"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo_state.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge7" class="edge">
+<title>sourcefile~rdb_ocean_halo_state.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M542.9,-236.87C488.31,-248.29 404.03,-266.03 331,-281.86 288.95,-290.98 277.48,-315.97 236.5,-302.86"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M234.5,-302.86C174.2,-283.44 117.44,-232.5 89.36,-204.32"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="91.71,-201.72 82.22,-197.02 86.7,-206.61 91.71,-201.72"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo_state.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge28" class="edge">
+<title>sourcefile~rdb_ocean_halo_state.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M567.48,-212.79C530.09,-200.32 467.14,-182.92 411.5,-184.86"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge8" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M939.28,-36.81C837.57,-14.54 600.8,26.3 411.5,-24.86"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M409.5,-24.86C374.66,-33.5 363.99,-29.71 331,-43.86 285.06,-63.57 283.49,-87.8 236.5,-104.86"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M234.5,-104.86C186.11,-122.43 133.09,-150.04 100.93,-167.79"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="99.08,-164.82 92.05,-172.74 102.49,-170.94 99.08,-164.82"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge11" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_continuity.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M958.03,-60.87C935.43,-69.19 904.13,-80.13 876,-87.86 805,-107.37 722.04,-123.79 666.26,-133.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="665.39,-130.52 656.17,-135.74 666.63,-137.41 665.39,-130.52"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge17" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M928.92,-54.48C907.9,-56.43 884.21,-58.63 862.69,-60.63"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="862.28,-57.15 852.65,-61.56 862.93,-64.12 862.28,-57.15"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge49" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M976.55,-61.08C960.15,-77 931.67,-106.19 912,-134.86 891.98,-164.04 898.89,-178.89 876,-205.86 862,-222.36 842.5,-236.8 826.2,-247.27"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="824.18,-244.41 817.53,-252.66 827.87,-250.35 824.18,-244.41"/>
+</g>
+<!-- sourcefile~rdb_barotropic_substep.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge21" class="edge">
+<title>sourcefile~rdb_barotropic_substep.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M391.96,-77.03C361.31,-98.29 297.89,-142.28 262.25,-167"/>
+<polygon fill="#003fff" stroke="#003fff" points="260.05,-164.27 253.83,-172.84 264.04,-170.02 260.05,-164.27"/>
+</g>
+<!-- sourcefile~rdb_driver.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node11" class="node">
+<title>sourcefile~rdb_driver.f90</title>
+<g id="a_sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_node11"><a xlink:href="../sourcefile/rdb_driver.f90.html" xlink:title="rdb_driver.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1746.5,-78.86 1658.5,-78.86 1658.5,-54.86 1746.5,-54.86 1746.5,-78.86"/>
+<text text-anchor="middle" x="1702.5" y="-64.46" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge13" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M1658.35,-65.51C1568.75,-62.64 1355.96,-55.48 1177.5,-46.86"/>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M1175.5,-46.86C1092.21,-40.87 1074.64,-1.11 991.5,-8.86"/>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge18" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1691.33,-78.89C1666.3,-108.49 1601.51,-185.1 1570.51,-221.75"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1567.53,-219.85 1563.74,-229.75 1572.87,-224.37 1567.53,-219.85"/>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge36" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1175.5,-46.86C1138.2,-45.06 1096.59,-45.32 1062.39,-46.14"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="1061.94,-42.65 1052.03,-46.41 1062.12,-49.65 1061.94,-42.65"/>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge19" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1657.1,-213.86C1641.65,-218.04 1624.15,-222.77 1607.99,-227.13"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1606.87,-223.81 1598.13,-229.8 1608.7,-230.57 1606.87,-223.81"/>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge37" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1654.92,-199.94C1562.16,-195.08 1348.55,-178.74 1177.5,-126.86"/>
+</g>
+<!-- sourcefile~rdb_ice_ocean_coupler.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge30" class="edge">
+<title>sourcefile~rdb_ice_ocean_coupler.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M911.74,-308.99C876.15,-310.43 833.52,-310.24 795.5,-304.86"/>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge9" class="edge">
+<title>sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_continuity.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M736.19,-172.86C714.08,-168.23 688.7,-162.91 666.04,-158.17"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="666.68,-154.73 656.17,-156.1 665.24,-161.58 666.68,-154.73"/>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge24" class="edge">
+<title>sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M730.23,-183.23C693.01,-182.67 645.05,-182.66 602.5,-184.86"/>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge31" class="edge">
+<title>sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M736.19,-196.86C715.42,-201.21 691.76,-206.17 670.17,-210.69"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="669.17,-207.32 660.1,-212.8 670.6,-214.18 669.17,-207.32"/>
+</g>
+<!-- sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge25" class="edge">
+<title>sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M557.61,-76.95C546.96,-80.72 535.8,-85.36 526,-90.86 468.59,-123.1 477.3,-182.57 411.5,-184.86"/>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M409.5,-184.86C375.24,-186.06 337.13,-186.19 305.43,-185.96"/>
+<polygon fill="#003fff" stroke="#003fff" points="305.4,-182.46 295.37,-185.88 305.34,-189.46 305.4,-182.46"/>
+</g>
+<!-- sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge42" class="edge">
+<title>sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M532.8,-64.86C522.37,-64.86 511.46,-64.86 500.64,-64.86"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="500.32,-61.36 490.32,-64.86 500.32,-68.36 500.32,-61.36"/>
+</g>
+<!-- sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge32" class="edge">
+<title>sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M736.19,-252.86C715.42,-248.51 691.76,-243.55 670.17,-239.03"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="670.6,-235.55 660.1,-236.92 669.17,-242.4 670.6,-235.55"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge38" class="edge">
+<title>sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1283.76,-136.38C1250.16,-138.37 1211.32,-137.12 1177.5,-126.86"/>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1175.5,-126.86C1144.45,-117.44 1135.24,-119.64 1105,-107.86 1074.99,-96.18 1042.56,-78.8 1020.08,-65.92"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="1021.79,-62.87 1011.38,-60.89 1018.28,-68.93 1021.79,-62.87"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge53" class="edge">
+<title>sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M1306.36,-112.84C1287.53,-109.04 1266.56,-104.82 1247.1,-100.89"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="1247.57,-97.42 1237.08,-98.87 1246.19,-104.28 1247.57,-97.42"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge39" class="edge">
+<title>sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1117.28,-74.84C1098.99,-71.06 1078.62,-66.85 1059.7,-62.95"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="1060.16,-59.47 1049.66,-60.87 1058.74,-66.32 1060.16,-59.47"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge16" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M1152.22,-210.79C1130.91,-200.01 1098.33,-184.23 1069,-172.86 1035.38,-159.84 1025.98,-159.43 991.5,-148.86"/>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M989.5,-148.86C955.02,-138.3 945.47,-138.27 912,-124.86 882.14,-112.9 849.46,-96.3 826.33,-83.92"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="827.81,-80.74 817.34,-79.07 824.48,-86.9 827.81,-80.74"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge29" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M989.5,-148.86C871.83,-112.81 835.17,-149.01 713,-163.86 663.38,-169.9 652.42,-182.28 602.5,-184.86"/>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M600.5,-184.86C516.59,-188.77 495.45,-182.01 411.5,-184.86"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge35" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1113.36,-223.08C1010.29,-223.44 803.8,-224.16 687.38,-224.57"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="687.08,-221.07 677.09,-224.6 687.11,-228.07 687.08,-221.07"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_periodic.f90~~AfferentGraph_edge41" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1151.97,-210.75C1137.6,-202.75 1119.3,-191.44 1105,-178.86 1086.03,-162.17 1085.46,-154.03 1069,-134.86 1049.19,-111.8 1025.74,-85.97 1009.86,-68.69"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="1012.07,-65.93 1002.72,-60.95 1006.93,-70.67 1012.07,-65.93"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefilerdb_ocean_periodicf90AfferentGraph = svgPanZoom('#sourcefilerdb_ocean_periodicf90AfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#AfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="AfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+<br>
+      <section>
+        <h2><span class="anchor" id="src"></span>Source Code</h2>
+        <div class="hl codehilite"><pre><span></span><a id="ln-1" name="ln-1" href="#ln-1"></a><span class="c">!! Periodic-boundary ghost-wrap helpers for the ocean dyn-core.</span>
+<a id="ln-2" name="ln-2" href="#ln-2"></a><span class="k">module </span><span class="n">rdb_ocean_periodic</span>
+<a id="ln-3" name="ln-3" href="#ln-3"></a><span class="w">   </span><span class="c">!! GPU-resident periodic ghost-wrap helpers. Seam invariant after every</span>
+<a id="ln-4" name="ln-4" href="#ln-4"></a><span class="w">   </span><span class="c">!! wrap call: (a) every ghost cell equals its interior partner, and</span>
+<a id="ln-5" name="ln-5" href="#ln-5"></a><span class="w">   </span><span class="c">!! (b) u(i_w, ·) == u(i_e, ·) bit-for-bit (i_w = nghost+1,</span>
+<a id="ln-6" name="ln-6" href="#ln-6"></a><span class="w">   </span><span class="c">!! i_e = nghost+nx_phys+1).</span>
+<a id="ln-7" name="ln-7" href="#ln-7"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-8" name="ln-8" href="#ln-8"></a><span class="w">   </span><span class="c">!! Explicit-shape dummies (never assumed-shape), j-outer / i-inner</span>
+<a id="ln-9" name="ln-9" href="#ln-9"></a><span class="w">   </span><span class="c">!! `do concurrent` for NVHPC GPU coalescing. The fast barotropic substep</span>
+<a id="ln-10" name="ln-10" href="#ln-10"></a><span class="w">   </span><span class="c">!! does NOT call these — it wraps inline in its `!$acc kernels async(1)`</span>
+<a id="ln-11" name="ln-11" href="#ln-11"></a><span class="w">   </span><span class="c">!! region.</span>
+<a id="ln-12" name="ln-12" href="#ln-12"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_constants</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">wp</span>
+<a id="ln-13" name="ln-13" href="#ln-13"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_grid</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">hgrid_t</span>
+<a id="ln-14" name="ln-14" href="#ln-14"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_multilayer_state</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">multilayer_state_t</span>
+<a id="ln-15" name="ln-15" href="#ln-15"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_ocean_boundary_types</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">ocean_bc_state_t</span>
+<a id="ln-16" name="ln-16" href="#ln-16"></a><span class="w">   </span><span class="c">! NOTE (D4): this kernel module must NOT import rdb_ocean_halo — that would</span>
+<a id="ln-17" name="ln-17" href="#ln-17"></a><span class="w">   </span><span class="c">! create a USE cycle (rdb_ocean_halo uses these wrap kernels).  The</span>
+<a id="ln-18" name="ln-18" href="#ln-18"></a><span class="w">   </span><span class="c">! decomposed-axis skip is passed IN by the caller via the optional</span>
+<a id="ln-19" name="ln-19" href="#ln-19"></a><span class="w">   </span><span class="c">! skip_x/skip_y arguments below, computed at the (higher-level) call site</span>
+<a id="ln-20" name="ln-20" href="#ln-20"></a><span class="w">   </span><span class="c">! from ocean_halo_is_decomposed_x/y().</span>
+<a id="ln-21" name="ln-21" href="#ln-21"></a><span class="w">   </span><span class="k">implicit none</span>
+<a id="ln-22" name="ln-22" href="#ln-22"></a><span class="k">   private</span>
+<a id="ln-23" name="ln-23" href="#ln-23"></a>
+<a id="ln-24" name="ln-24" href="#ln-24"></a><span class="k">   public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ocean_periodic_wrap_centre_2d</span>
+<a id="ln-25" name="ln-25" href="#ln-25"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ocean_periodic_wrap_centre_3d</span>
+<a id="ln-26" name="ln-26" href="#ln-26"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ocean_periodic_wrap_face_x_2d</span>
+<a id="ln-27" name="ln-27" href="#ln-27"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ocean_periodic_wrap_face_x_3d</span>
+<a id="ln-28" name="ln-28" href="#ln-28"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ocean_periodic_wrap_face_y_2d</span>
+<a id="ln-29" name="ln-29" href="#ln-29"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ocean_periodic_wrap_face_y_3d</span>
+<a id="ln-30" name="ln-30" href="#ln-30"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ocean_periodic_wrap_state</span>
+<a id="ln-31" name="ln-31" href="#ln-31"></a>
+<a id="ln-32" name="ln-32" href="#ln-32"></a><span class="k">contains</span>
+<a id="ln-33" name="ln-33" href="#ln-33"></a>
+<a id="ln-34" name="ln-34" href="#ln-34"></a><span class="k">   pure subroutine </span><span class="n">ocean_periodic_wrap_centre_2d</span><span class="p">(</span><span class="n">fld</span><span class="p">,</span><span class="w"> </span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-35" name="ln-35" href="#ln-35"></a><span class="w">                                                 </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-36" name="ln-36" href="#ln-36"></a><span class="w">                                                 </span><span class="n">wrap_x</span><span class="p">,</span><span class="w"> </span><span class="n">wrap_y</span><span class="p">)</span>
+<a id="ln-37" name="ln-37" href="#ln-37"></a><span class="w">      </span><span class="c">!! Fill ghost cells of a cell-centred 2D field (e.g. η, bt_H_ref)</span>
+<a id="ln-38" name="ln-38" href="#ln-38"></a><span class="w">      </span><span class="c">!! with the periodically-matching interior values.</span>
+<a id="ln-39" name="ln-39" href="#ln-39"></a><span class="w">      </span><span class="c">!! Explicit-shape dummies avoid per-launch descriptor-walk memcpys.</span>
+<a id="ln-40" name="ln-40" href="#ln-40"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span>
+<a id="ln-41" name="ln-41" href="#ln-41"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">ny_total</span><span class="p">)</span>
+<a id="ln-42" name="ln-42" href="#ln-42"></a><span class="w">         </span><span class="c">!! Cell-centred field, shape (nx_total, ny_total).</span>
+<a id="ln-43" name="ln-43" href="#ln-43"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wrap_x</span>
+<a id="ln-44" name="ln-44" href="#ln-44"></a><span class="w">         </span><span class="c">!! Wrap ghost columns (west ↔ east).</span>
+<a id="ln-45" name="ln-45" href="#ln-45"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wrap_y</span>
+<a id="ln-46" name="ln-46" href="#ln-46"></a><span class="w">         </span><span class="c">!! Wrap ghost rows (south ↔ north).</span>
+<a id="ln-47" name="ln-47" href="#ln-47"></a>
+<a id="ln-48" name="ln-48" href="#ln-48"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span>
+<a id="ln-49" name="ln-49" href="#ln-49"></a>
+<a id="ln-50" name="ln-50" href="#ln-50"></a><span class="w">      </span><span class="c">! X-wrap first, then Y-wrap in a separate loop.  The two passes must</span>
+<a id="ln-51" name="ln-51" href="#ln-51"></a><span class="w">      </span><span class="c">! not share a single do-concurrent because the Y-wrap reads ghost</span>
+<a id="ln-52" name="ln-52" href="#ln-52"></a><span class="w">      </span><span class="c">! columns that the X-wrap writes (data dependency across iterations).</span>
+<a id="ln-53" name="ln-53" href="#ln-53"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">wrap_x</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-54" name="ln-54" href="#ln-54"></a><span class="k">         do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx_total</span><span class="p">)</span>
+<a id="ln-55" name="ln-55" href="#ln-55"></a><span class="w">            </span><span class="c">! West ghosts: fld(1..nghost, j) := fld(nx_phys+1..nx_phys+nghost, j)</span>
+<a id="ln-56" name="ln-56" href="#ln-56"></a><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">nghost</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-57" name="ln-57" href="#ln-57"></a><span class="k">               </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<a id="ln-58" name="ln-58" href="#ln-58"></a><span class="w">            </span><span class="k">end if</span>
+<a id="ln-59" name="ln-59" href="#ln-59"></a><span class="w">            </span><span class="c">! East ghosts: fld(nx_phys+nghost+1..nx_total, j) := fld(nghost+1..2*nghost, j)</span>
+<a id="ln-60" name="ln-60" href="#ln-60"></a><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">nx_phys</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nghost</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-61" name="ln-61" href="#ln-61"></a><span class="k">               </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<a id="ln-62" name="ln-62" href="#ln-62"></a><span class="w">            </span><span class="k">end if</span>
+<a id="ln-63" name="ln-63" href="#ln-63"></a><span class="k">         end do</span>
+<a id="ln-64" name="ln-64" href="#ln-64"></a><span class="k">      end if</span>
+<a id="ln-65" name="ln-65" href="#ln-65"></a><span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">wrap_y</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-66" name="ln-66" href="#ln-66"></a><span class="k">         do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx_total</span><span class="p">)</span>
+<a id="ln-67" name="ln-67" href="#ln-67"></a><span class="w">            </span><span class="c">! South ghosts: fld(i, 1..nghost) := fld(i, ny_phys+1..ny_phys+nghost)</span>
+<a id="ln-68" name="ln-68" href="#ln-68"></a><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">j</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">nghost</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-69" name="ln-69" href="#ln-69"></a><span class="k">               </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">)</span>
+<a id="ln-70" name="ln-70" href="#ln-70"></a><span class="w">            </span><span class="k">end if</span>
+<a id="ln-71" name="ln-71" href="#ln-71"></a><span class="w">            </span><span class="c">! North ghosts: fld(i, ny_phys+nghost+1..ny_total) := fld(i, nghost+1..2*nghost)</span>
+<a id="ln-72" name="ln-72" href="#ln-72"></a><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">j</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">ny_phys</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nghost</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-73" name="ln-73" href="#ln-73"></a><span class="k">               </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">)</span>
+<a id="ln-74" name="ln-74" href="#ln-74"></a><span class="w">            </span><span class="k">end if</span>
+<a id="ln-75" name="ln-75" href="#ln-75"></a><span class="k">         end do</span>
+<a id="ln-76" name="ln-76" href="#ln-76"></a><span class="k">      end if</span>
+<a id="ln-77" name="ln-77" href="#ln-77"></a><span class="k">   end subroutine </span><span class="n">ocean_periodic_wrap_centre_2d</span>
+<a id="ln-78" name="ln-78" href="#ln-78"></a>
+<a id="ln-79" name="ln-79" href="#ln-79"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">ocean_periodic_wrap_centre_3d</span><span class="p">(</span><span class="n">fld</span><span class="p">,</span><span class="w"> </span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-80" name="ln-80" href="#ln-80"></a><span class="w">                                            </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-81" name="ln-81" href="#ln-81"></a><span class="w">                                            </span><span class="n">wrap_x</span><span class="p">,</span><span class="w"> </span><span class="n">wrap_y</span><span class="p">,</span><span class="w"> </span><span class="n">no_wait</span><span class="p">)</span>
+<a id="ln-82" name="ln-82" href="#ln-82"></a><span class="w">      </span><span class="c">!! Fill ghost cells of a cell-centred 3D field (e.g. h_layer, hTr, T, S).</span>
+<a id="ln-83" name="ln-83" href="#ln-83"></a><span class="w">      </span><span class="c">!! `no_wait` (optional, default .false.): when .true., loops issue on</span>
+<a id="ln-84" name="ln-84" href="#ln-84"></a><span class="w">      </span><span class="c">!! OpenACC queue 1 and the routine returns WITHOUT syncing, so a batched</span>
+<a id="ln-85" name="ln-85" href="#ln-85"></a><span class="w">      </span><span class="c">!! caller can pipeline many tiny ghost-slab wraps and `!$acc wait(1)`</span>
+<a id="ln-86" name="ln-86" href="#ln-86"></a><span class="w">      </span><span class="c">!! once. Default ⇒ self-contained blocking wrap. Not `pure` (directives).</span>
+<a id="ln-87" name="ln-87" href="#ln-87"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span>
+<a id="ln-88" name="ln-88" href="#ln-88"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<a id="ln-89" name="ln-89" href="#ln-89"></a><span class="w">         </span><span class="c">!! Cell-centred field, shape (nx_total, ny_total, nz).</span>
+<a id="ln-90" name="ln-90" href="#ln-90"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wrap_x</span>
+<a id="ln-91" name="ln-91" href="#ln-91"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wrap_y</span>
+<a id="ln-92" name="ln-92" href="#ln-92"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">no_wait</span>
+<a id="ln-93" name="ln-93" href="#ln-93"></a>
+<a id="ln-94" name="ln-94" href="#ln-94"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span>
+<a id="ln-95" name="ln-95" href="#ln-95"></a><span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">lwait</span>
+<a id="ln-96" name="ln-96" href="#ln-96"></a>
+<a id="ln-97" name="ln-97" href="#ln-97"></a><span class="w">      </span><span class="n">lwait</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span><span class="w">   </span><span class="c">! default: blocking (wait) — safe for non-batched callers</span>
+<a id="ln-98" name="ln-98" href="#ln-98"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">no_wait</span><span class="p">))</span><span class="w"> </span><span class="n">lwait</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">no_wait</span>
+<a id="ln-99" name="ln-99" href="#ln-99"></a>
+<a id="ln-100" name="ln-100" href="#ln-100"></a><span class="w">      </span><span class="c">! X-wrap first, then Y-wrap in a separate loop.  Two passes needed</span>
+<a id="ln-101" name="ln-101" href="#ln-101"></a><span class="w">      </span><span class="c">! because the Y-wrap reads the x-ghost columns the X-pass just wrote.</span>
+<a id="ln-102" name="ln-102" href="#ln-102"></a><span class="w">      </span><span class="c">! Same queue ⇒ ordered ⇒ the X→Y dependency holds.</span>
+<a id="ln-103" name="ln-103" href="#ln-103"></a><span class="w">      </span><span class="c">!$acc kernels async(1)</span>
+<a id="ln-104" name="ln-104" href="#ln-104"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">wrap_x</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-105" name="ln-105" href="#ln-105"></a><span class="k">         do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx_total</span><span class="p">)</span>
+<a id="ln-106" name="ln-106" href="#ln-106"></a><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">nghost</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-107" name="ln-107" href="#ln-107"></a><span class="k">               </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<a id="ln-108" name="ln-108" href="#ln-108"></a><span class="w">            </span><span class="k">end if</span>
+<a id="ln-109" name="ln-109" href="#ln-109"></a><span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">nx_phys</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nghost</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-110" name="ln-110" href="#ln-110"></a><span class="k">               </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<a id="ln-111" name="ln-111" href="#ln-111"></a><span class="w">            </span><span class="k">end if</span>
+<a id="ln-112" name="ln-112" href="#ln-112"></a><span class="k">         end do</span>
+<a id="ln-113" name="ln-113" href="#ln-113"></a><span class="k">      end if</span>
+<a id="ln-114" name="ln-114" href="#ln-114"></a><span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">wrap_y</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-115" name="ln-115" href="#ln-115"></a><span class="k">         do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx_total</span><span class="p">)</span>
+<a id="ln-116" name="ln-116" href="#ln-116"></a><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">j</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">nghost</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-117" name="ln-117" href="#ln-117"></a><span class="k">               </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<a id="ln-118" name="ln-118" href="#ln-118"></a><span class="w">            </span><span class="k">end if</span>
+<a id="ln-119" name="ln-119" href="#ln-119"></a><span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">j</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">ny_phys</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nghost</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-120" name="ln-120" href="#ln-120"></a><span class="k">               </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<a id="ln-121" name="ln-121" href="#ln-121"></a><span class="w">            </span><span class="k">end if</span>
+<a id="ln-122" name="ln-122" href="#ln-122"></a><span class="k">         end do</span>
+<a id="ln-123" name="ln-123" href="#ln-123"></a><span class="k">      end if</span>
+<a id="ln-124" name="ln-124" href="#ln-124"></a><span class="w">      </span><span class="c">!$acc end kernels</span>
+<a id="ln-125" name="ln-125" href="#ln-125"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">lwait</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-126" name="ln-126" href="#ln-126"></a><span class="w">         </span><span class="c">!$acc wait(1)</span>
+<a id="ln-127" name="ln-127" href="#ln-127"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-128" name="ln-128" href="#ln-128"></a><span class="k">   end subroutine </span><span class="n">ocean_periodic_wrap_centre_3d</span>
+<a id="ln-129" name="ln-129" href="#ln-129"></a>
+<a id="ln-130" name="ln-130" href="#ln-130"></a><span class="w">   </span><span class="k">pure subroutine </span><span class="n">ocean_periodic_wrap_face_x_2d</span><span class="p">(</span><span class="n">fld</span><span class="p">,</span><span class="w"> </span><span class="n">nx_face</span><span class="p">,</span><span class="w"> </span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-131" name="ln-131" href="#ln-131"></a><span class="w">                                                 </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-132" name="ln-132" href="#ln-132"></a><span class="w">                                                 </span><span class="n">wrap_x</span><span class="p">,</span><span class="w"> </span><span class="n">wrap_y</span><span class="p">)</span>
+<a id="ln-133" name="ln-133" href="#ln-133"></a><span class="w">      </span><span class="c">!! Fill ghost faces of a 2D x-face field (e.g. bt_ubt, shape nx_total+1).</span>
+<a id="ln-134" name="ln-134" href="#ln-134"></a><span class="w">      </span><span class="c">!! Also copies the west physical-wall face value onto the east physical-wall</span>
+<a id="ln-135" name="ln-135" href="#ln-135"></a><span class="w">      </span><span class="c">!! face (belt-and-braces seam invariant, §1.1 property b).</span>
+<a id="ln-136" name="ln-136" href="#ln-136"></a><span class="w">      </span><span class="c">!! nx_face = nx_total + 1.</span>
+<a id="ln-137" name="ln-137" href="#ln-137"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx_face</span><span class="p">,</span><span class="w"> </span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span>
+<a id="ln-138" name="ln-138" href="#ln-138"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">nx_face</span><span class="p">,</span><span class="w"> </span><span class="n">ny_total</span><span class="p">)</span>
+<a id="ln-139" name="ln-139" href="#ln-139"></a><span class="w">         </span><span class="c">!! x-face field, shape (nx_total+1, ny_total).</span>
+<a id="ln-140" name="ln-140" href="#ln-140"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wrap_x</span>
+<a id="ln-141" name="ln-141" href="#ln-141"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wrap_y</span>
+<a id="ln-142" name="ln-142" href="#ln-142"></a>
+<a id="ln-143" name="ln-143" href="#ln-143"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span>
+<a id="ln-144" name="ln-144" href="#ln-144"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i_w</span><span class="p">,</span><span class="w"> </span><span class="n">i_e</span>
+<a id="ln-145" name="ln-145" href="#ln-145"></a>
+<a id="ln-146" name="ln-146" href="#ln-146"></a><span class="w">      </span><span class="n">i_w</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w">          </span><span class="c">! west physical-wall face index</span>
+<a id="ln-147" name="ln-147" href="#ln-147"></a><span class="w">      </span><span class="n">i_e</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nx_phys</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w">  </span><span class="c">! east physical-wall face index</span>
+<a id="ln-148" name="ln-148" href="#ln-148"></a>
+<a id="ln-149" name="ln-149" href="#ln-149"></a><span class="w">      </span><span class="c">! X-wrap (including belt-and-braces seam copy) in its own DC loop,</span>
+<a id="ln-150" name="ln-150" href="#ln-150"></a><span class="w">      </span><span class="c">! then Y-wrap in a separate loop to avoid cross-iteration data dependencies.</span>
+<a id="ln-151" name="ln-151" href="#ln-151"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">wrap_x</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-152" name="ln-152" href="#ln-152"></a><span class="k">         do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx_face</span><span class="p">)</span>
+<a id="ln-153" name="ln-153" href="#ln-153"></a><span class="w">            </span><span class="c">! West ghost faces i=1..nghost  ← interior face i+nx_phys</span>
+<a id="ln-154" name="ln-154" href="#ln-154"></a><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">nghost</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-155" name="ln-155" href="#ln-155"></a><span class="k">               </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<a id="ln-156" name="ln-156" href="#ln-156"></a><span class="w">            </span><span class="k">end if</span>
+<a id="ln-157" name="ln-157" href="#ln-157"></a><span class="w">            </span><span class="c">! East ghost faces i=nx_phys+nghost+2..nx_face ← interior face i-nx_phys</span>
+<a id="ln-158" name="ln-158" href="#ln-158"></a><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">nx_phys</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-159" name="ln-159" href="#ln-159"></a><span class="k">               </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<a id="ln-160" name="ln-160" href="#ln-160"></a><span class="w">            </span><span class="k">end if</span>
+<a id="ln-161" name="ln-161" href="#ln-161"></a><span class="w">            </span><span class="c">! Belt-and-braces: copy west wall face onto east wall face.</span>
+<a id="ln-162" name="ln-162" href="#ln-162"></a><span class="w">            </span><span class="c">! Ensures property (b) even if a kernel breaks expression symmetry.</span>
+<a id="ln-163" name="ln-163" href="#ln-163"></a><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">i_e</span><span class="p">)</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i_w</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<a id="ln-164" name="ln-164" href="#ln-164"></a><span class="w">         </span><span class="k">end do</span>
+<a id="ln-165" name="ln-165" href="#ln-165"></a><span class="k">      end if</span>
+<a id="ln-166" name="ln-166" href="#ln-166"></a><span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">wrap_y</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-167" name="ln-167" href="#ln-167"></a><span class="k">         do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx_face</span><span class="p">)</span>
+<a id="ln-168" name="ln-168" href="#ln-168"></a><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">j</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">nghost</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-169" name="ln-169" href="#ln-169"></a><span class="k">               </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">)</span>
+<a id="ln-170" name="ln-170" href="#ln-170"></a><span class="w">            </span><span class="k">end if</span>
+<a id="ln-171" name="ln-171" href="#ln-171"></a><span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">j</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">ny_phys</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nghost</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-172" name="ln-172" href="#ln-172"></a><span class="k">               </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">)</span>
+<a id="ln-173" name="ln-173" href="#ln-173"></a><span class="w">            </span><span class="k">end if</span>
+<a id="ln-174" name="ln-174" href="#ln-174"></a><span class="k">         end do</span>
+<a id="ln-175" name="ln-175" href="#ln-175"></a><span class="k">      end if</span>
+<a id="ln-176" name="ln-176" href="#ln-176"></a><span class="k">   end subroutine </span><span class="n">ocean_periodic_wrap_face_x_2d</span>
+<a id="ln-177" name="ln-177" href="#ln-177"></a>
+<a id="ln-178" name="ln-178" href="#ln-178"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">ocean_periodic_wrap_face_x_3d</span><span class="p">(</span><span class="n">fld</span><span class="p">,</span><span class="w"> </span><span class="n">nx_face</span><span class="p">,</span><span class="w"> </span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-179" name="ln-179" href="#ln-179"></a><span class="w">                                            </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-180" name="ln-180" href="#ln-180"></a><span class="w">                                            </span><span class="n">wrap_x</span><span class="p">,</span><span class="w"> </span><span class="n">wrap_y</span><span class="p">,</span><span class="w"> </span><span class="n">no_wait</span><span class="p">)</span>
+<a id="ln-181" name="ln-181" href="#ln-181"></a><span class="w">      </span><span class="c">!! Fill ghost faces of a 3D x-face field (e.g. u_face_x_layer).</span>
+<a id="ln-182" name="ln-182" href="#ln-182"></a><span class="w">      </span><span class="c">!! nx_face = nx_total + 1.  `no_wait` (optional): see</span>
+<a id="ln-183" name="ln-183" href="#ln-183"></a><span class="w">      </span><span class="c">!! `ocean_periodic_wrap_centre_3d` — batched async(1), sync once at the</span>
+<a id="ln-184" name="ln-184" href="#ln-184"></a><span class="w">      </span><span class="c">!! caller.  Not `pure` (async/wait directives).</span>
+<a id="ln-185" name="ln-185" href="#ln-185"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx_face</span><span class="p">,</span><span class="w"> </span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span>
+<a id="ln-186" name="ln-186" href="#ln-186"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">nx_face</span><span class="p">,</span><span class="w"> </span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<a id="ln-187" name="ln-187" href="#ln-187"></a><span class="w">         </span><span class="c">!! x-face field, shape (nx_total+1, ny_total, nz).</span>
+<a id="ln-188" name="ln-188" href="#ln-188"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wrap_x</span>
+<a id="ln-189" name="ln-189" href="#ln-189"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wrap_y</span>
+<a id="ln-190" name="ln-190" href="#ln-190"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">no_wait</span>
+<a id="ln-191" name="ln-191" href="#ln-191"></a>
+<a id="ln-192" name="ln-192" href="#ln-192"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span>
+<a id="ln-193" name="ln-193" href="#ln-193"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i_w</span><span class="p">,</span><span class="w"> </span><span class="n">i_e</span>
+<a id="ln-194" name="ln-194" href="#ln-194"></a><span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">lwait</span>
+<a id="ln-195" name="ln-195" href="#ln-195"></a>
+<a id="ln-196" name="ln-196" href="#ln-196"></a><span class="w">      </span><span class="n">lwait</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span><span class="w">   </span><span class="c">! default: blocking (wait) — safe for non-batched callers</span>
+<a id="ln-197" name="ln-197" href="#ln-197"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">no_wait</span><span class="p">))</span><span class="w"> </span><span class="n">lwait</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">no_wait</span>
+<a id="ln-198" name="ln-198" href="#ln-198"></a><span class="w">      </span><span class="n">i_w</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-199" name="ln-199" href="#ln-199"></a><span class="w">      </span><span class="n">i_e</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nx_phys</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-200" name="ln-200" href="#ln-200"></a>
+<a id="ln-201" name="ln-201" href="#ln-201"></a><span class="w">      </span><span class="c">! Two-pass: X-wrap (+ belt-and-braces) first, Y-wrap second.</span>
+<a id="ln-202" name="ln-202" href="#ln-202"></a><span class="w">      </span><span class="c">!$acc kernels async(1)</span>
+<a id="ln-203" name="ln-203" href="#ln-203"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">wrap_x</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-204" name="ln-204" href="#ln-204"></a><span class="k">         do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx_face</span><span class="p">)</span>
+<a id="ln-205" name="ln-205" href="#ln-205"></a><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">nghost</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-206" name="ln-206" href="#ln-206"></a><span class="k">               </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<a id="ln-207" name="ln-207" href="#ln-207"></a><span class="w">            </span><span class="k">end if</span>
+<a id="ln-208" name="ln-208" href="#ln-208"></a><span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">nx_phys</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-209" name="ln-209" href="#ln-209"></a><span class="k">               </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<a id="ln-210" name="ln-210" href="#ln-210"></a><span class="w">            </span><span class="k">end if</span>
+<a id="ln-211" name="ln-211" href="#ln-211"></a><span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">i_e</span><span class="p">)</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i_w</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<a id="ln-212" name="ln-212" href="#ln-212"></a><span class="w">         </span><span class="k">end do</span>
+<a id="ln-213" name="ln-213" href="#ln-213"></a><span class="k">      end if</span>
+<a id="ln-214" name="ln-214" href="#ln-214"></a><span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">wrap_y</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-215" name="ln-215" href="#ln-215"></a><span class="k">         do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx_face</span><span class="p">)</span>
+<a id="ln-216" name="ln-216" href="#ln-216"></a><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">j</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">nghost</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-217" name="ln-217" href="#ln-217"></a><span class="k">               </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<a id="ln-218" name="ln-218" href="#ln-218"></a><span class="w">            </span><span class="k">end if</span>
+<a id="ln-219" name="ln-219" href="#ln-219"></a><span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">j</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">ny_phys</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nghost</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-220" name="ln-220" href="#ln-220"></a><span class="k">               </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<a id="ln-221" name="ln-221" href="#ln-221"></a><span class="w">            </span><span class="k">end if</span>
+<a id="ln-222" name="ln-222" href="#ln-222"></a><span class="k">         end do</span>
+<a id="ln-223" name="ln-223" href="#ln-223"></a><span class="k">      end if</span>
+<a id="ln-224" name="ln-224" href="#ln-224"></a><span class="w">      </span><span class="c">!$acc end kernels</span>
+<a id="ln-225" name="ln-225" href="#ln-225"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">lwait</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-226" name="ln-226" href="#ln-226"></a><span class="w">         </span><span class="c">!$acc wait(1)</span>
+<a id="ln-227" name="ln-227" href="#ln-227"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-228" name="ln-228" href="#ln-228"></a><span class="k">   end subroutine </span><span class="n">ocean_periodic_wrap_face_x_3d</span>
+<a id="ln-229" name="ln-229" href="#ln-229"></a>
+<a id="ln-230" name="ln-230" href="#ln-230"></a><span class="w">   </span><span class="k">pure subroutine </span><span class="n">ocean_periodic_wrap_face_y_2d</span><span class="p">(</span><span class="n">fld</span><span class="p">,</span><span class="w"> </span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">ny_face</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-231" name="ln-231" href="#ln-231"></a><span class="w">                                                 </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-232" name="ln-232" href="#ln-232"></a><span class="w">                                                 </span><span class="n">wrap_x</span><span class="p">,</span><span class="w"> </span><span class="n">wrap_y</span><span class="p">)</span>
+<a id="ln-233" name="ln-233" href="#ln-233"></a><span class="w">      </span><span class="c">!! Fill ghost faces of a 2D y-face field (e.g. bt_vbt, shape ny_total+1).</span>
+<a id="ln-234" name="ln-234" href="#ln-234"></a><span class="w">      </span><span class="c">!! Also copies south physical-wall face onto north physical-wall face.</span>
+<a id="ln-235" name="ln-235" href="#ln-235"></a><span class="w">      </span><span class="c">!! ny_face = ny_total + 1.</span>
+<a id="ln-236" name="ln-236" href="#ln-236"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">ny_face</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span>
+<a id="ln-237" name="ln-237" href="#ln-237"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">ny_face</span><span class="p">)</span>
+<a id="ln-238" name="ln-238" href="#ln-238"></a><span class="w">         </span><span class="c">!! y-face field, shape (nx_total, ny_total+1).</span>
+<a id="ln-239" name="ln-239" href="#ln-239"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wrap_x</span>
+<a id="ln-240" name="ln-240" href="#ln-240"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wrap_y</span>
+<a id="ln-241" name="ln-241" href="#ln-241"></a>
+<a id="ln-242" name="ln-242" href="#ln-242"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span>
+<a id="ln-243" name="ln-243" href="#ln-243"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">j_s</span><span class="p">,</span><span class="w"> </span><span class="n">j_n</span>
+<a id="ln-244" name="ln-244" href="#ln-244"></a>
+<a id="ln-245" name="ln-245" href="#ln-245"></a><span class="w">      </span><span class="n">j_s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-246" name="ln-246" href="#ln-246"></a><span class="w">      </span><span class="n">j_n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ny_phys</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-247" name="ln-247" href="#ln-247"></a>
+<a id="ln-248" name="ln-248" href="#ln-248"></a><span class="w">      </span><span class="c">! Two-pass: X-wrap first, Y-wrap (+ belt-and-braces) second.</span>
+<a id="ln-249" name="ln-249" href="#ln-249"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">wrap_x</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-250" name="ln-250" href="#ln-250"></a><span class="k">         do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny_face</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx_total</span><span class="p">)</span>
+<a id="ln-251" name="ln-251" href="#ln-251"></a><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">nghost</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-252" name="ln-252" href="#ln-252"></a><span class="k">               </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<a id="ln-253" name="ln-253" href="#ln-253"></a><span class="w">            </span><span class="k">end if</span>
+<a id="ln-254" name="ln-254" href="#ln-254"></a><span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">nx_phys</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nghost</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-255" name="ln-255" href="#ln-255"></a><span class="k">               </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<a id="ln-256" name="ln-256" href="#ln-256"></a><span class="w">            </span><span class="k">end if</span>
+<a id="ln-257" name="ln-257" href="#ln-257"></a><span class="k">         end do</span>
+<a id="ln-258" name="ln-258" href="#ln-258"></a><span class="k">      end if</span>
+<a id="ln-259" name="ln-259" href="#ln-259"></a><span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">wrap_y</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-260" name="ln-260" href="#ln-260"></a><span class="k">         do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny_face</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx_total</span><span class="p">)</span>
+<a id="ln-261" name="ln-261" href="#ln-261"></a><span class="w">            </span><span class="c">! South ghost faces j=1..nghost ← interior face j+ny_phys</span>
+<a id="ln-262" name="ln-262" href="#ln-262"></a><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">j</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">nghost</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-263" name="ln-263" href="#ln-263"></a><span class="k">               </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">)</span>
+<a id="ln-264" name="ln-264" href="#ln-264"></a><span class="w">            </span><span class="k">end if</span>
+<a id="ln-265" name="ln-265" href="#ln-265"></a><span class="w">            </span><span class="c">! North ghost faces j=ny_phys+nghost+2..ny_face ← interior face j-ny_phys</span>
+<a id="ln-266" name="ln-266" href="#ln-266"></a><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">j</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">ny_phys</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-267" name="ln-267" href="#ln-267"></a><span class="k">               </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">)</span>
+<a id="ln-268" name="ln-268" href="#ln-268"></a><span class="w">            </span><span class="k">end if</span>
+<a id="ln-269" name="ln-269" href="#ln-269"></a><span class="w">            </span><span class="c">! Belt-and-braces: copy south wall face onto north wall face.</span>
+<a id="ln-270" name="ln-270" href="#ln-270"></a><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">j</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">j_n</span><span class="p">)</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j_s</span><span class="p">)</span>
+<a id="ln-271" name="ln-271" href="#ln-271"></a><span class="w">         </span><span class="k">end do</span>
+<a id="ln-272" name="ln-272" href="#ln-272"></a><span class="k">      end if</span>
+<a id="ln-273" name="ln-273" href="#ln-273"></a><span class="k">   end subroutine </span><span class="n">ocean_periodic_wrap_face_y_2d</span>
+<a id="ln-274" name="ln-274" href="#ln-274"></a>
+<a id="ln-275" name="ln-275" href="#ln-275"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">ocean_periodic_wrap_face_y_3d</span><span class="p">(</span><span class="n">fld</span><span class="p">,</span><span class="w"> </span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">ny_face</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-276" name="ln-276" href="#ln-276"></a><span class="w">                                            </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-277" name="ln-277" href="#ln-277"></a><span class="w">                                            </span><span class="n">wrap_x</span><span class="p">,</span><span class="w"> </span><span class="n">wrap_y</span><span class="p">,</span><span class="w"> </span><span class="n">no_wait</span><span class="p">)</span>
+<a id="ln-278" name="ln-278" href="#ln-278"></a><span class="w">      </span><span class="c">!! Fill ghost faces of a 3D y-face field (e.g. v_face_y_layer).</span>
+<a id="ln-279" name="ln-279" href="#ln-279"></a><span class="w">      </span><span class="c">!! ny_face = ny_total + 1.  `no_wait` (optional): see</span>
+<a id="ln-280" name="ln-280" href="#ln-280"></a><span class="w">      </span><span class="c">!! `ocean_periodic_wrap_centre_3d`.  Not `pure` (async/wait directives).</span>
+<a id="ln-281" name="ln-281" href="#ln-281"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">ny_face</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span>
+<a id="ln-282" name="ln-282" href="#ln-282"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">ny_face</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<a id="ln-283" name="ln-283" href="#ln-283"></a><span class="w">         </span><span class="c">!! y-face field, shape (nx_total, ny_total+1, nz).</span>
+<a id="ln-284" name="ln-284" href="#ln-284"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wrap_x</span>
+<a id="ln-285" name="ln-285" href="#ln-285"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wrap_y</span>
+<a id="ln-286" name="ln-286" href="#ln-286"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">no_wait</span>
+<a id="ln-287" name="ln-287" href="#ln-287"></a>
+<a id="ln-288" name="ln-288" href="#ln-288"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span>
+<a id="ln-289" name="ln-289" href="#ln-289"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">j_s</span><span class="p">,</span><span class="w"> </span><span class="n">j_n</span>
+<a id="ln-290" name="ln-290" href="#ln-290"></a><span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">lwait</span>
+<a id="ln-291" name="ln-291" href="#ln-291"></a>
+<a id="ln-292" name="ln-292" href="#ln-292"></a><span class="w">      </span><span class="n">lwait</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<a id="ln-293" name="ln-293" href="#ln-293"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">no_wait</span><span class="p">))</span><span class="w"> </span><span class="n">lwait</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">no_wait</span>
+<a id="ln-294" name="ln-294" href="#ln-294"></a><span class="w">      </span><span class="n">j_s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-295" name="ln-295" href="#ln-295"></a><span class="w">      </span><span class="n">j_n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ny_phys</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-296" name="ln-296" href="#ln-296"></a>
+<a id="ln-297" name="ln-297" href="#ln-297"></a><span class="w">      </span><span class="c">! Two-pass: X-wrap first, Y-wrap (+ belt-and-braces) second.</span>
+<a id="ln-298" name="ln-298" href="#ln-298"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">wrap_x</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-299" name="ln-299" href="#ln-299"></a><span class="w">         </span><span class="c">!$acc kernels async(1)</span>
+<a id="ln-300" name="ln-300" href="#ln-300"></a><span class="w">         </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny_face</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx_total</span><span class="p">)</span>
+<a id="ln-301" name="ln-301" href="#ln-301"></a><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">nghost</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-302" name="ln-302" href="#ln-302"></a><span class="k">               </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<a id="ln-303" name="ln-303" href="#ln-303"></a><span class="w">            </span><span class="k">end if</span>
+<a id="ln-304" name="ln-304" href="#ln-304"></a><span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">nx_phys</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nghost</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-305" name="ln-305" href="#ln-305"></a><span class="k">               </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<a id="ln-306" name="ln-306" href="#ln-306"></a><span class="w">            </span><span class="k">end if</span>
+<a id="ln-307" name="ln-307" href="#ln-307"></a><span class="k">         end do</span>
+<a id="ln-308" name="ln-308" href="#ln-308"></a><span class="w">         </span><span class="c">!$acc end kernels</span>
+<a id="ln-309" name="ln-309" href="#ln-309"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-310" name="ln-310" href="#ln-310"></a><span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">wrap_y</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-311" name="ln-311" href="#ln-311"></a><span class="w">         </span><span class="c">!$acc kernels async(1)</span>
+<a id="ln-312" name="ln-312" href="#ln-312"></a><span class="w">         </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny_face</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx_total</span><span class="p">)</span>
+<a id="ln-313" name="ln-313" href="#ln-313"></a><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">j</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">nghost</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-314" name="ln-314" href="#ln-314"></a><span class="k">               </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<a id="ln-315" name="ln-315" href="#ln-315"></a><span class="w">            </span><span class="k">end if</span>
+<a id="ln-316" name="ln-316" href="#ln-316"></a><span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">j</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">ny_phys</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-317" name="ln-317" href="#ln-317"></a><span class="k">               </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<a id="ln-318" name="ln-318" href="#ln-318"></a><span class="w">            </span><span class="k">end if</span>
+<a id="ln-319" name="ln-319" href="#ln-319"></a><span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">j</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">j_n</span><span class="p">)</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j_s</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<a id="ln-320" name="ln-320" href="#ln-320"></a><span class="w">         </span><span class="k">end do</span>
+<a id="ln-321" name="ln-321" href="#ln-321"></a><span class="w">         </span><span class="c">!$acc end kernels</span>
+<a id="ln-322" name="ln-322" href="#ln-322"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-323" name="ln-323" href="#ln-323"></a><span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">lwait</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-324" name="ln-324" href="#ln-324"></a><span class="w">         </span><span class="c">!$acc wait(1)</span>
+<a id="ln-325" name="ln-325" href="#ln-325"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-326" name="ln-326" href="#ln-326"></a><span class="k">   end subroutine </span><span class="n">ocean_periodic_wrap_face_y_3d</span>
+<a id="ln-327" name="ln-327" href="#ln-327"></a>
+<a id="ln-328" name="ln-328" href="#ln-328"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">ocean_periodic_wrap_state</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">bc</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">skip_x</span><span class="p">,</span><span class="w"> </span><span class="n">skip_y</span><span class="p">)</span>
+<a id="ln-329" name="ln-329" href="#ln-329"></a><span class="w">      </span><span class="c">!! Convenience wrapper: wrap h_layer, u/v layer faces, and every</span>
+<a id="ln-330" name="ln-330" href="#ln-330"></a><span class="w">      </span><span class="c">!! registered tracer.  Called at stage entry (before</span>
+<a id="ln-331" name="ln-331" href="#ln-331"></a><span class="w">      </span><span class="c">!! `derive_bt_from_layers`) and after continuity (before hdiff).</span>
+<a id="ln-332" name="ln-332" href="#ln-332"></a><span class="w">      </span><span class="c">!!</span>
+<a id="ln-333" name="ln-333" href="#ln-333"></a><span class="w">      </span><span class="c">!! Per-tracer loop is OUTSIDE the DC kernels (outer-shim pattern:</span>
+<a id="ln-334" name="ln-334" href="#ln-334"></a><span class="w">      </span><span class="c">!! array-of-derived-types cannot be dereferenced on device).</span>
+<a id="ln-335" name="ln-335" href="#ln-335"></a><span class="w">      </span><span class="c">!!</span>
+<a id="ln-336" name="ln-336" href="#ln-336"></a><span class="w">      </span><span class="c">!! No-op when neither `bc%periodic_x` nor `bc%periodic_y` is set.</span>
+<a id="ln-337" name="ln-337" href="#ln-337"></a><span class="w">      </span><span class="c">!!</span>
+<a id="ln-338" name="ln-338" href="#ln-338"></a><span class="w">      </span><span class="c">!! D4: `skip_x` / `skip_y` (optional, default .false.): when .true.,</span>
+<a id="ln-339" name="ln-339" href="#ln-339"></a><span class="w">      </span><span class="c">!! the local wrap on that axis is suppressed.  The caller passes</span>
+<a id="ln-340" name="ln-340" href="#ln-340"></a><span class="w">      </span><span class="c">!! `ocean_halo_is_decomposed_x/y()` so that a multi-rank periodic-x</span>
+<a id="ln-341" name="ln-341" href="#ln-341"></a><span class="w">      </span><span class="c">!! decomposition does not double-wrap the seam (the MPI halo already</span>
+<a id="ln-342" name="ln-342" href="#ln-342"></a><span class="w">      </span><span class="c">!! owns those ghost columns).  Single-rank ⇒ caller passes .false.</span>
+<a id="ln-343" name="ln-343" href="#ln-343"></a><span class="w">      </span><span class="c">!! (or omits) ⇒ bit-identical.</span>
+<a id="ln-344" name="ln-344" href="#ln-344"></a><span class="w">      </span><span class="c">!! NOTE: rdb_ocean_periodic must NOT import rdb_ocean_halo (USE cycle —</span>
+<a id="ln-345" name="ln-345" href="#ln-345"></a><span class="w">      </span><span class="c">!! the halo backends import this module's wrap kernels).  The skip is</span>
+<a id="ln-346" name="ln-346" href="#ln-346"></a><span class="w">      </span><span class="c">!! passed in by the caller.</span>
+<a id="ln-347" name="ln-347" href="#ln-347"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<a id="ln-348" name="ln-348" href="#ln-348"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_bc_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">bc</span>
+<a id="ln-349" name="ln-349" href="#ln-349"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
+<a id="ln-350" name="ln-350" href="#ln-350"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">skip_x</span>
+<a id="ln-351" name="ln-351" href="#ln-351"></a><span class="w">         </span><span class="c">!! When .true., suppress the local x-axis wrap (D4 multi-rank).</span>
+<a id="ln-352" name="ln-352" href="#ln-352"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">skip_y</span>
+<a id="ln-353" name="ln-353" href="#ln-353"></a><span class="w">         </span><span class="c">!! When .true., suppress the local y-axis wrap (D4 multi-rank).</span>
+<a id="ln-354" name="ln-354" href="#ln-354"></a>
+<a id="ln-355" name="ln-355" href="#ln-355"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">it</span>
+<a id="ln-356" name="ln-356" href="#ln-356"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span>
+<a id="ln-357" name="ln-357" href="#ln-357"></a><span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">per_x</span><span class="p">,</span><span class="w"> </span><span class="n">per_y</span>
+<a id="ln-358" name="ln-358" href="#ln-358"></a>
+<a id="ln-359" name="ln-359" href="#ln-359"></a><span class="w">      </span><span class="n">per_x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bc</span><span class="p">%</span><span class="n">periodic_x</span>
+<a id="ln-360" name="ln-360" href="#ln-360"></a><span class="w">      </span><span class="n">per_y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bc</span><span class="p">%</span><span class="n">periodic_y</span>
+<a id="ln-361" name="ln-361" href="#ln-361"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">per_x</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">per_y</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-362" name="ln-362" href="#ln-362"></a>
+<a id="ln-363" name="ln-363" href="#ln-363"></a><span class="k">      </span><span class="n">nx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span>
+<a id="ln-364" name="ln-364" href="#ln-364"></a><span class="w">      </span><span class="n">ny</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span>
+<a id="ln-365" name="ln-365" href="#ln-365"></a><span class="w">      </span><span class="n">nz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span>
+<a id="ln-366" name="ln-366" href="#ln-366"></a><span class="w">      </span><span class="n">nx_phys</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_phys</span>
+<a id="ln-367" name="ln-367" href="#ln-367"></a><span class="w">      </span><span class="n">ny_phys</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_phys</span>
+<a id="ln-368" name="ln-368" href="#ln-368"></a><span class="w">      </span><span class="n">nghost</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nghost</span>
+<a id="ln-369" name="ln-369" href="#ln-369"></a>
+<a id="ln-370" name="ln-370" href="#ln-370"></a><span class="w">      </span><span class="c">! D4: skip the LOCAL periodic wrap on any axis split across MPI ranks.</span>
+<a id="ln-371" name="ln-371" href="#ln-371"></a><span class="w">      </span><span class="c">! On a decomposed axis the ghost columns are owned by a NEIGHBOUR rank —</span>
+<a id="ln-372" name="ln-372" href="#ln-372"></a><span class="w">      </span><span class="c">! the local wrap kernel copies the wrong (local-subdomain) columns into</span>
+<a id="ln-373" name="ln-373" href="#ln-373"></a><span class="w">      </span><span class="c">! those ghosts, overwriting what ocean_halo_* just filled correctly.</span>
+<a id="ln-374" name="ln-374" href="#ln-374"></a><span class="w">      </span><span class="c">! The MPI halo already ran before this call, so the ghosts are correct;</span>
+<a id="ln-375" name="ln-375" href="#ln-375"></a><span class="w">      </span><span class="c">! just leave them alone.  Single-rank ⇒ skip_x absent/.false.</span>
+<a id="ln-376" name="ln-376" href="#ln-376"></a><span class="w">      </span><span class="c">! ⇒ local wrap governs as before (bit-identical).</span>
+<a id="ln-377" name="ln-377" href="#ln-377"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">skip_x</span><span class="p">))</span><span class="w"> </span><span class="n">per_x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">per_x</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">skip_x</span>
+<a id="ln-378" name="ln-378" href="#ln-378"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">skip_y</span><span class="p">))</span><span class="w"> </span><span class="n">per_y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">per_y</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">skip_y</span>
+<a id="ln-379" name="ln-379" href="#ln-379"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">per_x</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">per_y</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-380" name="ln-380" href="#ln-380"></a>
+<a id="ln-381" name="ln-381" href="#ln-381"></a><span class="w">      </span><span class="c">! Batched async wrap: every per-field wrap issues on queue 1</span>
+<a id="ln-382" name="ln-382" href="#ln-382"></a><span class="w">      </span><span class="c">! (no_wait=.true.); the whole batch is synced ONCE below. Pipelines the</span>
+<a id="ln-383" name="ln-383" href="#ln-383"></a><span class="w">      </span><span class="c">! tiny launch-latency-bound ghost-slab kernels; same queue ⇒ ordered.</span>
+<a id="ln-384" name="ln-384" href="#ln-384"></a><span class="w">      </span><span class="k">call </span><span class="n">ocean_periodic_wrap_centre_3d</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-385" name="ln-385" href="#ln-385"></a><span class="w">                                         </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">per_x</span><span class="p">,</span><span class="w"> </span><span class="n">per_y</span><span class="p">,</span><span class="w"> </span><span class="n">no_wait</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<a id="ln-386" name="ln-386" href="#ln-386"></a><span class="w">      </span><span class="k">call </span><span class="n">ocean_periodic_wrap_face_x_3d</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">u_face_x_layer</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-387" name="ln-387" href="#ln-387"></a><span class="w">                                         </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">per_x</span><span class="p">,</span><span class="w"> </span><span class="n">per_y</span><span class="p">,</span><span class="w"> </span><span class="n">no_wait</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<a id="ln-388" name="ln-388" href="#ln-388"></a><span class="w">      </span><span class="k">call </span><span class="n">ocean_periodic_wrap_face_y_3d</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">v_face_y_layer</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-389" name="ln-389" href="#ln-389"></a><span class="w">                                         </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">per_x</span><span class="p">,</span><span class="w"> </span><span class="n">per_y</span><span class="p">,</span><span class="w"> </span><span class="n">no_wait</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<a id="ln-390" name="ln-390" href="#ln-390"></a>
+<a id="ln-391" name="ln-391" href="#ln-391"></a><span class="w">      </span><span class="c">! Per-tracer loop outside DCs — outer-shim pattern for array-of-DTs.</span>
+<a id="ln-392" name="ln-392" href="#ln-392"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-393" name="ln-393" href="#ln-393"></a><span class="k">         do </span><span class="n">it</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">)</span>
+<a id="ln-394" name="ln-394" href="#ln-394"></a><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="nb">allocated</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">it</span><span class="p">)%</span><span class="n">hTr</span><span class="p">))</span><span class="w"> </span><span class="k">cycle</span>
+<a id="ln-395" name="ln-395" href="#ln-395"></a><span class="k">            call </span><span class="n">ocean_periodic_wrap_centre_3d</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">it</span><span class="p">)%</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-396" name="ln-396" href="#ln-396"></a><span class="w">                                               </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">per_x</span><span class="p">,</span><span class="w"> </span><span class="n">per_y</span><span class="p">,</span><span class="w"> </span><span class="n">no_wait</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<a id="ln-397" name="ln-397" href="#ln-397"></a><span class="w">         </span><span class="k">end do</span>
+<a id="ln-398" name="ln-398" href="#ln-398"></a><span class="k">      end if</span>
+<a id="ln-399" name="ln-399" href="#ln-399"></a>
+<a id="ln-400" name="ln-400" href="#ln-400"></a><span class="w">      </span><span class="c">! Single sync for the whole batch (no-op on non-OpenACC builds).</span>
+<a id="ln-401" name="ln-401" href="#ln-401"></a><span class="w">      </span><span class="c">!$acc wait(1)</span>
+<a id="ln-402" name="ln-402" href="#ln-402"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">ocean_periodic_wrap_state</span>
+<a id="ln-403" name="ln-403" href="#ln-403"></a>
+<a id="ln-404" name="ln-404" href="#ln-404"></a><span class="k">end module </span><span class="n">rdb_ocean_periodic</span>
+</pre></div>
+
+      </section>
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-09 01:37 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

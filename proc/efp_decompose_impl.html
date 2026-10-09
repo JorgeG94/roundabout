@@ -1,0 +1,1126 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>efp_decompose_impl &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>efp_decompose_impl
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">51 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_console_stats.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_console_stats.f90.html'>rdb_ocean_console_stats.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_console_stats.html'>rdb_ocean_console_stats</a></li>
+            <li class="breadcrumb-item active" aria-current="page">efp_decompose_impl</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/efp_decompose_impl.html#variable-ipr1">IPR1</a>
+            <a class="list-group-item" href="../proc/efp_decompose_impl.html#variable-ipr2">IPR2</a>
+            <a class="list-group-item" href="../proc/efp_decompose_impl.html#variable-ipr3">IPR3</a>
+            <a class="list-group-item" href="../proc/efp_decompose_impl.html#variable-ipr4">IPR4</a>
+            <a class="list-group-item" href="../proc/efp_decompose_impl.html#variable-ipr5">IPR5</a>
+            <a class="list-group-item" href="../proc/efp_decompose_impl.html#variable-ipr6">IPR6</a>
+            <a class="list-group-item" href="../proc/efp_decompose_impl.html#variable-max_e1~2">MAX_E1</a>
+            <a class="list-group-item" href="../proc/efp_decompose_impl.html#variable-pr1">PR1</a>
+            <a class="list-group-item" href="../proc/efp_decompose_impl.html#variable-pr2">PR2</a>
+            <a class="list-group-item" href="../proc/efp_decompose_impl.html#variable-pr3">PR3</a>
+            <a class="list-group-item" href="../proc/efp_decompose_impl.html#variable-pr4">PR4</a>
+            <a class="list-group-item" href="../proc/efp_decompose_impl.html#variable-pr5">PR5</a>
+            <a class="list-group-item" href="../proc/efp_decompose_impl.html#variable-pr6">PR6</a>
+            <a class="list-group-item" href="../proc/efp_decompose_impl.html#variable-rs~2">rs</a>
+            <a class="list-group-item" href="../proc/efp_decompose_impl.html#variable-s~36">s</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/efp_decompose_impl.html#src">efp_decompose_impl</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public pure subroutine efp_decompose_impl(r, e1, e2, e3, e4, e5, e6, epoison)  
+</h2>
+    
+
+    <p>In-module <code>!$acc routine seq</code> duplicate of <code>rdb_efp::efp_decompose</code>
+&ndash; six SCALAR bin outputs (not an <code>int64(6)</code> array) so the call
+sites below can accumulate directly into
+<code>reduction(+:e1..e6,epoison)</code> clauses (OpenACC has no portable
+array reduction).  Duplicated rather than called from <code>rdb_efp</code>
+because NVHPC&rsquo;s device codegen does not inline a
+<code>pure !$acc routine seq</code> helper across a module boundary (CLAUDE.md
+Gotchas); <code>test_efp_impl_matches_canonical</code> (<code>RDB_ENABLE_TESTING</code>-
+gated) pins this copy bin-for-bit against the canonical procedure
+over the same magnitude table &ndash; <code>compute_ice_totals</code>&rsquo;s docstring
+documents the identical pattern for <code>ice_cell_concentration_impl</code>.</p>
+<p><code>epoison</code> is the device-reduction twin of <code>rdb_efp::efp_t%poison</code>:
+1 when <code>r</code> is NaN, +-Inf, or exceeds bin 1&rsquo;s representable
+ceiling, 0 otherwise &ndash; summed by the caller&rsquo;s OWN
+<code>reduction(+:epoison)</code> across the k-slab, and from there folded
+into the running <code>efp_t%poison</code> counter (<code>compute_total_h_efp</code>
+etc.) so a non-finite console summand (a NaN&rsquo;d <code>h_layer</code> or
+<code>u_face_x_layer</code>, the diagnosed vcm_rx0_040_lagrangian failure
+mode) makes the FINAL reduced total read as NaN via
+<code>efp_to_real</code>, instead of the zeroed/saturated bins below
+silently reconstructing a plausible finite number &ndash; the
+console&rsquo;s own NaN panic (<code>rdb_console_stats.F90</code>&rsquo;s
+<code>panic_on_nan</code>) sees the poisoned value it is supposed to.
+<code>ieee_is_finite</code> (not a <code>&gt;=</code>/<code>&lt;</code> comparison chain) is the guard,
+per CLAUDE.md&rsquo;s NaN-blind-if/else-clamp gotcha: it is the
+dedicated bit-pattern test and is not subject to <code>-fast</code>
+reassociation.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-r~18"></span>
+              real(kind=real64),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>r</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-e1~4"></span>
+              integer(kind=int64),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>e1</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-e2~2"></span>
+              integer(kind=int64),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>e2</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-e3~2"></span>
+              integer(kind=int64),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>e3</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-e4~2"></span>
+              integer(kind=int64),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>e4</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-e5~2"></span>
+              integer(kind=int64),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>e5</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-e6~2"></span>
+              integer(kind=int64),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>e6</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-epoison~2"></span>
+              integer(kind=int64),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>epoison</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~efp_decompose_impl~~CalledByGraph Pages: 1 -->
+<svg id="procefp_decompose_implCalledByGraph" width="641pt" height="108pt"
+ viewBox="0.00 0.00 641.00 108.46" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~efp_decompose_impl~~CalledByGraph" class="graph" transform="scale(0.54 0.54) rotate(0) translate(4 196)">
+<title>proc~~efp_decompose_impl~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-196 1178,-196 1178,4 -4,4"/>
+<!-- proc~efp_decompose_impl -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_node1" class="node">
+<title>proc~efp_decompose_impl</title>
+<polygon fill="none" stroke="black" points="1174,-108 1048,-108 1048,-84 1174,-84 1174,-108"/>
+<text text-anchor="middle" x="1111" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50">efp_decompose_impl</text>
+</g>
+<!-- proc~compute_ice_totals_efp -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_node2" class="node">
+<title>proc~compute_ice_totals_efp</title>
+<g id="a_proc~~efp_decompose_impl~~CalledByGraph_node2"><a xlink:href="../proc/compute_ice_totals_efp.html" xlink:title="compute_ice_totals_efp">
+<polygon fill="#d9534f" stroke="#d9534f" points="996.5,-150 858.5,-150 858.5,-126 996.5,-126 996.5,-150"/>
+<text text-anchor="middle" x="927.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">compute_ice_totals_efp</text>
+</a>
+</g>
+</g>
+<!-- proc~compute_ice_totals_efp&#45;&gt;proc~efp_decompose_impl -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_edge1" class="edge">
+<title>proc~compute_ice_totals_efp&#45;&gt;proc~efp_decompose_impl</title>
+<path fill="none" stroke="#ff0000" d="M980.51,-125.96C1001.59,-121.09 1026.09,-115.42 1048.08,-110.33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1049.03,-113.7 1057.98,-108.04 1047.45,-106.88 1049.03,-113.7"/>
+</g>
+<!-- proc~compute_total_h_efp -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_node3" class="node">
+<title>proc~compute_total_h_efp</title>
+<g id="a_proc~~efp_decompose_impl~~CalledByGraph_node3"><a xlink:href="../proc/compute_total_h_efp.html" xlink:title="compute_total_h_efp">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="989.5,-108 865.5,-108 865.5,-84 989.5,-84 989.5,-108"/>
+<text text-anchor="middle" x="927.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">compute_total_h_efp</text>
+</a>
+</g>
+</g>
+<!-- proc~compute_total_h_efp&#45;&gt;proc~efp_decompose_impl -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_edge2" class="edge">
+<title>proc~compute_total_h_efp&#45;&gt;proc~efp_decompose_impl</title>
+<path fill="none" stroke="#ff0000" d="M989.69,-96C1005.06,-96 1021.69,-96 1037.55,-96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1037.83,-99.5 1047.83,-96 1037.83,-92.5 1037.83,-99.5"/>
+</g>
+<!-- proc~compute_total_ke_efp -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_node4" class="node">
+<title>proc~compute_total_ke_efp</title>
+<g id="a_proc~~efp_decompose_impl~~CalledByGraph_node4"><a xlink:href="../proc/compute_total_ke_efp.html" xlink:title="compute_total_ke_efp">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="992.5,-66 862.5,-66 862.5,-42 992.5,-42 992.5,-66"/>
+<text text-anchor="middle" x="927.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">compute_total_ke_efp</text>
+</a>
+</g>
+</g>
+<!-- proc~compute_total_ke_efp&#45;&gt;proc~efp_decompose_impl -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_edge3" class="edge">
+<title>proc~compute_total_ke_efp&#45;&gt;proc~efp_decompose_impl</title>
+<path fill="none" stroke="#ff0000" d="M980.51,-66.04C1001.59,-70.91 1026.09,-76.58 1048.08,-81.67"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1047.45,-85.12 1057.98,-83.96 1049.03,-78.3 1047.45,-85.12"/>
+</g>
+<!-- proc~compute_total_tracer_efp -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_node5" class="node">
+<title>proc~compute_total_tracer_efp</title>
+<g id="a_proc~~efp_decompose_impl~~CalledByGraph_node5"><a xlink:href="../proc/compute_total_tracer_efp.html" xlink:title="compute_total_tracer_efp">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1002,-24 853,-24 853,0 1002,0 1002,-24"/>
+<text text-anchor="middle" x="927.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">compute_total_tracer_efp</text>
+</a>
+</g>
+</g>
+<!-- proc~compute_total_tracer_efp&#45;&gt;proc~efp_decompose_impl -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_edge4" class="edge">
+<title>proc~compute_total_tracer_efp&#45;&gt;proc~efp_decompose_impl</title>
+<path fill="none" stroke="#ff0000" d="M986.81,-24.07C995.41,-26.59 1004.04,-29.55 1012,-33 1039.2,-44.78 1067.37,-63.72 1086.49,-77.76"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1084.5,-80.64 1094.61,-83.83 1088.69,-75.04 1084.5,-80.64"/>
+</g>
+<!-- proc~ocean_accumulate_mass_out -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_node6" class="node">
+<title>proc~ocean_accumulate_mass_out</title>
+<g id="a_proc~~efp_decompose_impl~~CalledByGraph_node6"><a xlink:href="../proc/ocean_accumulate_mass_out.html" xlink:title="ocean_accumulate_mass_out">
+<polygon fill="#d9534f" stroke="#d9534f" points="1012,-192 843,-192 843,-168 1012,-168 1012,-192"/>
+<text text-anchor="middle" x="927.5" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_accumulate_mass_out</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_accumulate_mass_out&#45;&gt;proc~efp_decompose_impl -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_edge5" class="edge">
+<title>proc~ocean_accumulate_mass_out&#45;&gt;proc~efp_decompose_impl</title>
+<path fill="none" stroke="#ff0000" d="M986.81,-167.93C995.41,-165.41 1004.04,-162.45 1012,-159 1039.2,-147.22 1067.37,-128.28 1086.49,-114.24"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1088.69,-116.96 1094.61,-108.17 1084.5,-111.36 1088.69,-116.96"/>
+</g>
+<!-- proc~ocean_console_stats_report -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_node7" class="node">
+<title>proc~ocean_console_stats_report</title>
+<g id="a_proc~~efp_decompose_impl~~CalledByGraph_node7"><a xlink:href="../proc/ocean_console_stats_report.html" xlink:title="ocean_console_stats_report">
+<polygon fill="#d9534f" stroke="#d9534f" points="807,-108 647,-108 647,-84 807,-84 807,-108"/>
+<text text-anchor="middle" x="727" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_console_stats_report</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_console_stats_report&#45;&gt;proc~compute_ice_totals_efp -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_edge6" class="edge">
+<title>proc~ocean_console_stats_report&#45;&gt;proc~compute_ice_totals_efp</title>
+<path fill="none" stroke="#ff0000" d="M784.88,-108.04C808.24,-112.98 835.46,-118.74 859.75,-123.88"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="859.1,-127.32 869.61,-125.96 860.55,-120.47 859.1,-127.32"/>
+</g>
+<!-- proc~ocean_console_stats_report&#45;&gt;proc~compute_total_h_efp -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_edge7" class="edge">
+<title>proc~ocean_console_stats_report&#45;&gt;proc~compute_total_h_efp</title>
+<path fill="none" stroke="#cbff00" d="M807.02,-96C822.99,-96 839.68,-96 855.35,-96"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="855.49,-99.5 865.49,-96 855.49,-92.5 855.49,-99.5"/>
+</g>
+<!-- proc~ocean_console_stats_report&#45;&gt;proc~compute_total_ke_efp -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_edge8" class="edge">
+<title>proc~ocean_console_stats_report&#45;&gt;proc~compute_total_ke_efp</title>
+<path fill="none" stroke="#00ff66" d="M784.88,-83.96C808.24,-79.02 835.46,-73.26 859.75,-68.12"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="860.55,-71.53 869.61,-66.04 859.1,-64.68 860.55,-71.53"/>
+</g>
+<!-- proc~ocean_console_stats_report&#45;&gt;proc~compute_total_tracer_efp -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_edge9" class="edge">
+<title>proc~ocean_console_stats_report&#45;&gt;proc~compute_total_tracer_efp</title>
+<path fill="none" stroke="#0066ff" d="M746.41,-83.98C768.54,-70 807.18,-47.05 843,-33 848.53,-30.83 854.35,-28.83 860.24,-27"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="861.58,-30.25 870.19,-24.07 859.6,-23.54 861.58,-30.25"/>
+</g>
+<!-- proc~run_continuity_chain -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_node8" class="node">
+<title>proc~run_continuity_chain</title>
+<g id="a_proc~~efp_decompose_impl~~CalledByGraph_node8"><a xlink:href="../proc/run_continuity_chain.html" xlink:title="run_continuity_chain">
+<polygon fill="#d9534f" stroke="#d9534f" points="788.5,-151 665.5,-151 665.5,-127 788.5,-127 788.5,-151"/>
+<text text-anchor="middle" x="727" y="-136.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_continuity_chain</text>
+</a>
+</g>
+</g>
+<!-- proc~run_continuity_chain&#45;&gt;proc~ocean_accumulate_mass_out -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_edge10" class="edge">
+<title>proc~run_continuity_chain&#45;&gt;proc~ocean_accumulate_mass_out</title>
+<path fill="none" stroke="#cc00ff" d="M786.22,-151.02C808.84,-155.7 834.91,-161.08 858.4,-165.93"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="857.78,-169.38 868.29,-167.98 859.2,-162.53 857.78,-169.38"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_node9" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~efp_decompose_impl~~CalledByGraph_node9"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="597.5,-192 532.5,-192 532.5,-168 597.5,-168 597.5,-192"/>
+<text text-anchor="middle" x="565" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~ocean_accumulate_mass_out -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_edge11" class="edge">
+<title>proc~run_stage&#45;&gt;proc~ocean_accumulate_mass_out</title>
+<path fill="none" stroke="#cc00ff" d="M597.68,-180C649.64,-180 754.94,-180 832.44,-180"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="832.7,-183.5 842.7,-180 832.7,-176.5 832.7,-183.5"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_node10" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~efp_decompose_impl~~CalledByGraph_node10"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="209,-108 103,-108 103,-84 209,-84 209,-108"/>
+<text text-anchor="middle" x="156" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~ocean_console_stats_report -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_edge12" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~ocean_console_stats_report</title>
+<path fill="none" stroke="#ff0000" d="M209,-96C306.17,-96 516.3,-96 636.61,-96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="636.9,-99.5 646.9,-96 636.9,-92.5 636.9,-99.5"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_node14" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~efp_decompose_impl~~CalledByGraph_node14"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="322,-150 245,-150 245,-126 322,-126 322,-150"/>
+<text text-anchor="middle" x="283.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_edge18" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#00ff00" d="M192.96,-108.04C206.62,-112.6 222.35,-117.87 236.79,-122.7"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="235.94,-126.11 246.53,-125.96 238.16,-119.47 235.94,-126.11"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_node11" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~efp_decompose_impl~~CalledByGraph_node11"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="469.5,-192 371.5,-192 371.5,-168 469.5,-168 469.5,-192"/>
+<text text-anchor="middle" x="420.5" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_edge14" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#0000ff" d="M469.74,-180C486.7,-180 505.6,-180 522,-180"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="522.37,-183.5 532.37,-180 522.37,-176.5 522.37,-183.5"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_node12" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~efp_decompose_impl~~CalledByGraph_node12"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="611,-150 519,-150 519,-126 611,-126 611,-150"/>
+<text text-anchor="middle" x="565" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~run_continuity_chain -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_edge13" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~run_continuity_chain</title>
+<path fill="none" stroke="#00ff00" d="M611.42,-138.28C625.01,-138.37 640.24,-138.46 655.06,-138.56"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="655.2,-142.06 665.22,-138.62 655.24,-135.06 655.2,-142.06"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_node13" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~efp_decompose_impl~~CalledByGraph_node13"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="67,-108 0,-108 0,-84 67,-84 67,-108"/>
+<text text-anchor="middle" x="33.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_edge15" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M67.11,-96C75.11,-96 83.94,-96 92.83,-96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="92.85,-99.5 102.85,-96 92.85,-92.5 92.85,-99.5"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_edge16" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step</title>
+<path fill="none" stroke="#00ff00" d="M322.11,-149.7C337.22,-154.4 354.85,-159.89 370.92,-164.89"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="370.1,-168.3 380.69,-167.92 372.18,-161.61 370.1,-168.3"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_node15" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~efp_decompose_impl~~CalledByGraph_node15"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="483,-150 358,-150 358,-126 483,-126 483,-150"/>
+<text text-anchor="middle" x="420.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_edge20" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#0000ff" d="M322.11,-138C330.15,-138 338.91,-138 347.77,-138"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="347.78,-141.5 357.78,-138 347.78,-134.5 347.78,-141.5"/>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_edge17" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#0000ff" d="M483.17,-138C491.73,-138 500.47,-138 508.9,-138"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="508.99,-141.5 518.99,-138 508.99,-134.5 508.99,-141.5"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_node16" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~efp_decompose_impl~~CalledByGraph_node16"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="204.5,-150 107.5,-150 107.5,-126 204.5,-126 204.5,-150"/>
+<text text-anchor="middle" x="156" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~efp_decompose_impl~~CalledByGraph_edge19" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#00ff00" d="M204.8,-138C214.68,-138 225.07,-138 234.93,-138"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="234.97,-141.5 244.97,-138 234.97,-134.5 234.97,-141.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocefp_decompose_implCalledByGraph = svgPanZoom('#procefp_decompose_implCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ipr1"></span>
+              real(kind=real64),
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>IPR1</strong></td>
+<td> =</td>
+                <td>1.0_real64/PR1</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ipr2"></span>
+              real(kind=real64),
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>IPR2</strong></td>
+<td> =</td>
+                <td>1.0_real64/PR2</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ipr3"></span>
+              real(kind=real64),
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>IPR3</strong></td>
+<td> =</td>
+                <td>1.0_real64/PR3</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ipr4"></span>
+              real(kind=real64),
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>IPR4</strong></td>
+<td> =</td>
+                <td>1.0_real64/PR4</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ipr5"></span>
+              real(kind=real64),
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>IPR5</strong></td>
+<td> =</td>
+                <td>1.0_real64/PR5</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ipr6"></span>
+              real(kind=real64),
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>IPR6</strong></td>
+<td> =</td>
+                <td>1.0_real64/PR6</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-max_e1~2"></span>
+              real(kind=real64),
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>MAX_E1</strong></td>
+<td> =</td>
+                <td>real(huge(0_int64), real64)</td>
+            <td>
+                <p>Same bin-1 ceiling as <code>rdb_efp::efp_decompose</code>&rsquo;s <code>MAX_E1</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-pr1"></span>
+              real(kind=real64),
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>PR1</strong></td>
+<td> =</td>
+                <td>2.0_real64**(2*EFP_PREC_WIDTH)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-pr2"></span>
+              real(kind=real64),
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>PR2</strong></td>
+<td> =</td>
+                <td>2.0_real64**(1*EFP_PREC_WIDTH)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-pr3"></span>
+              real(kind=real64),
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>PR3</strong></td>
+<td> =</td>
+                <td>1.0_real64</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-pr4"></span>
+              real(kind=real64),
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>PR4</strong></td>
+<td> =</td>
+                <td>2.0_real64**(-1*EFP_PREC_WIDTH)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-pr5"></span>
+              real(kind=real64),
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>PR5</strong></td>
+<td> =</td>
+                <td>2.0_real64**(-2*EFP_PREC_WIDTH)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-pr6"></span>
+              real(kind=real64),
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>PR6</strong></td>
+<td> =</td>
+                <td>2.0_real64**(-3*EFP_PREC_WIDTH)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rs~2"></span>
+              real(kind=real64),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rs</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s~36"></span>
+              real(kind=real64),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">efp_decompose_impl</span><span class="p">(</span><span class="n">r</span><span class="p">,</span><span class="w"> </span><span class="n">e1</span><span class="p">,</span><span class="w"> </span><span class="n">e2</span><span class="p">,</span><span class="w"> </span><span class="n">e3</span><span class="p">,</span><span class="w"> </span><span class="n">e4</span><span class="p">,</span><span class="w"> </span><span class="n">e5</span><span class="p">,</span><span class="w"> </span><span class="n">e6</span><span class="p">,</span><span class="w"> </span><span class="n">epoison</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! In-module `!$acc routine seq` duplicate of `rdb_efp::efp_decompose`</span>
+<span class="w">      </span><span class="c">!! -- six SCALAR bin outputs (not an `int64(6)` array) so the call</span>
+<span class="w">      </span><span class="c">!! sites below can accumulate directly into</span>
+<span class="w">      </span><span class="c">!! `reduction(+:e1..e6,epoison)` clauses (OpenACC has no portable</span>
+<span class="w">      </span><span class="c">!! array reduction).  Duplicated rather than called from `rdb_efp`</span>
+<span class="w">      </span><span class="c">!! because NVHPC's device codegen does not inline a</span>
+<span class="w">      </span><span class="c">!! `pure !$acc routine seq` helper across a module boundary (CLAUDE.md</span>
+<span class="w">      </span><span class="c">!! Gotchas); `test_efp_impl_matches_canonical` (`RDB_ENABLE_TESTING`-</span>
+<span class="w">      </span><span class="c">!! gated) pins this copy bin-for-bit against the canonical procedure</span>
+<span class="w">      </span><span class="c">!! over the same magnitude table -- `compute_ice_totals`'s docstring</span>
+<span class="w">      </span><span class="c">!! documents the identical pattern for `ice_cell_concentration_impl`.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! `epoison` is the device-reduction twin of `rdb_efp::efp_t%poison`:</span>
+<span class="w">      </span><span class="c">!! 1 when `r` is NaN, +-Inf, or exceeds bin 1's representable</span>
+<span class="w">      </span><span class="c">!! ceiling, 0 otherwise -- summed by the caller's OWN</span>
+<span class="w">      </span><span class="c">!! `reduction(+:epoison)` across the k-slab, and from there folded</span>
+<span class="w">      </span><span class="c">!! into the running `efp_t%poison` counter (`compute_total_h_efp`</span>
+<span class="w">      </span><span class="c">!! etc.) so a non-finite console summand (a NaN'd `h_layer` or</span>
+<span class="w">      </span><span class="c">!! `u_face_x_layer`, the diagnosed vcm_rx0_040_lagrangian failure</span>
+<span class="w">      </span><span class="c">!! mode) makes the FINAL reduced total read as NaN via</span>
+<span class="w">      </span><span class="c">!! `efp_to_real`, instead of the zeroed/saturated bins below</span>
+<span class="w">      </span><span class="c">!! silently reconstructing a plausible finite number -- the</span>
+<span class="w">      </span><span class="c">!! console's own NaN panic (`rdb_console_stats.F90`'s</span>
+<span class="w">      </span><span class="c">!! `panic_on_nan`) sees the poisoned value it is supposed to.</span>
+<span class="w">      </span><span class="c">!! `ieee_is_finite` (not a `&gt;=`/`&lt;` comparison chain) is the guard,</span>
+<span class="w">      </span><span class="c">!! per CLAUDE.md's NaN-blind-if/else-clamp gotcha: it is the</span>
+<span class="w">      </span><span class="c">!! dedicated bit-pattern test and is not subject to `-fast`</span>
+<span class="w">      </span><span class="c">!! reassociation.</span>
+<span class="w">      </span><span class="c">!$acc routine seq</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">real64</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">r</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">e1</span><span class="p">,</span><span class="w"> </span><span class="n">e2</span><span class="p">,</span><span class="w"> </span><span class="n">e3</span><span class="p">,</span><span class="w"> </span><span class="n">e4</span><span class="p">,</span><span class="w"> </span><span class="n">e5</span><span class="p">,</span><span class="w"> </span><span class="n">e6</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">epoison</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">real64</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rs</span><span class="p">,</span><span class="w"> </span><span class="n">s</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">real64</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">PR1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">2.0_real64</span><span class="o">**</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">EFP_PREC_WIDTH</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">real64</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">PR2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">2.0_real64</span><span class="o">**</span><span class="p">(</span><span class="mi">1</span><span class="o">*</span><span class="n">EFP_PREC_WIDTH</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">real64</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">PR3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_real64</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">real64</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">PR4</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">2.0_real64</span><span class="o">**</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="o">*</span><span class="n">EFP_PREC_WIDTH</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">real64</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">PR5</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">2.0_real64</span><span class="o">**</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="o">*</span><span class="n">EFP_PREC_WIDTH</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">real64</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">PR6</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">2.0_real64</span><span class="o">**</span><span class="p">(</span><span class="o">-</span><span class="mi">3</span><span class="o">*</span><span class="n">EFP_PREC_WIDTH</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">real64</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">IPR1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_real64</span><span class="o">/</span><span class="n">PR1</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">real64</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">IPR2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_real64</span><span class="o">/</span><span class="n">PR2</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">real64</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">IPR3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_real64</span><span class="o">/</span><span class="n">PR3</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">real64</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">IPR4</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_real64</span><span class="o">/</span><span class="n">PR4</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">real64</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">IPR5</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_real64</span><span class="o">/</span><span class="n">PR5</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">real64</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">IPR6</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_real64</span><span class="o">/</span><span class="n">PR6</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">real64</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">MAX_E1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kt">real</span><span class="p">(</span><span class="nb">huge</span><span class="p">(</span><span class="mi">0_int64</span><span class="p">),</span><span class="w"> </span><span class="n">real64</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Same bin-1 ceiling as `rdb_efp::efp_decompose`'s `MAX_E1`.</span>
+
+<span class="w">      </span><span class="n">e1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0_int64</span>
+<span class="w">      </span><span class="n">e2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0_int64</span>
+<span class="w">      </span><span class="n">e3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0_int64</span>
+<span class="w">      </span><span class="n">e4</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0_int64</span>
+<span class="w">      </span><span class="n">e5</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0_int64</span>
+<span class="w">      </span><span class="n">e6</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0_int64</span>
+<span class="w">      </span><span class="n">epoison</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0_int64</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">ieee_is_finite</span><span class="p">(</span><span class="n">r</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="w">         </span><span class="c">! Covers NaN and +-Inf alike: zeroed bins (matching the canonical</span>
+<span class="w">         </span><span class="c">! `efp_decompose`'s NaN branch) plus the poison flag -- never an</span>
+<span class="w">         </span><span class="c">! `int(NaN, int64)` conversion, which is compiler-undefined and is</span>
+<span class="w">         </span><span class="c">! exactly how a NaN summand used to launder into "0.000" on the</span>
+<span class="w">         </span><span class="c">! console (see rdb_efp's module docstring / CLAUDE.md Gotchas).</span>
+<span class="w">         </span><span class="n">epoison</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1_int64</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+
+<span class="k">      </span><span class="n">s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_real64</span>
+<span class="w">      </span><span class="n">rs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">r</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">rs</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mf">0.0_real64</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="mf">1.0_real64</span>
+<span class="w">         </span><span class="n">rs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="n">rs</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">rs</span><span class="o">*</span><span class="n">IPR1</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">MAX_E1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">epoison</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1_int64</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+
+<span class="k">      </span><span class="n">e1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">int</span><span class="p">(</span><span class="n">s</span><span class="o">*</span><span class="nb">aint</span><span class="p">(</span><span class="n">rs</span><span class="o">*</span><span class="n">IPR1</span><span class="p">),</span><span class="w"> </span><span class="n">int64</span><span class="p">)</span>
+<span class="w">      </span><span class="n">rs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rs</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="kt">real</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">e1</span><span class="p">),</span><span class="w"> </span><span class="n">real64</span><span class="p">)</span><span class="o">*</span><span class="n">PR1</span>
+<span class="w">      </span><span class="n">e2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">int</span><span class="p">(</span><span class="n">s</span><span class="o">*</span><span class="nb">aint</span><span class="p">(</span><span class="n">rs</span><span class="o">*</span><span class="n">IPR2</span><span class="p">),</span><span class="w"> </span><span class="n">int64</span><span class="p">)</span>
+<span class="w">      </span><span class="n">rs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rs</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="kt">real</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">e2</span><span class="p">),</span><span class="w"> </span><span class="n">real64</span><span class="p">)</span><span class="o">*</span><span class="n">PR2</span>
+<span class="w">      </span><span class="n">e3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">int</span><span class="p">(</span><span class="n">s</span><span class="o">*</span><span class="nb">aint</span><span class="p">(</span><span class="n">rs</span><span class="o">*</span><span class="n">IPR3</span><span class="p">),</span><span class="w"> </span><span class="n">int64</span><span class="p">)</span>
+<span class="w">      </span><span class="n">rs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rs</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="kt">real</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">e3</span><span class="p">),</span><span class="w"> </span><span class="n">real64</span><span class="p">)</span><span class="o">*</span><span class="n">PR3</span>
+<span class="w">      </span><span class="n">e4</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">int</span><span class="p">(</span><span class="n">s</span><span class="o">*</span><span class="nb">aint</span><span class="p">(</span><span class="n">rs</span><span class="o">*</span><span class="n">IPR4</span><span class="p">),</span><span class="w"> </span><span class="n">int64</span><span class="p">)</span>
+<span class="w">      </span><span class="n">rs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rs</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="kt">real</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">e4</span><span class="p">),</span><span class="w"> </span><span class="n">real64</span><span class="p">)</span><span class="o">*</span><span class="n">PR4</span>
+<span class="w">      </span><span class="n">e5</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">int</span><span class="p">(</span><span class="n">s</span><span class="o">*</span><span class="nb">aint</span><span class="p">(</span><span class="n">rs</span><span class="o">*</span><span class="n">IPR5</span><span class="p">),</span><span class="w"> </span><span class="n">int64</span><span class="p">)</span>
+<span class="w">      </span><span class="n">rs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rs</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="kt">real</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">e5</span><span class="p">),</span><span class="w"> </span><span class="n">real64</span><span class="p">)</span><span class="o">*</span><span class="n">PR5</span>
+<span class="w">      </span><span class="n">e6</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">int</span><span class="p">(</span><span class="n">s</span><span class="o">*</span><span class="nb">aint</span><span class="p">(</span><span class="n">rs</span><span class="o">*</span><span class="n">IPR6</span><span class="p">),</span><span class="w"> </span><span class="n">int64</span><span class="p">)</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">efp_decompose_impl</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-09 01:37 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

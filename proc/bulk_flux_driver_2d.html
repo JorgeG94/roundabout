@@ -1,0 +1,1052 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>bulk_flux_driver_2d &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>bulk_flux_driver_2d
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">38 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_bulk_flux.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_bulk_flux.f90.html'>rdb_ocean_bulk_flux.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_bulk_flux.html'>rdb_ocean_bulk_flux</a></li>
+            <li class="breadcrumb-item active" aria-current="page">bulk_flux_driver_2d</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/bulk_flux_driver_2d.html#variable-cd~8">cd</a>
+            <a class="list-group-item" href="../proc/bulk_flux_driver_2d.html#variable-ce~5">ce</a>
+            <a class="list-group-item" href="../proc/bulk_flux_driver_2d.html#variable-ch~2">ch</a>
+            <a class="list-group-item" href="../proc/bulk_flux_driver_2d.html#variable-evp">evp</a>
+            <a class="list-group-item" href="../proc/bulk_flux_driver_2d.html#variable-i~521">i</a>
+            <a class="list-group-item" href="../proc/bulk_flux_driver_2d.html#variable-j~443">j</a>
+            <a class="list-group-item" href="../proc/bulk_flux_driver_2d.html#variable-lat~3">lat</a>
+            <a class="list-group-item" href="../proc/bulk_flux_driver_2d.html#variable-sens">sens</a>
+            <a class="list-group-item" href="../proc/bulk_flux_driver_2d.html#variable-taux~2">taux</a>
+            <a class="list-group-item" href="../proc/bulk_flux_driver_2d.html#variable-tauy~2">tauy</a>
+            <a class="list-group-item" href="../proc/bulk_flux_driver_2d.html#variable-ustar~12">ustar</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/bulk_flux_driver_2d.html#src">bulk_flux_driver_2d</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public pure subroutine bulk_flux_driver_2d(nx, ny, u_wind, v_wind, u_cur, v_cur, t_air, q_air, slp, sst_degc, wet_mask, z_wind, z_ta, n_iter, taux_cell, tauy_cell, q_sens, q_lat, evap_massflux, cd_out, ch_out, ce_out)  
+</h2>
+    
+
+    <p>Thin <code>do concurrent</code> driver — one <code>bulk_flux_column</code> call per
+CELL-CENTRED grid point.  Explicit-shape dummies throughout
+(the project&rsquo;s <code>do concurrent</code> convention), no <code>associate</code> over
+derived-type components, no namelist/engine coupling: a caller
+supplies plain model-grid arrays and reads plain outputs.</p>
+<p>Outputs are ALREADY in <code>ocean_surface_flux_t</code>&rsquo;s sign convention
+for <code>q_sens</code>/<code>q_lat</code> (positive down) and for <code>evap_massflux</code>
+(negated here to the MOM6 <code>evap &lt;= 0</code> convention &ndash; see the
+module&rsquo;s sign-convention note).  <code>taux_cell</code>/<code>tauy_cell</code> are
+CELL-CENTRED (T-point, like the <code>uas</code>/<code>vas</code> inputs); averaging
+onto the C-grid stress FACES is the caller&rsquo;s job (see the
+module&rsquo;s &ldquo;Seam for C2c&rdquo; note) &ndash; deliberately not done here, so
+this driver has no dependency on <code>ocean_surface_stress_t</code>&rsquo;s
+face-shaped arrays.</p>
+<p><code>wet_mask</code> gates every output over land (<code>wet_mask(i,j) &lt;= 0</code>):
+ALL EIGHT outputs are written as explicit zero on a land cell,
+and <code>bulk_flux_column</code> is never called there &ndash; land <code>t_air</code>/
+<code>q_air</code>/<code>slp</code>/<code>sst_degc</code>/<code>u_wind</code>/<code>v_wind</code> may legitimately be
+fill values (including NaN), and MULTIPLYING a column result
+by a zero mask does not scrub a NaN (<code>NaN*0.0 == NaN</code>), so the
+branch must skip the call outright rather than mask its
+result.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~454"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~454"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-u_wind~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>u_wind</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-v_wind~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>v_wind</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-u_cur~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>u_cur</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-v_cur~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>v_cur</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_air~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t_air</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_air~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_air</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-slp~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>slp</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sst_degc~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sst_degc</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wet_mask~23"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wet_mask</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_wind~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z_wind</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_ta~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z_ta</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_iter~4"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_iter</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-taux_cell"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>taux_cell</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tauy_cell"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tauy_cell</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_sens"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_sens</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_lat"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_lat</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-evap_massflux"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>evap_massflux</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cd_out"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cd_out</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ch_out"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ch_out</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ce_out"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ce_out</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~bulk_flux_driver_2d~~CallsGraph Pages: 1 -->
+<svg id="procbulk_flux_driver_2dCallsGraph" width="442pt" height="116pt"
+ viewBox="0.00 0.00 442.00 116.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~bulk_flux_driver_2d~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 112)">
+<title>proc~~bulk_flux_driver_2d~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-112 438,-112 438,4 -4,4"/>
+<!-- proc~bulk_flux_driver_2d -->
+<g id="proc~~bulk_flux_driver_2d~~CallsGraph_node1" class="node">
+<title>proc~bulk_flux_driver_2d</title>
+<polygon fill="none" stroke="black" points="115,-87 0,-87 0,-63 115,-63 115,-87"/>
+<text text-anchor="middle" x="57.5" y="-72.6" font-family="Helvetica,sans-Serif" font-size="10.50">bulk_flux_driver_2d</text>
+</g>
+<!-- local -->
+<g id="proc~~bulk_flux_driver_2d~~CallsGraph_node2" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="230.5,-108 176.5,-108 176.5,-84 230.5,-84 230.5,-108"/>
+<text text-anchor="middle" x="203.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~bulk_flux_driver_2d&#45;&gt;local -->
+<g id="proc~~bulk_flux_driver_2d~~CallsGraph_edge1" class="edge">
+<title>proc~bulk_flux_driver_2d&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M115.41,-83.3C132.53,-85.8 150.84,-88.47 166.23,-90.71"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="165.97,-94.21 176.37,-92.19 166.98,-87.28 165.97,-94.21"/>
+</g>
+<!-- proc~bulk_flux_column -->
+<g id="proc~~bulk_flux_driver_2d~~CallsGraph_node3" class="node">
+<title>proc~bulk_flux_column</title>
+<g id="a_proc~~bulk_flux_driver_2d~~CallsGraph_node3"><a xlink:href="../proc/bulk_flux_column.html" xlink:title="bulk_flux_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="256,-66 151,-66 151,-42 256,-42 256,-66"/>
+<text text-anchor="middle" x="203.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bulk_flux_column</text>
+</a>
+</g>
+</g>
+<!-- proc~bulk_flux_driver_2d&#45;&gt;proc~bulk_flux_column -->
+<g id="proc~~bulk_flux_driver_2d~~CallsGraph_edge2" class="edge">
+<title>proc~bulk_flux_driver_2d&#45;&gt;proc~bulk_flux_column</title>
+<path fill="none" stroke="#ff0000" d="M115.41,-66.7C123.68,-65.49 132.23,-64.25 140.6,-63.03"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="141.29,-66.46 150.68,-61.56 140.28,-59.54 141.29,-66.46"/>
+</g>
+<!-- proc~bulk_flux_cdn10_neutral -->
+<g id="proc~~bulk_flux_driver_2d~~CallsGraph_node4" class="node">
+<title>proc~bulk_flux_cdn10_neutral</title>
+<g id="a_proc~~bulk_flux_driver_2d~~CallsGraph_node4"><a xlink:href="../proc/bulk_flux_cdn10_neutral.html" xlink:title="bulk_flux_cdn10_neutral">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="434,-108 292,-108 292,-84 434,-84 434,-108"/>
+<text text-anchor="middle" x="363" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bulk_flux_cdn10_neutral</text>
+</a>
+</g>
+</g>
+<!-- proc~bulk_flux_column&#45;&gt;proc~bulk_flux_cdn10_neutral -->
+<g id="proc~~bulk_flux_driver_2d~~CallsGraph_edge3" class="edge">
+<title>proc~bulk_flux_column&#45;&gt;proc~bulk_flux_cdn10_neutral</title>
+<path fill="none" stroke="#00ffff" d="M249.63,-66.04C267.51,-70.8 288.23,-76.33 306.97,-81.33"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="306.3,-84.77 316.86,-83.96 308.1,-78 306.3,-84.77"/>
+</g>
+<!-- proc~bulk_flux_psi -->
+<g id="proc~~bulk_flux_driver_2d~~CallsGraph_node5" class="node">
+<title>proc~bulk_flux_psi</title>
+<g id="a_proc~~bulk_flux_driver_2d~~CallsGraph_node5"><a xlink:href="../proc/bulk_flux_psi.html" xlink:title="bulk_flux_psi">
+<polygon fill="#d9534f" stroke="#d9534f" points="403,-66 323,-66 323,-42 403,-42 403,-66"/>
+<text text-anchor="middle" x="363" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bulk_flux_psi</text>
+</a>
+</g>
+</g>
+<!-- proc~bulk_flux_column&#45;&gt;proc~bulk_flux_psi -->
+<g id="proc~~bulk_flux_driver_2d~~CallsGraph_edge4" class="edge">
+<title>proc~bulk_flux_column&#45;&gt;proc~bulk_flux_psi</title>
+<path fill="none" stroke="#00ffff" d="M256.07,-54C274.31,-54 294.75,-54 312.79,-54"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="312.81,-57.5 322.81,-54 312.81,-50.5 312.81,-57.5"/>
+</g>
+<!-- proc~bulk_flux_qsat_seawater -->
+<g id="proc~~bulk_flux_driver_2d~~CallsGraph_node6" class="node">
+<title>proc~bulk_flux_qsat_seawater</title>
+<g id="a_proc~~bulk_flux_driver_2d~~CallsGraph_node6"><a xlink:href="../proc/bulk_flux_qsat_seawater.html" xlink:title="bulk_flux_qsat_seawater">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="434,-24 292,-24 292,0 434,0 434,-24"/>
+<text text-anchor="middle" x="363" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bulk_flux_qsat_seawater</text>
+</a>
+</g>
+</g>
+<!-- proc~bulk_flux_column&#45;&gt;proc~bulk_flux_qsat_seawater -->
+<g id="proc~~bulk_flux_driver_2d~~CallsGraph_edge5" class="edge">
+<title>proc~bulk_flux_column&#45;&gt;proc~bulk_flux_qsat_seawater</title>
+<path fill="none" stroke="#00ffff" d="M249.63,-41.96C267.51,-37.2 288.23,-31.67 306.97,-26.67"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="308.1,-30 316.86,-24.04 306.3,-23.23 308.1,-30"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cd~8"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cd</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ce~5"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ce</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ch~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ch</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-evp"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>evp</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~521"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~443"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lat~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lat</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sens"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sens</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-taux~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>taux</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tauy~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tauy</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ustar~12"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ustar</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">bulk_flux_driver_2d</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">u_wind</span><span class="p">,</span><span class="w"> </span><span class="n">v_wind</span><span class="p">,</span><span class="w"> </span><span class="n">u_cur</span><span class="p">,</span><span class="w"> </span><span class="n">v_cur</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">t_air</span><span class="p">,</span><span class="w"> </span><span class="n">q_air</span><span class="p">,</span><span class="w"> </span><span class="n">slp</span><span class="p">,</span><span class="w"> </span><span class="n">sst_degc</span><span class="p">,</span><span class="w"> </span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">z_wind</span><span class="p">,</span><span class="w"> </span><span class="n">z_ta</span><span class="p">,</span><span class="w"> </span><span class="n">n_iter</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">taux_cell</span><span class="p">,</span><span class="w"> </span><span class="n">tauy_cell</span><span class="p">,</span><span class="w"> </span><span class="n">q_sens</span><span class="p">,</span><span class="w"> </span><span class="n">q_lat</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">evap_massflux</span><span class="p">,</span><span class="w"> </span><span class="n">cd_out</span><span class="p">,</span><span class="w"> </span><span class="n">ch_out</span><span class="p">,</span><span class="w"> </span><span class="n">ce_out</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Thin `do concurrent` driver — one `bulk_flux_column` call per</span>
+<span class="w">      </span><span class="c">!! CELL-CENTRED grid point.  Explicit-shape dummies throughout</span>
+<span class="w">      </span><span class="c">!! (the project's `do concurrent` convention), no `associate` over</span>
+<span class="w">      </span><span class="c">!! derived-type components, no namelist/engine coupling: a caller</span>
+<span class="w">      </span><span class="c">!! supplies plain model-grid arrays and reads plain outputs.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Outputs are ALREADY in `ocean_surface_flux_t`'s sign convention</span>
+<span class="w">      </span><span class="c">!! for `q_sens`/`q_lat` (positive down) and for `evap_massflux`</span>
+<span class="w">      </span><span class="c">!! (negated here to the MOM6 `evap &lt;= 0` convention -- see the</span>
+<span class="w">      </span><span class="c">!! module's sign-convention note).  `taux_cell`/`tauy_cell` are</span>
+<span class="w">      </span><span class="c">!! CELL-CENTRED (T-point, like the `uas`/`vas` inputs); averaging</span>
+<span class="w">      </span><span class="c">!! onto the C-grid stress FACES is the caller's job (see the</span>
+<span class="w">      </span><span class="c">!! module's "Seam for C2c" note) -- deliberately not done here, so</span>
+<span class="w">      </span><span class="c">!! this driver has no dependency on `ocean_surface_stress_t`'s</span>
+<span class="w">      </span><span class="c">!! face-shaped arrays.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! `wet_mask` gates every output over land (`wet_mask(i,j) &lt;= 0`):</span>
+<span class="w">      </span><span class="c">!! ALL EIGHT outputs are written as explicit zero on a land cell,</span>
+<span class="w">      </span><span class="c">!! and `bulk_flux_column` is never called there -- land `t_air`/</span>
+<span class="w">      </span><span class="c">!! `q_air`/`slp`/`sst_degc`/`u_wind`/`v_wind` may legitimately be</span>
+<span class="w">      </span><span class="c">!! fill values (including NaN), and MULTIPLYING a column result</span>
+<span class="w">      </span><span class="c">!! by a zero mask does not scrub a NaN (`NaN*0.0 == NaN`), so the</span>
+<span class="w">      </span><span class="c">!! branch must skip the call outright rather than mask its</span>
+<span class="w">      </span><span class="c">!! result.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u_wind</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">),</span><span class="w"> </span><span class="n">v_wind</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u_cur</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">),</span><span class="w"> </span><span class="n">v_cur</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">t_air</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">),</span><span class="w"> </span><span class="n">q_air</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">slp</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">),</span><span class="w"> </span><span class="n">sst_degc</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wet_mask</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">z_wind</span><span class="p">,</span><span class="w"> </span><span class="n">z_ta</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n_iter</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">taux_cell</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">),</span><span class="w"> </span><span class="n">tauy_cell</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">q_sens</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">),</span><span class="w"> </span><span class="n">q_lat</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">evap_massflux</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cd_out</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">),</span><span class="w"> </span><span class="n">ch_out</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">),</span><span class="w"> </span><span class="n">ce_out</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">taux</span><span class="p">,</span><span class="w"> </span><span class="n">tauy</span><span class="p">,</span><span class="w"> </span><span class="n">sens</span><span class="p">,</span><span class="w"> </span><span class="n">lat</span><span class="p">,</span><span class="w"> </span><span class="n">evp</span><span class="p">,</span><span class="w"> </span><span class="n">cd</span><span class="p">,</span><span class="w"> </span><span class="n">ch</span><span class="p">,</span><span class="w"> </span><span class="n">ce</span><span class="p">,</span><span class="w"> </span><span class="n">ustar</span>
+
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="n">local</span><span class="p">(</span><span class="n">taux</span><span class="p">,</span><span class="w"> </span><span class="n">tauy</span><span class="p">,</span><span class="w"> </span><span class="n">sens</span><span class="p">,</span><span class="w"> </span><span class="n">lat</span><span class="p">,</span><span class="w"> </span><span class="n">evp</span><span class="p">,</span><span class="w"> </span><span class="n">cd</span><span class="p">,</span><span class="w"> </span><span class="n">ch</span><span class="p">,</span><span class="w"> </span><span class="n">ce</span><span class="p">,</span><span class="w"> </span><span class="n">ustar</span><span class="p">)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">wet_mask</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">bulk_flux_column</span><span class="p">(</span><span class="n">u_wind</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">),</span><span class="w"> </span><span class="n">v_wind</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">),</span><span class="w"> </span><span class="n">u_cur</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">),</span><span class="w"> </span><span class="n">v_cur</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">t_air</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">),</span><span class="w"> </span><span class="n">q_air</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">),</span><span class="w"> </span><span class="n">slp</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">),</span><span class="w"> </span><span class="n">sst_degc</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">z_wind</span><span class="p">,</span><span class="w"> </span><span class="n">z_ta</span><span class="p">,</span><span class="w"> </span><span class="n">n_iter</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">taux</span><span class="p">,</span><span class="w"> </span><span class="n">tauy</span><span class="p">,</span><span class="w"> </span><span class="n">sens</span><span class="p">,</span><span class="w"> </span><span class="n">lat</span><span class="p">,</span><span class="w"> </span><span class="n">evp</span><span class="p">,</span><span class="w"> </span><span class="n">cd</span><span class="p">,</span><span class="w"> </span><span class="n">ch</span><span class="p">,</span><span class="w"> </span><span class="n">ce</span><span class="p">,</span><span class="w"> </span><span class="n">ustar</span><span class="p">)</span>
+<span class="w">            </span><span class="n">taux_cell</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">taux</span>
+<span class="w">            </span><span class="n">tauy_cell</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tauy</span>
+<span class="w">            </span><span class="n">q_sens</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sens</span>
+<span class="w">            </span><span class="n">q_lat</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">lat</span>
+<span class="w">            </span><span class="n">evap_massflux</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="n">evp</span>
+<span class="w">            </span><span class="n">cd_out</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cd</span>
+<span class="w">            </span><span class="n">ch_out</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ch</span>
+<span class="w">            </span><span class="n">ce_out</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ce</span>
+<span class="w">         </span><span class="k">else</span>
+<span class="k">            </span><span class="n">taux_cell</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="n">tauy_cell</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="n">q_sens</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="n">q_lat</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="n">evap_massflux</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="n">cd_out</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="n">ch_out</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="n">ce_out</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end do</span>
+<span class="k">   end subroutine </span><span class="n">bulk_flux_driver_2d</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-09 01:37 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

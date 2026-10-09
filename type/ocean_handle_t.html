@@ -1,0 +1,2625 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>ocean_handle_t &ndash; Roundabout </title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>ocean_handle_t
+      <small>Derived Type</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title="<p> 0.4% of total for derived types.</p>Including implementation: 13 statements,  0.2% of total for derived types.">13 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_handle.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_handle.f90.html'>rdb_handle.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_handle.html'>rdb_handle</a></li>
+            <li class="breadcrumb-item active" aria-current="page">ocean_handle_t</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../type/ocean_handle_t.html#variable-cfg~4">cfg</a>
+            <a class="list-group-item" href="../type/ocean_handle_t.html#variable-device_mapped">device_mapped</a>
+            <a class="list-group-item" href="../type/ocean_handle_t.html#variable-engine">engine</a>
+            <a class="list-group-item" href="../type/ocean_handle_t.html#variable-grid~83">grid</a>
+            <a class="list-group-item" href="../type/ocean_handle_t.html#variable-host_is_current">host_is_current</a>
+            <a class="list-group-item" href="../type/ocean_handle_t.html#variable-is_initialised~2">is_initialised</a>
+            <a class="list-group-item" href="../type/ocean_handle_t.html#variable-is_pending">is_pending</a>
+            <a class="list-group-item" href="../type/ocean_handle_t.html#variable-magic">magic</a>
+            <a class="list-group-item" href="../type/ocean_handle_t.html#variable-n_inner~4">n_inner</a>
+            <a class="list-group-item" href="../type/ocean_handle_t.html#variable-state">state</a>
+            <a class="list-group-item" href="../type/ocean_handle_t.html#variable-t_current">t_current</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../type/ocean_handle_t.html#src">ocean_handle_t</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+      <h2 id="type-def-statement">
+        type, public :: ocean_handle_t</h2>
+    <p>One ocean simulation: config + the P2.4 setup/step/teardown
+engine (god-state + grid + geothermal + bc_source + decomp +
+sea-ice params — <code>rdb_ocean_engine</code>). <code>state</code>/<code>grid</code> below are
+thin views onto <code>engine%state</code>/<code>engine%grid</code> kept ONLY so the
+P2 accessor bodies (<code>h%state%...</code>, <code>h%grid%...</code>) did not all
+need touching when this handle was rewired onto the shared
+engine (P2.4): <code>state</code> is POINTER-associated to <code>engine%state</code>
+right after <code>engine_enter_data</code> (stable for the handle&rsquo;s
+lifetime — <code>engine</code> is a component of this heap-allocated,
+pointer-accessed handle, never copied/reallocated); <code>grid</code> is a
+ONE-TIME VALUE COPY of <code>engine%grid</code> right after <code>engine_setup</code>
+(safe because grid metadata is read-only after setup — no
+kernel ever mutates <code>nx_phys</code>/<code>dx</code>/&hellip; mid-run). The standalone
+<code>sf</code> slot from P1 is gone: <code>engine_setup</code> now fully configures
+<code>engine%state%surface_flux</code> from the namelist (P2.4 closes the
+&ldquo;API surface flux is a separate, minimally-seeded object&rdquo; gap),
+so <code>rdb_ocean_get/set_*_flux</code> read/write <code>h%state%surface_flux</code>
+directly, same as the driver.</p>
+<br>      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Inherits</h3>
+        </div>
+        <div class="card-body">
+          <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: type~~ocean_handle_t~~InheritsGraph Pages: 1 -->
+<svg id="typeocean_handle_tInheritsGraph" width="641pt" height="1170pt"
+ viewBox="0.00 0.00 641.00 1170.19" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="type~~ocean_handle_t~~InheritsGraph" class="graph" transform="scale(0.31 0.31) rotate(0) translate(4 3815.09)">
+<title>type~~ocean_handle_t~~InheritsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-3815.09 2088,-3815.09 2088,4 -4,4"/>
+<!-- type~ocean_handle_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node1" class="node">
+<title>type~ocean_handle_t</title>
+<polygon fill="none" stroke="black" points="2084,-1785.09 1987,-1785.09 1987,-1761.09 2084,-1761.09 2084,-1785.09"/>
+<text text-anchor="middle" x="2035.5" y="-1770.69" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_handle_t</text>
+</g>
+<!-- type~config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node2" class="node">
+<title>type~config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node2"><a xlink:href="../type/config_t.html" xlink:title="config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1896,-2089.09 1841,-2089.09 1841,-2065.09 1896,-2065.09 1896,-2089.09"/>
+<text text-anchor="middle" x="1868.5" y="-2074.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_handle_t&#45;&gt;type~config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge1" class="edge">
+<title>type~ocean_handle_t&#45;&gt;type~config_t</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M2027.83,-1785.39C2002.64,-1831.8 1913.12,-1996.73 1881.04,-2055.83"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1877.77,-2054.52 1876.07,-2064.98 1883.92,-2057.86 1877.77,-2054.52"/>
+<text text-anchor="middle" x="1952" y="-1954.49" font-family="Helvetica,sans-Serif" font-size="9.50">cfg</text>
+</g>
+<!-- type~hgrid_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node3" class="node">
+<title>type~hgrid_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node3"><a xlink:href="../type/hgrid_t.html" xlink:title="hgrid_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="90.5,-549.09 36.5,-549.09 36.5,-525.09 90.5,-525.09 90.5,-549.09"/>
+<text text-anchor="middle" x="63.5" y="-534.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">hgrid_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_handle_t&#45;&gt;type~hgrid_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge3" class="edge">
+<title>type~ocean_handle_t&#45;&gt;type~hgrid_t</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1986.94,-1774.91C1926.36,-1777.13 1818.42,-1780.74 1726,-1782.09 1445.41,-1786.18 888.22,-1790.39 804.5,-1779.09"/>
+<text text-anchor="middle" x="1481.5" y="-1787.49" font-family="Helvetica,sans-Serif" font-size="9.50">grid</text>
+</g>
+<!-- type~ocean_engine_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node4" class="node">
+<title>type~ocean_engine_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node4"><a xlink:href="../type/ocean_engine_t.html" xlink:title="ocean_engine_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1917,-1669.09 1820,-1669.09 1820,-1645.09 1917,-1645.09 1917,-1669.09"/>
+<text text-anchor="middle" x="1868.5" y="-1654.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_engine_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_handle_t&#45;&gt;type~ocean_engine_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge2" class="edge">
+<title>type~ocean_handle_t&#45;&gt;type~ocean_engine_t</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M2017.15,-1760.9C1987.99,-1740.39 1928.99,-1698.92 1895.07,-1675.07"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1896.81,-1672.01 1886.61,-1669.12 1892.78,-1677.74 1896.81,-1672.01"/>
+<text text-anchor="middle" x="1952" y="-1728.49" font-family="Helvetica,sans-Serif" font-size="9.50">engine</text>
+</g>
+<!-- type~ocean_state_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node5" class="node">
+<title>type~ocean_state_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node5"><a xlink:href="../type/ocean_state_t.html" xlink:title="ocean_state_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1673.5,-885.09 1587.5,-885.09 1587.5,-861.09 1673.5,-861.09 1673.5,-885.09"/>
+<text text-anchor="middle" x="1630.5" y="-870.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_state_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_handle_t&#45;&gt;type~ocean_state_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge4" class="edge">
+<title>type~ocean_handle_t&#45;&gt;type~ocean_state_t</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M2029.11,-1761.05C1986.05,-1664.88 1698.14,-1021.91 1641.25,-894.87"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1644.3,-893.1 1637.01,-885.41 1637.91,-895.96 1644.3,-893.1"/>
+<text text-anchor="middle" x="1868.5" y="-1501.49" font-family="Helvetica,sans-Serif" font-size="9.50">state</text>
+</g>
+<!-- type~ocean_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node18" class="node">
+<title>type~ocean_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node18"><a xlink:href="../type/ocean_config_t.html" xlink:title="ocean_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1677,-2797.09 1584,-2797.09 1584,-2773.09 1677,-2773.09 1677,-2797.09"/>
+<text text-anchor="middle" x="1630.5" y="-2782.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~config_t&#45;&gt;type~ocean_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge5" class="edge">
+<title>type~config_t&#45;&gt;type~ocean_config_t</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1863.4,-2089.38C1835.62,-2172.72 1674.85,-2655.04 1638.71,-2763.46"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1635.37,-2762.42 1635.52,-2773.02 1642.01,-2764.64 1635.37,-2762.42"/>
+<text text-anchor="middle" x="1773" y="-2433.49" font-family="Helvetica,sans-Serif" font-size="9.50">ocean</text>
+</g>
+<!-- type~ocean_engine_t&#45;&gt;type~hgrid_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge7" class="edge">
+<title>type~ocean_engine_t&#45;&gt;type~hgrid_t</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1819.75,-1649.47C1754.31,-1640.69 1633.63,-1630.53 1535,-1656.09 1526.14,-1658.39 1525.66,-1663.12 1517,-1666.09 1402.14,-1705.53 1366.96,-1689.14 1247,-1708.09 1050.26,-1739.18 1000.16,-1816.4 804.5,-1779.09"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M802.5,-1779.09C614.22,-1742.37 544.49,-1796.37 378,-1701.09 280.09,-1645.06 256.03,-1612.95 212,-1509.09 171.51,-1413.58 249.59,-1111.23 170.5,-1044.09"/>
+<text text-anchor="middle" x="1337.5" y="-1710.49" font-family="Helvetica,sans-Serif" font-size="9.50">grid</text>
+</g>
+<!-- type~ocean_engine_t&#45;&gt;type~ocean_state_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge6" class="edge">
+<title>type~ocean_engine_t&#45;&gt;type~ocean_state_t</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1863.89,-1645.09C1837.4,-1557.09 1673.22,-1011.69 1638.11,-895.03"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1641.35,-893.68 1635.12,-885.11 1634.65,-895.7 1641.35,-893.68"/>
+<text text-anchor="middle" x="1773" y="-1428.49" font-family="Helvetica,sans-Serif" font-size="9.50">state</text>
+</g>
+<!-- type~decomp_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node9" class="node">
+<title>type~decomp_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node9"><a xlink:href="../type/decomp_t.html" xlink:title="decomp_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1663,-1609.09 1598,-1609.09 1598,-1585.09 1663,-1585.09 1663,-1609.09"/>
+<text text-anchor="middle" x="1630.5" y="-1594.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">decomp_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_engine_t&#45;&gt;type~decomp_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge10" class="edge">
+<title>type~ocean_engine_t&#45;&gt;type~decomp_t</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1854.05,-1645.08C1841.54,-1634.66 1821.87,-1620.18 1802,-1613.09 1760.13,-1598.16 1709,-1595.21 1673.71,-1595.34"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1673.26,-1591.85 1663.3,-1595.47 1673.34,-1598.85 1673.26,-1591.85"/>
+<text text-anchor="middle" x="1773" y="-1615.49" font-family="Helvetica,sans-Serif" font-size="9.50">decomp</text>
+</g>
+<!-- type~ice_evp_params_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node11" class="node">
+<title>type~ice_evp_params_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node11"><a xlink:href="../type/ice_evp_params_t.html" xlink:title="ice_evp_params_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1684.5,-1567.09 1576.5,-1567.09 1576.5,-1543.09 1684.5,-1543.09 1684.5,-1567.09"/>
+<text text-anchor="middle" x="1630.5" y="-1552.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_evp_params_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_engine_t&#45;&gt;type~ice_evp_params_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge11" class="edge">
+<title>type~ocean_engine_t&#45;&gt;type~ice_evp_params_t</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1859.83,-1644.99C1849.01,-1628.99 1827.68,-1601.19 1802,-1587.09 1769.34,-1569.16 1728.43,-1561.09 1694.88,-1557.53"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1695,-1554.03 1684.71,-1556.57 1694.34,-1561 1695,-1554.03"/>
+<text text-anchor="middle" x="1773" y="-1589.49" font-family="Helvetica,sans-Serif" font-size="9.50">evp_params</text>
+</g>
+<!-- type~ice_ic_params_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node12" class="node">
+<title>type~ice_ic_params_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node12"><a xlink:href="../type/ice_ic_params_t.html" xlink:title="ice_ic_params_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1679,-1773.09 1582,-1773.09 1582,-1749.09 1679,-1749.09 1679,-1773.09"/>
+<text text-anchor="middle" x="1630.5" y="-1758.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_ic_params_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_engine_t&#45;&gt;type~ice_ic_params_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge12" class="edge">
+<title>type~ocean_engine_t&#45;&gt;type~ice_ic_params_t</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1854.83,-1669.33C1842.23,-1680.99 1821.96,-1698.45 1802,-1710.09 1767.14,-1730.43 1723.48,-1743.29 1689.06,-1751.01"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1688.19,-1747.61 1679.15,-1753.15 1689.67,-1754.46 1688.19,-1747.61"/>
+<text text-anchor="middle" x="1773" y="-1738.49" font-family="Helvetica,sans-Serif" font-size="9.50">ic_par</text>
+</g>
+<!-- type~ocean_boundary_data_constant_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node16" class="node">
+<title>type~ocean_boundary_data_constant_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node16"><a xlink:href="../type/ocean_boundary_data_constant_t.html" xlink:title="ocean_boundary_data_constant_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1726,-1731.09 1535,-1731.09 1535,-1707.09 1726,-1707.09 1726,-1731.09"/>
+<text text-anchor="middle" x="1630.5" y="-1716.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_boundary_data_constant_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_engine_t&#45;&gt;type~ocean_boundary_data_constant_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge9" class="edge">
+<title>type~ocean_engine_t&#45;&gt;type~ocean_boundary_data_constant_t</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1837.12,-1669.16C1826.16,-1673.27 1813.62,-1677.68 1802,-1681.09 1770.5,-1690.34 1735.15,-1698.57 1704.84,-1704.98"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1703.84,-1701.61 1694.76,-1707.08 1705.27,-1708.46 1703.84,-1701.61"/>
+<text text-anchor="middle" x="1773" y="-1698.49" font-family="Helvetica,sans-Serif" font-size="9.50">bc_source</text>
+</g>
+<!-- type~ocean_geothermal_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node24" class="node">
+<title>type~ocean_geothermal_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node24"><a xlink:href="../type/ocean_geothermal_t.html" xlink:title="ocean_geothermal_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1691.5,-1689.09 1569.5,-1689.09 1569.5,-1665.09 1691.5,-1665.09 1691.5,-1689.09"/>
+<text text-anchor="middle" x="1630.5" y="-1674.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_geothermal_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_engine_t&#45;&gt;type~ocean_geothermal_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge8" class="edge">
+<title>type~ocean_engine_t&#45;&gt;type~ocean_geothermal_t</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1819.74,-1661.14C1785.86,-1664.01 1739.84,-1667.91 1701.79,-1671.14"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1701.46,-1667.65 1691.79,-1671.98 1702.05,-1674.63 1701.46,-1667.65"/>
+<text text-anchor="middle" x="1773" y="-1669.49" font-family="Helvetica,sans-Serif" font-size="9.50">geo</text>
+</g>
+<!-- type~barotropic_state_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node6" class="node">
+<title>type~barotropic_state_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node6"><a xlink:href="../type/barotropic_state_t.html" xlink:title="barotropic_state_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1391,-1239.09 1284,-1239.09 1284,-1215.09 1391,-1215.09 1391,-1239.09"/>
+<text text-anchor="middle" x="1337.5" y="-1224.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">barotropic_state_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~barotropic_state_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge13" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~barotropic_state_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1629.28,-885.28C1627.71,-933 1615.21,-1108.6 1517,-1193.09 1485.52,-1220.17 1439.23,-1228.39 1401.67,-1229.99"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1401.23,-1226.5 1391.33,-1230.28 1401.42,-1233.5 1401.23,-1226.5"/>
+<text text-anchor="middle" x="1481.5" y="-1227.49" font-family="Helvetica,sans-Serif" font-size="9.50">barotropic</text>
+</g>
+<!-- type~continuity_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node7" class="node">
+<title>type~continuity_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node7"><a xlink:href="../type/continuity_t.html" xlink:title="continuity_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1374.5,-1365.09 1300.5,-1365.09 1300.5,-1341.09 1374.5,-1341.09 1374.5,-1365.09"/>
+<text text-anchor="middle" x="1337.5" y="-1350.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">continuity_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~continuity_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge17" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~continuity_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1628.18,-885.26C1620.89,-950.32 1583.38,-1256.51 1517,-1319.09 1481.84,-1352.24 1424.86,-1357.89 1384.75,-1357.09"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1384.8,-1353.59 1374.68,-1356.74 1384.56,-1360.58 1384.8,-1353.59"/>
+<text text-anchor="middle" x="1481.5" y="-1354.49" font-family="Helvetica,sans-Serif" font-size="9.50">continuity</text>
+</g>
+<!-- type~coriolis_adv_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node8" class="node">
+<title>type~coriolis_adv_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node8"><a xlink:href="../type/coriolis_adv_t.html" xlink:title="coriolis_adv_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1380,-1197.09 1295,-1197.09 1295,-1173.09 1380,-1173.09 1380,-1197.09"/>
+<text text-anchor="middle" x="1337.5" y="-1182.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">coriolis_adv_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~coriolis_adv_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge18" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~coriolis_adv_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1628.4,-885.19C1623.81,-928.17 1602.26,-1074.64 1517,-1146.09 1481.74,-1175.64 1429.14,-1184.23 1390.16,-1186.12"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1389.93,-1182.62 1380.06,-1186.47 1390.18,-1189.62 1389.93,-1182.62"/>
+<text text-anchor="middle" x="1481.5" y="-1181.49" font-family="Helvetica,sans-Serif" font-size="9.50">coriolis_adv</text>
+</g>
+<!-- type~eos_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node10" class="node">
+<title>type~eos_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node10"><a xlink:href="../type/eos_t.html" xlink:title="eos_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="313,-1500.09 259,-1500.09 259,-1476.09 313,-1476.09 313,-1500.09"/>
+<text text-anchor="middle" x="286" y="-1485.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">eos_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~eos_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge41" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~eos_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1629.34,-885.11C1627.98,-964.87 1615.93,-1417.33 1517,-1500.09 1423.46,-1578.34 517.51,-1507.39 323.47,-1491.2"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="323.49,-1487.69 313.24,-1490.34 322.91,-1494.67 323.49,-1487.69"/>
+<text text-anchor="middle" x="1337.5" y="-1538.49" font-family="Helvetica,sans-Serif" font-size="9.50">eos</text>
+</g>
+<!-- type~multilayer_state_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node13" class="node">
+<title>type~multilayer_state_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node13"><a xlink:href="../type/multilayer_state_t.html" xlink:title="multilayer_state_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1391,-735.09 1284,-735.09 1284,-711.09 1391,-711.09 1391,-735.09"/>
+<text text-anchor="middle" x="1337.5" y="-720.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">multilayer_state_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~multilayer_state_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge14" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~multilayer_state_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1618.05,-861.09C1598.78,-841.46 1557.95,-802.26 1517,-778.09 1480.53,-756.57 1468.48,-756.51 1428,-744.09 1419.37,-741.44 1410.19,-738.94 1401.12,-736.65"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1401.89,-733.24 1391.35,-734.25 1400.22,-740.03 1401.89,-733.24"/>
+<text text-anchor="middle" x="1481.5" y="-780.49" font-family="Helvetica,sans-Serif" font-size="9.50">multilayer</text>
+</g>
+<!-- type~ocean_bc_state_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node14" class="node">
+<title>type~ocean_bc_state_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node14"><a xlink:href="../type/ocean_bc_state_t.html" xlink:title="ocean_bc_state_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1389.5,-651.09 1285.5,-651.09 1285.5,-627.09 1389.5,-627.09 1389.5,-651.09"/>
+<text text-anchor="middle" x="1337.5" y="-636.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_bc_state_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_bc_state_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge46" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_bc_state_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1625.4,-860.73C1613.84,-827.79 1577.82,-737.13 1517,-689.09 1483.64,-662.75 1437.19,-650.28 1400.03,-644.38"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1400.22,-640.87 1389.82,-642.88 1399.21,-647.79 1400.22,-640.87"/>
+<text text-anchor="middle" x="1481.5" y="-691.49" font-family="Helvetica,sans-Serif" font-size="9.50">bc</text>
+</g>
+<!-- type~ocean_bottom_drag_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node15" class="node">
+<title>type~ocean_bottom_drag_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node15"><a xlink:href="../type/ocean_bottom_drag_t.html" xlink:title="ocean_bottom_drag_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1401.5,-1113.09 1273.5,-1113.09 1273.5,-1089.09 1401.5,-1089.09 1401.5,-1113.09"/>
+<text text-anchor="middle" x="1337.5" y="-1098.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_bottom_drag_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_bottom_drag_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge33" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_bottom_drag_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1625.32,-885.15C1613.58,-917.29 1577.15,-1005.67 1517,-1052.09 1486.9,-1075.32 1446.49,-1087.55 1411.73,-1093.98"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1410.88,-1090.57 1401.62,-1095.71 1412.07,-1097.47 1410.88,-1090.57"/>
+<text text-anchor="middle" x="1481.5" y="-1087.49" font-family="Helvetica,sans-Serif" font-size="9.50">bdrag</text>
+</g>
+<!-- type~ocean_cavity_flux_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node17" class="node">
+<title>type~ocean_cavity_flux_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node17"><a xlink:href="../type/ocean_cavity_flux_t.html" xlink:title="ocean_cavity_flux_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1395.5,-609.09 1279.5,-609.09 1279.5,-585.09 1395.5,-585.09 1395.5,-609.09"/>
+<text text-anchor="middle" x="1337.5" y="-594.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_cavity_flux_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_cavity_flux_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge36" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_cavity_flux_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1627.24,-860.85C1619.49,-822.34 1590.25,-702.61 1517,-642.09 1485.92,-616.42 1442.13,-605.12 1405.7,-600.26"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1405.99,-596.77 1395.64,-599.06 1405.15,-603.72 1405.99,-596.77"/>
+<text text-anchor="middle" x="1481.5" y="-644.49" font-family="Helvetica,sans-Serif" font-size="9.50">cavity_flux</text>
+</g>
+<!-- type~ocean_data_forcing_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node19" class="node">
+<title>type~ocean_data_forcing_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node19"><a xlink:href="../type/ocean_data_forcing_t.html" xlink:title="ocean_data_forcing_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1400.5,-903.09 1274.5,-903.09 1274.5,-879.09 1400.5,-879.09 1400.5,-903.09"/>
+<text text-anchor="middle" x="1337.5" y="-888.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_data_forcing_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_data_forcing_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge51" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_data_forcing_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1587.5,-875.69C1541.34,-878.55 1466.37,-883.18 1410.74,-886.62"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1410.36,-883.14 1400.59,-887.25 1410.79,-890.13 1410.36,-883.14"/>
+<text text-anchor="middle" x="1481.5" y="-887.49" font-family="Helvetica,sans-Serif" font-size="9.50">data_forcing</text>
+</g>
+<!-- type~ocean_data_input_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node20" class="node">
+<title>type~ocean_data_input_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node20"><a xlink:href="../type/ocean_data_input_t.html" xlink:title="ocean_data_input_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1395.5,-567.09 1279.5,-567.09 1279.5,-543.09 1395.5,-543.09 1395.5,-567.09"/>
+<text text-anchor="middle" x="1337.5" y="-552.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_data_input_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_data_input_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge50" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_data_input_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1628.43,-860.85C1623.96,-817.37 1602.75,-669.12 1517,-596.09 1486.35,-569.99 1442.36,-559.68 1405.72,-555.92"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1405.87,-552.42 1395.6,-555.03 1405.26,-559.4 1405.87,-552.42"/>
+<text text-anchor="middle" x="1481.5" y="-598.49" font-family="Helvetica,sans-Serif" font-size="9.50">data_input</text>
+</g>
+<!-- type~ocean_diag_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node21" class="node">
+<title>type~ocean_diag_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node21"><a xlink:href="../type/ocean_diag_t.html" xlink:title="ocean_diag_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1379,-525.09 1296,-525.09 1296,-501.09 1379,-501.09 1379,-525.09"/>
+<text text-anchor="middle" x="1337.5" y="-510.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_diag_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_diag_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge49" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_diag_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1629.31,-860.78C1627.84,-812.61 1615.67,-635.25 1517,-549.09 1482.13,-518.65 1428.76,-511.25 1389.46,-510.5"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1389.3,-507 1379.28,-510.44 1389.26,-514 1389.3,-507"/>
+<text text-anchor="middle" x="1481.5" y="-551.49" font-family="Helvetica,sans-Serif" font-size="9.50">diag</text>
+</g>
+<!-- type~ocean_dyn_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node22" class="node">
+<title>type~ocean_dyn_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node22"><a xlink:href="../type/ocean_dyn_t.html" xlink:title="ocean_dyn_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1377,-441.09 1298,-441.09 1298,-417.09 1377,-417.09 1377,-441.09"/>
+<text text-anchor="middle" x="1337.5" y="-426.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_dyn_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge16" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_dyn_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1627.97,-860.92C1619.89,-798.49 1580.07,-514.94 1517,-458.09 1482.03,-426.57 1426.79,-422.03 1387.02,-423.67"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1386.8,-420.18 1377.01,-424.23 1387.18,-427.17 1386.8,-420.18"/>
+<text text-anchor="middle" x="1481.5" y="-460.49" font-family="Helvetica,sans-Serif" font-size="9.50">dyn</text>
+</g>
+<!-- type~ocean_epbl_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node23" class="node">
+<title>type~ocean_epbl_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node23"><a xlink:href="../type/ocean_epbl_t.html" xlink:title="ocean_epbl_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1379,-1323.09 1296,-1323.09 1296,-1299.09 1379,-1299.09 1379,-1323.09"/>
+<text text-anchor="middle" x="1337.5" y="-1308.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_epbl_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_epbl_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge21" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_epbl_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1627.97,-885.16C1619.85,-947.06 1579.88,-1228.17 1517,-1284.09 1498.55,-1300.5 1435.18,-1306.94 1389.18,-1309.46"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1388.88,-1305.98 1379.07,-1309.97 1389.23,-1312.97 1388.88,-1305.98"/>
+<text text-anchor="middle" x="1481.5" y="-1307.49" font-family="Helvetica,sans-Serif" font-size="9.50">epbl</text>
+</g>
+<!-- type~ocean_gm_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node25" class="node">
+<title>type~ocean_gm_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node25"><a xlink:href="../type/ocean_gm_t.html" xlink:title="ocean_gm_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1376,-693.09 1299,-693.09 1299,-669.09 1376,-669.09 1376,-693.09"/>
+<text text-anchor="middle" x="1337.5" y="-678.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_gm_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_gm_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge28" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_gm_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1622.64,-861.06C1607.11,-834.81 1566.7,-771.88 1517,-736.09 1477.99,-708 1424.3,-694 1386.01,-687.19"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1386.58,-683.74 1376.14,-685.53 1385.42,-690.64 1386.58,-683.74"/>
+<text text-anchor="middle" x="1481.5" y="-738.49" font-family="Helvetica,sans-Serif" font-size="9.50">gm</text>
+</g>
+<!-- type~ocean_hdiff_tracer_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node26" class="node">
+<title>type~ocean_hdiff_tracer_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node26"><a xlink:href="../type/ocean_hdiff_tracer_t.html" xlink:title="ocean_hdiff_tracer_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1398,-987.09 1277,-987.09 1277,-963.09 1398,-963.09 1398,-987.09"/>
+<text text-anchor="middle" x="1337.5" y="-972.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_hdiff_tracer_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_hdiff_tracer_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge39" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_hdiff_tracer_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1607.11,-885.1C1584.73,-896.8 1549.1,-914.6 1517,-927.09 1478.48,-942.08 1467.92,-943.37 1428,-954.09 1419.8,-956.29 1411.15,-958.49 1402.58,-960.58"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1401.5,-957.24 1392.59,-962.99 1403.14,-964.05 1401.5,-957.24"/>
+<text text-anchor="middle" x="1481.5" y="-951.49" font-family="Helvetica,sans-Serif" font-size="9.50">hdiff_tracer</text>
+</g>
+<!-- type~ocean_horizontal_viscosity_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node27" class="node">
+<title>type~ocean_horizontal_viscosity_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node27"><a xlink:href="../type/ocean_horizontal_viscosity_t.html" xlink:title="ocean_horizontal_viscosity_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1419,-777.09 1256,-777.09 1256,-753.09 1419,-753.09 1419,-777.09"/>
+<text text-anchor="middle" x="1337.5" y="-762.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_horizontal_viscosity_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_horizontal_viscosity_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge32" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_horizontal_viscosity_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1607.95,-861C1585.62,-848.75 1549.51,-829.72 1517,-816.09 1478.5,-799.95 1468.14,-797.54 1428,-786.09 1420.06,-783.83 1411.67,-781.62 1403.34,-779.54"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1404.16,-776.14 1393.62,-777.16 1402.5,-782.94 1404.16,-776.14"/>
+<text text-anchor="middle" x="1481.5" y="-818.49" font-family="Helvetica,sans-Serif" font-size="9.50">hvisc</text>
+</g>
+<!-- type~ocean_kappa_shear_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node28" class="node">
+<title>type~ocean_kappa_shear_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node28"><a xlink:href="../type/ocean_kappa_shear_t.html" xlink:title="ocean_kappa_shear_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1401.5,-1407.09 1273.5,-1407.09 1273.5,-1383.09 1401.5,-1383.09 1401.5,-1407.09"/>
+<text text-anchor="middle" x="1337.5" y="-1392.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_kappa_shear_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_kappa_shear_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge24" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_kappa_shear_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1628.52,-885.15C1622.7,-953.91 1590.3,-1295.95 1517,-1365.09 1489.43,-1391.1 1448.23,-1399.26 1412.35,-1400.62"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1411.83,-1397.13 1401.9,-1400.83 1411.97,-1404.13 1411.83,-1397.13"/>
+<text text-anchor="middle" x="1481.5" y="-1399.49" font-family="Helvetica,sans-Serif" font-size="9.50">kshear</text>
+</g>
+<!-- type~ocean_lateral_mix_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node29" class="node">
+<title>type~ocean_lateral_mix_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node29"><a xlink:href="../type/ocean_lateral_mix_t.html" xlink:title="ocean_lateral_mix_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1397,-1071.09 1278,-1071.09 1278,-1047.09 1397,-1047.09 1397,-1071.09"/>
+<text text-anchor="middle" x="1337.5" y="-1056.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_lateral_mix_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_lateral_mix_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge25" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_lateral_mix_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1622.08,-885.48C1606.03,-911.26 1565.62,-971.11 1517,-1005.09 1484.64,-1027.71 1442.59,-1041.04 1407.44,-1048.79"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1406.32,-1045.45 1397.25,-1050.92 1407.76,-1052.3 1406.32,-1045.45"/>
+<text text-anchor="middle" x="1481.5" y="-1040.49" font-family="Helvetica,sans-Serif" font-size="9.50">lateral_mix</text>
+</g>
+<!-- type~ocean_meke_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node30" class="node">
+<title>type~ocean_meke_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node30"><a xlink:href="../type/ocean_meke_t.html" xlink:title="ocean_meke_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1382.5,-483.09 1292.5,-483.09 1292.5,-459.09 1382.5,-459.09 1382.5,-483.09"/>
+<text text-anchor="middle" x="1337.5" y="-468.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_meke_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_meke_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge31" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_meke_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1629.96,-860.84C1631.21,-808.56 1628.67,-602.32 1517,-503.09 1483.41,-473.24 1431.78,-466.73 1392.67,-466.81"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1392.45,-463.31 1382.51,-466.98 1392.57,-470.31 1392.45,-463.31"/>
+<text text-anchor="middle" x="1481.5" y="-505.49" font-family="Helvetica,sans-Serif" font-size="9.50">meke</text>
+</g>
+<!-- type~ocean_metrics_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node31" class="node">
+<title>type~ocean_metrics_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node31"><a xlink:href="../type/ocean_metrics_t.html" xlink:title="ocean_metrics_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="113.5,-402.09 13.5,-402.09 13.5,-378.09 113.5,-378.09 113.5,-402.09"/>
+<text text-anchor="middle" x="63.5" y="-387.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_metrics_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_metrics_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge15" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_metrics_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1629.01,-860.9C1625.7,-784.66 1603.97,-374.29 1517,-293.09 1464.39,-243.97 738.6,-267.49 378,-275.09 304.17,-276.65 280.52,-254.56 212,-282.09 175.18,-296.89 171.65,-311.7 145,-341.09 135.8,-351.24 137.84,-357.73 127,-366.09 123.38,-368.88 119.4,-371.38 115.25,-373.61"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="113.47,-370.58 105.99,-378.08 116.51,-376.89 113.47,-370.58"/>
+<text text-anchor="middle" x="803.5" y="-277.49" font-family="Helvetica,sans-Serif" font-size="9.50">metrics</text>
+</g>
+<!-- type~ocean_mle_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node32" class="node">
+<title>type~ocean_mle_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node32"><a xlink:href="../type/ocean_mle_t.html" xlink:title="ocean_mle_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1377.5,-399.09 1297.5,-399.09 1297.5,-375.09 1377.5,-375.09 1377.5,-399.09"/>
+<text text-anchor="middle" x="1337.5" y="-384.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_mle_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_mle_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge27" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_mle_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1628.32,-860.97C1621.65,-794.74 1586.36,-477.46 1517,-414.09 1482.52,-382.59 1427.69,-378.61 1387.89,-380.79"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1387.6,-377.3 1377.86,-381.49 1388.08,-384.29 1387.6,-377.3"/>
+<text text-anchor="middle" x="1481.5" y="-416.49" font-family="Helvetica,sans-Serif" font-size="9.50">mle</text>
+</g>
+<!-- type~ocean_obc_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node33" class="node">
+<title>type~ocean_obc_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node33"><a xlink:href="../type/ocean_obc_t.html" xlink:title="ocean_obc_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1377,-357.09 1298,-357.09 1298,-333.09 1377,-333.09 1377,-357.09"/>
+<text text-anchor="middle" x="1337.5" y="-342.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_obc_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_obc_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge45" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_obc_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1628.6,-860.74C1623.17,-790.28 1592.65,-439.86 1517,-370.09 1482.51,-338.28 1427.18,-335.16 1387.26,-338.03"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1386.87,-334.55 1377.21,-338.9 1387.48,-341.53 1386.87,-334.55"/>
+<text text-anchor="middle" x="1481.5" y="-372.49" font-family="Helvetica,sans-Serif" font-size="9.50">obc</text>
+</g>
+<!-- type~ocean_p_surf_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node34" class="node">
+<title>type~ocean_p_surf_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node34"><a xlink:href="../type/ocean_p_surf_t.html" xlink:title="ocean_p_surf_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1383.5,-315.09 1291.5,-315.09 1291.5,-291.09 1383.5,-291.09 1383.5,-315.09"/>
+<text text-anchor="middle" x="1337.5" y="-300.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_p_surf_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_p_surf_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge43" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_p_surf_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1628.84,-860.64C1624.63,-786.35 1599.08,-402.26 1517,-326.09 1484.45,-295.88 1433.02,-292.13 1393.71,-294.77"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1393.42,-291.28 1383.74,-295.59 1394,-298.25 1393.42,-291.28"/>
+<text text-anchor="middle" x="1481.5" y="-328.49" font-family="Helvetica,sans-Serif" font-size="9.50">p_surf</text>
+</g>
+<!-- type~ocean_pressure_force_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node35" class="node">
+<title>type~ocean_pressure_force_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node35"><a xlink:href="../type/ocean_pressure_force_t.html" xlink:title="ocean_pressure_force_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1406,-1155.09 1269,-1155.09 1269,-1131.09 1406,-1131.09 1406,-1155.09"/>
+<text text-anchor="middle" x="1337.5" y="-1140.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_pressure_force_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_pressure_force_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge19" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_pressure_force_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1627.18,-885.1C1619.25,-922.9 1589.54,-1040.33 1517,-1099.09 1488.67,-1122.04 1450.09,-1133.27 1416.04,-1138.67"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1415.5,-1135.21 1406.1,-1140.1 1416.5,-1142.14 1415.5,-1135.21"/>
+<text text-anchor="middle" x="1481.5" y="-1134.49" font-family="Helvetica,sans-Serif" font-size="9.50">pressure_force</text>
+</g>
+<!-- type~ocean_redi_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node36" class="node">
+<title>type~ocean_redi_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node36"><a xlink:href="../type/ocean_redi_t.html" xlink:title="ocean_redi_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1377.5,-235.09 1297.5,-235.09 1297.5,-211.09 1377.5,-211.09 1377.5,-235.09"/>
+<text text-anchor="middle" x="1337.5" y="-220.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_redi_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_redi_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge29" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_redi_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1629.27,-861.05C1627.47,-781.08 1613.08,-327.22 1517,-239.09 1482.72,-207.65 1427.61,-207.47 1387.69,-212.77"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1387.01,-209.33 1377.63,-214.26 1388.03,-216.26 1387.01,-209.33"/>
+<text text-anchor="middle" x="1481.5" y="-241.49" font-family="Helvetica,sans-Serif" font-size="9.50">redi</text>
+</g>
+<!-- type~ocean_restart_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node37" class="node">
+<title>type~ocean_restart_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node37"><a xlink:href="../type/ocean_restart_t.html" xlink:title="ocean_restart_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1384.5,-193.09 1290.5,-193.09 1290.5,-169.09 1384.5,-169.09 1384.5,-193.09"/>
+<text text-anchor="middle" x="1337.5" y="-178.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_restart_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_restart_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge52" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_restart_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1629.4,-860.83C1628.45,-777.31 1618.57,-292.77 1517,-198.09 1484.85,-168.12 1433.85,-166.04 1394.59,-170.2"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1394.13,-166.73 1384.62,-171.42 1394.97,-173.68 1394.13,-166.73"/>
+<text text-anchor="middle" x="1481.5" y="-200.49" font-family="Helvetica,sans-Serif" font-size="9.50">restart</text>
+</g>
+<!-- type~ocean_sea_ice_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node38" class="node">
+<title>type~ocean_sea_ice_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node38"><a xlink:href="../type/ocean_sea_ice_t.html" xlink:title="ocean_sea_ice_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1387.5,-151.09 1287.5,-151.09 1287.5,-127.09 1387.5,-127.09 1387.5,-151.09"/>
+<text text-anchor="middle" x="1337.5" y="-136.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_sea_ice_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_sea_ice_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge44" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_sea_ice_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1629.53,-860.91C1629.47,-774.72 1624.59,-257.34 1517,-156.09 1485.89,-126.81 1436.84,-124.04 1398.02,-127.77"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1397.42,-124.31 1387.88,-128.91 1398.21,-131.27 1397.42,-124.31"/>
+<text text-anchor="middle" x="1481.5" y="-158.49" font-family="Helvetica,sans-Serif" font-size="9.50">ice</text>
+</g>
+<!-- type~ocean_slopes_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node39" class="node">
+<title>type~ocean_slopes_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node39"><a xlink:href="../type/ocean_slopes_t.html" xlink:title="ocean_slopes_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1384.5,-109.09 1290.5,-109.09 1290.5,-85.09 1384.5,-85.09 1384.5,-109.09"/>
+<text text-anchor="middle" x="1337.5" y="-94.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_slopes_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_slopes_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge26" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_slopes_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1629.64,-861.07C1630.43,-772.52 1630.65,-221.96 1517,-114.09 1485.12,-83.83 1434.1,-81.78 1394.75,-86.03"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1394.26,-82.56 1384.76,-87.26 1395.12,-89.51 1394.26,-82.56"/>
+<text text-anchor="middle" x="1481.5" y="-116.49" font-family="Helvetica,sans-Serif" font-size="9.50">slopes</text>
+</g>
+<!-- type~ocean_sponge_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node40" class="node">
+<title>type~ocean_sponge_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node40"><a xlink:href="../type/ocean_sponge_t.html" xlink:title="ocean_sponge_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1387,-67.09 1288,-67.09 1288,-43.09 1387,-43.09 1387,-67.09"/>
+<text text-anchor="middle" x="1337.5" y="-52.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_sponge_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_sponge_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge47" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_sponge_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1629.75,-861C1631.33,-769.48 1636.63,-186.5 1517,-72.09 1485.92,-42.37 1436.4,-39.77 1397.39,-43.69"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1396.73,-40.24 1387.21,-44.88 1397.55,-47.19 1396.73,-40.24"/>
+<text text-anchor="middle" x="1481.5" y="-74.49" font-family="Helvetica,sans-Serif" font-size="9.50">sponge</text>
+</g>
+<!-- type~ocean_surface_flux_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node41" class="node">
+<title>type~ocean_surface_flux_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node41"><a xlink:href="../type/ocean_surface_flux_t.html" xlink:title="ocean_surface_flux_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1399.5,-25.09 1275.5,-25.09 1275.5,-1.09 1399.5,-1.09 1399.5,-25.09"/>
+<text text-anchor="middle" x="1337.5" y="-10.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_surface_flux_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_surface_flux_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge37" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_surface_flux_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1628.77,-860.85C1622.77,-761.61 1580.02,-90.77 1517,-30.09 1489.23,-3.35 1446.55,1.5 1409.88,-0.63"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1409.43,2.85 1399.72,-1.4 1409.96,-4.13 1409.43,2.85"/>
+<text text-anchor="middle" x="1481.5" y="-32.49" font-family="Helvetica,sans-Serif" font-size="9.50">surface_flux</text>
+</g>
+<!-- type~ocean_surface_stress_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node42" class="node">
+<title>type~ocean_surface_stress_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node42"><a xlink:href="../type/ocean_surface_stress_t.html" xlink:title="ocean_surface_stress_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1405,-1029.09 1270,-1029.09 1270,-1005.09 1405,-1005.09 1405,-1029.09"/>
+<text text-anchor="middle" x="1337.5" y="-1014.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_surface_stress_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_surface_stress_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge35" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_surface_stress_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1616.99,-885.37C1597.21,-904.25 1556.84,-940.55 1517,-963.09 1480.28,-983.87 1468.39,-983.92 1428,-996.09 1420.4,-998.38 1412.37,-1000.58 1404.36,-1002.63"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1403.5,-999.23 1394.64,-1005.05 1405.19,-1006.03 1403.5,-999.23"/>
+<text text-anchor="middle" x="1481.5" y="-993.49" font-family="Helvetica,sans-Serif" font-size="9.50">surface_stress</text>
+</g>
+<!-- type~ocean_tidal_mixing_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node43" class="node">
+<title>type~ocean_tidal_mixing_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node43"><a xlink:href="../type/ocean_tidal_mixing_t.html" xlink:title="ocean_tidal_mixing_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1399.5,-1663.09 1275.5,-1663.09 1275.5,-1639.09 1399.5,-1639.09 1399.5,-1663.09"/>
+<text text-anchor="middle" x="1337.5" y="-1648.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_tidal_mixing_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_tidal_mixing_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge23" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_tidal_mixing_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1627.88,-885.16C1615.06,-980.15 1530.44,-1604.2 1517,-1618.09 1489.76,-1646.25 1446.88,-1654.84 1409.98,-1656.23"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1409.67,-1652.73 1399.75,-1656.44 1409.82,-1659.73 1409.67,-1652.73"/>
+<text text-anchor="middle" x="1481.5" y="-1654.49" font-family="Helvetica,sans-Serif" font-size="9.50">vmix_tidal</text>
+</g>
+<!-- type~ocean_tides_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node44" class="node">
+<title>type~ocean_tides_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node44"><a xlink:href="../type/ocean_tides_t.html" xlink:title="ocean_tides_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1380,-1579.09 1295,-1579.09 1295,-1555.09 1380,-1555.09 1380,-1579.09"/>
+<text text-anchor="middle" x="1337.5" y="-1564.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_tides_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_tides_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge42" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_tides_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1629.33,-885.18C1627.88,-967.46 1615.27,-1444.98 1517,-1541.09 1484.15,-1573.22 1430.32,-1577.06 1390.35,-1574.49"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1390.49,-1570.99 1380.25,-1573.68 1389.94,-1577.96 1390.49,-1570.99"/>
+<text text-anchor="middle" x="1481.5" y="-1575.49" font-family="Helvetica,sans-Serif" font-size="9.50">tides</text>
+</g>
+<!-- type~ocean_top_drag_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node45" class="node">
+<title>type~ocean_top_drag_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node45"><a xlink:href="../type/ocean_top_drag_t.html" xlink:title="ocean_top_drag_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1391,-945.09 1284,-945.09 1284,-921.09 1391,-921.09 1391,-945.09"/>
+<text text-anchor="middle" x="1337.5" y="-930.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_top_drag_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_top_drag_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge34" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_top_drag_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1587.38,-883.23C1566.29,-888.21 1540.34,-894.17 1517,-899.09 1478.65,-907.17 1435.48,-915.42 1401.21,-921.76"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1400.53,-918.33 1391.33,-923.59 1401.8,-925.21 1400.53,-918.33"/>
+<text text-anchor="middle" x="1481.5" y="-915.49" font-family="Helvetica,sans-Serif" font-size="9.50">tdrag</text>
+</g>
+<!-- type~ocean_varmix_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node46" class="node">
+<title>type~ocean_varmix_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node46"><a xlink:href="../type/ocean_varmix_t.html" xlink:title="ocean_varmix_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1386,-1491.09 1289,-1491.09 1289,-1467.09 1386,-1467.09 1386,-1491.09"/>
+<text text-anchor="middle" x="1337.5" y="-1476.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_varmix_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_varmix_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge30" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_varmix_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1629.02,-885.34C1625.74,-961.93 1604.15,-1374.22 1517,-1456.09 1485.33,-1485.84 1435.39,-1490.06 1396.38,-1487.7"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1396.44,-1484.2 1386.2,-1486.93 1395.91,-1491.18 1396.44,-1484.2"/>
+<text text-anchor="middle" x="1481.5" y="-1488.49" font-family="Helvetica,sans-Serif" font-size="9.50">varmix</text>
+</g>
+<!-- type~ocean_vcoord_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node47" class="node">
+<title>type~ocean_vcoord_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node47"><a xlink:href="../type/ocean_vcoord_t.html" xlink:title="ocean_vcoord_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1386,-1449.09 1289,-1449.09 1289,-1425.09 1386,-1425.09 1386,-1449.09"/>
+<text text-anchor="middle" x="1337.5" y="-1434.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_vcoord_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_vcoord_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge48" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_vcoord_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1628.79,-885.32C1624.28,-958.29 1597.29,-1335.59 1517,-1411.09 1485.27,-1440.93 1435.34,-1446.02 1396.34,-1444.45"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1396.35,-1440.94 1386.17,-1443.88 1395.96,-1447.93 1396.35,-1440.94"/>
+<text text-anchor="middle" x="1481.5" y="-1444.49" font-family="Helvetica,sans-Serif" font-size="9.50">vcoord</text>
+</g>
+<!-- type~ocean_vdiff_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node48" class="node">
+<title>type~ocean_vdiff_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node48"><a xlink:href="../type/ocean_vdiff_t.html" xlink:title="ocean_vdiff_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1379,-861.09 1296,-861.09 1296,-837.09 1379,-837.09 1379,-861.09"/>
+<text text-anchor="middle" x="1337.5" y="-846.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_vdiff_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_vdiff_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge40" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_vdiff_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1587.5,-869.63C1535.04,-865.3 1445.38,-857.91 1389.17,-853.27"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1389.34,-849.77 1379.08,-852.44 1388.76,-856.75 1389.34,-849.77"/>
+<text text-anchor="middle" x="1481.5" y="-866.49" font-family="Helvetica,sans-Serif" font-size="9.50">vdiff</text>
+</g>
+<!-- type~ocean_vertical_advection_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node49" class="node">
+<title>type~ocean_vertical_advection_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node49"><a xlink:href="../type/ocean_vertical_advection_t.html" xlink:title="ocean_vertical_advection_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1416,-819.09 1259,-819.09 1259,-795.09 1416,-795.09 1416,-819.09"/>
+<text text-anchor="middle" x="1337.5" y="-804.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_vertical_advection_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_vertical_advection_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge38" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_vertical_advection_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1587.38,-862.25C1566.29,-856.91 1540.34,-850.48 1517,-845.09 1481.05,-836.79 1440.87,-828.18 1407.75,-821.26"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1408.21,-817.78 1397.71,-819.17 1406.78,-824.63 1408.21,-817.78"/>
+<text text-anchor="middle" x="1481.5" y="-847.49" font-family="Helvetica,sans-Serif" font-size="9.50">vert_advect</text>
+</g>
+<!-- type~ocean_vmix_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node50" class="node">
+<title>type~ocean_vmix_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node50"><a xlink:href="../type/ocean_vmix_t.html" xlink:title="ocean_vmix_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1380,-1621.09 1295,-1621.09 1295,-1597.09 1380,-1597.09 1380,-1621.09"/>
+<text text-anchor="middle" x="1337.5" y="-1606.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_vmix_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_vmix_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge20" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_vmix_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1627.99,-885.23C1616.55,-976.89 1543.17,-1557.25 1517,-1583.09 1499.55,-1600.33 1436.61,-1606.21 1390.4,-1608.17"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1390.09,-1604.68 1380.23,-1608.55 1390.35,-1611.68 1390.09,-1604.68"/>
+<text text-anchor="middle" x="1481.5" y="-1606.49" font-family="Helvetica,sans-Serif" font-size="9.50">vmix</text>
+</g>
+<!-- type~ocean_wave_speed_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node51" class="node">
+<title>type~ocean_wave_speed_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node51"><a xlink:href="../type/ocean_wave_speed_t.html" xlink:title="ocean_wave_speed_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1400,-1281.09 1275,-1281.09 1275,-1257.09 1400,-1257.09 1400,-1281.09"/>
+<text text-anchor="middle" x="1337.5" y="-1266.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_wave_speed_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_state_t&#45;&gt;type~ocean_wave_speed_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge22" class="edge">
+<title>type~ocean_state_t&#45;&gt;type~ocean_wave_speed_t</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1629.94,-885.25C1631.1,-937.1 1628.24,-1141.61 1517,-1239.09 1488.28,-1264.26 1446.61,-1272.29 1410.76,-1273.79"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1410.24,-1270.3 1400.33,-1274.05 1410.41,-1277.3 1410.24,-1270.3"/>
+<text text-anchor="middle" x="1481.5" y="-1272.49" font-family="Helvetica,sans-Serif" font-size="9.50">wavespeed</text>
+</g>
+<!-- type~scratch_3d_buffer_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node113" class="node">
+<title>type~scratch_3d_buffer_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node113"><a xlink:href="../type/scratch_3d_buffer_t.html" xlink:title="scratch_3d_buffer_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="344.5,-1055.09 227.5,-1055.09 227.5,-1031.09 344.5,-1031.09 344.5,-1055.09"/>
+<text text-anchor="middle" x="286" y="-1040.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">scratch_3d_buffer_t</text>
+</a>
+</g>
+</g>
+<!-- type~continuity_t&#45;&gt;type~scratch_3d_buffer_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge53" class="edge">
+<title>type~continuity_t&#45;&gt;type~scratch_3d_buffer_t</title>
+<path fill="none" stroke="#ff2100" stroke-dasharray="5,2" d="M1300.48,-1354.62C1135.04,-1361.3 452.8,-1385.24 378,-1329.09 292.81,-1265.15 285.65,-1120.97 286.22,-1065.46"/>
+<polygon fill="#ff2100" stroke="#ff2100" points="289.72,-1065.37 286.42,-1055.31 282.72,-1065.23 289.72,-1065.37"/>
+<text text-anchor="middle" x="803.5" y="-1368.49" font-family="Helvetica,sans-Serif" font-size="9.50">h_face_left_x, h_face_right_x, h_face_left_y, h_face_right_y, mt_h_new, mt_grounded, pd_theta</text>
+</g>
+<!-- type~coriolis_adv_t&#45;&gt;type~scratch_3d_buffer_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge54" class="edge">
+<title>type~coriolis_adv_t&#45;&gt;type~scratch_3d_buffer_t</title>
+<path fill="none" stroke="#ff4200" stroke-dasharray="5,2" d="M1294.98,-1188.28C1132.7,-1200.07 542.2,-1236.42 378,-1155.09 339.01,-1135.78 311.04,-1091.12 297.08,-1064.4"/>
+<polygon fill="#ff4200" stroke="#ff4200" points="300.2,-1062.81 292.58,-1055.45 293.95,-1065.95 300.2,-1062.81"/>
+<text text-anchor="middle" x="803.5" y="-1209.49" font-family="Helvetica,sans-Serif" font-size="9.50">q_corner, ke_centre, pv_flux_x, pv_flux_y, mass_flux_u, mass_flux_v</text>
+</g>
+<!-- type~tracer_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node114" class="node">
+<title>type~tracer_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node114"><a xlink:href="../type/tracer_t.html" xlink:title="tracer_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="313,-823.09 259,-823.09 259,-799.09 313,-799.09 313,-823.09"/>
+<text text-anchor="middle" x="286" y="-808.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">tracer_t</text>
+</a>
+</g>
+</g>
+<!-- type~multilayer_state_t&#45;&gt;type~tracer_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge55" class="edge">
+<title>type~multilayer_state_t&#45;&gt;type~tracer_t</title>
+<path fill="none" stroke="#ffe800" stroke-dasharray="5,2" d="M1283.65,-727.31C1270.59,-730.44 1257.39,-735.62 1247,-744.09 1232.21,-756.16 1244.93,-772.57 1229,-783.09 1152.45,-833.69 486.75,-817.11 323.18,-812.24"/>
+<polygon fill="#ffe800" stroke="#ffe800" points="323.25,-808.74 313.14,-811.93 323.03,-815.73 323.25,-808.74"/>
+<text text-anchor="middle" x="803.5" y="-821.49" font-family="Helvetica,sans-Serif" font-size="9.50">tracers</text>
+</g>
+<!-- type~ocean_bc_face_tag_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node60" class="node">
+<title>type~ocean_bc_face_tag_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node60"><a xlink:href="../type/ocean_bc_face_tag_t.html" xlink:title="ocean_bc_face_tag_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="348,-781.09 224,-781.09 224,-757.09 348,-757.09 348,-781.09"/>
+<text text-anchor="middle" x="286" y="-766.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_bc_face_tag_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_bc_state_t&#45;&gt;type~ocean_bc_face_tag_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge56" class="edge">
+<title>type~ocean_bc_state_t&#45;&gt;type~ocean_bc_face_tag_t</title>
+<path fill="none" stroke="#f3ff00" stroke-dasharray="5,2" d="M1285.14,-641.24C1271.16,-644.25 1257.1,-649.88 1247,-660.09 1221.08,-686.32 1257.42,-717.59 1229,-741.09 1212.27,-754.92 575.6,-765.07 358.6,-768.13"/>
+<polygon fill="#f3ff00" stroke="#f3ff00" points="358.23,-764.64 348.28,-768.28 358.32,-771.63 358.23,-764.64"/>
+<text text-anchor="middle" x="803.5" y="-770.49" font-family="Helvetica,sans-Serif" font-size="9.50">west, east, south, north</text>
+</g>
+<!-- type~ocean_bottom_drag_t&#45;&gt;type~scratch_3d_buffer_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge57" class="edge">
+<title>type~ocean_bottom_drag_t&#45;&gt;type~scratch_3d_buffer_t</title>
+<path fill="none" stroke="#d2ff00" stroke-dasharray="5,2" d="M1273.45,-1101.47C1088.73,-1102.2 550.92,-1101.66 378,-1072.09 361.11,-1069.2 343.02,-1063.92 327.46,-1058.65"/>
+<polygon fill="#d2ff00" stroke="#d2ff00" points="328.23,-1055.21 317.63,-1055.21 325.92,-1061.81 328.23,-1055.21"/>
+<text text-anchor="middle" x="803.5" y="-1104.49" font-family="Helvetica,sans-Serif" font-size="9.50">du_drag, dv_drag, lambda_side_u, lambda_side_v</text>
+</g>
+<!-- type~ocean_boundary_data_source_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node62" class="node">
+<title>type~ocean_boundary_data_source_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node62"><a xlink:href="../type/ocean_boundary_data_source_t.html" xlink:title="ocean_boundary_data_source_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1428,-1751.09 1247,-1751.09 1247,-1727.09 1428,-1727.09 1428,-1751.09"/>
+<text text-anchor="middle" x="1337.5" y="-1736.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_boundary_data_source_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_boundary_data_constant_t&#45;&gt;type~ocean_boundary_data_source_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge58" class="edge">
+<title>type~ocean_boundary_data_constant_t&#45;&gt;type~ocean_boundary_data_source_t</title>
+<path fill="none" stroke="#b1ff00" d="M1534.62,-1725.61C1503.79,-1727.73 1469.49,-1730.09 1438.32,-1732.23"/>
+<polygon fill="#b1ff00" stroke="#b1ff00" points="1438.05,-1728.74 1428.31,-1732.92 1438.53,-1735.73 1438.05,-1728.74"/>
+</g>
+<!-- type~ocean_cavity_const_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node64" class="node">
+<title>type~ocean_cavity_const_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node64"><a xlink:href="../type/ocean_cavity_const_t.html" xlink:title="ocean_cavity_const_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="348.5,-655.09 223.5,-655.09 223.5,-631.09 348.5,-631.09 348.5,-655.09"/>
+<text text-anchor="middle" x="286" y="-640.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_cavity_const_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_cavity_flux_t&#45;&gt;type~ocean_cavity_const_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge61" class="edge">
+<title>type~ocean_cavity_flux_t&#45;&gt;type~ocean_cavity_const_t</title>
+<path fill="none" stroke="#90ff00" stroke-dasharray="5,2" d="M1279.23,-608.17C1263.05,-610.89 1245.38,-613.48 1229,-615.09 905.35,-646.85 516.42,-646.17 358.68,-644.28"/>
+<polygon fill="#90ff00" stroke="#90ff00" points="358.67,-640.78 348.63,-644.16 358.58,-647.78 358.67,-640.78"/>
+<text text-anchor="middle" x="803.5" y="-647.49" font-family="Helvetica,sans-Serif" font-size="9.50">const</text>
+</g>
+<!-- type~ocean_cavity_exchange_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node66" class="node">
+<title>type~ocean_cavity_exchange_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node66"><a xlink:href="../type/ocean_cavity_exchange_t.html" xlink:title="ocean_cavity_exchange_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="360,-739.09 212,-739.09 212,-715.09 360,-715.09 360,-739.09"/>
+<text text-anchor="middle" x="286" y="-724.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_cavity_exchange_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_cavity_flux_t&#45;&gt;type~ocean_cavity_exchange_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge59" class="edge">
+<title>type~ocean_cavity_flux_t&#45;&gt;type~ocean_cavity_exchange_t</title>
+<path fill="none" stroke="#90ff00" stroke-dasharray="5,2" d="M1279.46,-600.5C1267.39,-603.74 1255.69,-609.17 1247,-618.09 1219.45,-646.38 1259.33,-679.8 1229,-705.09 1212.62,-718.75 597.8,-724.75 370.42,-726.51"/>
+<polygon fill="#90ff00" stroke="#90ff00" points="370.19,-723.01 360.21,-726.59 370.24,-730.01 370.19,-723.01"/>
+<text text-anchor="middle" x="803.5" y="-729.49" font-family="Helvetica,sans-Serif" font-size="9.50">par</text>
+</g>
+<!-- type~ocean_cavity_ice_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node67" class="node">
+<title>type~ocean_cavity_ice_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node67"><a xlink:href="../type/ocean_cavity_ice_t.html" xlink:title="ocean_cavity_ice_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="342,-697.09 230,-697.09 230,-673.09 342,-673.09 342,-697.09"/>
+<text text-anchor="middle" x="286" y="-682.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_cavity_ice_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_cavity_flux_t&#45;&gt;type~ocean_cavity_ice_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge60" class="edge">
+<title>type~ocean_cavity_flux_t&#45;&gt;type~ocean_cavity_ice_t</title>
+<path fill="none" stroke="#90ff00" stroke-dasharray="5,2" d="M1279.35,-602.26C1267.7,-605.47 1256.2,-610.44 1247,-618.09 1231.7,-630.82 1245.51,-647.98 1229,-659.09 1156.79,-707.69 553.73,-693.46 352.25,-687.27"/>
+<polygon fill="#90ff00" stroke="#90ff00" points="352.22,-683.77 342.11,-686.96 352,-690.77 352.22,-683.77"/>
+<text text-anchor="middle" x="803.5" y="-696.49" font-family="Helvetica,sans-Serif" font-size="9.50">ice</text>
+</g>
+<!-- type~ocean_bc_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node59" class="node">
+<title>type~ocean_bc_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node59"><a xlink:href="../type/ocean_bc_config_t.html" xlink:title="ocean_bc_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1393,-1999.09 1282,-1999.09 1282,-1975.09 1393,-1975.09 1393,-1999.09"/>
+<text text-anchor="middle" x="1337.5" y="-1984.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_bc_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_bc_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge107" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_bc_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1629.71,-2772.97C1631.05,-2682.48 1634.66,-2113.02 1517,-2002.09 1487.3,-1974.09 1441.12,-1970.86 1403.18,-1974.36"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1402.78,-1970.88 1393.22,-1975.45 1403.54,-1977.84 1402.78,-1970.88"/>
+<text text-anchor="middle" x="1481.5" y="-2004.49" font-family="Helvetica,sans-Serif" font-size="9.50">bc</text>
+</g>
+<!-- type~ocean_bdrag_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node61" class="node">
+<title>type~ocean_bdrag_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node61"><a xlink:href="../type/ocean_bdrag_config_t.html" xlink:title="ocean_bdrag_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1402.5,-1957.09 1272.5,-1957.09 1272.5,-1933.09 1402.5,-1933.09 1402.5,-1957.09"/>
+<text text-anchor="middle" x="1337.5" y="-1942.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_bdrag_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_bdrag_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge76" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_bdrag_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1628.74,-2772.8C1622.55,-2674.54 1579.04,-2019.01 1517,-1960.09 1488.14,-1932.69 1443.53,-1928.93 1406.13,-1932.03"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1405.39,-1928.59 1395.79,-1933.07 1406.09,-1935.55 1405.39,-1928.59"/>
+<text text-anchor="middle" x="1481.5" y="-1962.49" font-family="Helvetica,sans-Serif" font-size="9.50">bdrag</text>
+</g>
+<!-- type~ocean_bt_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node63" class="node">
+<title>type~ocean_bt_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node63"><a xlink:href="../type/ocean_bt_config_t.html" xlink:title="ocean_bt_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1392,-1915.09 1283,-1915.09 1283,-1891.09 1392,-1891.09 1392,-1915.09"/>
+<text text-anchor="middle" x="1337.5" y="-1900.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_bt_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_bt_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge72" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_bt_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1628.83,-2772.82C1623.16,-2671.85 1582.08,-1980.3 1517,-1918.09 1487.18,-1889.59 1440.34,-1886.6 1402.12,-1890.33"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1401.64,-1886.86 1392.1,-1891.48 1402.43,-1893.82 1401.64,-1886.86"/>
+<text text-anchor="middle" x="1481.5" y="-1920.49" font-family="Helvetica,sans-Serif" font-size="9.50">bt</text>
+</g>
+<!-- type~ocean_cavity_dyn_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node65" class="node">
+<title>type~ocean_cavity_dyn_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node65"><a xlink:href="../type/ocean_cavity_dyn_config_t.html" xlink:title="ocean_cavity_dyn_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1414.5,-1873.09 1260.5,-1873.09 1260.5,-1849.09 1414.5,-1849.09 1414.5,-1873.09"/>
+<text text-anchor="middle" x="1337.5" y="-1858.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_cavity_dyn_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_cavity_dyn_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge97" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_cavity_dyn_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1628.91,-2772.87C1623.78,-2669.29 1585.38,-1940.48 1517,-1875.09 1487.2,-1846.6 1440.36,-1843.87 1402.14,-1847.86"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1401.62,-1844.4 1392.11,-1849.08 1402.46,-1851.35 1401.62,-1844.4"/>
+<text text-anchor="middle" x="1481.5" y="-1877.49" font-family="Helvetica,sans-Serif" font-size="9.50">cavity_dyn</text>
+</g>
+<!-- type~ocean_cavity_melt_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node68" class="node">
+<title>type~ocean_cavity_melt_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node68"><a xlink:href="../type/ocean_cavity_melt_config_t.html" xlink:title="ocean_cavity_melt_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1417,-1831.09 1258,-1831.09 1258,-1807.09 1417,-1807.09 1417,-1831.09"/>
+<text text-anchor="middle" x="1337.5" y="-1816.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_cavity_melt_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_cavity_melt_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge98" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_cavity_melt_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1628.98,-2772.99C1624.35,-2667.18 1588.46,-1901.79 1517,-1833.09 1487.17,-1804.42 1440.11,-1801.78 1401.79,-1805.85"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1401.24,-1802.39 1391.75,-1807.09 1402.1,-1809.34 1401.24,-1802.39"/>
+<text text-anchor="middle" x="1481.5" y="-1835.49" font-family="Helvetica,sans-Serif" font-size="9.50">cavity_melt</text>
+</g>
+<!-- type~ocean_continuity_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node69" class="node">
+<title>type~ocean_continuity_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node69"><a xlink:href="../type/ocean_continuity_config_t.html" xlink:title="ocean_continuity_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1413,-3805.09 1262,-3805.09 1262,-3781.09 1413,-3781.09 1413,-3805.09"/>
+<text text-anchor="middle" x="1337.5" y="-3790.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_continuity_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_continuity_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge99" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_continuity_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1629.01,-2797.26C1624.53,-2905.31 1589.31,-3698.12 1517,-3771.09 1493,-3795.31 1456.99,-3802.87 1423.59,-3803.58"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1423.32,-3800.08 1413.33,-3803.59 1423.33,-3807.08 1423.32,-3800.08"/>
+<text text-anchor="middle" x="1481.5" y="-3803.49" font-family="Helvetica,sans-Serif" font-size="9.50">continuity</text>
+</g>
+<!-- type~ocean_conv_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node70" class="node">
+<title>type~ocean_conv_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node70"><a xlink:href="../type/ocean_conv_config_t.html" xlink:title="ocean_conv_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1399.5,-3763.09 1275.5,-3763.09 1275.5,-3739.09 1399.5,-3739.09 1399.5,-3763.09"/>
+<text text-anchor="middle" x="1337.5" y="-3748.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_conv_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_conv_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge92" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_conv_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1628.94,-2797.4C1623.98,-2903.39 1586.3,-3659.51 1517,-3729.09 1489.61,-3756.59 1446.73,-3762.57 1409.86,-3761.45"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1409.8,-3757.94 1399.64,-3760.95 1409.46,-3764.93 1409.8,-3757.94"/>
+<text text-anchor="middle" x="1481.5" y="-3761.49" font-family="Helvetica,sans-Serif" font-size="9.50">conv</text>
+</g>
+<!-- type~ocean_coriolis_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node71" class="node">
+<title>type~ocean_coriolis_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node71"><a xlink:href="../type/ocean_coriolis_config_t.html" xlink:title="ocean_coriolis_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1405.5,-3721.09 1269.5,-3721.09 1269.5,-3697.09 1405.5,-3697.09 1405.5,-3721.09"/>
+<text text-anchor="middle" x="1337.5" y="-3706.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_coriolis_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_coriolis_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge63" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_coriolis_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1628.87,-2797.16C1623.46,-2899.51 1583.12,-3619.71 1517,-3686.09 1491.11,-3712.08 1451.42,-3719.07 1416.04,-3719.02"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1415.77,-3715.51 1405.7,-3718.81 1415.63,-3722.51 1415.77,-3715.51"/>
+<text text-anchor="middle" x="1481.5" y="-3718.49" font-family="Helvetica,sans-Serif" font-size="9.50">coriolis</text>
+</g>
+<!-- type~ocean_data_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node72" class="node">
+<title>type~ocean_data_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node72"><a xlink:href="../type/ocean_data_config_t.html" xlink:title="ocean_data_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1398.5,-3679.09 1276.5,-3679.09 1276.5,-3655.09 1398.5,-3655.09 1398.5,-3679.09"/>
+<text text-anchor="middle" x="1337.5" y="-3664.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_data_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_data_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge104" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_data_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1628.78,-2797.18C1622.77,-2896.62 1579.42,-3577.79 1517,-3641.09 1489.46,-3669.02 1446.16,-3675.84 1409.09,-3675.53"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1408.91,-3672.02 1398.82,-3675.26 1408.73,-3679.02 1408.91,-3672.02"/>
+<text text-anchor="middle" x="1481.5" y="-3674.49" font-family="Helvetica,sans-Serif" font-size="9.50">data</text>
+</g>
+<!-- type~ocean_dataovr_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node73" class="node">
+<title>type~ocean_dataovr_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node73"><a xlink:href="../type/ocean_dataovr_config_t.html" xlink:title="ocean_dataovr_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1407,-3637.09 1268,-3637.09 1268,-3613.09 1407,-3613.09 1407,-3637.09"/>
+<text text-anchor="middle" x="1337.5" y="-3622.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dataovr_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_dataovr_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge105" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_dataovr_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1629.68,-2797.22C1630.79,-2889 1633.18,-3473.92 1517,-3594.09 1491.63,-3620.33 1452.58,-3629.15 1417.47,-3630.96"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1417.08,-3627.47 1407.2,-3631.29 1417.31,-3634.46 1417.08,-3627.47"/>
+<text text-anchor="middle" x="1481.5" y="-3629.49" font-family="Helvetica,sans-Serif" font-size="9.50">dataovr</text>
+</g>
+<!-- type~ocean_ddiff_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node74" class="node">
+<title>type~ocean_ddiff_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node74"><a xlink:href="../type/ocean_ddiff_config_t.html" xlink:title="ocean_ddiff_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1398.5,-3595.09 1276.5,-3595.09 1276.5,-3571.09 1398.5,-3571.09 1398.5,-3595.09"/>
+<text text-anchor="middle" x="1337.5" y="-3580.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_ddiff_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_ddiff_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge94" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_ddiff_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1629.66,-2797.35C1630.55,-2887.63 1631.43,-3449.08 1517,-3561.09 1501.77,-3576 1452,-3581.27 1408.87,-3582.93"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1408.53,-3579.44 1398.64,-3583.27 1408.75,-3586.44 1408.53,-3579.44"/>
+<text text-anchor="middle" x="1481.5" y="-3582.49" font-family="Helvetica,sans-Serif" font-size="9.50">ddiff</text>
+</g>
+<!-- type~ocean_debug_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node75" class="node">
+<title>type~ocean_debug_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node75"><a xlink:href="../type/ocean_debug_config_t.html" xlink:title="ocean_debug_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1403.5,-3553.09 1271.5,-3553.09 1271.5,-3529.09 1403.5,-3529.09 1403.5,-3553.09"/>
+<text text-anchor="middle" x="1337.5" y="-3538.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_debug_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_debug_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge73" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_debug_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1629.55,-2797.25C1629.62,-2884.39 1625.56,-3413.68 1517,-3519.09 1490.29,-3545.03 1449.74,-3551.57 1414.04,-3551.17"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1413.72,-3547.66 1403.62,-3550.86 1413.51,-3554.66 1413.72,-3547.66"/>
+<text text-anchor="middle" x="1481.5" y="-3551.49" font-family="Helvetica,sans-Serif" font-size="9.50">debug</text>
+</g>
+<!-- type~ocean_diag_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node76" class="node">
+<title>type~ocean_diag_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node76"><a xlink:href="../type/ocean_diag_config_t.html" xlink:title="ocean_diag_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1398,-3511.09 1277,-3511.09 1277,-3487.09 1398,-3487.09 1398,-3511.09"/>
+<text text-anchor="middle" x="1337.5" y="-3496.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_diag_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_diag_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge106" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_diag_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1629.42,-2797.36C1628.63,-2881.95 1619.62,-3378.35 1517,-3477.09 1488.82,-3504.2 1445.5,-3510.05 1408.59,-3508.96"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1408.52,-3505.45 1398.37,-3508.48 1408.19,-3512.44 1408.52,-3505.45"/>
+<text text-anchor="middle" x="1481.5" y="-3508.49" font-family="Helvetica,sans-Serif" font-size="9.50">diag</text>
+</g>
+<!-- type~ocean_eos_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node78" class="node">
+<title>type~ocean_eos_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node78"><a xlink:href="../type/ocean_eos_config_t.html" xlink:title="ocean_eos_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1396,-3469.09 1279,-3469.09 1279,-3445.09 1396,-3445.09 1396,-3469.09"/>
+<text text-anchor="middle" x="1337.5" y="-3454.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_eos_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_eos_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge75" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_eos_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1629.29,-2797.14C1627.61,-2878.12 1613.82,-3342.88 1517,-3435.09 1488.17,-3462.55 1443.77,-3468.11 1406.47,-3466.78"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1406.33,-3463.27 1396.16,-3466.23 1405.96,-3470.26 1406.33,-3463.27"/>
+<text text-anchor="middle" x="1481.5" y="-3466.49" font-family="Helvetica,sans-Serif" font-size="9.50">eos</text>
+</g>
+<!-- type~ocean_epbl_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node79" class="node">
+<title>type~ocean_epbl_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node79"><a xlink:href="../type/ocean_epbl_config_t.html" xlink:title="ocean_epbl_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1398,-3427.09 1277,-3427.09 1277,-3403.09 1398,-3403.09 1398,-3427.09"/>
+<text text-anchor="middle" x="1337.5" y="-3412.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_epbl_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_epbl_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge82" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_epbl_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1629.14,-2797.11C1626.52,-2874.96 1607.96,-3307.46 1517,-3393.09 1488.53,-3419.89 1445.2,-3425.74 1408.36,-3424.72"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1408.31,-3421.21 1398.16,-3424.26 1407.99,-3428.2 1408.31,-3421.21"/>
+<text text-anchor="middle" x="1481.5" y="-3424.49" font-family="Helvetica,sans-Serif" font-size="9.50">epbl</text>
+</g>
+<!-- type~ocean_forcing_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node80" class="node">
+<title>type~ocean_forcing_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node80"><a xlink:href="../type/ocean_forcing_config_t.html" xlink:title="ocean_forcing_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1405,-3385.09 1270,-3385.09 1270,-3361.09 1405,-3361.09 1405,-3385.09"/>
+<text text-anchor="middle" x="1337.5" y="-3370.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_forcing_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_forcing_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge65" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_forcing_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1628.93,-2797.45C1625.19,-2872.94 1601.61,-3271.08 1517,-3350.09 1490.29,-3375.03 1450.73,-3381.99 1415.64,-3382.18"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1415.43,-3378.68 1405.39,-3382.05 1415.34,-3385.68 1415.43,-3378.68"/>
+<text text-anchor="middle" x="1481.5" y="-3381.49" font-family="Helvetica,sans-Serif" font-size="9.50">forcing</text>
+</g>
+<!-- type~ocean_foxkemper_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node81" class="node">
+<title>type~ocean_foxkemper_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node81"><a xlink:href="../type/ocean_foxkemper_config_t.html" xlink:title="ocean_foxkemper_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1415,-3343.09 1260,-3343.09 1260,-3319.09 1415,-3319.09 1415,-3343.09"/>
+<text text-anchor="middle" x="1337.5" y="-3328.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_foxkemper_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_foxkemper_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge84" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_foxkemper_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1628.71,-2797.44C1623.83,-2869.46 1595.46,-3234.57 1517,-3307.09 1492.55,-3329.69 1457.56,-3337.64 1425.02,-3339.22"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1424.91,-3335.72 1415.02,-3339.52 1425.11,-3342.72 1424.91,-3335.72"/>
+<text text-anchor="middle" x="1481.5" y="-3338.49" font-family="Helvetica,sans-Serif" font-size="9.50">foxkemper</text>
+</g>
+<!-- type~ocean_geothermal_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node82" class="node">
+<title>type~ocean_geothermal_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node82"><a xlink:href="../type/ocean_geothermal_config_t.html" xlink:title="ocean_geothermal_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1417.5,-3301.09 1257.5,-3301.09 1257.5,-3277.09 1417.5,-3277.09 1417.5,-3301.09"/>
+<text text-anchor="middle" x="1337.5" y="-3286.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_geothermal_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_geothermal_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge69" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_geothermal_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1628.45,-2797.27C1622.34,-2865.24 1589.1,-3196.97 1517,-3263.09 1493.15,-3284.96 1459.48,-3293.41 1427.8,-3295.71"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1427.4,-3292.23 1417.6,-3296.26 1427.77,-3299.22 1427.4,-3292.23"/>
+<text text-anchor="middle" x="1481.5" y="-3295.49" font-family="Helvetica,sans-Serif" font-size="9.50">geothermal</text>
+</g>
+<!-- type~ocean_gm_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node83" class="node">
+<title>type~ocean_gm_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node83"><a xlink:href="../type/ocean_gm_config_t.html" xlink:title="ocean_gm_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1395,-3259.09 1280,-3259.09 1280,-3235.09 1395,-3235.09 1395,-3259.09"/>
+<text text-anchor="middle" x="1337.5" y="-3244.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_gm_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_gm_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge87" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_gm_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1628.12,-2797.39C1620.62,-2861.8 1582.74,-3159.5 1517,-3219.09 1487.26,-3246.05 1442.65,-3253.05 1405.47,-3253.32"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1405.23,-3249.81 1395.19,-3253.22 1405.16,-3256.81 1405.23,-3249.81"/>
+<text text-anchor="middle" x="1481.5" y="-3251.49" font-family="Helvetica,sans-Serif" font-size="9.50">gm</text>
+</g>
+<!-- type~ocean_grid_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node84" class="node">
+<title>type~ocean_grid_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node84"><a xlink:href="../type/ocean_grid_config_t.html" xlink:title="ocean_grid_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1397,-3217.09 1278,-3217.09 1278,-3193.09 1397,-3193.09 1397,-3217.09"/>
+<text text-anchor="middle" x="1337.5" y="-3202.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_grid_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_grid_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge62" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_grid_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1627.72,-2797.28C1618.73,-2857.33 1576.3,-3120.96 1517,-3174.09 1487.56,-3200.47 1444,-3208.42 1407.28,-3209.68"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1407.06,-3206.18 1397.13,-3209.87 1407.19,-3213.18 1407.06,-3206.18"/>
+<text text-anchor="middle" x="1481.5" y="-3207.49" font-family="Helvetica,sans-Serif" font-size="9.50">grid</text>
+</g>
+<!-- type~ocean_hdiff_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node85" class="node">
+<title>type~ocean_hdiff_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node85"><a xlink:href="../type/ocean_hdiff_config_t.html" xlink:title="ocean_hdiff_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1398.5,-3175.09 1276.5,-3175.09 1276.5,-3151.09 1398.5,-3151.09 1398.5,-3175.09"/>
+<text text-anchor="middle" x="1337.5" y="-3160.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_hdiff_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_hdiff_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge78" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_hdiff_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1629.61,-2797.14C1629.39,-2846.79 1621.5,-3037.17 1517,-3129.09 1487.66,-3154.9 1444.93,-3163.69 1408.63,-3165.9"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1408.41,-3162.4 1398.58,-3166.35 1408.73,-3169.39 1408.41,-3162.4"/>
+<text text-anchor="middle" x="1481.5" y="-3162.49" font-family="Helvetica,sans-Serif" font-size="9.50">hdiff</text>
+</g>
+<!-- type~ocean_hvisc_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node86" class="node">
+<title>type~ocean_hvisc_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node86"><a xlink:href="../type/ocean_hvisc_config_t.html" xlink:title="ocean_hvisc_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1400,-3133.09 1275,-3133.09 1275,-3109.09 1400,-3109.09 1400,-3133.09"/>
+<text text-anchor="middle" x="1337.5" y="-3118.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_hvisc_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_hvisc_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge79" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_hvisc_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1628.87,-2797.33C1625.81,-2842.93 1608.65,-3004.35 1517,-3083.09 1487.91,-3108.09 1446.42,-3117.94 1410.76,-3121.38"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1410.07,-3117.93 1400.39,-3122.22 1410.64,-3124.9 1410.07,-3117.93"/>
+<text text-anchor="middle" x="1481.5" y="-3117.49" font-family="Helvetica,sans-Serif" font-size="9.50">hvisc</text>
+</g>
+<!-- type~ocean_ic_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node87" class="node">
+<title>type~ocean_ic_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node87"><a xlink:href="../type/ocean_ic_config_t.html" xlink:title="ocean_ic_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1391,-3091.09 1284,-3091.09 1284,-3067.09 1391,-3067.09 1391,-3091.09"/>
+<text text-anchor="middle" x="1337.5" y="-3076.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_ic_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_ic_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge102" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_ic_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1627.83,-2797.28C1621.59,-2837.97 1595.8,-2970.27 1517,-3036.09 1484.91,-3062.9 1438.84,-3073.52 1401.55,-3077.51"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1400.91,-3074.05 1391.28,-3078.47 1401.56,-3081.02 1400.91,-3074.05"/>
+<text text-anchor="middle" x="1481.5" y="-3071.49" font-family="Helvetica,sans-Serif" font-size="9.50">ic</text>
+</g>
+<!-- type~ocean_ice_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node88" class="node">
+<title>type~ocean_ice_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node88"><a xlink:href="../type/ocean_ice_config_t.html" xlink:title="ocean_ice_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1394.5,-3049.09 1280.5,-3049.09 1280.5,-3025.09 1394.5,-3025.09 1394.5,-3049.09"/>
+<text text-anchor="middle" x="1337.5" y="-3034.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_ice_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_ice_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge66" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_ice_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1626.42,-2797.15C1616.75,-2832.47 1583.63,-2936.59 1517,-2990.09 1485.25,-3015.58 1441.05,-3027.35 1404.58,-3032.73"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1403.95,-3029.29 1394.51,-3034.09 1404.89,-3036.22 1403.95,-3029.29"/>
+<text text-anchor="middle" x="1481.5" y="-3024.49" font-family="Helvetica,sans-Serif" font-size="9.50">ice</text>
+</g>
+<!-- type~ocean_ice_ic_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node89" class="node">
+<title>type~ocean_ice_ic_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node89"><a xlink:href="../type/ocean_ice_ic_config_t.html" xlink:title="ocean_ice_ic_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1401.5,-3007.09 1273.5,-3007.09 1273.5,-2983.09 1401.5,-2983.09 1401.5,-3007.09"/>
+<text text-anchor="middle" x="1337.5" y="-2992.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_ice_ic_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_ice_ic_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge67" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_ice_ic_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1624.06,-2797.33C1610.38,-2826.76 1571.68,-2902.07 1517,-2943.09 1486.57,-2965.92 1446.32,-2978.75 1411.75,-2985.95"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1410.83,-2982.56 1401.69,-2987.92 1412.17,-2989.43 1410.83,-2982.56"/>
+<text text-anchor="middle" x="1481.5" y="-2978.49" font-family="Helvetica,sans-Serif" font-size="9.50">ice_ic</text>
+</g>
+<!-- type~ocean_isopycnal_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node90" class="node">
+<title>type~ocean_isopycnal_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node90"><a xlink:href="../type/ocean_isopycnal_config_t.html" xlink:title="ocean_isopycnal_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1411.5,-2965.09 1263.5,-2965.09 1263.5,-2941.09 1411.5,-2941.09 1411.5,-2965.09"/>
+<text text-anchor="middle" x="1337.5" y="-2950.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_isopycnal_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_isopycnal_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge100" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_isopycnal_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1620.28,-2797.32C1602.56,-2820.05 1561.57,-2869.13 1517,-2898.09 1487.31,-2917.39 1450.47,-2930.23 1417.98,-2938.61"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1416.91,-2935.27 1408.05,-2941.07 1418.6,-2942.06 1416.91,-2935.27"/>
+<text text-anchor="middle" x="1481.5" y="-2931.49" font-family="Helvetica,sans-Serif" font-size="9.50">isopycnal</text>
+</g>
+<!-- type~ocean_kappa_shear_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node91" class="node">
+<title>type~ocean_kappa_shear_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node91"><a xlink:href="../type/ocean_kappa_shear_config_t.html" xlink:title="ocean_kappa_shear_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1420.5,-2923.09 1254.5,-2923.09 1254.5,-2899.09 1420.5,-2899.09 1420.5,-2923.09"/>
+<text text-anchor="middle" x="1337.5" y="-2908.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_kappa_shear_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_kappa_shear_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge85" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_kappa_shear_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1613.01,-2797.25C1591.66,-2812.61 1552.91,-2839.2 1517,-2857.09 1479.24,-2875.9 1468.39,-2877.92 1428,-2890.09 1420.4,-2892.38 1412.37,-2894.58 1404.36,-2896.63"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1403.5,-2893.23 1394.64,-2899.05 1405.19,-2900.03 1403.5,-2893.23"/>
+<text text-anchor="middle" x="1481.5" y="-2886.49" font-family="Helvetica,sans-Serif" font-size="9.50">kshear</text>
+</g>
+<!-- type~ocean_meke_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node92" class="node">
+<title>type~ocean_meke_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node92"><a xlink:href="../type/ocean_meke_config_t.html" xlink:title="ocean_meke_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1401.5,-2881.09 1273.5,-2881.09 1273.5,-2857.09 1401.5,-2857.09 1401.5,-2881.09"/>
+<text text-anchor="middle" x="1337.5" y="-2866.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_meke_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_meke_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge90" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_meke_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1596.72,-2797.14C1574.38,-2805.18 1544.07,-2815.76 1517,-2824.09 1477.84,-2836.14 1467.73,-2838.08 1428,-2848.09 1419.25,-2850.3 1410,-2852.55 1400.89,-2854.73"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1400.02,-2851.34 1391.1,-2857.05 1401.64,-2858.15 1400.02,-2851.34"/>
+<text text-anchor="middle" x="1481.5" y="-2845.49" font-family="Helvetica,sans-Serif" font-size="9.50">meke</text>
+</g>
+<!-- type~ocean_mpi_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node93" class="node">
+<title>type~ocean_mpi_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node93"><a xlink:href="../type/ocean_mpi_config_t.html" xlink:title="ocean_mpi_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1396.5,-2839.09 1278.5,-2839.09 1278.5,-2815.09 1396.5,-2815.09 1396.5,-2839.09"/>
+<text text-anchor="middle" x="1337.5" y="-2824.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_mpi_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_mpi_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge109" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_mpi_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1583.71,-2791.7C1536.1,-2798.57 1461.03,-2809.41 1406.49,-2817.28"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1405.95,-2813.82 1396.56,-2818.71 1406.95,-2820.75 1405.95,-2813.82"/>
+<text text-anchor="middle" x="1481.5" y="-2812.49" font-family="Helvetica,sans-Serif" font-size="9.50">mpi</text>
+</g>
+<!-- type~ocean_pgf_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node94" class="node">
+<title>type~ocean_pgf_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node94"><a xlink:href="../type/ocean_pgf_config_t.html" xlink:title="ocean_pgf_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1395,-2797.09 1280,-2797.09 1280,-2773.09 1395,-2773.09 1395,-2797.09"/>
+<text text-anchor="middle" x="1337.5" y="-2782.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_pgf_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_pgf_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge74" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_pgf_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1583.71,-2785.09C1535.82,-2785.09 1460.16,-2785.09 1405.54,-2785.09"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1405.25,-2781.59 1395.25,-2785.09 1405.25,-2788.59 1405.25,-2781.59"/>
+<text text-anchor="middle" x="1481.5" y="-2787.49" font-family="Helvetica,sans-Serif" font-size="9.50">pgf</text>
+</g>
+<!-- type~ocean_porous_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node95" class="node">
+<title>type~ocean_porous_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node95"><a xlink:href="../type/ocean_porous_config_t.html" xlink:title="ocean_porous_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1404.5,-2755.09 1270.5,-2755.09 1270.5,-2731.09 1404.5,-2731.09 1404.5,-2755.09"/>
+<text text-anchor="middle" x="1337.5" y="-2740.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_porous_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_porous_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge93" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_porous_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1583.71,-2778.48C1538.45,-2771.95 1468.39,-2761.84 1414.72,-2754.09"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1414.96,-2750.59 1404.56,-2752.63 1413.96,-2757.52 1414.96,-2750.59"/>
+<text text-anchor="middle" x="1481.5" y="-2769.49" font-family="Helvetica,sans-Serif" font-size="9.50">porous</text>
+</g>
+<!-- type~ocean_psurf_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node96" class="node">
+<title>type~ocean_psurf_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node96"><a xlink:href="../type/ocean_psurf_config_t.html" xlink:title="ocean_psurf_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1400,-2713.09 1275,-2713.09 1275,-2689.09 1400,-2689.09 1400,-2713.09"/>
+<text text-anchor="middle" x="1337.5" y="-2698.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_psurf_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_psurf_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge96" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_psurf_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1597.75,-2772.95C1575.35,-2764.6 1544.55,-2753.53 1517,-2745.09 1477.94,-2733.13 1467.67,-2731.87 1428,-2722.09 1419.12,-2719.9 1409.74,-2717.64 1400.52,-2715.45"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1401.14,-2712 1390.61,-2713.11 1399.53,-2718.82 1401.14,-2712"/>
+<text text-anchor="middle" x="1481.5" y="-2747.49" font-family="Helvetica,sans-Serif" font-size="9.50">psurf</text>
+</g>
+<!-- type~ocean_redi_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node97" class="node">
+<title>type~ocean_redi_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node97"><a xlink:href="../type/ocean_redi_config_t.html" xlink:title="ocean_redi_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1396.5,-2671.09 1278.5,-2671.09 1278.5,-2647.09 1396.5,-2647.09 1396.5,-2671.09"/>
+<text text-anchor="middle" x="1337.5" y="-2656.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_redi_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_redi_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge88" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_redi_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1613.44,-2772.96C1592.22,-2757.35 1553.29,-2730.09 1517,-2712.09 1479.34,-2693.42 1468.31,-2692.02 1428,-2680.09 1420.28,-2677.81 1412.12,-2675.6 1404,-2673.54"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1404.69,-2670.11 1394.14,-2671.1 1403.01,-2676.9 1404.69,-2670.11"/>
+<text text-anchor="middle" x="1481.5" y="-2714.49" font-family="Helvetica,sans-Serif" font-size="9.50">redi</text>
+</g>
+<!-- type~ocean_restore_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node98" class="node">
+<title>type~ocean_restore_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node98"><a xlink:href="../type/ocean_restore_config_t.html" xlink:title="ocean_restore_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1405,-2629.09 1270,-2629.09 1270,-2605.09 1405,-2605.09 1405,-2629.09"/>
+<text text-anchor="middle" x="1337.5" y="-2614.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_restore_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_restore_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge68" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_restore_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1620.6,-2773.07C1603.13,-2750.22 1562.08,-2700.21 1517,-2671.09 1486.44,-2651.35 1448.31,-2638.53 1415.15,-2630.37"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1415.57,-2626.87 1405.03,-2627.98 1413.96,-2633.68 1415.57,-2626.87"/>
+<text text-anchor="middle" x="1481.5" y="-2673.49" font-family="Helvetica,sans-Serif" font-size="9.50">restore</text>
+</g>
+<!-- type~ocean_slopes_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node99" class="node">
+<title>type~ocean_slopes_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node99"><a xlink:href="../type/ocean_slopes_config_t.html" xlink:title="ocean_slopes_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1403.5,-2587.09 1271.5,-2587.09 1271.5,-2563.09 1403.5,-2563.09 1403.5,-2587.09"/>
+<text text-anchor="middle" x="1337.5" y="-2572.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_slopes_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_slopes_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge86" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_slopes_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1624.36,-2773.07C1611.07,-2743.42 1572.71,-2666.27 1517,-2625.09 1487.08,-2602.98 1447.79,-2590.64 1413.69,-2583.76"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1414.23,-2580.3 1403.76,-2581.88 1412.93,-2587.18 1414.23,-2580.3"/>
+<text text-anchor="middle" x="1481.5" y="-2627.49" font-family="Helvetica,sans-Serif" font-size="9.50">slopes</text>
+</g>
+<!-- type~ocean_sponge_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node100" class="node">
+<title>type~ocean_sponge_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node100"><a xlink:href="../type/ocean_sponge_config_t.html" xlink:title="ocean_sponge_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1406,-2545.09 1269,-2545.09 1269,-2521.09 1406,-2521.09 1406,-2545.09"/>
+<text text-anchor="middle" x="1337.5" y="-2530.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_sponge_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_sponge_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge70" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_sponge_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1626.51,-2772.85C1617.09,-2737.01 1584.58,-2631.44 1517,-2578.09 1488.46,-2555.56 1450.03,-2544.17 1416.14,-2538.47"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1416.67,-2535.01 1406.25,-2536.94 1415.6,-2541.93 1416.67,-2535.01"/>
+<text text-anchor="middle" x="1481.5" y="-2580.49" font-family="Helvetica,sans-Serif" font-size="9.50">sponge</text>
+</g>
+<!-- type~ocean_tdrag_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node101" class="node">
+<title>type~ocean_tdrag_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node101"><a xlink:href="../type/ocean_tdrag_config_t.html" xlink:title="ocean_tdrag_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1401,-2503.09 1274,-2503.09 1274,-2479.09 1401,-2479.09 1401,-2503.09"/>
+<text text-anchor="middle" x="1337.5" y="-2488.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_tdrag_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_tdrag_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge77" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_tdrag_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1627.98,-2772.98C1622.14,-2731.94 1597.35,-2597.02 1517,-2531.09 1487.62,-2506.98 1446.69,-2496.67 1411.44,-2492.53"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1411.49,-2489.02 1401.18,-2491.48 1410.77,-2495.98 1411.49,-2489.02"/>
+<text text-anchor="middle" x="1481.5" y="-2533.49" font-family="Helvetica,sans-Serif" font-size="9.50">tdrag</text>
+</g>
+<!-- type~ocean_thermo_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node102" class="node">
+<title>type~ocean_thermo_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node102"><a xlink:href="../type/ocean_thermo_config_t.html" xlink:title="ocean_thermo_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1406,-2461.09 1269,-2461.09 1269,-2437.09 1406,-2437.09 1406,-2461.09"/>
+<text text-anchor="middle" x="1337.5" y="-2446.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_thermo_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_thermo_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge64" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_thermo_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1628.94,-2773.05C1626.14,-2727.47 1609.74,-2564.08 1517,-2485.09 1489.4,-2461.58 1450.71,-2451.91 1416.4,-2448.4"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1416.65,-2444.91 1406.38,-2447.53 1416.04,-2451.88 1416.65,-2444.91"/>
+<text text-anchor="middle" x="1481.5" y="-2487.49" font-family="Helvetica,sans-Serif" font-size="9.50">thermo</text>
+</g>
+<!-- type~ocean_tidal_mixing_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node103" class="node">
+<title>type~ocean_tidal_mixing_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node103"><a xlink:href="../type/ocean_tidal_mixing_config_t.html" xlink:title="ocean_tidal_mixing_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1419,-2419.09 1256,-2419.09 1256,-2395.09 1419,-2395.09 1419,-2419.09"/>
+<text text-anchor="middle" x="1337.5" y="-2404.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_tidal_mixing_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_tidal_mixing_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge91" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_tidal_mixing_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1629.67,-2772.94C1629.65,-2722.9 1622.47,-2531.02 1517,-2439.09 1493.01,-2418.19 1460.15,-2408.8 1429.15,-2405.09"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1429.47,-2401.61 1419.17,-2404.08 1428.76,-2408.57 1429.47,-2401.61"/>
+<text text-anchor="middle" x="1481.5" y="-2441.49" font-family="Helvetica,sans-Serif" font-size="9.50">tidal_mixing</text>
+</g>
+<!-- type~ocean_tides_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node104" class="node">
+<title>type~ocean_tides_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node104"><a xlink:href="../type/ocean_tides_config_t.html" xlink:title="ocean_tides_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1399.5,-2377.09 1275.5,-2377.09 1275.5,-2353.09 1399.5,-2353.09 1399.5,-2377.09"/>
+<text text-anchor="middle" x="1337.5" y="-2362.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_tides_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_tides_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge95" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_tides_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1627.76,-2772.79C1618.92,-2712.19 1577.1,-2446.17 1517,-2393.09 1488.09,-2367.56 1445.78,-2360.1 1409.61,-2359.23"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1409.62,-2355.73 1399.59,-2359.15 1409.56,-2362.73 1409.62,-2355.73"/>
+<text text-anchor="middle" x="1481.5" y="-2395.49" font-family="Helvetica,sans-Serif" font-size="9.50">tides</text>
+</g>
+<!-- type~ocean_topo_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node105" class="node">
+<title>type~ocean_topo_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node105"><a xlink:href="../type/ocean_topo_config_t.html" xlink:title="ocean_topo_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1398.5,-2335.09 1276.5,-2335.09 1276.5,-2311.09 1398.5,-2311.09 1398.5,-2335.09"/>
+<text text-anchor="middle" x="1337.5" y="-2320.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_topo_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_topo_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge101" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_topo_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1628.15,-2772.69C1620.81,-2707.74 1583.61,-2407.58 1517,-2348.09 1488.09,-2322.28 1445.38,-2315.59 1408.98,-2315.56"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1408.84,-2312.06 1398.89,-2315.72 1408.95,-2319.06 1408.84,-2312.06"/>
+<text text-anchor="middle" x="1481.5" y="-2350.49" font-family="Helvetica,sans-Serif" font-size="9.50">topo</text>
+</g>
+<!-- type~ocean_tracers_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node106" class="node">
+<title>type~ocean_tracers_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node106"><a xlink:href="../type/ocean_tracers_config_t.html" xlink:title="ocean_tracers_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1405.5,-2293.09 1269.5,-2293.09 1269.5,-2269.09 1405.5,-2269.09 1405.5,-2293.09"/>
+<text text-anchor="middle" x="1337.5" y="-2278.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_tracers_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_tracers_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge71" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_tracers_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1628.48,-2772.82C1622.53,-2704.32 1590.03,-2370.05 1517,-2304.09 1490.09,-2279.79 1450.9,-2272.79 1416.09,-2272.41"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1415.9,-2268.91 1405.93,-2272.48 1415.95,-2275.91 1415.9,-2268.91"/>
+<text text-anchor="middle" x="1481.5" y="-2306.49" font-family="Helvetica,sans-Serif" font-size="9.50">tracers</text>
+</g>
+<!-- type~ocean_varmix_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node107" class="node">
+<title>type~ocean_varmix_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node107"><a xlink:href="../type/ocean_varmix_config_t.html" xlink:title="ocean_varmix_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1405,-2251.09 1270,-2251.09 1270,-2227.09 1405,-2227.09 1405,-2251.09"/>
+<text text-anchor="middle" x="1337.5" y="-2236.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_varmix_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_varmix_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge89" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_varmix_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1628.74,-2772.65C1624.03,-2700.12 1596.45,-2332.4 1517,-2260.09 1490.01,-2235.53 1450.43,-2229.02 1415.39,-2229.21"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1415.08,-2225.71 1405.16,-2229.45 1415.24,-2232.71 1415.08,-2225.71"/>
+<text text-anchor="middle" x="1481.5" y="-2262.49" font-family="Helvetica,sans-Serif" font-size="9.50">varmix</text>
+</g>
+<!-- type~ocean_vdiff_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node108" class="node">
+<title>type~ocean_vdiff_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node108"><a xlink:href="../type/ocean_vdiff_config_t.html" xlink:title="ocean_vdiff_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1398,-2209.09 1277,-2209.09 1277,-2185.09 1398,-2185.09 1398,-2209.09"/>
+<text text-anchor="middle" x="1337.5" y="-2194.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_vdiff_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_vdiff_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge81" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_vdiff_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1628.96,-2772.64C1625.39,-2696.65 1602.66,-2295.85 1517,-2217.09 1488.36,-2190.76 1445.23,-2185.34 1408.55,-2186.71"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1408.18,-2183.23 1398.39,-2187.27 1408.57,-2190.22 1408.18,-2183.23"/>
+<text text-anchor="middle" x="1481.5" y="-2219.49" font-family="Helvetica,sans-Serif" font-size="9.50">vdiff</text>
+</g>
+<!-- type~ocean_vmix_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node109" class="node">
+<title>type~ocean_vmix_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node109"><a xlink:href="../type/ocean_vmix_config_t.html" xlink:title="ocean_vmix_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1399.5,-2167.09 1275.5,-2167.09 1275.5,-2143.09 1399.5,-2143.09 1399.5,-2167.09"/>
+<text text-anchor="middle" x="1337.5" y="-2152.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_vmix_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_vmix_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge80" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_vmix_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1629.16,-2773C1626.72,-2694.65 1609.07,-2259.41 1517,-2174.09 1488.79,-2147.95 1446.3,-2142.6 1409.86,-2144.06"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1409.54,-2140.58 1399.75,-2144.65 1409.94,-2147.57 1409.54,-2140.58"/>
+<text text-anchor="middle" x="1481.5" y="-2176.49" font-family="Helvetica,sans-Serif" font-size="9.50">vmix</text>
+</g>
+<!-- type~ocean_wave_speed_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node110" class="node">
+<title>type~ocean_wave_speed_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node110"><a xlink:href="../type/ocean_wave_speed_config_t.html" xlink:title="ocean_wave_speed_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1419,-2125.09 1256,-2125.09 1256,-2101.09 1419,-2101.09 1419,-2125.09"/>
+<text text-anchor="middle" x="1337.5" y="-2110.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_wave_speed_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_wave_speed_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge83" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_wave_speed_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1629.33,-2772.95C1627.89,-2691.31 1615.37,-2222.82 1517,-2131.09 1493.77,-2109.43 1460.73,-2102.17 1429.38,-2101.28"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1429.3,-2097.77 1419.27,-2101.2 1429.24,-2104.77 1429.3,-2097.77"/>
+<text text-anchor="middle" x="1481.5" y="-2133.49" font-family="Helvetica,sans-Serif" font-size="9.50">wavespeed</text>
+</g>
+<!-- type~ocean_wetdry_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node111" class="node">
+<title>type~ocean_wetdry_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node111"><a xlink:href="../type/ocean_wetdry_config_t.html" xlink:title="ocean_wetdry_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1404.5,-2083.09 1270.5,-2083.09 1270.5,-2059.09 1404.5,-2059.09 1404.5,-2083.09"/>
+<text text-anchor="middle" x="1337.5" y="-2068.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_wetdry_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_wetdry_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge108" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_wetdry_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1629.47,-2772.98C1629,-2688.37 1621.76,-2186.25 1517,-2088.09 1490.23,-2063 1450.27,-2057.42 1414.94,-2058.69"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1414.43,-2055.21 1404.63,-2059.25 1414.81,-2062.2 1414.43,-2055.21"/>
+<text text-anchor="middle" x="1481.5" y="-2090.49" font-family="Helvetica,sans-Serif" font-size="9.50">wetdry</text>
+</g>
+<!-- type~ocean_zinit_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node112" class="node">
+<title>type~ocean_zinit_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node112"><a xlink:href="../type/ocean_zinit_config_t.html" xlink:title="ocean_zinit_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="1397.5,-2041.09 1277.5,-2041.09 1277.5,-2017.09 1397.5,-2017.09 1397.5,-2041.09"/>
+<text text-anchor="middle" x="1337.5" y="-2026.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_zinit_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_config_t&#45;&gt;type~ocean_zinit_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge103" class="edge">
+<title>type~ocean_config_t&#45;&gt;type~ocean_zinit_config_t</title>
+<path fill="none" stroke="#6eff00" stroke-dasharray="5,2" d="M1629.6,-2773.08C1630.05,-2685.83 1628.23,-2149.69 1517,-2045.09 1488.51,-2018.3 1444.97,-2013.96 1408.03,-2016.48"/>
+<polygon fill="#6eff00" stroke="#6eff00" points="1407.46,-2013.02 1397.8,-2017.36 1408.06,-2019.99 1407.46,-2013.02"/>
+<text text-anchor="middle" x="1481.5" y="-2047.49" font-family="Helvetica,sans-Serif" font-size="9.50">zinit</text>
+</g>
+<!-- type~data_input_field_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node55" class="node">
+<title>type~data_input_field_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node55"><a xlink:href="../type/data_input_field_t.html" xlink:title="data_input_field_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="339,-613.09 233,-613.09 233,-589.09 339,-589.09 339,-613.09"/>
+<text text-anchor="middle" x="286" y="-598.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">data_input_field_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_data_input_t&#45;&gt;type~data_input_field_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge110" class="edge">
+<title>type~ocean_data_input_t&#45;&gt;type~data_input_field_t</title>
+<path fill="none" stroke="#2cff00" stroke-dasharray="5,2" d="M1280.95,-567.14C1264.32,-570.28 1245.99,-573.29 1229,-575.09 1057.74,-593.27 531.04,-599.14 349.37,-600.64"/>
+<polygon fill="#2cff00" stroke="#2cff00" points="349.16,-597.14 339.18,-600.73 349.21,-604.14 349.16,-597.14"/>
+<text text-anchor="middle" x="803.5" y="-603.49" font-family="Helvetica,sans-Serif" font-size="9.50">fields</text>
+</g>
+<!-- type~ocean_diag_t&#45;&gt;type~hgrid_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge113" class="edge">
+<title>type~ocean_diag_t&#45;&gt;type~hgrid_t</title>
+<path fill="none" stroke="#0bff00" stroke-dasharray="5,2" d="M1295.75,-519.25C1275.7,-522.06 1251.13,-525.19 1229,-527.09 1172.66,-531.94 252.88,-531.02 212,-570.09 135.57,-643.15 252.42,-1110.95 170.5,-1044.09"/>
+<path fill="none" stroke="#0bff00" stroke-dasharray="5,2" d="M168.5,-1044.09C92.79,-979.83 70.29,-648.54 65.55,-559.27"/>
+<polygon fill="#0bff00" stroke="#0bff00" points="69.04,-559 65.04,-549.19 62.05,-559.35 69.04,-559"/>
+<text text-anchor="middle" x="286" y="-572.49" font-family="Helvetica,sans-Serif" font-size="9.50">grid</text>
+</g>
+<!-- type~diag_var_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node56" class="node">
+<title>type~diag_var_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node56"><a xlink:href="../type/diag_var_t.html" xlink:title="diag_var_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="319.5,-483.09 252.5,-483.09 252.5,-459.09 319.5,-459.09 319.5,-483.09"/>
+<text text-anchor="middle" x="286" y="-468.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">diag_var_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_diag_t&#45;&gt;type~diag_var_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge111" class="edge">
+<title>type~ocean_diag_t&#45;&gt;type~diag_var_t</title>
+<path fill="none" stroke="#0bff00" stroke-dasharray="5,2" d="M1295.76,-506.81C1275.71,-503.97 1251.14,-500.86 1229,-499.09 882.83,-471.47 463.13,-470.41 329.8,-470.85"/>
+<polygon fill="#0bff00" stroke="#0bff00" points="329.59,-467.35 319.6,-470.88 329.62,-474.35 329.59,-467.35"/>
+<text text-anchor="middle" x="803.5" y="-501.49" font-family="Helvetica,sans-Serif" font-size="9.50">vars</text>
+</g>
+<!-- type~ocean_diag_nc_stream_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node77" class="node">
+<title>type~ocean_diag_nc_stream_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node77"><a xlink:href="../type/ocean_diag_nc_stream_t.html" xlink:title="ocean_diag_nc_stream_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="357.5,-525.09 214.5,-525.09 214.5,-501.09 357.5,-501.09 357.5,-525.09"/>
+<text text-anchor="middle" x="286" y="-510.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_diag_nc_stream_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_diag_t&#45;&gt;type~ocean_diag_nc_stream_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge112" class="edge">
+<title>type~ocean_diag_t&#45;&gt;type~ocean_diag_nc_stream_t</title>
+<path fill="none" stroke="#0bff00" stroke-dasharray="5,2" d="M1295.68,-513.09C1139.54,-513.09 578.38,-513.09 367.69,-513.09"/>
+<polygon fill="#0bff00" stroke="#0bff00" points="367.63,-509.59 357.63,-513.09 367.63,-516.59 367.63,-509.59"/>
+<text text-anchor="middle" x="803.5" y="-515.49" font-family="Helvetica,sans-Serif" font-size="9.50">nc_stream</text>
+</g>
+<!-- type~barotropic_workstate_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node52" class="node">
+<title>type~barotropic_workstate_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node52"><a xlink:href="../type/barotropic_workstate_t.html" xlink:title="barotropic_workstate_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="352.5,-357.09 219.5,-357.09 219.5,-333.09 352.5,-333.09 352.5,-357.09"/>
+<text text-anchor="middle" x="286" y="-342.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">barotropic_workstate_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_dyn_t&#45;&gt;type~barotropic_workstate_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge114" class="edge">
+<title>type~ocean_dyn_t&#45;&gt;type~barotropic_workstate_t</title>
+<path fill="none" stroke="#00ff16" stroke-dasharray="5,2" d="M1297.67,-427.21C1280.66,-424.68 1261.34,-419.29 1247,-408.09 1233.21,-397.32 1243.79,-382.42 1229,-373.09 1156.63,-327.44 573.48,-337.7 362.68,-342.98"/>
+<polygon fill="#00ff16" stroke="#00ff16" points="362.54,-339.48 352.63,-343.23 362.71,-346.48 362.54,-339.48"/>
+<text text-anchor="middle" x="803.5" y="-375.49" font-family="Helvetica,sans-Serif" font-size="9.50">bt_work</text>
+</g>
+<!-- type~bt_wide_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node53" class="node">
+<title>type~bt_wide_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node53"><a xlink:href="../type/bt_wide_t.html" xlink:title="bt_wide_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="317,-441.09 255,-441.09 255,-417.09 317,-417.09 317,-441.09"/>
+<text text-anchor="middle" x="286" y="-426.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bt_wide_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_dyn_t&#45;&gt;type~bt_wide_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge117" class="edge">
+<title>type~ocean_dyn_t&#45;&gt;type~bt_wide_t</title>
+<path fill="none" stroke="#00ff16" stroke-dasharray="5,2" d="M1297.9,-429.09C1133.8,-429.09 494.78,-429.09 327.34,-429.09"/>
+<polygon fill="#00ff16" stroke="#00ff16" points="327.01,-425.59 317.01,-429.09 327.01,-432.59 327.01,-425.59"/>
+<text text-anchor="middle" x="803.5" y="-431.49" font-family="Helvetica,sans-Serif" font-size="9.50">bt_wide</text>
+</g>
+<!-- type~chksum_probe_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node54" class="node">
+<title>type~chksum_probe_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node54"><a xlink:href="../type/chksum_probe_t.html" xlink:title="chksum_probe_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="335.5,-315.09 236.5,-315.09 236.5,-291.09 335.5,-291.09 335.5,-315.09"/>
+<text text-anchor="middle" x="286" y="-300.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">chksum_probe_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_dyn_t&#45;&gt;type~chksum_probe_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge116" class="edge">
+<title>type~ocean_dyn_t&#45;&gt;type~chksum_probe_t</title>
+<path fill="none" stroke="#00ff16" stroke-dasharray="5,2" d="M1297.57,-429.02C1279.91,-426.94 1260.09,-421.41 1247,-408.09 1220.54,-381.18 1258.1,-349.13 1229,-325.09 1161.12,-269.03 541.28,-291.7 345.78,-300.33"/>
+<polygon fill="#00ff16" stroke="#00ff16" points="345.54,-296.84 335.7,-300.78 345.85,-303.83 345.54,-296.84"/>
+<text text-anchor="middle" x="803.5" y="-327.49" font-family="Helvetica,sans-Serif" font-size="9.50">chksum_probe</text>
+</g>
+<!-- type~ke_probe_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node58" class="node">
+<title>type~ke_probe_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node58"><a xlink:href="../type/ke_probe_t.html" xlink:title="ke_probe_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="321,-399.09 251,-399.09 251,-375.09 321,-375.09 321,-399.09"/>
+<text text-anchor="middle" x="286" y="-384.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ke_probe_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_dyn_t&#45;&gt;type~ke_probe_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge115" class="edge">
+<title>type~ocean_dyn_t&#45;&gt;type~ke_probe_t</title>
+<path fill="none" stroke="#00ff16" stroke-dasharray="5,2" d="M1297.79,-423.1C1277.38,-420.18 1251.89,-416.92 1229,-415.09 884.41,-387.6 466.98,-386.42 331.65,-386.84"/>
+<polygon fill="#00ff16" stroke="#00ff16" points="331.27,-383.34 321.28,-386.88 331.3,-390.34 331.27,-383.34"/>
+<text text-anchor="middle" x="803.5" y="-417.49" font-family="Helvetica,sans-Serif" font-size="9.50">ke_probe</text>
+</g>
+<!-- type~ocean_epbl_t&#45;&gt;type~eos_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge118" class="edge">
+<title>type~ocean_epbl_t&#45;&gt;type~eos_t</title>
+<path fill="none" stroke="#00ff37" stroke-dasharray="5,2" d="M1295.93,-1306.11C1134.03,-1287.02 535.3,-1224.25 378,-1319.09 324.24,-1351.51 300.32,-1427.75 291.44,-1465.75"/>
+<polygon fill="#00ff37" stroke="#00ff37" points="287.96,-1465.28 289.23,-1475.8 294.79,-1466.78 287.96,-1465.28"/>
+<text text-anchor="middle" x="803.5" y="-1321.49" font-family="Helvetica,sans-Serif" font-size="9.50">eos</text>
+</g>
+<!-- type~ocean_epbl_t&#45;&gt;type~scratch_3d_buffer_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge119" class="edge">
+<title>type~ocean_epbl_t&#45;&gt;type~scratch_3d_buffer_t</title>
+<path fill="none" stroke="#00ff37" stroke-dasharray="5,2" d="M1295.81,-1309.01C1279.24,-1306.39 1260.77,-1300.98 1247,-1290.09 1232.97,-1279 1244.03,-1263.79 1229,-1254.09 1149.48,-1202.79 457.74,-1272.03 378,-1221.09 322.39,-1185.57 299.19,-1104.63 290.93,-1065.33"/>
+<polygon fill="#00ff37" stroke="#00ff37" points="294.34,-1064.56 288.98,-1055.42 287.48,-1065.91 294.34,-1064.56"/>
+<text text-anchor="middle" x="803.5" y="-1256.49" font-family="Helvetica,sans-Serif" font-size="9.50">t0, s0, dpe_t, dpe_s, dcolht_t, dcolht_s, ctke_sw</text>
+</g>
+<!-- type~ocean_hdiff_tracer_t&#45;&gt;type~scratch_3d_buffer_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge120" class="edge">
+<title>type~ocean_hdiff_tracer_t&#45;&gt;type~scratch_3d_buffer_t</title>
+<path fill="none" stroke="#00ff9b" stroke-dasharray="5,2" d="M1276.97,-975.12C1081.2,-975.42 464.91,-978.04 378,-999.09 355.7,-1004.5 332.43,-1015.86 315.01,-1025.69"/>
+<polygon fill="#00ff9b" stroke="#00ff9b" points="312.86,-1022.89 305.97,-1030.94 316.38,-1028.94 312.86,-1022.89"/>
+<text text-anchor="middle" x="803.5" y="-1001.49" font-family="Helvetica,sans-Serif" font-size="9.50">T_centre, F_x_face, F_y_face</text>
+</g>
+<!-- type~ocean_horizontal_viscosity_t&#45;&gt;type~scratch_3d_buffer_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge121" class="edge">
+<title>type~ocean_horizontal_viscosity_t&#45;&gt;type~scratch_3d_buffer_t</title>
+<path fill="none" stroke="#00ffbc" stroke-dasharray="5,2" d="M1260.63,-777.13C1255.74,-779.61 1251.13,-782.57 1247,-786.09 1230.93,-799.81 1246.39,-818.09 1229,-830.09 1151.16,-883.82 457.32,-800.57 378,-852.09 318.62,-890.66 297.07,-979.45 290.04,-1020.95"/>
+<polygon fill="#00ffbc" stroke="#00ffbc" points="286.58,-1020.46 288.49,-1030.88 293.5,-1021.54 286.58,-1020.46"/>
+<text text-anchor="middle" x="803.5" y="-854.49" font-family="Helvetica,sans-Serif" font-size="9.50">du_visc, dv_visc, lap_u, lap_v, str_xx, str_xy, ah_t, ah_q</text>
+</g>
+<!-- type~ocean_kappa_shear_t&#45;&gt;type~eos_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge122" class="edge">
+<title>type~ocean_kappa_shear_t&#45;&gt;type~eos_t</title>
+<path fill="none" stroke="#00ffdd" stroke-dasharray="5,2" d="M1273.21,-1400.7C1076.08,-1418.17 477.08,-1471.25 323.3,-1484.88"/>
+<polygon fill="#00ffdd" stroke="#00ffdd" points="322.66,-1481.42 313,-1485.79 323.27,-1488.39 322.66,-1481.42"/>
+<text text-anchor="middle" x="803.5" y="-1481.49" font-family="Helvetica,sans-Serif" font-size="9.50">eos</text>
+</g>
+<!-- type~ocean_lateral_mix_t&#45;&gt;type~scratch_3d_buffer_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge123" class="edge">
+<title>type~ocean_lateral_mix_t&#45;&gt;type~scratch_3d_buffer_t</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1277.83,-1058.2C1096.83,-1055.44 547.8,-1047.07 354.9,-1044.13"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="354.67,-1040.62 344.62,-1043.97 354.56,-1047.62 354.67,-1040.62"/>
+<text text-anchor="middle" x="803.5" y="-1060.49" font-family="Helvetica,sans-Serif" font-size="9.50">vort_corner</text>
+</g>
+<!-- type~ocean_pressure_force_t&#45;&gt;type~scratch_3d_buffer_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge124" class="edge">
+<title>type~ocean_pressure_force_t&#45;&gt;type~scratch_3d_buffer_t</title>
+<path fill="none" stroke="#0037ff" stroke-dasharray="5,2" d="M1268.64,-1143.47C1063.86,-1144.28 460.99,-1144.05 378,-1114.09 348.74,-1103.53 321.51,-1079.67 304.6,-1062.53"/>
+<polygon fill="#0037ff" stroke="#0037ff" points="307.03,-1060 297.59,-1055.19 301.97,-1064.84 307.03,-1060"/>
+<text text-anchor="middle" x="803.5" y="-1146.49" font-family="Helvetica,sans-Serif" font-size="9.50">p_edge, z_centre, mont_M, rho_insitu, dpdx_face, dpdy_face, e_face, pa, intz_dpa, intx_pa, inty_pa, intx_dpa, inty_dpa, conc_T, conc_S, recon_T_t, recon_T_b, recon_S_t, recon_S_b</text>
+</g>
+<!-- type~evp_workspace_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node57" class="node">
+<title>type~evp_workspace_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node57"><a xlink:href="../type/evp_workspace_t.html" xlink:title="evp_workspace_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="337.5,-151.09 234.5,-151.09 234.5,-127.09 337.5,-127.09 337.5,-151.09"/>
+<text text-anchor="middle" x="286" y="-136.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">evp_workspace_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_sea_ice_t&#45;&gt;type~evp_workspace_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge125" class="edge">
+<title>type~ocean_sea_ice_t&#45;&gt;type~evp_workspace_t</title>
+<path fill="none" stroke="#2c00ff" stroke-dasharray="5,2" d="M1287.29,-139.09C1114.68,-139.09 537.05,-139.09 347.69,-139.09"/>
+<polygon fill="#2c00ff" stroke="#2c00ff" points="347.63,-135.59 337.63,-139.09 347.63,-142.59 347.63,-135.59"/>
+<text text-anchor="middle" x="803.5" y="-141.49" font-family="Helvetica,sans-Serif" font-size="9.50">evp_ws</text>
+</g>
+<!-- type~ocean_surface_stress_t&#45;&gt;type~scratch_3d_buffer_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge126" class="edge">
+<title>type~ocean_surface_stress_t&#45;&gt;type~scratch_3d_buffer_t</title>
+<path fill="none" stroke="#b100ff" stroke-dasharray="5,2" d="M1269.86,-1015.4C1113.74,-1012.02 712.25,-1006.7 378,-1031.09 370.49,-1031.64 362.64,-1032.4 354.85,-1033.26"/>
+<polygon fill="#b100ff" stroke="#b100ff" points="354.19,-1029.82 344.66,-1034.46 355,-1036.77 354.19,-1029.82"/>
+<text text-anchor="middle" x="803.5" y="-1033.49" font-family="Helvetica,sans-Serif" font-size="9.50">du_stress, dv_stress</text>
+</g>
+<!-- type~ocean_tidal_mixing_t&#45;&gt;type~eos_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge127" class="edge">
+<title>type~ocean_tidal_mixing_t&#45;&gt;type~eos_t</title>
+<path fill="none" stroke="#d200ff" stroke-dasharray="5,2" d="M1275.46,-1658.12C1085.85,-1678.53 511.81,-1729.34 378,-1613.09 344.24,-1583.76 388.96,-1548.17 360,-1514.09 350.77,-1503.23 336.67,-1496.9 323.31,-1493.22"/>
+<polygon fill="#d200ff" stroke="#d200ff" points="323.87,-1489.75 313.34,-1490.89 322.28,-1496.57 323.87,-1489.75"/>
+<text text-anchor="middle" x="803.5" y="-1689.49" font-family="Helvetica,sans-Serif" font-size="9.50">eos</text>
+</g>
+<!-- type~ocean_top_drag_t&#45;&gt;type~scratch_3d_buffer_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge128" class="edge">
+<title>type~ocean_top_drag_t&#45;&gt;type~scratch_3d_buffer_t</title>
+<path fill="none" stroke="#ff00e8" stroke-dasharray="5,2" d="M1283.93,-934.56C1084.18,-940.17 383.31,-959.98 378,-962.09 346.5,-974.63 318.77,-1003.22 302.44,-1022.85"/>
+<polygon fill="#ff00e8" stroke="#ff00e8" points="299.51,-1020.91 295.97,-1030.89 304.96,-1025.3 299.51,-1020.91"/>
+<text text-anchor="middle" x="803.5" y="-964.49" font-family="Helvetica,sans-Serif" font-size="9.50">du_drag, dv_drag</text>
+</g>
+<!-- type~ocean_vdiff_t&#45;&gt;type~scratch_3d_buffer_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge129" class="edge">
+<title>type~ocean_vdiff_t&#45;&gt;type~scratch_3d_buffer_t</title>
+<path fill="none" stroke="#ff0085" stroke-dasharray="5,2" d="M1295.69,-851.67C1279.28,-854.39 1260.98,-859.74 1247,-870.09 1234.2,-879.58 1242.7,-892.97 1229,-901.09 1147.64,-949.34 462.16,-879.92 378,-923.09 336.97,-944.13 309.29,-993.13 296.03,-1021.58"/>
+<polygon fill="#ff0085" stroke="#ff0085" points="292.69,-1020.48 291.8,-1031.04 299.08,-1023.34 292.69,-1020.48"/>
+<text text-anchor="middle" x="803.5" y="-925.49" font-family="Helvetica,sans-Serif" font-size="9.50">a_diag_t, b_diag_t, c_diag_t, rhs_t, a_diag_u, b_diag_u, c_diag_u, rhs_u, a_diag_v, b_diag_v, c_diag_v, rhs_v, kv_scalar_buf</text>
+</g>
+<!-- type~ocean_vertical_advection_t&#45;&gt;type~scratch_3d_buffer_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge130" class="edge">
+<title>type~ocean_vertical_advection_t&#45;&gt;type~scratch_3d_buffer_t</title>
+<path fill="none" stroke="#ff0063" stroke-dasharray="5,2" d="M1261.28,-819.17C1256.18,-821.64 1251.35,-824.58 1247,-828.09 1232.46,-839.83 1244.65,-855.89 1229,-866.09 1149.76,-917.75 459.51,-841.11 378,-889.09 328.28,-918.36 302.8,-986.25 292.56,-1021.3"/>
+<polygon fill="#ff0063" stroke="#ff0063" points="289.16,-1020.47 289.86,-1031.04 295.91,-1022.33 289.16,-1020.47"/>
+<text text-anchor="middle" x="803.5" y="-891.49" font-family="Helvetica,sans-Serif" font-size="9.50">F_face</text>
+</g>
+<!-- type~ocean_vmix_t&#45;&gt;type~eos_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge131" class="edge">
+<title>type~ocean_vmix_t&#45;&gt;type~eos_t</title>
+<path fill="none" stroke="#ff0042" stroke-dasharray="5,2" d="M1294.75,-1606.63C1112.89,-1595.85 398.13,-1552.8 378,-1541.09 365.53,-1533.84 371.37,-1522.96 360,-1514.09 349.29,-1505.73 335.66,-1499.92 323.09,-1495.95"/>
+<polygon fill="#ff0042" stroke="#ff0042" points="323.89,-1492.54 313.32,-1493.15 321.96,-1499.27 323.89,-1492.54"/>
+<text text-anchor="middle" x="803.5" y="-1605.49" font-family="Helvetica,sans-Serif" font-size="9.50">eos</text>
+</g>
+<!-- type~local_bt_cont_u_type -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node117" class="node">
+<title>type~local_bt_cont_u_type</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node117"><a xlink:href="../type/local_bt_cont_u_type.html" xlink:title="local_BT_cont_u_type">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="127,-250.09 0,-250.09 0,-226.09 127,-226.09 127,-250.09"/>
+<text text-anchor="middle" x="63.5" y="-235.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local_BT_cont_u_type</text>
+</a>
+</g>
+</g>
+<!-- type~barotropic_workstate_t&#45;&gt;type~local_bt_cont_u_type -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge132" class="edge">
+<title>type~barotropic_workstate_t&#45;&gt;type~local_bt_cont_u_type</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M236.5,-332.97C228.2,-330.38 219.76,-327.41 212,-324.09 167.24,-304.96 119.21,-274.98 90.52,-255.95"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="92.17,-252.84 81.91,-250.18 88.27,-258.65 92.17,-252.84"/>
+<text text-anchor="middle" x="169.5" y="-317.49" font-family="Helvetica,sans-Serif" font-size="9.50">BTCL_u</text>
+</g>
+<!-- type~local_bt_cont_v_type -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node118" class="node">
+<title>type~local_bt_cont_v_type</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node118"><a xlink:href="../type/local_bt_cont_v_type.html" xlink:title="local_BT_cont_v_type">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="126.5,-357.09 0.5,-357.09 0.5,-333.09 126.5,-333.09 126.5,-357.09"/>
+<text text-anchor="middle" x="63.5" y="-342.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local_BT_cont_v_type</text>
+</a>
+</g>
+</g>
+<!-- type~barotropic_workstate_t&#45;&gt;type~local_bt_cont_v_type -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge133" class="edge">
+<title>type~barotropic_workstate_t&#45;&gt;type~local_bt_cont_v_type</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M219.44,-345.09C193.44,-345.09 163.44,-345.09 136.81,-345.09"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="136.78,-341.59 126.78,-345.09 136.78,-348.59 136.78,-341.59"/>
+<text text-anchor="middle" x="169.5" y="-347.49" font-family="Helvetica,sans-Serif" font-size="9.50">BTCL_v</text>
+</g>
+<!-- type~bt_wide_t&#45;&gt;type~hgrid_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge134" class="edge">
+<title>type~bt_wide_t&#45;&gt;type~hgrid_t</title>
+<path fill="none" stroke="#ff1800" stroke-dasharray="5,2" d="M254.91,-427.86C224.31,-428.14 176.95,-432.97 145,-457.09 131.04,-467.63 138.41,-478.84 127,-492.09 117.91,-502.64 105.87,-512.06 94.79,-519.52"/>
+<polygon fill="#ff1800" stroke="#ff1800" points="92.69,-516.7 86.18,-525.06 96.48,-522.59 92.69,-516.7"/>
+<text text-anchor="middle" x="169.5" y="-459.49" font-family="Helvetica,sans-Serif" font-size="9.50">grid_w</text>
+</g>
+<!-- type~bt_wide_t&#45;&gt;type~ocean_metrics_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge135" class="edge">
+<title>type~bt_wide_t&#45;&gt;type~ocean_metrics_t</title>
+<path fill="none" stroke="#ff1800" stroke-dasharray="5,2" d="M254.64,-420.19C232.93,-413.93 205.59,-406.3 194,-404.09 171.27,-399.77 146.03,-396.67 123.91,-394.5"/>
+<polygon fill="#ff1800" stroke="#ff1800" points="123.94,-390.99 113.66,-393.54 123.29,-397.96 123.94,-390.99"/>
+<text text-anchor="middle" x="169.5" y="-406.49" font-family="Helvetica,sans-Serif" font-size="9.50">metrics_w</text>
+</g>
+<!-- type~diag_mask_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node116" class="node">
+<title>type~diag_mask_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node116"><a xlink:href="../type/diag_mask_t.html" xlink:title="diag_mask_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="103,-483.09 24,-483.09 24,-459.09 103,-459.09 103,-483.09"/>
+<text text-anchor="middle" x="63.5" y="-468.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">diag_mask_t</text>
+</a>
+</g>
+</g>
+<!-- type~diag_var_t&#45;&gt;type~diag_mask_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge136" class="edge">
+<title>type~diag_var_t&#45;&gt;type~diag_mask_t</title>
+<path fill="none" stroke="#ff6100" stroke-dasharray="5,2" d="M252.46,-471.09C215.72,-471.09 155.55,-471.09 113.2,-471.09"/>
+<polygon fill="#ff6100" stroke="#ff6100" points="113.11,-467.59 103.11,-471.09 113.11,-474.59 113.11,-467.59"/>
+<text text-anchor="middle" x="169.5" y="-473.49" font-family="Helvetica,sans-Serif" font-size="9.50">mask</text>
+</g>
+<!-- type~dataovr_entry_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_node115" class="node">
+<title>type~dataovr_entry_config_t</title>
+<g id="a_type~~ocean_handle_t~~InheritsGraph_node115"><a xlink:href="../type/dataovr_entry_config_t.html" xlink:title="dataovr_entry_config_t">
+<polygon fill="#5cb85c" stroke="#5cb85c" points="353,-3637.09 219,-3637.09 219,-3613.09 353,-3613.09 353,-3637.09"/>
+<text text-anchor="middle" x="286" y="-3622.69" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">dataovr_entry_config_t</text>
+</a>
+</g>
+</g>
+<!-- type~ocean_dataovr_config_t&#45;&gt;type~dataovr_entry_config_t -->
+<g id="type~~ocean_handle_t~~InheritsGraph_edge137" class="edge">
+<title>type~ocean_dataovr_config_t&#45;&gt;type~dataovr_entry_config_t</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1267.64,-3625.09C1079.81,-3625.09 559.56,-3625.09 363.28,-3625.09"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="363.06,-3621.59 353.06,-3625.09 363.06,-3628.59 363.06,-3621.59"/>
+<text text-anchor="middle" x="803.5" y="-3627.49" font-family="Helvetica,sans-Serif" font-size="9.50">tau_x, tau_y, heat, evap, lprec, salt</text>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pantypeocean_handle_tInheritsGraph = svgPanZoom('#typeocean_handle_tInheritsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#InheritsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="InheritsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="186pt" height="32pt"
+ viewBox="0.00 0.00 185.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 181.5,-28 181.5,4 -4,4"/>
+<!-- Type -->
+<g id="node1" class="node">
+<title>Type</title>
+<polygon fill="#5cb85c" stroke="#5cb85c" points="54,-24 0,-24 0,0 54,0 54,-24"/>
+<text text-anchor="middle" x="27" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="177.5,-24 72.5,-24 72.5,0 177.5,0 177.5,-24"/>
+<text text-anchor="middle" x="125" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a derived type to the parent type which it
+extends. Dashed arrows point from a derived type to the other
+types it contains as a components, with a label listing the name(s) of
+said component(s).
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+        </div>
+      </div>
+    <br>
+
+    <section>
+    <h2>Components</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cfg~4"></span>
+              type(<a href='config_t.html'>config_t</a>),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cfg</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-device_mapped"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>device_mapped</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+                <p>True between <code>ocean_state_enter_data</code> and <code>ocean_state_exit_data</code>
+— tells <code>destroy</code> whether an exit_data pairing is owed.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-engine"></span>
+              type(<a href='ocean_engine_t.html'>ocean_engine_t</a>),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>engine</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                <p>Not declared <code>target</code> — component attributes may not include
+<code>target</code> (illegal syntax) — but this needs none: <code>h</code> is only
+ever reached through a <code>pointer</code> variable (<code>c_f_pointer</code> off
+the opaque <code>c_ptr</code> handle), and a pointer&rsquo;s entire pointee,
+subobjects included, is a valid pointer-association target
+for as long as that association persists. <code>h%state =&gt;
+h%engine%state</code> below relies on exactly this.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~83"></span>
+              type(<a href='hgrid_t.html'>hgrid_t</a>),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-host_is_current"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>host_is_current</strong></td>
+<td> =</td>
+                <td>.true.</td>
+            <td>
+                <p>P2 lazy-sync gate (<code>docs/ocean_python_api_plan.md</code>,
+<code>06_python_surface_design.md</code> D3.4): true iff the HOST copies of
+the API-exposed prognostic/forcing arrays match the (possibly
+more advanced) device copies. <code>rdb_ocean_step</code> clears it
+unconditionally — it does not sync; <code>rdb_ocean_refresh_host</code>
+is the only thing that sets it back to true (via a leaf-array
+<code>!$acc update self</code>, never the aggregate <code>state</code>). Starts <code>true</code>:
+right after <code>create()</code> the host seed IS what <code>enter_data</code> copied
+to the device, so the two agree with nothing to refresh yet.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-is_initialised~2"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>is_initialised</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+                <p>True once create() has completed device mapping. <code>step</code>/
+<code>get_*</code> reject a handle that never got this far.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-is_pending"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>is_pending</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+                <p>P2.5: true from <code>rdb_ocean_create_pending</code> until
+<code>rdb_ocean_create_finalize</code> completes (success or failure —
+failure destroys the whole handle, per the F9 rollback
+contract). The <code>rdb_ocean_stage_*</code> geometry-injection calls
+require this; <code>is_initialised</code> (above) still gates every
+step/getter/setter exactly as before P2.5.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-magic"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>magic</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_inner~4"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_inner</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+                <p>Barotropic fast-loop substep count, mirrored from
+<code>engine%n_inner</code> once at create — kept as a separate field
+only because the C ABI&rsquo;s OWN stricter &ldquo;n_inner must resolve
+to &gt;= 1&rdquo; contract (P1) is enforced here, not inside the
+shared <code>engine_setup</code> (which tolerates n_inner &lt; 1 the same
+way <code>driver_run_ocean</code> does — see <code>ocean_engine_t</code>&rsquo;s
+docstring).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-state"></span>
+              type(<a href='ocean_state_t.html'>ocean_state_t</a>),
+            </td>
+              <td>public,</td>
+            <td>
+              pointer
+            </td>
+            <td>::</td>
+            <td><strong>state</strong></td>
+<td>=&gt; </td>
+                <td>null()</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_current"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t_current</strong></td>
+<td> =</td>
+                <td>0.0_wp</td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+
+
+
+    <section>
+    <h3><span class="anchor" id="src"></span>Source Code</h3>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">type</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ocean_handle_t</span>
+<span class="w">      </span><span class="c">!! One ocean simulation: config + the P2.4 setup/step/teardown</span>
+<span class="w">      </span><span class="c">!! engine (god-state + grid + geothermal + bc_source + decomp +</span>
+<span class="w">      </span><span class="c">!! sea-ice params — `rdb_ocean_engine`). `state`/`grid` below are</span>
+<span class="w">      </span><span class="c">!! thin views onto `engine%state`/`engine%grid` kept ONLY so the</span>
+<span class="w">      </span><span class="c">!! P2 accessor bodies (`h%state%...`, `h%grid%...`) did not all</span>
+<span class="w">      </span><span class="c">!! need touching when this handle was rewired onto the shared</span>
+<span class="w">      </span><span class="c">!! engine (P2.4): `state` is POINTER-associated to `engine%state`</span>
+<span class="w">      </span><span class="c">!! right after `engine_enter_data` (stable for the handle's</span>
+<span class="w">      </span><span class="c">!! lifetime — `engine` is a component of this heap-allocated,</span>
+<span class="w">      </span><span class="c">!! pointer-accessed handle, never copied/reallocated); `grid` is a</span>
+<span class="w">      </span><span class="c">!! ONE-TIME VALUE COPY of `engine%grid` right after `engine_setup`</span>
+<span class="w">      </span><span class="c">!! (safe because grid metadata is read-only after setup — no</span>
+<span class="w">      </span><span class="c">!! kernel ever mutates `nx_phys`/`dx`/... mid-run). The standalone</span>
+<span class="w">      </span><span class="c">!! `sf` slot from P1 is gone: `engine_setup` now fully configures</span>
+<span class="w">      </span><span class="c">!! `engine%state%surface_flux` from the namelist (P2.4 closes the</span>
+<span class="w">      </span><span class="c">!! "API surface flux is a separate, minimally-seeded object" gap),</span>
+<span class="w">      </span><span class="c">!! so `rdb_ocean_get/set_*_flux` read/write `h%state%surface_flux`</span>
+<span class="w">      </span><span class="c">!! directly, same as the driver.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">magic</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">config_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cfg</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_engine_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">engine</span>
+<span class="w">         </span><span class="c">!! Not declared `target` — component attributes may not include</span>
+<span class="w">         </span><span class="c">!! `target` (illegal syntax) — but this needs none: `h` is only</span>
+<span class="w">         </span><span class="c">!! ever reached through a `pointer` variable (`c_f_pointer` off</span>
+<span class="w">         </span><span class="c">!! the opaque `c_ptr` handle), and a pointer's entire pointee,</span>
+<span class="w">         </span><span class="c">!! subobjects included, is a valid pointer-association target</span>
+<span class="w">         </span><span class="c">!! for as long as that association persists. `h%state =&gt;</span>
+<span class="w">         </span><span class="c">!! h%engine%state` below relies on exactly this.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">pointer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">state</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="nb">null</span><span class="p">()</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n_inner</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">         </span><span class="c">!! Barotropic fast-loop substep count, mirrored from</span>
+<span class="w">         </span><span class="c">!! `engine%n_inner` once at create — kept as a separate field</span>
+<span class="w">         </span><span class="c">!! only because the C ABI's OWN stricter "n_inner must resolve</span>
+<span class="w">         </span><span class="c">!! to &gt;= 1" contract (P1) is enforced here, not inside the</span>
+<span class="w">         </span><span class="c">!! shared `engine_setup` (which tolerates n_inner &lt; 1 the same</span>
+<span class="w">         </span><span class="c">!! way `driver_run_ocean` does — see `ocean_engine_t`'s</span>
+<span class="w">         </span><span class="c">!! docstring).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">t_current</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">is_initialised</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">         </span><span class="c">!! True once create() has completed device mapping. `step`/</span>
+<span class="w">         </span><span class="c">!! `get_*` reject a handle that never got this far.</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">is_pending</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">         </span><span class="c">!! P2.5: true from `rdb_ocean_create_pending` until</span>
+<span class="w">         </span><span class="c">!! `rdb_ocean_create_finalize` completes (success or failure —</span>
+<span class="w">         </span><span class="c">!! failure destroys the whole handle, per the F9 rollback</span>
+<span class="w">         </span><span class="c">!! contract). The `rdb_ocean_stage_*` geometry-injection calls</span>
+<span class="w">         </span><span class="c">!! require this; `is_initialised` (above) still gates every</span>
+<span class="w">         </span><span class="c">!! step/getter/setter exactly as before P2.5.</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">device_mapped</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">         </span><span class="c">!! True between `ocean_state_enter_data` and `ocean_state_exit_data`</span>
+<span class="w">         </span><span class="c">!! — tells `destroy` whether an exit_data pairing is owed.</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">host_is_current</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">         </span><span class="c">!! P2 lazy-sync gate (`docs/ocean_python_api_plan.md`,</span>
+<span class="w">         </span><span class="c">!! `06_python_surface_design.md` D3.4): true iff the HOST copies of</span>
+<span class="w">         </span><span class="c">!! the API-exposed prognostic/forcing arrays match the (possibly</span>
+<span class="w">         </span><span class="c">!! more advanced) device copies. `rdb_ocean_step` clears it</span>
+<span class="w">         </span><span class="c">!! unconditionally — it does not sync; `rdb_ocean_refresh_host`</span>
+<span class="w">         </span><span class="c">!! is the only thing that sets it back to true (via a leaf-array</span>
+<span class="w">         </span><span class="c">!! `!$acc update self`, never the aggregate `state`). Starts `true`:</span>
+<span class="w">         </span><span class="c">!! right after `create()` the host seed IS what `enter_data` copied</span>
+<span class="w">         </span><span class="c">!! to the device, so the two agree with nothing to refresh yet.</span>
+<span class="w">   </span><span class="k">end type </span><span class="n">ocean_handle_t</span>
+</pre></div>
+
+    </section>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-09 01:37 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

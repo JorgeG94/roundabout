@@ -1,0 +1,855 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>halo_allreduce_sum &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>halo_allreduce_sum
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">11 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_halo.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_halo.f90.html'>rdb_halo.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_halo.html'>rdb_halo</a></li>
+            <li class="breadcrumb-item active" aria-current="page">halo_allreduce_sum</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/halo_allreduce_sum.html#variable-comm~7">comm</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/halo_allreduce_sum.html#src">halo_allreduce_sum</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine halo_allreduce_sum(local_val, global_val)  
+</h2>
+    
+
+    <p>MPI_Allreduce with MPI_SUM for CG dot products</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-local_val~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>local_val</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-global_val~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>global_val</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~halo_allreduce_sum~~CallsGraph Pages: 1 -->
+<svg id="prochalo_allreduce_sumCallsGraph" width="442pt" height="74pt"
+ viewBox="0.00 0.00 442.00 74.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~halo_allreduce_sum~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 70)">
+<title>proc~~halo_allreduce_sum~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 438,-70 438,4 -4,4"/>
+<!-- proc~halo_allreduce_sum -->
+<g id="proc~~halo_allreduce_sum~~CallsGraph_node1" class="node">
+<title>proc~halo_allreduce_sum</title>
+<polygon fill="none" stroke="black" points="118,-45 0,-45 0,-21 118,-21 118,-45"/>
+<text text-anchor="middle" x="59" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">halo_allreduce_sum</text>
+</g>
+<!-- allreduce -->
+<g id="proc~~halo_allreduce_sum~~CallsGraph_node2" class="node">
+<title>allreduce</title>
+<polygon fill="#777777" stroke="#777777" points="266.5,-66 204.5,-66 204.5,-42 266.5,-42 266.5,-66"/>
+<text text-anchor="middle" x="235.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">allreduce</text>
+</g>
+<!-- proc~halo_allreduce_sum&#45;&gt;allreduce -->
+<g id="proc~~halo_allreduce_sum~~CallsGraph_edge1" class="edge">
+<title>proc~halo_allreduce_sum&#45;&gt;allreduce</title>
+<path fill="none" stroke="#ff0000" d="M118.11,-39.99C142.93,-42.98 171.3,-46.39 193.82,-49.1"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="193.7,-52.61 204.05,-50.33 194.54,-45.67 193.7,-52.61"/>
+</g>
+<!-- proc~comm_env_compute_comm -->
+<g id="proc~~halo_allreduce_sum~~CallsGraph_node3" class="node">
+<title>proc~comm_env_compute_comm</title>
+<g id="a_proc~~halo_allreduce_sum~~CallsGraph_node3"><a xlink:href="../proc/comm_env_compute_comm.html" xlink:title="comm_env_compute_comm">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="317,-24 154,-24 154,0 317,0 317,-24"/>
+<text text-anchor="middle" x="235.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_env_compute_comm</text>
+</a>
+</g>
+</g>
+<!-- proc~halo_allreduce_sum&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~halo_allreduce_sum~~CallsGraph_edge2" class="edge">
+<title>proc~halo_allreduce_sum&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#ff0000" d="M118.11,-26.01C126.46,-25 135.22,-23.95 144.02,-22.89"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="144.45,-26.36 153.96,-21.69 143.62,-19.41 144.45,-26.36"/>
+</g>
+<!-- comm_world -->
+<g id="proc~~halo_allreduce_sum~~CallsGraph_node4" class="node">
+<title>comm_world</title>
+<polygon fill="#777777" stroke="#777777" points="434,-24 353,-24 353,0 434,0 434,-24"/>
+<text text-anchor="middle" x="393.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_world</text>
+</g>
+<!-- proc~comm_env_compute_comm&#45;&gt;comm_world -->
+<g id="proc~~halo_allreduce_sum~~CallsGraph_edge3" class="edge">
+<title>proc~comm_env_compute_comm&#45;&gt;comm_world</title>
+<path fill="none" stroke="#00ffff" d="M317.24,-12C325.92,-12 334.55,-12 342.71,-12"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="342.75,-15.5 352.75,-12 342.75,-8.5 342.75,-15.5"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~halo_allreduce_sum~~CalledByGraph Pages: 1 -->
+<svg id="prochalo_allreduce_sumCalledByGraph" width="641pt" height="123pt"
+ viewBox="0.00 0.00 641.00 122.95" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~halo_allreduce_sum~~CalledByGraph" class="graph" transform="scale(0.55 0.55) rotate(0) translate(4 221)">
+<title>proc~~halo_allreduce_sum~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-221 1169,-221 1169,4 -4,4"/>
+<!-- proc~halo_allreduce_sum -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_node1" class="node">
+<title>proc~halo_allreduce_sum</title>
+<polygon fill="none" stroke="black" points="1165,-117 1047,-117 1047,-93 1165,-93 1165,-117"/>
+<text text-anchor="middle" x="1106" y="-102.6" font-family="Helvetica,sans-Serif" font-size="10.50">halo_allreduce_sum</text>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_node2" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~halo_allreduce_sum~~CalledByGraph_node2"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="332,-125 226,-125 226,-101 332,-101 332,-125"/>
+<text text-anchor="middle" x="279" y="-110.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~halo_allreduce_sum -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_edge1" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~halo_allreduce_sum</title>
+<path fill="none" stroke="#ff0000" d="M332.23,-105.42C394.01,-97.13 500.01,-85 591.5,-85 591.5,-85 591.5,-85 763,-85 858.04,-85 967.69,-92.79 1036.67,-98.65"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1036.7,-102.17 1046.97,-99.53 1037.3,-95.19 1036.7,-102.17"/>
+</g>
+<!-- proc~ocean_console_stats_report -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_node4" class="node">
+<title>proc~ocean_console_stats_report</title>
+<g id="a_proc~~halo_allreduce_sum~~CalledByGraph_node4"><a xlink:href="../proc/ocean_console_stats_report.html" xlink:title="ocean_console_stats_report">
+<polygon fill="#d9534f" stroke="#d9534f" points="1007.5,-137 847.5,-137 847.5,-113 1007.5,-113 1007.5,-137"/>
+<text text-anchor="middle" x="927.5" y="-122.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_console_stats_report</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~ocean_console_stats_report -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_edge8" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~ocean_console_stats_report</title>
+<path fill="none" stroke="#00ffff" d="M332.09,-113.97C442.32,-116.01 700.31,-120.8 837.33,-123.34"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="837.32,-126.85 847.38,-123.53 837.45,-119.85 837.32,-126.85"/>
+</g>
+<!-- proc~engine_setup -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_node10" class="node">
+<title>proc~engine_setup</title>
+<g id="a_proc~~halo_allreduce_sum~~CalledByGraph_node10"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="469,-57 385,-57 385,-33 469,-33 469,-57"/>
+<text text-anchor="middle" x="427" y="-42.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_setup -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_edge14" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M305.77,-101C329.39,-90 364.58,-73.61 390.79,-61.4"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="392.41,-64.5 400,-57.11 389.46,-58.16 392.41,-64.5"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_node15" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~halo_allreduce_sum~~CalledByGraph_node15"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="465.5,-175 388.5,-175 388.5,-151 465.5,-151 465.5,-175"/>
+<text text-anchor="middle" x="427" y="-160.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_edge20" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#0000ff" d="M315.34,-125.1C335.09,-131.87 359.89,-140.36 381.01,-147.59"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="380.14,-150.99 390.73,-150.92 382.4,-144.37 380.14,-150.99"/>
+</g>
+<!-- proc~ocean_cavity_mass_step -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_node3" class="node">
+<title>proc~ocean_cavity_mass_step</title>
+<g id="a_proc~~halo_allreduce_sum~~CalledByGraph_node3"><a xlink:href="../proc/ocean_cavity_mass_step.html" xlink:title="ocean_cavity_mass_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="999,-179 856,-179 856,-155 999,-155 999,-179"/>
+<text text-anchor="middle" x="927.5" y="-164.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_cavity_mass_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_mass_step&#45;&gt;proc~halo_allreduce_sum -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_edge2" class="edge">
+<title>proc~ocean_cavity_mass_step&#45;&gt;proc~halo_allreduce_sum</title>
+<path fill="none" stroke="#ff0000" d="M981.25,-154.93C991.22,-152.27 1001.49,-149.26 1011,-146 1031.32,-139.03 1053.37,-129.53 1071,-121.42"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1072.72,-124.48 1080.3,-117.09 1069.76,-118.14 1072.72,-124.48"/>
+</g>
+<!-- proc~ocean_console_stats_report&#45;&gt;proc~halo_allreduce_sum -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_edge3" class="edge">
+<title>proc~ocean_console_stats_report&#45;&gt;proc~halo_allreduce_sum</title>
+<path fill="none" stroke="#ff0000" d="M1007.72,-116.02C1017.41,-114.93 1027.24,-113.81 1036.76,-112.73"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1037.38,-116.18 1046.92,-111.58 1036.59,-109.23 1037.38,-116.18"/>
+</g>
+<!-- proc~refuse_open_zfixed_staircase -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_node5" class="node">
+<title>proc~refuse_open_zfixed_staircase</title>
+<g id="a_proc~~halo_allreduce_sum~~CalledByGraph_node5"><a xlink:href="../proc/refuse_open_zfixed_staircase.html" xlink:title="refuse_open_zfixed_staircase">
+<polygon fill="#d9534f" stroke="#d9534f" points="1011,-57 844,-57 844,-33 1011,-33 1011,-57"/>
+<text text-anchor="middle" x="927.5" y="-42.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">refuse_open_zfixed_staircase</text>
+</a>
+</g>
+</g>
+<!-- proc~refuse_open_zfixed_staircase&#45;&gt;proc~halo_allreduce_sum -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_edge4" class="edge">
+<title>proc~refuse_open_zfixed_staircase&#45;&gt;proc~halo_allreduce_sum</title>
+<path fill="none" stroke="#ff0000" d="M968.06,-57.1C981.7,-61.37 997.06,-66.28 1011,-71 1028.02,-76.76 1046.64,-83.42 1062.79,-89.31"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1061.9,-92.71 1072.49,-92.86 1064.31,-86.14 1061.9,-92.71"/>
+</g>
+<!-- proc~configure_ocean_closed_faces -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_node6" class="node">
+<title>proc~configure_ocean_closed_faces</title>
+<g id="a_proc~~halo_allreduce_sum~~CalledByGraph_node6"><a xlink:href="../proc/configure_ocean_closed_faces.html" xlink:title="configure_ocean_closed_faces">
+<polygon fill="#d9534f" stroke="#d9534f" points="680,-57 505,-57 505,-33 680,-33 680,-57"/>
+<text text-anchor="middle" x="592.5" y="-42.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_closed_faces</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_closed_faces&#45;&gt;proc~refuse_open_zfixed_staircase -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_edge9" class="edge">
+<title>proc~configure_ocean_closed_faces&#45;&gt;proc~refuse_open_zfixed_staircase</title>
+<path fill="none" stroke="#7f00ff" d="M680.12,-45C727.26,-45 785.59,-45 833.66,-45"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="833.75,-48.5 843.75,-45 833.75,-41.5 833.75,-48.5"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_node7" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~halo_allreduce_sum~~CalledByGraph_node7"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="120,-125 53,-125 53,-101 120,-101 120,-125"/>
+<text text-anchor="middle" x="86.5" y="-110.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_edge5" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M120.25,-113C146.45,-113 183.96,-113 215.83,-113"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="215.95,-116.5 225.95,-113 215.95,-109.5 215.95,-116.5"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_node8" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~halo_allreduce_sum~~CalledByGraph_node8"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="794.5,-175 729.5,-175 729.5,-151 794.5,-151 794.5,-175"/>
+<text text-anchor="middle" x="762" y="-160.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~ocean_cavity_mass_step -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_edge6" class="edge">
+<title>proc~run_stage&#45;&gt;proc~ocean_cavity_mass_step</title>
+<path fill="none" stroke="#7fff00" d="M794.52,-163.77C809.24,-164.13 827.51,-164.58 845.71,-165.02"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="845.71,-168.52 855.8,-165.27 845.89,-161.53 845.71,-168.52"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_node9" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~halo_allreduce_sum~~CalledByGraph_node9"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="808,-217 716,-217 716,-193 808,-193 808,-217"/>
+<text text-anchor="middle" x="762" y="-202.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~ocean_cavity_mass_step -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_edge7" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~ocean_cavity_mass_step</title>
+<path fill="none" stroke="#7fff00" d="M808.11,-194.52C825.58,-190.46 845.86,-185.74 864.64,-181.38"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="865.66,-184.73 874.6,-179.06 864.07,-177.92 865.66,-184.73"/>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~configure_ocean_closed_faces -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_edge10" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~configure_ocean_closed_faces</title>
+<path fill="none" stroke="#ff0000" d="M469.26,-45C477.23,-45 485.89,-45 494.8,-45"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="494.93,-48.5 504.93,-45 494.93,-41.5 494.93,-48.5"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_node11" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~halo_allreduce_sum~~CalledByGraph_node11"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="641.5,-175 543.5,-175 543.5,-151 641.5,-151 641.5,-175"/>
+<text text-anchor="middle" x="592.5" y="-160.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_edge11" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#00ffff" d="M641.95,-163C666.33,-163 695.6,-163 719.01,-163"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="719.32,-166.5 729.32,-163 719.32,-159.5 719.32,-166.5"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_node12" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~halo_allreduce_sum~~CalledByGraph_node12"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="655,-217 530,-217 530,-193 655,-193 655,-217"/>
+<text text-anchor="middle" x="592.5" y="-202.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_edge12" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#7f00ff" d="M655.39,-205C671.83,-205 689.47,-205 705.54,-205"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="705.85,-208.5 715.85,-205 705.85,-201.5 705.85,-208.5"/>
+</g>
+<!-- proc~complete_ocean_create -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_node13" class="node">
+<title>proc~complete_ocean_create</title>
+<g id="a_proc~~halo_allreduce_sum~~CalledByGraph_node13"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="349,-66 209,-66 209,-42 349,-42 349,-66"/>
+<text text-anchor="middle" x="279" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_setup -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_edge13" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M349.15,-49.74C357.75,-49.21 366.43,-48.67 374.69,-48.16"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="375.14,-51.64 384.91,-47.53 374.71,-44.65 375.14,-51.64"/>
+</g>
+<!-- proc~driver_validate -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_node14" class="node">
+<title>proc~driver_validate</title>
+<g id="a_proc~~halo_allreduce_sum~~CalledByGraph_node14"><a xlink:href="../proc/driver_validate.html" xlink:title="driver_validate">
+<polygon fill="#d9534f" stroke="#d9534f" points="325,-24 233,-24 233,0 325,0 325,-24"/>
+<text text-anchor="middle" x="279" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_validate</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_validate&#45;&gt;proc~engine_setup -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_edge15" class="edge">
+<title>proc~driver_validate&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M325.39,-22.26C341.06,-25.8 358.72,-29.79 374.81,-33.43"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="374.08,-36.85 384.6,-35.64 375.62,-30.02 374.08,-36.85"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_edge16" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step</title>
+<path fill="none" stroke="#00ff00" d="M465.51,-163C485.54,-163 510.64,-163 533.16,-163"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="533.29,-166.5 543.29,-163 533.29,-159.5 533.29,-166.5"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_edge17" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#0000ff" d="M465.54,-173.47C478.07,-176.9 492.12,-180.68 505,-184 513.37,-186.16 522.22,-188.37 530.93,-190.52"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="530.12,-193.93 540.67,-192.91 531.79,-187.13 530.12,-193.93"/>
+</g>
+<!-- proc~rdb_ocean_create_finalize -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_node16" class="node">
+<title>proc~rdb_ocean_create_finalize</title>
+<g id="a_proc~~halo_allreduce_sum~~CalledByGraph_node16"><a xlink:href="../proc/rdb_ocean_create_finalize.html" xlink:title="rdb_ocean_create_finalize">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="162,-66 11,-66 11,-42 162,-42 162,-66"/>
+<text text-anchor="middle" x="86.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_edge18" class="edge">
+<title>proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M162.24,-54C174.21,-54 186.64,-54 198.71,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="198.75,-57.5 208.75,-54 198.75,-50.5 198.75,-57.5"/>
+</g>
+<!-- proc~rdb_ocean_create_from_string -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_node17" class="node">
+<title>proc~rdb_ocean_create_from_string</title>
+<g id="a_proc~~halo_allreduce_sum~~CalledByGraph_node17"><a xlink:href="../proc/rdb_ocean_create_from_string.html" xlink:title="rdb_ocean_create_from_string">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="173,-24 0,-24 0,0 173,0 173,-24"/>
+<text text-anchor="middle" x="86.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_from_string</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_edge19" class="edge">
+<title>proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M142.09,-24.04C164.41,-28.96 190.39,-34.69 213.63,-39.81"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="212.88,-43.23 223.4,-41.96 214.39,-36.39 212.88,-43.23"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_node18" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~halo_allreduce_sum~~CalledByGraph_node18"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="327.5,-175 230.5,-175 230.5,-151 327.5,-151 327.5,-175"/>
+<text text-anchor="middle" x="279" y="-160.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~halo_allreduce_sum~~CalledByGraph_edge21" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#0000ff" d="M327.81,-163C343.91,-163 361.87,-163 377.99,-163"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="378.27,-166.5 388.27,-163 378.27,-159.5 378.27,-166.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprochalo_allreduce_sumCalledByGraph = svgPanZoom('#prochalo_allreduce_sumCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-comm~7"></span>
+              type(comm_t),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>comm</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">halo_allreduce_sum</span><span class="p">(</span><span class="n">local_val</span><span class="p">,</span><span class="w"> </span><span class="n">global_val</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! MPI_Allreduce with MPI_SUM for CG dot products</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">local_val</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">global_val</span>
+
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">comm_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm</span>
+
+<span class="w">      </span><span class="n">comm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">comm_env_compute_comm</span><span class="p">()</span>
+<span class="w">      </span><span class="c">! Single rank: the reduction is the identity, so return this rank's</span>
+<span class="w">      </span><span class="c">! own contribution without entering a collective.  Not just an</span>
+<span class="w">      </span><span class="c">! optimisation -- pic-mpi's serial backend (PIC_ENABLE_MPI=OFF)</span>
+<span class="w">      </span><span class="c">! deliberately `error stop`s in `allreduce`, pushing the size()==1</span>
+<span class="w">      </span><span class="c">! case onto the caller.  This IS that case.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">comm</span><span class="p">%</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">global_val</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">local_val</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+<span class="k">      call </span><span class="n">allreduce</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">local_val</span><span class="p">,</span><span class="w"> </span><span class="n">global_val</span><span class="p">,</span><span class="w"> </span><span class="n">op</span><span class="o">=</span><span class="n">MPI_SUM</span><span class="p">)</span>
+
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">halo_allreduce_sum</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-09 01:37 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

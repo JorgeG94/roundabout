@@ -1,0 +1,2111 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>ice_ocean_stress_flux &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>ice_ocean_stress_flux
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">17 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ice_ocean_coupler.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ice_ocean_coupler.f90.html'>rdb_ice_ocean_coupler.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ice_ocean_coupler.html'>rdb_ice_ocean_coupler</a></li>
+            <li class="breadcrumb-item active" aria-current="page">ice_ocean_stress_flux</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/ice_ocean_stress_flux.html#src">ice_ocean_stress_flux</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine ice_ocean_stress_flux(metrics, stress, ice, grid, bc)  
+</h2>
+    
+
+    <p>Ice-&gt;ocean momentum-mediation blend (PR 5), the momentum mirror
+of <code>ice_ocean_brine_flux</code>: FULL overwrite each outer step from
+the pristine wind snapshot + the lagged EVP drag, weighted by
+ice concentration at each face.
+  a_u(i,j) = 0.5<em>(ci(i-1,j) + ci(i,j))
+  tau_x(i,j) = (1-a_u)</em>tau_a_x(i,j) + a_u*fxoc(i,j)
+ditto y (<code>a_v(i,j) = 0.5*(ci(i,j-1)+ci(i,j))</code>).  <code>ci</code> is
+re-gathered via <code>ice_cell_concentration_impl</code> (shared with
+<code>rdb_ice_evp</code>, so this module never depends on the EVP kernel).</p>
+<p>Because this is a full overwrite of <code>tau_x</code>/<code>tau_y</code>, it also OWNS
+the DERIVED <code>stress_mag</code> (cell-centred <code>|tau|</code>) that KPP and EPBL
+take <code>u_*</code> from — refreshed on the device immediately after the
+blend, so the boundary-layer schemes see the ice-mediated stress
+rather than the configure-time wind.  Any future writer of the
+<code>tau</code> pair inherits the same obligation.</p>
+<p><strong>Momentum-budget caveat (F5, D7).</strong>  This blend gives the ocean
+<code>(1-a)*tau_a + a*fxoc</code> per face.  With <code>&amp;ocean_ice_nml
+a_face_stress=.false.</code> (default, legacy) the ice absorbs the FULL
+wind stress <code>tau_a</code> and sheds the FULL drag <code>fxoc</code> — so at
+fractional cover <code>a in (0,1)</code> the coupled system sees a spurious
+net input <code>(1-a)*(tau_a - fxoc)</code> per face.  It is exact only at
+<code>a in {0,1}</code> and at steady free drift (<code>fxoc == tau_a</code>); a
+generic transient at fractional <code>ci</code> (ITD) leaks momentum.
+<code>&amp;ocean_ice_nml a_face_stress=.true.</code> (PR 62,
+<code>evp_u_momentum_impl</code>/<code>evp_v_momentum_impl</code> in <code>rdb_ice_evp</code>)
+CLOSES this identically, for every <code>a</code> and in every transient, by
+weighting BOTH the wind AND the ice-ocean drag by the same <code>a_u</code>
+<em>inside the ice momentum balance</em> (this blend needs no code
+change — it already matches SIS2&rsquo;s <code>set_ocean_top_stress_Cgrid</code>
+exactly).  Weighting the wind alone — the naive reading of &ldquo;weight
+the wind the ICE feels by <code>a_face</code>&rdquo; — is WORSE than doing nothing:
+it converts this leak (zero at steady free drift) into a
+PERMANENT one, <code>-(1-a)*a*tau_a</code>, nonzero at steady state forever.
+Do not implement that half-measure.</p>
+<p><strong>Seam ghosts (X5).</strong>  With <code>grid</code> + <code>bc</code> present (the engine
+always passes them) the blended pair goes through
+<code>ocean_seam_refresh_surface_stress</code> — halo exchange, local
+periodic wrap on an axis the halo does not own, fold — which also
+re-derives <code>stress_mag</code>.  The blend itself is correct only on the
+faces this rank owns: a ghost face blends against <code>fxoc = 0</code>
+(the EVP momentum writes physical faces only), yet the ocean&rsquo;s
+KPP/EPBL/MLE read <code>tau</code> one cell into the halo.  The mirror into
+<code>tau_ocn_x/y</code> is taken AFTER the refresh so a restart resumes the
+exchanged ghosts the uninterrupted run stepped on.  Absent (the
+single-tile unit-test seam): the legacy <code>stress_mag</code>-only refresh.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-metrics~98"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>metrics</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-stress"></span>
+              type(<a href='../type/ocean_surface_stress_t.html'>ocean_surface_stress_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>stress</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ice~34"></span>
+              type(<a href='../type/ocean_sea_ice_t.html'>ocean_sea_ice_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ice</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~334"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bc~51"></span>
+              type(<a href='../type/ocean_bc_state_t.html'>ocean_bc_state_t</a>),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bc</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ice_ocean_stress_flux~~CallsGraph Pages: 1 -->
+<svg id="procice_ocean_stress_fluxCallsGraph" width="641pt" height="479pt"
+ viewBox="0.00 0.00 641.00 479.38" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph" class="graph" transform="scale(0.39 0.39) rotate(0) translate(4 1217.27)">
+<title>proc~~ice_ocean_stress_flux~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-1217.27 1629,-1217.27 1629,4 -4,4"/>
+<!-- proc~ice_ocean_stress_flux -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node1" class="node">
+<title>proc~ice_ocean_stress_flux</title>
+<polygon fill="none" stroke="black" points="127,-925 0,-925 0,-901 127,-901 127,-925"/>
+<text text-anchor="middle" x="63.5" y="-910.6" font-family="Helvetica,sans-Serif" font-size="10.50">ice_ocean_stress_flux</text>
+</g>
+<!-- proc~ice_cell_concentration_impl -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node2" class="node">
+<title>proc~ice_cell_concentration_impl</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node2"><a xlink:href="../proc/ice_cell_concentration_impl.html" xlink:title="ice_cell_concentration_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="344,-1205 184,-1205 184,-1181 344,-1181 344,-1205"/>
+<text text-anchor="middle" x="264" y="-1190.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_cell_concentration_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_ocean_stress_flux&#45;&gt;proc~ice_cell_concentration_impl -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge1" class="edge">
+<title>proc~ice_ocean_stress_flux&#45;&gt;proc~ice_cell_concentration_impl</title>
+<path fill="none" stroke="#ff0000" d="M66.06,-925.12C71.65,-963.9 94.21,-1086.32 163,-1154 173.21,-1164.04 186.3,-1171.57 199.62,-1177.19"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="198.74,-1180.6 209.32,-1180.95 201.27,-1174.07 198.74,-1180.6"/>
+</g>
+<!-- proc~ice_ocean_stress_flux_impl -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node3" class="node">
+<title>proc~ice_ocean_stress_flux_impl</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node3"><a xlink:href="../proc/ice_ocean_stress_flux_impl.html" xlink:title="ice_ocean_stress_flux_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="341.5,-1145 186.5,-1145 186.5,-1121 341.5,-1121 341.5,-1145"/>
+<text text-anchor="middle" x="264" y="-1130.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_ocean_stress_flux_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_ocean_stress_flux&#45;&gt;proc~ice_ocean_stress_flux_impl -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge2" class="edge">
+<title>proc~ice_ocean_stress_flux&#45;&gt;proc~ice_ocean_stress_flux_impl</title>
+<path fill="none" stroke="#ff0000" d="M69.82,-925.39C82.51,-953.88 117,-1025.11 163,-1071 181.69,-1089.64 206.98,-1105.26 227.46,-1116.16"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="226,-1119.34 236.49,-1120.83 229.21,-1113.12 226,-1119.34"/>
+</g>
+<!-- proc~ice_tau_mirror_impl -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node4" class="node">
+<title>proc~ice_tau_mirror_impl</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node4"><a xlink:href="../proc/ice_tau_mirror_impl.html" xlink:title="ice_tau_mirror_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="323,-760 205,-760 205,-736 323,-736 323,-760"/>
+<text text-anchor="middle" x="264" y="-745.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_tau_mirror_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_ocean_stress_flux&#45;&gt;proc~ice_tau_mirror_impl -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge3" class="edge">
+<title>proc~ice_ocean_stress_flux&#45;&gt;proc~ice_tau_mirror_impl</title>
+<path fill="none" stroke="#ff0000" d="M69.18,-900.6C80.52,-872.3 112.38,-802.82 163,-769 172.53,-762.64 183.61,-758.15 194.86,-754.99"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="195.89,-758.34 204.75,-752.55 194.21,-751.55 195.89,-758.34"/>
+</g>
+<!-- proc~ocean_seam_refresh_surface_stress -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node5" class="node">
+<title>proc~ocean_seam_refresh_surface_stress</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node5"><a xlink:href="../proc/ocean_seam_refresh_surface_stress.html" xlink:title="ocean_seam_refresh_surface_stress">
+<polygon fill="#d9534f" stroke="#d9534f" points="365,-802 163,-802 163,-778 365,-778 365,-802"/>
+<text text-anchor="middle" x="264" y="-787.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_seam_refresh_surface_stress</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_ocean_stress_flux&#45;&gt;proc~ocean_seam_refresh_surface_stress -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge4" class="edge">
+<title>proc~ice_ocean_stress_flux&#45;&gt;proc~ocean_seam_refresh_surface_stress</title>
+<path fill="none" stroke="#ff0000" d="M83.89,-900.98C119.17,-879.12 193.97,-832.77 234.86,-807.43"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="236.87,-810.31 243.53,-802.07 233.18,-804.36 236.87,-810.31"/>
+</g>
+<!-- proc~ocean_surface_stress_refresh_mag -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node6" class="node">
+<title>proc~ocean_surface_stress_refresh_mag</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node6"><a xlink:href="../proc/ocean_surface_stress_refresh_mag.html" xlink:title="ocean_surface_stress_refresh_mag">
+<polygon fill="#d9534f" stroke="#d9534f" points="1059,-1070 862,-1070 862,-1046 1059,-1046 1059,-1070"/>
+<text text-anchor="middle" x="960.5" y="-1055.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_surface_stress_refresh_mag</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_ocean_stress_flux&#45;&gt;proc~ocean_surface_stress_refresh_mag -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge5" class="edge">
+<title>proc~ice_ocean_stress_flux&#45;&gt;proc~ocean_surface_stress_refresh_mag</title>
+<path fill="none" stroke="#ff0000" d="M89.04,-925.13C143.54,-951.36 279.46,-1012.95 401,-1037 555.42,-1067.55 738.41,-1067.81 851.75,-1063.91"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="851.95,-1067.4 861.82,-1063.54 851.7,-1060.41 851.95,-1067.4"/>
+</g>
+<!-- proc~stress_scratch_ensure -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node7" class="node">
+<title>proc~stress_scratch_ensure</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node7"><a xlink:href="../proc/stress_scratch_ensure.html" xlink:title="stress_scratch_ensure">
+<polygon fill="#d9534f" stroke="#d9534f" points="328,-447 200,-447 200,-423 328,-423 328,-447"/>
+<text text-anchor="middle" x="264" y="-432.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">stress_scratch_ensure</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_ocean_stress_flux&#45;&gt;proc~stress_scratch_ensure -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge6" class="edge">
+<title>proc~ice_ocean_stress_flux&#45;&gt;proc~stress_scratch_ensure</title>
+<path fill="none" stroke="#ff0000" d="M69.61,-900.7C96.26,-836.52 219.5,-539.75 254,-456.67"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="257.32,-457.79 257.93,-447.21 250.86,-455.11 257.32,-457.79"/>
+</g>
+<!-- local -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node10" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="1420.5,-1126 1366.5,-1126 1366.5,-1102 1420.5,-1102 1420.5,-1126"/>
+<text text-anchor="middle" x="1393.5" y="-1111.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~ice_cell_concentration_impl&#45;&gt;local -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge7" class="edge">
+<title>proc~ice_cell_concentration_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M344.26,-1198.24C436.25,-1203.87 592.54,-1212 727,-1212 727,-1212 727,-1212 961.5,-1212 1103.37,-1212 1143.97,-1222.53 1279,-1179 1312.05,-1168.35 1346.12,-1147.22 1368.19,-1131.94"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1370.45,-1134.63 1376.6,-1126 1366.41,-1128.92 1370.45,-1134.63"/>
+</g>
+<!-- proc~ice_ocean_stress_flux_impl&#45;&gt;local -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge8" class="edge">
+<title>proc~ice_ocean_stress_flux_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ffff00" d="M341.66,-1143.99C433.16,-1156.13 590.92,-1174 727,-1174 727,-1174 727,-1174 961.5,-1174 1102.86,-1174 1140.55,-1183.53 1279,-1155 1305.81,-1149.48 1334.82,-1138.91 1356.8,-1129.89"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="1358.2,-1133.1 1366.07,-1126 1355.49,-1126.64 1358.2,-1133.1"/>
+</g>
+<!-- interface~ocean_halo_face_x -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node8" class="node">
+<title>interface~ocean_halo_face_x</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node8"><a xlink:href="../interface/ocean_halo_face_x.html" xlink:title="ocean_halo_face_x">
+<polygon fill="#a7506f" stroke="#a7506f" points="554.5,-486 440.5,-486 440.5,-462 554.5,-462 554.5,-486"/>
+<text text-anchor="middle" x="497.5" y="-471.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_face_x</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_seam_refresh_surface_stress&#45;&gt;interface~ocean_halo_face_x -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge9" class="edge">
+<title>proc~ocean_seam_refresh_surface_stress&#45;&gt;interface~ocean_halo_face_x</title>
+<path fill="none" stroke="#00ffff" d="M353.25,-777.99C357.5,-775.46 361.46,-772.48 365,-769 416.63,-718.17 371.63,-676.23 401,-610 421.07,-564.74 457.15,-519.05 478.75,-493.84"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="481.55,-495.95 485.48,-486.11 476.27,-491.36 481.55,-495.95"/>
+</g>
+<!-- interface~ocean_halo_face_y -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node9" class="node">
+<title>interface~ocean_halo_face_y</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node9"><a xlink:href="../interface/ocean_halo_face_y.html" xlink:title="ocean_halo_face_y">
+<polygon fill="#a7506f" stroke="#a7506f" points="554.5,-360 440.5,-360 440.5,-336 554.5,-336 554.5,-360"/>
+<text text-anchor="middle" x="497.5" y="-345.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_face_y</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_seam_refresh_surface_stress&#45;&gt;interface~ocean_halo_face_y -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge10" class="edge">
+<title>proc~ocean_seam_refresh_surface_stress&#45;&gt;interface~ocean_halo_face_y</title>
+<path fill="none" stroke="#00ffff" d="M354.6,-777.86C358.39,-775.34 361.89,-772.41 365,-769 412.58,-716.74 371.81,-517.37 401,-453 417.13,-417.42 449.91,-385.64 472.53,-366.6"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="474.84,-369.23 480.35,-360.18 470.4,-363.82 474.84,-369.23"/>
+</g>
+<!-- proc~ocean_fold_wrap_stress -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node12" class="node">
+<title>proc~ocean_fold_wrap_stress</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node12"><a xlink:href="../proc/ocean_fold_wrap_stress.html" xlink:title="ocean_fold_wrap_stress">
+<polygon fill="#d9534f" stroke="#d9534f" points="797,-780 659,-780 659,-756 797,-756 797,-780"/>
+<text text-anchor="middle" x="728" y="-765.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_fold_wrap_stress</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_seam_refresh_surface_stress&#45;&gt;proc~ocean_fold_wrap_stress -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge11" class="edge">
+<title>proc~ocean_seam_refresh_surface_stress&#45;&gt;proc~ocean_fold_wrap_stress</title>
+<path fill="none" stroke="#00ffff" d="M365.25,-785.23C450.2,-781.18 570.34,-775.46 648.46,-771.74"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="648.9,-775.22 658.72,-771.25 648.56,-768.23 648.9,-775.22"/>
+</g>
+<!-- proc~ocean_halo_is_decomposed_x -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node13" class="node">
+<title>proc~ocean_halo_is_decomposed_x</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node13"><a xlink:href="../proc/ocean_halo_is_decomposed_x.html" xlink:title="ocean_halo_is_decomposed_x">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="584,-238 411,-238 411,-214 584,-214 584,-238"/>
+<text text-anchor="middle" x="497.5" y="-223.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_is_decomposed_x</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_seam_refresh_surface_stress&#45;&gt;proc~ocean_halo_is_decomposed_x -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge12" class="edge">
+<title>proc~ocean_seam_refresh_surface_stress&#45;&gt;proc~ocean_halo_is_decomposed_x</title>
+<path fill="none" stroke="#00ffff" d="M355.21,-777.73C358.79,-775.24 362.09,-772.34 365,-769 440.65,-682.16 327.94,-341.02 401,-252 403.49,-248.97 406.3,-246.27 409.34,-243.87"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="411.51,-246.63 417.91,-238.18 407.64,-240.79 411.51,-246.63"/>
+</g>
+<!-- proc~ocean_halo_is_decomposed_y -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node14" class="node">
+<title>proc~ocean_halo_is_decomposed_y</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node14"><a xlink:href="../proc/ocean_halo_is_decomposed_y.html" xlink:title="ocean_halo_is_decomposed_y">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="584,-196 411,-196 411,-172 584,-172 584,-196"/>
+<text text-anchor="middle" x="497.5" y="-181.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_is_decomposed_y</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_seam_refresh_surface_stress&#45;&gt;proc~ocean_halo_is_decomposed_y -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge13" class="edge">
+<title>proc~ocean_seam_refresh_surface_stress&#45;&gt;proc~ocean_halo_is_decomposed_y</title>
+<path fill="none" stroke="#00ffff" d="M355.23,-777.75C358.81,-775.25 362.1,-772.35 365,-769 447.22,-674.07 319.23,-300.32 401,-205 401.63,-204.27 402.28,-203.56 402.94,-202.87"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="405.35,-205.42 410.71,-196.28 400.82,-200.08 405.35,-205.42"/>
+</g>
+<!-- proc~ocean_periodic_wrap_face_x_2d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node15" class="node">
+<title>proc~ocean_periodic_wrap_face_x_2d</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node15"><a xlink:href="../proc/ocean_periodic_wrap_face_x_2d.html" xlink:title="ocean_periodic_wrap_face_x_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1279,-612 1095,-612 1095,-588 1279,-588 1279,-612"/>
+<text text-anchor="middle" x="1187" y="-597.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_periodic_wrap_face_x_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_seam_refresh_surface_stress&#45;&gt;proc~ocean_periodic_wrap_face_x_2d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge14" class="edge">
+<title>proc~ocean_seam_refresh_surface_stress&#45;&gt;proc~ocean_periodic_wrap_face_x_2d</title>
+<path fill="none" stroke="#00ffff" d="M323.31,-777.97C485.93,-744.42 943.92,-649.94 1117.84,-614.06"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1118.56,-617.49 1127.65,-612.04 1117.15,-610.63 1118.56,-617.49"/>
+</g>
+<!-- proc~ocean_periodic_wrap_face_y_2d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node16" class="node">
+<title>proc~ocean_periodic_wrap_face_y_2d</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node16"><a xlink:href="../proc/ocean_periodic_wrap_face_y_2d.html" xlink:title="ocean_periodic_wrap_face_y_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1279,-24 1095,-24 1095,0 1279,0 1279,-24"/>
+<text text-anchor="middle" x="1187" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_periodic_wrap_face_y_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_seam_refresh_surface_stress&#45;&gt;proc~ocean_periodic_wrap_face_y_2d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge15" class="edge">
+<title>proc~ocean_seam_refresh_surface_stress&#45;&gt;proc~ocean_periodic_wrap_face_y_2d</title>
+<path fill="none" stroke="#00ffff" d="M354.73,-777.98C358.49,-775.43 361.95,-772.46 365,-769 430.17,-695.08 342.98,-406.65 401,-327 455.67,-251.95 508.41,-283.02 594,-247 817.17,-153.09 864.8,-108.07 1095,-33 1102.07,-30.69 1109.54,-28.54 1117.02,-26.56"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1118.02,-29.91 1126.84,-24.05 1116.28,-23.13 1118.02,-29.91"/>
+</g>
+<!-- proc~ocean_surface_stress_set_derived -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node17" class="node">
+<title>proc~ocean_surface_stress_set_derived</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node17"><a xlink:href="../proc/ocean_surface_stress_set_derived.html" xlink:title="ocean_surface_stress_set_derived">
+<polygon fill="#d9534f" stroke="#d9534f" points="594,-822 401,-822 401,-798 594,-798 594,-822"/>
+<text text-anchor="middle" x="497.5" y="-807.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_surface_stress_set_derived</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_seam_refresh_surface_stress&#45;&gt;proc~ocean_surface_stress_set_derived -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge16" class="edge">
+<title>proc~ocean_seam_refresh_surface_stress&#45;&gt;proc~ocean_surface_stress_set_derived</title>
+<path fill="none" stroke="#00ffff" d="M365.19,-798.66C373.71,-799.39 382.35,-800.14 390.91,-800.88"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="390.64,-804.37 400.91,-801.74 391.25,-797.39 390.64,-804.37"/>
+</g>
+<!-- proc~oh_count_suppress_off -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node19" class="node">
+<title>proc~oh_count_suppress_off</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node19"><a xlink:href="../proc/oh_count_suppress_off.html" xlink:title="oh_count_suppress_off">
+<polygon fill="#d9534f" stroke="#d9534f" points="564,-1028 431,-1028 431,-1004 564,-1004 564,-1028"/>
+<text text-anchor="middle" x="497.5" y="-1013.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">oh_count_suppress_off</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_seam_refresh_surface_stress&#45;&gt;proc~oh_count_suppress_off -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge17" class="edge">
+<title>proc~ocean_seam_refresh_surface_stress&#45;&gt;proc~oh_count_suppress_off</title>
+<path fill="none" stroke="#00ffff" d="M269.24,-802.05C282.48,-837.83 326.66,-944.06 401,-995 407.07,-999.16 413.81,-1002.51 420.84,-1005.21"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="419.95,-1008.6 430.55,-1008.5 422.2,-1001.97 419.95,-1008.6"/>
+</g>
+<!-- proc~oh_count_suppress_on -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node20" class="node">
+<title>proc~oh_count_suppress_on</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node20"><a xlink:href="../proc/oh_count_suppress_on.html" xlink:title="oh_count_suppress_on">
+<polygon fill="#d9534f" stroke="#d9534f" points="563.5,-986 431.5,-986 431.5,-962 563.5,-962 563.5,-986"/>
+<text text-anchor="middle" x="497.5" y="-971.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">oh_count_suppress_on</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_seam_refresh_surface_stress&#45;&gt;proc~oh_count_suppress_on -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge18" class="edge">
+<title>proc~ocean_seam_refresh_surface_stress&#45;&gt;proc~oh_count_suppress_on</title>
+<path fill="none" stroke="#00ffff" d="M271.35,-802.16C288.06,-832.85 336.43,-913.77 401,-953 407.33,-956.85 414.28,-959.99 421.46,-962.57"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="420.75,-966.01 431.34,-965.73 422.88,-959.35 420.75,-966.01"/>
+</g>
+<!-- proc~profiler_start -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node21" class="node">
+<title>proc~profiler_start</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node21"><a xlink:href="../proc/profiler_start.html" xlink:title="profiler_start">
+<polygon fill="#d9534f" stroke="#d9534f" points="537.5,-944 457.5,-944 457.5,-920 537.5,-920 537.5,-944"/>
+<text text-anchor="middle" x="497.5" y="-929.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">profiler_start</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_seam_refresh_surface_stress&#45;&gt;proc~profiler_start -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge19" class="edge">
+<title>proc~ocean_seam_refresh_surface_stress&#45;&gt;proc~profiler_start</title>
+<path fill="none" stroke="#00ffff" d="M274.82,-802.19C295.42,-826.88 345.82,-882.85 401,-911 415.27,-918.28 431.98,-923.04 447.41,-926.16"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="446.86,-929.62 457.33,-927.98 448.12,-922.73 446.86,-929.62"/>
+</g>
+<!-- proc~profiler_stop -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node22" class="node">
+<title>proc~profiler_stop</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node22"><a xlink:href="../proc/profiler_stop.html" xlink:title="profiler_stop">
+<polygon fill="#d9534f" stroke="#d9534f" points="537,-902 458,-902 458,-878 537,-878 537,-902"/>
+<text text-anchor="middle" x="497.5" y="-887.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">profiler_stop</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_seam_refresh_surface_stress&#45;&gt;proc~profiler_stop -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge20" class="edge">
+<title>proc~ocean_seam_refresh_surface_stress&#45;&gt;proc~profiler_stop</title>
+<path fill="none" stroke="#00ffff" d="M292.92,-802.06C334.46,-820.01 412.62,-853.77 459.07,-873.83"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="457.91,-877.14 468.48,-877.89 460.68,-870.72 457.91,-877.14"/>
+</g>
+<!-- proc~ocean_surfstress_derived_impl -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node18" class="node">
+<title>proc~ocean_surfstress_derived_impl</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node18"><a xlink:href="../proc/ocean_surfstress_derived_impl.html" xlink:title="ocean_surfstress_derived_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1274.5,-1146 1099.5,-1146 1099.5,-1122 1274.5,-1122 1274.5,-1146"/>
+<text text-anchor="middle" x="1187" y="-1131.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_surfstress_derived_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_surface_stress_refresh_mag&#45;&gt;proc~ocean_surfstress_derived_impl -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge21" class="edge">
+<title>proc~ocean_surface_stress_refresh_mag&#45;&gt;proc~ocean_surfstress_derived_impl</title>
+<path fill="none" stroke="#0000ff" d="M991.48,-1070.01C1018.37,-1080.6 1059.04,-1096.15 1095,-1108 1106.58,-1111.82 1119.1,-1115.61 1131.03,-1119.06"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="1130.31,-1122.5 1140.89,-1121.88 1132.23,-1115.77 1130.31,-1122.5"/>
+</g>
+<!-- proc~ice_ocean_stress_cleanup -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node11" class="node">
+<title>proc~ice_ocean_stress_cleanup</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node11"><a xlink:href="../proc/ice_ocean_stress_cleanup.html" xlink:title="ice_ocean_stress_cleanup">
+<polygon fill="#d9534f" stroke="#d9534f" points="572.5,-154 422.5,-154 422.5,-130 572.5,-130 572.5,-154"/>
+<text text-anchor="middle" x="497.5" y="-139.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_ocean_stress_cleanup</text>
+</a>
+</g>
+</g>
+<!-- proc~stress_scratch_ensure&#45;&gt;proc~ice_ocean_stress_cleanup -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge22" class="edge">
+<title>proc~stress_scratch_ensure&#45;&gt;proc~ice_ocean_stress_cleanup</title>
+<path fill="none" stroke="#ff00ff" d="M267.21,-422.89C275.74,-379.89 310.62,-233.41 401,-163 404.64,-160.17 408.58,-157.7 412.72,-155.55"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="414.39,-158.64 422.06,-151.33 411.51,-152.25 414.39,-158.64"/>
+</g>
+<!-- proc~ocean_halo_face_x_2d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node35" class="node">
+<title>proc~ocean_halo_face_x_2d</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node35"><a xlink:href="../proc/ocean_halo_face_x_2d.html" xlink:title="ocean_halo_face_x_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="794.5,-444 661.5,-444 661.5,-420 794.5,-420 794.5,-444"/>
+<text text-anchor="middle" x="728" y="-429.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_face_x_2d</text>
+</a>
+</g>
+</g>
+<!-- interface~ocean_halo_face_x&#45;&gt;proc~ocean_halo_face_x_2d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge23" class="edge">
+<title>interface~ocean_halo_face_x&#45;&gt;proc~ocean_halo_face_x_2d</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M554.69,-463.67C583.9,-458.3 620.01,-451.66 651.62,-445.86"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="652.51,-449.25 661.71,-444 651.24,-442.37 652.51,-449.25"/>
+</g>
+<!-- proc~ocean_halo_face_x_3d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node36" class="node">
+<title>proc~ocean_halo_face_x_3d</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node36"><a xlink:href="../proc/ocean_halo_face_x_3d.html" xlink:title="ocean_halo_face_x_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1027,-486 894,-486 894,-462 1027,-462 1027,-486"/>
+<text text-anchor="middle" x="960.5" y="-471.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_face_x_3d</text>
+</a>
+</g>
+</g>
+<!-- interface~ocean_halo_face_x&#45;&gt;proc~ocean_halo_face_x_3d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge24" class="edge">
+<title>interface~ocean_halo_face_x&#45;&gt;proc~ocean_halo_face_x_3d</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M554.57,-474C637.02,-474 791.19,-474 883.67,-474"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="883.81,-477.5 893.81,-474 883.81,-470.5 883.81,-477.5"/>
+</g>
+<!-- proc~ocean_halo_face_y_2d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node37" class="node">
+<title>proc~ocean_halo_face_y_2d</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node37"><a xlink:href="../proc/ocean_halo_face_y_2d.html" xlink:title="ocean_halo_face_y_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="794.5,-318 661.5,-318 661.5,-294 794.5,-294 794.5,-318"/>
+<text text-anchor="middle" x="728" y="-303.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_face_y_2d</text>
+</a>
+</g>
+</g>
+<!-- interface~ocean_halo_face_y&#45;&gt;proc~ocean_halo_face_y_2d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge25" class="edge">
+<title>interface~ocean_halo_face_y&#45;&gt;proc~ocean_halo_face_y_2d</title>
+<path fill="none" stroke="#ff6600" stroke-dasharray="5,2" d="M554.69,-337.67C583.9,-332.3 620.01,-325.66 651.62,-319.86"/>
+<polygon fill="#ff6600" stroke="#ff6600" points="652.51,-323.25 661.71,-318 651.24,-316.37 652.51,-323.25"/>
+</g>
+<!-- proc~ocean_halo_face_y_3d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node38" class="node">
+<title>proc~ocean_halo_face_y_3d</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node38"><a xlink:href="../proc/ocean_halo_face_y_3d.html" xlink:title="ocean_halo_face_y_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1027,-360 894,-360 894,-336 1027,-336 1027,-360"/>
+<text text-anchor="middle" x="960.5" y="-345.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_face_y_3d</text>
+</a>
+</g>
+</g>
+<!-- interface~ocean_halo_face_y&#45;&gt;proc~ocean_halo_face_y_3d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge26" class="edge">
+<title>interface~ocean_halo_face_y&#45;&gt;proc~ocean_halo_face_y_3d</title>
+<path fill="none" stroke="#ff6600" stroke-dasharray="5,2" d="M554.57,-348C637.02,-348 791.19,-348 883.67,-348"/>
+<polygon fill="#ff6600" stroke="#ff6600" points="883.81,-351.5 893.81,-348 883.81,-344.5 883.81,-351.5"/>
+</g>
+<!-- interface~fold_north_u_face -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node23" class="node">
+<title>interface~fold_north_u_face</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node23"><a xlink:href="../interface/fold_north_u_face.html" xlink:title="fold_north_u_face">
+<polygon fill="#a7506f" stroke="#a7506f" points="1014,-822 907,-822 907,-798 1014,-798 1014,-822"/>
+<text text-anchor="middle" x="960.5" y="-807.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_north_u_face</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_fold_wrap_stress&#45;&gt;interface~fold_north_u_face -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge27" class="edge">
+<title>proc~ocean_fold_wrap_stress&#45;&gt;interface~fold_north_u_face</title>
+<path fill="none" stroke="#65ff00" d="M795.05,-780.04C827.1,-785.88 865.4,-792.85 896.97,-798.61"/>
+<polygon fill="#65ff00" stroke="#65ff00" points="896.51,-802.08 906.97,-800.43 897.76,-795.19 896.51,-802.08"/>
+</g>
+<!-- interface~fold_north_v_face -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node24" class="node">
+<title>interface~fold_north_v_face</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node24"><a xlink:href="../interface/fold_north_v_face.html" xlink:title="fold_north_v_face">
+<polygon fill="#a7506f" stroke="#a7506f" points="1013.5,-986 907.5,-986 907.5,-962 1013.5,-962 1013.5,-986"/>
+<text text-anchor="middle" x="960.5" y="-971.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_north_v_face</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_fold_wrap_stress&#45;&gt;interface~fold_north_v_face -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge28" class="edge">
+<title>proc~ocean_fold_wrap_stress&#45;&gt;interface~fold_north_v_face</title>
+<path fill="none" stroke="#65ff00" d="M797.17,-772.42C807.91,-775.85 818.07,-781.09 826,-789 878.84,-841.69 809.13,-900.34 862,-953 871.53,-962.49 884.26,-968.16 897.36,-971.45"/>
+<polygon fill="#65ff00" stroke="#65ff00" points="896.91,-974.93 907.41,-973.52 898.32,-968.07 896.91,-974.93"/>
+</g>
+<!-- interface~ocean_fold_pack -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node25" class="node">
+<title>interface~ocean_fold_pack</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node25"><a xlink:href="../interface/ocean_fold_pack.html" xlink:title="ocean_fold_pack">
+<polygon fill="#a7506f" stroke="#a7506f" points="1011.5,-944 909.5,-944 909.5,-920 1011.5,-920 1011.5,-944"/>
+<text text-anchor="middle" x="960.5" y="-929.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_fold_pack</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_fold_wrap_stress&#45;&gt;interface~ocean_fold_pack -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge29" class="edge">
+<title>proc~ocean_fold_wrap_stress&#45;&gt;interface~ocean_fold_pack</title>
+<path fill="none" stroke="#65ff00" d="M797.24,-774.11C807.66,-777.39 817.69,-782.15 826,-789 857.34,-814.84 835.35,-842.35 862,-873 877.91,-891.3 900.94,-905.6 920.63,-915.54"/>
+<polygon fill="#65ff00" stroke="#65ff00" points="919.16,-918.72 929.68,-919.93 922.21,-912.42 919.16,-918.72"/>
+</g>
+<!-- interface~ocean_fold_unpack -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node26" class="node">
+<title>interface~ocean_fold_unpack</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node26"><a xlink:href="../interface/ocean_fold_unpack.html" xlink:title="ocean_fold_unpack">
+<polygon fill="#a7506f" stroke="#a7506f" points="1018,-864 903,-864 903,-840 1018,-840 1018,-864"/>
+<text text-anchor="middle" x="960.5" y="-849.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_fold_unpack</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_fold_wrap_stress&#45;&gt;interface~ocean_fold_unpack -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge30" class="edge">
+<title>proc~ocean_fold_wrap_stress&#45;&gt;interface~ocean_fold_unpack</title>
+<path fill="none" stroke="#65ff00" d="M797.15,-776.84C807.24,-779.81 817.19,-783.75 826,-789 847.12,-801.59 840.88,-818.42 862,-831 871.4,-836.6 882.09,-840.71 892.87,-843.73"/>
+<polygon fill="#65ff00" stroke="#65ff00" points="892.21,-847.17 902.76,-846.21 893.91,-840.38 892.21,-847.17"/>
+</g>
+<!-- proc~ocean_fold_begin -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node31" class="node">
+<title>proc~ocean_fold_begin</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node31"><a xlink:href="../proc/ocean_fold_begin.html" xlink:title="ocean_fold_begin">
+<polygon fill="#d9534f" stroke="#d9534f" points="1240,-738 1134,-738 1134,-714 1240,-714 1240,-738"/>
+<text text-anchor="middle" x="1187" y="-723.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_fold_begin</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_fold_wrap_stress&#45;&gt;proc~ocean_fold_begin -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge31" class="edge">
+<title>proc~ocean_fold_wrap_stress&#45;&gt;proc~ocean_fold_begin</title>
+<path fill="none" stroke="#65ff00" d="M747.85,-755.75C772.77,-740.35 818.63,-714.75 862,-705 952.05,-684.75 1059.45,-699 1125.17,-711.89"/>
+<polygon fill="#65ff00" stroke="#65ff00" points="1124.86,-715.4 1135.35,-713.95 1126.24,-708.54 1124.86,-715.4"/>
+</g>
+<!-- proc~ocean_fold_end -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node32" class="node">
+<title>proc~ocean_fold_end</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node32"><a xlink:href="../proc/ocean_fold_end.html" xlink:title="ocean_fold_end">
+<polygon fill="#d9534f" stroke="#d9534f" points="1009,-780 912,-780 912,-756 1009,-756 1009,-780"/>
+<text text-anchor="middle" x="960.5" y="-765.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_fold_end</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_fold_wrap_stress&#45;&gt;proc~ocean_fold_end -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge32" class="edge">
+<title>proc~ocean_fold_wrap_stress&#45;&gt;proc~ocean_fold_end</title>
+<path fill="none" stroke="#65ff00" d="M797.22,-768C830.52,-768 870.15,-768 901.9,-768"/>
+<polygon fill="#65ff00" stroke="#65ff00" points="901.92,-771.5 911.92,-768 901.92,-764.5 901.92,-771.5"/>
+</g>
+<!-- proc~ocean_fold_exchange -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node33" class="node">
+<title>proc~ocean_fold_exchange</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node33"><a xlink:href="../proc/ocean_fold_exchange.html" xlink:title="ocean_fold_exchange">
+<polygon fill="#d9534f" stroke="#d9534f" points="1024.5,-528 896.5,-528 896.5,-504 1024.5,-504 1024.5,-528"/>
+<text text-anchor="middle" x="960.5" y="-513.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_fold_exchange</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_fold_wrap_stress&#45;&gt;proc~ocean_fold_exchange -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge33" class="edge">
+<title>proc~ocean_fold_wrap_stress&#45;&gt;proc~ocean_fold_exchange</title>
+<path fill="none" stroke="#65ff00" d="M740.12,-755.85C777.09,-715.43 896.13,-585.28 941.61,-535.56"/>
+<polygon fill="#65ff00" stroke="#65ff00" points="944.33,-537.77 948.49,-528.03 939.16,-533.05 944.33,-537.77"/>
+</g>
+<!-- proc~ocean_fold_is_distributed -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node34" class="node">
+<title>proc~ocean_fold_is_distributed</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node34"><a xlink:href="../proc/ocean_fold_is_distributed.html" xlink:title="ocean_fold_is_distributed">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1034,-738 887,-738 887,-714 1034,-714 1034,-738"/>
+<text text-anchor="middle" x="960.5" y="-723.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_fold_is_distributed</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_fold_wrap_stress&#45;&gt;proc~ocean_fold_is_distributed -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge34" class="edge">
+<title>proc~ocean_fold_wrap_stress&#45;&gt;proc~ocean_fold_is_distributed</title>
+<path fill="none" stroke="#65ff00" d="M795.05,-755.96C822.66,-750.93 854.91,-745.06 883.49,-739.85"/>
+<polygon fill="#65ff00" stroke="#65ff00" points="884.23,-743.27 893.44,-738.04 882.97,-736.39 884.23,-743.27"/>
+</g>
+<!-- proc~ocean_surface_stress_set_derived&#45;&gt;proc~ocean_surface_stress_refresh_mag -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge36" class="edge">
+<title>proc~ocean_surface_stress_set_derived&#45;&gt;proc~ocean_surface_stress_refresh_mag</title>
+<path fill="none" stroke="#0066ff" d="M571.1,-822.05C666.17,-837.98 821.4,-864.55 826,-869 880.88,-922.1 808.03,-982.98 862,-1037 862.96,-1037.96 863.96,-1038.89 864.99,-1039.78"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="863.24,-1042.84 873.4,-1045.86 867.35,-1037.16 863.24,-1042.84"/>
+</g>
+<!-- proc~ocean_surface_stress_apply_cover -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node39" class="node">
+<title>proc~ocean_surface_stress_apply_cover</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node39"><a xlink:href="../proc/ocean_surface_stress_apply_cover.html" xlink:title="ocean_surface_stress_apply_cover">
+<polygon fill="#d9534f" stroke="#d9534f" points="826,-822 630,-822 630,-798 826,-798 826,-822"/>
+<text text-anchor="middle" x="728" y="-807.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_surface_stress_apply_cover</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_surface_stress_set_derived&#45;&gt;proc~ocean_surface_stress_apply_cover -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge35" class="edge">
+<title>proc~ocean_surface_stress_set_derived&#45;&gt;proc~ocean_surface_stress_apply_cover</title>
+<path fill="none" stroke="#0066ff" d="M594.08,-810C602.61,-810 611.28,-810 619.89,-810"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="619.97,-813.5 629.97,-810 619.97,-806.5 619.97,-813.5"/>
+</g>
+<!-- proc~ocean_surfstress_derived_impl&#45;&gt;local -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge37" class="edge">
+<title>proc~ocean_surfstress_derived_impl&#45;&gt;local</title>
+<path fill="none" stroke="#0000ff" d="M1274.73,-1125.52C1303.3,-1122.72 1333.52,-1119.77 1356.2,-1117.55"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="1356.75,-1121.01 1366.37,-1116.56 1356.07,-1114.05 1356.75,-1121.01"/>
+</g>
+<!-- proc~find_or_create_region -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node27" class="node">
+<title>proc~find_or_create_region</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node27"><a xlink:href="../proc/find_or_create_region.html" xlink:title="find_or_create_region">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="791.5,-1028 664.5,-1028 664.5,-1004 791.5,-1004 791.5,-1028"/>
+<text text-anchor="middle" x="728" y="-1013.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">find_or_create_region</text>
+</a>
+</g>
+</g>
+<!-- proc~profiler_start&#45;&gt;proc~find_or_create_region -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge38" class="edge">
+<title>proc~profiler_start&#45;&gt;proc~find_or_create_region</title>
+<path fill="none" stroke="#ff00cb" d="M537.78,-934.9C555.91,-937.63 577.1,-942.89 594,-953 615.1,-965.63 608.88,-982.41 630,-995 637.58,-999.52 646.01,-1003.07 654.65,-1005.86"/>
+<polygon fill="#ff00cb" stroke="#ff00cb" points="653.87,-1009.28 664.45,-1008.7 655.82,-1002.56 653.87,-1009.28"/>
+</g>
+<!-- proc~get_wall_time -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node28" class="node">
+<title>proc~get_wall_time</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node28"><a xlink:href="../proc/get_wall_time.html" xlink:title="get_wall_time">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="770.5,-944 685.5,-944 685.5,-920 770.5,-920 770.5,-944"/>
+<text text-anchor="middle" x="728" y="-929.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">get_wall_time</text>
+</a>
+</g>
+</g>
+<!-- proc~profiler_start&#45;&gt;proc~get_wall_time -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge39" class="edge">
+<title>proc~profiler_start&#45;&gt;proc~get_wall_time</title>
+<path fill="none" stroke="#ff00cb" d="M537.52,-932C575.48,-932 633.37,-932 675.17,-932"/>
+<polygon fill="#ff00cb" stroke="#ff00cb" points="675.43,-935.5 685.43,-932 675.43,-928.5 675.43,-935.5"/>
+</g>
+<!-- proc~nvtx_range_push -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node30" class="node">
+<title>proc~nvtx_range_push</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node30"><a xlink:href="../proc/nvtx_range_push.html" xlink:title="nvtx_range_push">
+<polygon fill="#d9534f" stroke="#d9534f" points="779.5,-986 676.5,-986 676.5,-962 779.5,-962 779.5,-986"/>
+<text text-anchor="middle" x="728" y="-971.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nvtx_range_push</text>
+</a>
+</g>
+</g>
+<!-- proc~profiler_start&#45;&gt;proc~nvtx_range_push -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge40" class="edge">
+<title>proc~profiler_start&#45;&gt;proc~nvtx_range_push</title>
+<path fill="none" stroke="#ff00cb" d="M537.52,-939.17C572.85,-945.67 625.45,-955.33 666.27,-962.84"/>
+<polygon fill="#ff00cb" stroke="#ff00cb" points="665.65,-966.28 676.11,-964.65 666.91,-959.4 665.65,-966.28"/>
+</g>
+<!-- proc~profiler_stop&#45;&gt;proc~get_wall_time -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge41" class="edge">
+<title>proc~profiler_stop&#45;&gt;proc~get_wall_time</title>
+<path fill="none" stroke="#ff0066" d="M537,-897.08C574.96,-904.05 633.21,-914.76 675.2,-922.48"/>
+<polygon fill="#ff0066" stroke="#ff0066" points="674.77,-925.96 685.24,-924.32 676.04,-919.07 674.77,-925.96"/>
+</g>
+<!-- proc~nvtx_range_pop -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node29" class="node">
+<title>proc~nvtx_range_pop</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node29"><a xlink:href="../proc/nvtx_range_pop.html" xlink:title="nvtx_range_pop">
+<polygon fill="#d9534f" stroke="#d9534f" points="776.5,-902 679.5,-902 679.5,-878 776.5,-878 776.5,-902"/>
+<text text-anchor="middle" x="728" y="-887.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nvtx_range_pop</text>
+</a>
+</g>
+</g>
+<!-- proc~profiler_stop&#45;&gt;proc~nvtx_range_pop -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge42" class="edge">
+<title>proc~profiler_stop&#45;&gt;proc~nvtx_range_pop</title>
+<path fill="none" stroke="#ff0066" d="M537,-890C573.12,-890 627.61,-890 668.99,-890"/>
+<polygon fill="#ff0066" stroke="#ff0066" points="669.21,-893.5 679.21,-890 669.21,-886.5 669.21,-893.5"/>
+</g>
+<!-- proc~fold_north_u_face_2d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node45" class="node">
+<title>proc~fold_north_u_face_2d</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node45"><a xlink:href="../proc/fold_north_u_face_2d.html" xlink:title="fold_north_u_face_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1250,-822 1124,-822 1124,-798 1250,-798 1250,-822"/>
+<text text-anchor="middle" x="1187" y="-807.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_north_u_face_2d</text>
+</a>
+</g>
+</g>
+<!-- interface~fold_north_u_face&#45;&gt;proc~fold_north_u_face_2d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge43" class="edge">
+<title>interface~fold_north_u_face&#45;&gt;proc~fold_north_u_face_2d</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1014.14,-810C1043.72,-810 1081.09,-810 1113.42,-810"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1113.73,-813.5 1123.73,-810 1113.73,-806.5 1113.73,-813.5"/>
+</g>
+<!-- proc~fold_north_u_face_3d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node46" class="node">
+<title>proc~fold_north_u_face_3d</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node46"><a xlink:href="../proc/fold_north_u_face_3d.html" xlink:title="fold_north_u_face_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1250,-780 1124,-780 1124,-756 1250,-756 1250,-780"/>
+<text text-anchor="middle" x="1187" y="-765.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_north_u_face_3d</text>
+</a>
+</g>
+</g>
+<!-- interface~fold_north_u_face&#45;&gt;proc~fold_north_u_face_3d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge44" class="edge">
+<title>interface~fold_north_u_face&#45;&gt;proc~fold_north_u_face_3d</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1014.14,-800.15C1043.85,-794.59 1081.42,-787.57 1113.84,-781.5"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1114.54,-784.93 1123.73,-779.65 1113.26,-778.05 1114.54,-784.93"/>
+</g>
+<!-- proc~fold_north_v_face_2d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node47" class="node">
+<title>proc~fold_north_v_face_2d</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node47"><a xlink:href="../proc/fold_north_v_face_2d.html" xlink:title="fold_north_v_face_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1249.5,-1024 1124.5,-1024 1124.5,-1000 1249.5,-1000 1249.5,-1024"/>
+<text text-anchor="middle" x="1187" y="-1009.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_north_v_face_2d</text>
+</a>
+</g>
+</g>
+<!-- interface~fold_north_v_face&#45;&gt;proc~fold_north_v_face_2d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge45" class="edge">
+<title>interface~fold_north_v_face&#45;&gt;proc~fold_north_v_face_2d</title>
+<path fill="none" stroke="#ff5900" stroke-dasharray="5,2" d="M1013.57,-982.81C1043.5,-987.88 1081.54,-994.32 1114.27,-999.86"/>
+<polygon fill="#ff5900" stroke="#ff5900" points="1113.8,-1003.33 1124.25,-1001.55 1114.97,-996.43 1113.8,-1003.33"/>
+</g>
+<!-- proc~fold_north_v_face_3d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node48" class="node">
+<title>proc~fold_north_v_face_3d</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node48"><a xlink:href="../proc/fold_north_v_face_3d.html" xlink:title="fold_north_v_face_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1249.5,-1066 1124.5,-1066 1124.5,-1042 1249.5,-1042 1249.5,-1066"/>
+<text text-anchor="middle" x="1187" y="-1051.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_north_v_face_3d</text>
+</a>
+</g>
+</g>
+<!-- interface~fold_north_v_face&#45;&gt;proc~fold_north_v_face_3d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge46" class="edge">
+<title>interface~fold_north_v_face&#45;&gt;proc~fold_north_v_face_3d</title>
+<path fill="none" stroke="#ff5900" stroke-dasharray="5,2" d="M1013.68,-979.3C1028.98,-982.39 1045.27,-987.28 1059,-995 1079.28,-1006.4 1074.81,-1021.45 1095,-1033 1101.19,-1036.54 1107.94,-1039.49 1114.88,-1041.94"/>
+<polygon fill="#ff5900" stroke="#ff5900" points="1113.83,-1045.27 1124.42,-1044.98 1115.95,-1038.6 1113.83,-1045.27"/>
+</g>
+<!-- proc~ocean_fold_pack_2d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node53" class="node">
+<title>proc~ocean_fold_pack_2d</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node53"><a xlink:href="../proc/ocean_fold_pack_2d.html" xlink:title="ocean_fold_pack_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1247.5,-944 1126.5,-944 1126.5,-920 1247.5,-920 1247.5,-944"/>
+<text text-anchor="middle" x="1187" y="-929.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_fold_pack_2d</text>
+</a>
+</g>
+</g>
+<!-- interface~ocean_fold_pack&#45;&gt;proc~ocean_fold_pack_2d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge47" class="edge">
+<title>interface~ocean_fold_pack&#45;&gt;proc~ocean_fold_pack_2d</title>
+<path fill="none" stroke="#ffb300" stroke-dasharray="5,2" d="M1011.6,-932C1042.4,-932 1082.32,-932 1116.19,-932"/>
+<polygon fill="#ffb300" stroke="#ffb300" points="1116.49,-935.5 1126.49,-932 1116.49,-928.5 1116.49,-935.5"/>
+</g>
+<!-- proc~ocean_fold_pack_3d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node54" class="node">
+<title>proc~ocean_fold_pack_3d</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node54"><a xlink:href="../proc/ocean_fold_pack_3d.html" xlink:title="ocean_fold_pack_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1454,-945 1333,-945 1333,-921 1454,-921 1454,-945"/>
+<text text-anchor="middle" x="1393.5" y="-930.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_fold_pack_3d</text>
+</a>
+</g>
+</g>
+<!-- interface~ocean_fold_pack&#45;&gt;proc~ocean_fold_pack_3d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge48" class="edge">
+<title>interface~ocean_fold_pack&#45;&gt;proc~ocean_fold_pack_3d</title>
+<path fill="none" stroke="#ffb300" stroke-dasharray="5,2" d="M1011.68,-941.79C1036.62,-946.17 1067.28,-950.83 1095,-953 1176.53,-959.37 1197.53,-960.12 1279,-953 1294.21,-951.67 1310.43,-949.36 1325.71,-946.76"/>
+<polygon fill="#ffb300" stroke="#ffb300" points="1326.36,-950.21 1335.6,-945.03 1325.14,-943.31 1326.36,-950.21"/>
+</g>
+<!-- proc~ocean_fold_unpack_2d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node55" class="node">
+<title>proc~ocean_fold_unpack_2d</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node55"><a xlink:href="../proc/ocean_fold_unpack_2d.html" xlink:title="ocean_fold_unpack_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1254,-864 1120,-864 1120,-840 1254,-840 1254,-864"/>
+<text text-anchor="middle" x="1187" y="-849.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_fold_unpack_2d</text>
+</a>
+</g>
+</g>
+<!-- interface~ocean_fold_unpack&#45;&gt;proc~ocean_fold_unpack_2d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge49" class="edge">
+<title>interface~ocean_fold_unpack&#45;&gt;proc~ocean_fold_unpack_2d</title>
+<path fill="none" stroke="#f0ff00" stroke-dasharray="5,2" d="M1018.15,-852C1045.93,-852 1079.78,-852 1109.79,-852"/>
+<polygon fill="#f0ff00" stroke="#f0ff00" points="1109.8,-855.5 1119.8,-852 1109.8,-848.5 1109.8,-855.5"/>
+</g>
+<!-- proc~ocean_fold_unpack_3d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node56" class="node">
+<title>proc~ocean_fold_unpack_3d</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node56"><a xlink:href="../proc/ocean_fold_unpack_3d.html" xlink:title="ocean_fold_unpack_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1460.5,-903 1326.5,-903 1326.5,-879 1460.5,-879 1460.5,-903"/>
+<text text-anchor="middle" x="1393.5" y="-888.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_fold_unpack_3d</text>
+</a>
+</g>
+</g>
+<!-- interface~ocean_fold_unpack&#45;&gt;proc~ocean_fold_unpack_3d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge50" class="edge">
+<title>interface~ocean_fold_unpack&#45;&gt;proc~ocean_fold_unpack_3d</title>
+<path fill="none" stroke="#f0ff00" stroke-dasharray="5,2" d="M1018.18,-862.14C1041.86,-866.06 1069.69,-870.25 1095,-873 1170.01,-881.15 1256.09,-885.86 1316.29,-888.4"/>
+<polygon fill="#f0ff00" stroke="#f0ff00" points="1316.34,-891.9 1326.47,-888.82 1316.62,-884.91 1316.34,-891.9"/>
+</g>
+<!-- proc~grow_buffers -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node49" class="node">
+<title>proc~grow_buffers</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node49"><a xlink:href="../proc/grow_buffers.html" xlink:title="grow_buffers">
+<polygon fill="#d9534f" stroke="#d9534f" points="1434,-738 1353,-738 1353,-714 1434,-714 1434,-738"/>
+<text text-anchor="middle" x="1393.5" y="-723.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">grow_buffers</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_fold_begin&#45;&gt;proc~grow_buffers -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge51" class="edge">
+<title>proc~ocean_fold_begin&#45;&gt;proc~grow_buffers</title>
+<path fill="none" stroke="#00ffd1" d="M1240.13,-726C1271.6,-726 1311.49,-726 1342.56,-726"/>
+<polygon fill="#00ffd1" stroke="#00ffd1" points="1342.73,-729.5 1352.73,-726 1342.73,-722.5 1342.73,-729.5"/>
+</g>
+<!-- to_string -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node68" class="node">
+<title>to_string</title>
+<polygon fill="#777777" stroke="#777777" points="1422.5,-591 1364.5,-591 1364.5,-567 1422.5,-567 1422.5,-591"/>
+<text text-anchor="middle" x="1393.5" y="-576.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">to_string</text>
+</g>
+<!-- proc~ocean_fold_begin&#45;&gt;to_string -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge52" class="edge">
+<title>proc~ocean_fold_begin&#45;&gt;to_string</title>
+<path fill="none" stroke="#00ffd1" d="M1240.29,-721.52C1253.87,-718.42 1267.81,-713.32 1279,-705 1304.88,-685.76 1294.13,-666.59 1315,-642 1329.67,-624.71 1349.58,-608.64 1365.54,-597.06"/>
+<polygon fill="#00ffd1" stroke="#00ffd1" points="1367.81,-599.75 1373.95,-591.11 1363.77,-594.03 1367.81,-599.75"/>
+</g>
+<!-- warning -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node70" class="node">
+<title>warning</title>
+<polygon fill="#777777" stroke="#777777" points="1421,-675 1366,-675 1366,-651 1421,-651 1421,-675"/>
+<text text-anchor="middle" x="1393.5" y="-660.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">warning</text>
+</g>
+<!-- proc~ocean_fold_begin&#45;&gt;warning -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge53" class="edge">
+<title>proc~ocean_fold_begin&#45;&gt;warning</title>
+<path fill="none" stroke="#00ffd1" d="M1240.27,-715.14C1253.03,-712.16 1266.57,-708.72 1279,-705 1305.3,-697.13 1334.32,-686.36 1356.44,-677.69"/>
+<polygon fill="#00ffd1" stroke="#00ffd1" points="1357.76,-680.93 1365.77,-673.99 1355.18,-674.42 1357.76,-680.93"/>
+</g>
+<!-- comm_irecv_real_sp_array_n -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node40" class="node">
+<title>comm_irecv_real_sp_array_n</title>
+<polygon fill="#777777" stroke="#777777" points="1270,-402 1104,-402 1104,-378 1270,-378 1270,-402"/>
+<text text-anchor="middle" x="1187" y="-387.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_irecv_real_sp_array_n</text>
+</g>
+<!-- proc~ocean_fold_exchange&#45;&gt;comm_irecv_real_sp_array_n -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge54" class="edge">
+<title>proc~ocean_fold_exchange&#45;&gt;comm_irecv_real_sp_array_n</title>
+<path fill="none" stroke="#0078ff" d="M1024.53,-511.54C1036.96,-508.27 1049.18,-503.09 1059,-495 1090.35,-469.18 1063.84,-437.05 1095,-411 1096.59,-409.67 1098.24,-408.43 1099.95,-407.26"/>
+<polygon fill="#0078ff" stroke="#0078ff" points="1102.06,-410.08 1108.93,-402.01 1098.53,-404.03 1102.06,-410.08"/>
+</g>
+<!-- comm_isend_real_sp_array_n -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node41" class="node">
+<title>comm_isend_real_sp_array_n</title>
+<polygon fill="#777777" stroke="#777777" points="1271.5,-486 1102.5,-486 1102.5,-462 1271.5,-462 1271.5,-486"/>
+<text text-anchor="middle" x="1187" y="-471.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_isend_real_sp_array_n</text>
+</g>
+<!-- proc~ocean_fold_exchange&#45;&gt;comm_isend_real_sp_array_n -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge55" class="edge">
+<title>proc~ocean_fold_exchange&#45;&gt;comm_isend_real_sp_array_n</title>
+<path fill="none" stroke="#0078ff" d="M1024.63,-504.19C1051.66,-499.13 1083.42,-493.19 1111.58,-487.92"/>
+<polygon fill="#0078ff" stroke="#0078ff" points="1112.6,-491.29 1121.78,-486.01 1111.31,-484.41 1112.6,-491.29"/>
+</g>
+<!-- proc~comm_env_compute_comm -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node42" class="node">
+<title>proc~comm_env_compute_comm</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node42"><a xlink:href="../proc/comm_env_compute_comm.html" xlink:title="comm_env_compute_comm">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1268.5,-528 1105.5,-528 1105.5,-504 1268.5,-504 1268.5,-528"/>
+<text text-anchor="middle" x="1187" y="-513.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_env_compute_comm</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_fold_exchange&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge56" class="edge">
+<title>proc~ocean_fold_exchange&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#0078ff" d="M1024.63,-516C1046.53,-516 1071.54,-516 1095.23,-516"/>
+<polygon fill="#0078ff" stroke="#0078ff" points="1095.28,-519.5 1105.28,-516 1095.28,-512.5 1095.28,-519.5"/>
+</g>
+<!-- waitall -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node69" class="node">
+<title>waitall</title>
+<polygon fill="#777777" stroke="#777777" points="1214,-444 1160,-444 1160,-420 1214,-420 1214,-444"/>
+<text text-anchor="middle" x="1187" y="-429.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">waitall</text>
+</g>
+<!-- proc~ocean_fold_exchange&#45;&gt;waitall -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge57" class="edge">
+<title>proc~ocean_fold_exchange&#45;&gt;waitall</title>
+<path fill="none" stroke="#0078ff" d="M1024.63,-508.67C1036.58,-505.58 1048.59,-501.2 1059,-495 1080.12,-482.42 1073.97,-465.73 1095,-453 1111.31,-443.12 1131.84,-437.89 1149.27,-435.12"/>
+<polygon fill="#0078ff" stroke="#0078ff" points="1150.22,-438.52 1159.65,-433.69 1149.27,-431.58 1150.22,-438.52"/>
+</g>
+<!-- proc~ocean_halo_face_x_2d_impl -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node58" class="node">
+<title>proc~ocean_halo_face_x_2d_impl</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node58"><a xlink:href="../proc/ocean_halo_face_x_2d_impl.html" xlink:title="ocean_halo_face_x_2d_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1041,-402 880,-402 880,-378 1041,-378 1041,-402"/>
+<text text-anchor="middle" x="960.5" y="-387.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_face_x_2d_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_x_2d&#45;&gt;proc~ocean_halo_face_x_2d_impl -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge58" class="edge">
+<title>proc~ocean_halo_face_x_2d&#45;&gt;proc~ocean_halo_face_x_2d_impl</title>
+<path fill="none" stroke="#3c00ff" d="M794.74,-420.02C822.36,-414.99 854.66,-409.1 883.3,-403.88"/>
+<polygon fill="#3c00ff" stroke="#3c00ff" points="884.06,-407.3 893.27,-402.07 882.8,-400.42 884.06,-407.3"/>
+</g>
+<!-- proc~oh_count_face_x_2d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node63" class="node">
+<title>proc~oh_count_face_x_2d</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node63"><a xlink:href="../proc/oh_count_face_x_2d.html" xlink:title="oh_count_face_x_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1020.5,-444 900.5,-444 900.5,-420 1020.5,-420 1020.5,-444"/>
+<text text-anchor="middle" x="960.5" y="-429.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">oh_count_face_x_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_x_2d&#45;&gt;proc~oh_count_face_x_2d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge59" class="edge">
+<title>proc~ocean_halo_face_x_2d&#45;&gt;proc~oh_count_face_x_2d</title>
+<path fill="none" stroke="#3c00ff" d="M794.74,-432C824.63,-432 860,-432 890.3,-432"/>
+<polygon fill="#3c00ff" stroke="#3c00ff" points="890.36,-435.5 900.36,-432 890.36,-428.5 890.36,-435.5"/>
+</g>
+<!-- proc~ocean_halo_face_x_3d&#45;&gt;comm_irecv_real_sp_array_n -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge60" class="edge">
+<title>proc~ocean_halo_face_x_3d&#45;&gt;comm_irecv_real_sp_array_n</title>
+<path fill="none" stroke="#9500ff" d="M1027.19,-465.99C1038.29,-462.95 1049.33,-458.76 1059,-453 1080.12,-440.42 1073.97,-423.73 1095,-411 1098,-409.18 1101.15,-407.52 1104.39,-406"/>
+<polygon fill="#9500ff" stroke="#9500ff" points="1105.88,-409.18 1113.76,-402.1 1103.18,-402.72 1105.88,-409.18"/>
+</g>
+<!-- proc~ocean_halo_face_x_3d&#45;&gt;comm_isend_real_sp_array_n -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge61" class="edge">
+<title>proc~ocean_halo_face_x_3d&#45;&gt;comm_isend_real_sp_array_n</title>
+<path fill="none" stroke="#9500ff" d="M1027.04,-474C1047.46,-474 1070.4,-474 1092.36,-474"/>
+<polygon fill="#9500ff" stroke="#9500ff" points="1092.37,-477.5 1102.37,-474 1092.37,-470.5 1092.37,-477.5"/>
+</g>
+<!-- proc~ocean_halo_face_x_3d&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge62" class="edge">
+<title>proc~ocean_halo_face_x_3d&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#9500ff" d="M1025.83,-486.04C1052.6,-491.04 1083.85,-496.89 1111.61,-502.08"/>
+<polygon fill="#9500ff" stroke="#9500ff" points="1111.18,-505.56 1121.66,-503.96 1112.47,-498.68 1111.18,-505.56"/>
+</g>
+<!-- proc~ew_rank_east -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node43" class="node">
+<title>proc~ew_rank_east</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node43"><a xlink:href="../proc/ew_rank_east.html" xlink:title="ew_rank_east">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1229.5,-360 1144.5,-360 1144.5,-336 1229.5,-336 1229.5,-360"/>
+<text text-anchor="middle" x="1187" y="-345.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ew_rank_east</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_x_3d&#45;&gt;proc~ew_rank_east -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge63" class="edge">
+<title>proc~ocean_halo_face_x_3d&#45;&gt;proc~ew_rank_east</title>
+<path fill="none" stroke="#9500ff" d="M1027.06,-468.84C1038.61,-465.55 1049.84,-460.54 1059,-453 1090.35,-427.18 1063.84,-395.05 1095,-369 1106.01,-359.79 1120.29,-354.44 1134.25,-351.38"/>
+<polygon fill="#9500ff" stroke="#9500ff" points="1135.11,-354.78 1144.32,-349.54 1133.85,-347.9 1135.11,-354.78"/>
+</g>
+<!-- proc~ew_rank_west -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node44" class="node">
+<title>proc~ew_rank_west</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node44"><a xlink:href="../proc/ew_rank_west.html" xlink:title="ew_rank_west">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1230,-318 1144,-318 1144,-294 1230,-294 1230,-318"/>
+<text text-anchor="middle" x="1187" y="-303.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ew_rank_west</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_x_3d&#45;&gt;proc~ew_rank_west -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge64" class="edge">
+<title>proc~ocean_halo_face_x_3d&#45;&gt;proc~ew_rank_west</title>
+<path fill="none" stroke="#9500ff" d="M1027.1,-469.97C1038.85,-466.61 1050.15,-461.28 1059,-453 1101.52,-413.2 1052.77,-367.11 1095,-327 1105.41,-317.12 1119.5,-311.56 1133.48,-308.51"/>
+<polygon fill="#9500ff" stroke="#9500ff" points="1134.35,-311.91 1143.58,-306.72 1133.13,-305.02 1134.35,-311.91"/>
+</g>
+<!-- proc~needs_flags -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node50" class="node">
+<title>proc~needs_flags</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node50"><a xlink:href="../proc/needs_flags.html" xlink:title="needs_flags">
+<polygon fill="#d9534f" stroke="#d9534f" points="1225,-276 1149,-276 1149,-252 1225,-252 1225,-276"/>
+<text text-anchor="middle" x="1187" y="-261.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">needs_flags</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_x_3d&#45;&gt;proc~needs_flags -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge65" class="edge">
+<title>proc~ocean_halo_face_x_3d&#45;&gt;proc~needs_flags</title>
+<path fill="none" stroke="#9500ff" d="M1027.05,-470.58C1038.94,-467.19 1050.31,-461.7 1059,-453 1112.97,-398.98 1041.43,-339.42 1095,-285 1106.38,-273.44 1122.77,-267.7 1138.52,-265.01"/>
+<polygon fill="#9500ff" stroke="#9500ff" points="1139.26,-268.44 1148.71,-263.65 1138.33,-261.51 1139.26,-268.44"/>
+</g>
+<!-- proc~ns_rank_north -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node51" class="node">
+<title>proc~ns_rank_north</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node51"><a xlink:href="../proc/ns_rank_north.html" xlink:title="ns_rank_north">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1231,-192 1143,-192 1143,-168 1231,-168 1231,-192"/>
+<text text-anchor="middle" x="1187" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ns_rank_north</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_x_3d&#45;&gt;proc~ns_rank_north -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge66" class="edge">
+<title>proc~ocean_halo_face_x_3d&#45;&gt;proc~ns_rank_north</title>
+<path fill="none" stroke="#9500ff" d="M1027.03,-471.18C1039.07,-467.77 1050.5,-462.12 1059,-453 1136.14,-370.24 1018.47,-284.32 1095,-201 1104.71,-190.43 1118.58,-184.66 1132.58,-181.63"/>
+<polygon fill="#9500ff" stroke="#9500ff" points="1133.48,-185.03 1142.74,-179.88 1132.29,-178.13 1133.48,-185.03"/>
+</g>
+<!-- proc~ns_rank_south -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node52" class="node">
+<title>proc~ns_rank_south</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node52"><a xlink:href="../proc/ns_rank_south.html" xlink:title="ns_rank_south">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1231,-150 1143,-150 1143,-126 1231,-126 1231,-150"/>
+<text text-anchor="middle" x="1187" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ns_rank_south</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_x_3d&#45;&gt;proc~ns_rank_south -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge67" class="edge">
+<title>proc~ocean_halo_face_x_3d&#45;&gt;proc~ns_rank_south</title>
+<path fill="none" stroke="#9500ff" d="M1027.17,-471.31C1039.2,-467.89 1050.59,-462.2 1059,-453 1147.79,-355.81 1006.93,-256.84 1095,-159 1104.6,-148.33 1118.44,-142.53 1132.44,-139.51"/>
+<polygon fill="#9500ff" stroke="#9500ff" points="1133.34,-142.9 1142.61,-137.77 1132.16,-136.01 1133.34,-142.9"/>
+</g>
+<!-- proc~ocean_halo_buffers_ensure_nz -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node57" class="node">
+<title>proc~ocean_halo_buffers_ensure_nz</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node57"><a xlink:href="../proc/ocean_halo_buffers_ensure_nz.html" xlink:title="ocean_halo_buffers_ensure_nz">
+<polygon fill="#d9534f" stroke="#d9534f" points="1274.5,-570 1099.5,-570 1099.5,-546 1274.5,-546 1274.5,-570"/>
+<text text-anchor="middle" x="1187" y="-555.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_buffers_ensure_nz</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_x_3d&#45;&gt;proc~ocean_halo_buffers_ensure_nz -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge68" class="edge">
+<title>proc~ocean_halo_face_x_3d&#45;&gt;proc~ocean_halo_buffers_ensure_nz</title>
+<path fill="none" stroke="#9500ff" d="M1027.19,-482.01C1038.29,-485.05 1049.33,-489.24 1059,-495 1080.12,-507.58 1073.97,-524.27 1095,-537 1098,-538.82 1101.15,-540.48 1104.39,-542"/>
+<polygon fill="#9500ff" stroke="#9500ff" points="1103.18,-545.28 1113.76,-545.9 1105.88,-538.82 1103.18,-545.28"/>
+</g>
+<!-- proc~ocean_periodic_wrap_face_x_3d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node60" class="node">
+<title>proc~ocean_periodic_wrap_face_x_3d</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node60"><a xlink:href="../proc/ocean_periodic_wrap_face_x_3d.html" xlink:title="ocean_periodic_wrap_face_x_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1279,-696 1095,-696 1095,-672 1279,-672 1279,-696"/>
+<text text-anchor="middle" x="1187" y="-681.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_periodic_wrap_face_x_3d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_x_3d&#45;&gt;proc~ocean_periodic_wrap_face_x_3d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge69" class="edge">
+<title>proc~ocean_halo_face_x_3d&#45;&gt;proc~ocean_periodic_wrap_face_x_3d</title>
+<path fill="none" stroke="#9500ff" d="M1027.05,-477.42C1038.94,-480.81 1050.31,-486.3 1059,-495 1112.97,-549.02 1041.43,-608.58 1095,-663 1095.96,-663.97 1096.96,-664.91 1097.98,-665.8"/>
+<polygon fill="#9500ff" stroke="#9500ff" points="1096.28,-668.89 1106.43,-671.9 1100.37,-663.21 1096.28,-668.89"/>
+</g>
+<!-- proc~oh_count_face_x_3d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node64" class="node">
+<title>proc~oh_count_face_x_3d</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node64"><a xlink:href="../proc/oh_count_face_x_3d.html" xlink:title="oh_count_face_x_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1247,-654 1127,-654 1127,-630 1247,-630 1247,-654"/>
+<text text-anchor="middle" x="1187" y="-639.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">oh_count_face_x_3d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_x_3d&#45;&gt;proc~oh_count_face_x_3d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge70" class="edge">
+<title>proc~ocean_halo_face_x_3d&#45;&gt;proc~oh_count_face_x_3d</title>
+<path fill="none" stroke="#9500ff" d="M1027.1,-478.03C1038.85,-481.39 1050.15,-486.72 1059,-495 1101.52,-534.8 1052.77,-580.89 1095,-621 1101.25,-626.94 1108.84,-631.32 1116.93,-634.53"/>
+<polygon fill="#9500ff" stroke="#9500ff" points="1116.01,-637.91 1126.61,-637.78 1118.24,-631.28 1116.01,-637.91"/>
+</g>
+<!-- proc~oh_count_msgs -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node67" class="node">
+<title>proc~oh_count_msgs</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node67"><a xlink:href="../proc/oh_count_msgs.html" xlink:title="oh_count_msgs">
+<polygon fill="#d9534f" stroke="#d9534f" points="1234,-234 1140,-234 1140,-210 1234,-210 1234,-234"/>
+<text text-anchor="middle" x="1187" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">oh_count_msgs</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_x_3d&#45;&gt;proc~oh_count_msgs -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge71" class="edge">
+<title>proc~ocean_halo_face_x_3d&#45;&gt;proc~oh_count_msgs</title>
+<path fill="none" stroke="#9500ff" d="M1027.08,-470.93C1039.05,-467.52 1050.43,-461.94 1059,-453 1124.53,-384.64 1029.98,-311.84 1095,-243 1104.14,-233.33 1116.77,-227.7 1129.72,-224.51"/>
+<polygon fill="#9500ff" stroke="#9500ff" points="1130.51,-227.92 1139.63,-222.53 1129.14,-221.06 1130.51,-227.92"/>
+</g>
+<!-- proc~ocean_halo_face_x_3d&#45;&gt;waitall -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge72" class="edge">
+<title>proc~ocean_halo_face_x_3d&#45;&gt;waitall</title>
+<path fill="none" stroke="#9500ff" d="M1025.83,-461.96C1066.05,-454.44 1116.37,-445.03 1149.77,-438.78"/>
+<polygon fill="#9500ff" stroke="#9500ff" points="1150.79,-442.15 1159.98,-436.87 1149.51,-435.27 1150.79,-442.15"/>
+</g>
+<!-- proc~ocean_halo_face_y_2d_impl -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node59" class="node">
+<title>proc~ocean_halo_face_y_2d_impl</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node59"><a xlink:href="../proc/ocean_halo_face_y_2d_impl.html" xlink:title="ocean_halo_face_y_2d_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1041,-276 880,-276 880,-252 1041,-252 1041,-276"/>
+<text text-anchor="middle" x="960.5" y="-261.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_face_y_2d_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_y_2d&#45;&gt;proc~ocean_halo_face_y_2d_impl -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge73" class="edge">
+<title>proc~ocean_halo_face_y_2d&#45;&gt;proc~ocean_halo_face_y_2d_impl</title>
+<path fill="none" stroke="#f000ff" d="M794.74,-294.02C822.36,-288.99 854.66,-283.1 883.3,-277.88"/>
+<polygon fill="#f000ff" stroke="#f000ff" points="884.06,-281.3 893.27,-276.07 882.8,-274.42 884.06,-281.3"/>
+</g>
+<!-- proc~oh_count_face_y_2d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node65" class="node">
+<title>proc~oh_count_face_y_2d</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node65"><a xlink:href="../proc/oh_count_face_y_2d.html" xlink:title="oh_count_face_y_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1020.5,-318 900.5,-318 900.5,-294 1020.5,-294 1020.5,-318"/>
+<text text-anchor="middle" x="960.5" y="-303.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">oh_count_face_y_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_y_2d&#45;&gt;proc~oh_count_face_y_2d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge74" class="edge">
+<title>proc~ocean_halo_face_y_2d&#45;&gt;proc~oh_count_face_y_2d</title>
+<path fill="none" stroke="#f000ff" d="M794.74,-306C824.63,-306 860,-306 890.3,-306"/>
+<polygon fill="#f000ff" stroke="#f000ff" points="890.36,-309.5 900.36,-306 890.36,-302.5 890.36,-309.5"/>
+</g>
+<!-- proc~ocean_halo_face_y_3d&#45;&gt;comm_irecv_real_sp_array_n -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge75" class="edge">
+<title>proc~ocean_halo_face_y_3d&#45;&gt;comm_irecv_real_sp_array_n</title>
+<path fill="none" stroke="#ff00b4" d="M1025.83,-360.04C1052.6,-365.04 1083.85,-370.89 1111.61,-376.08"/>
+<polygon fill="#ff00b4" stroke="#ff00b4" points="1111.18,-379.56 1121.66,-377.96 1112.47,-372.68 1111.18,-379.56"/>
+</g>
+<!-- proc~ocean_halo_face_y_3d&#45;&gt;comm_isend_real_sp_array_n -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge76" class="edge">
+<title>proc~ocean_halo_face_y_3d&#45;&gt;comm_isend_real_sp_array_n</title>
+<path fill="none" stroke="#ff00b4" d="M1027.06,-353.16C1038.61,-356.45 1049.84,-361.46 1059,-369 1090.35,-394.82 1063.84,-426.95 1095,-453 1096.59,-454.33 1098.24,-455.57 1099.95,-456.74"/>
+<polygon fill="#ff00b4" stroke="#ff00b4" points="1098.53,-459.97 1108.93,-461.99 1102.06,-453.92 1098.53,-459.97"/>
+</g>
+<!-- proc~ocean_halo_face_y_3d&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge77" class="edge">
+<title>proc~ocean_halo_face_y_3d&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#ff00b4" d="M1027.1,-352.03C1038.85,-355.39 1050.15,-360.72 1059,-369 1101.52,-408.8 1052.77,-454.89 1095,-495 1096.14,-496.08 1097.32,-497.11 1098.54,-498.09"/>
+<polygon fill="#ff00b4" stroke="#ff00b4" points="1096.88,-501.19 1107.13,-503.87 1100.79,-495.38 1096.88,-501.19"/>
+</g>
+<!-- proc~ocean_halo_face_y_3d&#45;&gt;proc~ew_rank_east -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge78" class="edge">
+<title>proc~ocean_halo_face_y_3d&#45;&gt;proc~ew_rank_east</title>
+<path fill="none" stroke="#ff00b4" d="M1027.04,-348C1061.26,-348 1102.52,-348 1134.43,-348"/>
+<polygon fill="#ff00b4" stroke="#ff00b4" points="1134.44,-351.5 1144.44,-348 1134.44,-344.5 1134.44,-351.5"/>
+</g>
+<!-- proc~ocean_halo_face_y_3d&#45;&gt;proc~ew_rank_west -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge79" class="edge">
+<title>proc~ocean_halo_face_y_3d&#45;&gt;proc~ew_rank_west</title>
+<path fill="none" stroke="#ff00b4" d="M1025.83,-335.96C1060.09,-329.56 1101.68,-321.78 1133.89,-315.75"/>
+<polygon fill="#ff00b4" stroke="#ff00b4" points="1134.81,-319.14 1143.99,-313.86 1133.52,-312.26 1134.81,-319.14"/>
+</g>
+<!-- proc~ocean_halo_face_y_3d&#45;&gt;proc~needs_flags -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge80" class="edge">
+<title>proc~ocean_halo_face_y_3d&#45;&gt;proc~needs_flags</title>
+<path fill="none" stroke="#ff00b4" d="M1027.19,-339.99C1038.29,-336.95 1049.33,-332.76 1059,-327 1080.12,-314.42 1073.97,-297.73 1095,-285 1108.07,-277.08 1123.85,-272.15 1138.58,-269.08"/>
+<polygon fill="#ff00b4" stroke="#ff00b4" points="1139.36,-272.49 1148.55,-267.23 1138.09,-265.61 1139.36,-272.49"/>
+</g>
+<!-- proc~ocean_halo_face_y_3d&#45;&gt;proc~ns_rank_north -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge81" class="edge">
+<title>proc~ocean_halo_face_y_3d&#45;&gt;proc~ns_rank_north</title>
+<path fill="none" stroke="#ff00b4" d="M1027.1,-343.97C1038.85,-340.61 1050.15,-335.28 1059,-327 1101.52,-287.2 1052.77,-241.11 1095,-201 1105.22,-191.3 1118.98,-185.76 1132.71,-182.68"/>
+<polygon fill="#ff00b4" stroke="#ff00b4" points="1133.45,-186.1 1142.65,-180.85 1132.18,-179.22 1133.45,-186.1"/>
+</g>
+<!-- proc~ocean_halo_face_y_3d&#45;&gt;proc~ns_rank_south -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge82" class="edge">
+<title>proc~ocean_halo_face_y_3d&#45;&gt;proc~ns_rank_south</title>
+<path fill="none" stroke="#ff00b4" d="M1027.05,-344.58C1038.94,-341.19 1050.31,-335.7 1059,-327 1112.97,-272.98 1041.43,-213.42 1095,-159 1104.98,-148.87 1118.8,-143.21 1132.66,-140.15"/>
+<polygon fill="#ff00b4" stroke="#ff00b4" points="1133.48,-143.56 1142.71,-138.36 1132.25,-136.67 1133.48,-143.56"/>
+</g>
+<!-- proc~ocean_halo_face_y_3d&#45;&gt;proc~ocean_halo_buffers_ensure_nz -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge83" class="edge">
+<title>proc~ocean_halo_face_y_3d&#45;&gt;proc~ocean_halo_buffers_ensure_nz</title>
+<path fill="none" stroke="#ff00b4" d="M1027.05,-351.42C1038.94,-354.81 1050.31,-360.3 1059,-369 1112.97,-423.02 1041.43,-482.58 1095,-537 1095.96,-537.97 1096.96,-538.91 1097.98,-539.8"/>
+<polygon fill="#ff00b4" stroke="#ff00b4" points="1096.28,-542.89 1106.43,-545.9 1100.37,-537.21 1096.28,-542.89"/>
+</g>
+<!-- proc~ocean_periodic_wrap_face_y_3d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node61" class="node">
+<title>proc~ocean_periodic_wrap_face_y_3d</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node61"><a xlink:href="../proc/ocean_periodic_wrap_face_y_3d.html" xlink:title="ocean_periodic_wrap_face_y_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1279,-108 1095,-108 1095,-84 1279,-84 1279,-108"/>
+<text text-anchor="middle" x="1187" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_periodic_wrap_face_y_3d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_y_3d&#45;&gt;proc~ocean_periodic_wrap_face_y_3d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge84" class="edge">
+<title>proc~ocean_halo_face_y_3d&#45;&gt;proc~ocean_periodic_wrap_face_y_3d</title>
+<path fill="none" stroke="#ff00b4" d="M1027.08,-344.93C1039.05,-341.52 1050.43,-335.94 1059,-327 1124.53,-258.64 1029.98,-185.84 1095,-117 1095.91,-116.04 1096.85,-115.12 1097.82,-114.23"/>
+<polygon fill="#ff00b4" stroke="#ff00b4" points="1099.97,-117 1105.85,-108.19 1095.76,-111.41 1099.97,-117"/>
+</g>
+<!-- proc~oh_count_face_y_3d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node66" class="node">
+<title>proc~oh_count_face_y_3d</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node66"><a xlink:href="../proc/oh_count_face_y_3d.html" xlink:title="oh_count_face_y_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1247,-66 1127,-66 1127,-42 1247,-42 1247,-66"/>
+<text text-anchor="middle" x="1187" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">oh_count_face_y_3d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_face_y_3d&#45;&gt;proc~oh_count_face_y_3d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge85" class="edge">
+<title>proc~ocean_halo_face_y_3d&#45;&gt;proc~oh_count_face_y_3d</title>
+<path fill="none" stroke="#ff00b4" d="M1027.03,-345.18C1039.07,-341.77 1050.5,-336.12 1059,-327 1136.14,-244.24 1018.47,-158.32 1095,-75 1101.06,-68.41 1108.73,-63.68 1117.05,-60.32"/>
+<polygon fill="#ff00b4" stroke="#ff00b4" points="1118.3,-63.59 1126.66,-57.09 1116.07,-56.96 1118.3,-63.59"/>
+</g>
+<!-- proc~ocean_halo_face_y_3d&#45;&gt;proc~oh_count_msgs -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge86" class="edge">
+<title>proc~ocean_halo_face_y_3d&#45;&gt;proc~oh_count_msgs</title>
+<path fill="none" stroke="#ff00b4" d="M1027.06,-342.84C1038.61,-339.55 1049.84,-334.54 1059,-327 1090.35,-301.18 1063.84,-269.05 1095,-243 1104.82,-234.79 1117.23,-229.65 1129.7,-226.46"/>
+<polygon fill="#ff00b4" stroke="#ff00b4" points="1130.63,-229.84 1139.67,-224.3 1129.15,-223 1130.63,-229.84"/>
+</g>
+<!-- proc~ocean_halo_face_y_3d&#45;&gt;waitall -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge87" class="edge">
+<title>proc~ocean_halo_face_y_3d&#45;&gt;waitall</title>
+<path fill="none" stroke="#ff00b4" d="M1027.19,-356.01C1038.29,-359.05 1049.33,-363.24 1059,-369 1080.12,-381.58 1073.97,-398.27 1095,-411 1111.31,-420.88 1131.84,-426.11 1149.27,-428.88"/>
+<polygon fill="#ff00b4" stroke="#ff00b4" points="1149.27,-432.42 1159.65,-430.31 1150.22,-425.48 1149.27,-432.42"/>
+</g>
+<!-- proc~ocean_surface_stress_apply_cover&#45;&gt;proc~ocean_surface_stress_refresh_mag -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge88" class="edge">
+<title>proc~ocean_surface_stress_apply_cover&#45;&gt;proc~ocean_surface_stress_refresh_mag</title>
+<path fill="none" stroke="#ff005a" d="M807.24,-822.1C814.25,-825.67 820.69,-830.22 826,-836 887.4,-902.83 798.96,-971.72 862,-1037 862.95,-1037.98 863.93,-1038.92 864.94,-1039.82"/>
+<polygon fill="#ff005a" stroke="#ff005a" points="863.14,-1042.85 873.26,-1046 867.32,-1037.23 863.14,-1042.85"/>
+</g>
+<!-- proc~ocean_surfstress_cover_impl -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node62" class="node">
+<title>proc~ocean_surfstress_cover_impl</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node62"><a xlink:href="../proc/ocean_surfstress_cover_impl.html" xlink:title="ocean_surfstress_cover_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1043,-1028 878,-1028 878,-1004 1043,-1004 1043,-1028"/>
+<text text-anchor="middle" x="960.5" y="-1013.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_surfstress_cover_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_surface_stress_apply_cover&#45;&gt;proc~ocean_surfstress_cover_impl -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge89" class="edge">
+<title>proc~ocean_surface_stress_apply_cover&#45;&gt;proc~ocean_surfstress_cover_impl</title>
+<path fill="none" stroke="#ff005a" d="M806.51,-822.11C813.75,-825.68 820.44,-830.22 826,-836 876.22,-888.23 810.5,-944.04 862,-995 864.19,-997.17 866.55,-999.14 869.04,-1000.92"/>
+<polygon fill="#ff005a" stroke="#ff005a" points="867.61,-1004.15 877.98,-1006.32 871.23,-998.16 867.61,-1004.15"/>
+</g>
+<!-- comm_world -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node71" class="node">
+<title>comm_world</title>
+<polygon fill="#777777" stroke="#777777" points="1434,-528 1353,-528 1353,-504 1434,-504 1434,-528"/>
+<text text-anchor="middle" x="1393.5" y="-513.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_world</text>
+</g>
+<!-- proc~comm_env_compute_comm&#45;&gt;comm_world -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge90" class="edge">
+<title>proc~comm_env_compute_comm&#45;&gt;comm_world</title>
+<path fill="none" stroke="#ff6200" d="M1268.53,-516C1293.52,-516 1320.33,-516 1342.6,-516"/>
+<polygon fill="#ff6200" stroke="#ff6200" points="1342.81,-519.5 1352.81,-516 1342.81,-512.5 1342.81,-519.5"/>
+</g>
+<!-- proc~decomp_rank_from_coords -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node72" class="node">
+<title>proc~decomp_rank_from_coords</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node72"><a xlink:href="../proc/decomp_rank_from_coords.html" xlink:title="decomp_rank_from_coords">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1472,-255 1315,-255 1315,-231 1472,-231 1472,-255"/>
+<text text-anchor="middle" x="1393.5" y="-240.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">decomp_rank_from_coords</text>
+</a>
+</g>
+</g>
+<!-- proc~ew_rank_east&#45;&gt;proc~decomp_rank_from_coords -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge91" class="edge">
+<title>proc~ew_rank_east&#45;&gt;proc~decomp_rank_from_coords</title>
+<path fill="none" stroke="#ff9400" d="M1229.95,-342.05C1245.8,-338.85 1263.69,-334.06 1279,-327 1315.13,-310.35 1351.06,-281.05 1372.52,-261.84"/>
+<polygon fill="#ff9400" stroke="#ff9400" points="1374.98,-264.34 1380.01,-255.01 1370.27,-259.16 1374.98,-264.34"/>
+</g>
+<!-- proc~ew_rank_west&#45;&gt;proc~decomp_rank_from_coords -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge92" class="edge">
+<title>proc~ew_rank_west&#45;&gt;proc~decomp_rank_from_coords</title>
+<path fill="none" stroke="#ffc500" d="M1230.43,-297.39C1245.84,-293.95 1263.31,-289.69 1279,-285 1304.14,-277.48 1331.76,-267.31 1353.46,-258.85"/>
+<polygon fill="#ffc500" stroke="#ffc500" points="1354.96,-262.02 1362.98,-255.1 1352.39,-255.51 1354.96,-262.02"/>
+</g>
+<!-- proc~fold_north_v_face_2d&#45;&gt;local -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge93" class="edge">
+<title>proc~fold_north_v_face_2d&#45;&gt;local</title>
+<path fill="none" stroke="#a4ff00" d="M1249.78,-1022.79C1259.77,-1025.51 1269.83,-1028.87 1279,-1033 1314.42,-1048.96 1350.04,-1076.75 1371.69,-1095.26"/>
+<polygon fill="#a4ff00" stroke="#a4ff00" points="1369.43,-1097.93 1379.27,-1101.85 1374.02,-1092.65 1369.43,-1097.93"/>
+</g>
+<!-- proc~fold_north_v_face_3d&#45;&gt;local -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge94" class="edge">
+<title>proc~fold_north_v_face_3d&#45;&gt;local</title>
+<path fill="none" stroke="#73ff00" d="M1230.62,-1066.06C1245.9,-1070.41 1263.23,-1075.39 1279,-1080 1305.02,-1087.61 1334.34,-1096.4 1356.66,-1103.14"/>
+<polygon fill="#73ff00" stroke="#73ff00" points="1355.8,-1106.53 1366.38,-1106.07 1357.82,-1099.83 1355.8,-1106.53"/>
+</g>
+<!-- proc~ns_rank_north&#45;&gt;proc~decomp_rank_from_coords -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge95" class="edge">
+<title>proc~ns_rank_north&#45;&gt;proc~decomp_rank_from_coords</title>
+<path fill="none" stroke="#00ff20" d="M1231.35,-188.82C1246.53,-192.22 1263.62,-196.4 1279,-201 1304.14,-208.52 1331.76,-218.69 1353.46,-227.15"/>
+<polygon fill="#00ff20" stroke="#00ff20" points="1352.39,-230.49 1362.98,-230.9 1354.96,-223.98 1352.39,-230.49"/>
+</g>
+<!-- proc~ns_rank_south&#45;&gt;proc~decomp_rank_from_coords -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge96" class="edge">
+<title>proc~ns_rank_south&#45;&gt;proc~decomp_rank_from_coords</title>
+<path fill="none" stroke="#00ff52" d="M1231.33,-144.23C1246.83,-147.43 1264.13,-152.14 1279,-159 1315.13,-175.65 1351.06,-204.95 1372.52,-224.16"/>
+<polygon fill="#00ff52" stroke="#00ff52" points="1370.27,-226.84 1380.01,-230.99 1374.98,-221.66 1370.27,-226.84"/>
+</g>
+<!-- proc~ocean_fold_pack_2d&#45;&gt;proc~ocean_fold_pack_3d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge97" class="edge">
+<title>proc~ocean_fold_pack_2d&#45;&gt;proc~ocean_fold_pack_3d</title>
+<path fill="none" stroke="#00ff83" d="M1247.7,-932.29C1271.12,-932.41 1298.16,-932.54 1322.48,-932.66"/>
+<polygon fill="#00ff83" stroke="#00ff83" points="1322.71,-936.16 1332.73,-932.71 1322.74,-929.16 1322.71,-936.16"/>
+</g>
+<!-- proc~fold_stagger_family -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node73" class="node">
+<title>proc~fold_stagger_family</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node73"><a xlink:href="../proc/fold_stagger_family.html" xlink:title="fold_stagger_family">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1625,-903 1508,-903 1508,-879 1625,-879 1625,-903"/>
+<text text-anchor="middle" x="1566.5" y="-888.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_stagger_family</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_fold_pack_3d&#45;&gt;proc~fold_stagger_family -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge98" class="edge">
+<title>proc~ocean_fold_pack_3d&#45;&gt;proc~fold_stagger_family</title>
+<path fill="none" stroke="#00ffb4" d="M1443.5,-920.96C1463.18,-916.13 1486.03,-910.52 1506.6,-905.47"/>
+<polygon fill="#00ffb4" stroke="#00ffb4" points="1507.61,-908.82 1516.49,-903.04 1505.94,-902.02 1507.61,-908.82"/>
+</g>
+<!-- proc~fold_stagger_nrows -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_node74" class="node">
+<title>proc~fold_stagger_nrows</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CallsGraph_node74"><a xlink:href="../proc/fold_stagger_nrows.html" xlink:title="fold_stagger_nrows">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1624,-945 1509,-945 1509,-921 1624,-921 1624,-945"/>
+<text text-anchor="middle" x="1566.5" y="-930.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_stagger_nrows</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_fold_pack_3d&#45;&gt;proc~fold_stagger_nrows -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge99" class="edge">
+<title>proc~ocean_fold_pack_3d&#45;&gt;proc~fold_stagger_nrows</title>
+<path fill="none" stroke="#00ffb4" d="M1454.31,-933C1468.71,-933 1484.18,-933 1498.86,-933"/>
+<polygon fill="#00ffb4" stroke="#00ffb4" points="1498.89,-936.5 1508.89,-933 1498.89,-929.5 1498.89,-936.5"/>
+</g>
+<!-- proc~ocean_fold_unpack_2d&#45;&gt;proc~ocean_fold_unpack_3d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge100" class="edge">
+<title>proc~ocean_fold_unpack_2d&#45;&gt;proc~ocean_fold_unpack_3d</title>
+<path fill="none" stroke="#00ffe6" d="M1251.03,-864.02C1272.6,-868.13 1296.92,-872.77 1319.24,-877.03"/>
+<polygon fill="#00ffe6" stroke="#00ffe6" points="1318.85,-880.52 1329.33,-878.95 1320.16,-873.64 1318.85,-880.52"/>
+</g>
+<!-- proc~ocean_fold_unpack_3d&#45;&gt;proc~fold_stagger_family -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge101" class="edge">
+<title>proc~ocean_fold_unpack_3d&#45;&gt;proc~fold_stagger_family</title>
+<path fill="none" stroke="#00e6ff" d="M1460.61,-891C1472.8,-891 1485.54,-891 1497.78,-891"/>
+<polygon fill="#00e6ff" stroke="#00e6ff" points="1497.91,-894.5 1507.91,-891 1497.91,-887.5 1497.91,-894.5"/>
+</g>
+<!-- proc~ocean_fold_unpack_3d&#45;&gt;proc~fold_stagger_nrows -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge102" class="edge">
+<title>proc~ocean_fold_unpack_3d&#45;&gt;proc~fold_stagger_nrows</title>
+<path fill="none" stroke="#00e6ff" d="M1443.5,-903.04C1463.18,-907.87 1486.03,-913.48 1506.6,-918.53"/>
+<polygon fill="#00e6ff" stroke="#00e6ff" points="1505.94,-921.98 1516.49,-920.96 1507.61,-915.18 1505.94,-921.98"/>
+</g>
+<!-- proc~ocean_halo_buffers_ensure_nz&#45;&gt;to_string -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge103" class="edge">
+<title>proc~ocean_halo_buffers_ensure_nz&#45;&gt;to_string</title>
+<path fill="none" stroke="#00b4ff" d="M1274.73,-566.91C1302.36,-569.74 1331.53,-572.74 1353.93,-575.04"/>
+<polygon fill="#00b4ff" stroke="#00b4ff" points="1353.73,-578.54 1364.03,-576.08 1354.44,-571.57 1353.73,-578.54"/>
+</g>
+<!-- proc~ocean_halo_buffers_ensure_nz&#45;&gt;warning -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge104" class="edge">
+<title>proc~ocean_halo_buffers_ensure_nz&#45;&gt;warning</title>
+<path fill="none" stroke="#00b4ff" d="M1254.68,-570.03C1263.04,-572.51 1271.34,-575.47 1279,-579 1298.07,-587.79 1342.43,-622.42 1369.7,-644.38"/>
+<polygon fill="#00b4ff" stroke="#00b4ff" points="1367.59,-647.18 1377.57,-650.74 1372,-641.73 1367.59,-647.18"/>
+</g>
+<!-- proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~ocean_periodic_wrap_face_x_2d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge113" class="edge">
+<title>proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~ocean_periodic_wrap_face_x_2d</title>
+<path fill="none" stroke="#0083ff" d="M1041.21,-398.7C1047.78,-401.83 1053.86,-405.85 1059,-411 1112.97,-465.02 1041.43,-524.58 1095,-579 1095.96,-579.97 1096.96,-580.91 1097.98,-581.8"/>
+<polygon fill="#0083ff" stroke="#0083ff" points="1096.28,-584.89 1106.43,-587.9 1100.37,-579.21 1096.28,-584.89"/>
+</g>
+<!-- proc~ocean_halo_face_x_2d_impl&#45;&gt;comm_irecv_real_sp_array_n -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge105" class="edge">
+<title>proc~ocean_halo_face_x_2d_impl&#45;&gt;comm_irecv_real_sp_array_n</title>
+<path fill="none" stroke="#0083ff" d="M1041.28,-390C1058.24,-390 1076.29,-390 1093.67,-390"/>
+<polygon fill="#0083ff" stroke="#0083ff" points="1093.82,-393.5 1103.82,-390 1093.82,-386.5 1093.82,-393.5"/>
+</g>
+<!-- proc~ocean_halo_face_x_2d_impl&#45;&gt;comm_isend_real_sp_array_n -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge106" class="edge">
+<title>proc~ocean_halo_face_x_2d_impl&#45;&gt;comm_isend_real_sp_array_n</title>
+<path fill="none" stroke="#0083ff" d="M1039.89,-402.05C1046.58,-404.51 1053.05,-407.46 1059,-411 1080.12,-423.58 1073.97,-440.27 1095,-453 1098,-454.82 1101.15,-456.48 1104.39,-458"/>
+<polygon fill="#0083ff" stroke="#0083ff" points="1103.18,-461.28 1113.76,-461.9 1105.88,-454.82 1103.18,-461.28"/>
+</g>
+<!-- proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge107" class="edge">
+<title>proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#0083ff" d="M1041.19,-400.22C1047.6,-403.06 1053.65,-406.6 1059,-411 1090.35,-436.82 1063.84,-468.95 1095,-495 1096.59,-496.33 1098.24,-497.57 1099.95,-498.74"/>
+<polygon fill="#0083ff" stroke="#0083ff" points="1098.53,-501.97 1108.93,-503.99 1102.06,-495.92 1098.53,-501.97"/>
+</g>
+<!-- proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~ew_rank_east -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge108" class="edge">
+<title>proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~ew_rank_east</title>
+<path fill="none" stroke="#0083ff" d="M1025.83,-377.96C1060.21,-371.53 1101.96,-363.72 1134.22,-357.69"/>
+<polygon fill="#0083ff" stroke="#0083ff" points="1135.15,-361.07 1144.33,-355.79 1133.86,-354.19 1135.15,-361.07"/>
+</g>
+<!-- proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~ew_rank_west -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge109" class="edge">
+<title>proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~ew_rank_west</title>
+<path fill="none" stroke="#0083ff" d="M1039.89,-377.95C1046.58,-375.49 1053.05,-372.54 1059,-369 1080.12,-356.42 1073.97,-339.73 1095,-327 1106.6,-319.97 1120.34,-315.3 1133.58,-312.18"/>
+<polygon fill="#0083ff" stroke="#0083ff" points="1134.5,-315.57 1143.57,-310.1 1133.06,-308.72 1134.5,-315.57"/>
+</g>
+<!-- proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~needs_flags -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge110" class="edge">
+<title>proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~needs_flags</title>
+<path fill="none" stroke="#0083ff" d="M1041.19,-379.78C1047.6,-376.94 1053.65,-373.4 1059,-369 1090.35,-343.18 1063.84,-311.05 1095,-285 1107.24,-274.76 1123.53,-269.29 1138.93,-266.44"/>
+<polygon fill="#0083ff" stroke="#0083ff" points="1139.52,-269.89 1148.88,-264.92 1138.46,-262.97 1139.52,-269.89"/>
+</g>
+<!-- proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~ns_rank_north -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge111" class="edge">
+<title>proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~ns_rank_north</title>
+<path fill="none" stroke="#0083ff" d="M1041.21,-381.3C1047.78,-378.17 1053.86,-374.15 1059,-369 1112.97,-314.98 1041.43,-255.42 1095,-201 1104.98,-190.87 1118.8,-185.21 1132.66,-182.15"/>
+<polygon fill="#0083ff" stroke="#0083ff" points="1133.48,-185.56 1142.71,-180.36 1132.25,-178.67 1133.48,-185.56"/>
+</g>
+<!-- proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~ns_rank_south -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge112" class="edge">
+<title>proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~ns_rank_south</title>
+<path fill="none" stroke="#0083ff" d="M1041.44,-381.52C1047.96,-378.34 1053.97,-374.25 1059,-369 1124.53,-300.64 1029.98,-227.84 1095,-159 1104.85,-148.57 1118.77,-142.84 1132.77,-139.81"/>
+<polygon fill="#0083ff" stroke="#0083ff" points="1133.66,-143.2 1142.92,-138.05 1132.46,-136.31 1133.66,-143.2"/>
+</g>
+<!-- proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~oh_count_msgs -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge114" class="edge">
+<title>proc~ocean_halo_face_x_2d_impl&#45;&gt;proc~oh_count_msgs</title>
+<path fill="none" stroke="#0083ff" d="M1041.33,-380.71C1047.79,-377.69 1053.82,-373.85 1059,-369 1101.52,-329.2 1052.77,-283.11 1095,-243 1104.56,-233.92 1117.22,-228.49 1130.05,-225.31"/>
+<polygon fill="#0083ff" stroke="#0083ff" points="1130.76,-228.74 1139.85,-223.29 1129.34,-221.88 1130.76,-228.74"/>
+</g>
+<!-- proc~ocean_halo_face_x_2d_impl&#45;&gt;waitall -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge115" class="edge">
+<title>proc~ocean_halo_face_x_2d_impl&#45;&gt;waitall</title>
+<path fill="none" stroke="#0083ff" d="M1025.83,-402.04C1066.05,-409.56 1116.37,-418.97 1149.77,-425.22"/>
+<polygon fill="#0083ff" stroke="#0083ff" points="1149.51,-428.73 1159.98,-427.13 1150.79,-421.85 1149.51,-428.73"/>
+</g>
+<!-- proc~ocean_halo_face_y_2d_impl&#45;&gt;proc~ocean_periodic_wrap_face_y_2d -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge124" class="edge">
+<title>proc~ocean_halo_face_y_2d_impl&#45;&gt;proc~ocean_periodic_wrap_face_y_2d</title>
+<path fill="none" stroke="#0052ff" d="M1040.16,-251.97C1047.21,-248.38 1053.67,-243.81 1059,-238 1121.51,-169.81 1031.34,-100.12 1095,-33 1095.91,-32.04 1096.85,-31.12 1097.83,-30.24"/>
+<polygon fill="#0052ff" stroke="#0052ff" points="1099.97,-33.01 1105.87,-24.21 1095.77,-27.41 1099.97,-33.01"/>
+</g>
+<!-- proc~ocean_halo_face_y_2d_impl&#45;&gt;comm_irecv_real_sp_array_n -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge116" class="edge">
+<title>proc~ocean_halo_face_y_2d_impl&#45;&gt;comm_irecv_real_sp_array_n</title>
+<path fill="none" stroke="#0052ff" d="M1041.19,-274.22C1047.6,-277.06 1053.65,-280.6 1059,-285 1090.35,-310.82 1063.84,-342.95 1095,-369 1096.59,-370.33 1098.24,-371.57 1099.95,-372.74"/>
+<polygon fill="#0052ff" stroke="#0052ff" points="1098.53,-375.97 1108.93,-377.99 1102.06,-369.92 1098.53,-375.97"/>
+</g>
+<!-- proc~ocean_halo_face_y_2d_impl&#45;&gt;comm_isend_real_sp_array_n -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge117" class="edge">
+<title>proc~ocean_halo_face_y_2d_impl&#45;&gt;comm_isend_real_sp_array_n</title>
+<path fill="none" stroke="#0052ff" d="M1041.21,-272.7C1047.78,-275.83 1053.86,-279.85 1059,-285 1112.97,-339.02 1041.43,-398.58 1095,-453 1095.96,-453.97 1096.96,-454.91 1097.98,-455.8"/>
+<polygon fill="#0052ff" stroke="#0052ff" points="1096.28,-458.89 1106.43,-461.9 1100.37,-453.21 1096.28,-458.89"/>
+</g>
+<!-- proc~ocean_halo_face_y_2d_impl&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge118" class="edge">
+<title>proc~ocean_halo_face_y_2d_impl&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#0052ff" d="M1041.44,-272.48C1047.96,-275.66 1053.97,-279.75 1059,-285 1124.53,-353.36 1029.98,-426.16 1095,-495 1095.91,-495.96 1096.85,-496.88 1097.82,-497.77"/>
+<polygon fill="#0052ff" stroke="#0052ff" points="1095.76,-500.59 1105.85,-503.81 1099.97,-495 1095.76,-500.59"/>
+</g>
+<!-- proc~ocean_halo_face_y_2d_impl&#45;&gt;proc~ew_rank_east -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge119" class="edge">
+<title>proc~ocean_halo_face_y_2d_impl&#45;&gt;proc~ew_rank_east</title>
+<path fill="none" stroke="#0052ff" d="M1039.89,-276.05C1046.58,-278.51 1053.05,-281.46 1059,-285 1080.12,-297.58 1073.97,-314.27 1095,-327 1106.83,-334.16 1120.87,-338.88 1134.34,-341.99"/>
+<polygon fill="#0052ff" stroke="#0052ff" points="1133.99,-345.49 1144.48,-344.07 1135.39,-338.64 1133.99,-345.49"/>
+</g>
+<!-- proc~ocean_halo_face_y_2d_impl&#45;&gt;proc~ew_rank_west -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge120" class="edge">
+<title>proc~ocean_halo_face_y_2d_impl&#45;&gt;proc~ew_rank_west</title>
+<path fill="none" stroke="#0052ff" d="M1025.83,-276.04C1060.09,-282.44 1101.68,-290.22 1133.89,-296.25"/>
+<polygon fill="#0052ff" stroke="#0052ff" points="1133.52,-299.74 1143.99,-298.14 1134.81,-292.86 1133.52,-299.74"/>
+</g>
+<!-- proc~ocean_halo_face_y_2d_impl&#45;&gt;proc~needs_flags -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge121" class="edge">
+<title>proc~ocean_halo_face_y_2d_impl&#45;&gt;proc~needs_flags</title>
+<path fill="none" stroke="#0052ff" d="M1041.28,-264C1073.95,-264 1110.62,-264 1138.88,-264"/>
+<polygon fill="#0052ff" stroke="#0052ff" points="1138.89,-267.5 1148.89,-264 1138.89,-260.5 1138.89,-267.5"/>
+</g>
+<!-- proc~ocean_halo_face_y_2d_impl&#45;&gt;proc~ns_rank_north -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge122" class="edge">
+<title>proc~ocean_halo_face_y_2d_impl&#45;&gt;proc~ns_rank_north</title>
+<path fill="none" stroke="#0052ff" d="M1026.41,-251.95C1037.71,-248.4 1049.02,-243.84 1059,-238 1078.8,-226.4 1075.01,-212.26 1095,-201 1106.6,-194.47 1120.11,-189.97 1133.12,-186.86"/>
+<polygon fill="#0052ff" stroke="#0052ff" points="1133.89,-190.28 1142.93,-184.75 1132.42,-183.44 1133.89,-190.28"/>
+</g>
+<!-- proc~ocean_halo_face_y_2d_impl&#45;&gt;proc~ns_rank_south -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge123" class="edge">
+<title>proc~ocean_halo_face_y_2d_impl&#45;&gt;proc~ns_rank_south</title>
+<path fill="none" stroke="#0052ff" d="M1035.31,-251.99C1043.89,-248.45 1052.04,-243.88 1059,-238 1088.46,-213.09 1065.12,-183.41 1095,-159 1105.61,-150.34 1119.12,-145.1 1132.47,-141.98"/>
+<polygon fill="#0052ff" stroke="#0052ff" points="1133.46,-145.35 1142.59,-139.98 1132.1,-138.48 1133.46,-145.35"/>
+</g>
+<!-- proc~ocean_halo_face_y_2d_impl&#45;&gt;proc~oh_count_msgs -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge125" class="edge">
+<title>proc~ocean_halo_face_y_2d_impl&#45;&gt;proc~oh_count_msgs</title>
+<path fill="none" stroke="#0052ff" d="M1025.83,-251.96C1058.69,-245.82 1098.28,-238.41 1129.88,-232.5"/>
+<polygon fill="#0052ff" stroke="#0052ff" points="1130.66,-235.91 1139.84,-230.64 1129.37,-229.03 1130.66,-235.91"/>
+</g>
+<!-- proc~ocean_halo_face_y_2d_impl&#45;&gt;waitall -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge126" class="edge">
+<title>proc~ocean_halo_face_y_2d_impl&#45;&gt;waitall</title>
+<path fill="none" stroke="#0052ff" d="M1041.33,-273.29C1047.79,-276.31 1053.82,-280.15 1059,-285 1101.52,-324.8 1052.77,-370.89 1095,-411 1109.51,-424.79 1131.19,-430.16 1149.75,-432.03"/>
+<polygon fill="#0052ff" stroke="#0052ff" points="1149.73,-435.53 1159.96,-432.75 1150.23,-428.55 1149.73,-435.53"/>
+</g>
+<!-- proc~ocean_surfstress_cover_impl&#45;&gt;local -->
+<g id="proc~~ice_ocean_stress_flux~~CallsGraph_edge127" class="edge">
+<title>proc~ocean_surfstress_cover_impl&#45;&gt;local</title>
+<path fill="none" stroke="#4100ff" d="M1038.7,-1028.02C1045.78,-1030.48 1052.66,-1033.44 1059,-1037 1079.28,-1048.4 1074.27,-1064.44 1095,-1075 1139.92,-1097.89 1286.99,-1108.46 1356.06,-1112.26"/>
+<polygon fill="#4100ff" stroke="#4100ff" points="1355.88,-1115.75 1366.05,-1112.79 1356.25,-1108.76 1355.88,-1115.75"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocice_ocean_stress_fluxCallsGraph = svgPanZoom('#procice_ocean_stress_fluxCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ice_ocean_stress_flux~~CalledByGraph Pages: 1 -->
+<svg id="procice_ocean_stress_fluxCalledByGraph" width="514pt" height="74pt"
+ viewBox="0.00 0.00 514.00 74.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ice_ocean_stress_flux~~CalledByGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 70)">
+<title>proc~~ice_ocean_stress_flux~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 510,-70 510,4 -4,4"/>
+<!-- proc~ice_ocean_stress_flux -->
+<g id="proc~~ice_ocean_stress_flux~~CalledByGraph_node1" class="node">
+<title>proc~ice_ocean_stress_flux</title>
+<polygon fill="none" stroke="black" points="506,-45 379,-45 379,-21 506,-21 506,-45"/>
+<text text-anchor="middle" x="442.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">ice_ocean_stress_flux</text>
+</g>
+<!-- proc~engine_step_ice -->
+<g id="proc~~ice_ocean_stress_flux~~CalledByGraph_node2" class="node">
+<title>proc~engine_step_ice</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CalledByGraph_node2"><a xlink:href="../proc/engine_step_ice.html" xlink:title="engine_step_ice">
+<polygon fill="#d9534f" stroke="#d9534f" points="343,-45 245,-45 245,-21 343,-21 343,-45"/>
+<text text-anchor="middle" x="294" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step_ice</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step_ice&#45;&gt;proc~ice_ocean_stress_flux -->
+<g id="proc~~ice_ocean_stress_flux~~CalledByGraph_edge1" class="edge">
+<title>proc~engine_step_ice&#45;&gt;proc~ice_ocean_stress_flux</title>
+<path fill="none" stroke="#ff0000" d="M343.38,-33C351.52,-33 360.14,-33 368.74,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="368.81,-36.5 378.81,-33 368.81,-29.5 368.81,-36.5"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~ice_ocean_stress_flux~~CalledByGraph_node3" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CalledByGraph_node3"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="209,-66 103,-66 103,-42 209,-42 209,-66"/>
+<text text-anchor="middle" x="156" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step_ice -->
+<g id="proc~~ice_ocean_stress_flux~~CalledByGraph_edge2" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step_ice</title>
+<path fill="none" stroke="#ff0000" d="M209.19,-45.94C217.5,-44.66 226.14,-43.32 234.58,-42.02"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="235.39,-45.44 244.74,-40.45 234.32,-38.52 235.39,-45.44"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~ice_ocean_stress_flux~~CalledByGraph_node4" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CalledByGraph_node4"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="204.5,-24 107.5,-24 107.5,0 204.5,0 204.5,-24"/>
+<text text-anchor="middle" x="156" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step_ice -->
+<g id="proc~~ice_ocean_stress_flux~~CalledByGraph_edge3" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step_ice</title>
+<path fill="none" stroke="#ff0000" d="M204.57,-19.34C214.33,-20.85 224.72,-22.46 234.81,-24.01"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="234.35,-27.49 244.77,-25.55 235.42,-20.57 234.35,-27.49"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~ice_ocean_stress_flux~~CalledByGraph_node5" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~ice_ocean_stress_flux~~CalledByGraph_node5"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="67,-66 0,-66 0,-42 67,-42 67,-66"/>
+<text text-anchor="middle" x="33.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~ice_ocean_stress_flux~~CalledByGraph_edge4" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M67.11,-54C75.11,-54 83.94,-54 92.83,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="92.85,-57.5 102.85,-54 92.85,-50.5 92.85,-57.5"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">ice_ocean_stress_flux</span><span class="p">(</span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">stress</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">bc</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Ice-&gt;ocean momentum-mediation blend (PR 5), the momentum mirror</span>
+<span class="w">      </span><span class="c">!! of `ice_ocean_brine_flux`: FULL overwrite each outer step from</span>
+<span class="w">      </span><span class="c">!! the pristine wind snapshot + the lagged EVP drag, weighted by</span>
+<span class="w">      </span><span class="c">!! ice concentration at each face.</span>
+<span class="w">      </span><span class="c">!!   a_u(i,j) = 0.5*(ci(i-1,j) + ci(i,j))</span>
+<span class="w">      </span><span class="c">!!   tau_x(i,j) = (1-a_u)*tau_a_x(i,j) + a_u*fxoc(i,j)</span>
+<span class="w">      </span><span class="c">!! ditto y (`a_v(i,j) = 0.5*(ci(i,j-1)+ci(i,j))`).  `ci` is</span>
+<span class="w">      </span><span class="c">!! re-gathered via `ice_cell_concentration_impl` (shared with</span>
+<span class="w">      </span><span class="c">!! `rdb_ice_evp`, so this module never depends on the EVP kernel).</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Because this is a full overwrite of `tau_x`/`tau_y`, it also OWNS</span>
+<span class="w">      </span><span class="c">!! the DERIVED `stress_mag` (cell-centred `|tau|`) that KPP and EPBL</span>
+<span class="w">      </span><span class="c">!! take `u_*` from — refreshed on the device immediately after the</span>
+<span class="w">      </span><span class="c">!! blend, so the boundary-layer schemes see the ice-mediated stress</span>
+<span class="w">      </span><span class="c">!! rather than the configure-time wind.  Any future writer of the</span>
+<span class="w">      </span><span class="c">!! `tau` pair inherits the same obligation.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! **Momentum-budget caveat (F5, D7).**  This blend gives the ocean</span>
+<span class="w">      </span><span class="c">!! `(1-a)*tau_a + a*fxoc` per face.  With `&amp;ocean_ice_nml</span>
+<span class="w">      </span><span class="c">!! a_face_stress=.false.` (default, legacy) the ice absorbs the FULL</span>
+<span class="w">      </span><span class="c">!! wind stress `tau_a` and sheds the FULL drag `fxoc` — so at</span>
+<span class="w">      </span><span class="c">!! fractional cover `a in (0,1)` the coupled system sees a spurious</span>
+<span class="w">      </span><span class="c">!! net input `(1-a)*(tau_a - fxoc)` per face.  It is exact only at</span>
+<span class="w">      </span><span class="c">!! `a in {0,1}` and at steady free drift (`fxoc == tau_a`); a</span>
+<span class="w">      </span><span class="c">!! generic transient at fractional `ci` (ITD) leaks momentum.</span>
+<span class="w">      </span><span class="c">!! `&amp;ocean_ice_nml a_face_stress=.true.` (PR 62,</span>
+<span class="w">      </span><span class="c">!! `evp_u_momentum_impl`/`evp_v_momentum_impl` in `rdb_ice_evp`)</span>
+<span class="w">      </span><span class="c">!! CLOSES this identically, for every `a` and in every transient, by</span>
+<span class="w">      </span><span class="c">!! weighting BOTH the wind AND the ice-ocean drag by the same `a_u`</span>
+<span class="w">      </span><span class="c">!! *inside the ice momentum balance* (this blend needs no code</span>
+<span class="w">      </span><span class="c">!! change — it already matches SIS2's `set_ocean_top_stress_Cgrid`</span>
+<span class="w">      </span><span class="c">!! exactly).  Weighting the wind alone — the naive reading of "weight</span>
+<span class="w">      </span><span class="c">!! the wind the ICE feels by `a_face`" — is WORSE than doing nothing:</span>
+<span class="w">      </span><span class="c">!! it converts this leak (zero at steady free drift) into a</span>
+<span class="w">      </span><span class="c">!! PERMANENT one, `-(1-a)*a*tau_a`, nonzero at steady state forever.</span>
+<span class="w">      </span><span class="c">!! Do not implement that half-measure.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! **Seam ghosts (X5).**  With `grid` + `bc` present (the engine</span>
+<span class="w">      </span><span class="c">!! always passes them) the blended pair goes through</span>
+<span class="w">      </span><span class="c">!! `ocean_seam_refresh_surface_stress` — halo exchange, local</span>
+<span class="w">      </span><span class="c">!! periodic wrap on an axis the halo does not own, fold — which also</span>
+<span class="w">      </span><span class="c">!! re-derives `stress_mag`.  The blend itself is correct only on the</span>
+<span class="w">      </span><span class="c">!! faces this rank owns: a ghost face blends against `fxoc = 0`</span>
+<span class="w">      </span><span class="c">!! (the EVP momentum writes physical faces only), yet the ocean's</span>
+<span class="w">      </span><span class="c">!! KPP/EPBL/MLE read `tau` one cell into the halo.  The mirror into</span>
+<span class="w">      </span><span class="c">!! `tau_ocn_x/y` is taken AFTER the refresh so a restart resumes the</span>
+<span class="w">      </span><span class="c">!! exchanged ghosts the uninterrupted run stepped on.  Absent (the</span>
+<span class="w">      </span><span class="c">!! single-tile unit-test seam): the legacy `stress_mag`-only refresh.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_metrics_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">metrics</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_surface_stress_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">stress</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_sea_ice_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ice</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_bc_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">bc</span>
+
+<span class="w">      </span><span class="k">call </span><span class="n">stress_scratch_ensure</span><span class="p">(</span><span class="n">ice</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">ny_total</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">ice_cell_concentration_impl</span><span class="p">(</span><span class="n">metrics</span><span class="p">%</span><span class="n">wet_T</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">part_size</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">m_ice</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">m_snow</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">mis_scratch</span><span class="p">,</span><span class="w"> </span><span class="n">mice_scratch</span><span class="p">,</span><span class="w"> </span><span class="n">ci_scratch</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">ice</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">ny_total</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">ice_ocean_stress_flux_impl</span><span class="p">(</span><span class="n">stress</span><span class="p">%</span><span class="n">tau_x</span><span class="p">,</span><span class="w"> </span><span class="n">stress</span><span class="p">%</span><span class="n">tau_y</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">tau_a_x</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">tau_a_y</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">ice</span><span class="p">%</span><span class="n">fxoc</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">fyoc</span><span class="p">,</span><span class="w"> </span><span class="n">ci_scratch</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">ny_total</span><span class="p">)</span>
+<span class="w">      </span><span class="c">! The blend above OVERWROTE `tau_x`/`tau_y`, so the cell-centred</span>
+<span class="w">      </span><span class="c">! `|tau|` the boundary-layer schemes take `u_* = sqrt(|tau|/rho0)`</span>
+<span class="w">      </span><span class="c">! from is stale until it is re-derived from the new pair.  KPP</span>
+<span class="w">      </span><span class="c">! (`rdb_ocean_vmix`) and EPBL (`rdb_ocean_epbl`) read</span>
+<span class="w">      </span><span class="c">! `stress%stress_mag` and NOTHING else, and no other per-step path</span>
+<span class="w">      </span><span class="c">! refreshes it (the wind setters run at configure; the data-override</span>
+<span class="w">      </span><span class="c">! seam refresh runs only under `&amp;ocean_dataovr_nml`), so without this</span>
+<span class="w">      </span><span class="c">! both schemes mix on the configure-time WIND under ice — identically</span>
+<span class="w">      </span><span class="c">! zero, and therefore `u_* == 0`, in a windless ice-covered run.</span>
+<span class="w">      </span><span class="c">! Device-resident and allocation-free.  Reached only through this</span>
+<span class="w">      </span><span class="c">! routine, which the engine calls only when `&amp;ocean_ice_nml enable`</span>
+<span class="w">      </span><span class="c">! AND `dynamics` are both on — an ice-free run never executes it and</span>
+<span class="w">      </span><span class="c">! stays bit-identical.  Gate: `test_ocean_ice_stress_mag`.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">grid</span><span class="p">)</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="nb">present</span><span class="p">(</span><span class="n">bc</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="w">         </span><span class="c">! X5: seam ghosts first (exchange -&gt; wrap -&gt; fold), then</span>
+<span class="w">         </span><span class="c">! `stress_mag` over the full array from the refreshed pair.</span>
+<span class="w">         </span><span class="k">call </span><span class="n">ocean_seam_refresh_surface_stress</span><span class="p">(</span><span class="n">stress</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">bc</span><span class="p">)</span>
+<span class="w">      </span><span class="k">else</span>
+<span class="k">         call </span><span class="n">ocean_surface_stress_refresh_mag</span><span class="p">(</span><span class="n">stress</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="w">      </span><span class="c">! PR 63: mirror the exact blended value into the restart-carried</span>
+<span class="w">      </span><span class="c">! tau_ocn_x/y (device copy — ice_tau_mirror_impl is NOT part of the</span>
+<span class="w">      </span><span class="c">! blend math above, so ice_ocean_stress_flux_impl stays byte-identical</span>
+<span class="w">      </span><span class="c">! by inspection and the tau_coupling gate is unaffected).  After the</span>
+<span class="w">      </span><span class="c">! seam refresh, so the checkpoint carries the exchanged ghosts.  The</span>
+<span class="w">      </span><span class="c">! host scalar write needs no signature change: this routine is</span>
+<span class="w">      </span><span class="c">! already non-pure (stress_scratch_ensure) with ice intent(inout).</span>
+<span class="w">      </span><span class="k">call </span><span class="n">ice_tau_mirror_impl</span><span class="p">(</span><span class="n">ice</span><span class="p">%</span><span class="n">tau_ocn_x</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">tau_ocn_y</span><span class="p">,</span><span class="w"> </span><span class="n">stress</span><span class="p">%</span><span class="n">tau_x</span><span class="p">,</span><span class="w"> </span><span class="n">stress</span><span class="p">%</span><span class="n">tau_y</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                               </span><span class="n">ice</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">ny_total</span><span class="p">)</span>
+<span class="w">      </span><span class="n">ice</span><span class="p">%</span><span class="n">tau_ocn_valid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">ice_ocean_stress_flux</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-09 01:37 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,793 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>drain_rescale_hTr &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>drain_rescale_hTr
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">9 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_continuity.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_continuity.f90.html'>rdb_continuity.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_continuity.html'>rdb_continuity</a></li>
+            <li class="breadcrumb-item active" aria-current="page">drain_rescale_hTr</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/drain_rescale_htr.html#variable-i~578">i</a>
+            <a class="list-group-item" href="../proc/drain_rescale_htr.html#variable-j~500">j</a>
+            <a class="list-group-item" href="../proc/drain_rescale_htr.html#variable-k~380">k</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/drain_rescale_htr.html#src">drain_rescale_hTr</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private pure subroutine drain_rescale_hTr(nx, ny, nz, h_new, h_old, hTr)  
+</h2>
+    
+
+    <p>Re-weight a tracer&rsquo;s thickness-weighted content onto a new layer
+thickness, holding the CONCENTRATION fixed:</p>
+<p>hTr := hTr · h_new / h_old      (⇒ hTr/h_new ≡ hTr/h_old)</p>
+<p>Used by the windowed (<code>dt_tracer_advect_ratio &gt; 1</code>) path, whose
+prognostic is the CONTENT <code>hTr</code> while MOM6&rsquo;s is the CONCENTRATION
+<code>Tr</code>.  Freezing a content across a window over which continuity
+keeps advancing <code>h</code> silently corrupts every consumer that derives
+<code>T = hTr/h_layer</code> — the EOS above all — by <code>δT/T = −δh/h</code>.  Freezing
+a concentration (what MOM6 does) does not.  See
+<code>continuity_tracer_step_split</code> / <code>continuity_tracer_drain</code>.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~509"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~509"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~446"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_new~15"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_new</strong>(nx,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_old~14"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_old</strong>(nx,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-htr~48"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hTr</strong>(nx,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~drain_rescale_htr~~CalledByGraph Pages: 1 -->
+<svg id="procdrain_rescale_htrCalledByGraph" width="641pt" height="83pt"
+ viewBox="0.00 0.00 641.00 82.87" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~drain_rescale_htr~~CalledByGraph" class="graph" transform="scale(0.5 0.5) rotate(0) translate(4 162)">
+<title>proc~~drain_rescale_htr~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-162 1280,-162 1280,4 -4,4"/>
+<!-- proc~drain_rescale_htr -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_node1" class="node">
+<title>proc~drain_rescale_htr</title>
+<polygon fill="none" stroke="black" points="1276,-96 1171,-96 1171,-72 1276,-72 1276,-96"/>
+<text text-anchor="middle" x="1223.5" y="-81.6" font-family="Helvetica,sans-Serif" font-size="10.50">drain_rescale_hTr</text>
+</g>
+<!-- proc~continuity_gm_apply -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_node2" class="node">
+<title>proc~continuity_gm_apply</title>
+<g id="a_proc~~drain_rescale_htr~~CalledByGraph_node2"><a xlink:href="../proc/continuity_gm_apply.html" xlink:title="continuity_gm_apply">
+<polygon fill="#d9534f" stroke="#d9534f" points="1117.5,-148 995.5,-148 995.5,-124 1117.5,-124 1117.5,-148"/>
+<text text-anchor="middle" x="1056.5" y="-133.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">continuity_gm_apply</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_gm_apply&#45;&gt;proc~drain_rescale_htr -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_edge1" class="edge">
+<title>proc~continuity_gm_apply&#45;&gt;proc~drain_rescale_htr</title>
+<path fill="none" stroke="#ff0000" d="M1095.77,-123.94C1119.22,-116.55 1149.43,-107.03 1174.48,-99.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1175.67,-102.43 1184.15,-96.09 1173.56,-95.75 1175.67,-102.43"/>
+</g>
+<!-- proc~continuity_tracer_drain -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_node3" class="node">
+<title>proc~continuity_tracer_drain</title>
+<g id="a_proc~~drain_rescale_htr~~CalledByGraph_node3"><a xlink:href="../proc/continuity_tracer_drain.html" xlink:title="continuity_tracer_drain">
+<polygon fill="#d9534f" stroke="#d9534f" points="783,-36 647,-36 647,-12 783,-12 783,-36"/>
+<text text-anchor="middle" x="715" y="-21.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">continuity_tracer_drain</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_tracer_drain&#45;&gt;proc~drain_rescale_htr -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_edge2" class="edge">
+<title>proc~continuity_tracer_drain&#45;&gt;proc~drain_rescale_htr</title>
+<path fill="none" stroke="#ff0000" d="M783.18,-27.08C866.28,-31.61 1011.86,-41.94 1135,-63 1145.5,-64.8 1156.62,-67.13 1167.28,-69.58"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1166.78,-73.06 1177.32,-71.95 1168.4,-66.25 1166.78,-73.06"/>
+</g>
+<!-- proc~continuity_tracer_step_split -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_node4" class="node">
+<title>proc~continuity_tracer_step_split</title>
+<g id="a_proc~~drain_rescale_htr~~CalledByGraph_node4"><a xlink:href="../proc/continuity_tracer_step_split.html" xlink:title="continuity_tracer_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="1135,-96 978,-96 978,-72 1135,-72 1135,-96"/>
+<text text-anchor="middle" x="1056.5" y="-81.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">continuity_tracer_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_tracer_step_split&#45;&gt;proc~drain_rescale_htr -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_edge3" class="edge">
+<title>proc~continuity_tracer_step_split&#45;&gt;proc~drain_rescale_htr</title>
+<path fill="none" stroke="#ff0000" d="M1135.17,-84C1143.63,-84 1152.16,-84 1160.4,-84"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1160.66,-87.5 1170.66,-84 1160.66,-80.5 1160.66,-87.5"/>
+</g>
+<!-- proc~ocean_dyn_flush_tracer_window -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_node5" class="node">
+<title>proc~ocean_dyn_flush_tracer_window</title>
+<g id="a_proc~~drain_rescale_htr~~CalledByGraph_node5"><a xlink:href="../proc/ocean_dyn_flush_tracer_window.html" xlink:title="ocean_dyn_flush_tracer_window">
+<polygon fill="#d9534f" stroke="#d9534f" points="450,-35 266,-35 266,-11 450,-11 450,-35"/>
+<text text-anchor="middle" x="358" y="-20.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_flush_tracer_window</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_flush_tracer_window&#45;&gt;proc~continuity_tracer_drain -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_edge5" class="edge">
+<title>proc~ocean_dyn_flush_tracer_window&#45;&gt;proc~continuity_tracer_drain</title>
+<path fill="none" stroke="#00ff00" d="M450.42,-23.26C508.25,-23.42 582.16,-23.63 636.99,-23.78"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="636.99,-27.28 647,-23.81 637.01,-20.28 636.99,-27.28"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_node6" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~drain_rescale_htr~~CalledByGraph_node6"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="597.5,-75 499.5,-75 499.5,-51 597.5,-51 597.5,-75"/>
+<text text-anchor="middle" x="548.5" y="-60.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~continuity_tracer_drain -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_edge6" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~continuity_tracer_drain</title>
+<path fill="none" stroke="#00ff00" d="M597.52,-51.61C615.05,-47.46 635.09,-42.71 653.56,-38.33"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="654.42,-41.72 663.34,-36.01 652.8,-34.91 654.42,-41.72"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_node10" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~drain_rescale_htr~~CalledByGraph_node10"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="913,-76 848,-76 848,-52 913,-52 913,-76"/>
+<text text-anchor="middle" x="880.5" y="-61.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_edge16" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#ff00ff" d="M597.84,-63.15C662.65,-63.34 776.65,-63.69 837.85,-63.87"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="837.92,-67.37 847.93,-63.9 837.94,-60.37 837.92,-67.37"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_node7" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~drain_rescale_htr~~CalledByGraph_node7"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="611,-117 486,-117 486,-93 611,-93 611,-117"/>
+<text text-anchor="middle" x="548.5" y="-102.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~continuity_tracer_drain -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_edge7" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~continuity_tracer_drain</title>
+<path fill="none" stroke="#00ff00" d="M588.67,-92.93C596.19,-90.25 603.92,-87.23 611,-84 637.89,-71.72 666.85,-54.46 687.19,-41.61"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="689.08,-44.55 695.62,-36.22 685.31,-38.65 689.08,-44.55"/>
+</g>
+<!-- proc~run_gm_step -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_node9" class="node">
+<title>proc~run_gm_step</title>
+<g id="a_proc~~drain_rescale_htr~~CalledByGraph_node9"><a xlink:href="../proc/run_gm_step.html" xlink:title="run_gm_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="755.5,-158 674.5,-158 674.5,-134 755.5,-134 755.5,-158"/>
+<text text-anchor="middle" x="715" y="-143.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_gm_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_gm_step -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_edge15" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_gm_step</title>
+<path fill="none" stroke="#0000ff" d="M597.97,-117.08C618.99,-122.32 643.58,-128.45 664.7,-133.71"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="663.9,-137.12 674.45,-136.14 665.59,-130.33 663.9,-137.12"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_node14" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~drain_rescale_htr~~CalledByGraph_node14"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="761,-116 669,-116 669,-92 761,-92 761,-116"/>
+<text text-anchor="middle" x="715" y="-101.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_edge20" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#7f00ff" d="M611.22,-104.62C626.78,-104.53 643.38,-104.43 658.6,-104.34"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="658.91,-107.84 668.89,-104.27 658.87,-100.84 658.91,-107.84"/>
+</g>
+<!-- proc~run_continuity_chain -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_node8" class="node">
+<title>proc~run_continuity_chain</title>
+<g id="a_proc~~drain_rescale_htr~~CalledByGraph_node8"><a xlink:href="../proc/run_continuity_chain.html" xlink:title="run_continuity_chain">
+<polygon fill="#d9534f" stroke="#d9534f" points="942,-118 819,-118 819,-94 942,-94 942,-118"/>
+<text text-anchor="middle" x="880.5" y="-103.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_continuity_chain</text>
+</a>
+</g>
+</g>
+<!-- proc~run_continuity_chain&#45;&gt;proc~continuity_tracer_step_split -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_edge8" class="edge">
+<title>proc~run_continuity_chain&#45;&gt;proc~continuity_tracer_step_split</title>
+<path fill="none" stroke="#0000ff" d="M942.36,-98.31C950.6,-97.26 959.18,-96.18 967.78,-95.09"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="968.37,-98.54 977.85,-93.82 967.49,-91.6 968.37,-98.54"/>
+</g>
+<!-- proc~run_gm_step&#45;&gt;proc~continuity_gm_apply -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_edge4" class="edge">
+<title>proc~run_gm_step&#45;&gt;proc~continuity_gm_apply</title>
+<path fill="none" stroke="#ff0000" d="M755.61,-144.83C811.76,-143.18 915.39,-140.13 984.89,-138.08"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="985.42,-141.57 995.31,-137.77 985.21,-134.57 985.42,-141.57"/>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~continuity_tracer_step_split -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_edge9" class="edge">
+<title>proc~run_stage&#45;&gt;proc~continuity_tracer_step_split</title>
+<path fill="none" stroke="#0000ff" d="M913.01,-67.62C928.59,-69.41 948.25,-71.67 967.95,-73.94"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="967.58,-77.42 977.92,-75.08 968.38,-70.46 967.58,-77.42"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_node11" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~drain_rescale_htr~~CalledByGraph_node11"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="219.5,-66 113.5,-66 113.5,-42 219.5,-42 219.5,-66"/>
+<text text-anchor="middle" x="166.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~ocean_dyn_flush_tracer_window -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_edge10" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~ocean_dyn_flush_tracer_window</title>
+<path fill="none" stroke="#ff0000" d="M219.53,-45.49C236.17,-42.77 255.04,-39.68 273.34,-36.69"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="274.13,-40.1 283.44,-35.03 273,-33.19 274.13,-40.1"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_node12" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~drain_rescale_htr~~CalledByGraph_node12"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="396.5,-87 319.5,-87 319.5,-63 396.5,-63 396.5,-87"/>
+<text text-anchor="middle" x="358" y="-72.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_edge18" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#7fff00" d="M219.53,-59.77C247.51,-62.87 281.78,-66.66 309.1,-69.69"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="308.88,-73.19 319.21,-70.81 309.65,-66.23 308.88,-73.19"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_edge12" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step</title>
+<path fill="none" stroke="#ffff00" d="M396.69,-72.6C423.24,-70.91 459.28,-68.62 489.47,-66.69"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="489.71,-70.19 499.47,-66.06 489.27,-63.2 489.71,-70.19"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_edge13" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#00ff00" d="M396.69,-81C419.27,-84.59 448.72,-89.28 475.6,-93.56"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="475.33,-97.06 485.75,-95.17 476.43,-90.14 475.33,-97.06"/>
+</g>
+<!-- proc~rdb_ocean_set_tracer -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_node13" class="node">
+<title>proc~rdb_ocean_set_tracer</title>
+<g id="a_proc~~drain_rescale_htr~~CalledByGraph_node13"><a xlink:href="../proc/rdb_ocean_set_tracer.html" xlink:title="rdb_ocean_set_tracer">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="230,-24 103,-24 103,0 230,0 230,-24"/>
+<text text-anchor="middle" x="166.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_set_tracer</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_set_tracer&#45;&gt;proc~ocean_dyn_flush_tracer_window -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_edge11" class="edge">
+<title>proc~rdb_ocean_set_tracer&#45;&gt;proc~ocean_dyn_flush_tracer_window</title>
+<path fill="none" stroke="#ff0000" d="M230.07,-15.63C238.29,-16.11 246.87,-16.61 255.52,-17.11"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="255.51,-20.61 265.7,-17.7 255.92,-13.63 255.51,-20.61"/>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~run_continuity_chain -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_edge14" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~run_continuity_chain</title>
+<path fill="none" stroke="#00ffff" d="M761.11,-104.55C775.76,-104.73 792.4,-104.93 808.47,-105.13"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="808.88,-108.64 818.93,-105.26 808.97,-101.64 808.88,-108.64"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_node15" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~drain_rescale_htr~~CalledByGraph_node15"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="67,-66 0,-66 0,-42 67,-42 67,-66"/>
+<text text-anchor="middle" x="33.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_edge17" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M67.22,-54C78.11,-54 90.64,-54 103.02,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="103.34,-57.5 113.34,-54 103.34,-50.5 103.34,-57.5"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_node16" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~drain_rescale_htr~~CalledByGraph_node16"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="215,-108 118,-108 118,-84 215,-84 215,-108"/>
+<text text-anchor="middle" x="166.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~drain_rescale_htr~~CalledByGraph_edge19" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#7fff00" d="M215.32,-90.7C244.03,-87.52 280.43,-83.49 309.15,-80.3"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="309.79,-83.75 319.35,-79.17 309.02,-76.8 309.79,-83.75"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocdrain_rescale_htrCalledByGraph = svgPanZoom('#procdrain_rescale_htrCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~578"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~500"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~380"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">drain_rescale_hTr</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">h_new</span><span class="p">,</span><span class="w"> </span><span class="n">h_old</span><span class="p">,</span><span class="w"> </span><span class="n">hTr</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Re-weight a tracer's thickness-weighted content onto a new layer</span>
+<span class="w">      </span><span class="c">!! thickness, holding the CONCENTRATION fixed:</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!!   hTr := hTr · h_new / h_old      (⇒ hTr/h_new ≡ hTr/h_old)</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Used by the windowed (`dt_tracer_advect_ratio &gt; 1`) path, whose</span>
+<span class="w">      </span><span class="c">!! prognostic is the CONTENT `hTr` while MOM6's is the CONCENTRATION</span>
+<span class="w">      </span><span class="c">!! `Tr`.  Freezing a content across a window over which continuity</span>
+<span class="w">      </span><span class="c">!! keeps advancing `h` silently corrupts every consumer that derives</span>
+<span class="w">      </span><span class="c">!! `T = hTr/h_layer` — the EOS above all — by `δT/T = −δh/h`.  Freezing</span>
+<span class="w">      </span><span class="c">!! a concentration (what MOM6 does) does not.  See</span>
+<span class="w">      </span><span class="c">!! `continuity_tracer_step_split` / `continuity_tracer_drain`.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_new</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">),</span><span class="w"> </span><span class="n">h_old</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hTr</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span>
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span>
+<span class="w">         </span><span class="n">hTr</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hTr</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="o">*</span><span class="n">h_new</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="o">/</span><span class="nb">max</span><span class="p">(</span><span class="n">h_old</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">),</span><span class="w"> </span><span class="n">DRAIN_MIN_H</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end do</span>
+<span class="k">   end subroutine </span><span class="n">drain_rescale_hTr</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-09 01:37 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

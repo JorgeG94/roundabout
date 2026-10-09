@@ -1,0 +1,1855 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>rdb_ocean_tide_astro.F90 &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>rdb_ocean_tide_astro.F90
+      <small>Source File</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.2% of total for source files.">148 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_tide_astro.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+            <li class="breadcrumb-item active" aria-current="page">rdb_ocean_tide_astro.F90</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#mods-0"
+         aria-expanded="false" aria-controls="mods-0">
+         <h4 class="card-header bg-primary text-white">Modules</h4>
+      </a>
+      <div id="mods-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_tide_astro.html">rdb_ocean_tide_astro</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../sourcefile/rdb_ocean_tide_astro.f90.html#src">rdb_ocean_tide_astro.F90</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    <div class="col-md-9" id='text'>
+      <p>Equilibrium-tide astronomy generator (mean longitudes, equilibrium
+arguments, nodal corrections, constituent catalog).</p>
+      <br>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">This file depends on</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~rdb_ocean_tide_astro.f90~~EfferentGraph Pages: 1 -->
+<svg id="sourcefilerdb_ocean_tide_astrof90EfferentGraph" width="441pt" height="52pt"
+ viewBox="0.00 0.00 441.00 52.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~EfferentGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 48)">
+<title>sourcefile~~rdb_ocean_tide_astro.f90~~EfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-48 437,-48 437,4 -4,4"/>
+<!-- sourcefile~rdb_ocean_tide_astro.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~EfferentGraph_node1" class="node">
+<title>sourcefile~rdb_ocean_tide_astro.f90</title>
+<polygon fill="none" stroke="black" points="433,-24 285,-24 285,0 433,0 433,-24"/>
+<text text-anchor="middle" x="359" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ocean_tide_astro.F90</text>
+</g>
+<!-- sourcefile~rdb_calendar.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~EfferentGraph_node2" class="node">
+<title>sourcefile~rdb_calendar.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~EfferentGraph_node2"><a xlink:href="../sourcefile/rdb_calendar.f90.html" xlink:title="rdb_calendar.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="249,-44 145,-44 145,-20 249,-20 249,-44"/>
+<text text-anchor="middle" x="197" y="-29.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_calendar.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_tide_astro.f90&#45;&gt;sourcefile~rdb_calendar.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~EfferentGraph_edge1" class="edge">
+<title>sourcefile~rdb_ocean_tide_astro.f90&#45;&gt;sourcefile~rdb_calendar.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M284.56,-21.18C276.03,-22.25 267.4,-23.32 259.07,-24.37"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="258.56,-20.9 249.07,-25.62 259.43,-27.85 258.56,-20.9"/>
+</g>
+<!-- sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~EfferentGraph_node3" class="node">
+<title>sourcefile~rdb_constants.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~EfferentGraph_node3"><a xlink:href="../sourcefile/rdb_constants.f90.html" xlink:title="rdb_constants.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="109,-24 0,-24 0,0 109,0 109,-24"/>
+<text text-anchor="middle" x="54.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_constants.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_tide_astro.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~EfferentGraph_edge2" class="edge">
+<title>sourcefile~rdb_ocean_tide_astro.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M284.71,-11.24C272.78,-11.14 260.54,-11.05 249,-11 202.78,-10.79 191.22,-10.74 145,-11 136.74,-11.05 128.04,-11.12 119.45,-11.2"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="119.42,-7.7 109.45,-11.3 119.49,-14.7 119.42,-7.7"/>
+</g>
+<!-- sourcefile~rdb_calendar.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~EfferentGraph_edge3" class="edge">
+<title>sourcefile~rdb_calendar.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M144.88,-24.72C136.53,-23.53 127.8,-22.29 119.19,-21.07"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="119.58,-17.59 109.18,-19.64 118.59,-24.52 119.58,-17.59"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#EfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="EfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Files dependent on this one</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph Pages: 1 -->
+<svg id="sourcefilerdb_ocean_tide_astrof90AfferentGraph" width="641pt" height="463pt"
+ viewBox="0.00 0.00 641.00 462.69" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph" class="graph" transform="scale(0.24 0.24) rotate(0) translate(4 1894.41)">
+<title>sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-1894.41 2626,-1894.41 2626,4 -4,4"/>
+<!-- sourcefile~rdb_ocean_tide_astro.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node1" class="node">
+<title>sourcefile~rdb_ocean_tide_astro.f90</title>
+<polygon fill="none" stroke="black" points="148,-1626.53 0,-1626.53 0,-1602.53 148,-1602.53 148,-1626.53"/>
+<text text-anchor="middle" x="74" y="-1612.13" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ocean_tide_astro.F90</text>
+</g>
+<!-- sourcefile~rdb_ocean_boundary_types.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node2" class="node">
+<title>sourcefile~rdb_ocean_boundary_types.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node2"><a xlink:href="../sourcefile/rdb_ocean_boundary_types.f90.html" xlink:title="rdb_ocean_boundary_types.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="365,-1626.53 184,-1626.53 184,-1602.53 365,-1602.53 365,-1626.53"/>
+<text text-anchor="middle" x="274.5" y="-1612.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_boundary_types.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_boundary_types.f90&#45;&gt;sourcefile~rdb_ocean_tide_astro.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge1" class="edge">
+<title>sourcefile~rdb_ocean_boundary_types.f90&#45;&gt;sourcefile~rdb_ocean_tide_astro.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M183.83,-1614.53C175.36,-1614.53 166.79,-1614.53 158.38,-1614.53"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="158.22,-1611.03 148.22,-1614.53 158.22,-1618.03 158.22,-1611.03"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node3" class="node">
+<title>sourcefile~rdb_ocean_setup.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node3"><a xlink:href="../sourcefile/rdb_ocean_setup.f90.html" xlink:title="rdb_ocean_setup.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1949,-964.53 1823,-964.53 1823,-940.53 1949,-940.53 1949,-964.53"/>
+<text text-anchor="middle" x="1886" y="-950.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_tide_astro.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge2" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_tide_astro.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1822.67,-942.78C1814.31,-938.96 1806.68,-933.71 1801,-926.53 1727.24,-833.23 1836.76,-487.38 1765,-392.53 1687.66,-290.31 1225.17,-216.53 1076.5,-216.53 1076.5,-216.53 1076.5,-216.53 486.5,-216.53 186.79,-216.53 89.38,-1413.89 76.52,-1592.39"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="73.03,-1592.22 75.81,-1602.44 80.01,-1592.71 73.03,-1592.22"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge23" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1822.74,-942.72C1814.37,-938.91 1806.72,-933.68 1801,-926.53 1737.24,-846.79 1832.69,-544.95 1765,-468.53 1690.67,-384.6 1382.61,-368.53 1270.5,-368.53 1270.5,-368.53 1270.5,-368.53 872,-368.53 785.12,-368.53 550.97,-232.15 488.5,-292.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_tides.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node4" class="node">
+<title>sourcefile~rdb_ocean_tides.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node4"><a xlink:href="../sourcefile/rdb_ocean_tides.f90.html" xlink:title="rdb_ocean_tides.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1330.5,-1866.53 1208.5,-1866.53 1208.5,-1842.53 1330.5,-1842.53 1330.5,-1866.53"/>
+<text text-anchor="middle" x="1269.5" y="-1852.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_tides.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_tides.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge28" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_tides.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1881.39,-964.54C1868.55,-1007.67 1824.63,-1158.95 1801,-1286.53 1776.63,-1418.14 1831.7,-1469.48 1765,-1585.53 1705.86,-1688.41 1658.19,-1693.55 1552,-1746.53 1482.51,-1781.2 1451.48,-1756.11 1384,-1794.53 1364.87,-1805.42 1366.87,-1817.21 1348,-1828.53 1341.56,-1832.39 1334.47,-1835.77 1327.27,-1838.7"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="1325.55,-1835.6 1317.44,-1842.41 1328.03,-1842.15 1325.55,-1835.6"/>
+</g>
+<!-- sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node7" class="node">
+<title>sourcefile~rdb_config.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node7"><a xlink:href="../sourcefile/rdb_config.f90.html" xlink:title="rdb_config.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="533,-498.53 442,-498.53 442,-474.53 533,-474.53 533,-498.53"/>
+<text text-anchor="middle" x="487.5" y="-484.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_config.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge41" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff9100" stroke-dasharray="5,2" d="M1822.77,-941C1814.71,-937.41 1807.14,-932.7 1801,-926.53 1767.74,-893.1 1713.77,-550.65 1677.5,-520.53"/>
+<path fill="none" stroke="#ff9100" stroke-dasharray="5,2" d="M1675.5,-520.53C1644.48,-494.76 1624.05,-514.59 1588,-496.53 1569.88,-487.45 1571.17,-475.11 1552,-468.53 1318.26,-388.33 1243.07,-464.15 996,-468.53 831.17,-471.45 636.37,-479.71 543.32,-483.95"/>
+<polygon fill="#ff9100" stroke="#ff9100" points="543.12,-480.45 533.29,-484.41 543.44,-487.44 543.12,-480.45"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node15" class="node">
+<title>sourcefile~rdb_ocean_dyn.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node15"><a xlink:href="../sourcefile/rdb_ocean_dyn.f90.html" xlink:title="rdb_ocean_dyn.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1526,-1583.53 1410,-1583.53 1410,-1559.53 1526,-1559.53 1526,-1583.53"/>
+<text text-anchor="middle" x="1468" y="-1569.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_dyn.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge59" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00ffda" stroke-dasharray="5,2" d="M1884.38,-964.53C1881.22,-1014.09 1862.89,-1205.33 1765,-1314.53 1707.25,-1378.95 1642.97,-1328.73 1588,-1395.53 1544.43,-1448.47 1598.8,-1495.43 1552,-1545.53 1547.29,-1550.57 1541.62,-1554.64 1535.48,-1557.92"/>
+<polygon fill="#00ffda" stroke="#00ffda" points="1533.82,-1554.83 1526.2,-1562.2 1536.75,-1561.19 1533.82,-1554.83"/>
+</g>
+<!-- sourcefile~rdb_ocean_fold_apply.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node17" class="node">
+<title>sourcefile~rdb_ocean_fold_apply.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node17"><a xlink:href="../sourcefile/rdb_ocean_fold_apply.f90.html" xlink:title="rdb_ocean_fold_apply.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1150.5,-972.53 1000.5,-972.53 1000.5,-948.53 1150.5,-948.53 1150.5,-972.53"/>
+<text text-anchor="middle" x="1075.5" y="-958.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_fold_apply.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge69" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M1854.02,-964.62C1813.73,-980.1 1740.99,-1007.24 1677.5,-1026.53"/>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M1675.5,-1026.53C1586.04,-1053.71 1363.31,-901.22 1270.5,-912.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node18" class="node">
+<title>sourcefile~rdb_ocean_halo_state.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node18"><a xlink:href="../sourcefile/rdb_ocean_halo_state.f90.html" xlink:title="rdb_ocean_halo_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1345,-1272.53 1194,-1272.53 1194,-1248.53 1345,-1248.53 1345,-1272.53"/>
+<text text-anchor="middle" x="1269.5" y="-1258.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_halo_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge75" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#0048ff" stroke-dasharray="5,2" d="M1675.5,-1026.53C1569.32,-1058.79 1641.06,-1177.33 1552,-1243.53 1521.63,-1266.1 1505.29,-1251.8 1469,-1262.53"/>
+<path fill="none" stroke="#0048ff" stroke-dasharray="5,2" d="M1467,-1262.53C1431.41,-1273.04 1390.6,-1274.26 1355.42,-1272.19"/>
+<polygon fill="#0048ff" stroke="#0048ff" points="1355.39,-1268.68 1345.17,-1271.48 1354.91,-1275.66 1355.39,-1268.68"/>
+</g>
+<!-- sourcefile~rdb_ocean_sponge.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node24" class="node">
+<title>sourcefile~rdb_ocean_sponge.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node24"><a xlink:href="../sourcefile/rdb_ocean_sponge.f90.html" xlink:title="rdb_ocean_sponge.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1337.5,-1546.53 1201.5,-1546.53 1201.5,-1522.53 1337.5,-1522.53 1337.5,-1546.53"/>
+<text text-anchor="middle" x="1269.5" y="-1532.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_sponge.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_sponge.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge94" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_sponge.f90</title>
+<path fill="none" stroke="#ff0091" stroke-dasharray="5,2" d="M1883.6,-964.64C1877.87,-1008.35 1852.28,-1159.49 1765,-1236.53 1703.71,-1290.62 1650.56,-1233.91 1588,-1286.53 1559.7,-1310.33 1568.11,-1328.25 1552,-1361.53 1515.36,-1437.21 1550.28,-1510 1469,-1531.53"/>
+<path fill="none" stroke="#ff0091" stroke-dasharray="5,2" d="M1467,-1531.53C1428.57,-1541.73 1384.41,-1543.27 1347.69,-1541.91"/>
+<polygon fill="#ff0091" stroke="#ff0091" points="1347.69,-1538.41 1337.55,-1541.46 1347.38,-1545.4 1347.69,-1538.41"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node25" class="node">
+<title>sourcefile~rdb_ocean_state.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node25"><a xlink:href="../sourcefile/rdb_ocean_state.f90.html" xlink:title="rdb_ocean_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1738,-1428.53 1615,-1428.53 1615,-1404.53 1738,-1404.53 1738,-1428.53"/>
+<text text-anchor="middle" x="1676.5" y="-1414.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge101" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff0048" stroke-dasharray="5,2" d="M1882.48,-964.57C1869.86,-1023.95 1812.4,-1285.48 1765,-1352.53 1751.09,-1372.21 1729.2,-1388.21 1710.8,-1399.29"/>
+<polygon fill="#ff0048" stroke="#ff0048" points="1709,-1396.29 1702.1,-1404.33 1712.5,-1402.35 1709,-1396.29"/>
+</g>
+<!-- sourcefile~rdb_decomp.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node27" class="node">
+<title>sourcefile~rdb_decomp.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node27"><a xlink:href="../sourcefile/rdb_decomp.f90.html" xlink:title="rdb_decomp.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="731,-888.53 629,-888.53 629,-864.53 731,-864.53 731,-888.53"/>
+<text text-anchor="middle" x="680" y="-874.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_decomp.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_decomp.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge107" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_decomp.f90</title>
+<path fill="none" stroke="#ff7f00" stroke-dasharray="5,2" d="M1675.5,-520.53C1657.55,-505.62 1492.31,-483.59 1469,-482.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node34" class="node">
+<title>sourcefile~rdb_ocean_halo.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node34"><a xlink:href="../sourcefile/rdb_ocean_halo.f90.html" xlink:title="rdb_ocean_halo.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="932.5,-1299.53 813.5,-1299.53 813.5,-1275.53 932.5,-1275.53 932.5,-1299.53"/>
+<text text-anchor="middle" x="873" y="-1285.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_halo.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge126" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1675.5,-1026.53C1470.36,-1092.54 1385.23,-914.18 1191,-1007.53 1167.92,-1018.62 1173.22,-1034.53 1155,-1052.53 1091.24,-1115.5 1054,-1108.21 996,-1176.53 974.38,-1202 983.83,-1219.11 960,-1242.53 947.76,-1254.56 931.64,-1264.14 916.68,-1271.32"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="915.2,-1268.14 907.55,-1275.47 918.1,-1274.51 915.2,-1268.14"/>
+</g>
+<!-- sourcefile~rdb_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node38" class="node">
+<title>sourcefile~rdb_halo.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node38"><a xlink:href="../sourcefile/rdb_halo.f90.html" xlink:title="rdb_halo.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1310,-648.53 1229,-648.53 1229,-624.53 1310,-624.53 1310,-648.53"/>
+<text text-anchor="middle" x="1269.5" y="-634.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_halo.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge136" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_halo.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1467,-596.53C1440.31,-584.82 1364.45,-605.54 1315.17,-621.28"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1313.83,-618.04 1305.39,-624.45 1315.99,-624.7 1313.83,-618.04"/>
+</g>
+<!-- sourcefile~rdb_ocean_fold_exchange.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node39" class="node">
+<title>sourcefile~rdb_ocean_fold_exchange.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node39"><a xlink:href="../sourcefile/rdb_ocean_fold_exchange.f90.html" xlink:title="rdb_ocean_fold_exchange.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="960,-930.53 786,-930.53 786,-906.53 960,-906.53 960,-930.53"/>
+<text text-anchor="middle" x="873" y="-916.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_fold_exchange.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge141" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1822.98,-949.54C1754.36,-942.69 1645.87,-920.64 1588,-850.53 1520.74,-769.04 1623.94,-692.92 1552,-615.53 1526.24,-587.81 1503.65,-611.73 1469,-596.53"/>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1467,-596.53C1355.23,-545.28 1300.25,-559.12 1191,-615.53 1047.04,-689.86 1097.1,-811.19 960,-897.53 957.2,-899.29 954.27,-900.9 951.24,-902.38"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="949.71,-899.23 941.92,-906.42 952.49,-905.65 949.71,-899.23"/>
+</g>
+<!-- sourcefile~rdb_ocean_tides.f90&#45;&gt;sourcefile~rdb_ocean_tide_astro.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge3" class="edge">
+<title>sourcefile~rdb_ocean_tides.f90&#45;&gt;sourcefile~rdb_ocean_tide_astro.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1208.35,-1855.02C1130.99,-1855.61 992.49,-1856.53 874,-1856.53 874,-1856.53 874,-1856.53 486.5,-1856.53 311.53,-1856.53 145.29,-1691.95 92.38,-1634.24"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="94.71,-1631.6 85.4,-1626.53 89.52,-1636.29 94.71,-1631.6"/>
+</g>
+<!-- sourcefile~rdb_barotropic_coupling.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node5" class="node">
+<title>sourcefile~rdb_barotropic_coupling.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node5"><a xlink:href="../sourcefile/rdb_barotropic_coupling.f90.html" xlink:title="rdb_barotropic_coupling.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="569,-1626.53 406,-1626.53 406,-1602.53 569,-1602.53 569,-1626.53"/>
+<text text-anchor="middle" x="487.5" y="-1612.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_barotropic_coupling.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_barotropic_coupling.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge4" class="edge">
+<title>sourcefile~rdb_barotropic_coupling.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M405.83,-1614.53C395.88,-1614.53 385.62,-1614.53 375.43,-1614.53"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="375.28,-1611.03 365.28,-1614.53 375.28,-1618.03 375.28,-1611.03"/>
+</g>
+<!-- sourcefile~rdb_barotropic_substep.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node6" class="node">
+<title>sourcefile~rdb_barotropic_substep.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node6"><a xlink:href="../sourcefile/rdb_barotropic_substep.f90.html" xlink:title="rdb_barotropic_substep.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1155,-1318.53 996,-1318.53 996,-1294.53 1155,-1294.53 1155,-1318.53"/>
+<text text-anchor="middle" x="1075.5" y="-1304.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_barotropic_substep.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_barotropic_substep.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge5" class="edge">
+<title>sourcefile~rdb_barotropic_substep.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1059.99,-1318.78C1027.75,-1344.54 947.2,-1400.8 874,-1386.53"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M872,-1386.53C781.84,-1368.94 751.56,-1248.71 681,-1307.53"/>
+</g>
+<!-- sourcefile~rdb_barotropic_substep.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge118" class="edge">
+<title>sourcefile~rdb_barotropic_substep.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M995.83,-1299.07C978.39,-1297.42 960.03,-1295.68 943.01,-1294.07"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="942.88,-1290.54 932.6,-1293.08 942.22,-1297.51 942.88,-1290.54"/>
+</g>
+<!-- sourcefile~rdb_barotropic_substep.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge137" class="edge">
+<title>sourcefile~rdb_barotropic_substep.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1066.47,-1294.23C1051.16,-1270.38 1017.42,-1215.86 996,-1166.53 975,-1118.18 982.35,-1101.27 960,-1053.53 939.77,-1010.3 907.97,-964.31 889.24,-938.72"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="891.96,-936.52 883.2,-930.56 886.33,-940.68 891.96,-936.52"/>
+</g>
+<!-- sourcefile~rdb_config.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge6" class="edge">
+<title>sourcefile~rdb_config.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M484.2,-498.81C463.37,-610.16 307.34,-1444.3 279.68,-1592.16"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="276.19,-1591.82 277.79,-1602.29 283.07,-1593.1 276.19,-1591.82"/>
+</g>
+<!-- sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node8" class="node">
+<title>sourcefile~rdb_continuity.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node8"><a xlink:href="../sourcefile/rdb_continuity.f90.html" xlink:title="rdb_continuity.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1324,-1428.53 1215,-1428.53 1215,-1404.53 1324,-1404.53 1324,-1428.53"/>
+<text text-anchor="middle" x="1269.5" y="-1414.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_continuity.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge7" class="edge">
+<title>sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1257.74,-1428.64C1238.81,-1449.29 1197.55,-1491.48 1155,-1516.53 1097.88,-1550.15 940.25,-1618.46 874,-1616.53"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M872,-1616.53C785.53,-1612.87 569.87,-1519.02 488.5,-1548.53"/>
+</g>
+<!-- sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge64" class="edge">
+<title>sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M1245.6,-1404.36C1227.47,-1393.39 1203.22,-1375.48 1191,-1352.53 1152.59,-1280.39 1206.04,-1050.36 1155,-986.53 1152.45,-983.34 1149.5,-980.54 1146.27,-978.08"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="1148.03,-975.05 1137.72,-972.64 1144.27,-980.96 1148.03,-975.05"/>
+</g>
+<!-- sourcefile~rdb_ocean_mle.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node20" class="node">
+<title>sourcefile~rdb_ocean_mle.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node20"><a xlink:href="../sourcefile/rdb_ocean_mle.f90.html" xlink:title="rdb_ocean_mle.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1134,-1706.53 1017,-1706.53 1017,-1682.53 1134,-1682.53 1134,-1706.53"/>
+<text text-anchor="middle" x="1075.5" y="-1692.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_mle.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_mle.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge78" class="edge">
+<title>sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_mle.f90</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M1255.67,-1428.73C1238.32,-1445.97 1207.64,-1479.19 1191,-1513.53 1160.16,-1577.17 1202.67,-1616.28 1155,-1668.53 1151.52,-1672.34 1147.47,-1675.6 1143.08,-1678.37"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="1141.39,-1675.31 1134.27,-1683.15 1144.73,-1681.46 1141.39,-1675.31"/>
+</g>
+<!-- sourcefile~rdb_ocean_periodic.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node22" class="node">
+<title>sourcefile~rdb_ocean_periodic.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node22"><a xlink:href="../sourcefile/rdb_ocean_periodic.f90.html" xlink:title="rdb_ocean_periodic.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="750,-1540.53 610,-1540.53 610,-1516.53 750,-1516.53 750,-1540.53"/>
+<text text-anchor="middle" x="680" y="-1526.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_periodic.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge82" class="edge">
+<title>sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90</title>
+<path fill="none" stroke="#da00ff" stroke-dasharray="5,2" d="M1221.04,-1428.59C1210.73,-1432.25 1200.17,-1436.85 1191,-1442.53 1171.76,-1454.44 1174.4,-1466.87 1155,-1478.53 1123.73,-1497.32 1112.28,-1495.42 1076.5,-1502.53"/>
+<path fill="none" stroke="#da00ff" stroke-dasharray="5,2" d="M1074.5,-1502.53C986.91,-1519.92 963.2,-1511.25 874,-1515.53"/>
+</g>
+<!-- sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge119" class="edge">
+<title>sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1250.16,-1404.5C1233.26,-1392.74 1208.26,-1373.58 1191,-1352.53 1169.57,-1326.39 1181.75,-1306.19 1155,-1285.53 1126.59,-1263.59 1112.38,-1267.67 1076.5,-1266.53"/>
+</g>
+<!-- sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge138" class="edge">
+<title>sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1248.42,-1404.39C1231.04,-1392.96 1206.36,-1374.36 1191,-1352.53 1163.82,-1313.89 1178.57,-1293.46 1155,-1252.53 1114.83,-1182.77 947.79,-998.75 892.13,-938.17"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="894.68,-935.77 885.33,-930.78 889.53,-940.51 894.68,-935.77"/>
+</g>
+<!-- sourcefile~rdb_ice_evp.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node9" class="node">
+<title>sourcefile~rdb_ice_evp.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node9"><a xlink:href="../sourcefile/rdb_ice_evp.f90.html" xlink:title="rdb_ice_evp.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1125,-1398.53 1026,-1398.53 1026,-1374.53 1125,-1374.53 1125,-1398.53"/>
+<text text-anchor="middle" x="1075.5" y="-1384.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_evp.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_evp.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge8" class="edge">
+<title>sourcefile~rdb_ice_evp.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1025.79,-1391.7C984.88,-1394.82 925.08,-1396.49 874,-1386.53"/>
+</g>
+<!-- sourcefile~rdb_ice_evp.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge83" class="edge">
+<title>sourcefile~rdb_ice_evp.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90</title>
+<path fill="none" stroke="#da00ff" stroke-dasharray="5,2" d="M1028.42,-1398.54C1017.44,-1402.27 1006.02,-1406.92 996,-1412.53 934.09,-1447.2 944.88,-1512.13 874,-1515.53"/>
+<path fill="none" stroke="#da00ff" stroke-dasharray="5,2" d="M872,-1515.53C835.45,-1517.28 795,-1519.93 760.78,-1522.38"/>
+<polygon fill="#da00ff" stroke="#da00ff" points="760.09,-1518.92 750.37,-1523.14 760.59,-1525.91 760.09,-1518.92"/>
+</g>
+<!-- sourcefile~rdb_ice_evp.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge120" class="edge">
+<title>sourcefile~rdb_ice_evp.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1032.29,-1374.43C1020.35,-1370.51 1007.49,-1365.79 996,-1360.53 961.38,-1344.67 924.17,-1321.41 900.08,-1305.43"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="901.77,-1302.35 891.51,-1299.69 897.87,-1308.17 901.77,-1302.35"/>
+</g>
+<!-- sourcefile~rdb_ice_ocean_coupler.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node10" class="node">
+<title>sourcefile~rdb_ice_ocean_coupler.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node10"><a xlink:href="../sourcefile/rdb_ice_ocean_coupler.f90.html" xlink:title="rdb_ice_ocean_coupler.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1546.5,-1352.53 1389.5,-1352.53 1389.5,-1328.53 1546.5,-1328.53 1546.5,-1352.53"/>
+<text text-anchor="middle" x="1468" y="-1338.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_ocean_coupler.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_ocean_coupler.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge9" class="edge">
+<title>sourcefile~rdb_ice_ocean_coupler.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1393.79,-1352.54C1337.83,-1362.35 1259.01,-1377.49 1191,-1395.53 1174.7,-1399.85 1171.65,-1404.83 1155,-1407.53 1031.38,-1427.59 996.92,-1410.5 874,-1386.53"/>
+</g>
+<!-- sourcefile~rdb_ice_ocean_coupler.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge70" class="edge">
+<title>sourcefile~rdb_ice_ocean_coupler.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#0048ff" stroke-dasharray="5,2" d="M1437.16,-1328.38C1403.06,-1314.49 1347.13,-1291.73 1309.58,-1276.44"/>
+<polygon fill="#0048ff" stroke="#0048ff" points="1310.56,-1273.06 1299.98,-1272.53 1307.92,-1279.54 1310.56,-1273.06"/>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node11" class="node">
+<title>sourcefile~rdb_ice_transport.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node11"><a xlink:href="../sourcefile/rdb_ice_transport.f90.html" xlink:title="rdb_ice_transport.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1532,-1234.53 1404,-1234.53 1404,-1210.53 1532,-1210.53 1532,-1234.53"/>
+<text text-anchor="middle" x="1468" y="-1220.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_transport.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge10" class="edge">
+<title>sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1403.62,-1224.18C1365.07,-1224.61 1314.87,-1224.16 1270.5,-1220.53"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1268.5,-1220.53C1236.14,-1217.88 1184.44,-1142.23 1155,-1128.53 1122.87,-1113.57 1111.8,-1111.42 1076.5,-1114.53"/>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge46" class="edge">
+<title>sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_continuity.f90</title>
+<path fill="none" stroke="#ffda00" stroke-dasharray="5,2" d="M1454.71,-1234.66C1421.62,-1267.33 1330.48,-1357.31 1290.14,-1397.13"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="1287.44,-1394.88 1282.79,-1404.4 1292.36,-1399.86 1287.44,-1394.88"/>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge71" class="edge">
+<title>sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#0048ff" stroke-dasharray="5,2" d="M1404.83,-1234.55C1385.02,-1238.38 1362.94,-1242.65 1342.49,-1246.61"/>
+<polygon fill="#0048ff" stroke="#0048ff" points="1341.76,-1243.18 1332.61,-1248.52 1343.09,-1250.05 1341.76,-1243.18"/>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge121" class="edge">
+<title>sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1268.5,-1220.53C1181.04,-1213.36 1164.2,-1269.31 1076.5,-1266.53"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1074.5,-1266.53C1030.51,-1265.13 981.35,-1270.17 942.72,-1275.67"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="942.01,-1272.23 932.63,-1277.15 943.03,-1279.16 942.01,-1272.23"/>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge131" class="edge">
+<title>sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_halo.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1452.54,-1210.41C1433.45,-1193.51 1400.35,-1160.94 1384,-1125.53 1341.18,-1032.79 1370.54,-998.16 1348,-898.53 1327.51,-807.94 1293.03,-702.65 1277.94,-658.15"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1281.24,-656.99 1274.7,-648.66 1274.62,-659.25 1281.24,-656.99"/>
+</g>
+<!-- sourcefile~rdb_ocean_boundary_data.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node12" class="node">
+<title>sourcefile~rdb_ocean_boundary_data.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node12"><a xlink:href="../sourcefile/rdb_ocean_boundary_data.f90.html" xlink:title="rdb_ocean_boundary_data.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1765,-226.53 1588,-226.53 1588,-202.53 1765,-202.53 1765,-226.53"/>
+<text text-anchor="middle" x="1676.5" y="-212.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_boundary_data.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_boundary_data.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge11" class="edge">
+<title>sourcefile~rdb_ocean_boundary_data.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1625.83,-226.54C1533.69,-248.42 1339.42,-292.53 1270.5,-292.53 1270.5,-292.53 1270.5,-292.53 872,-292.53 701.56,-292.53 614.55,-177.8 488.5,-292.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_bt_wide.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node13" class="node">
+<title>sourcefile~rdb_ocean_bt_wide.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node13"><a xlink:href="../sourcefile/rdb_ocean_bt_wide.f90.html" xlink:title="rdb_ocean_bt_wide.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1338,-1626.53 1201,-1626.53 1201,-1602.53 1338,-1602.53 1338,-1626.53"/>
+<text text-anchor="middle" x="1269.5" y="-1612.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_bt_wide.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge12" class="edge">
+<title>sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1200.78,-1612.07C1163.93,-1611.52 1117.6,-1612.13 1076.5,-1616.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge31" class="edge">
+<title>sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90</title>
+<path fill="none" stroke="#ff4800" stroke-dasharray="5,2" d="M1209.04,-1602.52C1202.18,-1598.99 1195.9,-1594.42 1191,-1588.53 1117.56,-1500.16 1228.61,-1420.75 1155,-1332.53 1152.26,-1329.24 1149.09,-1326.37 1145.63,-1323.86"/>
+<polygon fill="#ff4800" stroke="#ff4800" points="1147.46,-1320.87 1137.1,-1318.62 1143.8,-1326.84 1147.46,-1320.87"/>
+</g>
+<!-- sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge122" class="edge">
+<title>sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1221.23,-1602.47C1209.79,-1597.44 1198.67,-1590.38 1191,-1580.53 1131.47,-1504.09 1221.01,-1436.44 1155,-1365.53 1130.54,-1339.25 1105.49,-1367.7 1076.5,-1346.53"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1074.5,-1346.53C1045.51,-1325.36 1030.53,-1337.35 996,-1327.53 969.83,-1320.08 940.88,-1310.64 917.75,-1302.81"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="918.81,-1299.47 908.22,-1299.55 916.55,-1306.09 918.81,-1299.47"/>
+</g>
+<!-- sourcefile~rdb_ocean_data_forcing.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node14" class="node">
+<title>sourcefile~rdb_ocean_data_forcing.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node14"><a xlink:href="../sourcefile/rdb_ocean_data_forcing.f90.html" xlink:title="rdb_ocean_data_forcing.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1549.5,-1116.53 1386.5,-1116.53 1386.5,-1092.53 1549.5,-1092.53 1549.5,-1116.53"/>
+<text text-anchor="middle" x="1468" y="-1102.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_data_forcing.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge13" class="edge">
+<title>sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1386.44,-1103.67C1307.36,-1103.52 1183.41,-1105.12 1076.5,-1114.53"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1074.5,-1114.53C972.93,-1128.33 970.5,-1193.96 874,-1228.53"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M872,-1228.53C785.52,-1259.5 752.28,-1249.58 681,-1307.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge38" class="edge">
+<title>sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff9100" stroke-dasharray="5,2" d="M1386.22,-1097.25C1329.77,-1090.07 1253.62,-1076.14 1191,-1049.53 1173.07,-1041.91 1172.52,-1033.03 1155,-1024.53 1122.18,-1008.6 1112.7,-1005.03 1076.5,-1000.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge72" class="edge">
+<title>sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#0048ff" stroke-dasharray="5,2" d="M1457.16,-1116.76C1433.61,-1145.77 1374.03,-1217.6 1348,-1234.53 1341.95,-1238.46 1335.24,-1241.86 1328.38,-1244.78"/>
+<polygon fill="#0048ff" stroke="#0048ff" points="1327,-1241.56 1318.97,-1248.47 1329.55,-1248.08 1327,-1241.56"/>
+</g>
+<!-- sourcefile~rdb_ocean_data_input.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node31" class="node">
+<title>sourcefile~rdb_ocean_data_input.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node31"><a xlink:href="../sourcefile/rdb_ocean_data_input.f90.html" xlink:title="rdb_ocean_data_input.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1346,-1040.53 1193,-1040.53 1193,-1016.53 1346,-1016.53 1346,-1040.53"/>
+<text text-anchor="middle" x="1269.5" y="-1026.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_data_input.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_ocean_data_input.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge110" class="edge">
+<title>sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_ocean_data_input.f90</title>
+<path fill="none" stroke="#00ff7f" stroke-dasharray="5,2" d="M1420.44,-1092.49C1408.31,-1088.68 1395.44,-1084 1384,-1078.53 1366.65,-1070.24 1365.27,-1062.99 1348,-1054.53 1340.04,-1050.62 1331.35,-1047.08 1322.75,-1043.95"/>
+<polygon fill="#00ff7f" stroke="#00ff7f" points="1323.73,-1040.58 1313.14,-1040.59 1321.43,-1047.19 1323.73,-1040.58"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge14" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M679,-1654.53C555.19,-1657.41 524,-1649.99 401,-1635.53 384.47,-1633.58 366.79,-1630.96 350.08,-1628.24"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="350.26,-1624.72 339.82,-1626.53 349.11,-1631.62 350.26,-1624.72"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_tides.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge27" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_tides.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1459.79,-1583.55C1444.98,-1608.42 1410.31,-1667.46 1384,-1718.53 1366.7,-1752.11 1371.72,-1766.12 1348,-1795.53 1334.78,-1811.92 1316.08,-1826.33 1300.36,-1836.8"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="1298.02,-1834.14 1291.51,-1842.5 1301.81,-1840.03 1298.02,-1834.14"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_barotropic_coupling.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge30" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_barotropic_coupling.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1074.5,-1654.53C902,-1625.75 855.89,-1654.53 681,-1654.53"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M679,-1654.53C653.19,-1655.13 590.33,-1640.76 543.84,-1629.08"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="544.45,-1625.63 533.89,-1626.56 542.73,-1632.41 544.45,-1625.63"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge32" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90</title>
+<path fill="none" stroke="#ff4800" stroke-dasharray="5,2" d="M1409.73,-1576.27C1338.36,-1580.84 1222,-1583.51 1191,-1555.53 1116.48,-1488.25 1220.1,-1408.96 1155,-1332.53 1152.22,-1329.27 1149.03,-1326.42 1145.55,-1323.92"/>
+<polygon fill="#ff4800" stroke="#ff4800" points="1147.36,-1320.92 1136.99,-1318.72 1143.72,-1326.9 1147.36,-1320.92"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge47" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_continuity.f90</title>
+<path fill="none" stroke="#ffda00" stroke-dasharray="5,2" d="M1451.58,-1559.37C1417.29,-1532.31 1334.53,-1467.03 1293.85,-1434.95"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="1295.87,-1432.08 1285.85,-1428.63 1291.53,-1437.58 1295.87,-1432.08"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_bt_wide.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge53" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_bt_wide.f90</title>
+<path fill="none" stroke="#00ff48" stroke-dasharray="5,2" d="M1412,-1583.56C1388.25,-1588.76 1360.29,-1594.88 1335.52,-1600.3"/>
+<polygon fill="#00ff48" stroke="#00ff48" points="1334.5,-1596.94 1325.48,-1602.5 1336,-1603.78 1334.5,-1596.94"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge66" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M1460.74,-1559.39C1444.82,-1529.26 1400.31,-1449.62 1348,-1395.53 1288.05,-1333.54 1234.75,-1355.84 1191,-1281.53 1123.99,-1167.71 1238.69,-1088.72 1155,-986.53 1152.36,-983.31 1149.32,-980.48 1145.99,-978.01"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="1147.54,-974.85 1137.2,-972.54 1143.85,-980.8 1147.54,-974.85"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge73" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#0048ff" stroke-dasharray="5,2" d="M1463.26,-1559.45C1451.2,-1521.77 1410.39,-1404.14 1348,-1324.53 1333.92,-1306.57 1314,-1290.25 1297.88,-1278.59"/>
+<polygon fill="#0048ff" stroke="#0048ff" points="1299.57,-1275.5 1289.38,-1272.61 1295.55,-1281.23 1299.57,-1275.5"/>
+</g>
+<!-- sourcefile~rdb_ocean_hdiff_tracer.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node19" class="node">
+<title>sourcefile~rdb_ocean_hdiff_tracer.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node19"><a xlink:href="../sourcefile/rdb_ocean_hdiff_tracer.f90.html" xlink:title="rdb_ocean_hdiff_tracer.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1348,-1786.53 1191,-1786.53 1191,-1762.53 1348,-1762.53 1348,-1786.53"/>
+<text text-anchor="middle" x="1269.5" y="-1772.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_hdiff_tracer.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_hdiff_tracer.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge76" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_hdiff_tracer.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1460.53,-1583.72C1440.74,-1620.63 1380.38,-1730.01 1348,-1753.53 1345.88,-1755.07 1343.65,-1756.5 1341.34,-1757.82"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="1339.49,-1754.83 1332.1,-1762.42 1342.61,-1761.1 1339.49,-1754.83"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_mle.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge79" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_mle.f90</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M1268.5,-1654.53C1217.09,-1653.62 1159.53,-1667.7 1120.96,-1679.4"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="1119.6,-1676.16 1111.09,-1682.47 1121.68,-1682.84 1119.6,-1676.16"/>
+</g>
+<!-- sourcefile~rdb_ocean_obc_baroclinic.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node21" class="node">
+<title>sourcefile~rdb_ocean_obc_baroclinic.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node21"><a xlink:href="../sourcefile/rdb_ocean_obc_baroclinic.f90.html" xlink:title="rdb_ocean_obc_baroclinic.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="574,-1706.53 401,-1706.53 401,-1682.53 574,-1682.53 574,-1706.53"/>
+<text text-anchor="middle" x="487.5" y="-1692.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_obc_baroclinic.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_obc_baroclinic.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge81" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_obc_baroclinic.f90</title>
+<path fill="none" stroke="#9100ff" stroke-dasharray="5,2" d="M679,-1654.53C629.22,-1655.69 573.64,-1668.76 535.43,-1679.65"/>
+<polygon fill="#9100ff" stroke="#9100ff" points="534.24,-1676.35 525.61,-1682.51 536.19,-1683.07 534.24,-1676.35"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge85" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90</title>
+<path fill="none" stroke="#da00ff" stroke-dasharray="5,2" d="M1268.5,-1654.53C1183.18,-1653.01 1160.67,-1668.57 1076.5,-1654.53"/>
+<path fill="none" stroke="#da00ff" stroke-dasharray="5,2" d="M1074.5,-1654.53C967.55,-1636.68 982.35,-1511.29 874,-1515.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_redi.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node23" class="node">
+<title>sourcefile~rdb_ocean_redi.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node23"><a xlink:href="../sourcefile/rdb_ocean_redi.f90.html" xlink:title="rdb_ocean_redi.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1328,-1744.53 1211,-1744.53 1211,-1720.53 1328,-1720.53 1328,-1744.53"/>
+<text text-anchor="middle" x="1269.5" y="-1730.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_redi.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_redi.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge90" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_redi.f90</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M1452.23,-1583.63C1418.15,-1611.55 1333.83,-1680.64 1293.16,-1713.97"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="1290.69,-1711.46 1285.17,-1720.51 1295.13,-1716.88 1290.69,-1711.46"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_sponge.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge92" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_sponge.f90</title>
+<path fill="none" stroke="#ff0091" stroke-dasharray="5,2" d="M1409.9,-1560.78C1389.36,-1556.91 1365.9,-1552.49 1344.15,-1548.4"/>
+<polygon fill="#ff0091" stroke="#ff0091" points="1344.77,-1544.95 1334.3,-1546.54 1343.48,-1551.83 1344.77,-1544.95"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge123" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1451.14,-1583.64C1418.92,-1606.98 1342.7,-1655.81 1270.5,-1654.53"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1268.5,-1654.53C1233.04,-1653.9 1214.69,-1661.92 1191,-1635.53 1110.14,-1545.43 1236,-1455.5 1155,-1365.53 1130.98,-1338.85 1105.49,-1367.7 1076.5,-1346.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node16" class="node">
+<title>sourcefile~rdb_ocean_engine.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node16"><a xlink:href="../sourcefile/rdb_ocean_engine.f90.html" xlink:title="rdb_ocean_engine.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="2342,-1328.53 2209,-1328.53 2209,-1304.53 2342,-1304.53 2342,-1328.53"/>
+<text text-anchor="middle" x="2275.5" y="-1314.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge15" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M2273.33,-1304.14C2267.47,-1244.69 2238.97,-983.06 2173,-779.53 2108.02,-579.05 2133.07,-485.23 1971,-350.53 1941.32,-325.86 1924.73,-336.63 1887,-328.53"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1885,-328.53C1821.65,-279.21 1838.23,-226.41 1765,-193.53 1245.9,39.58 878.62,121.73 488.5,-292.53"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M486.5,-292.53C430.07,-357.11 425.02,-383.19 401,-465.53 272.77,-905 273.42,-1473.71 275.08,-1592.28"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="271.58,-1592.39 275.24,-1602.33 278.58,-1592.28 271.58,-1592.39"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge26" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M2089,-912.53C2076.07,-905.75 1997.41,-923.91 1942.16,-937.94"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1940.96,-934.63 1932.13,-940.5 1942.69,-941.41 1940.96,-934.63"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge40" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff9100" stroke-dasharray="5,2" d="M1885,-328.53C1703.8,-291.76 1653.14,-313.88 1469,-330.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_evp.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge49" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_evp.f90</title>
+<path fill="none" stroke="#daff00" stroke-dasharray="5,2" d="M1885,-1300.53C1809.46,-1353.43 1769.62,-1296.12 1677.5,-1300.53"/>
+<path fill="none" stroke="#daff00" stroke-dasharray="5,2" d="M1675.5,-1300.53C1545.82,-1306.73 1512.56,-1301.44 1384,-1319.53 1294.57,-1332.11 1192.42,-1356.38 1131.27,-1372"/>
+<polygon fill="#daff00" stroke="#daff00" points="1130.26,-1368.64 1121.45,-1374.52 1132,-1375.42 1130.26,-1368.64"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_ocean_coupler.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge50" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_ocean_coupler.f90</title>
+<path fill="none" stroke="#91ff00" stroke-dasharray="5,2" d="M1675.5,-1300.53C1622.6,-1303.06 1563.35,-1315.56 1521.94,-1325.92"/>
+<polygon fill="#91ff00" stroke="#91ff00" points="1520.9,-1322.58 1512.07,-1328.44 1522.62,-1329.36 1520.9,-1322.58"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_transport.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge51" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_transport.f90</title>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M1675.5,-1222.53C1632.82,-1208.97 1582.62,-1208.64 1542.41,-1211.86"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="1542.06,-1208.38 1532.41,-1212.75 1542.68,-1215.35 1542.06,-1208.38"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_boundary_data.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge52" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_boundary_data.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1885,-328.53C1810.79,-313.47 1735.93,-261.04 1699.78,-232.83"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1701.87,-230.02 1691.86,-226.55 1697.52,-235.5 1701.87,-230.02"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge54" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90</title>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M1675.5,-1222.53C1610.27,-1201.8 1612.96,-1161.64 1552,-1130.53 1544.08,-1126.49 1535.42,-1122.93 1526.77,-1119.85"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="1527.65,-1116.45 1517.06,-1116.57 1525.41,-1123.08 1527.65,-1116.45"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge58" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00ffda" stroke-dasharray="5,2" d="M1675.5,-1571.53C1628.95,-1569.3 1576.44,-1569.33 1536.01,-1569.91"/>
+<polygon fill="#00ffda" stroke="#00ffda" points="1535.95,-1566.41 1526.01,-1570.07 1536.06,-1573.41 1535.95,-1566.41"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge67" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M1885,-912.53C1618.69,-851.96 1542.42,-887 1270.5,-912.53"/>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M1268.5,-912.53C1216.28,-916.38 1158.2,-932.65 1119.74,-945.19"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="1118.3,-941.98 1109.91,-948.46 1120.51,-948.63 1118.3,-941.98"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge74" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#0048ff" stroke-dasharray="5,2" d="M1675.5,-1222.53C1637.97,-1210.6 1626.7,-1229.21 1588,-1236.53 1561.4,-1241.56 1494.96,-1254.86 1469,-1262.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge86" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90</title>
+<path fill="none" stroke="#da00ff" stroke-dasharray="5,2" d="M1885,-1300.53C1809.16,-1353.65 1167.32,-1484.49 1076.5,-1502.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_sponge.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge93" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_sponge.f90</title>
+<path fill="none" stroke="#ff0091" stroke-dasharray="5,2" d="M2265.59,-1328.81C2249.47,-1350.15 2213.41,-1394.1 2173,-1418.53 1975.75,-1537.75 1907.72,-1582.54 1677.5,-1571.53"/>
+<path fill="none" stroke="#ff0091" stroke-dasharray="5,2" d="M1675.5,-1571.53C1582.02,-1571.73 1559.35,-1507.53 1469,-1531.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge100" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff0048" stroke-dasharray="5,2" d="M1885,-1300.53C1850.65,-1324.59 1833.21,-1316.66 1801,-1343.53 1780.79,-1360.38 1786.67,-1375.61 1765,-1390.53 1759.3,-1394.45 1753,-1397.8 1746.47,-1400.64"/>
+<polygon fill="#ff0048" stroke="#ff0048" points="1744.79,-1397.54 1736.77,-1404.46 1747.36,-1404.05 1744.79,-1397.54"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_decomp.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge103" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_decomp.f90</title>
+<path fill="none" stroke="#ff7f00" stroke-dasharray="5,2" d="M2089,-912.53C1884.49,-805.42 1956.61,-635.3 1765,-506.53 1731.53,-484.04 1714.81,-497.84 1677.5,-482.53"/>
+<path fill="none" stroke="#ff7f00" stroke-dasharray="5,2" d="M1675.5,-482.53C1588.75,-452.57 1560.68,-486.7 1469,-482.53"/>
+<path fill="none" stroke="#ff7f00" stroke-dasharray="5,2" d="M1467,-482.53C1334.28,-476.49 989.35,-492.6 874,-558.53"/>
+<path fill="none" stroke="#ff7f00" stroke-dasharray="5,2" d="M872,-558.53C754.12,-622.85 701.55,-793.37 686.11,-854.41"/>
+<polygon fill="#ff7f00" stroke="#ff7f00" points="682.62,-853.94 683.65,-864.48 689.42,-855.6 682.62,-853.94"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_data_input.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge111" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_data_input.f90</title>
+<path fill="none" stroke="#00ff7f" stroke-dasharray="5,2" d="M2089,-912.53C1916.77,-822.33 2046.24,-1189 1887,-1300.53"/>
+<path fill="none" stroke="#00ff7f" stroke-dasharray="5,2" d="M1885,-1300.53C1804.3,-1357.05 1771.4,-1252.36 1677.5,-1222.53"/>
+<path fill="none" stroke="#00ff7f" stroke-dasharray="5,2" d="M1675.5,-1222.53C1596.74,-1197.51 1623.1,-1125.64 1552,-1083.53 1519.44,-1064.24 1501.61,-1083.74 1469,-1064.53"/>
+<path fill="none" stroke="#00ff7f" stroke-dasharray="5,2" d="M1467,-1064.53C1448.15,-1053.42 1400.15,-1044.52 1356.31,-1038.34"/>
+<polygon fill="#00ff7f" stroke="#00ff7f" points="1356.54,-1034.84 1346.16,-1036.95 1355.59,-1041.78 1356.54,-1034.84"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node32" class="node">
+<title>sourcefile~rdb_ocean_diag_derived.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node32"><a xlink:href="../sourcefile/rdb_ocean_diag_derived.f90.html" xlink:title="rdb_ocean_diag_derived.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="2173,-1409.53 2007,-1409.53 2007,-1385.53 2173,-1385.53 2173,-1409.53"/>
+<text text-anchor="middle" x="2090" y="-1395.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_derived.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge114" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M2247.03,-1328.65C2215.32,-1342.65 2163.02,-1365.74 2127.81,-1381.28"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="2126.09,-1378.21 2118.36,-1385.45 2128.92,-1384.61 2126.09,-1378.21"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node33" class="node">
+<title>sourcefile~rdb_ocean_diag_fills.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node33"><a xlink:href="../sourcefile/rdb_ocean_diag_fills.f90.html" xlink:title="rdb_ocean_diag_fills.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1957.5,-1409.53 1814.5,-1409.53 1814.5,-1385.53 1957.5,-1385.53 1957.5,-1409.53"/>
+<text text-anchor="middle" x="1886" y="-1395.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_fills.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge117" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#007fff" stroke-dasharray="5,2" d="M2089,-912.53C1902.41,-814.81 2116.28,-1219.02 1971,-1371.53 1967.77,-1374.91 1964.12,-1377.86 1960.18,-1380.43"/>
+<polygon fill="#007fff" stroke="#007fff" points="1958.19,-1377.53 1951.16,-1385.46 1961.6,-1383.64 1958.19,-1377.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge124" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1675.5,-1222.53C1387.4,-1131 1288.48,-1176.12 996,-1252.53 972.24,-1258.73 946.05,-1266.17 924.05,-1272.59"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="922.87,-1269.29 914.26,-1275.46 924.84,-1276 922.87,-1269.29"/>
+</g>
+<!-- sourcefile~rdb_ocean_stability_audit.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node35" class="node">
+<title>sourcefile~rdb_ocean_stability_audit.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node35"><a xlink:href="../sourcefile/rdb_ocean_stability_audit.f90.html" xlink:title="rdb_ocean_stability_audit.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1971,-418.53 1801,-418.53 1801,-394.53 1971,-394.53 1971,-418.53"/>
+<text text-anchor="middle" x="1886" y="-404.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_stability_audit.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_stability_audit.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge127" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_stability_audit.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M2273.88,-1304.51C2270.16,-1246.32 2245.23,-993.3 2091,-912.53"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M2089,-912.53C2040.77,-887.27 2033.46,-869.11 2007,-821.53 1997.01,-803.55 1916.01,-511.61 1893.05,-428.47"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1896.41,-427.49 1890.37,-418.78 1889.66,-429.35 1896.41,-427.49"/>
+</g>
+<!-- sourcefile~rdb_state.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node37" class="node">
+<title>sourcefile~rdb_state.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node37"><a xlink:href="../sourcefile/rdb_state.f90.html" xlink:title="rdb_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="2132.5,-812.53 2047.5,-812.53 2047.5,-788.53 2132.5,-788.53 2132.5,-812.53"/>
+<text text-anchor="middle" x="2090" y="-798.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_state.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge129" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_state.f90</title>
+<path fill="none" stroke="#ff007f" stroke-dasharray="5,2" d="M2273.56,-1304.2C2269.17,-1252.18 2247.71,-1046.53 2173,-898.53 2157.52,-867.86 2130.76,-838.43 2112.03,-819.96"/>
+<polygon fill="#ff007f" stroke="#ff007f" points="2114.18,-817.17 2104.55,-812.75 2109.32,-822.21 2114.18,-817.17"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge135" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_halo.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M2089,-912.53C2009.47,-870.88 1976.42,-920.57 1887,-912.53"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1885,-912.53C1781.24,-903.19 1648.34,-622.18 1552,-582.53 1482.95,-554.11 1456.83,-566.08 1384,-582.53 1352.9,-589.55 1320.32,-606.15 1298.09,-619.1"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1296.02,-616.26 1289.23,-624.4 1299.61,-622.27 1296.02,-616.26"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge139" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1675.5,-482.53C1662.84,-477.46 1204.18,-558.02 1191,-561.53 1101.57,-585.31 1053.78,-562.24 996,-634.53 922.34,-726.69 1039,-809.9 960,-897.53 959.23,-898.38 958.43,-899.21 957.6,-900"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="955.23,-897.41 949.52,-906.33 959.55,-902.92 955.23,-897.41"/>
+</g>
+<!-- sourcefile~rdb_ocean_fold_apply.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge16" class="edge">
+<title>sourcefile~rdb_ocean_fold_apply.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1000.39,-967.1C936.36,-976.44 845.07,-999.01 786,-1053.53 696.23,-1136.37 774.83,-1229.31 681,-1307.53"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M679,-1307.53C573.06,-1393.66 616.85,-1501.98 488.5,-1548.53"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M486.5,-1548.53C432.94,-1567.95 370.55,-1587.04 327.58,-1599.65"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="326.52,-1596.31 317.91,-1602.48 328.49,-1603.03 326.52,-1596.31"/>
+</g>
+<!-- sourcefile~rdb_ocean_fold_apply.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge140" class="edge">
+<title>sourcefile~rdb_ocean_fold_apply.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1017.04,-948.49C993.45,-943.55 965.96,-937.79 941.42,-932.65"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="941.97,-929.19 931.46,-930.56 940.53,-936.04 941.97,-929.19"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo_state.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge17" class="edge">
+<title>sourcefile~rdb_ocean_halo_state.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1233.56,-1248.52C1163.28,-1226.31 1000.7,-1184.92 874,-1228.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo_state.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge68" class="edge">
+<title>sourcefile~rdb_ocean_halo_state.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M1209.06,-1248.5C1202.2,-1244.97 1195.91,-1240.41 1191,-1234.53 1119.62,-1149.03 1226.54,-1071.89 1155,-986.53 1152.25,-983.25 1149.08,-980.38 1145.62,-977.87"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="1147.44,-974.88 1137.08,-972.65 1143.78,-980.85 1147.44,-974.88"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo_state.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge88" class="edge">
+<title>sourcefile~rdb_ocean_halo_state.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90</title>
+<path fill="none" stroke="#da00ff" stroke-dasharray="5,2" d="M1262.23,-1272.61C1247.3,-1300.27 1206.98,-1368.82 1155,-1407.53 1101.35,-1447.48 940.82,-1512.32 874,-1515.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo_state.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge125" class="edge">
+<title>sourcefile~rdb_ocean_halo_state.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1193.73,-1265.05C1158.21,-1266.64 1115.17,-1267.76 1076.5,-1266.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_hdiff_tracer.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge18" class="edge">
+<title>sourcefile~rdb_ocean_hdiff_tracer.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1190.96,-1775.96C1155.99,-1776.55 1114.17,-1777.17 1076.5,-1777.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_mle.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge19" class="edge">
+<title>sourcefile~rdb_ocean_mle.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1055.86,-1706.63C1021.56,-1727.86 945.4,-1770.29 874,-1777.53"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M872,-1777.53C661.94,-1798.83 595.12,-1798.58 401,-1715.53 356.88,-1696.65 315.52,-1657.7 293.04,-1634.07"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="295.54,-1631.62 286.17,-1626.69 290.42,-1636.39 295.54,-1631.62"/>
+</g>
+<!-- sourcefile~rdb_ocean_obc_baroclinic.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge20" class="edge">
+<title>sourcefile~rdb_ocean_obc_baroclinic.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M443.57,-1682.49C429.86,-1678.38 414.7,-1673.54 401,-1668.53 369.93,-1657.16 335.46,-1642.15 310.52,-1630.84"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="311.67,-1627.52 301.12,-1626.55 308.76,-1633.88 311.67,-1627.52"/>
+</g>
+<!-- sourcefile~rdb_ocean_periodic.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge21" class="edge">
+<title>sourcefile~rdb_ocean_periodic.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M609.76,-1527.8C572.8,-1529.38 527.11,-1534.53 488.5,-1548.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_redi.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge22" class="edge">
+<title>sourcefile~rdb_ocean_redi.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1222.06,-1744.54C1170.01,-1757.82 1090.96,-1777.39 1076.5,-1777.53"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1074.5,-1777.53C985.39,-1778.37 962.45,-1766.7 874,-1777.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_sponge.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge24" class="edge">
+<title>sourcefile~rdb_ocean_sponge.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1250.45,-1546.61C1217.57,-1567.58 1144.98,-1609.2 1076.5,-1616.53"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1074.5,-1616.53C985.89,-1626.01 963.07,-1619.12 874,-1616.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge25" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_boundary_types.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1467,-1732.53C1436.16,-1753.71 1415.85,-1726.91 1384,-1746.53 1360.99,-1760.7 1372.11,-1783.32 1348,-1795.53 1240.1,-1850.14 1197.43,-1776.39 1076.5,-1777.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_tides.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge29" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_tides.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1467,-1732.53C1435.22,-1754.09 1413.51,-1731.96 1384,-1756.53 1356.51,-1779.42 1375.01,-1805.06 1348,-1828.53 1343.78,-1832.19 1339.03,-1835.35 1334,-1838.06"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="1332.25,-1835.02 1324.72,-1842.48 1335.26,-1841.34 1332.25,-1835.02"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge43" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff9100" stroke-dasharray="5,2" d="M1662.03,-1404.29C1643.02,-1386.34 1608.34,-1351 1588,-1314.53 1562.33,-1268.49 1589.13,-1238.94 1552,-1201.53 1492.55,-1141.63 1270.42,-1112.09 1191,-1083.53 1139.55,-1065.03 1130.72,-1045.57 1076.5,-1038.53"/>
+<path fill="none" stroke="#ff9100" stroke-dasharray="5,2" d="M1074.5,-1038.53C897.31,-1017.18 821.64,-1068.4 681,-958.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge48" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_continuity.f90</title>
+<path fill="none" stroke="#ffda00" stroke-dasharray="5,2" d="M1614.87,-1416.53C1539.37,-1416.53 1411,-1416.53 1334.13,-1416.53"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="1334.1,-1413.03 1324.1,-1416.53 1334.1,-1420.03 1334.1,-1413.03"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge55" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90</title>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M1661.12,-1404.3C1641.34,-1386.62 1606.11,-1351.9 1588,-1314.53 1551.67,-1239.54 1607.58,-1192.61 1552,-1130.53 1549.05,-1127.24 1545.7,-1124.36 1542.06,-1121.84"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="1543.53,-1118.65 1533.14,-1116.6 1539.99,-1124.68 1543.53,-1118.65"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge60" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00ffda" stroke-dasharray="5,2" d="M1667.11,-1428.79C1649.06,-1454.29 1603.9,-1513.32 1552,-1545.53 1545.65,-1549.47 1538.65,-1552.86 1531.49,-1555.76"/>
+<polygon fill="#00ffda" stroke="#00ffda" points="1529.82,-1552.65 1521.68,-1559.42 1532.27,-1559.21 1529.82,-1552.65"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_hdiff_tracer.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge77" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_hdiff_tracer.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1467,-1732.53C1456.9,-1739.38 1399.14,-1751.29 1348.83,-1760.68"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="1348.08,-1757.26 1338.89,-1762.52 1349.36,-1764.14 1348.08,-1757.26"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_mle.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge80" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_mle.f90</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M1667.82,-1428.85C1632.21,-1485.92 1484.25,-1722.18 1469,-1732.53"/>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M1467,-1732.53C1422.56,-1762.68 1401.33,-1717.88 1348,-1711.53 1278.94,-1703.3 1199.5,-1698.91 1144.46,-1696.67"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="1144.27,-1693.16 1134.14,-1696.26 1143.99,-1700.15 1144.27,-1693.16"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge89" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90</title>
+<path fill="none" stroke="#da00ff" stroke-dasharray="5,2" d="M1652.99,-1428.54C1628.76,-1440.89 1588.74,-1459.69 1552,-1469.53 1509.09,-1481.02 1199.34,-1513.91 1155,-1516.53 1084.46,-1520.69 1066.67,-1516.82 996,-1516.53 941.78,-1516.31 928.18,-1513.41 874,-1515.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_redi.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge91" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_redi.f90</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M1467,-1732.53C1424.01,-1761.7 1362.63,-1756.16 1319.95,-1746.89"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="1320.6,-1743.45 1310.07,-1744.6 1319.02,-1750.27 1320.6,-1743.45"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_sponge.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge95" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_sponge.f90</title>
+<path fill="none" stroke="#ff0091" stroke-dasharray="5,2" d="M1662.47,-1428.61C1641.01,-1447.91 1596.19,-1485.73 1552,-1507.53 1517.56,-1524.52 1506.12,-1521.69 1469,-1531.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_decomp.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge108" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_decomp.f90</title>
+<path fill="none" stroke="#ff7f00" stroke-dasharray="5,2" d="M1660.65,-1404.52C1640.3,-1387.09 1604.4,-1352.68 1588,-1314.53 1526.43,-1171.26 1635.68,-1097.1 1552,-965.53 1504.85,-891.39 950.39,-515.12 874,-558.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_data_input.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge112" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_data_input.f90</title>
+<path fill="none" stroke="#00ff7f" stroke-dasharray="5,2" d="M1660.92,-1404.4C1640.89,-1386.82 1605.38,-1352.25 1588,-1314.53 1544.51,-1220.16 1622.84,-1159.54 1552,-1083.53 1526.2,-1055.84 1501.61,-1083.74 1469,-1064.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_z_init.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node36" class="node">
+<title>sourcefile~rdb_ocean_z_init.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node36"><a xlink:href="../sourcefile/rdb_ocean_z_init.f90.html" xlink:title="rdb_ocean_z_init.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="935,-1086.53 811,-1086.53 811,-1062.53 935,-1062.53 935,-1086.53"/>
+<text text-anchor="middle" x="873" y="-1072.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_z_init.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_z_init.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge128" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_z_init.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M1074.5,-1038.53C1047.6,-1035.03 980.92,-1048.66 931.81,-1060.14"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="930.86,-1056.77 921.93,-1062.47 932.47,-1063.58 930.86,-1056.77"/>
+</g>
+<!-- sourcefile~rdb_ocean_restart_io.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node40" class="node">
+<title>sourcefile~rdb_ocean_restart_io.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node40"><a xlink:href="../sourcefile/rdb_ocean_restart_io.f90.html" xlink:title="rdb_ocean_restart_io.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="945.5,-888.53 800.5,-888.53 800.5,-864.53 945.5,-864.53 945.5,-888.53"/>
+<text text-anchor="middle" x="873" y="-874.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_restart_io.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_restart_io.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge142" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_restart_io.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1660.82,-1404.44C1640.67,-1386.92 1605.02,-1352.41 1588,-1314.53 1539.47,-1206.51 1629.8,-1139.8 1552,-1050.53 1473.8,-960.79 1118.26,-906.5 955.63,-885.96"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="956.03,-882.48 945.67,-884.71 955.16,-889.43 956.03,-882.48"/>
+</g>
+<!-- sourcefile~rdb_config_schema.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node26" class="node">
+<title>sourcefile~rdb_config_schema.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node26"><a xlink:href="../sourcefile/rdb_config_schema.f90.html" xlink:title="rdb_config_schema.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="749.5,-458.53 610.5,-458.53 610.5,-434.53 749.5,-434.53 749.5,-458.53"/>
+<text text-anchor="middle" x="680" y="-444.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_config_schema.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_config_schema.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge33" class="edge">
+<title>sourcefile~rdb_config_schema.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff9100" stroke-dasharray="5,2" d="M621.84,-458.53C596.9,-463.77 567.77,-469.88 543.12,-475.06"/>
+<polygon fill="#ff9100" stroke="#ff9100" points="542.27,-471.66 533.21,-477.14 543.71,-478.51 542.27,-471.66"/>
+</g>
+<!-- sourcefile~rdb_decomp.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge34" class="edge">
+<title>sourcefile~rdb_decomp.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff9100" stroke-dasharray="5,2" d="M673.09,-864.43C646.04,-809.05 533.86,-579.38 498.93,-507.88"/>
+<polygon fill="#ff9100" stroke="#ff9100" points="502.06,-506.32 494.53,-498.87 495.77,-509.39 502.06,-506.32"/>
+</g>
+<!-- sourcefile~rdb_driver.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node28" class="node">
+<title>sourcefile~rdb_driver.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node28"><a xlink:href="../sourcefile/rdb_driver.f90.html" xlink:title="rdb_driver.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="2469.5,-1369.53 2381.5,-1369.53 2381.5,-1345.53 2469.5,-1345.53 2469.5,-1369.53"/>
+<text text-anchor="middle" x="2425.5" y="-1355.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge35" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff9100" stroke-dasharray="5,2" d="M2274.5,-840.53C2233.65,-802.54 1326.28,-836.53 1270.5,-836.53 1270.5,-836.53 1270.5,-836.53 1074.5,-836.53 946,-836.53 900.92,-798.02 786,-855.53 764.01,-866.53 767.25,-880.01 750,-897.53 721.28,-926.69 713.42,-983.52 681,-958.53"/>
+<path fill="none" stroke="#ff9100" stroke-dasharray="5,2" d="M679,-958.53C646.63,-933.47 631.99,-932.05 610,-897.53 526.1,-765.8 498.1,-573.79 490.74,-508.9"/>
+<polygon fill="#ff9100" stroke="#ff9100" points="494.18,-508.19 489.63,-498.63 487.22,-508.94 494.18,-508.19"/>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge56" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00ffda" stroke-dasharray="5,2" d="M2416.31,-1369.69C2388.26,-1410.1 2291.22,-1539.92 2173,-1585.53 1945.31,-1673.37 1644.61,-1615.69 1523.24,-1586.04"/>
+<polygon fill="#00ffda" stroke="#00ffda" points="1523.98,-1582.62 1513.43,-1583.61 1522.3,-1589.41 1523.98,-1582.62"/>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge61" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#00daff" stroke-dasharray="5,2" d="M2381.29,-1345.56C2365.18,-1341.09 2346.68,-1335.97 2329.77,-1331.28"/>
+<polygon fill="#00daff" stroke="#00daff" points="2330.59,-1327.88 2320.02,-1328.58 2328.72,-1334.63 2330.59,-1327.88"/>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge96" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff0048" stroke-dasharray="5,2" d="M2381.38,-1355.95C2351.82,-1355.25 2311.74,-1355.07 2276.5,-1357.53"/>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge130" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_halo.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M2388,-1345.34C2384.22,-1342.9 2380.76,-1339.99 2378,-1336.53 2237.53,-1160.75 2441.08,-993.97 2276.5,-840.53"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M2274.5,-840.53C2145.88,-720.61 2062.85,-760.53 1887,-760.53 1887,-760.53 1887,-760.53 1675.5,-760.53 1545.67,-760.53 1503.29,-792.78 1384,-741.53 1341.42,-723.23 1304.65,-681.86 1285.22,-656.86"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1287.92,-654.62 1279.09,-648.76 1282.34,-658.84 1287.92,-654.62"/>
+</g>
+<!-- sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node29" class="node">
+<title>sourcefile~rdb_handle.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node29"><a xlink:href="../sourcefile/rdb_handle.f90.html" xlink:title="rdb_handle.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="2473,-1327.53 2378,-1327.53 2378,-1303.53 2473,-1303.53 2473,-1327.53"/>
+<text text-anchor="middle" x="2425.5" y="-1313.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge36" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff9100" stroke-dasharray="5,2" d="M2424.83,-1303.3C2426.56,-1216.27 2426.19,-685.56 2173,-386.53 1970.18,-146.98 1780.99,-296.16 1469,-330.53"/>
+<path fill="none" stroke="#ff9100" stroke-dasharray="5,2" d="M1467,-330.53C1379.85,-336.25 760.1,-293.51 681,-330.53"/>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge62" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#00daff" stroke-dasharray="5,2" d="M2377.67,-1315.84C2369.58,-1315.9 2360.98,-1315.96 2352.34,-1316.02"/>
+<polygon fill="#00daff" stroke="#00daff" points="2352.2,-1312.52 2342.22,-1316.08 2352.25,-1319.52 2352.2,-1312.52"/>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge97" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff0048" stroke-dasharray="5,2" d="M2395.66,-1327.56C2366.29,-1338.89 2319.13,-1354.56 2276.5,-1357.53"/>
+<path fill="none" stroke="#ff0048" stroke-dasharray="5,2" d="M2274.5,-1357.53C2102.69,-1369.5 2058.55,-1342.32 1887,-1357.53"/>
+<path fill="none" stroke="#ff0048" stroke-dasharray="5,2" d="M1885,-1357.53C1846.88,-1360.95 1837.6,-1365.34 1801,-1376.53 1784.58,-1381.55 1781.24,-1384.97 1765,-1390.53 1753.98,-1394.3 1742.08,-1398.05 1730.71,-1401.48"/>
+<polygon fill="#ff0048" stroke="#ff0048" points="1729.48,-1398.19 1720.89,-1404.4 1731.48,-1404.9 1729.48,-1398.19"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node30" class="node">
+<title>sourcefile~rdb_ocean_api.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node30"><a xlink:href="../sourcefile/rdb_ocean_api.f90.html" xlink:title="rdb_ocean_api.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="2622,-1327.53 2509,-1327.53 2509,-1303.53 2622,-1303.53 2622,-1327.53"/>
+<text text-anchor="middle" x="2565.5" y="-1313.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge37" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff9100" stroke-dasharray="5,2" d="M2564.46,-1303.24C2563.88,-1198.87 2555.24,-460.78 2426.5,-290.53"/>
+<path fill="none" stroke="#ff9100" stroke-dasharray="5,2" d="M2424.5,-290.53C2190.76,18.6 1029.11,-160.2 681,-330.53"/>
+<path fill="none" stroke="#ff9100" stroke-dasharray="5,2" d="M679,-330.53C606.49,-365.24 537.71,-433.14 506.31,-466.73"/>
+<polygon fill="#ff9100" stroke="#ff9100" points="503.36,-464.77 499.15,-474.49 508.5,-469.51 503.36,-464.77"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge57" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00ffda" stroke-dasharray="5,2" d="M2274.5,-1656.53C2003.58,-1696.13 1951.22,-1801.84 1677.5,-1808.53"/>
+<path fill="none" stroke="#00ffda" stroke-dasharray="5,2" d="M1675.5,-1808.53C1619.58,-1798.87 1518.24,-1648.49 1482.17,-1592.41"/>
+<polygon fill="#00ffda" stroke="#00ffda" points="1484.92,-1590.21 1476.59,-1583.66 1479.02,-1593.98 1484.92,-1590.21"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge63" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#00daff" stroke-dasharray="5,2" d="M2563.42,-1327.81C2558.51,-1374.74 2533.67,-1542.07 2426.5,-1580.53"/>
+<path fill="none" stroke="#00daff" stroke-dasharray="5,2" d="M2424.5,-1580.53C2319.52,-1618.2 2418.63,-1424.57 2342,-1343.53 2338.4,-1339.72 2334.17,-1336.42 2329.64,-1333.59"/>
+<polygon fill="#00daff" stroke="#00daff" points="2331.07,-1330.38 2320.62,-1328.67 2327.72,-1336.53 2331.07,-1330.38"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge65" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M2424.5,-290.53C2333.73,-185.71 1932.08,-269.3 1801,-314.53 1690.57,-352.63 1647.86,-368.21 1588,-468.53 1525.29,-573.63 1625.66,-643.79 1552,-741.53 1446.7,-881.25 1348.29,-821.91 1191,-898.53 1161.88,-912.71 1129.5,-930.43 1106.62,-943.3"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="1104.72,-940.35 1097.74,-948.31 1108.17,-946.44 1104.72,-940.35"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge84" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90</title>
+<path fill="none" stroke="#da00ff" stroke-dasharray="5,2" d="M1675.5,-1808.53C1461.29,-1771.54 1398.76,-1939.5 1191,-1875.53 972.12,-1808.13 763.03,-1611.19 700.12,-1548.17"/>
+<polygon fill="#da00ff" stroke="#da00ff" points="702.38,-1545.48 692.86,-1540.84 697.41,-1550.4 702.38,-1545.48"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge109" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M2508.77,-1315.53C2500.37,-1315.53 2491.69,-1315.53 2483.27,-1315.53"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="2483.15,-1312.03 2473.15,-1315.53 2483.15,-1319.03 2483.15,-1312.03"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge113" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M2424.5,-1580.53C2293.83,-1627.42 2152.89,-1473.91 2106.65,-1417.5"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="2109.3,-1415.2 2100.29,-1409.62 2103.85,-1419.6 2109.3,-1415.2"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge115" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#007fff" stroke-dasharray="5,2" d="M2424.5,-1580.53C2354.3,-1603.75 2350.24,-1651.03 2276.5,-1656.53"/>
+<path fill="none" stroke="#007fff" stroke-dasharray="5,2" d="M2274.5,-1656.53C2102.6,-1669.34 1948.47,-1481.49 1901.56,-1418.06"/>
+<polygon fill="#007fff" stroke="#007fff" points="1904.15,-1415.66 1895.43,-1409.64 1898.49,-1419.78 1904.15,-1415.66"/>
+</g>
+<!-- sourcefile~rdb_ocean_data_input.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge39" class="edge">
+<title>sourcefile~rdb_ocean_data_input.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff9100" stroke-dasharray="5,2" d="M1192.77,-1020.28C1157.23,-1015.69 1114.44,-1009.15 1076.5,-1000.53"/>
+<path fill="none" stroke="#ff9100" stroke-dasharray="5,2" d="M1074.5,-1000.53C902.99,-961.54 822.39,-1063.14 681,-958.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge98" class="edge">
+<title>sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff0048" stroke-dasharray="5,2" d="M2043.51,-1385.43C1993.64,-1372.72 1916.74,-1354.89 1887,-1357.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge116" class="edge">
+<title>sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#007fff" stroke-dasharray="5,2" d="M2006.84,-1397.53C1994,-1397.53 1980.73,-1397.53 1967.92,-1397.53"/>
+<polygon fill="#007fff" stroke="#007fff" points="1967.76,-1394.03 1957.76,-1397.53 1967.76,-1401.03 1967.76,-1394.03"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge99" class="edge">
+<title>sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff0048" stroke-dasharray="5,2" d="M1814.46,-1403.99C1793.06,-1405.95 1769.55,-1408.1 1748.14,-1410.06"/>
+<polygon fill="#ff0048" stroke="#ff0048" points="1747.79,-1406.58 1738.15,-1410.97 1748.42,-1413.55 1747.79,-1406.58"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge87" class="edge">
+<title>sourcefile~rdb_ocean_halo.f90&#45;&gt;sourcefile~rdb_ocean_periodic.f90</title>
+<path fill="none" stroke="#da00ff" stroke-dasharray="5,2" d="M862.27,-1299.81C831.36,-1338.81 735.23,-1460.1 696.96,-1508.39"/>
+<polygon fill="#da00ff" stroke="#da00ff" points="694.18,-1506.26 690.71,-1516.27 699.67,-1510.61 694.18,-1506.26"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo.f90&#45;&gt;sourcefile~rdb_decomp.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge105" class="edge">
+<title>sourcefile~rdb_ocean_halo.f90&#45;&gt;sourcefile~rdb_decomp.f90</title>
+<path fill="none" stroke="#ff7f00" stroke-dasharray="5,2" d="M865.54,-1275.27C849.95,-1245.33 809.86,-1165.73 786,-1095.53 763.8,-1030.2 783.88,-1004.63 750,-944.53 738.99,-925 720.73,-907.37 705.77,-894.95"/>
+<polygon fill="#ff7f00" stroke="#ff7f00" points="707.85,-892.14 697.86,-888.62 703.47,-897.6 707.85,-892.14"/>
+</g>
+<!-- sourcefile~rdb_ocean_stability_audit.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge42" class="edge">
+<title>sourcefile~rdb_ocean_stability_audit.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff9100" stroke-dasharray="5,2" d="M1800.91,-404.71C1763.16,-404.37 1718.07,-404.6 1677.5,-406.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_z_init.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge44" class="edge">
+<title>sourcefile~rdb_ocean_z_init.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff9100" stroke-dasharray="5,2" d="M819.66,-1062.49C808.2,-1058.83 796.4,-1054.22 786,-1048.53 732.09,-1019 730.41,-995.08 681,-958.53"/>
+</g>
+<!-- sourcefile~rdb_state.f90&#45;&gt;sourcefile~rdb_config.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge45" class="edge">
+<title>sourcefile~rdb_state.f90&#45;&gt;sourcefile~rdb_config.f90</title>
+<path fill="none" stroke="#ff9100" stroke-dasharray="5,2" d="M2087.47,-788.15C2079.33,-724.7 2038.99,-436.88 1971,-385.53 1866.64,-306.71 1808.13,-400.31 1677.5,-406.53"/>
+<path fill="none" stroke="#ff9100" stroke-dasharray="5,2" d="M1675.5,-406.53C1495.67,-414.24 1450.5,-406.53 1270.5,-406.53 1270.5,-406.53 1270.5,-406.53 872,-406.53 755.25,-406.53 722.56,-394.52 610,-425.53 575.65,-434.99 539.56,-454.51 515.73,-468.93"/>
+<polygon fill="#ff9100" stroke="#ff9100" points="513.59,-466.13 506.92,-474.36 517.27,-472.09 513.59,-466.13"/>
+</g>
+<!-- sourcefile~rdb_halo.f90&#45;&gt;sourcefile~rdb_decomp.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge102" class="edge">
+<title>sourcefile~rdb_halo.f90&#45;&gt;sourcefile~rdb_decomp.f90</title>
+<path fill="none" stroke="#ff7f00" stroke-dasharray="5,2" d="M1249.82,-624.49C1190.64,-588.02 1003.59,-485.59 874,-558.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_fold_exchange.f90&#45;&gt;sourcefile~rdb_decomp.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge104" class="edge">
+<title>sourcefile~rdb_ocean_fold_exchange.f90&#45;&gt;sourcefile~rdb_decomp.f90</title>
+<path fill="none" stroke="#ff7f00" stroke-dasharray="5,2" d="M817.27,-906.49C793.43,-901.25 765.43,-895.09 741.03,-889.73"/>
+<polygon fill="#ff7f00" stroke="#ff7f00" points="741.68,-886.29 731.17,-887.56 740.18,-893.12 741.68,-886.29"/>
+</g>
+<!-- sourcefile~rdb_ocean_restart_io.f90&#45;&gt;sourcefile~rdb_decomp.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge106" class="edge">
+<title>sourcefile~rdb_ocean_restart_io.f90&#45;&gt;sourcefile~rdb_decomp.f90</title>
+<path fill="none" stroke="#ff7f00" stroke-dasharray="5,2" d="M800.34,-876.53C780.86,-876.53 759.98,-876.53 741.22,-876.53"/>
+<polygon fill="#ff7f00" stroke="#ff7f00" points="741.03,-873.03 731.03,-876.53 741.03,-880.03 741.03,-873.03"/>
+</g>
+<!-- sourcefile~rdb_ocean_cavity_flux.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node41" class="node">
+<title>sourcefile~rdb_ocean_cavity_flux.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node41"><a xlink:href="../sourcefile/rdb_ocean_cavity_flux.f90.html" xlink:title="rdb_ocean_cavity_flux.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1544.5,-648.53 1391.5,-648.53 1391.5,-624.53 1544.5,-624.53 1544.5,-648.53"/>
+<text text-anchor="middle" x="1468" y="-634.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_cavity_flux.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_cavity_flux.f90&#45;&gt;sourcefile~rdb_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge132" class="edge">
+<title>sourcefile~rdb_ocean_cavity_flux.f90&#45;&gt;sourcefile~rdb_halo.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1391.31,-636.53C1367.52,-636.53 1341.87,-636.53 1320.35,-636.53"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1320.15,-633.03 1310.15,-636.53 1320.15,-640.03 1320.15,-633.03"/>
+</g>
+<!-- sourcefile~rdb_ocean_chksum.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node42" class="node">
+<title>sourcefile~rdb_ocean_chksum.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node42"><a xlink:href="../sourcefile/rdb_ocean_chksum.f90.html" xlink:title="rdb_ocean_chksum.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1537,-732.53 1399,-732.53 1399,-708.53 1537,-708.53 1537,-732.53"/>
+<text text-anchor="middle" x="1468" y="-718.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_chksum.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_chksum.f90&#45;&gt;sourcefile~rdb_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge133" class="edge">
+<title>sourcefile~rdb_ocean_chksum.f90&#45;&gt;sourcefile~rdb_halo.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1411.01,-708.48C1401.85,-705.9 1392.57,-702.92 1384,-699.53 1352.88,-687.2 1319.66,-667.97 1297.26,-653.99"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1298.97,-650.93 1288.65,-648.55 1295.23,-656.85 1298.97,-650.93"/>
+</g>
+<!-- sourcefile~rdb_ocean_console_stats.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node43" class="node">
+<title>sourcefile~rdb_ocean_console_stats.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_node43"><a xlink:href="../sourcefile/rdb_ocean_console_stats.f90.html" xlink:title="rdb_ocean_console_stats.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1552,-690.53 1384,-690.53 1384,-666.53 1552,-666.53 1552,-690.53"/>
+<text text-anchor="middle" x="1468" y="-676.13" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_console_stats.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_console_stats.f90&#45;&gt;sourcefile~rdb_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_tide_astro.f90~~AfferentGraph_edge134" class="edge">
+<title>sourcefile~rdb_ocean_console_stats.f90&#45;&gt;sourcefile~rdb_halo.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1410.69,-666.49C1382.11,-660.38 1347.69,-653.03 1320.11,-647.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1320.8,-643.7 1310.29,-645.03 1319.33,-650.54 1320.8,-643.7"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefilerdb_ocean_tide_astrof90AfferentGraph = svgPanZoom('#sourcefilerdb_ocean_tide_astrof90AfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#AfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="AfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+<br>
+      <section>
+        <h2><span class="anchor" id="src"></span>Source Code</h2>
+        <div class="hl codehilite"><pre><span></span><a id="ln-1" name="ln-1" href="#ln-1"></a><span class="c">!! Equilibrium-tide astronomy generator (mean longitudes, equilibrium</span>
+<a id="ln-2" name="ln-2" href="#ln-2"></a><span class="c">!! arguments, nodal corrections, constituent catalog).</span>
+<a id="ln-3" name="ln-3" href="#ln-3"></a><span class="k">module </span><span class="n">rdb_ocean_tide_astro</span>
+<a id="ln-4" name="ln-4" href="#ln-4"></a><span class="w">   </span><span class="c">!! Clean-room astronomy for the equilibrium (astronomical) body-force</span>
+<a id="ln-5" name="ln-5" href="#ln-5"></a><span class="w">   </span><span class="c">!! tide.  Computes the four mean longitudes (moon `s`, sun `h`, lunar</span>
+<a id="ln-6" name="ln-6" href="#ln-6"></a><span class="w">   </span><span class="c">!! perigee `p`, ascending node `N`) from Schureman's polynomials, the</span>
+<a id="ln-7" name="ln-7" href="#ln-7"></a><span class="w">   </span><span class="c">!! per-constituent equilibrium argument `V_c` (with the load-bearing</span>
+<a id="ln-8" name="ln-8" href="#ln-8"></a><span class="w">   </span><span class="c">!! ±pi/2 diurnal signs), and the slowly-varying nodal amplitude/phase</span>
+<a id="ln-9" name="ln-9" href="#ln-9"></a><span class="w">   </span><span class="c">!! corrections `f_c(N)`, `u_c(N)`.  Host-side scalar generator — called</span>
+<a id="ln-10" name="ln-10" href="#ln-10"></a><span class="w">   </span><span class="c">!! once at init (to bake the ref-date offset into `phase0`) and once per</span>
+<a id="ln-11" name="ln-11" href="#ln-11"></a><span class="w">   </span><span class="c">!! outer step (to advance the running argument); NOT a device kernel.</span>
+<a id="ln-12" name="ln-12" href="#ln-12"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-13" name="ln-13" href="#ln-13"></a><span class="w">   </span><span class="c">!! References (the recipe is built from these, not from any model source):</span>
+<a id="ln-14" name="ln-14" href="#ln-14"></a><span class="w">   </span><span class="c">!!   * Doodson (1921), Proc. R. Soc. Lond. A 100.</span>
+<a id="ln-15" name="ln-15" href="#ln-15"></a><span class="w">   </span><span class="c">!!   * Schureman (1958), "Manual of harmonic analysis and prediction of</span>
+<a id="ln-16" name="ln-16" href="#ln-16"></a><span class="w">   </span><span class="c">!!     tides", US C&amp;GS Spec. Pub. 98 (mean-longitude polynomials; the</span>
+<a id="ln-17" name="ln-17" href="#ln-17"></a><span class="w">   </span><span class="c">!!     36525-day Julian century).</span>
+<a id="ln-18" name="ln-18" href="#ln-18"></a><span class="w">   </span><span class="c">!!   * Cartwright &amp; Tayler (1971) / Cartwright &amp; Edden (1973) (amplitudes).</span>
+<a id="ln-19" name="ln-19" href="#ln-19"></a><span class="w">   </span><span class="c">!!   * Kowalik &amp; Luick (2019), "Modern Theory and Practice of Tide</span>
+<a id="ln-20" name="ln-20" href="#ln-20"></a><span class="w">   </span><span class="c">!!     Analysis and Prediction" (Tables I.4 argument, I.6 nodal).</span>
+<a id="ln-21" name="ln-21" href="#ln-21"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_constants</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">wp</span>
+<a id="ln-22" name="ln-22" href="#ln-22"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_calendar</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">gregorian_day_number</span><span class="p">,</span><span class="w"> </span><span class="n">days_since_1900</span>
+<a id="ln-23" name="ln-23" href="#ln-23"></a><span class="w">   </span><span class="k">implicit none</span>
+<a id="ln-24" name="ln-24" href="#ln-24"></a><span class="k">   private</span>
+<a id="ln-25" name="ln-25" href="#ln-25"></a>
+<a id="ln-26" name="ln-26" href="#ln-26"></a><span class="k">   public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">TIDE_NAME</span><span class="p">,</span><span class="w"> </span><span class="n">TIDE_SPECIES</span><span class="p">,</span><span class="w"> </span><span class="n">TIDE_AMP</span><span class="p">,</span><span class="w"> </span><span class="n">TIDE_LOVE</span><span class="p">,</span><span class="w"> </span><span class="n">TIDE_OMEGA</span>
+<a id="ln-27" name="ln-27" href="#ln-27"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">TIDES_CATALOG_SIZE</span>
+<a id="ln-28" name="ln-28" href="#ln-28"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">gregorian_day_number</span><span class="p">,</span><span class="w"> </span><span class="n">days_since_1900</span>
+<a id="ln-29" name="ln-29" href="#ln-29"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">mean_longitudes</span><span class="p">,</span><span class="w"> </span><span class="n">equilibrium_arguments</span><span class="p">,</span><span class="w"> </span><span class="n">nodal_fu</span>
+<a id="ln-30" name="ln-30" href="#ln-30"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">tide_name_index</span><span class="p">,</span><span class="w"> </span><span class="n">parse_date_string</span>
+<a id="ln-31" name="ln-31" href="#ln-31"></a>
+<a id="ln-32" name="ln-32" href="#ln-32"></a><span class="w">   </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="p">,</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">TIDE_PI</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">4.0_wp</span><span class="o">*</span><span class="nb">atan</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="p">)</span>
+<a id="ln-33" name="ln-33" href="#ln-33"></a><span class="w">      </span><span class="c">!! Pi to working precision.</span>
+<a id="ln-34" name="ln-34" href="#ln-34"></a><span class="w">   </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="p">,</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">TIDE_DEG2RAD</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">TIDE_PI</span><span class="o">/</span><span class="mi">18</span><span class="mf">0.0_wp</span>
+<a id="ln-35" name="ln-35" href="#ln-35"></a><span class="w">      </span><span class="c">!! Degrees -&gt; radians.</span>
+<a id="ln-36" name="ln-36" href="#ln-36"></a>
+<a id="ln-37" name="ln-37" href="#ln-37"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">TIDES_CATALOG_SIZE</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">10</span>
+<a id="ln-38" name="ln-38" href="#ln-38"></a><span class="w">      </span><span class="c">!! Full catalog: 8 default (M2 S2 N2 K2 K1 O1 P1 Q1) + MF MM branch.</span>
+<a id="ln-39" name="ln-39" href="#ln-39"></a>
+<a id="ln-40" name="ln-40" href="#ln-40"></a><span class="w">   </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=</span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">TIDE_NAME</span><span class="p">(</span><span class="n">TIDES_CATALOG_SIZE</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-41" name="ln-41" href="#ln-41"></a><span class="w">                                  </span><span class="p">[</span><span class="s2">"M2"</span><span class="p">,</span><span class="w"> </span><span class="s2">"S2"</span><span class="p">,</span><span class="w"> </span><span class="s2">"N2"</span><span class="p">,</span><span class="w"> </span><span class="s2">"K2"</span><span class="p">,</span><span class="w"> </span><span class="s2">"K1"</span><span class="p">,</span><span class="w"> </span><span class="s2">"O1"</span><span class="p">,</span><span class="w"> </span><span class="s2">"P1"</span><span class="p">,</span><span class="w"> </span><span class="s2">"Q1"</span><span class="p">,</span><span class="w"> </span><span class="s2">"MF"</span><span class="p">,</span><span class="w"> </span><span class="s2">"MM"</span><span class="p">]</span>
+<a id="ln-42" name="ln-42" href="#ln-42"></a><span class="w">      </span><span class="c">!! Constituent names (catalog order).</span>
+<a id="ln-43" name="ln-43" href="#ln-43"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">TIDE_SPECIES</span><span class="p">(</span><span class="n">TIDES_CATALOG_SIZE</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-44" name="ln-44" href="#ln-44"></a><span class="w">                         </span><span class="p">[</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">]</span>
+<a id="ln-45" name="ln-45" href="#ln-45"></a><span class="w">      </span><span class="c">!! Species / structure-slice index: 1 diurnal, 2 semidiurnal,</span>
+<a id="ln-46" name="ln-46" href="#ln-46"></a><span class="w">      </span><span class="c">!! 3 long-period.  Directly indexes the (nx,ny,3) struct slices.</span>
+<a id="ln-47" name="ln-47" href="#ln-47"></a><span class="w">   </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">TIDE_AMP</span><span class="p">(</span><span class="n">TIDES_CATALOG_SIZE</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-48" name="ln-48" href="#ln-48"></a><span class="w">                          </span><span class="p">[</span><span class="mf">0.242334_wp</span><span class="p">,</span><span class="w"> </span><span class="mf">0.112743_wp</span><span class="p">,</span><span class="w"> </span><span class="mf">0.046397_wp</span><span class="p">,</span><span class="w"> </span><span class="mf">0.030684_wp</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-49" name="ln-49" href="#ln-49"></a><span class="w">                           </span><span class="mf">0.141565_wp</span><span class="p">,</span><span class="w"> </span><span class="mf">0.100661_wp</span><span class="p">,</span><span class="w"> </span><span class="mf">0.046848_wp</span><span class="p">,</span><span class="w"> </span><span class="mf">0.019273_wp</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-50" name="ln-50" href="#ln-50"></a><span class="w">                           </span><span class="mf">0.042041_wp</span><span class="p">,</span><span class="w"> </span><span class="mf">0.022191_wp</span><span class="p">]</span>
+<a id="ln-51" name="ln-51" href="#ln-51"></a><span class="w">      </span><span class="c">!! Equilibrium amplitudes A (m).</span>
+<a id="ln-52" name="ln-52" href="#ln-52"></a><span class="w">   </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">TIDE_LOVE</span><span class="p">(</span><span class="n">TIDES_CATALOG_SIZE</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-53" name="ln-53" href="#ln-53"></a><span class="w">                          </span><span class="p">[</span><span class="mf">0.693_wp</span><span class="p">,</span><span class="w"> </span><span class="mf">0.693_wp</span><span class="p">,</span><span class="w"> </span><span class="mf">0.693_wp</span><span class="p">,</span><span class="w"> </span><span class="mf">0.693_wp</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-54" name="ln-54" href="#ln-54"></a><span class="w">                           </span><span class="mf">0.736_wp</span><span class="p">,</span><span class="w"> </span><span class="mf">0.695_wp</span><span class="p">,</span><span class="w"> </span><span class="mf">0.706_wp</span><span class="p">,</span><span class="w"> </span><span class="mf">0.695_wp</span><span class="p">,</span><span class="w"> </span><span class="mf">0.693_wp</span><span class="p">,</span><span class="w"> </span><span class="mf">0.693_wp</span><span class="p">]</span>
+<a id="ln-55" name="ln-55" href="#ln-55"></a><span class="w">      </span><span class="c">!! Effective Love-number factors (1 + k - h).</span>
+<a id="ln-56" name="ln-56" href="#ln-56"></a><span class="w">   </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">TIDE_OMEGA</span><span class="p">(</span><span class="n">TIDES_CATALOG_SIZE</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-57" name="ln-57" href="#ln-57"></a><span class="w">                          </span><span class="p">[</span><span class="mf">1.4051890e-4_wp</span><span class="p">,</span><span class="w"> </span><span class="mf">1.4544410e-4_wp</span><span class="p">,</span><span class="w"> </span><span class="mf">1.3787970e-4_wp</span><span class="p">,</span><span class="w"> </span><span class="mf">1.4584234e-4_wp</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-58" name="ln-58" href="#ln-58"></a><span class="w">                           </span><span class="mf">0.7292117e-4_wp</span><span class="p">,</span><span class="w"> </span><span class="mf">0.6759774e-4_wp</span><span class="p">,</span><span class="w"> </span><span class="mf">0.7252295e-4_wp</span><span class="p">,</span><span class="w"> </span><span class="mf">0.6495854e-4_wp</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-59" name="ln-59" href="#ln-59"></a><span class="w">                           </span><span class="mf">0.053234e-4_wp</span><span class="p">,</span><span class="w"> </span><span class="mf">0.026392e-4_wp</span><span class="p">]</span>
+<a id="ln-60" name="ln-60" href="#ln-60"></a><span class="w">      </span><span class="c">!! Angular frequencies omega_c (rad/s).</span>
+<a id="ln-61" name="ln-61" href="#ln-61"></a>
+<a id="ln-62" name="ln-62" href="#ln-62"></a><span class="k">contains</span>
+<a id="ln-63" name="ln-63" href="#ln-63"></a>
+<a id="ln-64" name="ln-64" href="#ln-64"></a><span class="k">   pure subroutine </span><span class="n">mean_longitudes</span><span class="p">(</span><span class="n">dnum</span><span class="p">,</span><span class="w"> </span><span class="n">s_deg</span><span class="p">,</span><span class="w"> </span><span class="n">h_deg</span><span class="p">,</span><span class="w"> </span><span class="n">p_deg</span><span class="p">,</span><span class="w"> </span><span class="n">n_deg</span><span class="p">)</span>
+<a id="ln-65" name="ln-65" href="#ln-65"></a><span class="w">      </span><span class="c">!! Mean longitudes at day number `dnum` (Schureman polynomials).</span>
+<a id="ln-66" name="ln-66" href="#ln-66"></a><span class="w">      </span><span class="c">!! Returned in DEGREES, folded to [0,360).  T = dnum/36525 (Julian</span>
+<a id="ln-67" name="ln-67" href="#ln-67"></a><span class="w">      </span><span class="c">!! centuries, Schureman's 36525-day century).  Multiply by</span>
+<a id="ln-68" name="ln-68" href="#ln-68"></a><span class="w">      </span><span class="c">!! TIDE_DEG2RAD to get radians for the equilibrium arguments.</span>
+<a id="ln-69" name="ln-69" href="#ln-69"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dnum</span>
+<a id="ln-70" name="ln-70" href="#ln-70"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">s_deg</span><span class="p">,</span><span class="w"> </span><span class="n">h_deg</span><span class="p">,</span><span class="w"> </span><span class="n">p_deg</span><span class="p">,</span><span class="w"> </span><span class="n">n_deg</span>
+<a id="ln-71" name="ln-71" href="#ln-71"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">t</span>
+<a id="ln-72" name="ln-72" href="#ln-72"></a><span class="w">      </span><span class="n">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dnum</span><span class="o">/</span><span class="mi">3652</span><span class="mf">5.0_wp</span>
+<a id="ln-73" name="ln-73" href="#ln-73"></a><span class="w">      </span><span class="n">s_deg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">wrap360</span><span class="p">(</span><span class="mi">27</span><span class="mf">7.0248_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">48126</span><span class="mf">7.8906_wp</span><span class="o">*</span><span class="n">t</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">0.0011_wp</span><span class="o">*</span><span class="n">t</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+<a id="ln-74" name="ln-74" href="#ln-74"></a><span class="w">      </span><span class="n">h_deg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">wrap360</span><span class="p">(</span><span class="mi">28</span><span class="mf">0.1895_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">3600</span><span class="mf">0.7689_wp</span><span class="o">*</span><span class="n">t</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">3.0310e-4_wp</span><span class="o">*</span><span class="n">t</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+<a id="ln-75" name="ln-75" href="#ln-75"></a><span class="w">      </span><span class="n">p_deg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">wrap360</span><span class="p">(</span><span class="mi">33</span><span class="mf">4.3853_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">406</span><span class="mf">9.0340_wp</span><span class="o">*</span><span class="n">t</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">0.0103_wp</span><span class="o">*</span><span class="n">t</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+<a id="ln-76" name="ln-76" href="#ln-76"></a><span class="w">      </span><span class="n">n_deg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">wrap360</span><span class="p">(</span><span class="mi">25</span><span class="mf">9.1568_wp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">193</span><span class="mf">4.142_wp</span><span class="o">*</span><span class="n">t</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">0.0021_wp</span><span class="o">*</span><span class="n">t</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+<a id="ln-77" name="ln-77" href="#ln-77"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">mean_longitudes</span>
+<a id="ln-78" name="ln-78" href="#ln-78"></a>
+<a id="ln-79" name="ln-79" href="#ln-79"></a><span class="w">   </span><span class="k">pure function </span><span class="n">wrap360</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+<a id="ln-80" name="ln-80" href="#ln-80"></a><span class="w">      </span><span class="c">!! Fold an angle in degrees to the canonical residue [0,360).</span>
+<a id="ln-81" name="ln-81" href="#ln-81"></a><span class="w">      </span><span class="c">!! (Fortran `mod` returns the sign of the argument, so a negative</span>
+<a id="ln-82" name="ln-82" href="#ln-82"></a><span class="w">      </span><span class="c">!! polynomial value needs the +360 canonicalisation.)</span>
+<a id="ln-83" name="ln-83" href="#ln-83"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">x</span>
+<a id="ln-84" name="ln-84" href="#ln-84"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">y</span>
+<a id="ln-85" name="ln-85" href="#ln-85"></a><span class="w">      </span><span class="n">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">mod</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="mi">36</span><span class="mf">0.0_wp</span><span class="p">)</span>
+<a id="ln-86" name="ln-86" href="#ln-86"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">y</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="n">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">y</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">36</span><span class="mf">0.0_wp</span>
+<a id="ln-87" name="ln-87" href="#ln-87"></a><span class="w">   </span><span class="k">end function </span><span class="n">wrap360</span>
+<a id="ln-88" name="ln-88" href="#ln-88"></a>
+<a id="ln-89" name="ln-89" href="#ln-89"></a><span class="w">   </span><span class="k">pure subroutine </span><span class="n">equilibrium_arguments</span><span class="p">(</span><span class="n">dnum</span><span class="p">,</span><span class="w"> </span><span class="n">v_arg</span><span class="p">)</span>
+<a id="ln-90" name="ln-90" href="#ln-90"></a><span class="w">      </span><span class="c">!! Equilibrium argument `V_c` (radians) for every catalog</span>
+<a id="ln-91" name="ln-91" href="#ln-91"></a><span class="w">      </span><span class="c">!! constituent at day number `dnum`.  s,h,p,N are taken in radians</span>
+<a id="ln-92" name="ln-92" href="#ln-92"></a><span class="w">      </span><span class="c">!! (deg-mod-360 -&gt; rad); the result is left un-modded (cos/sin are</span>
+<a id="ln-93" name="ln-93" href="#ln-93"></a><span class="w">      </span><span class="c">!! periodic).  The ±pi/2 diurnal signs are load-bearing.</span>
+<a id="ln-94" name="ln-94" href="#ln-94"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dnum</span>
+<a id="ln-95" name="ln-95" href="#ln-95"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">v_arg</span><span class="p">(</span><span class="n">TIDES_CATALOG_SIZE</span><span class="p">)</span>
+<a id="ln-96" name="ln-96" href="#ln-96"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">s_deg</span><span class="p">,</span><span class="w"> </span><span class="n">h_deg</span><span class="p">,</span><span class="w"> </span><span class="n">p_deg</span><span class="p">,</span><span class="w"> </span><span class="n">n_deg</span>
+<a id="ln-97" name="ln-97" href="#ln-97"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">s</span><span class="p">,</span><span class="w"> </span><span class="n">h</span><span class="p">,</span><span class="w"> </span><span class="n">p</span>
+<a id="ln-98" name="ln-98" href="#ln-98"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">half_pi</span>
+<a id="ln-99" name="ln-99" href="#ln-99"></a><span class="w">      </span><span class="k">call </span><span class="n">mean_longitudes</span><span class="p">(</span><span class="n">dnum</span><span class="p">,</span><span class="w"> </span><span class="n">s_deg</span><span class="p">,</span><span class="w"> </span><span class="n">h_deg</span><span class="p">,</span><span class="w"> </span><span class="n">p_deg</span><span class="p">,</span><span class="w"> </span><span class="n">n_deg</span><span class="p">)</span>
+<a id="ln-100" name="ln-100" href="#ln-100"></a><span class="w">      </span><span class="n">s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">s_deg</span><span class="o">*</span><span class="n">TIDE_DEG2RAD</span>
+<a id="ln-101" name="ln-101" href="#ln-101"></a><span class="w">      </span><span class="n">h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_deg</span><span class="o">*</span><span class="n">TIDE_DEG2RAD</span>
+<a id="ln-102" name="ln-102" href="#ln-102"></a><span class="w">      </span><span class="n">p</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">p_deg</span><span class="o">*</span><span class="n">TIDE_DEG2RAD</span>
+<a id="ln-103" name="ln-103" href="#ln-103"></a><span class="w">      </span><span class="n">half_pi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">TIDE_PI</span>
+<a id="ln-104" name="ln-104" href="#ln-104"></a><span class="w">      </span><span class="n">v_arg</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">2.0_wp</span><span class="o">*</span><span class="p">(</span><span class="n">h</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">s</span><span class="p">)</span><span class="w">                    </span><span class="c">! M2</span>
+<a id="ln-105" name="ln-105" href="#ln-105"></a><span class="w">      </span><span class="n">v_arg</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="w">                            </span><span class="c">! S2</span>
+<a id="ln-106" name="ln-106" href="#ln-106"></a><span class="w">      </span><span class="n">v_arg</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="mf">3.0_wp</span><span class="o">*</span><span class="n">s</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">2.0_wp</span><span class="o">*</span><span class="n">h</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">p</span><span class="w">          </span><span class="c">! N2</span>
+<a id="ln-107" name="ln-107" href="#ln-107"></a><span class="w">      </span><span class="n">v_arg</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">2.0_wp</span><span class="o">*</span><span class="n">h</span><span class="w">                          </span><span class="c">! K2</span>
+<a id="ln-108" name="ln-108" href="#ln-108"></a><span class="w">      </span><span class="n">v_arg</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">half_pi</span><span class="w">                       </span><span class="c">! K1  (+pi/2)</span>
+<a id="ln-109" name="ln-109" href="#ln-109"></a><span class="w">      </span><span class="n">v_arg</span><span class="p">(</span><span class="mi">6</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="mf">2.0_wp</span><span class="o">*</span><span class="n">s</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">half_pi</span><span class="w">           </span><span class="c">! O1  (-pi/2)</span>
+<a id="ln-110" name="ln-110" href="#ln-110"></a><span class="w">      </span><span class="n">v_arg</span><span class="p">(</span><span class="mi">7</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="n">h</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">half_pi</span><span class="w">                      </span><span class="c">! P1  (-pi/2)</span>
+<a id="ln-111" name="ln-111" href="#ln-111"></a><span class="w">      </span><span class="n">v_arg</span><span class="p">(</span><span class="mi">8</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="mf">3.0_wp</span><span class="o">*</span><span class="n">s</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">p</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">half_pi</span><span class="w">       </span><span class="c">! Q1  (-pi/2)</span>
+<a id="ln-112" name="ln-112" href="#ln-112"></a><span class="w">      </span><span class="n">v_arg</span><span class="p">(</span><span class="mi">9</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">2.0_wp</span><span class="o">*</span><span class="n">s</span><span class="w">                          </span><span class="c">! MF</span>
+<a id="ln-113" name="ln-113" href="#ln-113"></a><span class="w">      </span><span class="n">v_arg</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">p</span><span class="w">                            </span><span class="c">! MM</span>
+<a id="ln-114" name="ln-114" href="#ln-114"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">equilibrium_arguments</span>
+<a id="ln-115" name="ln-115" href="#ln-115"></a>
+<a id="ln-116" name="ln-116" href="#ln-116"></a><span class="w">   </span><span class="k">pure subroutine </span><span class="n">nodal_fu</span><span class="p">(</span><span class="n">dnum</span><span class="p">,</span><span class="w"> </span><span class="n">add_nodal</span><span class="p">,</span><span class="w"> </span><span class="n">f_nodal</span><span class="p">,</span><span class="w"> </span><span class="n">u_nodal</span><span class="p">)</span>
+<a id="ln-117" name="ln-117" href="#ln-117"></a><span class="w">      </span><span class="c">!! Nodal amplitude factor `f_c(N)` (nondim) and phase `u_c(N)`</span>
+<a id="ln-118" name="ln-118" href="#ln-118"></a><span class="w">      </span><span class="c">!! (radians), fixed at the nodal reference date's `N`.</span>
+<a id="ln-119" name="ln-119" href="#ln-119"></a><span class="w">      </span><span class="c">!! `add_nodal = .false.` returns f=1, u=0 for every constituent.</span>
+<a id="ln-120" name="ln-120" href="#ln-120"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dnum</span>
+<a id="ln-121" name="ln-121" href="#ln-121"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">add_nodal</span>
+<a id="ln-122" name="ln-122" href="#ln-122"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">f_nodal</span><span class="p">(</span><span class="n">TIDES_CATALOG_SIZE</span><span class="p">)</span>
+<a id="ln-123" name="ln-123" href="#ln-123"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u_nodal</span><span class="p">(</span><span class="n">TIDES_CATALOG_SIZE</span><span class="p">)</span>
+<a id="ln-124" name="ln-124" href="#ln-124"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">s_deg</span><span class="p">,</span><span class="w"> </span><span class="n">h_deg</span><span class="p">,</span><span class="w"> </span><span class="n">p_deg</span><span class="p">,</span><span class="w"> </span><span class="n">n_deg</span>
+<a id="ln-125" name="ln-125" href="#ln-125"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cos_n</span><span class="p">,</span><span class="w"> </span><span class="n">sin_n</span>
+<a id="ln-126" name="ln-126" href="#ln-126"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">c</span>
+<a id="ln-127" name="ln-127" href="#ln-127"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">add_nodal</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-128" name="ln-128" href="#ln-128"></a><span class="k">         do </span><span class="n">c</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">TIDES_CATALOG_SIZE</span>
+<a id="ln-129" name="ln-129" href="#ln-129"></a><span class="w">            </span><span class="n">f_nodal</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span>
+<a id="ln-130" name="ln-130" href="#ln-130"></a><span class="w">            </span><span class="n">u_nodal</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-131" name="ln-131" href="#ln-131"></a><span class="w">         </span><span class="k">end do</span>
+<a id="ln-132" name="ln-132" href="#ln-132"></a><span class="k">         return</span>
+<a id="ln-133" name="ln-133" href="#ln-133"></a><span class="k">      end if</span>
+<a id="ln-134" name="ln-134" href="#ln-134"></a><span class="k">      call </span><span class="n">mean_longitudes</span><span class="p">(</span><span class="n">dnum</span><span class="p">,</span><span class="w"> </span><span class="n">s_deg</span><span class="p">,</span><span class="w"> </span><span class="n">h_deg</span><span class="p">,</span><span class="w"> </span><span class="n">p_deg</span><span class="p">,</span><span class="w"> </span><span class="n">n_deg</span><span class="p">)</span>
+<a id="ln-135" name="ln-135" href="#ln-135"></a><span class="w">      </span><span class="n">cos_n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">cos</span><span class="p">(</span><span class="n">n_deg</span><span class="o">*</span><span class="n">TIDE_DEG2RAD</span><span class="p">)</span>
+<a id="ln-136" name="ln-136" href="#ln-136"></a><span class="w">      </span><span class="n">sin_n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">sin</span><span class="p">(</span><span class="n">n_deg</span><span class="o">*</span><span class="n">TIDE_DEG2RAD</span><span class="p">)</span>
+<a id="ln-137" name="ln-137" href="#ln-137"></a><span class="w">      </span><span class="c">! M2, N2</span>
+<a id="ln-138" name="ln-138" href="#ln-138"></a><span class="w">      </span><span class="n">f_nodal</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">0.037_wp</span><span class="o">*</span><span class="n">cos_n</span>
+<a id="ln-139" name="ln-139" href="#ln-139"></a><span class="w">      </span><span class="n">u_nodal</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="o">-</span><span class="mf">2.1_wp</span><span class="p">)</span><span class="o">*</span><span class="n">TIDE_DEG2RAD</span><span class="o">*</span><span class="n">sin_n</span>
+<a id="ln-140" name="ln-140" href="#ln-140"></a><span class="w">      </span><span class="n">f_nodal</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">0.037_wp</span><span class="o">*</span><span class="n">cos_n</span>
+<a id="ln-141" name="ln-141" href="#ln-141"></a><span class="w">      </span><span class="n">u_nodal</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="o">-</span><span class="mf">2.1_wp</span><span class="p">)</span><span class="o">*</span><span class="n">TIDE_DEG2RAD</span><span class="o">*</span><span class="n">sin_n</span>
+<a id="ln-142" name="ln-142" href="#ln-142"></a><span class="w">      </span><span class="c">! K2</span>
+<a id="ln-143" name="ln-143" href="#ln-143"></a><span class="w">      </span><span class="n">f_nodal</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.024_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">0.286_wp</span><span class="o">*</span><span class="n">cos_n</span>
+<a id="ln-144" name="ln-144" href="#ln-144"></a><span class="w">      </span><span class="n">u_nodal</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="mf">7.7_wp</span><span class="p">)</span><span class="o">*</span><span class="n">TIDE_DEG2RAD</span><span class="o">*</span><span class="n">sin_n</span>
+<a id="ln-145" name="ln-145" href="#ln-145"></a><span class="w">      </span><span class="c">! K1</span>
+<a id="ln-146" name="ln-146" href="#ln-146"></a><span class="w">      </span><span class="n">f_nodal</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.006_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">0.115_wp</span><span class="o">*</span><span class="n">cos_n</span>
+<a id="ln-147" name="ln-147" href="#ln-147"></a><span class="w">      </span><span class="n">u_nodal</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="o">-</span><span class="mf">8.9_wp</span><span class="p">)</span><span class="o">*</span><span class="n">TIDE_DEG2RAD</span><span class="o">*</span><span class="n">sin_n</span>
+<a id="ln-148" name="ln-148" href="#ln-148"></a><span class="w">      </span><span class="c">! O1, Q1  (NOTE +sign on u)</span>
+<a id="ln-149" name="ln-149" href="#ln-149"></a><span class="w">      </span><span class="n">f_nodal</span><span class="p">(</span><span class="mi">6</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.009_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">0.187_wp</span><span class="o">*</span><span class="n">cos_n</span>
+<a id="ln-150" name="ln-150" href="#ln-150"></a><span class="w">      </span><span class="n">u_nodal</span><span class="p">(</span><span class="mi">6</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="mi">1</span><span class="mf">0.8_wp</span><span class="p">)</span><span class="o">*</span><span class="n">TIDE_DEG2RAD</span><span class="o">*</span><span class="n">sin_n</span>
+<a id="ln-151" name="ln-151" href="#ln-151"></a><span class="w">      </span><span class="n">f_nodal</span><span class="p">(</span><span class="mi">8</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.009_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">0.187_wp</span><span class="o">*</span><span class="n">cos_n</span>
+<a id="ln-152" name="ln-152" href="#ln-152"></a><span class="w">      </span><span class="n">u_nodal</span><span class="p">(</span><span class="mi">8</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="mi">1</span><span class="mf">0.8_wp</span><span class="p">)</span><span class="o">*</span><span class="n">TIDE_DEG2RAD</span><span class="o">*</span><span class="n">sin_n</span>
+<a id="ln-153" name="ln-153" href="#ln-153"></a><span class="w">      </span><span class="c">! S2, P1</span>
+<a id="ln-154" name="ln-154" href="#ln-154"></a><span class="w">      </span><span class="n">f_nodal</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span>
+<a id="ln-155" name="ln-155" href="#ln-155"></a><span class="w">      </span><span class="n">u_nodal</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-156" name="ln-156" href="#ln-156"></a><span class="w">      </span><span class="n">f_nodal</span><span class="p">(</span><span class="mi">7</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span>
+<a id="ln-157" name="ln-157" href="#ln-157"></a><span class="w">      </span><span class="n">u_nodal</span><span class="p">(</span><span class="mi">7</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-158" name="ln-158" href="#ln-158"></a><span class="w">      </span><span class="c">! MF</span>
+<a id="ln-159" name="ln-159" href="#ln-159"></a><span class="w">      </span><span class="n">f_nodal</span><span class="p">(</span><span class="mi">9</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.043_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">0.414_wp</span><span class="o">*</span><span class="n">cos_n</span>
+<a id="ln-160" name="ln-160" href="#ln-160"></a><span class="w">      </span><span class="n">u_nodal</span><span class="p">(</span><span class="mi">9</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="mf">3.7_wp</span><span class="p">)</span><span class="o">*</span><span class="n">TIDE_DEG2RAD</span><span class="o">*</span><span class="n">sin_n</span>
+<a id="ln-161" name="ln-161" href="#ln-161"></a><span class="w">      </span><span class="c">! MM</span>
+<a id="ln-162" name="ln-162" href="#ln-162"></a><span class="w">      </span><span class="n">f_nodal</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">0.130_wp</span><span class="o">*</span><span class="n">cos_n</span>
+<a id="ln-163" name="ln-163" href="#ln-163"></a><span class="w">      </span><span class="n">u_nodal</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-164" name="ln-164" href="#ln-164"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">nodal_fu</span>
+<a id="ln-165" name="ln-165" href="#ln-165"></a>
+<a id="ln-166" name="ln-166" href="#ln-166"></a><span class="w">   </span><span class="k">pure function </span><span class="n">tide_name_index</span><span class="p">(</span><span class="n">name</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span>
+<a id="ln-167" name="ln-167" href="#ln-167"></a><span class="w">      </span><span class="c">!! Catalog index (1..TIDES_CATALOG_SIZE) of a constituent name,</span>
+<a id="ln-168" name="ln-168" href="#ln-168"></a><span class="w">      </span><span class="c">!! matched case-insensitively; -1 if unknown.</span>
+<a id="ln-169" name="ln-169" href="#ln-169"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">name</span>
+<a id="ln-170" name="ln-170" href="#ln-170"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">idx</span>
+<a id="ln-171" name="ln-171" href="#ln-171"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">c</span>
+<a id="ln-172" name="ln-172" href="#ln-172"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">up</span>
+<a id="ln-173" name="ln-173" href="#ln-173"></a><span class="w">      </span><span class="n">up</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">upcase2</span><span class="p">(</span><span class="nb">adjustl</span><span class="p">(</span><span class="n">name</span><span class="p">))</span>
+<a id="ln-174" name="ln-174" href="#ln-174"></a><span class="w">      </span><span class="n">idx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span>
+<a id="ln-175" name="ln-175" href="#ln-175"></a><span class="w">      </span><span class="k">do </span><span class="n">c</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">TIDES_CATALOG_SIZE</span>
+<a id="ln-176" name="ln-176" href="#ln-176"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">up</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">TIDE_NAME</span><span class="p">(</span><span class="n">c</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-177" name="ln-177" href="#ln-177"></a><span class="k">            </span><span class="n">idx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span>
+<a id="ln-178" name="ln-178" href="#ln-178"></a><span class="w">            </span><span class="k">return</span>
+<a id="ln-179" name="ln-179" href="#ln-179"></a><span class="k">         end if</span>
+<a id="ln-180" name="ln-180" href="#ln-180"></a><span class="k">      end do</span>
+<a id="ln-181" name="ln-181" href="#ln-181"></a><span class="k">   end function </span><span class="n">tide_name_index</span>
+<a id="ln-182" name="ln-182" href="#ln-182"></a>
+<a id="ln-183" name="ln-183" href="#ln-183"></a><span class="w">   </span><span class="k">pure function </span><span class="n">upcase2</span><span class="p">(</span><span class="n">s</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">u</span><span class="p">)</span>
+<a id="ln-184" name="ln-184" href="#ln-184"></a><span class="w">      </span><span class="c">!! Uppercase the first two characters of a token.</span>
+<a id="ln-185" name="ln-185" href="#ln-185"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">s</span>
+<a id="ln-186" name="ln-186" href="#ln-186"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u</span>
+<a id="ln-187" name="ln-187" href="#ln-187"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">ic</span>
+<a id="ln-188" name="ln-188" href="#ln-188"></a><span class="w">      </span><span class="n">u</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"  "</span>
+<a id="ln-189" name="ln-189" href="#ln-189"></a><span class="w">      </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="nb">len_trim</span><span class="p">(</span><span class="n">s</span><span class="p">))</span>
+<a id="ln-190" name="ln-190" href="#ln-190"></a><span class="w">         </span><span class="n">ic</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">iachar</span><span class="p">(</span><span class="n">s</span><span class="p">(</span><span class="n">k</span><span class="p">:</span><span class="n">k</span><span class="p">))</span>
+<a id="ln-191" name="ln-191" href="#ln-191"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ic</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="nb">iachar</span><span class="p">(</span><span class="s2">"a"</span><span class="p">)</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">ic</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="nb">iachar</span><span class="p">(</span><span class="s2">"z"</span><span class="p">))</span><span class="w"> </span><span class="n">ic</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ic</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">32</span>
+<a id="ln-192" name="ln-192" href="#ln-192"></a><span class="w">         </span><span class="n">u</span><span class="p">(</span><span class="n">k</span><span class="p">:</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">achar</span><span class="p">(</span><span class="n">ic</span><span class="p">)</span>
+<a id="ln-193" name="ln-193" href="#ln-193"></a><span class="w">      </span><span class="k">end do</span>
+<a id="ln-194" name="ln-194" href="#ln-194"></a><span class="k">   end function </span><span class="n">upcase2</span>
+<a id="ln-195" name="ln-195" href="#ln-195"></a>
+<a id="ln-196" name="ln-196" href="#ln-196"></a><span class="w">   </span><span class="k">pure subroutine </span><span class="n">parse_date_string</span><span class="p">(</span><span class="n">str</span><span class="p">,</span><span class="w"> </span><span class="n">y</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">,</span><span class="w"> </span><span class="n">d</span><span class="p">,</span><span class="w"> </span><span class="n">ok</span><span class="p">)</span>
+<a id="ln-197" name="ln-197" href="#ln-197"></a><span class="w">      </span><span class="c">!! Parse a "YYYY-MM-DD" calendar date.  `ok = .false.` on any</span>
+<a id="ln-198" name="ln-198" href="#ln-198"></a><span class="w">      </span><span class="c">!! malformed field (caller decides fail-loud policy).</span>
+<a id="ln-199" name="ln-199" href="#ln-199"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">str</span>
+<a id="ln-200" name="ln-200" href="#ln-200"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">y</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">,</span><span class="w"> </span><span class="n">d</span>
+<a id="ln-201" name="ln-201" href="#ln-201"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ok</span>
+<a id="ln-202" name="ln-202" href="#ln-202"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=</span><span class="p">:),</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">t</span>
+<a id="ln-203" name="ln-203" href="#ln-203"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=</span><span class="mi">128</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">emsg</span>
+<a id="ln-204" name="ln-204" href="#ln-204"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">p1</span><span class="p">,</span><span class="w"> </span><span class="n">p2</span><span class="p">,</span><span class="w"> </span><span class="n">ios</span>
+<a id="ln-205" name="ln-205" href="#ln-205"></a><span class="w">      </span><span class="n">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-206" name="ln-206" href="#ln-206"></a><span class="w">      </span><span class="n">m</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-207" name="ln-207" href="#ln-207"></a><span class="w">      </span><span class="n">d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-208" name="ln-208" href="#ln-208"></a><span class="w">      </span><span class="n">ok</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<a id="ln-209" name="ln-209" href="#ln-209"></a><span class="w">      </span><span class="n">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">trim</span><span class="p">(</span><span class="nb">adjustl</span><span class="p">(</span><span class="n">str</span><span class="p">))</span>
+<a id="ln-210" name="ln-210" href="#ln-210"></a><span class="w">      </span><span class="n">p1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">index</span><span class="p">(</span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="s2">"-"</span><span class="p">)</span>
+<a id="ln-211" name="ln-211" href="#ln-211"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">p1</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-212" name="ln-212" href="#ln-212"></a><span class="k">      </span><span class="n">p2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">index</span><span class="p">(</span><span class="n">t</span><span class="p">(</span><span class="n">p1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">:),</span><span class="w"> </span><span class="s2">"-"</span><span class="p">)</span>
+<a id="ln-213" name="ln-213" href="#ln-213"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">p2</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-214" name="ln-214" href="#ln-214"></a><span class="k">      </span><span class="n">p2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">p1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">p2</span>
+<a id="ln-215" name="ln-215" href="#ln-215"></a><span class="w">      </span><span class="k">read</span><span class="w"> </span><span class="p">(</span><span class="n">t</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="n">p1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="n">iostat</span><span class="o">=</span><span class="n">ios</span><span class="p">,</span><span class="w"> </span><span class="n">iomsg</span><span class="o">=</span><span class="n">emsg</span><span class="p">)</span><span class="w"> </span><span class="n">y</span>
+<a id="ln-216" name="ln-216" href="#ln-216"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ios</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-217" name="ln-217" href="#ln-217"></a><span class="k">      read</span><span class="w"> </span><span class="p">(</span><span class="n">t</span><span class="p">(</span><span class="n">p1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">:</span><span class="n">p2</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="n">iostat</span><span class="o">=</span><span class="n">ios</span><span class="p">,</span><span class="w"> </span><span class="n">iomsg</span><span class="o">=</span><span class="n">emsg</span><span class="p">)</span><span class="w"> </span><span class="n">m</span>
+<a id="ln-218" name="ln-218" href="#ln-218"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ios</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-219" name="ln-219" href="#ln-219"></a><span class="k">      read</span><span class="w"> </span><span class="p">(</span><span class="n">t</span><span class="p">(</span><span class="n">p2</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">:),</span><span class="w"> </span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="n">iostat</span><span class="o">=</span><span class="n">ios</span><span class="p">,</span><span class="w"> </span><span class="n">iomsg</span><span class="o">=</span><span class="n">emsg</span><span class="p">)</span><span class="w"> </span><span class="n">d</span>
+<a id="ln-220" name="ln-220" href="#ln-220"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ios</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-221" name="ln-221" href="#ln-221"></a><span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">m</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">m</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">12</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">d</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">d</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">31</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-222" name="ln-222" href="#ln-222"></a><span class="k">      </span><span class="n">ok</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<a id="ln-223" name="ln-223" href="#ln-223"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">parse_date_string</span>
+<a id="ln-224" name="ln-224" href="#ln-224"></a>
+<a id="ln-225" name="ln-225" href="#ln-225"></a><span class="k">end module </span><span class="n">rdb_ocean_tide_astro</span>
+</pre></div>
+
+      </section>
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-09 01:37 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

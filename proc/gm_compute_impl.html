@@ -1,0 +1,1424 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>gm_compute_impl &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>gm_compute_impl
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">46 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_gm.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_gm.f90.html'>rdb_ocean_gm.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_gm.html'>rdb_ocean_gm</a></li>
+            <li class="breadcrumb-item active" aria-current="page">gm_compute_impl</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/gm_compute_impl.html#variable-i~137">i</a>
+            <a class="list-group-item" href="../proc/gm_compute_impl.html#variable-i4dt">i4dt</a>
+            <a class="list-group-item" href="../proc/gm_compute_impl.html#variable-i_smax2">i_smax2</a>
+            <a class="list-group-item" href="../proc/gm_compute_impl.html#variable-j~100">j</a>
+            <a class="list-group-item" href="../proc/gm_compute_impl.html#variable-k~82">k</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/gm_compute_impl.html#src">gm_compute_impl</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private  subroutine gm_compute_impl(nx, ny, nz, dt, khth, khth_max_cfl, slope_max, rho0, use_ext, use_open, dy_cu, dx_cv, idxCu, idyCv, idyCu, idxCv, areaT, wet_u, wet_v, h_layer, bathy, slope_x, slope_y, n2_u, n2_v, khth_ext_u, khth_ext_v, open_u, open_v, khth_u, khth_v, uhD, vhD, gm_src)  
+</h2>
+    
+
+    <p>Flat-impl GM kernel.  Passes: CFL-clamp the 2D face KhTh, the
+u-face and v-face column recurrences into <code>uhD</code>/<code>vhD</code>, the
+<code>gm_src</code> PE release.  Each face&rsquo;s column sweep is serial in k (the
+<code>uhtot</code> recurrence) but faces parallelise over (i,j).</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~98"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~98"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~103"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~45"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-khth~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>khth</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-khth_max_cfl~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>khth_max_cfl</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-slope_max"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>slope_max</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rho0~24"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rho0</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-use_ext~4"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>use_ext</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-use_open~4"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>use_open</strong></td>
+            <td>
+                <p>z-level closed faces active (<code>metrics%use_closed_faces</code>).
+<code>.false.</code> ⇒ <code>open_u</code>/<code>open_v</code> are never indexed.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dy_cu~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dy_cu</strong>(nx+1,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dx_cv~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dx_cv</strong>(nx,ny+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idxcu~15"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>idxCu</strong>(nx+1,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idycv~14"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>idyCv</strong>(nx,ny+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idycu~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>idyCu</strong>(nx+1,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idxcv~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>idxCv</strong>(nx,ny+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-areat~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>areaT</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wet_u~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wet_u</strong>(nx+1,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wet_v~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wet_v</strong>(nx,ny+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_layer~23"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_layer</strong>(nx,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bathy"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bathy</strong>(nx,ny)</td>
+            <td>
+                <p>Bed depth <code>D</code> (m, positive down; <code>slopes%bathy</code>): the bed of each
+column is at <code>z = −D</code> for the bottom-blocking limiter.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-slope_x"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>slope_x</strong>(nx+1,ny,nz+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-slope_y"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>slope_y</strong>(nx,ny+1,nz+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n2_u"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n2_u</strong>(nx+1,ny,nz+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n2_v"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n2_v</strong>(nx,ny+1,nz+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-khth_ext_u~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>khth_ext_u</strong>(nx+1,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-khth_ext_v~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>khth_ext_v</strong>(nx,ny+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-open_u~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>open_u</strong>(nx+1,ny,nz)</td>
+            <td>
+                <p>Per-layer 0/1 u-face open mask (<code>metrics%open_u</code>), read only
+when <code>use_open</code>; an inert device-present stand-in otherwise.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-open_v~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>open_v</strong>(nx,ny+1,nz)</td>
+            <td>
+                <p>v-face twin of <code>open_u</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-khth_u~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>khth_u</strong>(nx+1,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-khth_v~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>khth_v</strong>(nx,ny+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-uhd~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>uhD</strong>(nx+1,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vhd~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>vhD</strong>(nx,ny+1,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-gm_src~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>gm_src</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~gm_compute_impl~~CallsGraph Pages: 1 -->
+<svg id="procgm_compute_implCallsGraph" width="414pt" height="242pt"
+ viewBox="0.00 0.00 414.00 242.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~gm_compute_impl~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 238)">
+<title>proc~~gm_compute_impl~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-238 410,-238 410,4 -4,4"/>
+<!-- proc~gm_compute_impl -->
+<g id="proc~~gm_compute_impl~~CallsGraph_node1" class="node">
+<title>proc~gm_compute_impl</title>
+<polygon fill="none" stroke="black" points="111,-129 0,-129 0,-105 111,-105 111,-129"/>
+<text text-anchor="middle" x="55.5" y="-114.6" font-family="Helvetica,sans-Serif" font-size="10.50">gm_compute_impl</text>
+</g>
+<!-- proc~gm_clamp_khth -->
+<g id="proc~~gm_compute_impl~~CallsGraph_node2" class="node">
+<title>proc~gm_clamp_khth</title>
+<g id="a_proc~~gm_compute_impl~~CallsGraph_node2"><a xlink:href="../proc/gm_clamp_khth.html" xlink:title="gm_clamp_khth">
+<polygon fill="#d9534f" stroke="#d9534f" points="244,-108 147,-108 147,-84 244,-84 244,-108"/>
+<text text-anchor="middle" x="195.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">gm_clamp_khth</text>
+</a>
+</g>
+</g>
+<!-- proc~gm_compute_impl&#45;&gt;proc~gm_clamp_khth -->
+<g id="proc~~gm_compute_impl~~CallsGraph_edge1" class="edge">
+<title>proc~gm_compute_impl&#45;&gt;proc~gm_clamp_khth</title>
+<path fill="none" stroke="#ff0000" d="M111.04,-108.7C119.4,-107.43 128.05,-106.11 136.48,-104.83"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="137.25,-108.25 146.61,-103.29 136.2,-101.33 137.25,-108.25"/>
+</g>
+<!-- proc~gm_column_x -->
+<g id="proc~~gm_compute_impl~~CallsGraph_node3" class="node">
+<title>proc~gm_column_x</title>
+<g id="a_proc~~gm_compute_impl~~CallsGraph_node3"><a xlink:href="../proc/gm_column_x.html" xlink:title="gm_column_x">
+<polygon fill="#d9534f" stroke="#d9534f" points="238.5,-192 152.5,-192 152.5,-168 238.5,-168 238.5,-192"/>
+<text text-anchor="middle" x="195.5" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">gm_column_x</text>
+</a>
+</g>
+</g>
+<!-- proc~gm_compute_impl&#45;&gt;proc~gm_column_x -->
+<g id="proc~~gm_compute_impl~~CallsGraph_edge2" class="edge">
+<title>proc~gm_compute_impl&#45;&gt;proc~gm_column_x</title>
+<path fill="none" stroke="#ff0000" d="M82.19,-129.07C100.27,-137.54 125.07,-149.06 147,-159 150.45,-160.56 154.04,-162.18 157.64,-163.78"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="156.52,-167.12 167.08,-167.98 159.37,-160.72 156.52,-167.12"/>
+</g>
+<!-- proc~gm_column_y -->
+<g id="proc~~gm_compute_impl~~CallsGraph_node4" class="node">
+<title>proc~gm_column_y</title>
+<g id="a_proc~~gm_compute_impl~~CallsGraph_node4"><a xlink:href="../proc/gm_column_y.html" xlink:title="gm_column_y">
+<polygon fill="#d9534f" stroke="#d9534f" points="238.5,-150 152.5,-150 152.5,-126 238.5,-126 238.5,-150"/>
+<text text-anchor="middle" x="195.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">gm_column_y</text>
+</a>
+</g>
+</g>
+<!-- proc~gm_compute_impl&#45;&gt;proc~gm_column_y -->
+<g id="proc~~gm_compute_impl~~CallsGraph_edge3" class="edge">
+<title>proc~gm_compute_impl&#45;&gt;proc~gm_column_y</title>
+<path fill="none" stroke="#ff0000" d="M111.04,-125.3C121.32,-126.86 132.06,-128.5 142.27,-130.05"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="141.86,-133.53 152.27,-131.57 142.91,-126.61 141.86,-133.53"/>
+</g>
+<!-- proc~gm_pe_release -->
+<g id="proc~~gm_compute_impl~~CallsGraph_node5" class="node">
+<title>proc~gm_pe_release</title>
+<g id="a_proc~~gm_compute_impl~~CallsGraph_node5"><a xlink:href="../proc/gm_pe_release.html" xlink:title="gm_pe_release">
+<polygon fill="#d9534f" stroke="#d9534f" points="242,-66 149,-66 149,-42 242,-42 242,-66"/>
+<text text-anchor="middle" x="195.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">gm_pe_release</text>
+</a>
+</g>
+</g>
+<!-- proc~gm_compute_impl&#45;&gt;proc~gm_pe_release -->
+<g id="proc~~gm_compute_impl~~CallsGraph_edge4" class="edge">
+<title>proc~gm_compute_impl&#45;&gt;proc~gm_pe_release</title>
+<path fill="none" stroke="#ff0000" d="M82.19,-104.93C100.27,-96.46 125.07,-84.94 147,-75 150.45,-73.44 154.04,-71.82 157.64,-70.22"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="159.37,-73.28 167.08,-66.02 156.52,-66.88 159.37,-73.28"/>
+</g>
+<!-- local -->
+<g id="proc~~gm_compute_impl~~CallsGraph_node6" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="370,-108 316,-108 316,-84 370,-84 370,-108"/>
+<text text-anchor="middle" x="343" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~gm_clamp_khth&#45;&gt;local -->
+<g id="proc~~gm_compute_impl~~CallsGraph_edge5" class="edge">
+<title>proc~gm_clamp_khth&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M244.14,-96C264.19,-96 287.13,-96 305.77,-96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="305.9,-99.5 315.9,-96 305.9,-92.5 305.9,-99.5"/>
+</g>
+<!-- proc~gm_column_x&#45;&gt;local -->
+<g id="proc~~gm_compute_impl~~CallsGraph_edge6" class="edge">
+<title>proc~gm_column_x&#45;&gt;local</title>
+<path fill="none" stroke="#7fff00" d="M229.26,-167.84C234.41,-165.29 239.51,-162.33 244,-159 263.73,-144.33 259.63,-130.77 280,-117 287.88,-111.67 297.24,-107.58 306.27,-104.49"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="307.33,-107.83 315.84,-101.52 305.25,-101.14 307.33,-107.83"/>
+</g>
+<!-- proc~gm_block_below_bed -->
+<g id="proc~~gm_compute_impl~~CallsGraph_node7" class="node">
+<title>proc~gm_block_below_bed</title>
+<g id="a_proc~~gm_compute_impl~~CallsGraph_node7"><a xlink:href="../proc/gm_block_below_bed.html" xlink:title="gm_block_below_bed">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="406,-150 280,-150 280,-126 406,-126 406,-150"/>
+<text text-anchor="middle" x="343" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">gm_block_below_bed</text>
+</a>
+</g>
+</g>
+<!-- proc~gm_column_x&#45;&gt;proc~gm_block_below_bed -->
+<g id="proc~~gm_compute_impl~~CallsGraph_edge7" class="edge">
+<title>proc~gm_column_x&#45;&gt;proc~gm_block_below_bed</title>
+<path fill="none" stroke="#7fff00" d="M238.19,-167.96C254.48,-163.26 273.32,-157.82 290.45,-152.88"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="291.66,-156.17 300.3,-150.04 289.72,-149.45 291.66,-156.17"/>
+</g>
+<!-- proc~gm_h_frac -->
+<g id="proc~~gm_compute_impl~~CallsGraph_node9" class="node">
+<title>proc~gm_h_frac</title>
+<g id="a_proc~~gm_compute_impl~~CallsGraph_node9"><a xlink:href="../proc/gm_h_frac.html" xlink:title="gm_h_frac">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="377,-234 309,-234 309,-210 377,-210 377,-234"/>
+<text text-anchor="middle" x="343" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">gm_h_frac</text>
+</a>
+</g>
+</g>
+<!-- proc~gm_column_x&#45;&gt;proc~gm_h_frac -->
+<g id="proc~~gm_compute_impl~~CallsGraph_edge8" class="edge">
+<title>proc~gm_column_x&#45;&gt;proc~gm_h_frac</title>
+<path fill="none" stroke="#7fff00" d="M238.19,-192.04C257.22,-197.53 279.72,-204.02 298.91,-209.56"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="298.03,-212.95 308.61,-212.36 299.97,-206.22 298.03,-212.95"/>
+</g>
+<!-- rdb_vl_is_live -->
+<g id="proc~~gm_compute_impl~~CallsGraph_node11" class="node">
+<title>rdb_vl_is_live</title>
+<polygon fill="#777777" stroke="#777777" points="384,-192 302,-192 302,-168 384,-168 384,-192"/>
+<text text-anchor="middle" x="343" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_vl_is_live</text>
+</g>
+<!-- proc~gm_column_x&#45;&gt;rdb_vl_is_live -->
+<g id="proc~~gm_compute_impl~~CallsGraph_edge9" class="edge">
+<title>proc~gm_column_x&#45;&gt;rdb_vl_is_live</title>
+<path fill="none" stroke="#7fff00" d="M238.58,-180C254.99,-180 273.94,-180 291.1,-180"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="291.51,-183.5 301.51,-180 291.51,-176.5 291.51,-183.5"/>
+</g>
+<!-- proc~gm_column_y&#45;&gt;local -->
+<g id="proc~~gm_compute_impl~~CallsGraph_edge10" class="edge">
+<title>proc~gm_column_y&#45;&gt;local</title>
+<path fill="none" stroke="#00ffff" d="M238.19,-125.96C259.7,-119.76 285.66,-112.26 306.24,-106.32"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="307.23,-109.68 315.87,-103.54 305.29,-102.95 307.23,-109.68"/>
+</g>
+<!-- proc~gm_column_y&#45;&gt;proc~gm_block_below_bed -->
+<g id="proc~~gm_compute_impl~~CallsGraph_edge11" class="edge">
+<title>proc~gm_column_y&#45;&gt;proc~gm_block_below_bed</title>
+<path fill="none" stroke="#00ffff" d="M238.58,-138C248.38,-138 259.08,-138 269.77,-138"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="269.98,-141.5 279.98,-138 269.98,-134.5 269.98,-141.5"/>
+</g>
+<!-- proc~gm_column_y&#45;&gt;proc~gm_h_frac -->
+<g id="proc~~gm_compute_impl~~CallsGraph_edge12" class="edge">
+<title>proc~gm_column_y&#45;&gt;proc~gm_h_frac</title>
+<path fill="none" stroke="#00ffff" d="M229.26,-150.16C234.41,-152.71 239.51,-155.67 244,-159 263.73,-173.67 259.63,-187.23 280,-201 285.82,-204.93 292.44,-208.19 299.14,-210.87"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="298.34,-214.3 308.93,-214.4 300.71,-207.72 298.34,-214.3"/>
+</g>
+<!-- proc~gm_column_y&#45;&gt;rdb_vl_is_live -->
+<g id="proc~~gm_compute_impl~~CallsGraph_edge13" class="edge">
+<title>proc~gm_column_y&#45;&gt;rdb_vl_is_live</title>
+<path fill="none" stroke="#00ffff" d="M238.19,-150.04C254.9,-154.86 274.3,-160.46 291.77,-165.5"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="291.23,-168.99 301.8,-168.4 293.17,-162.26 291.23,-168.99"/>
+</g>
+<!-- proc~gm_pe_release&#45;&gt;local -->
+<g id="proc~~gm_compute_impl~~CallsGraph_edge14" class="edge">
+<title>proc~gm_pe_release&#45;&gt;local</title>
+<path fill="none" stroke="#7f00ff" d="M238.19,-66.04C259.7,-72.24 285.66,-79.74 306.24,-85.68"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="305.29,-89.05 315.87,-88.46 307.23,-82.32 305.29,-89.05"/>
+</g>
+<!-- proc~gm_clamp_slope -->
+<g id="proc~~gm_compute_impl~~CallsGraph_node8" class="node">
+<title>proc~gm_clamp_slope</title>
+<g id="a_proc~~gm_compute_impl~~CallsGraph_node8"><a xlink:href="../proc/gm_clamp_slope.html" xlink:title="gm_clamp_slope">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="394,-66 292,-66 292,-42 394,-42 394,-66"/>
+<text text-anchor="middle" x="343" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">gm_clamp_slope</text>
+</a>
+</g>
+</g>
+<!-- proc~gm_pe_release&#45;&gt;proc~gm_clamp_slope -->
+<g id="proc~~gm_compute_impl~~CallsGraph_edge15" class="edge">
+<title>proc~gm_pe_release&#45;&gt;proc~gm_clamp_slope</title>
+<path fill="none" stroke="#7f00ff" d="M242.14,-54C254.76,-54 268.64,-54 281.95,-54"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="281.98,-57.5 291.98,-54 281.98,-50.5 281.98,-57.5"/>
+</g>
+<!-- proc~gm_pos_n2 -->
+<g id="proc~~gm_compute_impl~~CallsGraph_node10" class="node">
+<title>proc~gm_pos_n2</title>
+<g id="a_proc~~gm_compute_impl~~CallsGraph_node10"><a xlink:href="../proc/gm_pos_n2.html" xlink:title="gm_pos_n2">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="379.5,-24 306.5,-24 306.5,0 379.5,0 379.5,-24"/>
+<text text-anchor="middle" x="343" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">gm_pos_n2</text>
+</a>
+</g>
+</g>
+<!-- proc~gm_pe_release&#45;&gt;proc~gm_pos_n2 -->
+<g id="proc~~gm_compute_impl~~CallsGraph_edge16" class="edge">
+<title>proc~gm_pe_release&#45;&gt;proc~gm_pos_n2</title>
+<path fill="none" stroke="#7f00ff" d="M238.19,-41.96C256.42,-36.7 277.84,-30.52 296.48,-25.14"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="297.58,-28.46 306.22,-22.33 295.64,-21.74 297.58,-28.46"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~gm_compute_impl~~CalledByGraph Pages: 1 -->
+<svg id="procgm_compute_implCalledByGraph" width="641pt" height="57pt"
+ viewBox="0.00 0.00 641.00 57.15" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~gm_compute_impl~~CalledByGraph" class="graph" transform="scale(0.77 0.77) rotate(0) translate(4 70)">
+<title>proc~~gm_compute_impl~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 826,-70 826,4 -4,4"/>
+<!-- proc~gm_compute_impl -->
+<g id="proc~~gm_compute_impl~~CalledByGraph_node1" class="node">
+<title>proc~gm_compute_impl</title>
+<polygon fill="none" stroke="black" points="822,-45 711,-45 711,-21 822,-21 822,-45"/>
+<text text-anchor="middle" x="766.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">gm_compute_impl</text>
+</g>
+<!-- proc~gm_compute_transports -->
+<g id="proc~~gm_compute_impl~~CalledByGraph_node2" class="node">
+<title>proc~gm_compute_transports</title>
+<g id="a_proc~~gm_compute_impl~~CalledByGraph_node2"><a xlink:href="../proc/gm_compute_transports.html" xlink:title="gm_compute_transports">
+<polygon fill="#d9534f" stroke="#d9534f" points="675,-45 533,-45 533,-21 675,-21 675,-45"/>
+<text text-anchor="middle" x="604" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">gm_compute_transports</text>
+</a>
+</g>
+</g>
+<!-- proc~gm_compute_transports&#45;&gt;proc~gm_compute_impl -->
+<g id="proc~~gm_compute_impl~~CalledByGraph_edge1" class="edge">
+<title>proc~gm_compute_transports&#45;&gt;proc~gm_compute_impl</title>
+<path fill="none" stroke="#ff0000" d="M675.4,-33C683.69,-33 692.12,-33 700.34,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="700.6,-36.5 710.6,-33 700.6,-29.5 700.6,-36.5"/>
+</g>
+<!-- proc~run_gm_step -->
+<g id="proc~~gm_compute_impl~~CalledByGraph_node3" class="node">
+<title>proc~run_gm_step</title>
+<g id="a_proc~~gm_compute_impl~~CalledByGraph_node3"><a xlink:href="../proc/run_gm_step.html" xlink:title="run_gm_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="497,-45 416,-45 416,-21 497,-21 497,-45"/>
+<text text-anchor="middle" x="456.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_gm_step</text>
+</a>
+</g>
+</g>
+<!-- proc~run_gm_step&#45;&gt;proc~gm_compute_transports -->
+<g id="proc~~gm_compute_impl~~CalledByGraph_edge2" class="edge">
+<title>proc~run_gm_step&#45;&gt;proc~gm_compute_transports</title>
+<path fill="none" stroke="#ff0000" d="M497.26,-33C505.27,-33 513.95,-33 522.79,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="522.79,-36.5 532.79,-33 522.79,-29.5 522.79,-36.5"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~gm_compute_impl~~CalledByGraph_node4" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~gm_compute_impl~~CalledByGraph_node4"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="380,-45 255,-45 255,-21 380,-21 380,-45"/>
+<text text-anchor="middle" x="317.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_gm_step -->
+<g id="proc~~gm_compute_impl~~CalledByGraph_edge3" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_gm_step</title>
+<path fill="none" stroke="#ff0000" d="M380.19,-33C388.68,-33 397.31,-33 405.55,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="405.74,-36.5 415.74,-33 405.74,-29.5 405.74,-36.5"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~gm_compute_impl~~CalledByGraph_node5" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~gm_compute_impl~~CalledByGraph_node5"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="219,-45 142,-45 142,-21 219,-21 219,-45"/>
+<text text-anchor="middle" x="180.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~gm_compute_impl~~CalledByGraph_edge4" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#ff0000" d="M219.11,-33C227.15,-33 235.91,-33 244.77,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="244.78,-36.5 254.78,-33 244.78,-29.5 244.78,-36.5"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~gm_compute_impl~~CalledByGraph_node6" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~gm_compute_impl~~CalledByGraph_node6"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="106,-66 0,-66 0,-42 106,-42 106,-66"/>
+<text text-anchor="middle" x="53" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~gm_compute_impl~~CalledByGraph_edge5" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M106.13,-45.28C114.66,-43.85 123.45,-42.38 131.85,-40.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="132.59,-44.4 141.87,-39.3 131.43,-37.49 132.59,-44.4"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~gm_compute_impl~~CalledByGraph_node7" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~gm_compute_impl~~CalledByGraph_node7"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="101.5,-24 4.5,-24 4.5,0 101.5,0 101.5,-24"/>
+<text text-anchor="middle" x="53" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~gm_compute_impl~~CalledByGraph_edge6" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M101.8,-20C111.68,-21.65 122.07,-23.39 131.93,-25.04"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="131.53,-28.52 141.97,-26.72 132.69,-21.62 131.53,-28.52"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocgm_compute_implCalledByGraph = svgPanZoom('#procgm_compute_implCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~137"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i4dt"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i4dt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i_smax2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i_smax2</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~100"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~82"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">gm_compute_impl</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">khth</span><span class="p">,</span><span class="w"> </span><span class="n">khth_max_cfl</span><span class="p">,</span><span class="w"> </span><span class="n">slope_max</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">rho0</span><span class="p">,</span><span class="w"> </span><span class="n">use_ext</span><span class="p">,</span><span class="w"> </span><span class="n">use_open</span><span class="p">,</span><span class="w"> </span><span class="n">dy_cu</span><span class="p">,</span><span class="w"> </span><span class="n">dx_cv</span><span class="p">,</span><span class="w"> </span><span class="n">idxCu</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">idyCv</span><span class="p">,</span><span class="w"> </span><span class="n">idyCu</span><span class="p">,</span><span class="w"> </span><span class="n">idxCv</span><span class="p">,</span><span class="w"> </span><span class="n">areaT</span><span class="p">,</span><span class="w"> </span><span class="n">wet_u</span><span class="p">,</span><span class="w"> </span><span class="n">wet_v</span><span class="p">,</span><span class="w"> </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">bathy</span><span class="p">,</span><span class="w"> </span><span class="n">slope_x</span><span class="p">,</span><span class="w"> </span><span class="n">slope_y</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">n2_u</span><span class="p">,</span><span class="w"> </span><span class="n">n2_v</span><span class="p">,</span><span class="w"> </span><span class="n">khth_ext_u</span><span class="p">,</span><span class="w"> </span><span class="n">khth_ext_v</span><span class="p">,</span><span class="w"> </span><span class="n">open_u</span><span class="p">,</span><span class="w"> </span><span class="n">open_v</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">khth_u</span><span class="p">,</span><span class="w"> </span><span class="n">khth_v</span><span class="p">,</span><span class="w"> </span><span class="n">uhD</span><span class="p">,</span><span class="w"> </span><span class="n">vhD</span><span class="p">,</span><span class="w"> </span><span class="n">gm_src</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Flat-impl GM kernel.  Passes: CFL-clamp the 2D face KhTh, the</span>
+<span class="w">      </span><span class="c">!! u-face and v-face column recurrences into `uhD`/`vhD`, the</span>
+<span class="w">      </span><span class="c">!! `gm_src` PE release.  Each face's column sweep is serial in k (the</span>
+<span class="w">      </span><span class="c">!! `uhtot` recurrence) but faces parallelise over (i,j).</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">khth</span><span class="p">,</span><span class="w"> </span><span class="n">khth_max_cfl</span><span class="p">,</span><span class="w"> </span><span class="n">slope_max</span><span class="p">,</span><span class="w"> </span><span class="n">rho0</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">use_ext</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">use_open</span>
+<span class="w">         </span><span class="c">!! z-level closed faces active (`metrics%use_closed_faces`).</span>
+<span class="w">         </span><span class="c">!! `.false.` ⇒ `open_u`/`open_v` are never indexed.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dy_cu</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dx_cv</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">idxCu</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">idyCv</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">idyCu</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">idxCv</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">areaT</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wet_u</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wet_v</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">bathy</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Bed depth `D` (m, positive down; `slopes%bathy`): the bed of each</span>
+<span class="w">         </span><span class="c">!! column is at `z = −D` for the bottom-blocking limiter.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">slope_x</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">slope_y</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n2_u</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n2_v</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">khth_ext_u</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">khth_ext_v</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">open_u</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Per-layer 0/1 u-face open mask (`metrics%open_u`), read only</span>
+<span class="w">         </span><span class="c">!! when `use_open`; an inert device-present stand-in otherwise.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">open_v</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! v-face twin of `open_u`.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">khth_u</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">khth_v</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">uhD</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">vhD</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">gm_src</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i_smax2</span><span class="p">,</span><span class="w"> </span><span class="n">i4dt</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span>
+
+<span class="w">      </span><span class="n">i_smax2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="p">(</span><span class="n">slope_max</span><span class="o">*</span><span class="n">slope_max</span><span class="p">)</span>
+<span class="w">      </span><span class="n">i4dt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="p">(</span><span class="mf">4.0_wp</span><span class="o">*</span><span class="n">dt</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! ---- 1. CFL-clamp the constant KhTh onto the 2D face fields, using</span>
+<span class="w">      </span><span class="c">! native face metrics (idxCu/idyCu at u-faces, idxCv/idyCv at</span>
+<span class="w">      </span><span class="c">! v-faces) — exact on curvilinear grids.  Wall faces -&gt; 0.</span>
+<span class="w">      </span><span class="k">call </span><span class="n">gm_clamp_khth</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">khth</span><span class="p">,</span><span class="w"> </span><span class="n">khth_max_cfl</span><span class="p">,</span><span class="w"> </span><span class="n">use_ext</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                         </span><span class="n">khth_ext_u</span><span class="p">,</span><span class="w"> </span><span class="n">khth_ext_v</span><span class="p">,</span><span class="w"> </span><span class="n">idxCu</span><span class="p">,</span><span class="w"> </span><span class="n">idyCu</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                         </span><span class="n">idxCv</span><span class="p">,</span><span class="w"> </span><span class="n">idyCv</span><span class="p">,</span><span class="w"> </span><span class="n">wet_u</span><span class="p">,</span><span class="w"> </span><span class="n">wet_v</span><span class="p">,</span><span class="w"> </span><span class="n">khth_u</span><span class="p">,</span><span class="w"> </span><span class="n">khth_v</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! ---- 2. u-face bolus transport (column recurrence).</span>
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">)</span>
+<span class="w">         </span><span class="n">uhD</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="n">uhD</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">      </span><span class="k">end do</span>
+<span class="k">      call </span><span class="n">gm_column_x</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">i_smax2</span><span class="p">,</span><span class="w"> </span><span class="n">i4dt</span><span class="p">,</span><span class="w"> </span><span class="n">use_open</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                       </span><span class="n">dy_cu</span><span class="p">,</span><span class="w"> </span><span class="n">areaT</span><span class="p">,</span><span class="w"> </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">bathy</span><span class="p">,</span><span class="w"> </span><span class="n">slope_x</span><span class="p">,</span><span class="w"> </span><span class="n">khth_u</span><span class="p">,</span><span class="w"> </span><span class="n">open_u</span><span class="p">,</span><span class="w"> </span><span class="n">uhD</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! ---- 3. v-face bolus transport (mirror).</span>
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span>
+<span class="w">         </span><span class="n">vhD</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="n">vhD</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">      </span><span class="k">end do</span>
+<span class="k">      call </span><span class="n">gm_column_y</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">i_smax2</span><span class="p">,</span><span class="w"> </span><span class="n">i4dt</span><span class="p">,</span><span class="w"> </span><span class="n">use_open</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                       </span><span class="n">dx_cv</span><span class="p">,</span><span class="w"> </span><span class="n">areaT</span><span class="p">,</span><span class="w"> </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">bathy</span><span class="p">,</span><span class="w"> </span><span class="n">slope_y</span><span class="p">,</span><span class="w"> </span><span class="n">khth_v</span><span class="p">,</span><span class="w"> </span><span class="n">open_v</span><span class="p">,</span><span class="w"> </span><span class="n">vhD</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! ---- 4. gm_src PE release (cell centres).</span>
+<span class="w">      </span><span class="k">call </span><span class="n">gm_pe_release</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">slope_max</span><span class="p">,</span><span class="w"> </span><span class="n">rho0</span><span class="p">,</span><span class="w"> </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                         </span><span class="n">slope_x</span><span class="p">,</span><span class="w"> </span><span class="n">slope_y</span><span class="p">,</span><span class="w"> </span><span class="n">n2_u</span><span class="p">,</span><span class="w"> </span><span class="n">n2_v</span><span class="p">,</span><span class="w"> </span><span class="n">khth_u</span><span class="p">,</span><span class="w"> </span><span class="n">khth_v</span><span class="p">,</span><span class="w"> </span><span class="n">gm_src</span><span class="p">)</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">gm_compute_impl</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-09 01:37 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,851 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>ocean_slopes_compute &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>ocean_slopes_compute
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">17 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_isopycnal_slopes.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_isopycnal_slopes.f90.html'>rdb_ocean_isopycnal_slopes.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_isopycnal_slopes.html'>rdb_ocean_isopycnal_slopes</a></li>
+            <li class="breadcrumb-item active" aria-current="page">ocean_slopes_compute</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/ocean_slopes_compute.html#src">ocean_slopes_compute</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine ocean_slopes_compute(grid, metrics, eos, slopes, ms, dt)  
+</h2>
+    
+
+    <p>Public entry point — fill <code>slope_x</code>/<code>slope_y</code> + <code>n2_u</code>/<code>n2_v</code> at
+all interfaces.  No-op if absent / uninitialised / disabled, so
+the driver can call it unconditionally.  Pipeline: vert-fill T/S
+→ build interface heights <code>e_int</code> → u-face pass → v-face pass.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~233"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-metrics~69"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>metrics</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eos~48"></span>
+              type(<a href='../type/eos_t.html'>eos_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eos</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-slopes~9"></span>
+              type(<a href='../type/ocean_slopes_t.html'>ocean_slopes_t</a>),
+            </td>
+<td>intent(inout),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>slopes</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ms~132"></span>
+              type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ms</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~107"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ocean_slopes_compute~~CallsGraph Pages: 1 -->
+<svg id="prococean_slopes_computeCallsGraph" width="641pt" height="141pt"
+ viewBox="0.00 0.00 641.00 140.57" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_slopes_compute~~CallsGraph" class="graph" transform="scale(0.7 0.7) rotate(0) translate(4 196)">
+<title>proc~~ocean_slopes_compute~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-196 908,-196 908,4 -4,4"/>
+<!-- proc~ocean_slopes_compute -->
+<g id="proc~~ocean_slopes_compute~~CallsGraph_node1" class="node">
+<title>proc~ocean_slopes_compute</title>
+<polygon fill="none" stroke="black" points="137,-108 0,-108 0,-84 137,-84 137,-108"/>
+<text text-anchor="middle" x="68.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_slopes_compute</text>
+</g>
+<!-- proc~ocean_slopes_compute_impl -->
+<g id="proc~~ocean_slopes_compute~~CallsGraph_node2" class="node">
+<title>proc~ocean_slopes_compute_impl</title>
+<g id="a_proc~~ocean_slopes_compute~~CallsGraph_node2"><a xlink:href="../proc/ocean_slopes_compute_impl.html" xlink:title="ocean_slopes_compute_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="339,-108 173,-108 173,-84 339,-84 339,-108"/>
+<text text-anchor="middle" x="256" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_slopes_compute_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_slopes_compute&#45;&gt;proc~ocean_slopes_compute_impl -->
+<g id="proc~~ocean_slopes_compute~~CallsGraph_edge1" class="edge">
+<title>proc~ocean_slopes_compute&#45;&gt;proc~ocean_slopes_compute_impl</title>
+<path fill="none" stroke="#ff0000" d="M137.26,-96C145.59,-96 154.21,-96 162.83,-96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="162.92,-99.5 172.92,-96 162.92,-92.5 162.92,-99.5"/>
+</g>
+<!-- proc~ocean_slopes_build_e -->
+<g id="proc~~ocean_slopes_compute~~CallsGraph_node3" class="node">
+<title>proc~ocean_slopes_build_e</title>
+<g id="a_proc~~ocean_slopes_compute~~CallsGraph_node3"><a xlink:href="../proc/ocean_slopes_build_e.html" xlink:title="ocean_slopes_build_e">
+<polygon fill="#d9534f" stroke="#d9534f" points="537,-192 409,-192 409,-168 537,-168 537,-192"/>
+<text text-anchor="middle" x="473" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_slopes_build_e</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_slopes_compute_impl&#45;&gt;proc~ocean_slopes_build_e -->
+<g id="proc~~ocean_slopes_compute~~CallsGraph_edge2" class="edge">
+<title>proc~ocean_slopes_compute_impl&#45;&gt;proc~ocean_slopes_build_e</title>
+<path fill="none" stroke="#ff0000" d="M275.86,-108.2C298.53,-122.35 338.16,-145.48 375,-159 382.65,-161.81 390.78,-164.29 398.95,-166.48"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="398.36,-169.94 408.92,-169.01 400.08,-163.16 398.36,-169.94"/>
+</g>
+<!-- proc~ocean_slopes_mask_open_column -->
+<g id="proc~~ocean_slopes_compute~~CallsGraph_node4" class="node">
+<title>proc~ocean_slopes_mask_open_column</title>
+<g id="a_proc~~ocean_slopes_compute~~CallsGraph_node4"><a xlink:href="../proc/ocean_slopes_mask_open_column.html" xlink:title="ocean_slopes_mask_open_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="571,-150 375,-150 375,-126 571,-126 571,-150"/>
+<text text-anchor="middle" x="473" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_slopes_mask_open_column</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_slopes_compute_impl&#45;&gt;proc~ocean_slopes_mask_open_column -->
+<g id="proc~~ocean_slopes_compute~~CallsGraph_edge3" class="edge">
+<title>proc~ocean_slopes_compute_impl&#45;&gt;proc~ocean_slopes_mask_open_column</title>
+<path fill="none" stroke="#ff0000" d="M318.61,-108.04C344.14,-113.02 373.91,-118.84 400.4,-124.01"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="399.9,-127.48 410.38,-125.96 401.24,-120.61 399.9,-127.48"/>
+</g>
+<!-- proc~ocean_slopes_pass_x -->
+<g id="proc~~ocean_slopes_compute~~CallsGraph_node5" class="node">
+<title>proc~ocean_slopes_pass_x</title>
+<g id="a_proc~~ocean_slopes_compute~~CallsGraph_node5"><a xlink:href="../proc/ocean_slopes_pass_x.html" xlink:title="ocean_slopes_pass_x">
+<polygon fill="#d9534f" stroke="#d9534f" points="535.5,-24 410.5,-24 410.5,0 535.5,0 535.5,-24"/>
+<text text-anchor="middle" x="473" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_slopes_pass_x</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_slopes_compute_impl&#45;&gt;proc~ocean_slopes_pass_x -->
+<g id="proc~~ocean_slopes_compute~~CallsGraph_edge4" class="edge">
+<title>proc~ocean_slopes_compute_impl&#45;&gt;proc~ocean_slopes_pass_x</title>
+<path fill="none" stroke="#ff0000" d="M275.86,-83.8C298.53,-69.65 338.16,-46.52 375,-33 383.17,-30 391.89,-27.37 400.62,-25.08"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="401.61,-28.44 410.47,-22.63 399.92,-21.64 401.61,-28.44"/>
+</g>
+<!-- proc~ocean_slopes_pass_y -->
+<g id="proc~~ocean_slopes_compute~~CallsGraph_node6" class="node">
+<title>proc~ocean_slopes_pass_y</title>
+<g id="a_proc~~ocean_slopes_compute~~CallsGraph_node6"><a xlink:href="../proc/ocean_slopes_pass_y.html" xlink:title="ocean_slopes_pass_y">
+<polygon fill="#d9534f" stroke="#d9534f" points="535.5,-66 410.5,-66 410.5,-42 535.5,-42 535.5,-66"/>
+<text text-anchor="middle" x="473" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_slopes_pass_y</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_slopes_compute_impl&#45;&gt;proc~ocean_slopes_pass_y -->
+<g id="proc~~ocean_slopes_compute~~CallsGraph_edge5" class="edge">
+<title>proc~ocean_slopes_compute_impl&#45;&gt;proc~ocean_slopes_pass_y</title>
+<path fill="none" stroke="#ff0000" d="M318.61,-83.96C344.14,-78.98 373.91,-73.16 400.4,-67.99"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="401.24,-71.39 410.38,-66.04 399.9,-64.52 401.24,-71.39"/>
+</g>
+<!-- proc~ocean_slopes_vert_fill_ts -->
+<g id="proc~~ocean_slopes_compute~~CallsGraph_node7" class="node">
+<title>proc~ocean_slopes_vert_fill_ts</title>
+<g id="a_proc~~ocean_slopes_compute~~CallsGraph_node7"><a xlink:href="../proc/ocean_slopes_vert_fill_ts.html" xlink:title="ocean_slopes_vert_fill_ts">
+<polygon fill="#d9534f" stroke="#d9534f" points="544.5,-108 401.5,-108 401.5,-84 544.5,-84 544.5,-108"/>
+<text text-anchor="middle" x="473" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_slopes_vert_fill_ts</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_slopes_compute_impl&#45;&gt;proc~ocean_slopes_vert_fill_ts -->
+<g id="proc~~ocean_slopes_compute~~CallsGraph_edge6" class="edge">
+<title>proc~ocean_slopes_compute_impl&#45;&gt;proc~ocean_slopes_vert_fill_ts</title>
+<path fill="none" stroke="#ff0000" d="M339.2,-96C356.19,-96 374.06,-96 391,-96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="391.41,-99.5 401.41,-96 391.41,-92.5 391.41,-99.5"/>
+</g>
+<!-- local -->
+<g id="proc~~ocean_slopes_compute~~CallsGraph_node8" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="713,-108 659,-108 659,-84 713,-84 713,-108"/>
+<text text-anchor="middle" x="686" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~ocean_slopes_pass_x&#45;&gt;local -->
+<g id="proc~~ocean_slopes_compute~~CallsGraph_edge7" class="edge">
+<title>proc~ocean_slopes_pass_x&#45;&gt;local</title>
+<path fill="none" stroke="#00ff66" d="M535.53,-19.04C547.84,-22.14 560.27,-26.6 571,-33 592.12,-45.59 586.2,-61.89 607,-75 619.48,-82.87 634.87,-87.82 648.68,-90.91"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="648.36,-94.42 658.85,-92.94 649.73,-87.55 648.36,-94.42"/>
+</g>
+<!-- proc~eos_density_specvol_derivs -->
+<g id="proc~~ocean_slopes_compute~~CallsGraph_node9" class="node">
+<title>proc~eos_density_specvol_derivs</title>
+<g id="a_proc~~ocean_slopes_compute~~CallsGraph_node9"><a xlink:href="../proc/eos_density_specvol_derivs.html" xlink:title="eos_density_specvol_derivs">
+<polygon fill="#d9534f" stroke="#d9534f" points="765,-24 607,-24 607,0 765,0 765,-24"/>
+<text text-anchor="middle" x="686" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">eos_density_specvol_derivs</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_slopes_pass_x&#45;&gt;proc~eos_density_specvol_derivs -->
+<g id="proc~~ocean_slopes_compute~~CallsGraph_edge8" class="edge">
+<title>proc~ocean_slopes_pass_x&#45;&gt;proc~eos_density_specvol_derivs</title>
+<path fill="none" stroke="#00ff66" d="M535.6,-12C554.73,-12 576.2,-12 596.77,-12"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="596.79,-15.5 606.79,-12 596.79,-8.5 596.79,-15.5"/>
+</g>
+<!-- proc~pressure_above_x -->
+<g id="proc~~ocean_slopes_compute~~CallsGraph_node10" class="node">
+<title>proc~pressure_above_x</title>
+<g id="a_proc~~ocean_slopes_compute~~CallsGraph_node10"><a xlink:href="../proc/pressure_above_x.html" xlink:title="pressure_above_x">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="739.5,-66 632.5,-66 632.5,-42 739.5,-42 739.5,-66"/>
+<text text-anchor="middle" x="686" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pressure_above_x</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_slopes_pass_x&#45;&gt;proc~pressure_above_x -->
+<g id="proc~~ocean_slopes_compute~~CallsGraph_edge9" class="edge">
+<title>proc~ocean_slopes_pass_x&#45;&gt;proc~pressure_above_x</title>
+<path fill="none" stroke="#00ff66" d="M534.46,-24.04C562.01,-29.52 594.6,-36.01 622.41,-41.54"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="621.92,-45.01 632.41,-43.53 623.29,-38.15 621.92,-45.01"/>
+</g>
+<!-- proc~ocean_slopes_pass_y&#45;&gt;local -->
+<g id="proc~~ocean_slopes_compute~~CallsGraph_edge10" class="edge">
+<title>proc~ocean_slopes_pass_y&#45;&gt;local</title>
+<path fill="none" stroke="#0066ff" d="M534.46,-66.04C571.44,-73.4 617.51,-82.57 648.88,-88.81"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="648.43,-92.29 658.92,-90.81 649.8,-85.42 648.43,-92.29"/>
+</g>
+<!-- proc~ocean_slopes_pass_y&#45;&gt;proc~eos_density_specvol_derivs -->
+<g id="proc~~ocean_slopes_compute~~CallsGraph_edge11" class="edge">
+<title>proc~ocean_slopes_pass_y&#45;&gt;proc~eos_density_specvol_derivs</title>
+<path fill="none" stroke="#0066ff" d="M534.46,-41.96C559.41,-37 588.48,-31.21 614.39,-26.05"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="615.4,-29.42 624.53,-24.04 614.04,-22.56 615.4,-29.42"/>
+</g>
+<!-- proc~ocean_slopes_pass_y&#45;&gt;proc~pressure_above_x -->
+<g id="proc~~ocean_slopes_compute~~CallsGraph_edge12" class="edge">
+<title>proc~ocean_slopes_pass_y&#45;&gt;proc~pressure_above_x</title>
+<path fill="none" stroke="#0066ff" d="M535.6,-54C562.78,-54 594.69,-54 622.03,-54"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="622.26,-57.5 632.26,-54 622.26,-50.5 622.26,-57.5"/>
+</g>
+<!-- proc~ocean_slopes_vert_fill_ts&#45;&gt;local -->
+<g id="proc~~ocean_slopes_compute~~CallsGraph_edge13" class="edge">
+<title>proc~ocean_slopes_vert_fill_ts&#45;&gt;local</title>
+<path fill="none" stroke="#cc00ff" d="M544.55,-96C579.4,-96 619.97,-96 648.53,-96"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="648.85,-99.5 658.85,-96 648.85,-92.5 648.85,-99.5"/>
+</g>
+<!-- proc~roquet_spv_point -->
+<g id="proc~~ocean_slopes_compute~~CallsGraph_node11" class="node">
+<title>proc~roquet_spv_point</title>
+<g id="a_proc~~ocean_slopes_compute~~CallsGraph_node11"><a xlink:href="../proc/roquet_spv_point.html" xlink:title="roquet_spv_point">
+<polygon fill="#d9534f" stroke="#d9534f" points="904,-24 801,-24 801,0 904,0 904,-24"/>
+<text text-anchor="middle" x="852.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">roquet_spv_point</text>
+</a>
+</g>
+</g>
+<!-- proc~eos_density_specvol_derivs&#45;&gt;proc~roquet_spv_point -->
+<g id="proc~~ocean_slopes_compute~~CallsGraph_edge14" class="edge">
+<title>proc~eos_density_specvol_derivs&#45;&gt;proc~roquet_spv_point</title>
+<path fill="none" stroke="#00ff00" d="M765.4,-12C773.89,-12 782.44,-12 790.68,-12"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="790.93,-15.5 800.93,-12 790.93,-8.5 790.93,-15.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprococean_slopes_computeCallsGraph = svgPanZoom('#prococean_slopes_computeCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ocean_slopes_compute~~CalledByGraph Pages: 1 -->
+<svg id="prococean_slopes_computeCalledByGraph" width="641pt" height="59pt"
+ viewBox="0.00 0.00 641.00 59.44" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_slopes_compute~~CalledByGraph" class="graph" transform="scale(0.8 0.8) rotate(0) translate(4 70)">
+<title>proc~~ocean_slopes_compute~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 794,-70 794,4 -4,4"/>
+<!-- proc~ocean_slopes_compute -->
+<g id="proc~~ocean_slopes_compute~~CalledByGraph_node1" class="node">
+<title>proc~ocean_slopes_compute</title>
+<polygon fill="none" stroke="black" points="790,-45 653,-45 653,-21 790,-21 790,-45"/>
+<text text-anchor="middle" x="721.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_slopes_compute</text>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~ocean_slopes_compute~~CalledByGraph_node2" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~ocean_slopes_compute~~CalledByGraph_node2"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="617,-66 492,-66 492,-42 617,-42 617,-66"/>
+<text text-anchor="middle" x="554.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~ocean_slopes_compute -->
+<g id="proc~~ocean_slopes_compute~~CalledByGraph_edge1" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~ocean_slopes_compute</title>
+<path fill="none" stroke="#ff0000" d="M617.41,-46.12C625.76,-45.06 634.4,-43.96 642.98,-42.87"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="643.51,-46.33 652.99,-41.59 642.63,-39.38 643.51,-46.33"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~ocean_slopes_compute~~CalledByGraph_node3" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~ocean_slopes_compute~~CalledByGraph_node3"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="587,-24 522,-24 522,0 587,0 587,-24"/>
+<text text-anchor="middle" x="554.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~ocean_slopes_compute -->
+<g id="proc~~ocean_slopes_compute~~CalledByGraph_edge2" class="edge">
+<title>proc~run_stage&#45;&gt;proc~ocean_slopes_compute</title>
+<path fill="none" stroke="#ff0000" d="M587.31,-16.05C603.26,-18.08 623.32,-20.63 643,-23.14"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="642.57,-26.61 652.93,-24.4 643.45,-19.67 642.57,-26.61"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~ocean_slopes_compute~~CalledByGraph_node4" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~ocean_slopes_compute~~CalledByGraph_node4"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="322,-45 245,-45 245,-21 322,-21 322,-45"/>
+<text text-anchor="middle" x="283.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~ocean_slopes_compute~~CalledByGraph_edge3" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#ff0000" d="M322.19,-35.94C363.4,-39.16 430.4,-44.39 481.71,-48.4"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="481.51,-51.89 491.75,-49.18 482.06,-44.91 481.51,-51.89"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~ocean_slopes_compute~~CalledByGraph_node5" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~ocean_slopes_compute~~CalledByGraph_node5"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="456,-25 358,-25 358,-1 456,-1 456,-25"/>
+<text text-anchor="middle" x="407" y="-10.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step -->
+<g id="proc~~ocean_slopes_compute~~CalledByGraph_edge7" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step</title>
+<path fill="none" stroke="#00ffff" d="M322.28,-26.78C330.39,-25.45 339.14,-24.01 347.82,-22.58"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="348.64,-25.99 357.94,-20.91 347.5,-19.08 348.64,-25.99"/>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~ocean_slopes_compute~~CalledByGraph_edge4" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#00ffff" d="M456.05,-12.67C474.01,-12.55 494.24,-12.41 511.61,-12.29"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="512.02,-15.79 522,-12.22 511.97,-8.79 512.02,-15.79"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~ocean_slopes_compute~~CalledByGraph_node6" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~ocean_slopes_compute~~CalledByGraph_node6"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="209,-66 103,-66 103,-42 209,-42 209,-66"/>
+<text text-anchor="middle" x="156" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~ocean_slopes_compute~~CalledByGraph_edge5" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M209.13,-45.28C217.66,-43.85 226.45,-42.38 234.85,-40.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="235.59,-44.4 244.87,-39.3 234.43,-37.49 235.59,-44.4"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~ocean_slopes_compute~~CalledByGraph_node7" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~ocean_slopes_compute~~CalledByGraph_node7"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="204.5,-24 107.5,-24 107.5,0 204.5,0 204.5,-24"/>
+<text text-anchor="middle" x="156" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~ocean_slopes_compute~~CalledByGraph_edge6" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M204.8,-20C214.68,-21.65 225.07,-23.39 234.93,-25.04"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="234.53,-28.52 244.97,-26.72 235.69,-21.62 234.53,-28.52"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~ocean_slopes_compute~~CalledByGraph_node8" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~ocean_slopes_compute~~CalledByGraph_node8"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="67,-66 0,-66 0,-42 67,-42 67,-66"/>
+<text text-anchor="middle" x="33.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~ocean_slopes_compute~~CalledByGraph_edge8" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M67.11,-54C75.11,-54 83.94,-54 92.83,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="92.85,-57.5 102.85,-54 92.85,-50.5 92.85,-57.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprococean_slopes_computeCalledByGraph = svgPanZoom('#prococean_slopes_computeCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">ocean_slopes_compute</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">slopes</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Public entry point — fill `slope_x`/`slope_y` + `n2_u`/`n2_v` at</span>
+<span class="w">      </span><span class="c">!! all interfaces.  No-op if absent / uninitialised / disabled, so</span>
+<span class="w">      </span><span class="c">!! the driver can call it unconditionally.  Pipeline: vert-fill T/S</span>
+<span class="w">      </span><span class="c">!! → build interface heights `e_int` → u-face pass → v-face pass.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_metrics_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">metrics</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">eos_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">eos</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_slopes_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">slopes</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="nb">present</span><span class="p">(</span><span class="n">slopes</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">slopes</span><span class="p">%</span><span class="n">is_init</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">slopes</span><span class="p">%</span><span class="n">enable</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">idx_temperature</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">idx_salinity</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="nb">allocated</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">slopes</span><span class="p">%</span><span class="n">bathy_set</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         error stop</span><span class="w"> </span><span class="s2">"ocean_slopes_compute: bed datum never set; call "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">            </span><span class="s2">"slopes%set_bathymetry(barotropic%b) before enter_data"</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="w">      </span><span class="c">! Outer shim: dereference the tracer-registry hTr arrays (array of</span>
+<span class="w">      </span><span class="c">! derived types ⇒ device indirection) on the host, pass the flat</span>
+<span class="w">      </span><span class="c">! top-level allocatables into the flat-impl kernel.</span>
+<span class="w">      </span><span class="k">call </span><span class="n">ocean_slopes_compute_impl</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">slopes</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                     </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                     </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">idx_temperature</span><span class="p">)%</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                     </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">idx_salinity</span><span class="p">)%</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">)</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">ocean_slopes_compute</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-09 01:37 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

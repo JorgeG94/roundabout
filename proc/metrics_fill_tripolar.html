@@ -1,0 +1,1366 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>metrics_fill_tripolar &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>metrics_fill_tripolar
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">20 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_metrics.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_metrics.f90.html'>rdb_ocean_metrics.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_metrics.html'>rdb_ocean_metrics</a></li>
+            <li class="breadcrumb-item active" aria-current="page">metrics_fill_tripolar</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/metrics_fill_tripolar.html#variable-gwhole">gwhole</a>
+            <a class="list-group-item" href="../proc/metrics_fill_tripolar.html#variable-io~3">io</a>
+            <a class="list-group-item" href="../proc/metrics_fill_tripolar.html#variable-jo~2">jo</a>
+            <a class="list-group-item" href="../proc/metrics_fill_tripolar.html#variable-mwhole">mwhole</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/metrics_fill_tripolar.html#src">metrics_fill_tripolar</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine metrics_fill_tripolar(this, grid, lon_west, lat_south, dlon_deg, dlat_deg, rad_earth, phi_join, lon_pole)  
+</h2>
+    
+
+    <p>Fill every metric array for an analytic TRIPOLAR grid (Murray
+1996): ordinary lon-lat for cell-corner latitude &lt;= <code>phi_join</code>,
+and a conformal bipolar Arctic cap above (two grid poles at
+<code>(phi_join, lon_pole)</code> and <code>(phi_join, lon_pole+180)</code>; see
+<code>rdb_ocean_bipolar</code>).  The construction generates an in-memory
+MOM6-style supergrid (2x-refined corner geography, great-circle
+edge lengths, sub-cell areas) from the analytic map, then feeds
+the SAME <code>metrics_assemble_from_supergrid_arrays</code> index-sum path
+the NetCDF reader uses — so tripolar metrics flow through the
+battle-tested supergrid assembly.  Call <code>metrics_finalize</code> after.</p>
+<p>Logical layout: the i-direction wraps the full 360 deg of
+pseudo-longitude (lon_west .. lon_west+360); the j-direction goes
+from lat_south up.  Corner Bu(i,j) = SW corner of T(i,j) sits at
+geographic lon <code>lon_west + (i-ng-1)*dlon</code> BELOW the join.  The cap
+starts where the corner latitude exceeds <code>phi_join</code>; inside it the
+row fraction <code>s = (lat_lonlat - phi_join)/(lat_top - phi_join)</code> in
+[0,1] drives the bipolar map (s=0 reproduces the join ring exactly
+-&gt; C0 continuity; s=1 is the north-fold line).</p>
+<p>Decomposed tile (<code>nx_phys /= nx_global</code> or <code>ny_phys /= ny_global</code>):
+the cap map, the supergrid assembler&rsquo;s edge extrapolation and the
+fold/periodic ghost fill are all functions of the WHOLE grid, so a
+tile cannot be built from its local extents (it used to be — each
+rank then built a complete, wrong globe of its own size).  The
+tile is instead cut out of the undecomposed grid: the whole grid is
+assembled into a temporary <code>ocean_metrics_t</code> exactly as a single
+rank would, and the tile&rsquo;s storage window — ghost rows and columns
+included — is copied from it at the global offsets.  Every tile&rsquo;s
+metrics are then bit-identical to the matching slice of the
+single-rank grid, whatever the tile owns (a south neighbour&rsquo;s
+rows, the folded north ghosts, the periodic columns).  Cost: one
+transient global-size metric set per rank at configure time
+(~20 <code>(ni_global, nj_global)</code> arrays + the 4x supergrid) — fine
+for the north-south splits this serves; a distributed (px &gt; 1)
+hero-scale grid will want a tile-local construction instead.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~525"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~317"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lon_west~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lon_west</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lat_south~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lat_south</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dlon_deg~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dlon_deg</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dlat_deg~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dlat_deg</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rad_earth~7"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rad_earth</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-phi_join~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>phi_join</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lon_pole~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lon_pole</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~metrics_fill_tripolar~~CallsGraph Pages: 1 -->
+<svg id="procmetrics_fill_tripolarCallsGraph" width="641pt" height="310pt"
+ viewBox="0.00 0.00 641.00 310.14" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~metrics_fill_tripolar~~CallsGraph" class="graph" transform="scale(0.53 0.53) rotate(0) translate(4 580)">
+<title>proc~~metrics_fill_tripolar~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-580 1203,-580 1203,4 -4,4"/>
+<!-- proc~metrics_fill_tripolar -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node1" class="node">
+<title>proc~metrics_fill_tripolar</title>
+<polygon fill="none" stroke="black" points="115,-179 0,-179 0,-155 115,-155 115,-179"/>
+<text text-anchor="middle" x="57.5" y="-164.6" font-family="Helvetica,sans-Serif" font-size="10.50">metrics_fill_tripolar</text>
+</g>
+<!-- proc~grid_init -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node2" class="node">
+<title>proc~grid_init</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node2"><a xlink:href="../proc/grid_init.html" xlink:title="hgrid_t%grid_init">
+<polygon fill="#d9534f" stroke="#d9534f" points="318,-242 216,-242 216,-218 318,-218 318,-242"/>
+<text text-anchor="middle" x="267" y="-227.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">hgrid_t%grid_init</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fill_tripolar&#45;&gt;proc~grid_init -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge1" class="edge">
+<title>proc~metrics_fill_tripolar&#45;&gt;proc~grid_init</title>
+<path fill="none" stroke="#ff0000" d="M81.07,-179.15C99.43,-188.55 126.26,-201.25 151,-209 168.41,-214.45 187.76,-218.66 205.55,-221.83"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="205.38,-225.35 215.82,-223.58 206.55,-218.45 205.38,-225.35"/>
+</g>
+<!-- proc~metrics_fill_tripolar_whole -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node3" class="node">
+<title>proc~metrics_fill_tripolar_whole</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node3"><a xlink:href="../proc/metrics_fill_tripolar_whole.html" xlink:title="metrics_fill_tripolar_whole">
+<polygon fill="#d9534f" stroke="#d9534f" points="342.5,-200 191.5,-200 191.5,-176 342.5,-176 342.5,-200"/>
+<text text-anchor="middle" x="267" y="-185.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_fill_tripolar_whole</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fill_tripolar&#45;&gt;proc~metrics_fill_tripolar_whole -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge2" class="edge">
+<title>proc~metrics_fill_tripolar&#45;&gt;proc~metrics_fill_tripolar_whole</title>
+<path fill="none" stroke="#ff0000" d="M115.2,-172.74C135.6,-174.8 159.07,-177.18 181.33,-179.43"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="181.15,-182.93 191.45,-180.46 181.86,-175.97 181.15,-182.93"/>
+</g>
+<!-- proc~metrics_window_all -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node4" class="node">
+<title>proc~metrics_window_all</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node4"><a xlink:href="../proc/metrics_window_all.html" xlink:title="metrics_window_all">
+<polygon fill="#d9534f" stroke="#d9534f" points="324.5,-158 209.5,-158 209.5,-134 324.5,-134 324.5,-158"/>
+<text text-anchor="middle" x="267" y="-143.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_window_all</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fill_tripolar&#45;&gt;proc~metrics_window_all -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge3" class="edge">
+<title>proc~metrics_fill_tripolar&#45;&gt;proc~metrics_window_all</title>
+<path fill="none" stroke="#ff0000" d="M115.2,-161.26C141.16,-158.63 172.11,-155.5 199.2,-152.76"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="199.77,-156.22 209.37,-151.73 199.07,-149.26 199.77,-156.22"/>
+</g>
+<!-- proc~ocean_metrics_destroy -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node5" class="node">
+<title>proc~ocean_metrics_destroy</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node5"><a xlink:href="../proc/ocean_metrics_destroy.html" xlink:title="ocean_metrics_t%ocean_metrics_destroy">
+<polygon fill="#d9534f" stroke="#d9534f" points="383,-116 151,-116 151,-92 383,-92 383,-116"/>
+<text text-anchor="middle" x="267" y="-101.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_metrics_t%ocean_metrics_destroy</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fill_tripolar&#45;&gt;proc~ocean_metrics_destroy -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge4" class="edge">
+<title>proc~metrics_fill_tripolar&#45;&gt;proc~ocean_metrics_destroy</title>
+<path fill="none" stroke="#ff0000" d="M81.07,-154.85C99.43,-145.45 126.26,-132.75 151,-125 159,-122.49 167.42,-120.25 175.91,-118.25"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="176.9,-121.61 185.89,-116.01 175.36,-114.78 176.9,-121.61"/>
+</g>
+<!-- proc~metrics_assemble_from_supergrid_arrays -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node6" class="node">
+<title>proc~metrics_assemble_from_supergrid_arrays</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node6"><a xlink:href="../proc/metrics_assemble_from_supergrid_arrays.html" xlink:title="metrics_assemble_from_supergrid_arrays">
+<polygon fill="#d9534f" stroke="#d9534f" points="653,-492 419,-492 419,-468 653,-468 653,-492"/>
+<text text-anchor="middle" x="536" y="-477.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_assemble_from_supergrid_arrays</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fill_tripolar_whole&#45;&gt;proc~metrics_assemble_from_supergrid_arrays -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge5" class="edge">
+<title>proc~metrics_fill_tripolar_whole&#45;&gt;proc~metrics_assemble_from_supergrid_arrays</title>
+<path fill="none" stroke="#7fff00" d="M342.78,-190.38C357.33,-193.79 371.58,-199.56 383,-209 417.15,-237.25 398.79,-262.55 419,-302 449.75,-362.01 495.73,-427.09 519.52,-459.39"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="516.84,-461.65 525.6,-467.6 522.46,-457.48 516.84,-461.65"/>
+</g>
+<!-- proc~metrics_fold_periodic_ghosts -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node7" class="node">
+<title>proc~metrics_fold_periodic_ghosts</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node7"><a xlink:href="../proc/metrics_fold_periodic_ghosts.html" xlink:title="metrics_fold_periodic_ghosts">
+<polygon fill="#d9534f" stroke="#d9534f" points="619,-293 453,-293 453,-269 619,-269 619,-293"/>
+<text text-anchor="middle" x="536" y="-278.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_fold_periodic_ghosts</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fill_tripolar_whole&#45;&gt;proc~metrics_fold_periodic_ghosts -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge6" class="edge">
+<title>proc~metrics_fill_tripolar_whole&#45;&gt;proc~metrics_fold_periodic_ghosts</title>
+<path fill="none" stroke="#7fff00" d="M342.63,-198.69C356.22,-201.46 370.15,-204.86 383,-209 427.14,-223.21 475.01,-247.5 505,-263.89"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="503.63,-267.14 514.08,-268.92 507.02,-261.01 503.63,-267.14"/>
+</g>
+<!-- proc~supergrid_angle_dx_from_geography -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node9" class="node">
+<title>proc~supergrid_angle_dx_from_geography</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node9"><a xlink:href="../proc/supergrid_angle_dx_from_geography.html" xlink:title="supergrid_angle_dx_from_geography">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="641,-200 431,-200 431,-176 641,-176 641,-200"/>
+<text text-anchor="middle" x="536" y="-185.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">supergrid_angle_dx_from_geography</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fill_tripolar_whole&#45;&gt;proc~supergrid_angle_dx_from_geography -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge7" class="edge">
+<title>proc~metrics_fill_tripolar_whole&#45;&gt;proc~supergrid_angle_dx_from_geography</title>
+<path fill="none" stroke="#7fff00" d="M342.73,-188C366.94,-188 394.38,-188 420.79,-188"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="420.85,-191.5 430.85,-188 420.85,-184.5 420.85,-191.5"/>
+</g>
+<!-- proc~tripolar_supergrid_arrays -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node10" class="node">
+<title>proc~tripolar_supergrid_arrays</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node10"><a xlink:href="../proc/tripolar_supergrid_arrays.html" xlink:title="tripolar_supergrid_arrays">
+<polygon fill="#d9534f" stroke="#d9534f" points="609.5,-106 462.5,-106 462.5,-82 609.5,-82 609.5,-106"/>
+<text text-anchor="middle" x="536" y="-91.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">tripolar_supergrid_arrays</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fill_tripolar_whole&#45;&gt;proc~tripolar_supergrid_arrays -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge8" class="edge">
+<title>proc~metrics_fill_tripolar_whole&#45;&gt;proc~tripolar_supergrid_arrays</title>
+<path fill="none" stroke="#7fff00" d="M342.65,-177.37C356.24,-174.59 370.16,-171.17 383,-167 427.22,-152.63 475.07,-128 505.03,-111.36"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="507.1,-114.22 514.1,-106.27 503.67,-108.11 507.1,-114.22"/>
+</g>
+<!-- proc~metrics_window_2d -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node8" class="node">
+<title>proc~metrics_window_2d</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node8"><a xlink:href="../proc/metrics_window_2d.html" xlink:title="metrics_window_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="594,-64 478,-64 478,-40 594,-40 594,-64"/>
+<text text-anchor="middle" x="536" y="-49.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_window_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_window_all&#45;&gt;proc~metrics_window_2d -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge9" class="edge">
+<title>proc~metrics_window_all&#45;&gt;proc~metrics_window_2d</title>
+<path fill="none" stroke="#00ffff" d="M324.77,-144.41C344.45,-141.67 365.86,-136.06 383,-125 406.62,-109.76 395.37,-88.22 419,-73 433.46,-63.69 450.92,-58.23 467.85,-55.09"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="468.42,-58.55 477.74,-53.5 467.31,-51.64 468.42,-58.55"/>
+</g>
+<!-- proc~supergrid_ghost_fill_2d -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node16" class="node">
+<title>proc~supergrid_ghost_fill_2d</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node16"><a xlink:href="../proc/supergrid_ghost_fill_2d.html" xlink:title="supergrid_ghost_fill_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="829,-576 694,-576 694,-552 829,-552 829,-576"/>
+<text text-anchor="middle" x="761.5" y="-561.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">supergrid_ghost_fill_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_assemble_from_supergrid_arrays&#45;&gt;proc~supergrid_ghost_fill_2d -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge10" class="edge">
+<title>proc~metrics_assemble_from_supergrid_arrays&#45;&gt;proc~supergrid_ghost_fill_2d</title>
+<path fill="none" stroke="#ff0000" d="M563.57,-492.03C593.65,-505.41 644.28,-527.22 689,-543 694.84,-545.06 701.01,-547.09 707.16,-549.02"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="706.19,-552.38 716.78,-551.97 708.24,-545.69 706.19,-552.38"/>
+</g>
+<!-- proc~supergrid_ghost_fill_bu -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node17" class="node">
+<title>proc~supergrid_ghost_fill_bu</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node17"><a xlink:href="../proc/supergrid_ghost_fill_bu.html" xlink:title="supergrid_ghost_fill_bu">
+<polygon fill="#d9534f" stroke="#d9534f" points="829,-534 694,-534 694,-510 829,-510 829,-534"/>
+<text text-anchor="middle" x="761.5" y="-519.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">supergrid_ghost_fill_bu</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_assemble_from_supergrid_arrays&#45;&gt;proc~supergrid_ghost_fill_bu -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge11" class="edge">
+<title>proc~metrics_assemble_from_supergrid_arrays&#45;&gt;proc~supergrid_ghost_fill_bu</title>
+<path fill="none" stroke="#ff0000" d="M601.05,-492.04C627.7,-497.04 658.81,-502.89 686.44,-508.08"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="685.97,-511.56 696.44,-509.96 687.26,-504.68 685.97,-511.56"/>
+</g>
+<!-- proc~supergrid_ghost_fill_cu -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node18" class="node">
+<title>proc~supergrid_ghost_fill_cu</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node18"><a xlink:href="../proc/supergrid_ghost_fill_cu.html" xlink:title="supergrid_ghost_fill_cu">
+<polygon fill="#d9534f" stroke="#d9534f" points="828.5,-492 694.5,-492 694.5,-468 828.5,-468 828.5,-492"/>
+<text text-anchor="middle" x="761.5" y="-477.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">supergrid_ghost_fill_cu</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_assemble_from_supergrid_arrays&#45;&gt;proc~supergrid_ghost_fill_cu -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge12" class="edge">
+<title>proc~metrics_assemble_from_supergrid_arrays&#45;&gt;proc~supergrid_ghost_fill_cu</title>
+<path fill="none" stroke="#ff0000" d="M653.01,-480C663.5,-480 673.94,-480 683.96,-480"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="684.24,-483.5 694.24,-480 684.24,-476.5 684.24,-483.5"/>
+</g>
+<!-- proc~supergrid_ghost_fill_cv -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node19" class="node">
+<title>proc~supergrid_ghost_fill_cv</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node19"><a xlink:href="../proc/supergrid_ghost_fill_cv.html" xlink:title="supergrid_ghost_fill_cv">
+<polygon fill="#d9534f" stroke="#d9534f" points="828,-450 695,-450 695,-426 828,-426 828,-450"/>
+<text text-anchor="middle" x="761.5" y="-435.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">supergrid_ghost_fill_cv</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_assemble_from_supergrid_arrays&#45;&gt;proc~supergrid_ghost_fill_cv -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge13" class="edge">
+<title>proc~metrics_assemble_from_supergrid_arrays&#45;&gt;proc~supergrid_ghost_fill_cv</title>
+<path fill="none" stroke="#ff0000" d="M601.05,-467.96C627.7,-462.96 658.81,-457.11 686.44,-451.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="687.26,-455.32 696.44,-450.04 685.97,-448.44 687.26,-455.32"/>
+</g>
+<!-- interface~fold_north_centre -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node11" class="node">
+<title>interface~fold_north_centre</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node11"><a xlink:href="../interface/fold_north_centre.html" xlink:title="fold_north_centre">
+<polygon fill="#a7506f" stroke="#a7506f" points="814.5,-408 708.5,-408 708.5,-384 814.5,-384 814.5,-408"/>
+<text text-anchor="middle" x="761.5" y="-393.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_north_centre</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fold_periodic_ghosts&#45;&gt;interface~fold_north_centre -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge14" class="edge">
+<title>proc~metrics_fold_periodic_ghosts&#45;&gt;interface~fold_north_centre</title>
+<path fill="none" stroke="#cbff00" d="M560.5,-293.09C600.57,-313.71 682.22,-355.72 727.83,-379.19"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="726.49,-382.44 736.98,-383.9 729.69,-376.21 726.49,-382.44"/>
+</g>
+<!-- proc~metrics_fold_north_faces -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node13" class="node">
+<title>proc~metrics_fold_north_faces</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node13"><a xlink:href="../proc/metrics_fold_north_faces.html" xlink:title="metrics_fold_north_faces">
+<polygon fill="#d9534f" stroke="#d9534f" points="834,-335 689,-335 689,-311 834,-311 834,-335"/>
+<text text-anchor="middle" x="761.5" y="-320.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_fold_north_faces</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fold_periodic_ghosts&#45;&gt;proc~metrics_fold_north_faces -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge15" class="edge">
+<title>proc~metrics_fold_periodic_ghosts&#45;&gt;proc~metrics_fold_north_faces</title>
+<path fill="none" stroke="#cbff00" d="M601.05,-293.04C627.7,-298.04 658.81,-303.89 686.44,-309.08"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="685.97,-312.56 696.44,-310.96 687.26,-305.68 685.97,-312.56"/>
+</g>
+<!-- proc~metrics_periodic_x_all -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node14" class="node">
+<title>proc~metrics_periodic_x_all</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node14"><a xlink:href="../proc/metrics_periodic_x_all.html" xlink:title="metrics_periodic_x_all">
+<polygon fill="#d9534f" stroke="#d9534f" points="826.5,-230 696.5,-230 696.5,-206 826.5,-206 826.5,-230"/>
+<text text-anchor="middle" x="761.5" y="-215.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_periodic_x_all</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fold_periodic_ghosts&#45;&gt;proc~metrics_periodic_x_all -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge16" class="edge">
+<title>proc~metrics_fold_periodic_ghosts&#45;&gt;proc~metrics_periodic_x_all</title>
+<path fill="none" stroke="#cbff00" d="M579.83,-268.93C616.25,-258.66 668.69,-243.88 707.7,-232.88"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="709.14,-236.11 717.82,-230.03 707.24,-229.38 709.14,-236.11"/>
+</g>
+<!-- proc~great_circle -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node12" class="node">
+<title>proc~great_circle</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node12"><a xlink:href="../proc/great_circle.html" xlink:title="great_circle">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1173,-86 1099,-86 1099,-62 1173,-62 1173,-86"/>
+<text text-anchor="middle" x="1136" y="-71.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">great_circle</text>
+</a>
+</g>
+</g>
+<!-- proc~tripolar_supergrid_arrays&#45;&gt;proc~great_circle -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge17" class="edge">
+<title>proc~tripolar_supergrid_arrays&#45;&gt;proc~great_circle</title>
+<path fill="none" stroke="#cc00ff" d="M609.73,-91.57C734.31,-87.4 985.12,-79.01 1088.66,-75.55"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="1088.92,-79.04 1098.8,-75.21 1088.69,-72.05 1088.92,-79.04"/>
+</g>
+<!-- proc~spherical_quad_area -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node15" class="node">
+<title>proc~spherical_quad_area</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node15"><a xlink:href="../proc/spherical_quad_area.html" xlink:title="spherical_quad_area">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="823,-66 700,-66 700,-42 823,-42 823,-66"/>
+<text text-anchor="middle" x="761.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">spherical_quad_area</text>
+</a>
+</g>
+</g>
+<!-- proc~tripolar_supergrid_arrays&#45;&gt;proc~spherical_quad_area -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge18" class="edge">
+<title>proc~tripolar_supergrid_arrays&#45;&gt;proc~spherical_quad_area</title>
+<path fill="none" stroke="#cc00ff" d="M604.06,-82C631.2,-77.14 662.55,-71.53 690.03,-66.61"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="690.73,-70.04 699.96,-64.83 689.5,-63.15 690.73,-70.04"/>
+</g>
+<!-- proc~tripolar_node_latlon -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node20" class="node">
+<title>proc~tripolar_node_latlon</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node20"><a xlink:href="../proc/tripolar_node_latlon.html" xlink:title="tripolar_node_latlon">
+<polygon fill="#d9534f" stroke="#d9534f" points="821,-24 702,-24 702,0 821,0 821,-24"/>
+<text text-anchor="middle" x="761.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">tripolar_node_latlon</text>
+</a>
+</g>
+</g>
+<!-- proc~tripolar_supergrid_arrays&#45;&gt;proc~tripolar_node_latlon -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge19" class="edge">
+<title>proc~tripolar_supergrid_arrays&#45;&gt;proc~tripolar_node_latlon</title>
+<path fill="none" stroke="#cc00ff" d="M609.77,-88.37C624.7,-85.17 639.86,-80.32 653,-73 673.89,-61.35 668.76,-45.74 689,-33 691.79,-31.24 694.74,-29.63 697.78,-28.14"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="699.35,-31.27 707.12,-24.07 696.56,-24.86 699.35,-31.27"/>
+</g>
+<!-- proc~fold_north_centre_2d -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node23" class="node">
+<title>proc~fold_north_centre_2d</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node23"><a xlink:href="../proc/fold_north_centre_2d.html" xlink:title="fold_north_centre_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1015.5,-482 891.5,-482 891.5,-458 1015.5,-458 1015.5,-482"/>
+<text text-anchor="middle" x="953.5" y="-467.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_north_centre_2d</text>
+</a>
+</g>
+</g>
+<!-- interface~fold_north_centre&#45;&gt;proc~fold_north_centre_2d -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge20" class="edge">
+<title>interface~fold_north_centre&#45;&gt;proc~fold_north_centre_2d</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M814.01,-408.13C820.93,-410.61 827.78,-413.55 834,-417 852.72,-427.38 851.09,-438.96 870,-449 873.75,-450.99 877.69,-452.79 881.73,-454.43"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="880.73,-457.79 891.33,-457.97 883.15,-451.23 880.73,-457.79"/>
+</g>
+<!-- proc~fold_north_centre_3d -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node24" class="node">
+<title>proc~fold_north_centre_3d</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node24"><a xlink:href="../proc/fold_north_centre_3d.html" xlink:title="fold_north_centre_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1015.5,-440 891.5,-440 891.5,-416 1015.5,-416 1015.5,-440"/>
+<text text-anchor="middle" x="953.5" y="-425.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_north_centre_3d</text>
+</a>
+</g>
+</g>
+<!-- interface~fold_north_centre&#45;&gt;proc~fold_north_centre_3d -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge21" class="edge">
+<title>interface~fold_north_centre&#45;&gt;proc~fold_north_centre_3d</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M814.67,-404.79C835.25,-408.25 859.22,-412.29 881.34,-416.02"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="880.91,-419.49 891.36,-417.7 882.08,-412.59 880.91,-419.49"/>
+</g>
+<!-- interface~fold_north_corner -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node21" class="node">
+<title>interface~fold_north_corner</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node21"><a xlink:href="../interface/fold_north_corner.html" xlink:title="fold_north_corner">
+<polygon fill="#a7506f" stroke="#a7506f" points="1007,-398 900,-398 900,-374 1007,-374 1007,-398"/>
+<text text-anchor="middle" x="953.5" y="-383.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_north_corner</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fold_north_faces&#45;&gt;interface~fold_north_corner -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge22" class="edge">
+<title>proc~metrics_fold_north_faces&#45;&gt;interface~fold_north_corner</title>
+<path fill="none" stroke="#cbff00" d="M790.45,-335.02C811.95,-343.99 842.53,-356.17 870,-365 876.87,-367.21 884.12,-369.34 891.35,-371.34"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="890.6,-374.76 901.17,-373.98 892.42,-368 890.6,-374.76"/>
+</g>
+<!-- proc~metrics_fold_north_cu_scalar -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node25" class="node">
+<title>proc~metrics_fold_north_cu_scalar</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node25"><a xlink:href="../proc/metrics_fold_north_cu_scalar.html" xlink:title="metrics_fold_north_cu_scalar">
+<polygon fill="#d9534f" stroke="#d9534f" points="1037,-356 870,-356 870,-332 1037,-332 1037,-356"/>
+<text text-anchor="middle" x="953.5" y="-341.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_fold_north_cu_scalar</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fold_north_faces&#45;&gt;proc~metrics_fold_north_cu_scalar -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge23" class="edge">
+<title>proc~metrics_fold_north_faces&#45;&gt;proc~metrics_fold_north_cu_scalar</title>
+<path fill="none" stroke="#cbff00" d="M834.06,-330.91C842.45,-331.84 851.11,-332.79 859.73,-333.75"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="859.51,-337.24 869.83,-334.86 860.28,-330.29 859.51,-337.24"/>
+</g>
+<!-- proc~metrics_fold_north_cv_scalar -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node26" class="node">
+<title>proc~metrics_fold_north_cv_scalar</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node26"><a xlink:href="../proc/metrics_fold_north_cv_scalar.html" xlink:title="metrics_fold_north_cv_scalar">
+<polygon fill="#d9534f" stroke="#d9534f" points="1036.5,-314 870.5,-314 870.5,-290 1036.5,-290 1036.5,-314"/>
+<text text-anchor="middle" x="953.5" y="-299.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_fold_north_cv_scalar</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fold_north_faces&#45;&gt;proc~metrics_fold_north_cv_scalar -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge24" class="edge">
+<title>proc~metrics_fold_north_faces&#45;&gt;proc~metrics_fold_north_cv_scalar</title>
+<path fill="none" stroke="#cbff00" d="M834.06,-315.09C842.7,-314.14 851.61,-313.15 860.49,-312.17"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="860.92,-315.64 870.48,-311.07 860.15,-308.69 860.92,-315.64"/>
+</g>
+<!-- proc~metrics_periodic_x_2d -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node27" class="node">
+<title>proc~metrics_periodic_x_2d</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node27"><a xlink:href="../proc/metrics_periodic_x_2d.html" xlink:title="metrics_periodic_x_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1019,-272 888,-272 888,-248 1019,-248 1019,-272"/>
+<text text-anchor="middle" x="953.5" y="-257.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_periodic_x_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_periodic_x_all&#45;&gt;proc~metrics_periodic_x_2d -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge25" class="edge">
+<title>proc~metrics_periodic_x_all&#45;&gt;proc~metrics_periodic_x_2d</title>
+<path fill="none" stroke="#33ff00" d="M816.95,-230.04C839.11,-234.93 864.89,-240.63 887.99,-245.74"/>
+<polygon fill="#33ff00" stroke="#33ff00" points="887.53,-249.22 898.05,-247.96 889.04,-242.39 887.53,-249.22"/>
+</g>
+<!-- proc~metrics_periodic_x_bu -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node28" class="node">
+<title>proc~metrics_periodic_x_bu</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node28"><a xlink:href="../proc/metrics_periodic_x_bu.html" xlink:title="metrics_periodic_x_bu">
+<polygon fill="#d9534f" stroke="#d9534f" points="1019,-230 888,-230 888,-206 1019,-206 1019,-230"/>
+<text text-anchor="middle" x="953.5" y="-215.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_periodic_x_bu</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_periodic_x_all&#45;&gt;proc~metrics_periodic_x_bu -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge26" class="edge">
+<title>proc~metrics_periodic_x_all&#45;&gt;proc~metrics_periodic_x_bu</title>
+<path fill="none" stroke="#33ff00" d="M826.56,-218C842.89,-218 860.58,-218 877.41,-218"/>
+<polygon fill="#33ff00" stroke="#33ff00" points="877.75,-221.5 887.75,-218 877.75,-214.5 877.75,-221.5"/>
+</g>
+<!-- proc~metrics_periodic_x_cu -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node29" class="node">
+<title>proc~metrics_periodic_x_cu</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node29"><a xlink:href="../proc/metrics_periodic_x_cu.html" xlink:title="metrics_periodic_x_cu">
+<polygon fill="#d9534f" stroke="#d9534f" points="1018.5,-188 888.5,-188 888.5,-164 1018.5,-164 1018.5,-188"/>
+<text text-anchor="middle" x="953.5" y="-173.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_periodic_x_cu</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_periodic_x_all&#45;&gt;proc~metrics_periodic_x_cu -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge27" class="edge">
+<title>proc~metrics_periodic_x_all&#45;&gt;proc~metrics_periodic_x_cu</title>
+<path fill="none" stroke="#33ff00" d="M816.95,-205.96C839.11,-201.07 864.89,-195.37 887.99,-190.26"/>
+<polygon fill="#33ff00" stroke="#33ff00" points="889.04,-193.61 898.05,-188.04 887.53,-186.78 889.04,-193.61"/>
+</g>
+<!-- proc~metrics_periodic_x_cv -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node30" class="node">
+<title>proc~metrics_periodic_x_cv</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node30"><a xlink:href="../proc/metrics_periodic_x_cv.html" xlink:title="metrics_periodic_x_cv">
+<polygon fill="#d9534f" stroke="#d9534f" points="1018.5,-146 888.5,-146 888.5,-122 1018.5,-122 1018.5,-146"/>
+<text text-anchor="middle" x="953.5" y="-131.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_periodic_x_cv</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_periodic_x_all&#45;&gt;proc~metrics_periodic_x_cv -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge28" class="edge">
+<title>proc~metrics_periodic_x_all&#45;&gt;proc~metrics_periodic_x_cv</title>
+<path fill="none" stroke="#33ff00" d="M779.59,-205.93C800.17,-191.9 836.18,-168.89 870,-155 875.34,-152.81 880.98,-150.79 886.69,-148.96"/>
+<polygon fill="#33ff00" stroke="#33ff00" points="887.78,-152.28 896.34,-146.03 885.75,-145.58 887.78,-152.28"/>
+</g>
+<!-- proc~spherical_tri_area -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node31" class="node">
+<title>proc~spherical_tri_area</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node31"><a xlink:href="../proc/spherical_tri_area.html" xlink:title="spherical_tri_area">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1007,-66 900,-66 900,-42 1007,-42 1007,-66"/>
+<text text-anchor="middle" x="953.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">spherical_tri_area</text>
+</a>
+</g>
+</g>
+<!-- proc~spherical_quad_area&#45;&gt;proc~spherical_tri_area -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge29" class="edge">
+<title>proc~spherical_quad_area&#45;&gt;proc~spherical_tri_area</title>
+<path fill="none" stroke="#00ff66" d="M823.14,-54C844.33,-54 868.15,-54 889.52,-54"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="889.79,-57.5 899.79,-54 889.79,-50.5 889.79,-57.5"/>
+</g>
+<!-- proc~bipolar_corner_latlon -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node22" class="node">
+<title>proc~bipolar_corner_latlon</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node22"><a xlink:href="../proc/bipolar_corner_latlon.html" xlink:title="bipolar_corner_latlon">
+<polygon fill="#d9534f" stroke="#d9534f" points="1016.5,-24 890.5,-24 890.5,0 1016.5,0 1016.5,-24"/>
+<text text-anchor="middle" x="953.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bipolar_corner_latlon</text>
+</a>
+</g>
+</g>
+<!-- proc~tripolar_node_latlon&#45;&gt;proc~bipolar_corner_latlon -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge30" class="edge">
+<title>proc~tripolar_node_latlon&#45;&gt;proc~bipolar_corner_latlon</title>
+<path fill="none" stroke="#ff0098" d="M821.06,-12C839.72,-12 860.59,-12 880.12,-12"/>
+<polygon fill="#ff0098" stroke="#ff0098" points="880.18,-15.5 890.18,-12 880.18,-8.5 880.18,-15.5"/>
+</g>
+<!-- proc~fold_north_corner_2d -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_node32" class="node">
+<title>proc~fold_north_corner_2d</title>
+<g id="a_proc~~metrics_fill_tripolar~~CallsGraph_node32"><a xlink:href="../proc/fold_north_corner_2d.html" xlink:title="fold_north_corner_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1199,-398 1073,-398 1073,-374 1199,-374 1199,-398"/>
+<text text-anchor="middle" x="1136" y="-383.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_north_corner_2d</text>
+</a>
+</g>
+</g>
+<!-- interface~fold_north_corner&#45;&gt;proc~fold_north_corner_2d -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge31" class="edge">
+<title>interface~fold_north_corner&#45;&gt;proc~fold_north_corner_2d</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1007.19,-386C1024.58,-386 1044.22,-386 1062.81,-386"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1063,-389.5 1073,-386 1063,-382.5 1063,-389.5"/>
+</g>
+<!-- proc~spherical_tri_area&#45;&gt;proc~great_circle -->
+<g id="proc~~metrics_fill_tripolar~~CallsGraph_edge32" class="edge">
+<title>proc~spherical_tri_area&#45;&gt;proc~great_circle</title>
+<path fill="none" stroke="#ff008b" d="M1007.19,-59.84C1032.96,-62.69 1063.7,-66.1 1088.57,-68.86"/>
+<polygon fill="#ff008b" stroke="#ff008b" points="1088.52,-72.37 1098.84,-69.99 1089.29,-65.41 1088.52,-72.37"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocmetrics_fill_tripolarCallsGraph = svgPanZoom('#procmetrics_fill_tripolarCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~metrics_fill_tripolar~~CalledByGraph Pages: 1 -->
+<svg id="procmetrics_fill_tripolarCalledByGraph" width="641pt" height="125pt"
+ viewBox="0.00 0.00 641.00 125.03" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~metrics_fill_tripolar~~CalledByGraph" class="graph" transform="scale(0.79 0.79) rotate(0) translate(4 154)">
+<title>proc~~metrics_fill_tripolar~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-154 806,-154 806,4 -4,4"/>
+<!-- proc~metrics_fill_tripolar -->
+<g id="proc~~metrics_fill_tripolar~~CalledByGraph_node1" class="node">
+<title>proc~metrics_fill_tripolar</title>
+<polygon fill="none" stroke="black" points="802,-66 687,-66 687,-42 802,-42 802,-66"/>
+<text text-anchor="middle" x="744.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50">metrics_fill_tripolar</text>
+</g>
+<!-- proc~configure_ocean_metrics -->
+<g id="proc~~metrics_fill_tripolar~~CalledByGraph_node2" class="node">
+<title>proc~configure_ocean_metrics</title>
+<g id="a_proc~~metrics_fill_tripolar~~CalledByGraph_node2"><a xlink:href="../proc/configure_ocean_metrics.html" xlink:title="configure_ocean_metrics">
+<polygon fill="#d9534f" stroke="#d9534f" points="651,-66 505,-66 505,-42 651,-42 651,-66"/>
+<text text-anchor="middle" x="578" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_metrics</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_metrics&#45;&gt;proc~metrics_fill_tripolar -->
+<g id="proc~~metrics_fill_tripolar~~CalledByGraph_edge1" class="edge">
+<title>proc~configure_ocean_metrics&#45;&gt;proc~metrics_fill_tripolar</title>
+<path fill="none" stroke="#ff0000" d="M651.15,-54C659.62,-54 668.24,-54 676.63,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="676.73,-57.5 686.73,-54 676.73,-50.5 676.73,-57.5"/>
+</g>
+<!-- proc~engine_setup -->
+<g id="proc~~metrics_fill_tripolar~~CalledByGraph_node3" class="node">
+<title>proc~engine_setup</title>
+<g id="a_proc~~metrics_fill_tripolar~~CalledByGraph_node3"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="469,-66 385,-66 385,-42 469,-42 469,-66"/>
+<text text-anchor="middle" x="427" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~configure_ocean_metrics -->
+<g id="proc~~metrics_fill_tripolar~~CalledByGraph_edge2" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~configure_ocean_metrics</title>
+<path fill="none" stroke="#ff0000" d="M469.11,-54C477.18,-54 485.92,-54 494.8,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="494.86,-57.5 504.86,-54 494.86,-50.5 494.86,-57.5"/>
+</g>
+<!-- proc~complete_ocean_create -->
+<g id="proc~~metrics_fill_tripolar~~CalledByGraph_node4" class="node">
+<title>proc~complete_ocean_create</title>
+<g id="a_proc~~metrics_fill_tripolar~~CalledByGraph_node4"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="349,-108 209,-108 209,-84 349,-84 349,-108"/>
+<text text-anchor="middle" x="279" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_setup -->
+<g id="proc~~metrics_fill_tripolar~~CalledByGraph_edge3" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M321.84,-83.96C338.39,-79.2 357.58,-73.68 374.94,-68.69"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="376.27,-71.95 384.91,-65.82 374.33,-65.22 376.27,-71.95"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~metrics_fill_tripolar~~CalledByGraph_node5" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~metrics_fill_tripolar~~CalledByGraph_node5"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="332,-66 226,-66 226,-42 332,-42 332,-66"/>
+<text text-anchor="middle" x="279" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_setup -->
+<g id="proc~~metrics_fill_tripolar~~CalledByGraph_edge4" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M332.3,-54C345.99,-54 360.74,-54 374.4,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="374.59,-57.5 384.59,-54 374.59,-50.5 374.59,-57.5"/>
+</g>
+<!-- proc~driver_validate -->
+<g id="proc~~metrics_fill_tripolar~~CalledByGraph_node6" class="node">
+<title>proc~driver_validate</title>
+<g id="a_proc~~metrics_fill_tripolar~~CalledByGraph_node6"><a xlink:href="../proc/driver_validate.html" xlink:title="driver_validate">
+<polygon fill="#d9534f" stroke="#d9534f" points="325,-24 233,-24 233,0 325,0 325,-24"/>
+<text text-anchor="middle" x="279" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_validate</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_validate&#45;&gt;proc~engine_setup -->
+<g id="proc~~metrics_fill_tripolar~~CalledByGraph_edge5" class="edge">
+<title>proc~driver_validate&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M321.84,-24.04C338.39,-28.8 357.58,-34.32 374.94,-39.31"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="374.33,-42.78 384.91,-42.18 376.27,-36.05 374.33,-42.78"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~metrics_fill_tripolar~~CalledByGraph_node7" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~metrics_fill_tripolar~~CalledByGraph_node7"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="120,-66 53,-66 53,-42 120,-42 120,-66"/>
+<text text-anchor="middle" x="86.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~metrics_fill_tripolar~~CalledByGraph_edge8" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#00ff00" d="M120.25,-54C146.45,-54 183.96,-54 215.83,-54"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="215.95,-57.5 225.95,-54 215.95,-50.5 215.95,-57.5"/>
+</g>
+<!-- proc~rdb_ocean_create_finalize -->
+<g id="proc~~metrics_fill_tripolar~~CalledByGraph_node8" class="node">
+<title>proc~rdb_ocean_create_finalize</title>
+<g id="a_proc~~metrics_fill_tripolar~~CalledByGraph_node8"><a xlink:href="../proc/rdb_ocean_create_finalize.html" xlink:title="rdb_ocean_create_finalize">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="162,-150 11,-150 11,-126 162,-126 162,-150"/>
+<text text-anchor="middle" x="86.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~metrics_fill_tripolar~~CalledByGraph_edge6" class="edge">
+<title>proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M142.09,-125.96C164.41,-121.04 190.39,-115.31 213.63,-110.19"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="214.39,-113.61 223.4,-108.04 212.88,-106.77 214.39,-113.61"/>
+</g>
+<!-- proc~rdb_ocean_create_from_string -->
+<g id="proc~~metrics_fill_tripolar~~CalledByGraph_node9" class="node">
+<title>proc~rdb_ocean_create_from_string</title>
+<g id="a_proc~~metrics_fill_tripolar~~CalledByGraph_node9"><a xlink:href="../proc/rdb_ocean_create_from_string.html" xlink:title="rdb_ocean_create_from_string">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="173,-108 0,-108 0,-84 173,-84 173,-108"/>
+<text text-anchor="middle" x="86.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_from_string</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~metrics_fill_tripolar~~CalledByGraph_edge7" class="edge">
+<title>proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M173.28,-96C181.77,-96 190.37,-96 198.79,-96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="198.97,-99.5 208.97,-96 198.97,-92.5 198.97,-99.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocmetrics_fill_tripolarCalledByGraph = svgPanZoom('#procmetrics_fill_tripolarCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-gwhole"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>gwhole</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-io~3"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>io</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-jo~2"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>jo</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mwhole"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mwhole</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">metrics_fill_tripolar</span><span class="p">(</span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">lon_west</span><span class="p">,</span><span class="w"> </span><span class="n">lat_south</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">dlon_deg</span><span class="p">,</span><span class="w"> </span><span class="n">dlat_deg</span><span class="p">,</span><span class="w"> </span><span class="n">rad_earth</span><span class="p">,</span><span class="w"> </span><span class="n">phi_join</span><span class="p">,</span><span class="w"> </span><span class="n">lon_pole</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Fill every metric array for an analytic TRIPOLAR grid (Murray</span>
+<span class="w">      </span><span class="c">!! 1996): ordinary lon-lat for cell-corner latitude &lt;= `phi_join`,</span>
+<span class="w">      </span><span class="c">!! and a conformal bipolar Arctic cap above (two grid poles at</span>
+<span class="w">      </span><span class="c">!! `(phi_join, lon_pole)` and `(phi_join, lon_pole+180)`; see</span>
+<span class="w">      </span><span class="c">!! `rdb_ocean_bipolar`).  The construction generates an in-memory</span>
+<span class="w">      </span><span class="c">!! MOM6-style supergrid (2x-refined corner geography, great-circle</span>
+<span class="w">      </span><span class="c">!! edge lengths, sub-cell areas) from the analytic map, then feeds</span>
+<span class="w">      </span><span class="c">!! the SAME `metrics_assemble_from_supergrid_arrays` index-sum path</span>
+<span class="w">      </span><span class="c">!! the NetCDF reader uses — so tripolar metrics flow through the</span>
+<span class="w">      </span><span class="c">!! battle-tested supergrid assembly.  Call `metrics_finalize` after.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Logical layout: the i-direction wraps the full 360 deg of</span>
+<span class="w">      </span><span class="c">!! pseudo-longitude (lon_west .. lon_west+360); the j-direction goes</span>
+<span class="w">      </span><span class="c">!! from lat_south up.  Corner Bu(i,j) = SW corner of T(i,j) sits at</span>
+<span class="w">      </span><span class="c">!! geographic lon `lon_west + (i-ng-1)*dlon` BELOW the join.  The cap</span>
+<span class="w">      </span><span class="c">!! starts where the corner latitude exceeds `phi_join`; inside it the</span>
+<span class="w">      </span><span class="c">!! row fraction `s = (lat_lonlat - phi_join)/(lat_top - phi_join)` in</span>
+<span class="w">      </span><span class="c">!! [0,1] drives the bipolar map (s=0 reproduces the join ring exactly</span>
+<span class="w">      </span><span class="c">!! -&gt; C0 continuity; s=1 is the north-fold line).</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Decomposed tile (`nx_phys /= nx_global` or `ny_phys /= ny_global`):</span>
+<span class="w">      </span><span class="c">!! the cap map, the supergrid assembler's edge extrapolation and the</span>
+<span class="w">      </span><span class="c">!! fold/periodic ghost fill are all functions of the WHOLE grid, so a</span>
+<span class="w">      </span><span class="c">!! tile cannot be built from its local extents (it used to be — each</span>
+<span class="w">      </span><span class="c">!! rank then built a complete, wrong globe of its own size).  The</span>
+<span class="w">      </span><span class="c">!! tile is instead cut out of the undecomposed grid: the whole grid is</span>
+<span class="w">      </span><span class="c">!! assembled into a temporary `ocean_metrics_t` exactly as a single</span>
+<span class="w">      </span><span class="c">!! rank would, and the tile's storage window — ghost rows and columns</span>
+<span class="w">      </span><span class="c">!! included — is copied from it at the global offsets.  Every tile's</span>
+<span class="w">      </span><span class="c">!! metrics are then bit-identical to the matching slice of the</span>
+<span class="w">      </span><span class="c">!! single-rank grid, whatever the tile owns (a south neighbour's</span>
+<span class="w">      </span><span class="c">!! rows, the folded north ghosts, the periodic columns).  Cost: one</span>
+<span class="w">      </span><span class="c">!! transient global-size metric set per rank at configure time</span>
+<span class="w">      </span><span class="c">!! (~20 `(ni_global, nj_global)` arrays + the 4x supergrid) — fine</span>
+<span class="w">      </span><span class="c">!! for the north-south splits this serves; a distributed (px &gt; 1)</span>
+<span class="w">      </span><span class="c">!! hero-scale grid will want a tile-local construction instead.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_metrics_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">lon_west</span><span class="p">,</span><span class="w"> </span><span class="n">lat_south</span><span class="p">,</span><span class="w"> </span><span class="n">dlon_deg</span><span class="p">,</span><span class="w"> </span><span class="n">dlat_deg</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rad_earth</span><span class="p">,</span><span class="w"> </span><span class="n">phi_join</span><span class="p">,</span><span class="w"> </span><span class="n">lon_pole</span>
+
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">gwhole</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_metrics_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">mwhole</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">io</span><span class="p">,</span><span class="w"> </span><span class="n">jo</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">grid</span><span class="p">%</span><span class="n">nx_phys</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_global</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_phys</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_global</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">metrics_fill_tripolar_whole</span><span class="p">(</span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">lon_west</span><span class="p">,</span><span class="w"> </span><span class="n">lat_south</span><span class="p">,</span><span class="w"> </span><span class="n">dlat_deg</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                          </span><span class="n">rad_earth</span><span class="p">,</span><span class="w"> </span><span class="n">phi_join</span><span class="p">,</span><span class="w"> </span><span class="n">lon_pole</span><span class="p">)</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+
+<span class="k">      call </span><span class="n">gwhole</span><span class="p">%</span><span class="n">init</span><span class="p">(</span><span class="n">grid</span><span class="p">%</span><span class="n">nx_global</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_global</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">dx</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">dy</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">mwhole</span><span class="p">%</span><span class="n">init</span><span class="p">(</span><span class="n">gwhole</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">metrics_fill_tripolar_whole</span><span class="p">(</span><span class="n">mwhole</span><span class="p">,</span><span class="w"> </span><span class="n">gwhole</span><span class="p">,</span><span class="w"> </span><span class="n">lon_west</span><span class="p">,</span><span class="w"> </span><span class="n">lat_south</span><span class="p">,</span><span class="w"> </span><span class="n">dlat_deg</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">rad_earth</span><span class="p">,</span><span class="w"> </span><span class="n">phi_join</span><span class="p">,</span><span class="w"> </span><span class="n">lon_pole</span><span class="p">)</span>
+<span class="w">      </span><span class="n">io</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">i_offset_global</span>
+<span class="w">      </span><span class="n">jo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">j_offset_global</span>
+<span class="w">      </span><span class="k">call </span><span class="n">metrics_window_all</span><span class="p">(</span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">mwhole</span><span class="p">,</span><span class="w"> </span><span class="n">io</span><span class="p">,</span><span class="w"> </span><span class="n">jo</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">mwhole</span><span class="p">%</span><span class="n">destroy</span><span class="p">()</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">metrics_fill_tripolar</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-09 01:37 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

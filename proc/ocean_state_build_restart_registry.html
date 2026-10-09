@@ -1,0 +1,1541 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>ocean_state_build_restart_registry &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>ocean_state_build_restart_registry
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.3% of total for procedures.">181 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_state.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_state.f90.html'>rdb_ocean_state.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_state.html'>rdb_ocean_state</a></li>
+            <li class="breadcrumb-item active" aria-current="page">ocean_state_build_restart_registry</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/ocean_state_build_restart_registry.html#variable-it~53">it</a>
+            <a class="list-group-item" href="../proc/ocean_state_build_restart_registry.html#variable-tag~23">tag</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/ocean_state_build_restart_registry.html#src">ocean_state_build_restart_registry</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine ocean_state_build_restart_registry(state, grid, reg)  
+</h2>
+    
+
+    <p>Walk the ocean god state and register every field that must
+checkpoint for a bit-exact step-(N+1) resume (ROADMAP A1).</p>
+<p>Registered (always):
+  barotropic prognostics h, u_face_x, v_face_y;
+  multilayer prognostics h_layer, u/v_face_x/y_layer, every
+  tracers(:)%hTr (registry-of-registries — iterate the tracer
+  registry so passive tracers join automatically).
+Registered (conditionally — only when the slot&rsquo;s persistent
+  array is allocated):
+  vmix%bl_depth — KPP&rsquo;s lagged BL-depth seed; the V_t² wstar3
+    term reads the PREVIOUS step&rsquo;s value, so a restart between
+    steps reads it stale unless checkpointed.  Allocated
+    unconditionally (alloc tracks slot existence, not whether the
+    closure is active), so it always registers.
+  epbl%mld + epbl%kd_int, kshear%kd_int + kshear%tke_int.
+    These refresh only at thermo cadence but are <em>merged every
+    stage</em>, so a restart between refreshes reads them stale.
+    Also allocated unconditionally — register-always; the
+    enable-state itself is fixed at config and validated by the
+    schema metadata, so a flipped flag is a fresh run, not a
+    resume (flags cannot flip mid-run).
+  ml_rho_layer — diagnosed each stage from S/T, BUT when
+    <code>dt_therm_ratio &gt; 1</code> it is NOT recomputed on the slow steps
+    that skip the EOS, so the value carried into the next step
+    depends on the last thermo step.  Cheapest correct fix:
+    checkpoint it (review #2).
+  bc%eta_old_chapman_{w,e,s,n} — Chapman radiation persistent
+    corner state (host scalars).  bc%tres_* tracer reservoirs —
+    registered when allocated (device-mapped, so they join the
+    update-self walk).</p>
+<p>Deliberately EXCLUDED:
+  sf%Q_heat / sf%Q_salt with the surface-flux component set OFF
+    (default) — configure-static: re-seeded from <code>&amp;ocean_thermo_nml
+    q_heat / q_salt</code> on every resume, and the sea-ice couplers&rsquo;
+    contributions are folded back in from the registered
+    <code>ice_salt_flux_diag</code> / <code>ice_heat_flux_diag</code> / <code>ice_sw_thru_diag</code>
+    (<code>engine_setup</code>), exactly the sums the couplers form.  With the
+    component set ON they ARE registered (<code>sf_Q_heat</code>/<code>sf_Q_salt</code>,
+    see below): <code>ocean_surface_flux_assemble</code> rebuilds them at the
+    END of each thermo step, and every step until the next one
+    reads that assembly &ndash; carried state, with SST-dependent terms
+    no configure-time re-assembly could reproduce.
+  RK saves (h_layer0, hTr0, <em><em>layer0) + bt accumulators
+    (bt_eta/ubt/&hellip;) — step-internal scratch, re-zeroed at the
+    top of every outer step (restart is step-aligned).
+  bt_H_ref — recomputed from <code>b</code> by configure_ocean_bt_split;
+    <code>b</code> is bathymetry (static), reconstructed at config time.
+  metrics%z_draft / cover_frac / p_ice_ref — the ice-shelf cavity
+    statics (<code>&amp;ocean_cavity_dyn_nml</code>) fall under the SAME rule,
+    and for the same reason: the draft is a PRESCRIBED, static
+    geometry, rebuilt at configure by <code>seed_cavity_draft</code> from
+    the namelist before the restart read runs, exactly as <code>b</code> and
+    <code>bt_H_ref</code> are.  Checkpointing it would create the
+    file-vs-namelist ambiguity the derived-field exclusion exists
+    to avoid (does a saved draft beat an edited namelist?), and a
+    resume whose draft disagreed with its datum would be
+    silently wrong — <code>bt_H_ref = b − z_draft</code> ties the two
+    together, so they must be rebuilt together or not at all.
+    A TIME-VARYING draft (a coupled ice sheet) is a different
+    field with a different owner and would register itself, the
+    same way a time-varying surface-flux component must.
+  vcoord target_h / z_ref — recomputed per step (z_ref rebuilt
+    from <code>b</code> in the seed); never prognostic.
+  w_interface, mass_flux</em></em> — diagnosed each stage from the
+    prognostics before first use.
+  diag accumulators — MEAN/MAX windows RESET on restart by
+    design (documented); the bit-exact gate covers the
+    prognostic trajectory, not mid-window diag aggregates.</p>
+<p>The dead <code>ocean_obc_t</code> scaffold (<code>state%obc</code>) is NOT registered:
+it is never enabled, never device-mapped, and has no enter_data —
+registering it (and issuing <code>update self</code> on its host-only
+buffers) was a latent GPU crash (review #3/#8).  When OBC lands,
+it registers its own live persistent state here.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-state~13"></span>
+              type(<a href='../type/ocean_state_t.html'>ocean_state_t</a>),
+            </td>
+<td>intent(in),</td>
+              <td></td>            <td>
+              target
+            </td>
+            <td>::</td>
+            <td><strong>state</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~260"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-reg~3"></span>
+              type(<a href='../type/restart_registry_t.html'>restart_registry_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>reg</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ocean_state_build_restart_registry~~CallsGraph Pages: 1 -->
+<svg id="prococean_state_build_restart_registryCallsGraph" width="641pt" height="208pt"
+ viewBox="0.00 0.00 641.00 207.89" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_state_build_restart_registry~~CallsGraph" class="graph" transform="scale(0.82 0.82) rotate(0) translate(4 250.26)">
+<title>proc~~ocean_state_build_restart_registry~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-250.26 780,-250.26 780,4 -4,4"/>
+<!-- proc~ocean_state_build_restart_registry -->
+<g id="proc~~ocean_state_build_restart_registry~~CallsGraph_node1" class="node">
+<title>proc~ocean_state_build_restart_registry</title>
+<polygon fill="none" stroke="black" points="193,-144 0,-144 0,-120 193,-120 193,-144"/>
+<text text-anchor="middle" x="96.5" y="-129.6" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_state_build_restart_registry</text>
+</g>
+<!-- proc~register_full_3d -->
+<g id="proc~~ocean_state_build_restart_registry~~CallsGraph_node2" class="node">
+<title>proc~register_full_3d</title>
+<g id="a_proc~~ocean_state_build_restart_registry~~CallsGraph_node2"><a xlink:href="../proc/register_full_3d.html" xlink:title="register_full_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="367.5,-104 273.5,-104 273.5,-80 367.5,-80 367.5,-104"/>
+<text text-anchor="middle" x="320.5" y="-89.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">register_full_3d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_build_restart_registry&#45;&gt;proc~register_full_3d -->
+<g id="proc~~ocean_state_build_restart_registry~~CallsGraph_edge1" class="edge">
+<title>proc~ocean_state_build_restart_registry&#45;&gt;proc~register_full_3d</title>
+<path fill="none" stroke="#ff0000" d="M164.11,-120C195.78,-114.29 233.22,-107.55 263.41,-102.11"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="264.14,-105.53 273.36,-100.31 262.9,-98.64 264.14,-105.53"/>
+</g>
+<!-- proc~register_full_3d_opt -->
+<g id="proc~~ocean_state_build_restart_registry~~CallsGraph_node3" class="node">
+<title>proc~register_full_3d_opt</title>
+<g id="a_proc~~ocean_state_build_restart_registry~~CallsGraph_node3"><a xlink:href="../proc/register_full_3d_opt.html" xlink:title="register_full_3d_opt">
+<polygon fill="#d9534f" stroke="#d9534f" points="378.5,-184 262.5,-184 262.5,-160 378.5,-160 378.5,-184"/>
+<text text-anchor="middle" x="320.5" y="-169.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">register_full_3d_opt</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_build_restart_registry&#45;&gt;proc~register_full_3d_opt -->
+<g id="proc~~ocean_state_build_restart_registry~~CallsGraph_edge2" class="edge">
+<title>proc~ocean_state_build_restart_registry&#45;&gt;proc~register_full_3d_opt</title>
+<path fill="none" stroke="#ff0000" d="M164.11,-144C191.98,-149.02 224.31,-154.85 252.25,-159.88"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="251.87,-163.37 262.33,-161.7 253.11,-156.48 251.87,-163.37"/>
+</g>
+<!-- proc~registry_clear -->
+<g id="proc~~ocean_state_build_restart_registry~~CallsGraph_node4" class="node">
+<title>proc~registry_clear</title>
+<g id="a_proc~~ocean_state_build_restart_registry~~CallsGraph_node4"><a xlink:href="../proc/registry_clear.html" xlink:title="restart_registry_t%registry_clear">
+<polygon fill="#d9534f" stroke="#d9534f" points="412,-24 229,-24 229,0 412,0 412,-24"/>
+<text text-anchor="middle" x="320.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">restart_registry_t%registry_clear</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_build_restart_registry&#45;&gt;proc~registry_clear -->
+<g id="proc~~ocean_state_build_restart_registry~~CallsGraph_edge3" class="edge">
+<title>proc~ocean_state_build_restart_registry&#45;&gt;proc~registry_clear</title>
+<path fill="none" stroke="#ff0000" d="M111.08,-119.85C133.88,-100.04 182,-60.71 229,-38 237.63,-33.83 247.05,-30.21 256.46,-27.1"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="257.71,-30.37 266.21,-24.04 255.62,-23.69 257.71,-30.37"/>
+</g>
+<!-- proc~registry_register_2d -->
+<g id="proc~~ocean_state_build_restart_registry~~CallsGraph_node5" class="node">
+<title>proc~registry_register_2d</title>
+<g id="a_proc~~ocean_state_build_restart_registry~~CallsGraph_node5"><a xlink:href="../proc/registry_register_2d.html" xlink:title="restart_registry_t%registry_register_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="672.5,-204 457.5,-204 457.5,-180 672.5,-180 672.5,-204"/>
+<text text-anchor="middle" x="565" y="-189.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">restart_registry_t%registry_register_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_build_restart_registry&#45;&gt;proc~registry_register_2d -->
+<g id="proc~~ocean_state_build_restart_registry~~CallsGraph_edge4" class="edge">
+<title>proc~ocean_state_build_restart_registry&#45;&gt;proc~registry_register_2d</title>
+<path fill="none" stroke="#ff0000" d="M116.6,-144.12C141.38,-159.06 186.48,-183.62 229,-193 300.7,-208.82 383.15,-208.79 448.32,-204.7"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="448.88,-208.17 458.62,-204.01 448.41,-201.19 448.88,-208.17"/>
+</g>
+<!-- proc~registry_register_3d -->
+<g id="proc~~ocean_state_build_restart_registry~~CallsGraph_node6" class="node">
+<title>proc~registry_register_3d</title>
+<g id="a_proc~~ocean_state_build_restart_registry~~CallsGraph_node6"><a xlink:href="../proc/registry_register_3d.html" xlink:title="restart_registry_t%registry_register_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="672.5,-162 457.5,-162 457.5,-138 672.5,-138 672.5,-162"/>
+<text text-anchor="middle" x="565" y="-147.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">restart_registry_t%registry_register_3d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_build_restart_registry&#45;&gt;proc~registry_register_3d -->
+<g id="proc~~ocean_state_build_restart_registry~~CallsGraph_edge5" class="edge">
+<title>proc~ocean_state_build_restart_registry&#45;&gt;proc~registry_register_3d</title>
+<path fill="none" stroke="#ff0000" d="M193.03,-135.69C266.5,-138.52 368.38,-142.45 446.78,-145.48"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="447.07,-148.99 457.19,-145.88 447.34,-142 447.07,-148.99"/>
+</g>
+<!-- proc~registry_register_scalar -->
+<g id="proc~~ocean_state_build_restart_registry~~CallsGraph_node7" class="node">
+<title>proc~registry_register_scalar</title>
+<g id="a_proc~~ocean_state_build_restart_registry~~CallsGraph_node7"><a xlink:href="../proc/registry_register_scalar.html" xlink:title="restart_registry_t%registry_register_scalar">
+<polygon fill="#d9534f" stroke="#d9534f" points="682,-120 448,-120 448,-96 682,-96 682,-120"/>
+<text text-anchor="middle" x="565" y="-105.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">restart_registry_t%registry_register_scalar</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_build_restart_registry&#45;&gt;proc~registry_register_scalar -->
+<g id="proc~~ocean_state_build_restart_registry~~CallsGraph_edge6" class="edge">
+<title>proc~ocean_state_build_restart_registry&#45;&gt;proc~registry_register_scalar</title>
+<path fill="none" stroke="#ff0000" d="M116.6,-119.88C141.38,-104.94 186.48,-80.38 229,-71 329.88,-48.74 450.95,-74.78 516.38,-93.09"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="515.82,-96.57 526.39,-95.95 517.74,-89.84 515.82,-96.57"/>
+</g>
+<!-- to_string -->
+<g id="proc~~ocean_state_build_restart_registry~~CallsGraph_node8" class="node">
+<title>to_string</title>
+<polygon fill="#777777" stroke="#777777" points="776,-204 718,-204 718,-180 776,-180 776,-204"/>
+<text text-anchor="middle" x="747" y="-189.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">to_string</text>
+</g>
+<!-- proc~ocean_state_build_restart_registry&#45;&gt;to_string -->
+<g id="proc~~ocean_state_build_restart_registry~~CallsGraph_edge7" class="edge">
+<title>proc~ocean_state_build_restart_registry&#45;&gt;to_string</title>
+<path fill="none" stroke="#ff0000" d="M111.22,-144.12C133.85,-163.2 181.27,-199.48 229,-213 422.71,-267.87 483.19,-244.78 682,-213 690.63,-211.62 699.68,-209.26 708.16,-206.6"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="709.42,-209.87 717.81,-203.39 707.21,-203.23 709.42,-209.87"/>
+</g>
+<!-- proc~register_full_3d&#45;&gt;proc~registry_register_3d -->
+<g id="proc~~ocean_state_build_restart_registry~~CallsGraph_edge8" class="edge">
+<title>proc~register_full_3d&#45;&gt;proc~registry_register_3d</title>
+<path fill="none" stroke="#ff0000" d="M363.9,-104.02C379.09,-108.37 396.33,-113.35 412,-118 428.04,-122.75 431.74,-125.06 448,-129 458.36,-131.51 469.3,-133.87 480.16,-136.03"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="479.6,-139.49 490.09,-137.96 480.94,-132.62 479.6,-139.49"/>
+</g>
+<!-- proc~register_full_3d_opt&#45;&gt;proc~registry_register_3d -->
+<g id="proc~~ocean_state_build_restart_registry~~CallsGraph_edge9" class="edge">
+<title>proc~register_full_3d_opt&#45;&gt;proc~registry_register_3d</title>
+<path fill="none" stroke="#ffda00" d="M378.66,-166.81C399.25,-164.95 423.29,-162.77 447.11,-160.6"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="447.65,-164.07 457.29,-159.68 447.01,-157.1 447.65,-164.07"/>
+</g>
+<!-- proc~registry_register_2d&#45;&gt;to_string -->
+<g id="proc~~ocean_state_build_restart_registry~~CallsGraph_edge11" class="edge">
+<title>proc~registry_register_2d&#45;&gt;to_string</title>
+<path fill="none" stroke="#00ff91" d="M672.53,-192C685.05,-192 697.14,-192 707.76,-192"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="707.86,-195.5 717.86,-192 707.86,-188.5 707.86,-195.5"/>
+</g>
+<!-- error -->
+<g id="proc~~ocean_state_build_restart_registry~~CallsGraph_node9" class="node">
+<title>error</title>
+<polygon fill="#777777" stroke="#777777" points="774,-162 720,-162 720,-138 774,-138 774,-162"/>
+<text text-anchor="middle" x="747" y="-147.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error</text>
+</g>
+<!-- proc~registry_register_2d&#45;&gt;error -->
+<g id="proc~~ocean_state_build_restart_registry~~CallsGraph_edge10" class="edge">
+<title>proc~registry_register_2d&#45;&gt;error</title>
+<path fill="none" stroke="#00ff91" d="M641.21,-179.95C654.85,-177.32 668.91,-174.32 682,-171 691.24,-168.66 701.09,-165.68 710.21,-162.71"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="711.4,-166 719.77,-159.51 709.18,-159.36 711.4,-166"/>
+</g>
+<!-- proc~registry_register_3d&#45;&gt;to_string -->
+<g id="proc~~ocean_state_build_restart_registry~~CallsGraph_edge13" class="edge">
+<title>proc~registry_register_3d&#45;&gt;to_string</title>
+<path fill="none" stroke="#0091ff" d="M641.21,-162.05C654.85,-164.68 668.91,-167.68 682,-171 690.56,-173.17 699.63,-175.88 708.17,-178.63"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="707.3,-182.03 717.89,-181.85 709.5,-175.38 707.3,-182.03"/>
+</g>
+<!-- proc~registry_register_3d&#45;&gt;error -->
+<g id="proc~~ocean_state_build_restart_registry~~CallsGraph_edge12" class="edge">
+<title>proc~registry_register_3d&#45;&gt;error</title>
+<path fill="none" stroke="#0091ff" d="M672.53,-150C685.87,-150 698.72,-150 709.83,-150"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="709.91,-153.5 719.91,-150 709.91,-146.5 709.91,-153.5"/>
+</g>
+<!-- proc~registry_register_scalar&#45;&gt;to_string -->
+<g id="proc~~ocean_state_build_restart_registry~~CallsGraph_edge15" class="edge">
+<title>proc~registry_register_scalar&#45;&gt;to_string</title>
+<path fill="none" stroke="#4800ff" d="M662.49,-120.07C669.29,-122.54 675.87,-125.49 682,-129 703.33,-141.23 700.06,-154.19 718,-171 718.92,-171.86 719.88,-172.73 720.86,-173.58"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="718.68,-176.32 728.64,-179.91 723.09,-170.89 718.68,-176.32"/>
+</g>
+<!-- proc~registry_register_scalar&#45;&gt;error -->
+<g id="proc~~ocean_state_build_restart_registry~~CallsGraph_edge14" class="edge">
+<title>proc~registry_register_scalar&#45;&gt;error</title>
+<path fill="none" stroke="#4800ff" d="M641.21,-120.05C654.85,-122.68 668.91,-125.68 682,-129 691.24,-131.34 701.09,-134.32 710.21,-137.29"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="709.18,-140.64 719.77,-140.49 711.4,-134 709.18,-140.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprococean_state_build_restart_registryCallsGraph = svgPanZoom('#prococean_state_build_restart_registryCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ocean_state_build_restart_registry~~CalledByGraph Pages: 1 -->
+<svg id="prococean_state_build_restart_registryCalledByGraph" width="641pt" height="73pt"
+ viewBox="0.00 0.00 641.00 73.47" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_state_build_restart_registry~~CalledByGraph" class="graph" transform="scale(0.63 0.63) rotate(0) translate(4 112)">
+<title>proc~~ocean_state_build_restart_registry~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-112 1008,-112 1008,4 -4,4"/>
+<!-- proc~ocean_state_build_restart_registry -->
+<g id="proc~~ocean_state_build_restart_registry~~CalledByGraph_node1" class="node">
+<title>proc~ocean_state_build_restart_registry</title>
+<polygon fill="none" stroke="black" points="1004,-67 811,-67 811,-43 1004,-43 1004,-67"/>
+<text text-anchor="middle" x="907.5" y="-52.6" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_state_build_restart_registry</text>
+</g>
+<!-- proc~ocean_state_restart_read -->
+<g id="proc~~ocean_state_build_restart_registry~~CalledByGraph_node2" class="node">
+<title>proc~ocean_state_restart_read</title>
+<g id="a_proc~~ocean_state_build_restart_registry~~CalledByGraph_node2"><a xlink:href="../proc/ocean_state_restart_read.html" xlink:title="ocean_state_restart_read">
+<polygon fill="#d9534f" stroke="#d9534f" points="745,-67 599,-67 599,-43 745,-43 745,-67"/>
+<text text-anchor="middle" x="672" y="-52.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_state_restart_read</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_restart_read&#45;&gt;proc~ocean_state_build_restart_registry -->
+<g id="proc~~ocean_state_build_restart_registry~~CalledByGraph_edge1" class="edge">
+<title>proc~ocean_state_restart_read&#45;&gt;proc~ocean_state_build_restart_registry</title>
+<path fill="none" stroke="#ff0000" d="M745.28,-55C762.88,-55 782.06,-55 800.86,-55"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="800.94,-58.5 810.94,-55 800.94,-51.5 800.94,-58.5"/>
+</g>
+<!-- proc~ocean_state_restart_write -->
+<g id="proc~~ocean_state_build_restart_registry~~CalledByGraph_node3" class="node">
+<title>proc~ocean_state_restart_write</title>
+<g id="a_proc~~ocean_state_build_restart_registry~~CalledByGraph_node3"><a xlink:href="../proc/ocean_state_restart_write.html" xlink:title="ocean_state_restart_write">
+<polygon fill="#d9534f" stroke="#d9534f" points="533,-108 385,-108 385,-84 533,-84 533,-108"/>
+<text text-anchor="middle" x="459" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_state_restart_write</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_restart_write&#45;&gt;proc~ocean_state_build_restart_registry -->
+<g id="proc~~ocean_state_build_restart_registry~~CalledByGraph_edge2" class="edge">
+<title>proc~ocean_state_restart_write&#45;&gt;proc~ocean_state_build_restart_registry</title>
+<path fill="none" stroke="#ff0000" d="M533.05,-93.33C597,-90.52 692.36,-85.2 775,-76 792.48,-74.05 811.18,-71.41 828.84,-68.66"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="829.77,-72.05 839.09,-67.02 828.67,-65.14 829.77,-72.05"/>
+</g>
+<!-- proc~ocean_state_restart_write_drop_field -->
+<g id="proc~~ocean_state_build_restart_registry~~CalledByGraph_node4" class="node">
+<title>proc~ocean_state_restart_write_drop_field</title>
+<g id="a_proc~~ocean_state_build_restart_registry~~CalledByGraph_node4"><a xlink:href="../proc/ocean_state_restart_write_drop_field.html" xlink:title="ocean_state_restart_write_drop_field">
+<polygon fill="#d9534f" stroke="#d9534f" points="775,-25 569,-25 569,-1 775,-1 775,-25"/>
+<text text-anchor="middle" x="672" y="-10.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_state_restart_write_drop_field</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_restart_write_drop_field&#45;&gt;proc~ocean_state_build_restart_registry -->
+<g id="proc~~ocean_state_build_restart_registry~~CalledByGraph_edge3" class="edge">
+<title>proc~ocean_state_restart_write_drop_field&#45;&gt;proc~ocean_state_build_restart_registry</title>
+<path fill="none" stroke="#ff0000" d="M739.91,-25.04C767.88,-30.07 800.54,-35.94 829.5,-41.15"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="829.12,-44.64 839.58,-42.96 830.36,-37.75 829.12,-44.64"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~ocean_state_build_restart_registry~~CalledByGraph_node5" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~ocean_state_build_restart_registry~~CalledByGraph_node5"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="332,-108 226,-108 226,-84 332,-84 332,-108"/>
+<text text-anchor="middle" x="279" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~ocean_state_restart_write -->
+<g id="proc~~ocean_state_build_restart_registry~~CalledByGraph_edge5" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~ocean_state_restart_write</title>
+<path fill="none" stroke="#00ff00" d="M332.44,-96C345.65,-96 360.15,-96 374.46,-96"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="374.83,-99.5 384.83,-96 374.83,-92.5 374.83,-99.5"/>
+</g>
+<!-- proc~engine_setup -->
+<g id="proc~~ocean_state_build_restart_registry~~CalledByGraph_node6" class="node">
+<title>proc~engine_setup</title>
+<g id="a_proc~~ocean_state_build_restart_registry~~CalledByGraph_node6"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="501,-66 417,-66 417,-42 501,-42 501,-66"/>
+<text text-anchor="middle" x="459" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_setup -->
+<g id="proc~~ocean_state_build_restart_registry~~CalledByGraph_edge8" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#00ffff" d="M331.01,-83.96C354.83,-78.34 383.12,-71.67 406.95,-66.05"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="407.93,-69.41 416.86,-63.71 406.32,-62.6 407.93,-69.41"/>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~ocean_state_restart_read -->
+<g id="proc~~ocean_state_build_restart_registry~~CalledByGraph_edge4" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~ocean_state_restart_read</title>
+<path fill="none" stroke="#ff0000" d="M501.18,-54.2C526.07,-54.31 558.69,-54.47 588.67,-54.61"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="588.71,-58.11 598.73,-54.66 588.74,-51.11 588.71,-58.11"/>
+</g>
+<!-- proc~complete_ocean_create -->
+<g id="proc~~ocean_state_build_restart_registry~~CalledByGraph_node7" class="node">
+<title>proc~complete_ocean_create</title>
+<g id="a_proc~~ocean_state_build_restart_registry~~CalledByGraph_node7"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="349,-66 209,-66 209,-42 349,-42 349,-66"/>
+<text text-anchor="middle" x="279" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_setup -->
+<g id="proc~~ocean_state_build_restart_registry~~CalledByGraph_edge7" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#00ffff" d="M349.07,-54C368.19,-54 388.6,-54 406.52,-54"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="406.76,-57.5 416.76,-54 406.76,-50.5 406.76,-57.5"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~ocean_state_build_restart_registry~~CalledByGraph_node8" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~ocean_state_build_restart_registry~~CalledByGraph_node8"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="120,-108 53,-108 53,-84 120,-84 120,-108"/>
+<text text-anchor="middle" x="86.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~ocean_state_build_restart_registry~~CalledByGraph_edge6" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M120.25,-96C146.45,-96 183.96,-96 215.83,-96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="215.95,-99.5 225.95,-96 215.95,-92.5 215.95,-99.5"/>
+</g>
+<!-- proc~driver_validate -->
+<g id="proc~~ocean_state_build_restart_registry~~CalledByGraph_node9" class="node">
+<title>proc~driver_validate</title>
+<g id="a_proc~~ocean_state_build_restart_registry~~CalledByGraph_node9"><a xlink:href="../proc/driver_validate.html" xlink:title="driver_validate">
+<polygon fill="#d9534f" stroke="#d9534f" points="325,-24 233,-24 233,0 325,0 325,-24"/>
+<text text-anchor="middle" x="279" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_validate</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_validate&#45;&gt;proc~engine_setup -->
+<g id="proc~~ocean_state_build_restart_registry~~CalledByGraph_edge9" class="edge">
+<title>proc~driver_validate&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#00ffff" d="M325.38,-22.71C350.29,-28.59 381.27,-35.89 407.02,-41.97"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="406.43,-45.43 416.97,-44.32 408.04,-38.61 406.43,-45.43"/>
+</g>
+<!-- proc~rdb_ocean_create_finalize -->
+<g id="proc~~ocean_state_build_restart_registry~~CalledByGraph_node10" class="node">
+<title>proc~rdb_ocean_create_finalize</title>
+<g id="a_proc~~ocean_state_build_restart_registry~~CalledByGraph_node10"><a xlink:href="../proc/rdb_ocean_create_finalize.html" xlink:title="rdb_ocean_create_finalize">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="162,-66 11,-66 11,-42 162,-42 162,-66"/>
+<text text-anchor="middle" x="86.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~ocean_state_build_restart_registry~~CalledByGraph_edge10" class="edge">
+<title>proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M162.24,-54C174.21,-54 186.64,-54 198.71,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="198.75,-57.5 208.75,-54 198.75,-50.5 198.75,-57.5"/>
+</g>
+<!-- proc~rdb_ocean_create_from_string -->
+<g id="proc~~ocean_state_build_restart_registry~~CalledByGraph_node11" class="node">
+<title>proc~rdb_ocean_create_from_string</title>
+<g id="a_proc~~ocean_state_build_restart_registry~~CalledByGraph_node11"><a xlink:href="../proc/rdb_ocean_create_from_string.html" xlink:title="rdb_ocean_create_from_string">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="173,-24 0,-24 0,0 173,0 173,-24"/>
+<text text-anchor="middle" x="86.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_from_string</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~ocean_state_build_restart_registry~~CalledByGraph_edge11" class="edge">
+<title>proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M142.09,-24.04C164.41,-28.96 190.39,-34.69 213.63,-39.81"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="212.88,-43.23 223.4,-41.96 214.39,-36.39 212.88,-43.23"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprococean_state_build_restart_registryCalledByGraph = svgPanZoom('#prococean_state_build_restart_registryCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-it~53"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>it</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tag~23"></span>
+              character(len=64),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tag</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">ocean_state_build_restart_registry</span><span class="p">(</span><span class="n">state</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">reg</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Walk the ocean god state and register every field that must</span>
+<span class="w">      </span><span class="c">!! checkpoint for a bit-exact step-(N+1) resume (ROADMAP A1).</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Registered (always):</span>
+<span class="w">      </span><span class="c">!!   barotropic prognostics h, u_face_x, v_face_y;</span>
+<span class="w">      </span><span class="c">!!   multilayer prognostics h_layer, u/v_face_x/y_layer, every</span>
+<span class="w">      </span><span class="c">!!   tracers(:)%hTr (registry-of-registries — iterate the tracer</span>
+<span class="w">      </span><span class="c">!!   registry so passive tracers join automatically).</span>
+<span class="w">      </span><span class="c">!! Registered (conditionally — only when the slot's persistent</span>
+<span class="w">      </span><span class="c">!!   array is allocated):</span>
+<span class="w">      </span><span class="c">!!   vmix%bl_depth — KPP's lagged BL-depth seed; the V_t² wstar3</span>
+<span class="w">      </span><span class="c">!!     term reads the PREVIOUS step's value, so a restart between</span>
+<span class="w">      </span><span class="c">!!     steps reads it stale unless checkpointed.  Allocated</span>
+<span class="w">      </span><span class="c">!!     unconditionally (alloc tracks slot existence, not whether the</span>
+<span class="w">      </span><span class="c">!!     closure is active), so it always registers.</span>
+<span class="w">      </span><span class="c">!!   epbl%mld + epbl%kd_int, kshear%kd_int + kshear%tke_int.</span>
+<span class="w">      </span><span class="c">!!     These refresh only at thermo cadence but are *merged every</span>
+<span class="w">      </span><span class="c">!!     stage*, so a restart between refreshes reads them stale.</span>
+<span class="w">      </span><span class="c">!!     Also allocated unconditionally — register-always; the</span>
+<span class="w">      </span><span class="c">!!     enable-state itself is fixed at config and validated by the</span>
+<span class="w">      </span><span class="c">!!     schema metadata, so a flipped flag is a fresh run, not a</span>
+<span class="w">      </span><span class="c">!!     resume (flags cannot flip mid-run).</span>
+<span class="w">      </span><span class="c">!!   ml_rho_layer — diagnosed each stage from S/T, BUT when</span>
+<span class="w">      </span><span class="c">!!     `dt_therm_ratio &gt; 1` it is NOT recomputed on the slow steps</span>
+<span class="w">      </span><span class="c">!!     that skip the EOS, so the value carried into the next step</span>
+<span class="w">      </span><span class="c">!!     depends on the last thermo step.  Cheapest correct fix:</span>
+<span class="w">      </span><span class="c">!!     checkpoint it (review #2).</span>
+<span class="w">      </span><span class="c">!!   bc%eta_old_chapman_{w,e,s,n} — Chapman radiation persistent</span>
+<span class="w">      </span><span class="c">!!     corner state (host scalars).  bc%tres_* tracer reservoirs —</span>
+<span class="w">      </span><span class="c">!!     registered when allocated (device-mapped, so they join the</span>
+<span class="w">      </span><span class="c">!!     update-self walk).</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Deliberately EXCLUDED:</span>
+<span class="w">      </span><span class="c">!!   sf%Q_heat / sf%Q_salt with the surface-flux component set OFF</span>
+<span class="w">      </span><span class="c">!!     (default) — configure-static: re-seeded from `&amp;ocean_thermo_nml</span>
+<span class="w">      </span><span class="c">!!     q_heat / q_salt` on every resume, and the sea-ice couplers'</span>
+<span class="w">      </span><span class="c">!!     contributions are folded back in from the registered</span>
+<span class="w">      </span><span class="c">!!     `ice_salt_flux_diag` / `ice_heat_flux_diag` / `ice_sw_thru_diag`</span>
+<span class="w">      </span><span class="c">!!     (`engine_setup`), exactly the sums the couplers form.  With the</span>
+<span class="w">      </span><span class="c">!!     component set ON they ARE registered (`sf_Q_heat`/`sf_Q_salt`,</span>
+<span class="w">      </span><span class="c">!!     see below): `ocean_surface_flux_assemble` rebuilds them at the</span>
+<span class="w">      </span><span class="c">!!     END of each thermo step, and every step until the next one</span>
+<span class="w">      </span><span class="c">!!     reads that assembly -- carried state, with SST-dependent terms</span>
+<span class="w">      </span><span class="c">!!     no configure-time re-assembly could reproduce.</span>
+<span class="w">      </span><span class="c">!!   RK saves (h_layer0, hTr0, *_layer0) + bt accumulators</span>
+<span class="w">      </span><span class="c">!!     (bt_eta/ubt/...) — step-internal scratch, re-zeroed at the</span>
+<span class="w">      </span><span class="c">!!     top of every outer step (restart is step-aligned).</span>
+<span class="w">      </span><span class="c">!!   bt_H_ref — recomputed from `b` by configure_ocean_bt_split;</span>
+<span class="w">      </span><span class="c">!!     `b` is bathymetry (static), reconstructed at config time.</span>
+<span class="w">      </span><span class="c">!!   metrics%z_draft / cover_frac / p_ice_ref — the ice-shelf cavity</span>
+<span class="w">      </span><span class="c">!!     statics (`&amp;ocean_cavity_dyn_nml`) fall under the SAME rule,</span>
+<span class="w">      </span><span class="c">!!     and for the same reason: the draft is a PRESCRIBED, static</span>
+<span class="w">      </span><span class="c">!!     geometry, rebuilt at configure by `seed_cavity_draft` from</span>
+<span class="w">      </span><span class="c">!!     the namelist before the restart read runs, exactly as `b` and</span>
+<span class="w">      </span><span class="c">!!     `bt_H_ref` are.  Checkpointing it would create the</span>
+<span class="w">      </span><span class="c">!!     file-vs-namelist ambiguity the derived-field exclusion exists</span>
+<span class="w">      </span><span class="c">!!     to avoid (does a saved draft beat an edited namelist?), and a</span>
+<span class="w">      </span><span class="c">!!     resume whose draft disagreed with its datum would be</span>
+<span class="w">      </span><span class="c">!!     silently wrong — `bt_H_ref = b − z_draft` ties the two</span>
+<span class="w">      </span><span class="c">!!     together, so they must be rebuilt together or not at all.</span>
+<span class="w">      </span><span class="c">!!     A TIME-VARYING draft (a coupled ice sheet) is a different</span>
+<span class="w">      </span><span class="c">!!     field with a different owner and would register itself, the</span>
+<span class="w">      </span><span class="c">!!     same way a time-varying surface-flux component must.</span>
+<span class="w">      </span><span class="c">!!   vcoord target_h / z_ref — recomputed per step (z_ref rebuilt</span>
+<span class="w">      </span><span class="c">!!     from `b` in the seed); never prognostic.</span>
+<span class="w">      </span><span class="c">!!   w_interface, mass_flux_* — diagnosed each stage from the</span>
+<span class="w">      </span><span class="c">!!     prognostics before first use.</span>
+<span class="w">      </span><span class="c">!!   diag accumulators — MEAN/MAX windows RESET on restart by</span>
+<span class="w">      </span><span class="c">!!     design (documented); the bit-exact gate covers the</span>
+<span class="w">      </span><span class="c">!!     prognostic trajectory, not mid-window diag aggregates.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! The dead `ocean_obc_t` scaffold (`state%obc`) is NOT registered:</span>
+<span class="w">      </span><span class="c">!! it is never enabled, never device-mapped, and has no enter_data —</span>
+<span class="w">      </span><span class="c">!! registering it (and issuing `update self` on its host-only</span>
+<span class="w">      </span><span class="c">!! buffers) was a latent GPU crash (review #3/#8).  When OBC lands,</span>
+<span class="w">      </span><span class="c">!! it registers its own live persistent state here.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">target</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">state</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">restart_registry_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">reg</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">it</span>
+<span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=</span><span class="mi">64</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">tag</span>
+
+<span class="w">      </span><span class="k">call </span><span class="n">reg</span><span class="p">%</span><span class="n">clear</span><span class="p">()</span>
+
+<span class="w">      </span><span class="c">! Ghost-cell policy (v1): the structured prognostic + closure</span>
+<span class="w">      </span><span class="c">! arrays are checkpointed as FULL local arrays (interior + ghosts),</span>
+<span class="w">      </span><span class="c">! registered with ng=0 over the total extent.  Rationale — three</span>
+<span class="w">      </span><span class="c">! kinds of ghost cell, distinguished for the MPI-readiness contract:</span>
+<span class="w">      </span><span class="c">!   * physical domain-edge (wall) ghosts are GENUINE owned boundary</span>
+<span class="w">      </span><span class="c">!     state — the slow-tendency operators (EOS / face-thickness /</span>
+<span class="w">      </span><span class="c">!     hvisc) read `h_layer` etc. at wall-adjacent ghost faces and</span>
+<span class="w">      </span><span class="c">!     there is NO stage-entry wall-mirror op to re-establish them,</span>
+<span class="w">      </span><span class="c">!     so owned-only loses information and breaks the bit-exact gate.</span>
+<span class="w">      </span><span class="c">!   * periodic / tripolar-fold seam ghosts are redundant — the</span>
+<span class="w">      </span><span class="c">!     stage-entry wrap (`ocean_periodic_wrap_state` / fold) rebuilds</span>
+<span class="w">      </span><span class="c">!     them from the interior every step; saving them is harmless.</span>
+<span class="w">      </span><span class="c">!   * inter-rank halo ghosts (E1, multi-rank) will be refilled by</span>
+<span class="w">      </span><span class="c">!     the halo exchange on resume; under the v1 SAME-decomp rule</span>
+<span class="w">      </span><span class="c">!     those columns round-trip identically anyway.</span>
+<span class="w">      </span><span class="c">! So a full-array write is bit-exact today and forward-compatible</span>
+<span class="w">      </span><span class="c">! with E1 (the halo columns simply get overwritten by exchange).</span>
+<span class="w">      </span><span class="c">! The owned-slice machinery in restart_entry_t is retained for the</span>
+<span class="w">      </span><span class="c">! ghostless edge buffers (OBC rings) and for a future owned-only</span>
+<span class="w">      </span><span class="c">! mode once a wall-ghost-rebuild op exists.</span>
+<span class="w">      </span><span class="c">! --- Barotropic prognostics ---</span>
+<span class="w">      </span><span class="k">call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"bt_h"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">barotropic</span><span class="p">%</span><span class="n">h</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">barotropic</span><span class="p">%</span><span class="n">h</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">barotropic</span><span class="p">%</span><span class="n">h</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">))</span>
+<span class="w">      </span><span class="k">call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"bt_u_face_x"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">barotropic</span><span class="p">%</span><span class="n">u_face_x</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">barotropic</span><span class="p">%</span><span class="n">u_face_x</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">barotropic</span><span class="p">%</span><span class="n">u_face_x</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">))</span>
+<span class="w">      </span><span class="k">call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"bt_v_face_y"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">barotropic</span><span class="p">%</span><span class="n">v_face_y</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">barotropic</span><span class="p">%</span><span class="n">v_face_y</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">barotropic</span><span class="p">%</span><span class="n">v_face_y</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">))</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">use_multilayer</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">         </span><span class="c">! --- Multilayer prognostics ---</span>
+<span class="w">         </span><span class="k">call </span><span class="n">register_full_3d</span><span class="p">(</span><span class="n">reg</span><span class="p">,</span><span class="w"> </span><span class="s2">"ml_h_layer"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">%</span><span class="n">h_layer</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">register_full_3d</span><span class="p">(</span><span class="n">reg</span><span class="p">,</span><span class="w"> </span><span class="s2">"ml_u_face_x_layer"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">%</span><span class="n">u_face_x_layer</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">register_full_3d</span><span class="p">(</span><span class="n">reg</span><span class="p">,</span><span class="w"> </span><span class="s2">"ml_v_face_y_layer"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">%</span><span class="n">v_face_y_layer</span><span class="p">)</span>
+
+<span class="w">         </span><span class="c">! --- Tracers (registry-of-registries) ---</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">%</span><span class="n">tracers</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            do </span><span class="n">it</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">%</span><span class="n">tracers</span><span class="p">)</span>
+<span class="w">               </span><span class="k">write</span><span class="w"> </span><span class="p">(</span><span class="n">tag</span><span class="p">,</span><span class="w"> </span><span class="s2">"(A,I0)"</span><span class="p">)</span><span class="w"> </span><span class="s2">"tracer_hTr_"</span><span class="p">,</span><span class="w"> </span><span class="n">it</span>
+<span class="w">               </span><span class="k">call </span><span class="n">register_full_3d</span><span class="p">(</span><span class="n">reg</span><span class="p">,</span><span class="w"> </span><span class="nb">trim</span><span class="p">(</span><span class="n">tag</span><span class="p">),</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">it</span><span class="p">)%</span><span class="n">hTr</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">         end if</span>
+<span class="w">         </span><span class="c">! --- pred_corr step time-means (SPEC S1).  Under</span>
+<span class="w">         </span><span class="c">!     `&amp;ocean_bt_nml split_scheme="pred_corr"` these are CARRIED</span>
+<span class="w">         </span><span class="c">!     STATE, not scratch: the predictor's Coriolis-advection and</span>
+<span class="w">         </span><span class="c">!     horizontal viscosity read u_av/v_av/h_av, and the dyn loop</span>
+<span class="w">         </span><span class="c">!     seeds them from the initial state only at</span>
+<span class="w">         </span><span class="c">!     `outer_step_count == 0`.  A resume restores outer_step_count</span>
+<span class="w">         </span><span class="c">!     from the file, so that seed does NOT re-fire -- without</span>
+<span class="w">         </span><span class="c">!     checkpointing them the first post-restart predictor reads</span>
+<span class="w">         </span><span class="c">!     the allocation zeros (a zero-thickness h_av) and the resume</span>
+<span class="w">         </span><span class="c">!     is not bit-exact.  Caught by `restart_bit_exact_*` the day</span>
+<span class="w">         </span><span class="c">!     pred_corr became the default.  `optional=.true.`: a pre-flip</span>
+<span class="w">         </span><span class="c">!     checkpoint has no such variables and must still resume --</span>
+<span class="w">         </span><span class="c">!     it will be an ssp_rk2 file, where they are unread.</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">%</span><span class="n">u_av_layer</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_3d</span><span class="p">(</span><span class="s2">"ml_u_av_layer"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">%</span><span class="n">u_av_layer</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">%</span><span class="n">u_av_layer</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">%</span><span class="n">u_av_layer</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">%</span><span class="n">v_av_layer</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_3d</span><span class="p">(</span><span class="s2">"ml_v_av_layer"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">%</span><span class="n">v_av_layer</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">%</span><span class="n">v_av_layer</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">%</span><span class="n">v_av_layer</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">%</span><span class="n">h_av_layer</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_3d</span><span class="p">(</span><span class="s2">"ml_h_av_layer"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">%</span><span class="n">h_av_layer</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">%</span><span class="n">h_av_layer</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">%</span><span class="n">h_av_layer</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="w">         </span><span class="c">! --- pred_corr carried viscous tendency.  The predictor does NOT</span>
+<span class="w">         </span><span class="c">!     recompute the lateral viscosity: it reuses the previous</span>
+<span class="w">         </span><span class="c">!     step's corrector `du_visc`/`dv_visc` (MOM6 `diffu(u[n-1])`,</span>
+<span class="w">         </span><span class="c">!     `rdb_ocean_dyn`'s `is_pred` gate), so these buffers are</span>
+<span class="w">         </span><span class="c">!     CARRIED STATE under pred_corr, not scratch.  Unregistered,</span>
+<span class="w">         </span><span class="c">!     the first post-restart predictor read the device-zeroed</span>
+<span class="w">         </span><span class="c">!     payload -- one step with no lateral viscosity in any column</span>
+<span class="w">         </span><span class="c">!     -- and the resume was not bit-exact (found on the 1/4-degree</span>
+<span class="w">         </span><span class="c">!     Southern Ocean, 2026-10-01; the restart gate ran inviscid).</span>
+<span class="w">         </span><span class="c">!     Under ssp_rk2 they are recomputed before every read, so</span>
+<span class="w">         </span><span class="c">!     restoring them is inert.  `optional=.true.`: an older</span>
+<span class="w">         </span><span class="c">!     checkpoint still resumes, with the old one-step defect.</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">hvisc</span><span class="p">%</span><span class="n">du_visc</span><span class="p">%</span><span class="k">data</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">register_full_3d_opt</span><span class="p">(</span><span class="n">reg</span><span class="p">,</span><span class="w"> </span><span class="s2">"hvisc_du_visc"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">hvisc</span><span class="p">%</span><span class="n">du_visc</span><span class="p">%</span><span class="k">data</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">hvisc</span><span class="p">%</span><span class="n">dv_visc</span><span class="p">%</span><span class="k">data</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">register_full_3d_opt</span><span class="p">(</span><span class="n">reg</span><span class="p">,</span><span class="w"> </span><span class="s2">"hvisc_dv_visc"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">hvisc</span><span class="p">%</span><span class="n">dv_visc</span><span class="p">%</span><span class="k">data</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! --- rho_layer (review #2): diagnosed each stage, but NOT</span>
+<span class="w">      </span><span class="c">!     recomputed on dt_therm-skipped slow steps, so the value</span>
+<span class="w">      </span><span class="c">!     carried forward is thermo-step-dependent.  Checkpoint it. ---</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">use_multilayer</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">%</span><span class="n">rho_layer</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">register_full_3d</span><span class="p">(</span><span class="n">reg</span><span class="p">,</span><span class="w"> </span><span class="s2">"ml_rho_layer"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">%</span><span class="n">rho_layer</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="w">      </span><span class="c">! --- KPP lagged BL-depth seed (review #1): the V_t² wstar3_lagged</span>
+<span class="w">      </span><span class="c">!     term reads the previous step's bl_depth.  Allocated</span>
+<span class="w">      </span><span class="c">!     unconditionally; required for a bit-exact KPP resume. ---</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bl_depth</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"vmix_bl_depth"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bl_depth</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bl_depth</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">bl_depth</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">))</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="w">      </span><span class="c">! --- PR-2 (bt-rem-from-av-rem): vmix%kv, closing the REAL root cause</span>
+<span class="w">      </span><span class="c">!     of compat row `restart_visc_rem`.  `visc_rem_precompute` runs</span>
+<span class="w">      </span><span class="c">!     at the START of every pred_corr stage (MOM6-order parity,</span>
+<span class="w">      </span><span class="c">!     PGF_BUG.md §9), BEFORE that stage's own `vmix_apply_in_stage`</span>
+<span class="w">      </span><span class="c">!     recomputes `vmix%kv` -- so it always reads the PREVIOUS</span>
+<span class="w">      </span><span class="c">!     stage's `kv`, one stage stale by design (mirrors MOM6:</span>
+<span class="w">      </span><span class="c">!     `vertvisc_coef`'s `visc%Kv_slow`/the shear-viscosity input is</span>
+<span class="w">      </span><span class="c">!     likewise carried across the predictor/corrector boundary, and</span>
+<span class="w">      </span><span class="c">!     MOM6 checkpoints exactly this class of field --</span>
+<span class="w">      </span><span class="c">!     `set_visc_register_restarts`</span>
+<span class="w">      </span><span class="c">!     registers `Kv_shear`/`Kd_shear`/`Kv_shear_Bu`/`MLD` for the</span>
+<span class="w">      </span><span class="c">!     same "read before recomputed" reason).  Unregistered, a warm</span>
+<span class="w">      </span><span class="c">!     restart re-seeds `kv` from the COLD background value</span>
+<span class="w">      </span><span class="c">!     (`vmix_seed_backgrounds`, `pp81_nu_bg`) rather than the</span>
+<span class="w">      </span><span class="c">!     spun-up profile, so the first resumed stage's visc_rem matrix</span>
+<span class="w">      </span><span class="c">!     (hence `F_bt`'s weighting under `bt_forcing_visc_rem`/</span>
+<span class="w">      </span><span class="c">!     `bt_renorm_visc_rem`, and `bt_rem_from_visc_rem`'s av_rem/</span>
+<span class="w">      </span><span class="c">!     bt_rem) differs from the continued run --</span>
+<span class="w">      </span><span class="c">!     every prognostic then drifts (measured 1e-11 relative by step</span>
+<span class="w">      </span><span class="c">!     24, `tests/regression/compat_expect.py::restart_visc_rem`).</span>
+<span class="w">      </span><span class="c">!     `kv` is allocated UNCONDITIONALLY by `ocean_vmix_init`</span>
+<span class="w">      </span><span class="c">!     (every vmix consumer shares it, not just visc_rem), so this</span>
+<span class="w">      </span><span class="c">!     registers on every run, not just visc_rem-chain ones --</span>
+<span class="w">      </span><span class="c">!     cheap and simple beats a consumer-flag gate here: one extra</span>
+<span class="w">      </span><span class="c">!     `(nx, ny, nz+1)` field, the same class of cost as</span>
+<span class="w">      </span><span class="c">!     `epbl_kd_int` two lines below.  `optional=.true.`: a</span>
+<span class="w">      </span><span class="c">!     pre-PR-2 checkpoint has no such field and must still resume</span>
+<span class="w">      </span><span class="c">!     (re-seeding `kv` cold, the pre-existing one-stage-stale</span>
+<span class="w">      </span><span class="c">!     defect, same compat posture as `bt_visc_rem_u/v` above). ---</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">kv</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">register_full_3d_opt</span><span class="p">(</span><span class="n">reg</span><span class="p">,</span><span class="w"> </span><span class="s2">"vmix_kv"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">kv</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="w">      </span><span class="c">! --- EPBL prev-MLD seed + kd_int (merged every stage) ---</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">epbl</span><span class="p">%</span><span class="n">mld</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"epbl_mld"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">epbl</span><span class="p">%</span><span class="n">mld</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">epbl</span><span class="p">%</span><span class="n">mld</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">epbl</span><span class="p">%</span><span class="n">mld</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">))</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">epbl</span><span class="p">%</span><span class="n">kd_int</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">register_full_3d</span><span class="p">(</span><span class="n">reg</span><span class="p">,</span><span class="w"> </span><span class="s2">"epbl_kd_int"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">epbl</span><span class="p">%</span><span class="n">kd_int</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="w">      </span><span class="c">! --- MEKE prognostic eddy-energy field (capability [5]): without</span>
+<span class="w">      </span><span class="c">!     this it would cold-reset to 0 each restart, losing the spun-up</span>
+<span class="w">      </span><span class="c">!     eddy field.  Allocated whenever the multilayer path is on. ---</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">meke</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"meke"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">meke</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">meke</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">meke</span><span class="p">%</span><span class="n">meke</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">))</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="w">      </span><span class="c">! --- Gent-McWilliams carried state.  The GM operator runs AFTER the</span>
+<span class="w">      </span><span class="c">!     dynamics of step n (`run_gm_step`) and leaves its PE release</span>
+<span class="w">      </span><span class="c">!     `gm_src`, which MEKE reads at the top of step n+1: carried, so</span>
+<span class="w">      </span><span class="c">!     a resume between the two must restore it (without it the first</span>
+<span class="w">      </span><span class="c">!     resumed MEKE step sourced from a cold GM work, ~3 % off at step</span>
+<span class="w">      </span><span class="c">!     24).  With `dt_therm_ratio &gt; 1` the GM operator also runs on</span>
+<span class="w">      </span><span class="c">!     the steps BETWEEN thermo refreshes, reading the slopes and the</span>
+<span class="w">      </span><span class="c">!     VarMix(+MEKE) base KhTh the last thermo step left — carried as</span>
+<span class="w">      </span><span class="c">!     well (at ratio 1 they are recomputed before every read, so</span>
+<span class="w">      </span><span class="c">!     restoring them is inert).  Registered on EVERY GM run: this</span>
+<span class="w">      </span><span class="c">!     registry is built for the read BEFORE `configure_ocean_vmix`</span>
+<span class="w">      </span><span class="c">!     sets `dyn%dt_therm_ratio`, so the ratio cannot gate it (a</span>
+<span class="w">      </span><span class="c">!     ratio-gated registration wrote them and never read them back —</span>
+<span class="w">      </span><span class="c">!     `restart_engine_bit_exact_gm_meke_varmix_therm2`).  All</span>
+<span class="w">      </span><span class="c">!     optional: a checkpoint written before they were registered</span>
+<span class="w">      </span><span class="c">!     still resumes, with the old one-step defect. ---</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">gm</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">gm</span><span class="p">%</span><span class="n">gm_src</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"gm_src"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">gm</span><span class="p">%</span><span class="n">gm_src</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">gm</span><span class="p">%</span><span class="n">gm_src</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">gm</span><span class="p">%</span><span class="n">gm_src</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">slopes</span><span class="p">%</span><span class="n">slope_x</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">register_full_3d_opt</span><span class="p">(</span><span class="n">reg</span><span class="p">,</span><span class="w"> </span><span class="s2">"slopes_slope_x"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">slopes</span><span class="p">%</span><span class="n">slope_x</span><span class="p">)</span>
+<span class="w">            </span><span class="k">call </span><span class="n">register_full_3d_opt</span><span class="p">(</span><span class="n">reg</span><span class="p">,</span><span class="w"> </span><span class="s2">"slopes_slope_y"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">slopes</span><span class="p">%</span><span class="n">slope_y</span><span class="p">)</span>
+<span class="w">            </span><span class="k">call </span><span class="n">register_full_3d_opt</span><span class="p">(</span><span class="n">reg</span><span class="p">,</span><span class="w"> </span><span class="s2">"slopes_n2_u"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">slopes</span><span class="p">%</span><span class="n">n2_u</span><span class="p">)</span>
+<span class="w">            </span><span class="k">call </span><span class="n">register_full_3d_opt</span><span class="p">(</span><span class="n">reg</span><span class="p">,</span><span class="w"> </span><span class="s2">"slopes_n2_v"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">slopes</span><span class="p">%</span><span class="n">n2_v</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">khth_u</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"varmix_khth_u"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">khth_u</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">khth_u</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">khth_u</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">            </span><span class="k">call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"varmix_khth_v"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">khth_v</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">khth_v</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">varmix</span><span class="p">%</span><span class="n">khth_v</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! --- Wet/dry hysteresis mask (docs/ocean_wetdry_plan.md): persistent</span>
+<span class="w">      </span><span class="c">!     front state (wet/dry/held-in-band).  optional — a restart</span>
+<span class="w">      </span><span class="c">!     written before the knob existed re-seeds from depth at</span>
+<span class="w">      </span><span class="c">!     configure instead of failing. ---</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">bt_work</span><span class="p">%</span><span class="n">wd_wet_dyn</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"wd_wet_dyn"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">bt_work</span><span class="p">%</span><span class="n">wd_wet_dyn</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">bt_work</span><span class="p">%</span><span class="n">wd_wet_dyn</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">bt_work</span><span class="p">%</span><span class="n">wd_wet_dyn</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="w">      </span><span class="c">! --- PR-1 viscous remnant γ (`bt_work%visc_rem_u/v`): REFRESHED,</span>
+<span class="w">      </span><span class="c">!     not re-derived from scratch, by the stage-end vdiff producer</span>
+<span class="w">      </span><span class="c">!     (`bt_visc_rem_producer`, D1 follow-up -- decoupled from the</span>
+<span class="w">      </span><span class="c">!     retired `bt_correction_visc_rem`) and the pre-substep</span>
+<span class="w">      </span><span class="c">!     `visc_rem_precompute` (`forcing_visc_rem`/`renorm_visc_rem`/</span>
+<span class="w">      </span><span class="c">!     `bt_rem_from_visc_rem`) -- a cold resume without this</span>
+<span class="w">      </span><span class="c">!     checkpoint would restart every post-restart stage from the</span>
+<span class="w">      </span><span class="c">!     `source=1.0` init value, which is one stage's worth of</span>
+<span class="w">      </span><span class="c">!     refresh behind a continued run (consumers read the PREVIOUS</span>
+<span class="w">      </span><span class="c">!     stage's γ by design -- see `bt_visc_rem_producer`'s</span>
+<span class="w">      </span><span class="c">!     docstring in `rdb_barotropic_workstate`).  Allocated</span>
+<span class="w">      </span><span class="c">!     unconditionally by</span>
+<span class="w">      </span><span class="c">!     `barotropic_workstate_t%init`.  `optional=.true.`: a pre-PR-1</span>
+<span class="w">      </span><span class="c">!     checkpoint has no such variables and must still resume -- it</span>
+<span class="w">      </span><span class="c">!     re-seeds at 1.0, same as a cold start (closes compat row</span>
+<span class="w">      </span><span class="c">!     `restart_visc_rem`). ---</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">bt_work</span><span class="p">%</span><span class="n">visc_rem_u</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">register_full_3d_opt</span><span class="p">(</span><span class="n">reg</span><span class="p">,</span><span class="w"> </span><span class="s2">"bt_visc_rem_u"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">bt_work</span><span class="p">%</span><span class="n">visc_rem_u</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">bt_work</span><span class="p">%</span><span class="n">visc_rem_v</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">register_full_3d_opt</span><span class="p">(</span><span class="n">reg</span><span class="p">,</span><span class="w"> </span><span class="s2">"bt_visc_rem_v"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">bt_work</span><span class="p">%</span><span class="n">visc_rem_v</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="w">      </span><span class="c">! --- Sea-ice frazil bank (PR 1): un-spent supercooling heat the ice</span>
+<span class="w">      </span><span class="c">!     model (PR 3) will consume.  PERSISTENT (accumulates across</span>
+<span class="w">      </span><span class="c">!     steps), so a restart must carry it or banked energy would be</span>
+<span class="w">      </span><span class="c">!     silently discarded.  optional — only ice-on runs write it, and</span>
+<span class="w">      </span><span class="c">!     an ice-on resume from an older checkpoint re-seeds 0. ---</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">frazil_heat</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"ice_frazil_heat"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">frazil_heat</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">frazil_heat</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">frazil_heat</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="w">      </span><span class="c">! --- Sea-ice PR 3b: brine-rejection flux diag.  `salt_flux_diag` is</span>
+<span class="w">      </span><span class="c">!     REQUIRED for restart-exact Q_salt refill: `rdb_ice_ocean_coupler`</span>
+<span class="w">      </span><span class="c">!     rebuilds Q_salt from this field every thermo step, and the</span>
+<span class="w">      </span><span class="c">!     driver's configure-time resume fold re-applies it so the first</span>
+<span class="w">      </span><span class="c">!     post-resume window sees the same flux the uninterrupted run</span>
+<span class="w">      </span><span class="c">!     would have (Q_salt itself is configure-static and NOT</span>
+<span class="w">      </span><span class="c">!     registered).  `m_frozen_diag` is registered alongside for</span>
+<span class="w">      </span><span class="c">!     post-resume diagnostic continuity only.  optional — an</span>
+<span class="w">      </span><span class="c">!     ice-on resume from a pre-3b checkpoint re-seeds 0 (a one-window</span>
+<span class="w">      </span><span class="c">!     cold-start of the brine flux) rather than failing.</span>
+<span class="w">      </span><span class="c">!</span>
+<span class="w">      </span><span class="c">!     PR 3c extends the same contract to the melt side:</span>
+<span class="w">      </span><span class="c">!     `heat_flux_diag` is REQUIRED for restart-exact Q_heat refill</span>
+<span class="w">      </span><span class="c">!     (mirrors `salt_flux_diag` — `ice_ocean_heat_flux` rebuilds</span>
+<span class="w">      </span><span class="c">!     Q_heat from it every thermo step, and the driver resume fold</span>
+<span class="w">      </span><span class="c">!     re-applies it); `m_melt_diag` is diagnostic-continuity only,</span>
+<span class="w">      </span><span class="c">!     like `m_frozen_diag`.  PR 31 extends the same required-refill</span>
+<span class="w">      </span><span class="c">!     contract to `sw_thru_diag` — `ice_ocean_sw_flux` rebuilds the</span>
+<span class="w">      </span><span class="c">!     ocean shortwave from it every thermo step and the driver resume</span>
+<span class="w">      </span><span class="c">!     fold re-applies it, so it is registered alongside</span>
+<span class="w">      </span><span class="c">!     `heat_flux_diag`.  The coupleable atmospheric-forcing seam</span>
+<span class="w">      </span><span class="c">!     (`atm_sf0`/`atm_dsfdt`/`atm_sw_dn`) and the column-driver</span>
+<span class="w">      </span><span class="c">!     scratch (`fb`/`sst_seam`/`ssurf_seam`/`tfw_seam`/`tsurf_out`/</span>
+<span class="w">      </span><span class="c">!     `h2o_ocn_to_ice`/`h2o_ice_to_ocn`/`heat_to_ocn`/`sw_thru`) are</span>
+<span class="w">      </span><span class="c">!     ALL recomputed every thermo step — deliberately NOT</span>
+<span class="w">      </span><span class="c">!     registered (the per-category `sw_thru` stays unregistered; only</span>
+<span class="w">      </span><span class="c">!     its per-cell reduction `sw_thru_diag` is carried). ---</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">m_frozen_diag</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"ice_m_frozen_diag"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">m_frozen_diag</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">m_frozen_diag</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">m_frozen_diag</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">salt_flux_diag</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"ice_salt_flux_diag"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">salt_flux_diag</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">salt_flux_diag</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">salt_flux_diag</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">m_melt_diag</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"ice_m_melt_diag"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">m_melt_diag</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">m_melt_diag</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">m_melt_diag</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">heat_flux_diag</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"ice_heat_flux_diag"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">heat_flux_diag</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">heat_flux_diag</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">heat_flux_diag</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">sw_thru_diag</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"ice_sw_thru_diag"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">sw_thru_diag</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">sw_thru_diag</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">sw_thru_diag</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="w">      </span><span class="c">! --- Ice-shelf cavity basal melt (P2b): the TWO OWNED surface-flux</span>
+<span class="w">      </span><span class="c">!     components.  These ARE registered, and the exclusion rule</span>
+<span class="w">      </span><span class="c">!     above says exactly why: `Q_heat`/`Q_salt` are derived views</span>
+<span class="w">      </span><span class="c">!     and stay out, but "any filler that makes a COMPONENT</span>
+<span class="w">      </span><span class="c">!     time-varying MUST register it".  The melt rate is a function</span>
+<span class="w">      </span><span class="c">!     of the live state, so `heat_cavity`/`salt_cavity` are</span>
+<span class="w">      </span><span class="c">!     time-varying — and they are written at the END of outer step</span>
+<span class="w">      </span><span class="c">!     N and integrated on step N+1 (the ice coupler's documented</span>
+<span class="w">      </span><span class="c">!     one-step lag), so without them a warm restart would apply</span>
+<span class="w">      </span><span class="c">!     zero melt for its first step.  `optional=.true.`: an older</span>
+<span class="w">      </span><span class="c">!     checkpoint resumes with the zero seed rather than failing.</span>
+<span class="w">      </span><span class="c">!     The slot's own arrays (`cavity_flux%melt`, `t_b`, ...) are</span>
+<span class="w">      </span><span class="c">!     NOT registered — they are recomputed from state before first</span>
+<span class="w">      </span><span class="c">!     use, the same derived-field rule as `mass_flux_*`.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">surface_flux</span><span class="p">%</span><span class="n">heat_cavity</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"sf_heat_cavity"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">surface_flux</span><span class="p">%</span><span class="n">heat_cavity</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">surface_flux</span><span class="p">%</span><span class="n">heat_cavity</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">surface_flux</span><span class="p">%</span><span class="n">heat_cavity</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">surface_flux</span><span class="p">%</span><span class="n">salt_cavity</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"sf_salt_cavity"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">surface_flux</span><span class="p">%</span><span class="n">salt_cavity</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">surface_flux</span><span class="p">%</span><span class="n">salt_cavity</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">surface_flux</span><span class="p">%</span><span class="n">salt_cavity</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="w">      </span><span class="c">! --- Assembled net surface fluxes under the component set.  With</span>
+<span class="w">      </span><span class="c">!     `use_components` the assembler derives Q_heat/Q_salt at the END</span>
+<span class="w">      </span><span class="c">!     of each thermo step and the following steps read them, so they</span>
+<span class="w">      </span><span class="c">!     are carried state (an end-of-window checkpoint is read by the</span>
+<span class="w">      </span><span class="c">!     very next step); `sf_q_assembled` says the arrays hold an</span>
+<span class="w">      </span><span class="c">!     assembly (engine_setup then resumes them instead of the</span>
+<span class="w">      </span><span class="c">!     configure seed + ice fold, which sum the same terms in a</span>
+<span class="w">      </span><span class="c">!     different order and miss every non-ice component).  Optional:</span>
+<span class="w">      </span><span class="c">!     an older checkpoint resumes with the seed + fold as before.</span>
+<span class="w">      </span><span class="c">!     `set_components` runs BEFORE the restart read in engine_setup,</span>
+<span class="w">      </span><span class="c">!     so these (and sf_heat_cavity/sf_salt_cavity above) exist when</span>
+<span class="w">      </span><span class="c">!     the read walks the registry. ---</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">surface_flux</span><span class="p">%</span><span class="n">use_components</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"sf_Q_heat"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">surface_flux</span><span class="p">%</span><span class="n">Q_heat</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">surface_flux</span><span class="p">%</span><span class="n">Q_heat</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">surface_flux</span><span class="p">%</span><span class="n">Q_heat</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"sf_Q_salt"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">surface_flux</span><span class="p">%</span><span class="n">Q_salt</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">surface_flux</span><span class="p">%</span><span class="n">Q_salt</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">surface_flux</span><span class="p">%</span><span class="n">Q_salt</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_scalar</span><span class="p">(</span><span class="s2">"sf_q_assembled"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">surface_flux</span><span class="p">%</span><span class="n">q_assembled</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="w">      </span><span class="c">! --- Sea-ice PR 5: C-grid EVP dynamics prognostics.  u_ice/v_ice</span>
+<span class="w">      </span><span class="c">!     become PROGNOSTIC under dynamics=.true. (previously a v1</span>
+<span class="w">      </span><span class="c">!     interim sampler output — cheap to always register).</span>
+<span class="w">      </span><span class="c">!     str_d/str_t/str_s are the H&amp;D stress tensor components;</span>
+<span class="w">      </span><span class="c">!     fxoc/fyoc are carried for DIAGNOSTIC CONTINUITY only (PR 63 —</span>
+<span class="w">      </span><span class="c">!     see below, they are no longer what makes tau_x/tau_y</span>
+<span class="w">      </span><span class="c">!     restart-exact).  All optional: a resume from a pre-5</span>
+<span class="w">      </span><span class="c">!     checkpoint re-seeds 0 (a one-window cold-start of the ice</span>
+<span class="w">      </span><span class="c">!     velocity/stress) rather than failing.  tau_a_x/tau_a_y are</span>
+<span class="w">      </span><span class="c">!     deliberately NOT registered (configure-time snapshot, rebuilt</span>
+<span class="w">      </span><span class="c">!     fresh from the wind-stress config on every run).</span>
+<span class="w">      </span><span class="c">!</span>
+<span class="w">      </span><span class="c">!     PR 63: tau_ocn_x/tau_ocn_y + tau_ocn_valid are what make the</span>
+<span class="w">      </span><span class="c">!     ice-&gt;ocean tau MEDIATION restart-exact.  ice_ocean_stress_flux</span>
+<span class="w">      </span><span class="c">!     mirrors its own blended output into tau_ocn_x/y every outer</span>
+<span class="w">      </span><span class="c">!     step; ice_ocean_stress_resume_apply COPIES them into</span>
+<span class="w">      </span><span class="c">!     surface_stress%tau_x/y at configure (after the wind re-seed),</span>
+<span class="w">      </span><span class="c">!     replacing the old deleted resume-fold RECONSTRUCT routine</span>
+<span class="w">      </span><span class="c">!     (which used the checkpoint's POST-thermo ci — wrong whenever a</span>
+<span class="w">      </span><span class="c">!     checkpoint step's thermo/transport changed ci after the blend,</span>
+<span class="w">      </span><span class="c">!     F4).  fxoc/fyoc above are no longer load-bearing for this: they</span>
+<span class="w">      </span><span class="c">!     are write-only-within-a-call accumulators</span>
+<span class="w">      </span><span class="c">!     (`ice_evp_dynamics` zeros them at entry), so the resume fold</span>
+<span class="w">      </span><span class="c">!     was their only cross-step-boundary reader — that reader is</span>
+<span class="w">      </span><span class="c">!     gone now.  tau_ocn_valid is register_scalar (device_mapped</span>
+<span class="w">      </span><span class="c">!     forced .false.) and gated on the SAME allocated(...) check as</span>
+<span class="w">      </span><span class="c">!     the arrays, so an ocean-only restart file never grows this</span>
+<span class="w">      </span><span class="c">!     variable. ---</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">u_ice</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"ice_u_ice"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">u_ice</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">u_ice</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">u_ice</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">v_ice</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"ice_v_ice"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">v_ice</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">v_ice</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">v_ice</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">str_d</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"ice_str_d"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">str_d</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">str_d</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">str_d</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">str_t</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"ice_str_t"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">str_t</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">str_t</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">str_t</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">str_s</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"ice_str_s"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">str_s</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">str_s</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">str_s</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">fxoc</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"ice_fxoc"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">fxoc</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">fxoc</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">fxoc</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">fyoc</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"ice_fyoc"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">fyoc</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">fyoc</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">fyoc</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="w">      </span><span class="c">! PR 63: the ice-&gt;ocean tau mediation seam (see the comment block</span>
+<span class="w">      </span><span class="c">! above).  The allocated(...) gate is mandatory for all THREE</span>
+<span class="w">      </span><span class="c">! entries, including the scalar — tau_ocn_valid lives on the type</span>
+<span class="w">      </span><span class="c">! whether or not the ice slot is live; gating it on the array's</span>
+<span class="w">      </span><span class="c">! allocation (rather than registering it unconditionally) keeps an</span>
+<span class="w">      </span><span class="c">! ocean-only restart file free of a stray ice_tau_ocn_valid</span>
+<span class="w">      </span><span class="c">! variable.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">tau_ocn_x</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"ice_tau_ocn_x"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">tau_ocn_x</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">tau_ocn_x</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">tau_ocn_x</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_2d</span><span class="p">(</span><span class="s2">"ice_tau_ocn_y"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">tau_ocn_y</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">tau_ocn_y</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">tau_ocn_y</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_scalar</span><span class="p">(</span><span class="s2">"ice_tau_ocn_valid"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">tau_ocn_valid</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="w">      </span><span class="c">! --- Sea-ice Winton column prognostics (PR 3a): part_size, m_ice,</span>
+<span class="w">      </span><span class="c">!     m_snow are rank-3 (register directly); enth_ice/sal_ice</span>
+<span class="w">      </span><span class="c">!     (rank-4, per-k bottom-up) and enth_snow (rank-4, nk=1) are</span>
+<span class="w">      </span><span class="c">!     registered as per-k rank-3 slices — the registry is</span>
+<span class="w">      </span><span class="c">!     rank-2/3 only.  All optional: a resume from a pre-3a</span>
+<span class="w">      </span><span class="c">!     checkpoint warns-and-seeds the init values (part_size all</span>
+<span class="w">      </span><span class="c">!     open water, m_ice/m_snow/enth_* = 0, sal_ice =</span>
+<span class="w">      </span><span class="c">!     ICE_BULK_SALINITY) rather than failing. ---</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">part_size</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_3d</span><span class="p">(</span><span class="s2">"ice_part_size"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">part_size</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">part_size</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">part_size</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">m_ice</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_3d</span><span class="p">(</span><span class="s2">"ice_m_ice"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">m_ice</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">m_ice</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">m_ice</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">m_snow</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_3d</span><span class="p">(</span><span class="s2">"ice_m_snow"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">m_snow</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">m_snow</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">m_snow</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">enth_ice</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         do </span><span class="n">it</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">enth_ice</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">)</span>
+<span class="w">            </span><span class="k">call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_3d</span><span class="p">(</span><span class="s2">"ice_enth_ice_k"</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">it</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">enth_ice</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="n">it</span><span class="p">),</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">enth_ice</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">enth_ice</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">      end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">sal_ice</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         do </span><span class="n">it</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">sal_ice</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">)</span>
+<span class="w">            </span><span class="k">call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_3d</span><span class="p">(</span><span class="s2">"ice_sal_ice_k"</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">it</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">sal_ice</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="n">it</span><span class="p">),</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">sal_ice</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">sal_ice</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">      end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">enth_snow</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         do </span><span class="n">it</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">enth_snow</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">)</span>
+<span class="w">            </span><span class="k">call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_3d</span><span class="p">(</span><span class="s2">"ice_enth_snow_k"</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">it</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">enth_snow</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="n">it</span><span class="p">),</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">enth_snow</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                 </span><span class="n">size</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">ice</span><span class="p">%</span><span class="n">enth_snow</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! --- Kappa-shear kd_int / tke_int (merged every stage) ---</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">kshear</span><span class="p">%</span><span class="n">kd_int</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">register_full_3d</span><span class="p">(</span><span class="n">reg</span><span class="p">,</span><span class="w"> </span><span class="s2">"kshear_kd_int"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">kshear</span><span class="p">%</span><span class="n">kd_int</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">kshear</span><span class="p">%</span><span class="n">tke_int</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">register_full_3d</span><span class="p">(</span><span class="n">reg</span><span class="p">,</span><span class="w"> </span><span class="s2">"kshear_tke_int"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">kshear</span><span class="p">%</span><span class="n">tke_int</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="w">      </span><span class="c">! --- Kappa-shear VERTEX corner diffusivity (c069 restart fix):</span>
+<span class="w">      </span><span class="c">!     `kd_corner` is the Pass-B -&gt; Pass-C carrier `kappa_shear_compute`</span>
+<span class="w">      </span><span class="c">!     writes and `vdiff_apply_momentum`'s `kv_corner_source` reads --</span>
+<span class="w">      </span><span class="c">!     but it is only refreshed at STAGE 1 of a thermo step</span>
+<span class="w">      </span><span class="c">!     (`vmix_apply_in_stage`, "stage-invariant by design"), while</span>
+<span class="w">      </span><span class="c">!     `visc_rem_precompute` -- called at the START of every stage,</span>
+<span class="w">      </span><span class="c">!     BEFORE that refresh -- reads it on EVERY stage, including</span>
+<span class="w">      </span><span class="c">!     stage 1 itself (MOM6-order parity, PGF_BUG.md Sec.9:</span>
+<span class="w">      </span><span class="c">!     `vertvisc_coef` runs before `btstep`).  On a continued run</span>
+<span class="w">      </span><span class="c">!     stage 1's `visc_rem_precompute` sees the PREVIOUS step's</span>
+<span class="w">      </span><span class="c">!     converged `kd_corner`, still live in process memory.  On a</span>
+<span class="w">      </span><span class="c">!     warm restart `kd_corner` is a plain workspace -- allocated</span>
+<span class="w">      </span><span class="c">!     zero by `init_vertex`, never written before the first resumed</span>
+<span class="w">      </span><span class="c">!     stage's `visc_rem_precompute` call -- so that FIRST call</span>
+<span class="w">      </span><span class="c">!     silently drops the vertex kappa-shear's corner viscosity from</span>
+<span class="w">      </span><span class="c">!     the remnant matrix, perturbing `bt_visc_rem_u/v` at the</span>
+<span class="w">      </span><span class="c">!     `kappa_trunc` scale (~1e-9) and from there every consumer of</span>
+<span class="w">      </span><span class="c">!     the BT-correction weighting (compat row c069).  `optional</span>
+<span class="w">      </span><span class="c">!     =.true.`: a pre-fix checkpoint has no such field and must</span>
+<span class="w">      </span><span class="c">!     still resume (re-seeding `kd_corner` at 0 for the first</span>
+<span class="w">      </span><span class="c">!     stage only, same as the pre-existing defect). ---</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">kshear</span><span class="p">%</span><span class="n">kd_corner</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">register_full_3d_opt</span><span class="p">(</span><span class="n">reg</span><span class="p">,</span><span class="w"> </span><span class="s2">"kshear_kd_corner"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">kshear</span><span class="p">%</span><span class="n">kd_corner</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="w">      </span><span class="c">! --- Live persistent BC state (review #3) ---</span>
+<span class="w">      </span><span class="c">! Chapman radiation corner scalars: host-side, always present.</span>
+<span class="w">      </span><span class="k">call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_scalar</span><span class="p">(</span><span class="s2">"bc_eta_old_chapman_w"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">bc</span><span class="p">%</span><span class="n">eta_old_chapman_w</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_scalar</span><span class="p">(</span><span class="s2">"bc_eta_old_chapman_e"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">bc</span><span class="p">%</span><span class="n">eta_old_chapman_e</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_scalar</span><span class="p">(</span><span class="s2">"bc_eta_old_chapman_s"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">bc</span><span class="p">%</span><span class="n">eta_old_chapman_s</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">reg</span><span class="p">%</span><span class="n">register_scalar</span><span class="p">(</span><span class="s2">"bc_eta_old_chapman_n"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">bc</span><span class="p">%</span><span class="n">eta_old_chapman_n</span><span class="p">)</span>
+<span class="w">      </span><span class="c">! Tracer reservoirs: rank-3 (edge, layer, tracer); device-mapped</span>
+<span class="w">      </span><span class="c">! when allocated, so they join the update-self walk by default.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">bc</span><span class="p">%</span><span class="n">tres_west</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">register_full_3d</span><span class="p">(</span><span class="n">reg</span><span class="p">,</span><span class="w"> </span><span class="s2">"bc_tres_west"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">bc</span><span class="p">%</span><span class="n">tres_west</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">bc</span><span class="p">%</span><span class="n">tres_east</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">register_full_3d</span><span class="p">(</span><span class="n">reg</span><span class="p">,</span><span class="w"> </span><span class="s2">"bc_tres_east"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">bc</span><span class="p">%</span><span class="n">tres_east</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">bc</span><span class="p">%</span><span class="n">tres_south</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">register_full_3d</span><span class="p">(</span><span class="n">reg</span><span class="p">,</span><span class="w"> </span><span class="s2">"bc_tres_south"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">bc</span><span class="p">%</span><span class="n">tres_south</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">bc</span><span class="p">%</span><span class="n">tres_north</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">register_full_3d</span><span class="p">(</span><span class="n">reg</span><span class="p">,</span><span class="w"> </span><span class="s2">"bc_tres_north"</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">bc</span><span class="p">%</span><span class="n">tres_north</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">   end subroutine </span><span class="n">ocean_state_build_restart_registry</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-09 01:37 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

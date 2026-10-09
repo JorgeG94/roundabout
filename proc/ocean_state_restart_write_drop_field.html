@@ -1,0 +1,1218 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>ocean_state_restart_write_drop_field &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>ocean_state_restart_write_drop_field
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">35 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_state.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_state.f90.html'>rdb_ocean_state.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_state.html'>rdb_ocean_state</a></li>
+            <li class="breadcrumb-item active" aria-current="page">ocean_state_restart_write_drop_field</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/ocean_state_restart_write_drop_field.html#variable-e~15">e</a>
+            <a class="list-group-item" href="../proc/ocean_state_restart_write_drop_field.html#variable-found~7">found</a>
+            <a class="list-group-item" href="../proc/ocean_state_restart_write_drop_field.html#variable-meta~6">meta</a>
+            <a class="list-group-item" href="../proc/ocean_state_restart_write_drop_field.html#variable-reg~7">reg</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/ocean_state_restart_write_drop_field.html#src">ocean_state_restart_write_drop_field</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private  subroutine ocean_state_restart_write_drop_field(state, grid, decomp, filename, t, step, drop_tag, ierr)  
+</h2>
+    
+
+    <p>Test-only sibling of <code>ocean_state_restart_write</code>: identical,
+except the ONE registered entry whose tag matches <code>drop_tag</code> is
+written under a mangled tag instead of its real one, so a
+subsequent <code>ocean_state_restart_read</code>/<code>ocean_restart_read_local</code>
+&ndash; which looks up variables by their REAL tag &ndash; finds nothing
+and takes exactly the &ldquo;optional field absent&rdquo; path it takes for
+a genuinely older checkpoint.  <code>error stop</code>s if <code>drop_tag</code> does
+not match any registered entry (a typo here must not silently
+test nothing).</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-state~16"></span>
+              type(<a href='../type/ocean_state_t.html'>ocean_state_t</a>),
+            </td>
+<td>intent(inout),</td>
+              <td></td>            <td>
+              target
+            </td>
+            <td>::</td>
+            <td><strong>state</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~263"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-decomp~16"></span>
+              type(<a href='../type/decomp_t.html'>decomp_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>decomp</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-filename~16"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>filename</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t~48"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-step~21"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>step</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-drop_tag"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>drop_tag</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ierr~134"></span>
+              integer,
+            </td>
+<td>intent(out),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ierr</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ocean_state_restart_write_drop_field~~CallsGraph Pages: 1 -->
+<svg id="prococean_state_restart_write_drop_fieldCallsGraph" width="641pt" height="515pt"
+ viewBox="0.00 0.00 641.00 514.99" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph" class="graph" transform="scale(0.5 0.5) rotate(0) translate(4 1030)">
+<title>proc~~ocean_state_restart_write_drop_field~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-1030 1283,-1030 1283,4 -4,4"/>
+<!-- proc~ocean_state_restart_write_drop_field -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node1" class="node">
+<title>proc~ocean_state_restart_write_drop_field</title>
+<polygon fill="none" stroke="black" points="206,-750 0,-750 0,-726 206,-726 206,-750"/>
+<text text-anchor="middle" x="103" y="-735.6" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_state_restart_write_drop_field</text>
+</g>
+<!-- proc~ocean_restart_write_local -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node2" class="node">
+<title>proc~ocean_restart_write_local</title>
+<g id="a_proc~~ocean_state_restart_write_drop_field~~CallsGraph_node2"><a xlink:href="../proc/ocean_restart_write_local.html" xlink:title="ocean_restart_write_local">
+<polygon fill="#d9534f" stroke="#d9534f" points="412.5,-330 264.5,-330 264.5,-306 412.5,-306 412.5,-330"/>
+<text text-anchor="middle" x="338.5" y="-315.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_restart_write_local</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_restart_write_drop_field&#45;&gt;proc~ocean_restart_write_local -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge1" class="edge">
+<title>proc~ocean_state_restart_write_drop_field&#45;&gt;proc~ocean_restart_write_local</title>
+<path fill="none" stroke="#ff0000" d="M110.74,-725.88C143.23,-667.44 283.88,-414.45 325.72,-339.19"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="328.94,-340.61 330.74,-330.17 322.82,-337.21 328.94,-340.61"/>
+</g>
+<!-- proc~ocean_state_build_restart_registry -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node3" class="node">
+<title>proc~ocean_state_build_restart_registry</title>
+<g id="a_proc~~ocean_state_restart_write_drop_field~~CallsGraph_node3"><a xlink:href="../proc/ocean_state_build_restart_registry.html" xlink:title="ocean_state_build_restart_registry">
+<polygon fill="#d9534f" stroke="#d9534f" points="435,-887 242,-887 242,-863 435,-863 435,-887"/>
+<text text-anchor="middle" x="338.5" y="-872.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_state_build_restart_registry</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_restart_write_drop_field&#45;&gt;proc~ocean_state_build_restart_registry -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge2" class="edge">
+<title>proc~ocean_state_restart_write_drop_field&#45;&gt;proc~ocean_state_build_restart_registry</title>
+<path fill="none" stroke="#ff0000" d="M124.72,-750.16C166.35,-774.58 260.24,-829.67 308.16,-857.78"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="306.43,-860.83 316.82,-862.87 309.97,-854.79 306.43,-860.83"/>
+</g>
+<!-- proc~ocean_state_fill_restart_metadata -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node4" class="node">
+<title>proc~ocean_state_fill_restart_metadata</title>
+<g id="a_proc~~ocean_state_restart_write_drop_field~~CallsGraph_node4"><a xlink:href="../proc/ocean_state_fill_restart_metadata.html" xlink:title="ocean_state_fill_restart_metadata">
+<polygon fill="#d9534f" stroke="#d9534f" points="434.5,-750 242.5,-750 242.5,-726 434.5,-726 434.5,-750"/>
+<text text-anchor="middle" x="338.5" y="-735.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_state_fill_restart_metadata</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_restart_write_drop_field&#45;&gt;proc~ocean_state_fill_restart_metadata -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge3" class="edge">
+<title>proc~ocean_state_restart_write_drop_field&#45;&gt;proc~ocean_state_fill_restart_metadata</title>
+<path fill="none" stroke="#ff0000" d="M206.08,-738C214.72,-738 223.47,-738 232.14,-738"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="232.27,-741.5 242.27,-738 232.27,-734.5 232.27,-741.5"/>
+</g>
+<!-- error -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node5" class="node">
+<title>error</title>
+<polygon fill="#777777" stroke="#777777" points="1258,-786 1204,-786 1204,-762 1258,-762 1258,-786"/>
+<text text-anchor="middle" x="1231" y="-771.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error</text>
+</g>
+<!-- proc~ocean_restart_write_local&#45;&gt;error -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge4" class="edge">
+<title>proc~ocean_restart_write_local&#45;&gt;error</title>
+<path fill="none" stroke="#ff0000" d="M342.38,-330.2C352.4,-369.69 389.61,-494.82 471,-553 593.99,-640.92 654.82,-612 806,-612 806,-612 806,-612 996,-612 1094.46,-612 1181.42,-710.16 1215.13,-753.66"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1212.49,-755.97 1221.32,-761.82 1218.06,-751.74 1212.49,-755.97"/>
+</g>
+<!-- info -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node6" class="node">
+<title>info</title>
+<polygon fill="#777777" stroke="#777777" points="589.5,-66 535.5,-66 535.5,-42 589.5,-42 589.5,-66"/>
+<text text-anchor="middle" x="562.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">info</text>
+</g>
+<!-- proc~ocean_restart_write_local&#45;&gt;info -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge5" class="edge">
+<title>proc~ocean_restart_write_local&#45;&gt;info</title>
+<path fill="none" stroke="#ff0000" d="M342.58,-305.97C353.19,-266.97 392,-142.96 471,-80 486.39,-67.74 507.32,-61.26 525.17,-57.83"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="525.97,-61.25 535.26,-56.15 524.82,-54.34 525.97,-61.25"/>
+</g>
+<!-- nf90_def_var -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node7" class="node">
+<title>nf90_def_var</title>
+<polygon fill="#777777" stroke="#777777" points="603.5,-24 521.5,-24 521.5,0 603.5,0 603.5,-24"/>
+<text text-anchor="middle" x="562.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nf90_def_var</text>
+</g>
+<!-- proc~ocean_restart_write_local&#45;&gt;nf90_def_var -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge6" class="edge">
+<title>proc~ocean_restart_write_local&#45;&gt;nf90_def_var</title>
+<path fill="none" stroke="#ff0000" d="M341.24,-305.98C348.29,-261.93 378.87,-108 471,-33 482.27,-23.82 496.83,-18.5 510.95,-15.47"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="511.89,-18.85 521.11,-13.63 510.65,-11.96 511.89,-18.85"/>
+</g>
+<!-- nf90_put_var -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node8" class="node">
+<title>nf90_put_var</title>
+<polygon fill="#777777" stroke="#777777" points="603.5,-146 521.5,-146 521.5,-122 603.5,-122 603.5,-146"/>
+<text text-anchor="middle" x="562.5" y="-131.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nf90_put_var</text>
+</g>
+<!-- proc~ocean_restart_write_local&#45;&gt;nf90_put_var -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge7" class="edge">
+<title>proc~ocean_restart_write_local&#45;&gt;nf90_put_var</title>
+<path fill="none" stroke="#ff0000" d="M345.56,-305.88C361.51,-275.3 407.85,-194.59 471,-155 483.1,-147.42 497.65,-142.57 511.51,-139.47"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="512.3,-142.88 521.44,-137.5 510.95,-136.01 512.3,-142.88"/>
+</g>
+<!-- proc~error_ring_push -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node9" class="node">
+<title>proc~error_ring_push</title>
+<g id="a_proc~~ocean_state_restart_write_drop_field~~CallsGraph_node9"><a xlink:href="../proc/error_ring_push.html" xlink:title="error_ring_push">
+<polygon fill="#d9534f" stroke="#d9534f" points="1279,-226 1183,-226 1183,-202 1279,-202 1279,-226"/>
+<text text-anchor="middle" x="1231" y="-211.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error_ring_push</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_restart_write_local&#45;&gt;proc~error_ring_push -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge8" class="edge">
+<title>proc~ocean_restart_write_local&#45;&gt;proc~error_ring_push</title>
+<path fill="none" stroke="#ff0000" d="M342.96,-305.92C354.21,-269.13 393.59,-158.2 471,-113 535.39,-75.4 731.44,-94 806,-94 806,-94 806,-94 996,-94 1083.38,-94 1170.89,-161.07 1209.5,-194.93"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1207.19,-197.56 1216.98,-201.61 1211.86,-192.34 1207.19,-197.56"/>
+</g>
+<!-- proc~nc_check -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node10" class="node">
+<title>proc~nc_check</title>
+<g id="a_proc~~ocean_state_restart_write_drop_field~~CallsGraph_node10"><a xlink:href="../proc/nc_check.html" xlink:title="nc_check">
+<polygon fill="#d9534f" stroke="#d9534f" points="1026,-346 964,-346 964,-322 1026,-322 1026,-346"/>
+<text text-anchor="middle" x="995" y="-331.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nc_check</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_restart_write_local&#45;&gt;proc~nc_check -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge9" class="edge">
+<title>proc~ocean_restart_write_local&#45;&gt;proc~nc_check</title>
+<path fill="none" stroke="#ff0000" d="M412.67,-319.79C550.84,-323.17 845.92,-330.38 953.6,-333.01"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="953.64,-336.51 963.72,-333.26 953.81,-329.52 953.64,-336.51"/>
+</g>
+<!-- proc~nc_close -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node11" class="node">
+<title>proc~nc_close</title>
+<g id="a_proc~~ocean_state_restart_write_drop_field~~CallsGraph_node11"><a xlink:href="../proc/nc_close.html" xlink:title="nc_close">
+<polygon fill="#d9534f" stroke="#d9534f" points="836,-188 778,-188 778,-164 836,-164 836,-188"/>
+<text text-anchor="middle" x="807" y="-173.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nc_close</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_restart_write_local&#45;&gt;proc~nc_close -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge10" class="edge">
+<title>proc~ocean_restart_write_local&#45;&gt;proc~nc_close</title>
+<path fill="none" stroke="#ff0000" d="M354.24,-305.95C377.52,-287.57 424.92,-252.8 471,-235 498.44,-224.4 686.06,-194.56 767.93,-181.85"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="768.49,-185.31 777.83,-180.32 767.42,-178.39 768.49,-185.31"/>
+</g>
+<!-- proc~nc_create_file -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node12" class="node">
+<title>proc~nc_create_file</title>
+<g id="a_proc~~ocean_state_restart_write_drop_field~~CallsGraph_node12"><a xlink:href="../proc/nc_create_file.html" xlink:title="nc_create_file">
+<polygon fill="#d9534f" stroke="#d9534f" points="605.5,-464 519.5,-464 519.5,-440 605.5,-440 605.5,-464"/>
+<text text-anchor="middle" x="562.5" y="-449.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nc_create_file</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_restart_write_local&#45;&gt;proc~nc_create_file -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge11" class="edge">
+<title>proc~ocean_restart_write_local&#45;&gt;proc~nc_create_file</title>
+<path fill="none" stroke="#ff0000" d="M359.02,-330.21C384.63,-346.19 431.01,-374.98 471,-399 491.2,-411.14 514.11,-424.55 531.83,-434.85"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="530.17,-437.93 540.57,-439.92 533.68,-431.88 530.17,-437.93"/>
+</g>
+<!-- proc~nc_def_dim -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node13" class="node">
+<title>proc~nc_def_dim</title>
+<g id="a_proc~~ocean_state_restart_write_drop_field~~CallsGraph_node13"><a xlink:href="../proc/nc_def_dim.html" xlink:title="nc_def_dim">
+<polygon fill="#d9534f" stroke="#d9534f" points="599,-544 526,-544 526,-520 599,-520 599,-544"/>
+<text text-anchor="middle" x="562.5" y="-529.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nc_def_dim</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_restart_write_local&#45;&gt;proc~nc_def_dim -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge12" class="edge">
+<title>proc~ocean_restart_write_local&#45;&gt;proc~nc_def_dim</title>
+<path fill="none" stroke="#ff0000" d="M348.02,-330.31C367.58,-357.98 418.05,-426.33 471,-473 489.09,-488.95 511.84,-503.76 530.01,-514.55"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="528.64,-517.81 539.04,-519.82 532.16,-511.76 528.64,-517.81"/>
+</g>
+<!-- proc~nc_enddef -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node14" class="node">
+<title>proc~nc_enddef</title>
+<g id="a_proc~~ocean_state_restart_write_drop_field~~CallsGraph_node14"><a xlink:href="../proc/nc_enddef.html" xlink:title="nc_enddef">
+<polygon fill="#d9534f" stroke="#d9534f" points="596.5,-390 528.5,-390 528.5,-366 596.5,-366 596.5,-390"/>
+<text text-anchor="middle" x="562.5" y="-375.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nc_enddef</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_restart_write_local&#45;&gt;proc~nc_enddef -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge13" class="edge">
+<title>proc~ocean_restart_write_local&#45;&gt;proc~nc_enddef</title>
+<path fill="none" stroke="#ff0000" d="M384.16,-330.07C423.33,-340.66 479.91,-355.95 518.56,-366.39"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="517.9,-369.84 528.46,-369.07 519.72,-363.08 517.9,-369.84"/>
+</g>
+<!-- proc~nc_put_att_global -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node15" class="node">
+<title>proc~nc_put_att_global</title>
+<g id="a_proc~~ocean_state_restart_write_drop_field~~CallsGraph_node15"><a xlink:href="../proc/nc_put_att_global.html" xlink:title="nc_put_att_global">
+<polygon fill="#d9534f" stroke="#d9534f" points="615.5,-268 509.5,-268 509.5,-244 615.5,-244 615.5,-268"/>
+<text text-anchor="middle" x="562.5" y="-253.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nc_put_att_global</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_restart_write_local&#45;&gt;proc~nc_put_att_global -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge14" class="edge">
+<title>proc~ocean_restart_write_local&#45;&gt;proc~nc_put_att_global</title>
+<path fill="none" stroke="#ff0000" d="M375.57,-305.96C401.87,-297.38 438.46,-285.84 471,-277 480.13,-274.52 489.82,-272.08 499.34,-269.78"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="500.25,-273.16 509.17,-267.45 498.63,-266.35 500.25,-273.16"/>
+</g>
+<!-- proc~nc_put_att_global_int -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node16" class="node">
+<title>proc~nc_put_att_global_int</title>
+<g id="a_proc~~ocean_state_restart_write_drop_field~~CallsGraph_node16"><a xlink:href="../proc/nc_put_att_global_int.html" xlink:title="nc_put_att_global_int">
+<polygon fill="#d9534f" stroke="#d9534f" points="624.5,-310 500.5,-310 500.5,-286 624.5,-286 624.5,-310"/>
+<text text-anchor="middle" x="562.5" y="-295.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nc_put_att_global_int</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_restart_write_local&#45;&gt;proc~nc_put_att_global_int -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge15" class="edge">
+<title>proc~ocean_restart_write_local&#45;&gt;proc~nc_put_att_global_int</title>
+<path fill="none" stroke="#ff0000" d="M412.81,-311.4C437.67,-309.16 465.4,-306.66 490.11,-304.43"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="490.49,-307.91 500.14,-303.53 489.87,-300.94 490.49,-307.91"/>
+</g>
+<!-- proc~posix_rename -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node17" class="node">
+<title>proc~posix_rename</title>
+<g id="a_proc~~ocean_state_restart_write_drop_field~~CallsGraph_node17"><a xlink:href="../proc/posix_rename.html" xlink:title="posix_rename">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="606,-664 519,-664 519,-640 606,-640 606,-664"/>
+<text text-anchor="middle" x="562.5" y="-649.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">posix_rename</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_restart_write_local&#45;&gt;proc~posix_rename -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge16" class="edge">
+<title>proc~ocean_restart_write_local&#45;&gt;proc~posix_rename</title>
+<path fill="none" stroke="#ff0000" d="M340.97,-330.16C347.18,-376.23 375.57,-541.7 471,-626 481.65,-635.41 495.5,-641.42 509.14,-645.27"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="508.45,-648.7 519,-647.7 510.13,-641.9 508.45,-648.7"/>
+</g>
+<!-- proc~restart_io_ok -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node24" class="node">
+<title>proc~restart_io_ok</title>
+<g id="a_proc~~ocean_state_restart_write_drop_field~~CallsGraph_node24"><a xlink:href="../proc/restart_io_ok.html" xlink:title="restart_io_ok">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="602.5,-188 522.5,-188 522.5,-164 602.5,-164 602.5,-188"/>
+<text text-anchor="middle" x="562.5" y="-173.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">restart_io_ok</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_restart_write_local&#45;&gt;proc~restart_io_ok -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge17" class="edge">
+<title>proc~ocean_restart_write_local&#45;&gt;proc~restart_io_ok</title>
+<path fill="none" stroke="#ff0000" d="M349.79,-305.88C370.4,-282.36 419.21,-230.38 471,-202 483.69,-195.05 498.42,-189.79 512.27,-185.9"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="513.38,-189.22 522.16,-183.29 511.59,-182.45 513.38,-189.22"/>
+</g>
+<!-- to_string -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node26" class="node">
+<title>to_string</title>
+<polygon fill="#777777" stroke="#777777" points="1024,-848 966,-848 966,-824 1024,-824 1024,-848"/>
+<text text-anchor="middle" x="995" y="-833.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">to_string</text>
+</g>
+<!-- proc~ocean_restart_write_local&#45;&gt;to_string -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge18" class="edge">
+<title>proc~ocean_restart_write_local&#45;&gt;to_string</title>
+<path fill="none" stroke="#ff0000" d="M339.95,-330.13C342.54,-380.99 359.66,-578.7 471,-673 627.01,-805.14 746.13,-652.2 924,-753 949.79,-767.62 970.31,-795.6 982.3,-815.01"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="979.38,-816.94 987.49,-823.75 985.4,-813.36 979.38,-816.94"/>
+</g>
+<!-- proc~register_full_3d -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node18" class="node">
+<title>proc~register_full_3d</title>
+<g id="a_proc~~ocean_state_restart_write_drop_field~~CallsGraph_node18"><a xlink:href="../proc/register_full_3d.html" xlink:title="register_full_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="609.5,-1026 515.5,-1026 515.5,-1002 609.5,-1002 609.5,-1026"/>
+<text text-anchor="middle" x="562.5" y="-1011.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">register_full_3d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_build_restart_registry&#45;&gt;proc~register_full_3d -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge19" class="edge">
+<title>proc~ocean_state_build_restart_registry&#45;&gt;proc~register_full_3d</title>
+<path fill="none" stroke="#00ff00" d="M349.3,-887.2C369.41,-911.38 417.94,-965.4 471,-993 481.62,-998.52 493.69,-1002.61 505.47,-1005.63"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="504.73,-1009.05 515.27,-1007.92 506.33,-1002.23 504.73,-1009.05"/>
+</g>
+<!-- proc~register_full_3d_opt -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node19" class="node">
+<title>proc~register_full_3d_opt</title>
+<g id="a_proc~~ocean_state_restart_write_drop_field~~CallsGraph_node19"><a xlink:href="../proc/register_full_3d_opt.html" xlink:title="register_full_3d_opt">
+<polygon fill="#d9534f" stroke="#d9534f" points="620.5,-984 504.5,-984 504.5,-960 620.5,-960 620.5,-984"/>
+<text text-anchor="middle" x="562.5" y="-969.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">register_full_3d_opt</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_build_restart_registry&#45;&gt;proc~register_full_3d_opt -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge20" class="edge">
+<title>proc~ocean_state_build_restart_registry&#45;&gt;proc~register_full_3d_opt</title>
+<path fill="none" stroke="#00ff00" d="M358.9,-887.2C384,-902.58 429.44,-929.04 471,-946 481.08,-950.11 492.04,-953.85 502.75,-957.12"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="501.89,-960.51 512.47,-959.99 503.87,-953.8 501.89,-960.51"/>
+</g>
+<!-- proc~registry_clear -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node20" class="node">
+<title>proc~registry_clear</title>
+<g id="a_proc~~ocean_state_restart_write_drop_field~~CallsGraph_node20"><a xlink:href="../proc/registry_clear.html" xlink:title="restart_registry_t%registry_clear">
+<polygon fill="#d9534f" stroke="#d9534f" points="654,-828 471,-828 471,-804 654,-804 654,-828"/>
+<text text-anchor="middle" x="562.5" y="-813.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">restart_registry_t%registry_clear</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_build_restart_registry&#45;&gt;proc~registry_clear -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge21" class="edge">
+<title>proc~ocean_state_build_restart_registry&#45;&gt;proc~registry_clear</title>
+<path fill="none" stroke="#00ff00" d="M384.69,-862.99C419.84,-853.65 468.76,-840.65 506.24,-830.69"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="507.22,-834.05 515.99,-828.09 505.43,-827.28 507.22,-834.05"/>
+</g>
+<!-- proc~registry_register_2d -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node21" class="node">
+<title>proc~registry_register_2d</title>
+<g id="a_proc~~ocean_state_restart_write_drop_field~~CallsGraph_node21"><a xlink:href="../proc/registry_register_2d.html" xlink:title="restart_registry_t%registry_register_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="914.5,-786 699.5,-786 699.5,-762 914.5,-762 914.5,-786"/>
+<text text-anchor="middle" x="807" y="-771.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">restart_registry_t%registry_register_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_build_restart_registry&#45;&gt;proc~registry_register_2d -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge22" class="edge">
+<title>proc~ocean_state_build_restart_registry&#45;&gt;proc~registry_register_2d</title>
+<path fill="none" stroke="#00ff00" d="M354.1,-862.77C377.2,-844.24 424.35,-809.67 471,-795 541.05,-772.98 623.3,-767.55 688.78,-767.71"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="689.11,-771.21 699.14,-767.78 689.16,-764.21 689.11,-771.21"/>
+</g>
+<!-- proc~registry_register_3d -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node22" class="node">
+<title>proc~registry_register_3d</title>
+<g id="a_proc~~ocean_state_restart_write_drop_field~~CallsGraph_node22"><a xlink:href="../proc/registry_register_3d.html" xlink:title="restart_registry_t%registry_register_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="914.5,-950 699.5,-950 699.5,-926 914.5,-926 914.5,-950"/>
+<text text-anchor="middle" x="807" y="-935.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">restart_registry_t%registry_register_3d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_build_restart_registry&#45;&gt;proc~registry_register_3d -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge23" class="edge">
+<title>proc~ocean_state_build_restart_registry&#45;&gt;proc~registry_register_3d</title>
+<path fill="none" stroke="#00ff00" d="M404.27,-887.05C425.49,-890.8 449.22,-894.8 471,-898 543.33,-908.64 624.77,-918.41 689.24,-925.63"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="689.11,-929.14 699.44,-926.77 689.89,-922.18 689.11,-929.14"/>
+</g>
+<!-- proc~registry_register_scalar -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node23" class="node">
+<title>proc~registry_register_scalar</title>
+<g id="a_proc~~ocean_state_restart_write_drop_field~~CallsGraph_node23"><a xlink:href="../proc/registry_register_scalar.html" xlink:title="restart_registry_t%registry_register_scalar">
+<polygon fill="#d9534f" stroke="#d9534f" points="924,-908 690,-908 690,-884 924,-884 924,-908"/>
+<text text-anchor="middle" x="807" y="-893.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">restart_registry_t%registry_register_scalar</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_build_restart_registry&#45;&gt;proc~registry_register_scalar -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge24" class="edge">
+<title>proc~ocean_state_build_restart_registry&#45;&gt;proc~registry_register_scalar</title>
+<path fill="none" stroke="#00ff00" d="M435.03,-879.3C505.69,-882.48 602.63,-886.85 679.7,-890.31"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="679.81,-893.82 689.95,-890.78 680.12,-886.83 679.81,-893.82"/>
+</g>
+<!-- proc~ocean_state_build_restart_registry&#45;&gt;to_string -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge25" class="edge">
+<title>proc~ocean_state_build_restart_registry&#45;&gt;to_string</title>
+<path fill="none" stroke="#00ff00" d="M435.02,-869.31C581.51,-860.58 855.25,-844.27 955.74,-838.28"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="955.97,-841.77 965.74,-837.68 955.55,-834.78 955.97,-841.77"/>
+</g>
+<!-- proc~vcoord_type_name -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node25" class="node">
+<title>proc~vcoord_type_name</title>
+<g id="a_proc~~ocean_state_restart_write_drop_field~~CallsGraph_node25"><a xlink:href="../proc/vcoord_type_name.html" xlink:title="vcoord_type_name">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="864,-828 750,-828 750,-804 864,-804 864,-828"/>
+<text text-anchor="middle" x="807" y="-813.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vcoord_type_name</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_fill_restart_metadata&#45;&gt;proc~vcoord_type_name -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge26" class="edge">
+<title>proc~ocean_state_fill_restart_metadata&#45;&gt;proc~vcoord_type_name</title>
+<path fill="none" stroke="#0000ff" d="M411.37,-750.02C500.98,-765 652.92,-790.4 739.8,-804.93"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="739.37,-808.41 749.81,-806.6 740.52,-801.5 739.37,-808.41"/>
+</g>
+<!-- nf90_strerror -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node32" class="node">
+<title>nf90_strerror</title>
+<polygon fill="#777777" stroke="#777777" points="1147,-367 1066,-367 1066,-343 1147,-343 1147,-367"/>
+<text text-anchor="middle" x="1106.5" y="-352.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nf90_strerror</text>
+</g>
+<!-- proc~nc_check&#45;&gt;nf90_strerror -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge27" class="edge">
+<title>proc~nc_check&#45;&gt;nf90_strerror</title>
+<path fill="none" stroke="#a2ff00" d="M1026.21,-339.79C1035.42,-341.56 1045.8,-343.55 1055.94,-345.5"/>
+<polygon fill="#a2ff00" stroke="#a2ff00" points="1055.47,-348.97 1065.95,-347.41 1056.79,-342.09 1055.47,-348.97"/>
+</g>
+<!-- proc~fail -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node34" class="node">
+<title>proc~fail</title>
+<g id="a_proc~~ocean_state_restart_write_drop_field~~CallsGraph_node34"><a xlink:href="../proc/fail.html" xlink:title="fail">
+<polygon fill="#d9534f" stroke="#d9534f" points="1133.5,-325 1079.5,-325 1079.5,-301 1133.5,-301 1133.5,-325"/>
+<text text-anchor="middle" x="1106.5" y="-310.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fail</text>
+</a>
+</g>
+</g>
+<!-- proc~nc_check&#45;&gt;proc~fail -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge28" class="edge">
+<title>proc~nc_check&#45;&gt;proc~fail</title>
+<path fill="none" stroke="#a2ff00" d="M1026.21,-328.21C1039.66,-325.63 1055.6,-322.57 1069.64,-319.88"/>
+<polygon fill="#a2ff00" stroke="#a2ff00" points="1070.31,-323.31 1079.48,-317.99 1069,-316.44 1070.31,-323.31"/>
+</g>
+<!-- proc~nc_close&#45;&gt;proc~nc_check -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge30" class="edge">
+<title>proc~nc_close&#45;&gt;proc~nc_check</title>
+<path fill="none" stroke="#5cff00" d="M836.05,-175.89C861.41,-177.16 898.57,-182.59 924,-202 960.55,-229.89 980.04,-282.43 988.58,-312.12"/>
+<polygon fill="#5cff00" stroke="#5cff00" points="985.24,-313.2 991.24,-321.94 992,-311.37 985.24,-313.2"/>
+</g>
+<!-- nf90_close -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node27" class="node">
+<title>nf90_close</title>
+<polygon fill="#777777" stroke="#777777" points="1030,-188 960,-188 960,-164 1030,-164 1030,-188"/>
+<text text-anchor="middle" x="995" y="-173.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nf90_close</text>
+</g>
+<!-- proc~nc_close&#45;&gt;nf90_close -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge29" class="edge">
+<title>proc~nc_close&#45;&gt;nf90_close</title>
+<path fill="none" stroke="#5cff00" d="M836.25,-176C866.4,-176 914.59,-176 949.78,-176"/>
+<polygon fill="#5cff00" stroke="#5cff00" points="949.79,-179.5 959.79,-176 949.79,-172.5 949.79,-179.5"/>
+</g>
+<!-- proc~nc_create_file&#45;&gt;proc~nc_check -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge32" class="edge">
+<title>proc~nc_create_file&#45;&gt;proc~nc_check</title>
+<path fill="none" stroke="#17ff00" d="M605.72,-454.29C688.87,-458.08 870.42,-462.55 924,-433 954.67,-416.09 975.04,-379.34 985.55,-355.69"/>
+<polygon fill="#17ff00" stroke="#17ff00" points="988.91,-356.73 989.56,-346.15 982.45,-354.01 988.91,-356.73"/>
+</g>
+<!-- nf90_create -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node28" class="node">
+<title>nf90_create</title>
+<polygon fill="#777777" stroke="#777777" points="845,-504 769,-504 769,-480 845,-480 845,-504"/>
+<text text-anchor="middle" x="807" y="-489.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nf90_create</text>
+</g>
+<!-- proc~nc_create_file&#45;&gt;nf90_create -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge31" class="edge">
+<title>proc~nc_create_file&#45;&gt;nf90_create</title>
+<path fill="none" stroke="#17ff00" d="M605.74,-458.97C648.42,-466.01 714.23,-476.86 758.65,-484.19"/>
+<polygon fill="#17ff00" stroke="#17ff00" points="758.18,-487.66 768.62,-485.83 759.32,-480.75 758.18,-487.66"/>
+</g>
+<!-- proc~nc_def_dim&#45;&gt;proc~nc_check -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge34" class="edge">
+<title>proc~nc_def_dim&#45;&gt;proc~nc_check</title>
+<path fill="none" stroke="#00ff2e" d="M599.2,-534.85C679.82,-540.56 872.93,-549.87 924,-513 975.33,-475.94 989.02,-395.5 992.67,-356.33"/>
+<polygon fill="#00ff2e" stroke="#00ff2e" points="996.17,-356.48 993.47,-346.23 989.2,-355.93 996.17,-356.48"/>
+</g>
+<!-- nf90_def_dim -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node29" class="node">
+<title>nf90_def_dim</title>
+<polygon fill="#777777" stroke="#777777" points="849.5,-584 764.5,-584 764.5,-560 849.5,-560 849.5,-584"/>
+<text text-anchor="middle" x="807" y="-569.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nf90_def_dim</text>
+</g>
+<!-- proc~nc_def_dim&#45;&gt;nf90_def_dim -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge33" class="edge">
+<title>proc~nc_def_dim&#45;&gt;nf90_def_dim</title>
+<path fill="none" stroke="#00ff2e" d="M599.02,-537.86C639.96,-544.61 707.59,-555.77 754.34,-563.48"/>
+<polygon fill="#00ff2e" stroke="#00ff2e" points="753.84,-566.94 764.28,-565.12 754.98,-560.04 753.84,-566.94"/>
+</g>
+<!-- proc~nc_enddef&#45;&gt;proc~nc_check -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge36" class="edge">
+<title>proc~nc_enddef&#45;&gt;proc~nc_check</title>
+<path fill="none" stroke="#00ff73" d="M596.94,-376.5C660.77,-373.34 804.29,-364.9 924,-348 933.75,-346.62 944.18,-344.76 953.94,-342.83"/>
+<polygon fill="#00ff73" stroke="#00ff73" points="954.71,-346.25 963.81,-340.82 953.31,-339.39 954.71,-346.25"/>
+</g>
+<!-- nf90_enddef -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node30" class="node">
+<title>nf90_enddef</title>
+<polygon fill="#777777" stroke="#777777" points="846.5,-424 767.5,-424 767.5,-400 846.5,-400 846.5,-424"/>
+<text text-anchor="middle" x="807" y="-409.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nf90_enddef</text>
+</g>
+<!-- proc~nc_enddef&#45;&gt;nf90_enddef -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge35" class="edge">
+<title>proc~nc_enddef&#45;&gt;nf90_enddef</title>
+<path fill="none" stroke="#00ff73" d="M596.71,-382.66C638.16,-388.47 709.4,-398.46 757.09,-405.14"/>
+<polygon fill="#00ff73" stroke="#00ff73" points="756.8,-408.64 767.19,-406.56 757.77,-401.7 756.8,-408.64"/>
+</g>
+<!-- proc~nc_put_att_global&#45;&gt;proc~nc_check -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge38" class="edge">
+<title>proc~nc_put_att_global&#45;&gt;proc~nc_check</title>
+<path fill="none" stroke="#00ffb9" d="M615.57,-245.37C638.32,-241.25 665.37,-237.03 690,-235 793.65,-226.46 831.64,-187.19 924,-235 955.24,-251.17 975.53,-288.42 985.84,-312.34"/>
+<polygon fill="#00ffb9" stroke="#00ffb9" points="982.64,-313.74 989.66,-321.67 989.11,-311.09 982.64,-313.74"/>
+</g>
+<!-- nf90_put_att -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node31" class="node">
+<title>nf90_put_att</title>
+<polygon fill="#777777" stroke="#777777" points="846.5,-268 767.5,-268 767.5,-244 846.5,-244 846.5,-268"/>
+<text text-anchor="middle" x="807" y="-253.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nf90_put_att</text>
+</g>
+<!-- proc~nc_put_att_global&#45;&gt;nf90_put_att -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge37" class="edge">
+<title>proc~nc_put_att_global&#45;&gt;nf90_put_att</title>
+<path fill="none" stroke="#00ffb9" d="M615.52,-256C657.48,-256 716.06,-256 757.14,-256"/>
+<polygon fill="#00ffb9" stroke="#00ffb9" points="757.19,-259.5 767.19,-256 757.19,-252.5 757.19,-259.5"/>
+</g>
+<!-- proc~nc_put_att_global_int&#45;&gt;proc~nc_check -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge40" class="edge">
+<title>proc~nc_put_att_global_int&#45;&gt;proc~nc_check</title>
+<path fill="none" stroke="#00ffff" d="M624.66,-299.19C696.56,-301.18 819.38,-306.41 924,-320 933.76,-321.27 944.2,-323.1 953.96,-325.02"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="953.33,-328.46 963.83,-327.03 954.73,-321.6 953.33,-328.46"/>
+</g>
+<!-- proc~nc_put_att_global_int&#45;&gt;nf90_put_att -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge39" class="edge">
+<title>proc~nc_put_att_global_int&#45;&gt;nf90_put_att</title>
+<path fill="none" stroke="#00ffff" d="M624.69,-287.4C665.61,-280.32 718.72,-271.12 756.87,-264.51"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="757.96,-267.87 767.21,-262.72 756.76,-260.98 757.96,-267.87"/>
+</g>
+<!-- none~c_rename -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node33" class="node">
+<title>none~c_rename</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="839.5,-664 774.5,-664 774.5,-640 839.5,-640 839.5,-664"/>
+<text text-anchor="middle" x="807" y="-649.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">c_rename</text>
+</g>
+<!-- proc~posix_rename&#45;&gt;none~c_rename -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge41" class="edge">
+<title>proc~posix_rename&#45;&gt;none~c_rename</title>
+<path fill="none" stroke="#00b9ff" d="M606.02,-652C650.53,-652 720,-652 764.23,-652"/>
+<polygon fill="#00b9ff" stroke="#00b9ff" points="764.36,-655.5 774.36,-652 764.36,-648.5 764.36,-655.5"/>
+</g>
+<!-- proc~string_to_c -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_node35" class="node">
+<title>proc~string_to_c</title>
+<g id="a_proc~~ocean_state_restart_write_drop_field~~CallsGraph_node35"><a xlink:href="../proc/string_to_c.html" xlink:title="string_to_c">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="842,-706 772,-706 772,-682 842,-682 842,-706"/>
+<text text-anchor="middle" x="807" y="-691.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">string_to_c</text>
+</a>
+</g>
+</g>
+<!-- proc~posix_rename&#45;&gt;proc~string_to_c -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge42" class="edge">
+<title>proc~posix_rename&#45;&gt;proc~string_to_c</title>
+<path fill="none" stroke="#00b9ff" d="M606.02,-659.36C649.75,-666.94 717.55,-678.68 761.86,-686.35"/>
+<polygon fill="#00b9ff" stroke="#00b9ff" points="761.31,-689.81 771.76,-688.07 762.51,-682.92 761.31,-689.81"/>
+</g>
+<!-- proc~register_full_3d&#45;&gt;proc~registry_register_3d -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge43" class="edge">
+<title>proc~register_full_3d&#45;&gt;proc~registry_register_3d</title>
+<path fill="none" stroke="#0073ff" d="M609.82,-1004.37C624.08,-1001.1 639.77,-997.21 654,-993 692.85,-981.51 736.23,-965.48 766.67,-953.7"/>
+<polygon fill="#0073ff" stroke="#0073ff" points="768.03,-956.92 776.07,-950.03 765.48,-950.4 768.03,-956.92"/>
+</g>
+<!-- proc~register_full_3d_opt&#45;&gt;proc~registry_register_3d -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge44" class="edge">
+<title>proc~register_full_3d_opt&#45;&gt;proc~registry_register_3d</title>
+<path fill="none" stroke="#002eff" d="M620.66,-963.99C647.33,-960.25 679.81,-955.69 710.08,-951.45"/>
+<polygon fill="#002eff" stroke="#002eff" points="710.83,-954.88 720.25,-950.02 709.86,-947.95 710.83,-954.88"/>
+</g>
+<!-- proc~registry_register_2d&#45;&gt;error -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge45" class="edge">
+<title>proc~registry_register_2d&#45;&gt;error</title>
+<path fill="none" stroke="#5c00ff" d="M914.76,-774C1005.98,-774 1131.91,-774 1193.33,-774"/>
+<polygon fill="#5c00ff" stroke="#5c00ff" points="1193.68,-777.5 1203.68,-774 1193.68,-770.5 1193.68,-777.5"/>
+</g>
+<!-- proc~registry_register_2d&#45;&gt;to_string -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge46" class="edge">
+<title>proc~registry_register_2d&#45;&gt;to_string</title>
+<path fill="none" stroke="#5c00ff" d="M893.81,-786.01C904.13,-788.48 914.4,-791.45 924,-795 939.62,-800.78 955.75,-809.97 968.59,-818.19"/>
+<polygon fill="#5c00ff" stroke="#5c00ff" points="967.02,-821.35 977.3,-823.94 970.88,-815.51 967.02,-821.35"/>
+</g>
+<!-- proc~registry_register_3d&#45;&gt;error -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge47" class="edge">
+<title>proc~registry_register_3d&#45;&gt;error</title>
+<path fill="none" stroke="#a200ff" d="M890.53,-925.97C961.84,-913.06 1065.91,-888.03 1147,-843 1171.13,-829.6 1194.98,-808.77 1210.87,-793.5"/>
+<polygon fill="#a200ff" stroke="#a200ff" points="1213.74,-795.6 1218.42,-786.09 1208.83,-790.6 1213.74,-795.6"/>
+</g>
+<!-- proc~registry_register_3d&#45;&gt;to_string -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge48" class="edge">
+<title>proc~registry_register_3d&#45;&gt;to_string</title>
+<path fill="none" stroke="#a200ff" d="M904.47,-925.9C911.28,-923.44 917.87,-920.5 924,-917 949.25,-902.59 969.77,-875.55 981.92,-856.7"/>
+<polygon fill="#a200ff" stroke="#a200ff" points="984.9,-858.53 987.2,-848.19 978.95,-854.84 984.9,-858.53"/>
+</g>
+<!-- proc~registry_register_scalar&#45;&gt;error -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge49" class="edge">
+<title>proc~registry_register_scalar&#45;&gt;error</title>
+<path fill="none" stroke="#e700ff" d="M903.03,-884C942.73,-877.78 989.05,-868.94 1030,-857 1090.39,-839.4 1157.27,-809.35 1196.37,-790.64"/>
+<polygon fill="#e700ff" stroke="#e700ff" points="1198.2,-793.64 1205.69,-786.15 1195.16,-787.34 1198.2,-793.64"/>
+</g>
+<!-- proc~registry_register_scalar&#45;&gt;to_string -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge50" class="edge">
+<title>proc~registry_register_scalar&#45;&gt;to_string</title>
+<path fill="none" stroke="#e700ff" d="M874.08,-883.97C890.6,-880.2 908.12,-875.55 924,-870 937.28,-865.36 951.35,-858.86 963.35,-852.79"/>
+<polygon fill="#e700ff" stroke="#e700ff" points="965.22,-855.77 972.49,-848.06 962,-849.55 965.22,-855.77"/>
+</g>
+<!-- proc~restart_io_ok&#45;&gt;proc~nc_close -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge51" class="edge">
+<title>proc~restart_io_ok&#45;&gt;proc~nc_close</title>
+<path fill="none" stroke="#ff00d0" d="M602.73,-176C648.15,-176 722.48,-176 767.56,-176"/>
+<polygon fill="#ff00d0" stroke="#ff00d0" points="767.81,-179.5 777.81,-176 767.81,-172.5 767.81,-179.5"/>
+</g>
+<!-- proc~vcoord_type_name&#45;&gt;to_string -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge52" class="edge">
+<title>proc~vcoord_type_name&#45;&gt;to_string</title>
+<path fill="none" stroke="#ff008b" d="M864.06,-822.03C893.71,-825.22 929.34,-829.05 955.79,-831.89"/>
+<polygon fill="#ff008b" stroke="#ff008b" points="955.48,-835.38 965.8,-832.97 956.23,-828.42 955.48,-835.38"/>
+</g>
+<!-- proc~fail&#45;&gt;error -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge53" class="edge">
+<title>proc~fail&#45;&gt;error</title>
+<path fill="none" stroke="#aa00ff" d="M1133.84,-322.73C1138.86,-325.66 1143.59,-329.37 1147,-334 1197.06,-402.04 1221.94,-671.62 1228.32,-751.55"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="1224.86,-752.22 1229.12,-761.92 1231.84,-751.68 1224.86,-752.22"/>
+</g>
+<!-- proc~fail&#45;&gt;proc~error_ring_push -->
+<g id="proc~~ocean_state_restart_write_drop_field~~CallsGraph_edge54" class="edge">
+<title>proc~fail&#45;&gt;proc~error_ring_push</title>
+<path fill="none" stroke="#aa00ff" d="M1122.52,-300.86C1143.64,-283.79 1182.3,-252.55 1207.05,-232.55"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="1209.28,-235.25 1214.86,-226.24 1204.88,-229.8 1209.28,-235.25"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprococean_state_restart_write_drop_fieldCallsGraph = svgPanZoom('#prococean_state_restart_write_drop_fieldCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-e~15"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>e</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-found~7"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>found</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-meta~6"></span>
+              type(<a href='../type/ocean_restart_metadata_t.html'>ocean_restart_metadata_t</a>),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>meta</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-reg~7"></span>
+              type(<a href='../type/restart_registry_t.html'>restart_registry_t</a>),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>reg</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">ocean_state_restart_write_drop_field</span><span class="p">(</span><span class="n">state</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">decomp</span><span class="p">,</span><span class="w"> </span><span class="n">filename</span><span class="p">,</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="n">step</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                   </span><span class="n">drop_tag</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Test-only sibling of `ocean_state_restart_write`: identical,</span>
+<span class="w">      </span><span class="c">!! except the ONE registered entry whose tag matches `drop_tag` is</span>
+<span class="w">      </span><span class="c">!! written under a mangled tag instead of its real one, so a</span>
+<span class="w">      </span><span class="c">!! subsequent `ocean_state_restart_read`/`ocean_restart_read_local`</span>
+<span class="w">      </span><span class="c">!! -- which looks up variables by their REAL tag -- finds nothing</span>
+<span class="w">      </span><span class="c">!! and takes exactly the "optional field absent" path it takes for</span>
+<span class="w">      </span><span class="c">!! a genuinely older checkpoint.  `error stop`s if `drop_tag` does</span>
+<span class="w">      </span><span class="c">!! not match any registered entry (a typo here must not silently</span>
+<span class="w">      </span><span class="c">!! test nothing).</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">),</span><span class="w"> </span><span class="k">target</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">state</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">decomp_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">decomp</span>
+<span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">filename</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">t</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">step</span>
+<span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">drop_tag</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ierr</span>
+<span class="cp">#ifndef RDB_NO_NETCDF</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">restart_registry_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">reg</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_restart_metadata_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">meta</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">e</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">found</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">ierr</span><span class="p">))</span><span class="w"> </span><span class="n">ierr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">OCEAN_STATUS_OK</span>
+
+<span class="w">      </span><span class="k">call </span><span class="n">ocean_state_build_restart_registry</span><span class="p">(</span><span class="n">state</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">reg</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">ocean_state_fill_restart_metadata</span><span class="p">(</span><span class="n">state</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">meta</span><span class="p">)</span>
+
+<span class="w">      </span><span class="n">found</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">      </span><span class="k">do </span><span class="n">e</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">reg</span><span class="p">%</span><span class="n">n</span>
+<span class="w">         </span><span class="k">associate</span><span class="w"> </span><span class="p">(</span><span class="n">en</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">reg</span><span class="p">%</span><span class="n">entries</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+<span class="w">            </span><span class="c">! Device sync (same as ocean_state_restart_write): no `cycle`</span>
+<span class="w">            </span><span class="c">! here, unlike that routine, because the tag check below must</span>
+<span class="w">            </span><span class="c">! still run for every entry including host-only ones.</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">en</span><span class="p">%</span><span class="n">device_mapped</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               if</span><span class="w"> </span><span class="p">(</span><span class="n">en</span><span class="p">%</span><span class="n">rank</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">                  </span><span class="c">!$acc update self(en%p2)</span>
+<span class="w">               </span><span class="k">else if</span><span class="w"> </span><span class="p">(</span><span class="n">en</span><span class="p">%</span><span class="n">rank</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">                  </span><span class="c">!$acc update self(en%p3)</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">            end if</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="nb">trim</span><span class="p">(</span><span class="n">en</span><span class="p">%</span><span class="n">tag</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nb">trim</span><span class="p">(</span><span class="n">drop_tag</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">en</span><span class="p">%</span><span class="n">tag</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">trim</span><span class="p">(</span><span class="n">drop_tag</span><span class="p">)</span><span class="o">//</span><span class="s2">"_DROPPED_FOR_TEST"</span>
+<span class="w">               </span><span class="n">found</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         end associate</span>
+<span class="k">      end do</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">found</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         error stop</span><span class="w"> </span><span class="s2">"ocean_state_restart_write_drop_field: drop_tag not registered"</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="k">      call </span><span class="n">ocean_restart_write_local</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span><span class="w"> </span><span class="n">reg</span><span class="p">,</span><span class="w"> </span><span class="n">decomp</span><span class="p">,</span><span class="w"> </span><span class="n">meta</span><span class="p">,</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="n">step</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                     </span><span class="n">state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">outer_step_count</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="o">=</span><span class="n">ierr</span><span class="p">)</span>
+<span class="cp">#else</span>
+<span class="w">      </span><span class="k">call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"ocean_state_restart_write_drop_field: built without NetCDF "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                </span><span class="s2">"(RDB_ENABLE_NETCDF=ON required)"</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">OCEAN_STATUS_ERR_IO</span><span class="p">)</span>
+<span class="cp">#endif</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">ocean_state_restart_write_drop_field</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-09 01:37 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>
