@@ -304,7 +304,7 @@ module rdb_continuity
          !! P2 diagnostic counter: number of interior faces whose mass flux
          !! the positive-definite limiter scaled (θ_donor < 1) this outer-step
          !! call, summed over the zonal + meridional passes.  Host-side scalar
-         !! (the `!$acc parallel loop reduction` returns to the host); zeroed
+         !! (the `do concurrent reduce(+:...)` returns to the host); zeroed
          !! at the top of every `continuity_tracer_step_split` call.  P3 drains
          !! it to the console stats line.  0 ⇒ no limiting fired (the healthy
          !! case; MOM6-style graceful degradation must be loud).
@@ -3152,9 +3152,10 @@ contains
       !! two ranks sharing a seam face compute the same θ from the same
       !! exchanged donor `h_layer` and the same face flux, so they scale the
       !! shared face identically.  `n_limited` accumulates the count of scaled
-      !! faces (θ_donor < 1, flux ≠ 0) via an `!$acc parallel loop reduction`
-      !! (a `do concurrent` + `sum()` would silently read the stale host shadow
-      !! on the mem:separate GPU build).
+      !! faces (θ_donor < 1, flux ≠ 0) via a `do concurrent reduce(+:...)`
+      !! (the `sum()` intrinsic on a present-mapped array would silently read
+      !! the stale host shadow on the mem:separate GPU build — the reduce
+      !! clause itself stays device-resident).
       !!
       !! v1.1 — u_cor re-matching (optional `u_cor`).  `split_scheme="pred_corr"`
       !! captures the MOM6 `u_cor` (the transport-matched velocity the fluxes

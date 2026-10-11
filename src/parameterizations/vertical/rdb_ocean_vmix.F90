@@ -2344,9 +2344,9 @@ contains
 
    pure subroutine vmix_guard_impl(nx, ny, nzp1, kv, kt, ks, bad_count)
       !! Count negative or NaN diffusivities across interior interfaces.
-      !! A reduction over fresh scratch — uses `!$acc parallel loop
-      !! reduction` (the project rule for device reductions; bare
-      !! `count`/`sum` over device data can silently return 0).
+      !! A reduction over fresh scratch — uses `do concurrent reduce(+:...)`
+      !! (bare `count`/`sum` over device data can silently return 0 on the
+      !! mem:separate GPU build).
       integer, intent(in) :: nx, ny, nzp1
       real(wp), intent(in) :: kv(nx, ny, nzp1)
       real(wp), intent(in) :: kt(nx, ny, nzp1)
