@@ -438,7 +438,7 @@ class Smagorinsky:
     biharmonic add-on, matching MOM6.
 
     `free_slip=True` is the DEFAULT, matching the Fortran schema's own
-    `&ocean_hvisc_nml no_slip = .false.` (rdb_config.F90:864). An earlier
+    `&ocean_hvisc_nml no_slip = .false.` (rdb_config_register_lateral.F90 :: register_ocean_hvisc). An earlier
     version defaulted to `free_slip=False` and claimed that matched the
     Fortran -- it did not; it wrote `no_slip = .true.`, silently inverting
     the wall boundary condition relative to a namelist that omits the knob.

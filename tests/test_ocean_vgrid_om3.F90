@@ -24,6 +24,7 @@
 !!     (every array the kernel touches must be device-present).
 module test_ocean_vgrid_om3
    use, intrinsic :: iso_c_binding, only: c_ptr, c_int, c_null_ptr, c_f_pointer
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_constants, only: wp
    use rdb_grid, only: hgrid_t
    use rdb_ocean_state, only: ocean_state_t, ocean_state_enter_data, ocean_state_exit_data
@@ -179,12 +180,6 @@ contains
       end do
    end subroutine set_uniform_TS_d
 
-   pure elemental function finite(x) result(ok)
-      real(wp), intent(in) :: x
-      logical :: ok
-      ok = (x == x) .and. (abs(x) < huge(1.0_wp))
-   end function finite
-
    subroutine test_diag_over64(error)
       !! 100 output z-levels (> the pre-C1 MAX_OCEAN_DIAG_Z_LEVELS=64
       !! bound, <= the post-C1 bound of 128) spanning a 40 m column
@@ -193,6 +188,12 @@ contains
       !! thickness-weighted column integral of T is preserved.
       type(error_type), allocatable, intent(out) :: error
       integer, parameter :: NLEV = 100
+      real(wp), parameter :: COLUMN_INT_TOL = 1.0e-6_wp
+         !! Absolute tolerance on the ~60 degC*m column integral: the
+         !! remap is a sum of 100 piecewise-constant layer contributions
+         !! in `wp` (real64), so round-off is many orders below this —
+         !! loose enough to never flake, tight enough to catch a
+         !! mis-weighted remap (which misses by O(1), not O(1e-6)).
       type(hgrid_t) :: grid
       type(ocean_state_t) :: state
       real(wp) :: z_levels(NLEV)
@@ -230,7 +231,7 @@ contains
                     "output_buffer must carry all 100 levels")
          if (allocated(error)) exit checks
 
-         call check(error, all(finite(state%diag%vars(it)%output_buffer)), &
+         call check(error, all(ieee_is_finite(state%diag%vars(it)%output_buffer)), &
                     "100-level z remap output must be finite")
          if (allocated(error)) exit checks
 
@@ -241,7 +242,7 @@ contains
          dz_lev = 0.4_wp
          out_int = sum(state%diag%vars(it)%output_buffer(2, 2, :))*dz_lev
          src_int = sum(TEMP_BY_LAYER)*10.0_wp
-         call check(error, abs(out_int - src_int) < 1.0e-6_wp, &
+         call check(error, abs(out_int - src_int) < COLUMN_INT_TOL, &
                     "100-level z remap must preserve the column T integral (60)")
       end block checks
       call state%destroy()

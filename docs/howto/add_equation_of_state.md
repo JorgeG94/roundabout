@@ -60,7 +60,7 @@ variant + column sweep.
    scratch must be released in `eos_destroy` *and* wired into
    `ocean_state_enter_data`).
 6. **Namelist** — add the string to the `&ocean_eos_nml eos` enum registration
-   in `register_ocean_eos` (`src/core/rdb_config.F90`) and the matching
+   in `register_ocean_eos` (`src/core/config/rdb_config_register_vmix.F90`) and the matching
    `case` in `parse_eos_variant` — the two must stay in sync (the registration's
    FORD comment says so explicitly). See
    [add_namelist_knob.md](add_namelist_knob.md).
@@ -133,6 +133,7 @@ Analytical point-value asserts, one per branch of the formula:
 - `src/pressure_force/rdb_ocean_pressure_force.F90` — `OPGF_VARIANT_*`,
   `parse_opgf_variant`, the in-situ re-eval call.
 - `src/core/ocean/dynamics/split_rk2/rdb_ocean_dyn.F90` — EOS-before-PGF call order.
-- `src/core/rdb_config.F90` — `register_ocean_eos` (`&ocean_eos_nml`);
+- `src/core/config/rdb_config_register_vmix.F90` — `register_ocean_eos`
+  (`&ocean_eos_nml`);
   `src/core/ocean/state/rdb_ocean_setup.F90` — the `parse_eos_variant` assignment.
 - The "Equation of state" section of [`docs/CLOSURE_MATRIX.md`](../CLOSURE_MATRIX.md).

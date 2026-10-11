@@ -3,7 +3,14 @@
 A knob is the entry point for almost every capability (workflow step 1). Get the
 plumbing right once and the rest of the guides reuse it.
 
-All config lives in `src/core/rdb_config.F90`. There are two public config types:
+All config types and their field-level defaults live in `src/core/rdb_config.F90`
+(the parent module). Its `register_*` / `validate_config` / `read_config*` /
+`apply_time_unit_cascade` procedures are `module subroutine` INTERFACES only —
+the implementations live in submodules: `src/core/config/rdb_config_register_{core,
+vmix,lateral,forcing}.F90` (the `register_*` groups, split by concern),
+`rdb_config_validate.F90` (`validate_config` + its helpers), and
+`rdb_config_read.F90` (`read_config*` + `apply_time_unit_cascade`). There are
+two public config types:
 
 - **`config_t`** — the flat parent: grid, time, physics, tracer, vcoord,
   boundary, MPI, output, logging. Each field is declared *with its default inline*
@@ -46,7 +53,8 @@ type field (default)  ->  registered in the group's register_* routine
    The default must reproduce current behaviour. **There is no `default=`
    argument on the registration** — the field initialiser *is* the default.
 2. **Register it** in that group's `register_ocean_<group>` subroutine (here
-   `register_ocean_hvisc`, called from `build_rdb_schema`):
+   `register_ocean_hvisc`, implemented in `src/core/config/
+   rdb_config_register_lateral.F90`, called from `build_rdb_schema`):
    ```fortran
    pr => cfg%ocean%hvisc%foo
    call g%add(nml_real("foo", pr, "What foo does", units="m^2/s", min=0.0_wp))
@@ -59,7 +67,8 @@ type field (default)  ->  registered in the group's register_* routine
    `parse_lateral_closure`, `eos` ↔ `parse_eos_variant`, …).
 3. **Validate (optional).** Anything the engine can't express — exclusive
    bounds, cross-knob "requires X" / mutual-exclusion rules — goes in
-   `validate_config` (`rdb_config.F90`) or in the group's `configure_*` routine.
+   `validate_config` (`src/core/config/rdb_config_validate.F90`) or in the
+   group's `configure_*` routine.
    Set `has_error` / log and let the routine `error stop`. Never silently
    downgrade a bad combination.
 4. **Propagate to state.** In `src/core/ocean/state/rdb_ocean_setup.F90`, in the
@@ -100,7 +109,8 @@ Configure fails loud on anything else. Also append the module to
 ## The CLOSURE_MATRIX drift hook
 
 `tools/check_closure_matrix.py` (pre-commit + CI) fires when you touch
-`src/core/rdb_config.F90`, `docs/CLOSURE_MATRIX.md`, or `tests/CMakeLists.txt`.
+`src/core/rdb_config.F90`, any `src/core/config/*.F90` submodule,
+`docs/CLOSURE_MATRIX.md`, or `tests/CMakeLists.txt`.
 It enforces:
 
 1. **Knob coverage** — every auto-discovered `logical :: vmix_use_* =` toggle,
@@ -152,9 +162,16 @@ form, …).
 
 ## Source pointers
 
-- `src/core/rdb_config.F90` — `config_t`, `ocean_config_t` + sub-types,
-  `read_config`, `build_rdb_schema` + the `register_*` routines,
-  `read_ocean_bc_nml`, `validate_config`.
+- `src/core/rdb_config.F90` — `config_t`, `ocean_config_t` + sub-types (with
+  their field-level defaults), `build_rdb_schema`, `read_ocean_bc_nml`, and
+  the `module subroutine` INTERFACES for `read_config`, `apply_time_unit_cascade`,
+  `validate_config` and every `register_*` routine — implemented in the
+  submodules below.
+- `src/core/config/rdb_config_register_{core,vmix,lateral,forcing}.F90` — the
+  `register_*` implementations, split by concern.
+- `src/core/config/rdb_config_validate.F90` — `validate_config` + its helpers.
+- `src/core/config/rdb_config_read.F90` — `read_config`/`read_config_from_string`
+  + `apply_time_unit_cascade`.
 - `src/core/rdb_nml_schema.F90` — `nml_schema_t`, the `nml_*` constructors,
   `render_markdown`.
 - `src/core/rdb_config_schema.F90` — the re-export shim (`build_rdb_schema`,

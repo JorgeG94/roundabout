@@ -13,7 +13,7 @@ ABSENCE IS THE DEFAULT (D2.0 rule 2): a freshly constructed `Config` has
 every knob unset, and `to_namelist()` emits ONLY explicitly-assigned
 knobs. This is what gives bit-identity to existing namelists and tests --
 `read_config_from_string` on an empty buffer keeps the pristine
-`config_t` defaults (`rdb_config.F90:2734`'s own docstring).
+`config_t` defaults (`rdb_config.F90 :: config_t`'s own docstring).
 
 This layer deliberately does NOT re-implement `validate_config`'s
 cross-knob rules or the schema's per-group `cross_check` callbacks

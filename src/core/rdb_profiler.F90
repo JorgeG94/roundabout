@@ -104,6 +104,13 @@ contains
          state%regions(idx)%total_time = 0.0_dp
          state%regions(idx)%call_count = 0
          state%regions(idx)%active = .false.
+         ! `profiler_init` only zeroes `num_regions`, not the `regions`
+         ! array, so a slot index can be REUSED across an init/reset cycle
+         ! (e.g. a one-time nvtx_only=.true. pre-touch pass before the
+         ! real init) — reset nvtx_only here too, or the new region
+         ! silently inherits the old slot's flag and vanishes from the
+         ! text report despite a nonzero profiler_get_time().
+         state%regions(idx)%nvtx_only = .false.
       else
          idx = -1
       end if

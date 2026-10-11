@@ -1024,7 +1024,7 @@ def _one(_case, bars, out, pid, prob, fam, strat, eos, is_cavity, status,
             "assertions": ["completed"],
             "tiers": [1, 2],
             "reason": _refusal_reason(pid, prob, fam, is_cavity),
-            "ref": "src/core/rdb_config.F90 :: validate_config",
+            "ref": "src/core/config/rdb_config_validate.F90 :: validate_config",
         }
     # A cell that is MEASURED failing today carries its own scoped marker,
     # naming the assertions it covers and the number behind them. See

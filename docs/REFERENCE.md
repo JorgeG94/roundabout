@@ -848,7 +848,13 @@ ITSELF differences to advance `h_layer` (`mass_flux_x_layer` /
 so they are registered `is_extensive=.true.` (a target layer/density
 bin SUMS the source layers it spans, matching the physical meaning of
 a flux) and remap through every output vcoord including
-`DIAG_VGRID_DENSITY` (needed for overturning in density space).
+`DIAG_VGRID_DENSITY` (needed for overturning in density space). Both
+are a STAGE flux: whatever `mass_flux_{x,y}_layer` holds from the LAST
+continuity call of the step (`rdb_continuity`, which overwrites the
+array every call) — not a time-mean accumulated across the step's
+sub-stages. The outermost domain face (`i = nx+1` / `j = ny+1`) has no
+T-cell slot in the `(nx,ny,nz)` output buffer and is DROPPED, same as
+every other face diagnostic (`u`/`v`, `KE`, `tauuo`/`tauvo`).
 `tauuo` / `tauvo` (N/m², 2-D, MOM6 `tauuo`/`tauvo`) are the stress the
 momentum solve actually applied (`surface_stress%tau_x`/`tau_y`), face
 values reported as-is. `Kd_interface` (m²/s, 3-D, MOM6 `difvho`) is

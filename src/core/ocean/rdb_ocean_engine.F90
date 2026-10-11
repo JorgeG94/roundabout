@@ -1338,7 +1338,7 @@ contains
          end if
 
          ! P7 F1: a fresh checkout's default `output_dir = "./output"`
-         ! (rdb_config.F90:2316) does not exist until something creates
+         ! (rdb_config_register_core.F90 :: register_output) does not exist until something creates
          ! it, and `nc_create_file` used to `error stop` the whole host
          ! process on the resulting ENOENT — the single most likely
          ! real-world `create()` failure for a first-time caller.

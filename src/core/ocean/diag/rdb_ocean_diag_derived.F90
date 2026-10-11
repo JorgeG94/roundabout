@@ -862,8 +862,12 @@ contains
       !! the two bounding faces onto the T-cell for a depth-integrated
       !! VELOCITY diagnostic). `umo = rho_0 · mass_flux_x_layer`
       !! (Boussinesq: mass flux through a face is the reference density
-      !! times the volume flux). See `fill_mass_transport_x_impl` for
-      !! the face/T-cell index convention.
+      !! times the volume flux). A STAGE flux: `mass_flux_x_layer` is
+      !! overwritten by every `rdb_continuity` call, so this reports
+      !! whatever the LAST continuity call of the step left there, not
+      !! a time-mean over the step's sub-stages. See
+      !! `fill_mass_transport_x_impl` for the face/T-cell index
+      !! convention (also where the dropped eastmost boundary face is).
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
@@ -899,7 +903,10 @@ contains
       !! 3-D layer mass transport through the meridional (v) face, kg/s
       !! — MOM6/CMOR `vmo`.  Mirror of `fill_umo`: reads
       !! `ms%mass_flux_y_layer`, the time-consistent flux continuity
-      !! actually used to advance `h_layer`.
+      !! actually used to advance `h_layer` — a STAGE flux (whatever the
+      !! last `rdb_continuity` call of the step left there, not a
+      !! time-mean), with the northmost boundary face dropped the same
+      !! way.
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
