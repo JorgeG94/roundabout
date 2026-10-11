@@ -617,23 +617,13 @@ contains
          ! Pack: buffer index = ((L-1)*nyt + (j-1))*ng + k
          if (on_device) then
             if (need_e) then
-               !$acc parallel loop collapse(3) present(oh_buf_send_east, fld)
-               do L = 1, nz
-                  do j = 1, nyt
-                     do k = 1, ng
-                        oh_buf_send_east(((L - 1)*nyt + (j - 1))*ng + k) = fld(nxl + k, j, L)
-                     end do
-                  end do
+               do concurrent(L=1:nz, j=1:nyt, k=1:ng)
+                  oh_buf_send_east(((L - 1)*nyt + (j - 1))*ng + k) = fld(nxl + k, j, L)
                end do
             end if
             if (need_w) then
-               !$acc parallel loop collapse(3) present(oh_buf_send_west, fld)
-               do L = 1, nz
-                  do j = 1, nyt
-                     do k = 1, ng
-                        oh_buf_send_west(((L - 1)*nyt + (j - 1))*ng + k) = fld(ng + k, j, L)
-                     end do
-                  end do
+               do concurrent(L=1:nz, j=1:nyt, k=1:ng)
+                  oh_buf_send_west(((L - 1)*nyt + (j - 1))*ng + k) = fld(ng + k, j, L)
                end do
             end if
          else
@@ -698,23 +688,13 @@ contains
          ! Unpack: X pass fills west ghosts (i=1..ng) and east ghosts (i=ng+nxl+1..nxt)
          if (on_device) then
             if (need_w) then
-               !$acc parallel loop collapse(3) present(oh_buf_recv_west, fld)
-               do L = 1, nz
-                  do j = 1, nyt
-                     do k = 1, ng
-                        fld(k, j, L) = oh_buf_recv_west(((L - 1)*nyt + (j - 1))*ng + k)
-                     end do
-                  end do
+               do concurrent(L=1:nz, j=1:nyt, k=1:ng)
+                  fld(k, j, L) = oh_buf_recv_west(((L - 1)*nyt + (j - 1))*ng + k)
                end do
             end if
             if (need_e) then
-               !$acc parallel loop collapse(3) present(oh_buf_recv_east, fld)
-               do L = 1, nz
-                  do j = 1, nyt
-                     do k = 1, ng
-                        fld(ng + nxl + k, j, L) = oh_buf_recv_east(((L - 1)*nyt + (j - 1))*ng + k)
-                     end do
-                  end do
+               do concurrent(L=1:nz, j=1:nyt, k=1:ng)
+                  fld(ng + nxl + k, j, L) = oh_buf_recv_east(((L - 1)*nyt + (j - 1))*ng + k)
                end do
             end if
          else
@@ -751,23 +731,13 @@ contains
          ! Pack: buffer index = ((L-1)*ng + (k-1))*nxt + j
          if (on_device) then
             if (need_n) then
-               !$acc parallel loop collapse(3) present(oh_buf_send_north, fld)
-               do L = 1, nz
-                  do k = 1, ng
-                     do j = 1, nxt
-                        oh_buf_send_north(((L - 1)*ng + (k - 1))*nxt + j) = fld(j, nyl + k, L)
-                     end do
-                  end do
+               do concurrent(L=1:nz, k=1:ng, j=1:nxt)
+                  oh_buf_send_north(((L - 1)*ng + (k - 1))*nxt + j) = fld(j, nyl + k, L)
                end do
             end if
             if (need_s) then
-               !$acc parallel loop collapse(3) present(oh_buf_send_south, fld)
-               do L = 1, nz
-                  do k = 1, ng
-                     do j = 1, nxt
-                        oh_buf_send_south(((L - 1)*ng + (k - 1))*nxt + j) = fld(j, ng + k, L)
-                     end do
-                  end do
+               do concurrent(L=1:nz, k=1:ng, j=1:nxt)
+                  oh_buf_send_south(((L - 1)*ng + (k - 1))*nxt + j) = fld(j, ng + k, L)
                end do
             end if
          else
@@ -832,23 +802,13 @@ contains
          ! Unpack: Y pass fills south ghosts (j=1..ng) and north ghosts (j=ng+nyl+1..nyt)
          if (on_device) then
             if (need_s) then
-               !$acc parallel loop collapse(3) present(oh_buf_recv_south, fld)
-               do L = 1, nz
-                  do k = 1, ng
-                     do j = 1, nxt
-                        fld(j, k, L) = oh_buf_recv_south(((L - 1)*ng + (k - 1))*nxt + j)
-                     end do
-                  end do
+               do concurrent(L=1:nz, k=1:ng, j=1:nxt)
+                  fld(j, k, L) = oh_buf_recv_south(((L - 1)*ng + (k - 1))*nxt + j)
                end do
             end if
             if (need_n) then
-               !$acc parallel loop collapse(3) present(oh_buf_recv_north, fld)
-               do L = 1, nz
-                  do k = 1, ng
-                     do j = 1, nxt
-                        fld(j, ng + nyl + k, L) = oh_buf_recv_north(((L - 1)*ng + (k - 1))*nxt + j)
-                     end do
-                  end do
+               do concurrent(L=1:nz, k=1:ng, j=1:nxt)
+                  fld(j, ng + nyl + k, L) = oh_buf_recv_north(((L - 1)*ng + (k - 1))*nxt + j)
                end do
             end if
          else
@@ -963,24 +923,14 @@ contains
          ! Pack: buffer index = ((L-1)*nyt + (j-1))*(ng+1) + k
          if (on_device) then
             if (need_e) then
-               !$acc parallel loop collapse(3) present(oh_buf_send_east, fld)
-               do L = 1, nz
-                  do j = 1, nyt
-                     do k = 1, ng + 1
-                        oh_buf_send_east(((L - 1)*nyt + (j - 1))*(ng + 1) + k) = fld(nxl + k, j, L)
-                     end do
-                  end do
+               do concurrent(L=1:nz, j=1:nyt, k=1:ng + 1)
+                  oh_buf_send_east(((L - 1)*nyt + (j - 1))*(ng + 1) + k) = fld(nxl + k, j, L)
                end do
             end if
             ! Send west: ng per j-row per layer (first ng interior faces after west-seam copy)
             if (need_w) then
-               !$acc parallel loop collapse(3) present(oh_buf_send_west, fld)
-               do L = 1, nz
-                  do j = 1, nyt
-                     do k = 1, ng
-                        oh_buf_send_west(((L - 1)*nyt + (j - 1))*ng + k) = fld(ng + 1 + k, j, L)
-                     end do
-                  end do
+               do concurrent(L=1:nz, j=1:nyt, k=1:ng)
+                  oh_buf_send_west(((L - 1)*nyt + (j - 1))*ng + k) = fld(ng + 1 + k, j, L)
                end do
             end if
          else
@@ -1045,24 +995,14 @@ contains
          if (on_device) then
             ! Unpack recv-from-west: fills i=1..ng+1 (west ghosts + seam-copy)
             if (need_w) then
-               !$acc parallel loop collapse(3) present(oh_buf_recv_west, fld)
-               do L = 1, nz
-                  do j = 1, nyt
-                     do k = 1, ng + 1
-                        fld(k, j, L) = oh_buf_recv_west(((L - 1)*nyt + (j - 1))*(ng + 1) + k)
-                     end do
-                  end do
+               do concurrent(L=1:nz, j=1:nyt, k=1:ng + 1)
+                  fld(k, j, L) = oh_buf_recv_west(((L - 1)*nyt + (j - 1))*(ng + 1) + k)
                end do
             end if
             ! Unpack recv-from-east: fills east ghosts i=ng+nxl+2..ng+nxl+ng+1
             if (need_e) then
-               !$acc parallel loop collapse(3) present(oh_buf_recv_east, fld)
-               do L = 1, nz
-                  do j = 1, nyt
-                     do k = 1, ng
-                        fld(ng + nxl + 1 + k, j, L) = oh_buf_recv_east(((L - 1)*nyt + (j - 1))*ng + k)
-                     end do
-                  end do
+               do concurrent(L=1:nz, j=1:nyt, k=1:ng)
+                  fld(ng + nxl + 1 + k, j, L) = oh_buf_recv_east(((L - 1)*nyt + (j - 1))*ng + k)
                end do
             end if
          else
@@ -1099,23 +1039,13 @@ contains
          ! Pack Y-pass: buffer index = ((L-1)*ng + (k-1))*nxt1 + j
          if (on_device) then
             if (need_n) then
-               !$acc parallel loop collapse(3) present(oh_buf_send_north, fld)
-               do L = 1, nz
-                  do k = 1, ng
-                     do j = 1, nxt1
-                        oh_buf_send_north(((L - 1)*ng + (k - 1))*nxt1 + j) = fld(j, nyl + k, L)
-                     end do
-                  end do
+               do concurrent(L=1:nz, k=1:ng, j=1:nxt1)
+                  oh_buf_send_north(((L - 1)*ng + (k - 1))*nxt1 + j) = fld(j, nyl + k, L)
                end do
             end if
             if (need_s) then
-               !$acc parallel loop collapse(3) present(oh_buf_send_south, fld)
-               do L = 1, nz
-                  do k = 1, ng
-                     do j = 1, nxt1
-                        oh_buf_send_south(((L - 1)*ng + (k - 1))*nxt1 + j) = fld(j, ng + k, L)
-                     end do
-                  end do
+               do concurrent(L=1:nz, k=1:ng, j=1:nxt1)
+                  oh_buf_send_south(((L - 1)*ng + (k - 1))*nxt1 + j) = fld(j, ng + k, L)
                end do
             end if
          else
@@ -1179,23 +1109,13 @@ contains
 
          if (on_device) then
             if (need_s) then
-               !$acc parallel loop collapse(3) present(oh_buf_recv_south, fld)
-               do L = 1, nz
-                  do k = 1, ng
-                     do j = 1, nxt1
-                        fld(j, k, L) = oh_buf_recv_south(((L - 1)*ng + (k - 1))*nxt1 + j)
-                     end do
-                  end do
+               do concurrent(L=1:nz, k=1:ng, j=1:nxt1)
+                  fld(j, k, L) = oh_buf_recv_south(((L - 1)*ng + (k - 1))*nxt1 + j)
                end do
             end if
             if (need_n) then
-               !$acc parallel loop collapse(3) present(oh_buf_recv_north, fld)
-               do L = 1, nz
-                  do k = 1, ng
-                     do j = 1, nxt1
-                        fld(j, ng + nyl + k, L) = oh_buf_recv_north(((L - 1)*ng + (k - 1))*nxt1 + j)
-                     end do
-                  end do
+               do concurrent(L=1:nz, k=1:ng, j=1:nxt1)
+                  fld(j, ng + nyl + k, L) = oh_buf_recv_north(((L - 1)*ng + (k - 1))*nxt1 + j)
                end do
             end if
          else
@@ -1307,23 +1227,13 @@ contains
          ! Pack X-pass: buffer index = ((L-1)*ng + (k-1))*nyt1 + i
          if (on_device) then
             if (need_e) then
-               !$acc parallel loop collapse(3) present(oh_buf_send_east, fld)
-               do L = 1, nz
-                  do k = 1, ng
-                     do i = 1, nyt1
-                        oh_buf_send_east(((L - 1)*ng + (k - 1))*nyt1 + i) = fld(nxl + k, i, L)
-                     end do
-                  end do
+               do concurrent(L=1:nz, k=1:ng, i=1:nyt1)
+                  oh_buf_send_east(((L - 1)*ng + (k - 1))*nyt1 + i) = fld(nxl + k, i, L)
                end do
             end if
             if (need_w) then
-               !$acc parallel loop collapse(3) present(oh_buf_send_west, fld)
-               do L = 1, nz
-                  do k = 1, ng
-                     do i = 1, nyt1
-                        oh_buf_send_west(((L - 1)*ng + (k - 1))*nyt1 + i) = fld(ng + k, i, L)
-                     end do
-                  end do
+               do concurrent(L=1:nz, k=1:ng, i=1:nyt1)
+                  oh_buf_send_west(((L - 1)*ng + (k - 1))*nyt1 + i) = fld(ng + k, i, L)
                end do
             end if
          else
@@ -1387,23 +1297,13 @@ contains
 
          if (on_device) then
             if (need_w) then
-               !$acc parallel loop collapse(3) present(oh_buf_recv_west, fld)
-               do L = 1, nz
-                  do k = 1, ng
-                     do i = 1, nyt1
-                        fld(k, i, L) = oh_buf_recv_west(((L - 1)*ng + (k - 1))*nyt1 + i)
-                     end do
-                  end do
+               do concurrent(L=1:nz, k=1:ng, i=1:nyt1)
+                  fld(k, i, L) = oh_buf_recv_west(((L - 1)*ng + (k - 1))*nyt1 + i)
                end do
             end if
             if (need_e) then
-               !$acc parallel loop collapse(3) present(oh_buf_recv_east, fld)
-               do L = 1, nz
-                  do k = 1, ng
-                     do i = 1, nyt1
-                        fld(ng + nxl + k, i, L) = oh_buf_recv_east(((L - 1)*ng + (k - 1))*nyt1 + i)
-                     end do
-                  end do
+               do concurrent(L=1:nz, k=1:ng, i=1:nyt1)
+                  fld(ng + nxl + k, i, L) = oh_buf_recv_east(((L - 1)*ng + (k - 1))*nyt1 + i)
                end do
             end if
          else
@@ -1442,24 +1342,14 @@ contains
          if (on_device) then
             ! Send north: ng+1 per i-col per layer
             if (need_n) then
-               !$acc parallel loop collapse(3) present(oh_buf_send_north, fld)
-               do L = 1, nz
-                  do i = 1, nxt
-                     do k = 1, ng + 1
-                        oh_buf_send_north(((L - 1)*nxt + (i - 1))*(ng + 1) + k) = fld(i, nyl + k, L)
-                     end do
-                  end do
+               do concurrent(L=1:nz, i=1:nxt, k=1:ng + 1)
+                  oh_buf_send_north(((L - 1)*nxt + (i - 1))*(ng + 1) + k) = fld(i, nyl + k, L)
                end do
             end if
             ! Send south: ng per i-col per layer
             if (need_s) then
-               !$acc parallel loop collapse(3) present(oh_buf_send_south, fld)
-               do L = 1, nz
-                  do i = 1, nxt
-                     do k = 1, ng
-                        oh_buf_send_south(((L - 1)*nxt + (i - 1))*ng + k) = fld(i, ng + 1 + k, L)
-                     end do
-                  end do
+               do concurrent(L=1:nz, i=1:nxt, k=1:ng)
+                  oh_buf_send_south(((L - 1)*nxt + (i - 1))*ng + k) = fld(i, ng + 1 + k, L)
                end do
             end if
          else
@@ -1524,24 +1414,14 @@ contains
          if (on_device) then
             ! Recv from south (ng+1 per i-col per layer) → fills south ghosts + seam-copy j=1..ng+1
             if (need_s) then
-               !$acc parallel loop collapse(3) present(oh_buf_recv_south, fld)
-               do L = 1, nz
-                  do i = 1, nxt
-                     do k = 1, ng + 1
-                        fld(i, k, L) = oh_buf_recv_south(((L - 1)*nxt + (i - 1))*(ng + 1) + k)
-                     end do
-                  end do
+               do concurrent(L=1:nz, i=1:nxt, k=1:ng + 1)
+                  fld(i, k, L) = oh_buf_recv_south(((L - 1)*nxt + (i - 1))*(ng + 1) + k)
                end do
             end if
             ! Recv from north (ng per i-col per layer) → fills north ghosts j=ng+nyl+2..ng+nyl+ng+1
             if (need_n) then
-               !$acc parallel loop collapse(3) present(oh_buf_recv_north, fld)
-               do L = 1, nz
-                  do i = 1, nxt
-                     do k = 1, ng
-                        fld(i, ng + nyl + 1 + k, L) = oh_buf_recv_north(((L - 1)*nxt + (i - 1))*ng + k)
-                     end do
-                  end do
+               do concurrent(L=1:nz, i=1:nxt, k=1:ng)
+                  fld(i, ng + nyl + 1 + k, L) = oh_buf_recv_north(((L - 1)*nxt + (i - 1))*ng + k)
                end do
             end if
          else
@@ -1906,19 +1786,13 @@ contains
 
          if (on_device) then
             if (need_e) then
-               !$acc parallel loop collapse(2) present(oh_buf_send_east, fld)
-               do j = 1, nyt
-                  do k = 1, ng
-                     oh_buf_send_east((j - 1)*ng + k) = fld(nxl + k, j)
-                  end do
+               do concurrent(j=1:nyt, k=1:ng)
+                  oh_buf_send_east((j - 1)*ng + k) = fld(nxl + k, j)
                end do
             end if
             if (need_w) then
-               !$acc parallel loop collapse(2) present(oh_buf_send_west, fld)
-               do j = 1, nyt
-                  do k = 1, ng
-                     oh_buf_send_west((j - 1)*ng + k) = fld(ng + k, j)
-                  end do
+               do concurrent(j=1:nyt, k=1:ng)
+                  oh_buf_send_west((j - 1)*ng + k) = fld(ng + k, j)
                end do
             end if
          else
@@ -1977,19 +1851,13 @@ contains
 
          if (on_device) then
             if (need_w) then
-               !$acc parallel loop collapse(2) present(oh_buf_recv_west, fld)
-               do j = 1, nyt
-                  do k = 1, ng
-                     fld(k, j) = oh_buf_recv_west((j - 1)*ng + k)
-                  end do
+               do concurrent(j=1:nyt, k=1:ng)
+                  fld(k, j) = oh_buf_recv_west((j - 1)*ng + k)
                end do
             end if
             if (need_e) then
-               !$acc parallel loop collapse(2) present(oh_buf_recv_east, fld)
-               do j = 1, nyt
-                  do k = 1, ng
-                     fld(ng + nxl + k, j) = oh_buf_recv_east((j - 1)*ng + k)
-                  end do
+               do concurrent(j=1:nyt, k=1:ng)
+                  fld(ng + nxl + k, j) = oh_buf_recv_east((j - 1)*ng + k)
                end do
             end if
          else
@@ -2021,19 +1889,13 @@ contains
 
          if (on_device) then
             if (need_n) then
-               !$acc parallel loop collapse(2) present(oh_buf_send_north, fld)
-               do k = 1, ng
-                  do j = 1, nxt
-                     oh_buf_send_north((k - 1)*nxt + j) = fld(j, nyl + k)
-                  end do
+               do concurrent(k=1:ng, j=1:nxt)
+                  oh_buf_send_north((k - 1)*nxt + j) = fld(j, nyl + k)
                end do
             end if
             if (need_s) then
-               !$acc parallel loop collapse(2) present(oh_buf_send_south, fld)
-               do k = 1, ng
-                  do j = 1, nxt
-                     oh_buf_send_south((k - 1)*nxt + j) = fld(j, ng + k)
-                  end do
+               do concurrent(k=1:ng, j=1:nxt)
+                  oh_buf_send_south((k - 1)*nxt + j) = fld(j, ng + k)
                end do
             end if
          else
@@ -2092,19 +1954,13 @@ contains
 
          if (on_device) then
             if (need_s) then
-               !$acc parallel loop collapse(2) present(oh_buf_recv_south, fld)
-               do k = 1, ng
-                  do j = 1, nxt
-                     fld(j, k) = oh_buf_recv_south((k - 1)*nxt + j)
-                  end do
+               do concurrent(k=1:ng, j=1:nxt)
+                  fld(j, k) = oh_buf_recv_south((k - 1)*nxt + j)
                end do
             end if
             if (need_n) then
-               !$acc parallel loop collapse(2) present(oh_buf_recv_north, fld)
-               do k = 1, ng
-                  do j = 1, nxt
-                     fld(j, ng + nyl + k) = oh_buf_recv_north((k - 1)*nxt + j)
-                  end do
+               do concurrent(k=1:ng, j=1:nxt)
+                  fld(j, ng + nyl + k) = oh_buf_recv_north((k - 1)*nxt + j)
                end do
             end if
          else
@@ -2174,19 +2030,13 @@ contains
 
          if (on_device) then
             if (need_e) then
-               !$acc parallel loop collapse(2) present(oh_buf_send_east, fld)
-               do j = 1, nyt
-                  do k = 1, ng + 1
-                     oh_buf_send_east((j - 1)*(ng + 1) + k) = fld(nxl + k, j)
-                  end do
+               do concurrent(j=1:nyt, k=1:ng + 1)
+                  oh_buf_send_east((j - 1)*(ng + 1) + k) = fld(nxl + k, j)
                end do
             end if
             if (need_w) then
-               !$acc parallel loop collapse(2) present(oh_buf_send_west, fld)
-               do j = 1, nyt
-                  do k = 1, ng
-                     oh_buf_send_west((j - 1)*ng + k) = fld(ng + 1 + k, j)
-                  end do
+               do concurrent(j=1:nyt, k=1:ng)
+                  oh_buf_send_west((j - 1)*ng + k) = fld(ng + 1 + k, j)
                end do
             end if
          else
@@ -2245,19 +2095,13 @@ contains
 
          if (on_device) then
             if (need_w) then
-               !$acc parallel loop collapse(2) present(oh_buf_recv_west, fld)
-               do j = 1, nyt
-                  do k = 1, ng + 1
-                     fld(k, j) = oh_buf_recv_west((j - 1)*(ng + 1) + k)
-                  end do
+               do concurrent(j=1:nyt, k=1:ng + 1)
+                  fld(k, j) = oh_buf_recv_west((j - 1)*(ng + 1) + k)
                end do
             end if
             if (need_e) then
-               !$acc parallel loop collapse(2) present(oh_buf_recv_east, fld)
-               do j = 1, nyt
-                  do k = 1, ng
-                     fld(ng + nxl + 1 + k, j) = oh_buf_recv_east((j - 1)*ng + k)
-                  end do
+               do concurrent(j=1:nyt, k=1:ng)
+                  fld(ng + nxl + 1 + k, j) = oh_buf_recv_east((j - 1)*ng + k)
                end do
             end if
          else
@@ -2289,19 +2133,13 @@ contains
 
          if (on_device) then
             if (need_n) then
-               !$acc parallel loop collapse(2) present(oh_buf_send_north, fld)
-               do k = 1, ng
-                  do j = 1, nxt1
-                     oh_buf_send_north((k - 1)*nxt1 + j) = fld(j, nyl + k)
-                  end do
+               do concurrent(k=1:ng, j=1:nxt1)
+                  oh_buf_send_north((k - 1)*nxt1 + j) = fld(j, nyl + k)
                end do
             end if
             if (need_s) then
-               !$acc parallel loop collapse(2) present(oh_buf_send_south, fld)
-               do k = 1, ng
-                  do j = 1, nxt1
-                     oh_buf_send_south((k - 1)*nxt1 + j) = fld(j, ng + k)
-                  end do
+               do concurrent(k=1:ng, j=1:nxt1)
+                  oh_buf_send_south((k - 1)*nxt1 + j) = fld(j, ng + k)
                end do
             end if
          else
@@ -2360,19 +2198,13 @@ contains
 
          if (on_device) then
             if (need_s) then
-               !$acc parallel loop collapse(2) present(oh_buf_recv_south, fld)
-               do k = 1, ng
-                  do j = 1, nxt1
-                     fld(j, k) = oh_buf_recv_south((k - 1)*nxt1 + j)
-                  end do
+               do concurrent(k=1:ng, j=1:nxt1)
+                  fld(j, k) = oh_buf_recv_south((k - 1)*nxt1 + j)
                end do
             end if
             if (need_n) then
-               !$acc parallel loop collapse(2) present(oh_buf_recv_north, fld)
-               do k = 1, ng
-                  do j = 1, nxt1
-                     fld(j, ng + nyl + k) = oh_buf_recv_north((k - 1)*nxt1 + j)
-                  end do
+               do concurrent(k=1:ng, j=1:nxt1)
+                  fld(j, ng + nyl + k) = oh_buf_recv_north((k - 1)*nxt1 + j)
                end do
             end if
          else
@@ -2442,19 +2274,13 @@ contains
 
          if (on_device) then
             if (need_e) then
-               !$acc parallel loop collapse(2) present(oh_buf_send_east, fld)
-               do k = 1, ng
-                  do i = 1, nyt1
-                     oh_buf_send_east((k - 1)*nyt1 + i) = fld(nxl + k, i)
-                  end do
+               do concurrent(k=1:ng, i=1:nyt1)
+                  oh_buf_send_east((k - 1)*nyt1 + i) = fld(nxl + k, i)
                end do
             end if
             if (need_w) then
-               !$acc parallel loop collapse(2) present(oh_buf_send_west, fld)
-               do k = 1, ng
-                  do i = 1, nyt1
-                     oh_buf_send_west((k - 1)*nyt1 + i) = fld(ng + k, i)
-                  end do
+               do concurrent(k=1:ng, i=1:nyt1)
+                  oh_buf_send_west((k - 1)*nyt1 + i) = fld(ng + k, i)
                end do
             end if
          else
@@ -2513,19 +2339,13 @@ contains
 
          if (on_device) then
             if (need_w) then
-               !$acc parallel loop collapse(2) present(oh_buf_recv_west, fld)
-               do k = 1, ng
-                  do i = 1, nyt1
-                     fld(k, i) = oh_buf_recv_west((k - 1)*nyt1 + i)
-                  end do
+               do concurrent(k=1:ng, i=1:nyt1)
+                  fld(k, i) = oh_buf_recv_west((k - 1)*nyt1 + i)
                end do
             end if
             if (need_e) then
-               !$acc parallel loop collapse(2) present(oh_buf_recv_east, fld)
-               do k = 1, ng
-                  do i = 1, nyt1
-                     fld(ng + nxl + k, i) = oh_buf_recv_east((k - 1)*nyt1 + i)
-                  end do
+               do concurrent(k=1:ng, i=1:nyt1)
+                  fld(ng + nxl + k, i) = oh_buf_recv_east((k - 1)*nyt1 + i)
                end do
             end if
          else
@@ -2557,19 +2377,13 @@ contains
 
          if (on_device) then
             if (need_n) then
-               !$acc parallel loop collapse(2) present(oh_buf_send_north, fld)
-               do i = 1, nxt
-                  do k = 1, ng + 1
-                     oh_buf_send_north((i - 1)*(ng + 1) + k) = fld(i, nyl + k)
-                  end do
+               do concurrent(i=1:nxt, k=1:ng + 1)
+                  oh_buf_send_north((i - 1)*(ng + 1) + k) = fld(i, nyl + k)
                end do
             end if
             if (need_s) then
-               !$acc parallel loop collapse(2) present(oh_buf_send_south, fld)
-               do i = 1, nxt
-                  do k = 1, ng
-                     oh_buf_send_south((i - 1)*ng + k) = fld(i, ng + 1 + k)
-                  end do
+               do concurrent(i=1:nxt, k=1:ng)
+                  oh_buf_send_south((i - 1)*ng + k) = fld(i, ng + 1 + k)
                end do
             end if
          else
@@ -2628,19 +2442,13 @@ contains
 
          if (on_device) then
             if (need_s) then
-               !$acc parallel loop collapse(2) present(oh_buf_recv_south, fld)
-               do i = 1, nxt
-                  do k = 1, ng + 1
-                     fld(i, k) = oh_buf_recv_south((i - 1)*(ng + 1) + k)
-                  end do
+               do concurrent(i=1:nxt, k=1:ng + 1)
+                  fld(i, k) = oh_buf_recv_south((i - 1)*(ng + 1) + k)
                end do
             end if
             if (need_n) then
-               !$acc parallel loop collapse(2) present(oh_buf_recv_north, fld)
-               do i = 1, nxt
-                  do k = 1, ng
-                     fld(i, ng + nyl + 1 + k) = oh_buf_recv_north((i - 1)*ng + k)
-                  end do
+               do concurrent(i=1:nxt, k=1:ng)
+                  fld(i, ng + nyl + 1 + k) = oh_buf_recv_north((i - 1)*ng + k)
                end do
             end if
          else

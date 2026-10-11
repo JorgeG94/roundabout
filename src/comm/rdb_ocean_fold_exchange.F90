@@ -439,17 +439,11 @@ contains
 
       if (ng_e > 0) then
          if (on_device) then
-            !$acc parallel loop collapse(3) private(p) &
-            !$acc& present(fx_sbuf, fx_scol, fx_speer, fx_se, fx_sn, fld)
-            do L = 1, nz
-               do r = 1, nrow
-                  do g = g0 + 1, g0 + ng_e
-                     p = fx_speer(g)
-                     fx_sbuf((p - 1)*cap + oT*fx_sn(p, FOLD_FAM_T) + oU*fx_sn(p, FOLD_FAM_U) &
-                             + ((L - 1)*nrow + (r - 1))*fx_sn(p, fam) + fx_se(g)) = &
-                        fld(fx_scol(g), sbase - r, L)
-                  end do
-               end do
+            do concurrent(L=1:nz, r=1:nrow, g=g0 + 1:g0 + ng_e) local(p)
+               p = fx_speer(g)
+               fx_sbuf((p - 1)*cap + oT*fx_sn(p, FOLD_FAM_T) + oU*fx_sn(p, FOLD_FAM_U) &
+                       + ((L - 1)*nrow + (r - 1))*fx_sn(p, fam) + fx_se(g)) = &
+                  fld(fx_scol(g), sbase - r, L)
             end do
          else
             do L = 1, nz
@@ -494,8 +488,7 @@ contains
          if (p == fx_self) then
             ! Self pair: the receive region is the send region (same list).
             if (on_device) then
-               !$acc parallel loop present(fx_sbuf, fx_rbuf)
-               do i = o + 1, o + n_s
+               do concurrent(i=o + 1:o + n_s)
                   fx_rbuf(i) = fx_sbuf(i)
                end do
             else
@@ -591,27 +584,21 @@ contains
 
       if (ng_e > 0) then
          if (on_device) then
-            !$acc parallel loop collapse(3) private(p, ib, cls, val) &
-            !$acc& present(fx_rbuf, fx_rcol, fx_rpeer, fx_re, fx_rcls, fx_rn, fld)
-            do L = 1, nz
-               do r = 1, nrow
-                  do g = g0 + 1, g0 + ng_e
-                     p = fx_rpeer(g)
-                     ib = (p - 1)*cap + oT*fx_rn(p, FOLD_FAM_T) + oU*fx_rn(p, FOLD_FAM_U) &
-                          + ((L - 1)*nrow + (r - 1))*fx_rn(p, fam) + fx_re(g)
-                     val = sgn*fx_rbuf(ib)
-                     if (has_row .and. r == 1) then
-                        cls = fx_rcls(g)
-                        if (cls == FOLD_ROW_WEST) then
-                           fld(fx_rcol(g), dbase + 1, L) = val
-                        else if (cls == FOLD_ROW_SELF .and. negate) then
-                           fld(fx_rcol(g), dbase + 1, L) = 0.0_wp
-                        end if
-                     else
-                        fld(fx_rcol(g), dbase + r, L) = val
-                     end if
-                  end do
-               end do
+            do concurrent(L=1:nz, r=1:nrow, g=g0 + 1:g0 + ng_e) local(p, ib, cls, val)
+               p = fx_rpeer(g)
+               ib = (p - 1)*cap + oT*fx_rn(p, FOLD_FAM_T) + oU*fx_rn(p, FOLD_FAM_U) &
+                    + ((L - 1)*nrow + (r - 1))*fx_rn(p, fam) + fx_re(g)
+               val = sgn*fx_rbuf(ib)
+               if (has_row .and. r == 1) then
+                  cls = fx_rcls(g)
+                  if (cls == FOLD_ROW_WEST) then
+                     fld(fx_rcol(g), dbase + 1, L) = val
+                  else if (cls == FOLD_ROW_SELF .and. negate) then
+                     fld(fx_rcol(g), dbase + 1, L) = 0.0_wp
+                  end if
+               else
+                  fld(fx_rcol(g), dbase + r, L) = val
+               end if
             end do
          else
             do L = 1, nz
