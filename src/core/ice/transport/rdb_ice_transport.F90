@@ -1340,10 +1340,8 @@ contains
       !! triples directly, mirroring `ice_adjust_categories_impl`'s
       !! established pattern.  `ok` is a per-cell-then-reduced flag
       !! (D7: SIS2 FATALs on the top-category overflow inconsistency;
-      !! ported as a `!$acc parallel loop reduction` instead, since
-      !! `do concurrent` cannot itself carry a boolean/min reduction in
-      !! the house style — CLAUDE.md "Reductions use `!$acc parallel loop
-      !! reduction(...)`").
+      !! ported as a `do concurrent reduce(min:ok_acc)` — F2023's `reduce`
+      !! clause carries the min-reduction directly, no ACC fallback needed).
       integer, intent(in) :: nghost, ncat, nk, nx, ny
       real(wp), intent(in) :: wet_mask(nx, ny)
       real(wp), intent(inout) :: part_size(nx, ny, 0:ncat)

@@ -149,12 +149,9 @@ contains
       mx = -huge(1.0_wp)
       nf = 0
       bsum = 0_int64
-      ! GPU-offload risk: transfer()/popcnt() inside a device region has
-      ! NO precedent in this tree.  The intended design accumulates `bsum`
-      ! here (device-side, in the same reduction).  If nvfortran cannot
-      ! offload transfer/popcnt, this ONE accumulation moves to a
-      ! window-cadence host fallback (`!$acc update self(arr)` then a plain
-      ! host loop) — a localized one-block change; the FP reductions stay.
+      ! acc-kept: transfer()/popcnt() inside the reduction body — nvfortran
+      ! miscompiles `transfer()` inside a `do concurrent` on -stdpar=gpu
+      ! (dc-transfer pre-commit hook); stays `!$acc parallel loop reduction`.
       !$acc parallel loop collapse(3) reduction(+:s, nf, bsum) &
       !$acc   reduction(min:mn) reduction(max:mx)
       do k = 1, nz
@@ -200,8 +197,8 @@ contains
       mx = -huge(1.0_wp)
       nf = 0
       bsum = 0_int64
-      ! GPU-offload risk on transfer/popcnt in a device region — see the
-      ! matching note in chksum_stats_3d for the host-fallback recipe.
+      ! acc-kept: transfer()/popcnt() inside the reduction body — see the
+      ! matching note in chksum_stats_3d (dc-transfer pre-commit hook).
       !$acc parallel loop collapse(2) reduction(+:s, nf, bsum) &
       !$acc   reduction(min:mn) reduction(max:mx)
       do j = ja, jb

@@ -763,6 +763,7 @@ contains
       j_lo = nghost + 1
       j_hi = ny - nghost
       acc = 0.0_wp
+      ! acc-kept: assumed-shape dummy h_layer/areaT (dc-assumed-shape)
       !$acc parallel loop collapse(3) reduction(+:acc) present(h_layer, areaT)
       do k = 1, nz
          do j = j_lo, j_hi
@@ -791,6 +792,7 @@ contains
       j_lo = nghost + 1
       j_hi = ny - nghost
       acc = 0.0_wp
+      ! acc-kept: assumed-shape dummy hTr/areaT (dc-assumed-shape)
       !$acc parallel loop collapse(3) reduction(+:acc) present(hTr, areaT)
       do k = 1, nz
          do j = j_lo, j_hi
@@ -828,6 +830,7 @@ contains
       acc_c = 0.0_wp
       acc_h = 0.0_wp
       if (ncat == 1) then
+         ! acc-kept: assumed-shape dummy wet_T/areaT/m_ice (dc-assumed-shape)
          !$acc parallel loop collapse(2) reduction(+:acc_w, acc_c, acc_h) &
          !$acc&         private(ci, mice) present(wet_T, areaT, m_ice)
          do j = j_lo, j_hi
@@ -842,6 +845,7 @@ contains
             end do
          end do
       else
+         ! acc-kept: assumed-shape dummy wet_T/areaT/part_size/m_ice (dc-assumed-shape)
          !$acc parallel loop collapse(2) reduction(+:acc_w, acc_c, acc_h) &
          !$acc&         private(ci, mice, c) present(wet_T, areaT, part_size, m_ice)
          do j = j_lo, j_hi
@@ -884,6 +888,7 @@ contains
       j_lo = nghost + 1
       j_hi = ny - nghost
       acc = 0.0_wp
+      ! acc-kept: assumed-shape dummy h_layer/u_face/v_face/areaT (dc-assumed-shape)
       !$acc parallel loop collapse(3) reduction(+:acc) &
       !$acc&         private(uc, vc) present(h_layer, u_face, v_face, areaT)
       do k = 1, nz
@@ -1054,6 +1059,7 @@ contains
          e5 = 0_int64
          e6 = 0_int64
          epoison = 0_int64
+         ! acc-kept: EFP reproducing-sum path, left exactly as-is + assumed-shape dummy
          !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
          !$acc&         private(val, d1, d2, d3, d4, d5, d6, dpoison) present(h_layer, areaT)
          do j = j_lo, j_hi
@@ -1110,6 +1116,7 @@ contains
          e5 = 0_int64
          e6 = 0_int64
          epoison = 0_int64
+         ! acc-kept: EFP reproducing-sum path, left exactly as-is + assumed-shape dummy
          !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
          !$acc&         private(val, d1, d2, d3, d4, d5, d6, dpoison) present(hTr, areaT)
          do j = j_lo, j_hi
@@ -1168,6 +1175,7 @@ contains
          e5 = 0_int64
          e6 = 0_int64
          epoison = 0_int64
+         ! acc-kept: EFP reproducing-sum path, left exactly as-is + assumed-shape dummy
          !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
          !$acc&         private(val, uc, vc, d1, d2, d3, d4, d5, d6, dpoison) &
          !$acc&         present(h_layer, u_face, v_face, areaT)
@@ -1267,6 +1275,7 @@ contains
       ew5 = 0_int64
       ew6 = 0_int64
       ewp = 0_int64
+      ! acc-kept: EFP reproducing-sum path, left exactly as-is + assumed-shape dummy
       !$acc parallel loop collapse(2) reduction(+:ew1,ew2,ew3,ew4,ew5,ew6,ewp) &
       !$acc&    private(val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp) present(wet_T, areaT)
       do j = j_lo, j_hi
@@ -1297,6 +1306,7 @@ contains
       ec6 = 0_int64
       ecp = 0_int64
       if (ncat == 1) then
+         ! acc-kept: EFP reproducing-sum path, left exactly as-is + assumed-shape dummy
          !$acc parallel loop collapse(2) reduction(+:ec1,ec2,ec3,ec4,ec5,ec6,ecp) &
          !$acc&    private(ci, val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp) present(wet_T, areaT, m_ice)
          do j = j_lo, j_hi
@@ -1315,6 +1325,7 @@ contains
             end do
          end do
       else
+         ! acc-kept: EFP reproducing-sum path, left exactly as-is + assumed-shape dummy
          !$acc parallel loop collapse(2) reduction(+:ec1,ec2,ec3,ec4,ec5,ec6,ecp) &
          !$acc&    private(c, ci, val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp) &
          !$acc&    present(wet_T, areaT, part_size)
@@ -1353,6 +1364,7 @@ contains
       eh6 = 0_int64
       ehp = 0_int64
       if (ncat == 1) then
+         ! acc-kept: EFP reproducing-sum path, left exactly as-is + assumed-shape dummy
          !$acc parallel loop collapse(2) reduction(+:eh1,eh2,eh3,eh4,eh5,eh6,ehp) &
          !$acc&    private(mice, val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp) present(wet_T, areaT, m_ice)
          do j = j_lo, j_hi
@@ -1371,6 +1383,7 @@ contains
             end do
          end do
       else
+         ! acc-kept: EFP reproducing-sum path, left exactly as-is + assumed-shape dummy
          !$acc parallel loop collapse(2) reduction(+:eh1,eh2,eh3,eh4,eh5,eh6,ehp) &
          !$acc&    private(c, mice, val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp) &
          !$acc&    present(wet_T, areaT, part_size, m_ice)
@@ -1457,6 +1470,7 @@ contains
          ! Separate loop so the compiler keeps the !$acc parallel region clean
          ! (no absent-optional reference inside the parallel body).
          acc = 0.0_wp
+         ! acc-kept: assumed-shape dummy u_face/v_face/h_layer/idxT/idyT (dc-assumed-shape)
          !$acc parallel loop collapse(3) reduction(max:acc) &
          !$acc&         present(u_face, v_face, h_layer, idxT, idyT)
          do k = 1, nz
@@ -1475,6 +1489,7 @@ contains
          ! Un-gated path: all layers contribute.  Byte-identical to the
          ! pre-Phase-3 implementation.
          acc = 0.0_wp
+         ! acc-kept: assumed-shape dummy u_face/v_face/idxT/idyT (dc-assumed-shape)
          !$acc parallel loop collapse(3) reduction(max:acc) &
          !$acc&         present(u_face, v_face, idxT, idyT)
          do k = 1, nz

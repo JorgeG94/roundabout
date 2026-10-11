@@ -1071,10 +1071,10 @@ contains
       !! ice-bearing faces it touched (`mi > m_neglect`, SIS2 `:1466,1469`
       !! -- massless faces clip silently, matching SIS2: counting them
       !! would flood the driver's warning with meaningless ice-free clips
-      !! at every margin). Not a `do concurrent`: reductions use
-      !! `!$acc parallel loop reduction(...)` (`ice_compress_impl` is the
-      !! local precedent for a reduction that also mutates the arrays it
-      !! walks). Same bound algebra as `evp_truncate_velocity_impl`,
+      !! at every margin). Uses `do concurrent reduce(+:n_acc)`
+      !! (`ice_compress_impl` is the local precedent for a `reduce` clause
+      !! that also mutates the arrays it walks). Same bound algebra as
+      !! `evp_truncate_velocity_impl`,
       !! duplicated rather than shared: the in-loop variant runs
       !! `evp_sub_steps` (432 by default) times per outer step and must
       !! NOT carry a reduction (each would be a device->host sync); this

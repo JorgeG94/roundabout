@@ -588,6 +588,7 @@ contains
       ! already present]`, which is a no-op for the production state (mapped by
       ! `enter_data`) and still correct for a host-only unit test.  `present(...)`
       ! here would make the test abort with a present-table lookup failure.
+      ! acc-kept: nested `!$acc loop seq` early-exit scan inside (no do-concurrent twin)
       !$acc parallel loop collapse(2) private(k, k_top, k_don, c_live) &
       !$acc   reduction(+:n_bad) reduction(max:worst)
       do j = 1, ny

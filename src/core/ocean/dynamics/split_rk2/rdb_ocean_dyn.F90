@@ -2044,11 +2044,14 @@ contains
       !!      face clipped to `0.9·cfl_trunc·dx/dt > maxvel` is further
       !!      bounded to `±maxvel`.
       !!
-      !! The CFL clip + count run in a single `!$acc parallel loop
-      !! reduction(+:n)` per face component — *not* a bare `do concurrent`
-      !! + `sum()` over scratch (which silently returns 0 on GPU under
-      !! stdpar; see the no-managed-memory gotcha).  `ntrunc_step` is the
-      !! host-scalar reduction result (reset to 0 here each call).
+      !! The CFL count runs as a read-only `do concurrent reduce(+:n)` per
+      !! face component, in a SEPARATE pass from the masked-write clip
+      !! (fusing a conditional array write into the same reduction pass
+      !! silently dropped the write on the cc70 build — see the two-pass
+      !! split below) — *not* a bare `sum()` over scratch, which silently
+      !! returns 0 on GPU under stdpar (see the no-managed-memory gotcha).
+      !! `ntrunc_step` is the host-scalar reduction result (reset to 0
+      !! here each call).
       !!
       !! Not conservative — clipping a runaway face loses momentum; when
       !! the truncation fires, conservation is already broken by whatever
@@ -2159,21 +2162,11 @@ contains
       ny_uface = size(ms%u_face_x_layer, 2)
       nx_vface = size(ms%v_face_y_layer, 1)
       ny_vface = size(ms%v_face_y_layer, 2)
-      !$acc parallel loop collapse(3) reduction(+:n_nan) present(ms%u_face_x_layer)
-      do k = 1, nz
-         do j = 1, ny_uface
-            do i = 1, nx_uface
-               if (.not. ieee_is_finite(ms%u_face_x_layer(i, j, k))) n_nan = n_nan + 1
-            end do
-         end do
+      do concurrent(k=1:nz, j=1:ny_uface, i=1:nx_uface) reduce(+:n_nan)
+         if (.not. ieee_is_finite(ms%u_face_x_layer(i, j, k))) n_nan = n_nan + 1
       end do
-      !$acc parallel loop collapse(3) reduction(+:n_nan) present(ms%v_face_y_layer)
-      do k = 1, nz
-         do j = 1, ny_vface
-            do i = 1, nx_vface
-               if (.not. ieee_is_finite(ms%v_face_y_layer(i, j, k))) n_nan = n_nan + 1
-            end do
-         end do
+      do concurrent(k=1:nz, j=1:ny_vface, i=1:nx_vface) reduce(+:n_nan)
+         if (.not. ieee_is_finite(ms%v_face_y_layer(i, j, k))) n_nan = n_nan + 1
       end do
       ! Locate the FIRST non-finite face (min-reduction over an encoded
       ! linear index, k-major) — ONLY when n_nan>0 (something is already
@@ -2198,28 +2191,18 @@ contains
          nxv64 = int(nx_vface, int64)
          nyv64 = int(ny_vface, int64)
          lin_u_min = huge(1_int64)
-         !$acc parallel loop collapse(3) reduction(min:lin_u_min) present(ms%u_face_x_layer)
-         do k = 1, nz
-            do j = 1, ny_uface
-               do i = 1, nx_uface
-                  if (.not. ieee_is_finite(ms%u_face_x_layer(i, j, k))) then
-                     lin_u_min = min(lin_u_min, &
-                                     (int(k - 1, int64)*nyu64 + int(j - 1, int64))*nxu64 + int(i - 1, int64))
-                  end if
-               end do
-            end do
+         do concurrent(k=1:nz, j=1:ny_uface, i=1:nx_uface) reduce(min:lin_u_min)
+            if (.not. ieee_is_finite(ms%u_face_x_layer(i, j, k))) then
+               lin_u_min = min(lin_u_min, &
+                               (int(k - 1, int64)*nyu64 + int(j - 1, int64))*nxu64 + int(i - 1, int64))
+            end if
          end do
          lin_v_min = huge(1_int64)
-         !$acc parallel loop collapse(3) reduction(min:lin_v_min) present(ms%v_face_y_layer)
-         do k = 1, nz
-            do j = 1, ny_vface
-               do i = 1, nx_vface
-                  if (.not. ieee_is_finite(ms%v_face_y_layer(i, j, k))) then
-                     lin_v_min = min(lin_v_min, &
-                                     (int(k - 1, int64)*nyv64 + int(j - 1, int64))*nxv64 + int(i - 1, int64))
-                  end if
-               end do
-            end do
+         do concurrent(k=1:nz, j=1:ny_vface, i=1:nx_vface) reduce(min:lin_v_min)
+            if (.not. ieee_is_finite(ms%v_face_y_layer(i, j, k))) then
+               lin_v_min = min(lin_v_min, &
+                               (int(k - 1, int64)*nyv64 + int(j - 1, int64))*nxv64 + int(i - 1, int64))
+            end if
          end do
 
          block
@@ -2342,22 +2325,16 @@ contains
          ! ⇒ bit-identical.
          nx_centre = size(ms%h_layer, 1)
          ny_centre = size(ms%h_layer, 2)
-         !$acc parallel loop collapse(3) reduction(+:n_u) private(idx_use) &
-         !$acc   present(ms%u_face_x_layer, metrics%idxCu, metrics%idxT)
-         do k = 1, nz
-            do j = 1, ny_uface
-               do i = 1, nx_uface
-                  if (do_clip_cell) then
-                     idx_use = max(metrics%idxT(max(i - 1, 1), j), &
-                                   metrics%idxT(min(i, nx_centre), j))
-                  else
-                     idx_use = metrics%idxCu(i, j)
-                  end if
-                  if (abs(ms%u_face_x_layer(i, j, k))*dt*idx_use > cfl_trunc) then
-                     n_u = n_u + 1
-                  end if
-               end do
-            end do
+         do concurrent(k=1:nz, j=1:ny_uface, i=1:nx_uface) local(idx_use) reduce(+:n_u)
+            if (do_clip_cell) then
+               idx_use = max(metrics%idxT(max(i - 1, 1), j), &
+                             metrics%idxT(min(i, nx_centre), j))
+            else
+               idx_use = metrics%idxCu(i, j)
+            end if
+            if (abs(ms%u_face_x_layer(i, j, k))*dt*idx_use > cfl_trunc) then
+               n_u = n_u + 1
+            end if
          end do
          do concurrent(k=1:nz, j=1:ny_uface, i=1:nx_uface) local(idx_use)
             if (do_clip_cell) then
@@ -2374,22 +2351,16 @@ contains
          end do
 
          ! v-faces (Cv): same two-pass split as the u-faces above.
-         !$acc parallel loop collapse(3) reduction(+:n_v) private(idy_use) &
-         !$acc   present(ms%v_face_y_layer, metrics%idyCv, metrics%idyT)
-         do k = 1, nz
-            do j = 1, ny_vface
-               do i = 1, nx_vface
-                  if (do_clip_cell) then
-                     idy_use = max(metrics%idyT(i, max(j - 1, 1)), &
-                                   metrics%idyT(i, min(j, ny_centre)))
-                  else
-                     idy_use = metrics%idyCv(i, j)
-                  end if
-                  if (abs(ms%v_face_y_layer(i, j, k))*dt*idy_use > cfl_trunc) then
-                     n_v = n_v + 1
-                  end if
-               end do
-            end do
+         do concurrent(k=1:nz, j=1:ny_vface, i=1:nx_vface) local(idy_use) reduce(+:n_v)
+            if (do_clip_cell) then
+               idy_use = max(metrics%idyT(i, max(j - 1, 1)), &
+                             metrics%idyT(i, min(j, ny_centre)))
+            else
+               idy_use = metrics%idyCv(i, j)
+            end if
+            if (abs(ms%v_face_y_layer(i, j, k))*dt*idy_use > cfl_trunc) then
+               n_v = n_v + 1
+            end if
          end do
          do concurrent(k=1:nz, j=1:ny_vface, i=1:nx_vface) local(idy_use)
             if (do_clip_cell) then
@@ -2494,6 +2465,7 @@ contains
       j_lo = nghost + 1
       j_hi = ny - nghost
       acc = 0.0_wp
+      ! acc-kept: assumed-shape dummy flux_h_layer/areaT (dc-assumed-shape)
       !$acc parallel loop collapse(3) reduction(+:acc) present(flux_h_layer, areaT)
       do k = 1, nz
          do j = j_lo, j_hi
@@ -2520,6 +2492,7 @@ contains
          e5 = 0_int64
          e6 = 0_int64
          epoison = 0_int64
+         ! acc-kept: EFP reproducing-sum path, left exactly as-is + assumed-shape dummy
          !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
          !$acc&  private(val, colsum, d1, d2, d3, d4, d5, d6, dpoison) present(flux_h_layer, areaT)
          do j = j_lo, j_hi
@@ -4048,27 +4021,18 @@ contains
       ! uniformly over every layer, poisoning the whole column silently.
       ! Catching the total here names the stage that evacuated the column.
       col_min = huge(1.0_wp)
-      !$acc parallel loop collapse(2) reduction(min:col_min) &
-      !$acc   private(k, col_sum) present(ms%h_layer)
-      do j = j0, j1
-         do i = i0, i1
-            col_sum = 0.0_wp
-            do k = 1, ms%nz_ml
-               col_sum = col_sum + ms%h_layer(i, j, k)
-            end do
-            col_min = min(col_min, col_sum)
+      do concurrent(j=j0:j1, i=i0:i1) local(k, col_sum) reduce(min:col_min)
+         col_sum = 0.0_wp
+         do k = 1, ms%nz_ml
+            col_sum = col_sum + ms%h_layer(i, j, k)
          end do
+         col_min = min(col_min, col_sum)
       end do
 
       h_min = huge(1.0_wp)
       if (check_layers) then
-         !$acc parallel loop collapse(3) reduction(min:h_min) present(ms%h_layer)
-         do k = 1, ms%nz_ml
-            do j = j0, j1
-               do i = i0, i1
-                  h_min = min(h_min, ms%h_layer(i, j, k))
-               end do
-            end do
+         do concurrent(k=1:ms%nz_ml, j=j0:j1, i=i0:i1) reduce(min:h_min)
+            h_min = min(h_min, ms%h_layer(i, j, k))
          end do
       end if
       if (h_min >= 0.0_wp .and. col_min > 0.0_wp) return
