@@ -692,7 +692,7 @@ contains
       !! grandparent still fails, loudly, at the `inquire` re-check
       !! below). Exists to close the headline P7 crash: `&ocean_diag_nml`/
       !! `&output_nml` default `output_dir = "./output"`
-      !! (`rdb_config.F90:2316`), so a first-time `create()` against a
+      !! (`rdb_config_register_core.F90 :: register_output`), so a first-time `create()` against a
       !! fresh checkout with no `./output/` directory would otherwise
       !! reach `nc_create_file` -> `nf90_create` -> ENOENT ->
       !! `error stop`, killing the whole host process.

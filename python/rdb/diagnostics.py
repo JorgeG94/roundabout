@@ -20,7 +20,7 @@ _CADENCE_UNITS = frozenset("smhd")
 _VGRIDS = ("layer", "z_fixed", "sigma", "zstar", "density")
 _PRECISIONS = ("double", "single")
 _LOG_LEVELS = ("debug", "verbose", "info", "performance", "warning", "error")
-#: Mirrors `apply_time_unit_cascade`'s own case list (rdb_config.F90:2886)
+#: Mirrors `apply_time_unit_cascade`'s own case list (rdb_config_read.F90 :: apply_time_unit_cascade)
 #: -- the SAME conversion `Duration.time_unit` feeds.
 _TIME_UNITS = ("s", "sec", "second", "seconds", "min", "minute", "minutes",
                "hr", "hour", "hours", "h", "day", "days", "d",
@@ -224,7 +224,7 @@ class Duration:
     drives the outer loop directly in raw simulated seconds via
     ``until=``/``steps=`` and never reads either knob -- but `t_end`
     still gates ``create()``: the Fortran's own cross-check
-    (`rdb_config.F90:3252`) refuses a ``Diagnostics(every=...)``
+    (`rdb_config_validate.F90 :: validate_config`) refuses a ``Diagnostics(every=...)``
     cadence (``&ocean_diag_nml dt_out``) that exceeds `t_end` once BOTH
     are scaled through `time_unit`, and `t_end` DEFAULTS to 1.0
     **second** -- almost any real diagnostic cadence exceeds that, so
@@ -233,7 +233,7 @@ class Duration:
 
     `time_unit` ALSO scales `status_interval`
     (``Diagnostics(status_interval=...)``) the same way
-    (`apply_time_unit_cascade`, `rdb_config.F90:2886`, multiplies
+    (`apply_time_unit_cascade`, `rdb_config_read.F90 :: apply_time_unit_cascade`, multiplies
     `t_end`/`status_interval`/`ocean_diag.dt_out` through by the SAME
     factor) -- set `time_unit=` here to whatever unit every other
     time-ish curated value in this `Model(...)` is meant to be read in.
@@ -244,7 +244,7 @@ class Duration:
             raise ValueError(
                 f"time_unit must be one of {_TIME_UNITS!r} (mirrors "
                 f"apply_time_unit_cascade's own case list, "
-                f"rdb_config.F90:2886), got {time_unit!r}")
+                f"rdb_config_read.F90 :: apply_time_unit_cascade), got {time_unit!r}")
         self.t_end, self.time_unit = t_end, time_unit
 
     def apply(self, config):

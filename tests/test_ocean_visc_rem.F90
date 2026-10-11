@@ -602,7 +602,7 @@ contains
    subroutine test_pr1_two_layer_bbl_glue_closed_form(error)
       !! PR-1 plan §3 "Tests": a two-layer BBL-glued case against the
       !! closed-form tridiagonal.  `bbl_glue` requires `hvel_mom6`
-      !! (`rdb_config.F90:5108-5110`); a UNIFORM column on both sides of
+      !! (`rdb_config_validate.F90 :: validate_config`); a UNIFORM column on both sides of
       !! every face (`h_delta = 0`) collapses `diffuse_velocity_columns_
       !! impl`'s hvel/upwind blend to the plain arithmetic mean and makes
       !! `zint(k)` an exact cumulative-height-above-bed (no blend

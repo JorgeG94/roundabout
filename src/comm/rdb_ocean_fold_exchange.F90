@@ -47,7 +47,7 @@
 !! DEVICE vs HOST
 !! ==============
 !! Mirrors `rdb_ocean_halo` exactly: the `device_resident` switch selects
-!! `!$acc parallel loop` pack/unpack over device-present arrays (default)
+!! `do concurrent` pack/unpack over device-present arrays (default)
 !! or plain host loops (setup-time host fills), and the MPI calls pass the
 !! buffers through `!$acc host_data use_device` — like the halo, the device
 !! path always hands MPI DEVICE addresses (`RDB_CUDA_AWARE_MPI` only selects

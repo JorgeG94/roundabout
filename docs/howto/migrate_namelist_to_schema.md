@@ -17,8 +17,10 @@ native reader (`read_ocean_bc_nml` in `rdb_config.F90`) and is registered with
 without validating it. Migrating it is the outstanding job this guide is for.
 The worked examples to copy are the pilot groups `register_kappa_shear` and
 `register_epbl`, and — for a group with an array knob and a big enum —
-`register_ocean_hvisc`. All the `register_*` routines live in `rdb_config.F90`
-and are called from `build_rdb_schema`; `rdb_config_schema.F90` is only a
+`register_ocean_hvisc`. All the `register_*` routines are declared as
+`module subroutine` interfaces in `rdb_config.F90` and implemented in the
+`src/core/config/rdb_config_register_{core,vmix,lateral,forcing}.F90`
+submodules, called from `build_rdb_schema`; `rdb_config_schema.F90` is only a
 re-export shim (it also owns `nml_dirname`), kept separate to avoid a circular
 dependency.
 
@@ -32,7 +34,7 @@ dependency.
    `&ocean_epbl_nml`.
 3. Validation that the engine can't express (exclusive bounds, cross-knob
    requirements involving non-config state) stays where it is
-   (`validate_config` in `rdb_config.F90`, and the `configure_ocean_*`
+   (`validate_config` in `src/core/config/rdb_config_validate.F90`, and the `configure_ocean_*`
    routines in `src/core/ocean/state/rdb_ocean_setup.F90`) — migrating a group
    must never weaken an existing check.
 4. **A string knob with a fixed accepted set becomes `nml_enum`**, and its
@@ -41,7 +43,7 @@ dependency.
 
 ## Recipe (one group per commit)
 
-1. In `build_rdb_schema` (`rdb_config.F90`): remove the group's
+1. In `build_rdb_schema` (`src/core/config/rdb_config_register_core.F90`): remove the group's
    `add_external_group` line; add a `register_<group>` subroutine registering
    **every** field of its config type — `nml_real/int/logical/string/enum/real_array(name,
    cfg%...%field, doc [, units] [, min/max] [, allowed])` — and call it from

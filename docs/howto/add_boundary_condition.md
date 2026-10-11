@@ -147,6 +147,7 @@ without your BC is byte-for-byte unchanged.
 - `src/core/ocean/boundary/{rdb_ocean_sponge,rdb_ocean_periodic,rdb_ocean_fold,rdb_ocean_fold_apply,rdb_ocean_boundary_data}.F90`.
 - `src/core/ocean/kernels/continuity_ppm/rdb_continuity.F90` — wall
   mass-flux zeroing.
-- `src/core/rdb_config.F90` — `read_ocean_bc_nml`, `validate_config`;
+- `src/core/rdb_config.F90` — `read_ocean_bc_nml`;
+  `src/core/config/rdb_config_validate.F90` — `validate_config`;
   `src/core/ocean/state/rdb_ocean_setup.F90` — `configure_ocean_bc`.
 - The "Boundaries" bullet of the top-level [`CLAUDE.md`](../../CLAUDE.md).

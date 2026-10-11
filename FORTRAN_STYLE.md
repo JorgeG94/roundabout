@@ -843,6 +843,13 @@ the bonus that it does not depend on that staying true. Existing
 hand-duplicated copies are historical; don't add more, and don't keep a second
 inline copy of a formula an include already holds.
 
+**This is about small leaf helpers, not kernel blocks.** Moving a real kernel
+block into a submodule is NOT free: measured 2026-10-11, lifting
+`rdb_continuity`'s tracer-drain block (12 procedures, ~1230 lines) into its own
+submodule cost +36% in `ocean_tracer_drain` and +6.2% total wall time
+(double-gyre bench, V100; bit-identical). Kernel code stays in its module
+file; submodules are for host-only code (e.g. `src/core/config/`).
+
 Passing an array **element** to a helper makes nvfortran report the enclosing
 array as a whole-array `implicit copy`. That is free when the array is already
 device-resident, and one more reason the residency rules are not optional.

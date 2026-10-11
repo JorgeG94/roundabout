@@ -77,7 +77,7 @@ where the `select case (coord_type)` lives:
    in `src/ALE/rdb_ocean_remap.F90` (there is one per remap entry point).
 6. **Config + namelist** — `vcoord_type` already exists in `&vcoord_nml`; add
    the new string to its enum registration (`register_vcoord` in
-   `src/core/rdb_config.F90`) and any new knob fields per
+   `src/core/config/rdb_config_register_core.F90`) and any new knob fields per
    [add_namelist_knob.md](add_namelist_knob.md).
 7. **Driver wiring** — `src/driver/rdb_driver.F90` already routes
    `ocean_state%vcoord%coord_type = parse_ocean_vcoord_type(cfg%vcoord_type)`;

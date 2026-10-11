@@ -660,9 +660,9 @@ constraint.
 
 | Knob | file:line (decl) | Default | Selects | Scope |
 |---|---|---|---|---|
-| `remap_method` | `src/core/rdb_config.F90:2030` (enum `:4097`, parse `src/ALE/rdb_vcoord.F90:628`) | `"ppm"` (pcm/plm/ppm/ppm_h4/pqm) | vertical ALE remap order | the ocean setup parses it into `vcoord%remap_method` (`rdb_ocean_setup.F90:838`) and the ocean remap caller passes it (`rdb_ocean_dyn.F90:1061`) |
-| `ppm_limit_pos` | `src/core/rdb_config.F90:569` (parse `:2967-2968`) | `.false.` | positivity-limiter **modifier** on the ocean continuity PPM face values — not a scheme-family selector | ocean continuity |
-| `positive_definite` | `src/core/rdb_config.F90` (`register_ocean_continuity`) | `.false.` | positive-definite split continuity **modifier**: `2·h_lim` PPM edge floor + per-donor θ outflux limiter ⇒ every layer `h ≥ h_lim` with zero mass created; `h_lim = angstrom_h` on VCOORD_LAGRANGIAN else 0. Mutually exclusive with `&ocean_wetdry_nml enable` | ocean continuity |
+| `remap_method` | `src/core/config/rdb_config_register_core.F90 :: register_vcoord` (parse `src/ALE/rdb_vcoord.F90:628`) | `"ppm"` (pcm/plm/ppm/ppm_h4/pqm) | vertical ALE remap order | the ocean setup parses it into `vcoord%remap_method` (`rdb_ocean_setup.F90:838`) and the ocean remap caller passes it (`rdb_ocean_dyn.F90:1061`) |
+| `ppm_limit_pos` | `src/core/config/rdb_config_register_vmix.F90 :: register_ocean_continuity` | `.false.` | positivity-limiter **modifier** on the ocean continuity PPM face values — not a scheme-family selector | ocean continuity |
+| `positive_definite` | `src/core/config/rdb_config_register_vmix.F90` (`register_ocean_continuity`) | `.false.` | positive-definite split continuity **modifier**: `2·h_lim` PPM edge floor + per-donor θ outflux limiter ⇒ every layer `h ≥ h_lim` with zero mass created; `h_lim = angstrom_h` on VCOORD_LAGRANGIAN else 0. Mutually exclusive with `&ocean_wetdry_nml enable` | ocean continuity |
 
 ### (d) Honesty notes (the bits a reader will get wrong)
 

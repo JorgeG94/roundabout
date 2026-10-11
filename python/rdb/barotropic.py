@@ -44,7 +44,7 @@ class BarotropicSolver:
     `pc_be`, `bebt`, `bt_halo`, `substep_drag`.
 
     `auto=False` is the DEFAULT, matching `&ocean_bt_nml auto_n_inner =
-    .false.` (rdb_config.F90:499). An earlier version defaulted to
+    .false.` (rdb_config_register_lateral.F90 :: register_ocean_bt). An earlier version defaulted to
     `auto=True`, so `BarotropicSolver(n_inner=60)` silently ignored the
     `n_inner` it was handed and derived one from the gravity-wave CFL
     instead.
