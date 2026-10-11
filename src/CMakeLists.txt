@@ -21,6 +21,15 @@ set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/ALE/rdb_vcoord.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/rdb_decomp.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/rdb_config.F90
+    # Submodules of rdb_config (R1 split, 11.7k-line monolith -> parent +
+    # bodies-by-concern): read/validate entry points, then the strict-schema
+    # register_* family grouped core/vmix/lateral/forcing.
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/config/rdb_config_read.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/config/rdb_config_validate.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/config/rdb_config_register_core.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/config/rdb_config_register_vmix.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/config/rdb_config_register_lateral.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/config/rdb_config_register_forcing.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/rdb_config_schema.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/rdb_grid.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/rdb_tracer.F90
