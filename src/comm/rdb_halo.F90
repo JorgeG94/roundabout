@@ -325,6 +325,7 @@ contains
       ! --- Pack on device ---
       if (.not. decomp%has_west) then
          rank_west = decomp_rank_from_coords(decomp%px, decomp%rx - 1, decomp%ry)
+         ! acc-kept: assumed-shape dummy fld(:,:) (dc-assumed-shape)
          !$acc parallel loop collapse(2) present(hs_buf_send_west, fld)
          do j = 1, ny_total
             do k = 1, nghost
@@ -335,6 +336,7 @@ contains
 
       if (.not. decomp%has_east) then
          rank_east = decomp_rank_from_coords(decomp%px, decomp%rx + 1, decomp%ry)
+         ! acc-kept: assumed-shape dummy fld(:,:) (dc-assumed-shape)
          !$acc parallel loop collapse(2) present(hs_buf_send_east, fld)
          do j = 1, ny_total
             do k = 1, nghost
@@ -345,6 +347,7 @@ contains
 
       if (.not. decomp%has_south) then
          rank_south = decomp_rank_from_coords(decomp%px, decomp%rx, decomp%ry - 1)
+         ! acc-kept: assumed-shape dummy fld(:,:) (dc-assumed-shape)
          !$acc parallel loop collapse(2) present(hs_buf_send_south, fld)
          do k = 1, nghost
             do i = 1, nx_total
@@ -355,6 +358,7 @@ contains
 
       if (.not. decomp%has_north) then
          rank_north = decomp_rank_from_coords(decomp%px, decomp%rx, decomp%ry + 1)
+         ! acc-kept: assumed-shape dummy fld(:,:) (dc-assumed-shape)
          !$acc parallel loop collapse(2) present(hs_buf_send_north, fld)
          do k = 1, nghost
             do i = 1, nx_total
@@ -406,6 +410,7 @@ contains
 
       ! --- Unpack on device ---
       if (.not. decomp%has_west) then
+         ! acc-kept: assumed-shape dummy fld(:,:) (dc-assumed-shape)
          !$acc parallel loop collapse(2) present(hs_buf_recv_west, fld)
          do j = 1, ny_total
             do k = 1, nghost
@@ -415,6 +420,7 @@ contains
       end if
 
       if (.not. decomp%has_east) then
+         ! acc-kept: assumed-shape dummy fld(:,:) (dc-assumed-shape)
          !$acc parallel loop collapse(2) present(hs_buf_recv_east, fld)
          do j = 1, ny_total
             do k = 1, nghost
@@ -424,6 +430,7 @@ contains
       end if
 
       if (.not. decomp%has_south) then
+         ! acc-kept: assumed-shape dummy fld(:,:) (dc-assumed-shape)
          !$acc parallel loop collapse(2) present(hs_buf_recv_south, fld)
          do k = 1, nghost
             do i = 1, nx_total
@@ -433,6 +440,7 @@ contains
       end if
 
       if (.not. decomp%has_north) then
+         ! acc-kept: assumed-shape dummy fld(:,:) (dc-assumed-shape)
          !$acc parallel loop collapse(2) present(hs_buf_recv_north, fld)
          do k = 1, nghost
             do i = 1, nx_total
@@ -607,6 +615,7 @@ contains
 
       ! --- Pack all 4 fields into combined buffers on device ---
       if (.not. ha%decomp%has_west) then
+         ! acc-kept: assumed-shape dummy h/hu/hv/b_fld(:,:) (dc-assumed-shape)
          !$acc parallel loop collapse(2)
          do j = 1, nyt
             do k = 1, ng
@@ -620,6 +629,7 @@ contains
       end if
 
       if (.not. ha%decomp%has_east) then
+         ! acc-kept: assumed-shape dummy h/hu/hv/b_fld(:,:) (dc-assumed-shape)
          !$acc parallel loop collapse(2)
          do j = 1, nyt
             do k = 1, ng
@@ -633,6 +643,7 @@ contains
       end if
 
       if (.not. ha%decomp%has_south) then
+         ! acc-kept: assumed-shape dummy h/hu/hv/b_fld(:,:) (dc-assumed-shape)
          !$acc parallel loop collapse(2)
          do k = 1, ng
             do i = 1, nxt
@@ -646,6 +657,7 @@ contains
       end if
 
       if (.not. ha%decomp%has_north) then
+         ! acc-kept: assumed-shape dummy h/hu/hv/b_fld(:,:) (dc-assumed-shape)
          !$acc parallel loop collapse(2)
          do k = 1, ng
             do i = 1, nxt
@@ -721,6 +733,7 @@ contains
 
       ! --- Unpack all 4 fields from combined buffers on device ---
       if (.not. ha%decomp%has_west) then
+         ! acc-kept: assumed-shape dummy h/hu/hv/b_fld(:,:) (dc-assumed-shape)
          !$acc parallel loop collapse(2)
          do j = 1, nyt
             do k = 1, ng
@@ -734,6 +747,7 @@ contains
       end if
 
       if (.not. ha%decomp%has_east) then
+         ! acc-kept: assumed-shape dummy h/hu/hv/b_fld(:,:) (dc-assumed-shape)
          !$acc parallel loop collapse(2)
          do j = 1, nyt
             do k = 1, ng
@@ -747,6 +761,7 @@ contains
       end if
 
       if (.not. ha%decomp%has_south) then
+         ! acc-kept: assumed-shape dummy h/hu/hv/b_fld(:,:) (dc-assumed-shape)
          !$acc parallel loop collapse(2)
          do k = 1, ng
             do i = 1, nxt
@@ -760,6 +775,7 @@ contains
       end if
 
       if (.not. ha%decomp%has_north) then
+         ! acc-kept: assumed-shape dummy h/hu/hv/b_fld(:,:) (dc-assumed-shape)
          !$acc parallel loop collapse(2)
          do k = 1, ng
             do i = 1, nxt
@@ -870,49 +886,29 @@ contains
       ! --- Pack on device (all layers in a single kernel per direction) ---
       if (.not. decomp%has_west) then
          rank_west = decomp_rank_from_coords(decomp%px, decomp%rx - 1, decomp%ry)
-         !$acc parallel loop collapse(3) present(hs3_buf_send_west, fld)
-         do L = 1, nz
-            do j = 1, ny_total
-               do k = 1, nghost
-                  hs3_buf_send_west(((L - 1)*ny_total + (j - 1))*nghost + k) = fld(nghost + k, j, L)
-               end do
-            end do
+         do concurrent(L=1:nz, j=1:ny_total, k=1:nghost)
+            hs3_buf_send_west(((L - 1)*ny_total + (j - 1))*nghost + k) = fld(nghost + k, j, L)
          end do
       end if
 
       if (.not. decomp%has_east) then
          rank_east = decomp_rank_from_coords(decomp%px, decomp%rx + 1, decomp%ry)
-         !$acc parallel loop collapse(3) present(hs3_buf_send_east, fld)
-         do L = 1, nz
-            do j = 1, ny_total
-               do k = 1, nghost
-                  hs3_buf_send_east(((L - 1)*ny_total + (j - 1))*nghost + k) = fld(nghost + nx_local - nghost + k, j, L)
-               end do
-            end do
+         do concurrent(L=1:nz, j=1:ny_total, k=1:nghost)
+            hs3_buf_send_east(((L - 1)*ny_total + (j - 1))*nghost + k) = fld(nghost + nx_local - nghost + k, j, L)
          end do
       end if
 
       if (.not. decomp%has_south) then
          rank_south = decomp_rank_from_coords(decomp%px, decomp%rx, decomp%ry - 1)
-         !$acc parallel loop collapse(3) present(hs3_buf_send_south, fld)
-         do L = 1, nz
-            do k = 1, nghost
-               do i = 1, nx_total
-                  hs3_buf_send_south(((L - 1)*nghost + (k - 1))*nx_total + i) = fld(i, nghost + k, L)
-               end do
-            end do
+         do concurrent(L=1:nz, k=1:nghost, i=1:nx_total)
+            hs3_buf_send_south(((L - 1)*nghost + (k - 1))*nx_total + i) = fld(i, nghost + k, L)
          end do
       end if
 
       if (.not. decomp%has_north) then
          rank_north = decomp_rank_from_coords(decomp%px, decomp%rx, decomp%ry + 1)
-         !$acc parallel loop collapse(3) present(hs3_buf_send_north, fld)
-         do L = 1, nz
-            do k = 1, nghost
-               do i = 1, nx_total
-                  hs3_buf_send_north(((L - 1)*nghost + (k - 1))*nx_total + i) = fld(i, nghost + ny_local - nghost + k, L)
-               end do
-            end do
+         do concurrent(L=1:nz, k=1:nghost, i=1:nx_total)
+            hs3_buf_send_north(((L - 1)*nghost + (k - 1))*nx_total + i) = fld(i, nghost + ny_local - nghost + k, L)
          end do
       end if
 
@@ -959,46 +955,26 @@ contains
 
       ! --- Unpack on device (all layers in a single kernel per direction) ---
       if (.not. decomp%has_west) then
-         !$acc parallel loop collapse(3) present(hs3_buf_recv_west, fld)
-         do L = 1, nz
-            do j = 1, ny_total
-               do k = 1, nghost
-                  fld(k, j, L) = hs3_buf_recv_west(((L - 1)*ny_total + (j - 1))*nghost + k)
-               end do
-            end do
+         do concurrent(L=1:nz, j=1:ny_total, k=1:nghost)
+            fld(k, j, L) = hs3_buf_recv_west(((L - 1)*ny_total + (j - 1))*nghost + k)
          end do
       end if
 
       if (.not. decomp%has_east) then
-         !$acc parallel loop collapse(3) present(hs3_buf_recv_east, fld)
-         do L = 1, nz
-            do j = 1, ny_total
-               do k = 1, nghost
-                  fld(nghost + nx_local + k, j, L) = hs3_buf_recv_east(((L - 1)*ny_total + (j - 1))*nghost + k)
-               end do
-            end do
+         do concurrent(L=1:nz, j=1:ny_total, k=1:nghost)
+            fld(nghost + nx_local + k, j, L) = hs3_buf_recv_east(((L - 1)*ny_total + (j - 1))*nghost + k)
          end do
       end if
 
       if (.not. decomp%has_south) then
-         !$acc parallel loop collapse(3) present(hs3_buf_recv_south, fld)
-         do L = 1, nz
-            do k = 1, nghost
-               do i = 1, nx_total
-                  fld(i, k, L) = hs3_buf_recv_south(((L - 1)*nghost + (k - 1))*nx_total + i)
-               end do
-            end do
+         do concurrent(L=1:nz, k=1:nghost, i=1:nx_total)
+            fld(i, k, L) = hs3_buf_recv_south(((L - 1)*nghost + (k - 1))*nx_total + i)
          end do
       end if
 
       if (.not. decomp%has_north) then
-         !$acc parallel loop collapse(3) present(hs3_buf_recv_north, fld)
-         do L = 1, nz
-            do k = 1, nghost
-               do i = 1, nx_total
-                  fld(i, nghost + ny_local + k, L) = hs3_buf_recv_north(((L - 1)*nghost + (k - 1))*nx_total + i)
-               end do
-            end do
+         do concurrent(L=1:nz, k=1:nghost, i=1:nx_total)
+            fld(i, nghost + ny_local + k, L) = hs3_buf_recv_north(((L - 1)*nghost + (k - 1))*nx_total + i)
          end do
       end if
 
