@@ -5,7 +5,7 @@ ENVELOPES and one record per failing cell (union of failing
 assertions over toolchains and tiers, every toolchain's number
 quoted).  Re-measure and regenerate; never hand-edit a number.
 
-Provenance: tier 1 = 30 simulated days (10 for the seamount and rx0 problems, T1_STEPS_SEAMOUNT), tier 2 = 3.33 days; gfortran 15.1.0 Release -march=x86-64-v3 (CPU) and nvfortran 26.5 (GPU, cc70, V100); RDB_ENABLE_MPI=OFF, single rank; main df34a995d (MPI bit-identity round) + the EFP non-finite propagation fix + the barotropic gravity fix (g_bt = GRAVITY under FV_MOM6); fix/lid-unstrat-blip 11c4ba94b; 2026-09-28; lagrangian family re-pinned 2026-10-04 on fix/lagrangian-growth (grounded-layer PGF gate requires a vanished side): gfortran 15.1.0 Release (CPU) and nvfortran 26.5 (GPU, cc70, V100), tier 1 + tier 2, the 20 lagrangian cells + 6 tier-2 twins only -- the gate applies under VCOORD_LAGRANGIAN alone, so every other family's records are unchanged; zstar family re-pinned 2026-10-07 on fix/zstar-matrix-repin (0d45057c9 redefined zstar as MOM6 z* = z_fixed's staircase dilated by (H+eta)/H; the 12 FAIL cells are the z_fixed_staircase boundary-reconstruction residual (remap_boundary_extrap), confirmed bounded (Leg 2: off pins S_min exactly, En +2.8%; Leg 3: saturates by day 10, flat through day 60, nz=30 overshoot ~half) -- gfortran 15.1.0 Release (CPU) only, tier 1 + tier 2, the 12 zstar cells + their tier-2 twins; nvfortran/GPU-side pin pending (GPUs in use for a production run) -- every other family's records are unchanged
+Provenance: tier 1 = 30 simulated days (10 for the seamount and rx0 problems, T1_STEPS_SEAMOUNT), tier 2 = 3.33 days; gfortran 15.1.0 Release -march=x86-64-v3 (CPU) and nvfortran 26.5 (GPU, cc70, V100); RDB_ENABLE_MPI=OFF, single rank; main df34a995d (MPI bit-identity round) + the EFP non-finite propagation fix + the barotropic gravity fix (g_bt = GRAVITY under FV_MOM6); fix/lid-unstrat-blip 11c4ba94b; 2026-09-28; lagrangian family re-pinned 2026-10-04 on fix/lagrangian-growth (grounded-layer PGF gate requires a vanished side): gfortran 15.1.0 Release (CPU) and nvfortran 26.5 (GPU, cc70, V100), tier 1 + tier 2, the 20 lagrangian cells + 6 tier-2 twins only -- the gate applies under VCOORD_LAGRANGIAN alone, so every other family's records are unchanged; zstar family re-pinned 2026-10-07 on fix/zstar-matrix-repin (0d45057c9 redefined zstar as MOM6 z* = z_fixed's staircase dilated by (H+eta)/H; the 12 FAIL cells are the z_fixed_staircase boundary-reconstruction residual (remap_boundary_extrap), confirmed bounded (Leg 2: off pins S_min exactly, En +2.8%; Leg 3: saturates by day 10, flat through day 60, nz=30 overshoot ~half) -- gfortran 15.1.0 Release (CPU) only, tier 1 + tier 2, the 12 zstar cells + their tier-2 twins; nvfortran/GPU-side pin added 2026-10-11 on test/187-zstar-nvfortran-pins (#187): gfortran 15.1.0 Release (CPU) and nvfortran 26.5 (GPU, cc70, V100), tier 1 + tier 2, the same 12 zstar cells + their tier-2 twins only -- every number is identical to the gfortran-only pin to every printed digit (toolchain-independent, as Leg 1 of the 2026-10-07 re-pin already established), so only the `measured` dict's `nvfortran` key was added; every other family's records are unchanged
 """
 
 ENVELOPES = {
@@ -83,6 +83,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: peak En 2.697e-07',
+                'nvfortran': 'tier 1: peak En 2.697e-07',
             },
         },
         'rx0_040/eulerian_z': {
@@ -154,6 +155,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: peak En 1.906e-07; tier 2: peak En 1.25e-07',
+                'nvfortran': 'tier 1: peak En 1.906e-07; tier 2: peak En 1.25e-07',
             },
         },
         'rx0_080/eulerian_z': {
@@ -198,6 +200,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: peak En 1.827e-07',
+                'nvfortran': 'tier 1: peak En 1.827e-07',
             },
         },
         'seamount_gentle/z_fixed': {
@@ -215,6 +218,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: peak En 3.198e-06',
+                'nvfortran': 'tier 1: peak En 3.198e-06',
             },
         },
         'seamount_steep/eulerian_z': {
@@ -259,6 +263,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: peak En 3.845e-05',
+                'nvfortran': 'tier 1: peak En 3.845e-05',
             },
         },
         'slope/eulerian_z': {
@@ -321,6 +326,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: peak En 5.655e-07; tier 2: peak En 5.167e-07',
+                'nvfortran': 'tier 1: peak En 5.655e-07; tier 2: peak En 5.167e-07',
             },
         },
     },
@@ -385,6 +391,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: peak En 2.75e-08',
+                'nvfortran': 'tier 1: peak En 2.75e-08',
             },
         },
         'rx0_040/hycom': {
@@ -438,6 +445,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: peak En 2.231e-08',
+                'nvfortran': 'tier 1: peak En 2.231e-08',
             },
         },
         'rx0_080/hycom': {
@@ -473,6 +481,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: peak En 1.285e-08',
+                'nvfortran': 'tier 1: peak En 1.285e-08',
             },
         },
         'seamount_gentle/hycom': {
@@ -508,6 +517,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: peak En 2.633e-07',
+                'nvfortran': 'tier 1: peak En 2.633e-07',
             },
         },
         'seamount_steep/hycom': {
@@ -543,6 +553,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: peak En 1.199e-07; tier 2: peak En 1.311e-07',
+                'nvfortran': 'tier 1: peak En 1.199e-07; tier 2: peak En 1.311e-07',
             },
         },
         'slope/hycom': {
@@ -596,6 +607,7 @@ MEASURED = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 1: peak En 5.437e-08; tier 2: passes',
+                'nvfortran': 'tier 1: peak En 5.437e-08; tier 2: passes',
             },
         },
     },
@@ -638,6 +650,7 @@ MEASURED_TWIN = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 2: peak En 8.951e-06',
+                'nvfortran': 'tier 2: peak En 8.951e-06',
             },
         },
         'slope/z_fixed': {
@@ -664,6 +677,7 @@ MEASURED_TWIN = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 2: peak En 5.277e-07',
+                'nvfortran': 'tier 2: peak En 5.277e-07',
             },
         },
     },
@@ -701,6 +715,7 @@ MEASURED_TWIN = {
             "toolchain_dependent": False,
             "measured": {
                 'gfortran': 'tier 2: peak En 1.318e-07',
+                'nvfortran': 'tier 2: peak En 1.318e-07',
             },
         },
         'slope/hycom': {

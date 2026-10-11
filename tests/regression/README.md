@@ -812,7 +812,10 @@ the lagrangian re-pin: `rx0_060 × lagrangian` and its twin).
    it); `zstar_sigma` now differs from them on the ladder (it is the
    only place its z* branch engages). The `zstar` rows were re-pinned
    2026-10-07 on fix/zstar-matrix-repin (gfortran 15.1.0 CPU only;
-   nvfortran/GPU-side pin pending): all 12 FAIL cells (`rx0_020/060/080`,
+   nvfortran/GPU-side pin added 2026-10-11, #187 -- gfortran 15.1.0 CPU and
+   nvfortran 26.5 GPU/cc70/V100 report the IDENTICAL numbers to every
+   printed digit on all 12 cells + their 3 tier-2 twins, so the defect is
+   toolchain-independent): all 12 FAIL cells (`rx0_020/060/080`,
    `seamount_gentle/steep`, `slope`, both legs) are `z_fixed`'s own
    staircase residual — MOM6 z\* lays exactly `z_fixed`'s staircase at
    `eta = 0`, so `Z_STAIRCASE` already routes them to the
