@@ -63,6 +63,7 @@ contains
          !! present; absent behaves as today (`error stop`).
 
       logical :: has_error
+      integer :: atm_code
       integer :: lateral_closure_code
       type(date_t) :: start_date_parsed
       logical :: start_date_ok
@@ -3565,74 +3566,20 @@ contains
                            "build (RDB_ENABLE_NETCDF=ON); the reader is compiled out here")
          has_error = .true.
 #endif
-         if (len_trim(cfg%start_date) == 0) then
-            call logger%error("&ocean_atm_forcing_nml enable=.true. requires "// &
-                              "&time_nml start_date (absolute file-time axes need "// &
-                              "a model-clock epoch)")
+         atm_code = atm_forcing_prereq_code(cfg)
+         if (atm_code /= ATM_PREREQ_OK) then
+            call logger%error(atm_forcing_prereq_message(atm_code))
             has_error = .true.
          end if
-         if (.not. cfg%ocean%forcing%enable_components) then
-            call logger%error("&ocean_atm_forcing_nml enable=.true. requires "// &
-                              "&ocean_forcing_nml enable_components=.true. "// &
-                              "(the bulk-flux outputs land on the component set)")
-            has_error = .true.
-         end if
-         if (trim(cfg%ocean%grid%grid_config) == "cartesian") then
-            call logger%error("&ocean_atm_forcing_nml enable=.true. requires a "// &
-                              "non-cartesian &ocean_grid_nml grid_config "// &
-                              "(spherical/supergrid/tripolar) -- a cartesian grid "// &
-                              "has no geographic lon/lat to regrid the atmosphere onto")
-            has_error = .true.
-         end if
-         if (trim(cfg%ocean%atm_forcing%states_regrid) == "patch") then
-            call logger%error("&ocean_atm_forcing_nml states_regrid='patch' is not "// &
-                              "implemented (no xESMF-equivalent patch recovery in this "// &
-                              "tree); use 'bilinear'")
-            has_error = .true.
-         end if
-         if (len_trim(cfg%ocean%atm_forcing%filelist_tas) == 0 .or. &
-             len_trim(cfg%ocean%atm_forcing%filelist_huss) == 0 .or. &
-             len_trim(cfg%ocean%atm_forcing%filelist_uas) == 0 .or. &
-             len_trim(cfg%ocean%atm_forcing%filelist_vas) == 0 .or. &
-             len_trim(cfg%ocean%atm_forcing%filelist_psl) == 0 .or. &
-             len_trim(cfg%ocean%atm_forcing%filelist_rlds) == 0 .or. &
-             len_trim(cfg%ocean%atm_forcing%filelist_rsds) == 0 .or. &
-             len_trim(cfg%ocean%atm_forcing%filelist_prra) == 0 .or. &
-             len_trim(cfg%ocean%atm_forcing%filelist_prsn) == 0) then
-            call logger%error("&ocean_atm_forcing_nml enable=.true. requires all nine "// &
-                              "filelist_<field> paths (tas/huss/uas/vas/psl/rlds/rsds/"// &
-                              "prra/prsn) -- a blank one is a fail-loud setup, never a "// &
-                              "silently-skipped field")
-            has_error = .true.
-         end if
-         if (cfg%ocean%thermo%sw_pen_frac > 0.0_wp .and. &
-             trim(cfg%ocean%thermo%sw_source) /= "q_sw") then
-            call logger%error("&ocean_atm_forcing_nml enable=.true. with "// &
-                              "&ocean_thermo_nml sw_pen_frac > 0 requires sw_source='q_sw' "// &
-                              "(the atmosphere writes q_sw, not net_heat)")
-            has_error = .true.
-         end if
-         if (len_trim(cfg%ocean%dataovr%tau_x%file) > 0 .or. &
-             len_trim(cfg%ocean%dataovr%tau_y%file) > 0 .or. &
-             len_trim(cfg%ocean%dataovr%heat%file) > 0 .or. &
-             len_trim(cfg%ocean%dataovr%evap%file) > 0 .or. &
-             len_trim(cfg%ocean%dataovr%lprec%file) > 0) then
-            call logger%error("&ocean_atm_forcing_nml enable=.true. conflicts with "// &
-                              "&ocean_dataovr_nml tau_x/tau_y/heat/evap/lprec -- both "// &
-                              "would write the same surface-flux components (a salt_file "// &
-                              "MAY coexist: SSS restoring is independent of the atmosphere)")
-            has_error = .true.
-         end if
-         if (.not. cfg%ocean%bulk_flux%enable) then
-            call logger%error("&ocean_atm_forcing_nml enable=.true. requires "// &
-                              "&ocean_bulk_flux_nml enable=.true. (bulk_flux%enable is "// &
-                              "implied by atm_forcing -- an explicit .false. is a conflict)")
-            has_error = .true.
-         end if
-         if (.not. bulk_flux_config_n_iter_ok(cfg%ocean%bulk_flux)) then
-            call logger%error("&ocean_bulk_flux_nml n_iter must be >= 1")
-            has_error = .true.
-         end if
+      end if
+      ! C2c-3 removes this refusal: until the provider and the bulk-flux
+      ! consumer are wired into the engine, enabling either group would be
+      ! a silent no-op that runs on whatever forcing was there before.
+      if (cfg%ocean%atm_forcing%enable .or. cfg%ocean%bulk_flux%enable) then
+         call logger%error("&ocean_atm_forcing_nml / &ocean_bulk_flux_nml enable=.true. "// &
+                           "is configured but not yet wired into the engine (lands "// &
+                           "with C2c-3); refusing rather than running on the old forcing")
+         has_error = .true.
       end if
 
       if (has_error) then
@@ -3713,6 +3660,90 @@ contains
       bad = (len_trim(cfg%evap%file) > 0 .or. len_trim(cfg%lprec%file) > 0) &
             .and. (.not. use_components)
    end function dataovr_freshwater_needs_components
+
+   pure module function atm_forcing_prereq_code(cfg) result(code)
+      !! First failing prerequisite of `&ocean_atm_forcing_nml enable` as an
+      !! `ATM_PREREQ_*` code (`ATM_PREREQ_OK` when all hold). Independent of
+      !! the NetCDF build and of the engine-wiring refusal, so each reason
+      !! is testable on every toolchain.
+      type(config_t), intent(in) :: cfg
+      integer :: code
+
+      code = ATM_PREREQ_OK
+      if (len_trim(cfg%start_date) == 0) then
+         code = ATM_PREREQ_START_DATE
+      else if (.not. cfg%ocean%forcing%enable_components) then
+         code = ATM_PREREQ_COMPONENTS
+      else if (trim(cfg%ocean%grid%grid_config) == "cartesian") then
+         code = ATM_PREREQ_CARTESIAN
+      else if (len_trim(cfg%ocean%atm_forcing%filelist_tas) == 0 .or. &
+               len_trim(cfg%ocean%atm_forcing%filelist_huss) == 0 .or. &
+               len_trim(cfg%ocean%atm_forcing%filelist_uas) == 0 .or. &
+               len_trim(cfg%ocean%atm_forcing%filelist_vas) == 0 .or. &
+               len_trim(cfg%ocean%atm_forcing%filelist_psl) == 0 .or. &
+               len_trim(cfg%ocean%atm_forcing%filelist_rlds) == 0 .or. &
+               len_trim(cfg%ocean%atm_forcing%filelist_rsds) == 0 .or. &
+               len_trim(cfg%ocean%atm_forcing%filelist_prra) == 0 .or. &
+               len_trim(cfg%ocean%atm_forcing%filelist_prsn) == 0) then
+         code = ATM_PREREQ_FILELIST
+      else if (cfg%ocean%thermo%sw_pen_frac > 0.0_wp .and. &
+               trim(cfg%ocean%thermo%sw_source) /= "q_sw") then
+         code = ATM_PREREQ_SW_SOURCE
+      else if (len_trim(cfg%ocean%dataovr%tau_x%file) > 0 .or. &
+               len_trim(cfg%ocean%dataovr%tau_y%file) > 0 .or. &
+               len_trim(cfg%ocean%dataovr%heat%file) > 0 .or. &
+               len_trim(cfg%ocean%dataovr%evap%file) > 0 .or. &
+               len_trim(cfg%ocean%dataovr%lprec%file) > 0) then
+         code = ATM_PREREQ_DATAOVR
+      else if (.not. cfg%ocean%bulk_flux%enable) then
+         code = ATM_PREREQ_BULK_FLUX
+      else if (.not. bulk_flux_config_n_iter_ok(cfg%ocean%bulk_flux)) then
+         code = ATM_PREREQ_N_ITER
+      else if (cfg%ocean%atm_forcing%orb_year /= 1990) then
+         code = ATM_PREREQ_ORB_YEAR
+      end if
+   end function atm_forcing_prereq_code
+
+   pure module function atm_forcing_prereq_message(code) result(msg)
+      !! The fail-loud message for an `ATM_PREREQ_*` code.
+      integer, intent(in) :: code
+      character(len=:), allocatable :: msg
+
+      select case (code)
+      case (ATM_PREREQ_START_DATE)
+         msg = "&ocean_atm_forcing_nml enable=.true. requires &time_nml start_date "// &
+               "(absolute file-time axes need a model-clock epoch)"
+      case (ATM_PREREQ_COMPONENTS)
+         msg = "&ocean_atm_forcing_nml enable=.true. requires &ocean_forcing_nml "// &
+               "enable_components=.true. (the bulk-flux outputs land on the component set)"
+      case (ATM_PREREQ_CARTESIAN)
+         msg = "&ocean_atm_forcing_nml enable=.true. requires a non-cartesian "// &
+               "&ocean_grid_nml grid_config (spherical/supergrid/tripolar) -- a "// &
+               "cartesian grid has no geographic lon/lat to regrid the atmosphere onto"
+      case (ATM_PREREQ_FILELIST)
+         msg = "&ocean_atm_forcing_nml enable=.true. requires all nine filelist_<field> "// &
+               "paths (tas/huss/uas/vas/psl/rlds/rsds/prra/prsn) -- a blank one is a "// &
+               "fail-loud setup, never a silently-skipped field"
+      case (ATM_PREREQ_SW_SOURCE)
+         msg = "&ocean_atm_forcing_nml enable=.true. with &ocean_thermo_nml "// &
+               "sw_pen_frac > 0 requires sw_source='q_sw' (the atmosphere writes "// &
+               "q_sw, not net_heat)"
+      case (ATM_PREREQ_DATAOVR)
+         msg = "&ocean_atm_forcing_nml enable=.true. conflicts with &ocean_dataovr_nml "// &
+               "tau_x/tau_y/heat/evap/lprec -- both would write the same surface-flux "// &
+               "components (a salt_file MAY coexist: SSS restoring is independent)"
+      case (ATM_PREREQ_BULK_FLUX)
+         msg = "&ocean_atm_forcing_nml enable=.true. requires &ocean_bulk_flux_nml "// &
+               "enable=.true. (set it explicitly)"
+      case (ATM_PREREQ_N_ITER)
+         msg = "&ocean_bulk_flux_nml n_iter must be >= 1"
+      case (ATM_PREREQ_ORB_YEAR)
+         msg = "&ocean_atm_forcing_nml orb_year is not wired yet (the coszen kernel "// &
+               "uses fixed Spencer (1971) coefficients); leave it at the default 1990"
+      case default
+         msg = ""
+      end select
+   end function atm_forcing_prereq_message
 
    pure module function dataovr_any_tag_set(cfg) result(any_set)
       !! `.true.` when at least one tag names a file, i.e. enabling the

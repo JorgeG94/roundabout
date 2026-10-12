@@ -5841,11 +5841,11 @@ class OceanAtmForcing(Group):
 
     states_regrid = Enum(
         'states_regrid',
-        doc="Horizontal regrid for tas/huss/uas/vas/psl; only 'bilinear' is implemented -- 'patch' fails loud naming the xESMF gap",
+        doc="Horizontal regrid for tas/huss/uas/vas/psl (only 'bilinear' is implemented)",
         units='',
         required=False,
         default='bilinear',
-        allowed=('bilinear', 'patch'),
+        allowed=('bilinear',),
     )
 
     fluxes_regrid = Enum(
@@ -5876,7 +5876,7 @@ class OceanAtmForcing(Group):
 
     orb_year = Int(
         'orb_year',
-        doc='Orbital-parameter year (reserved; v1 coszen uses fixed Spencer (1971) coefficients regardless)',
+        doc='Orbital-parameter year (reserved: v1 coszen uses fixed Spencer (1971) coefficients, so a non-default value is refused)',
         units='',
         required=False,
         default=1990,
@@ -5914,7 +5914,7 @@ class OceanBulkFlux(Group):
 
     enable = Bool(
         'enable',
-        doc='Master switch (implied by &ocean_atm_forcing_nml enable; an explicit .false. with atm_forcing on is a conflict)',
+        doc='Master switch (required when &ocean_atm_forcing_nml enable is on)',
         units='',
         required=False,
         default=False,

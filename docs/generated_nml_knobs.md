@@ -1056,11 +1056,11 @@ JRA55-do-style prescribed atmospheric state driving bulk-flux ocean/ice surface 
 | `time_mode` | `"interannual"` |  | interannual (default) or repeat_year (RYF) |
 | `ryf_start_date` | `"1990-05-01"` |  | RYF window start date (time_mode=repeat_year only) |
 | `ryf_period_days` | `0.3650000000E+03` | days | RYF window length (time_mode=repeat_year only) |
-| `states_regrid` | `"bilinear"` |  | Horizontal regrid for tas/huss/uas/vas/psl; only 'bilinear' is implemented -- 'patch' fails loud naming the xESMF gap |
+| `states_regrid` | `"bilinear"` |  | Horizontal regrid for tas/huss/uas/vas/psl (only 'bilinear' is implemented) |
 | `fluxes_regrid` | `"conservative"` |  | Horizontal regrid for rlds/rsds/prra/prsn |
 | `sw_interp` | `"coszen"` |  | coszen (default, held interval + diurnal cosine-zenith factor) or linear (plain time-blend) |
 | `sw_offset_s` | `-0.5400000000E+04` | s | Time offset applied to the rsds query time before the bracket search (sw_interp=coszen) |
-| `orb_year` | `1990` |  | Orbital-parameter year (reserved; v1 coszen uses fixed Spencer (1971) coefficients regardless) |
+| `orb_year` | `1990` |  | Orbital-parameter year (reserved: v1 coszen uses fixed Spencer (1971) coefficients, so a non-default value is refused) |
 | `wind_relative` | `.true.` |  | Subtract the ocean surface current from the atmospheric wind before the bulk flux |
 | `ocean_albedo` | `0.6600000000E-01` |  | Ocean surface shortwave albedo (Large & Yeager 2009) |
 | `verbose` | `.false.` |  | Log every bracket advance of the 9 underlying readers |
@@ -1071,7 +1071,7 @@ Monin-Obukhov bulk-flux kernel (Large & Yeager 2004/2009).
 
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
-| `enable` | `.false.` |  | Master switch (implied by &ocean_atm_forcing_nml enable; an explicit .false. with atm_forcing on is a conflict) |
+| `enable` | `.false.` |  | Master switch (required when &ocean_atm_forcing_nml enable is on) |
 | `n_iter` | `5` |  | Monin-Obukhov iteration count |
 | `z_wind` | `0.1000000000E+02` | m | Wind reference height |
 | `z_ta` | `0.2000000000E+01` | m | Air temperature / specific humidity reference height |

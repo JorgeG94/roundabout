@@ -8,7 +8,11 @@ module test_config
                          BT_HALO_AUTO_SENTINEL, BT_HALO_AUTO_WIDTH, &
                          diag_density_levels_ok, MAX_OCEAN_DIAG_Z_LEVELS, &
                          ice_hlim_count, ice_hlim_spec_is_valid, MAX_ICE_HLIM_VALS, &
-                         validate_config
+                         validate_config, atm_forcing_prereq_code, &
+                         ATM_PREREQ_OK, ATM_PREREQ_START_DATE, ATM_PREREQ_COMPONENTS, &
+                         ATM_PREREQ_CARTESIAN, ATM_PREREQ_FILELIST, ATM_PREREQ_SW_SOURCE, &
+                         ATM_PREREQ_DATAOVR, ATM_PREREQ_BULK_FLUX, ATM_PREREQ_N_ITER, &
+                         ATM_PREREQ_ORB_YEAR
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_VALIDATE
    implicit none
    private
@@ -66,11 +70,8 @@ contains
                   new_unittest("pv_weno_nghost_gate_radius_plus_one", test_pv_weno_nghost_gate), &
                   new_unittest("implicit_drag_hbbl_needs_effective_glue", test_glue_hbbl_gate), &
                   new_unittest("calendar_names_fit_and_validate", test_calendar_names), &
-                  new_unittest("atm_forcing_requires_noncartesian_grid", test_atm_forcing_cartesian_conflict), &
-                  new_unittest("atm_forcing_conflicts_with_dataovr_wind_heat", &
-                               test_atm_forcing_dataovr_conflict), &
-                  new_unittest("atm_forcing_requires_bulk_flux_enable", &
-                               test_atm_forcing_bulk_flux_conflict) &
+                  new_unittest("atm_forcing_prereq_codes", test_atm_forcing_prereq_codes), &
+                  new_unittest("atm_forcing_not_wired_refused", test_atm_forcing_not_wired_refused) &
                   ]
    end subroutine collect_config_tests
 
@@ -849,10 +850,9 @@ contains
       !! (enable_components, start_date, all nine filelists set) with
       !! `grid_config`, an optional single `&ocean_dataovr_nml` block,
       !! and the `&ocean_bulk_flux_nml enable` value all parameterised --
-      !! the C2c-1 conflict tests each vary exactly one of the three and
-      !! check `validate_config`'s verdict (never two `&ocean_grid_nml`/
-      !! `&ocean_dataovr_nml`/`&ocean_bulk_flux_nml` blocks in one file,
-      !! which the schema parser itself refuses as a duplicate group).
+      !! the C2c-1 tests mutate the parsed `config_t` one field at a time
+      !! rather than writing a second copy of a group (the schema parser
+      !! refuses a duplicate group).
       character(len=*), intent(in) :: grid_config, dataovr_block
       logical, intent(in) :: bulk_enable
       character(len=:), allocatable :: nml
@@ -876,11 +876,75 @@ contains
       if (len_trim(dataovr_block) > 0) nml = nml//trim(dataovr_block)//new_line('a')
    end function atm_forcing_baseline_nml
 
-   subroutine test_atm_forcing_cartesian_conflict(error)
-      !! C2c-1: `&ocean_atm_forcing_nml enable=.true.` requires a
-      !! non-cartesian `&ocean_grid_nml grid_config` (no geographic
-      !! lon/lat to regrid the atmosphere onto). The baseline (spherical)
-      !! must validate; switching back to cartesian must be refused.
+   subroutine test_atm_forcing_prereq_codes(error)
+      !! C2c-1: every `&ocean_atm_forcing_nml enable` prerequisite, one at a
+      !! time, through the pure `atm_forcing_prereq_code` (independent of the
+      !! NetCDF build and of the not-yet-wired refusal, so this runs on every
+      !! toolchain). The spherical baseline passes; each single mutation is
+      !! refused with its own code; a coexisting dataovr `salt` file passes.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: base, cfg
+      integer :: ierr
+
+      ierr = -999
+      call read_config_from_string(atm_forcing_baseline_nml("spherical", "", .true.), base, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "atm_forcing baseline must parse")
+      if (allocated(error)) return
+      call check(error, atm_forcing_prereq_code(base) == ATM_PREREQ_OK, &
+                 "atm_forcing spherical baseline must meet every prerequisite")
+      if (allocated(error)) return
+
+      cfg = base
+      cfg%start_date = ""
+      call check(error, atm_forcing_prereq_code(cfg) == ATM_PREREQ_START_DATE, "blank start_date")
+      if (allocated(error)) return
+      cfg = base
+      cfg%ocean%forcing%enable_components = .false.
+      call check(error, atm_forcing_prereq_code(cfg) == ATM_PREREQ_COMPONENTS, "enable_components off")
+      if (allocated(error)) return
+      cfg = base
+      cfg%ocean%grid%grid_config = "cartesian"
+      call check(error, atm_forcing_prereq_code(cfg) == ATM_PREREQ_CARTESIAN, "cartesian grid")
+      if (allocated(error)) return
+      cfg = base
+      cfg%ocean%atm_forcing%filelist_rsds = ""
+      call check(error, atm_forcing_prereq_code(cfg) == ATM_PREREQ_FILELIST, "blank filelist_rsds")
+      if (allocated(error)) return
+      cfg = base
+      cfg%ocean%thermo%sw_pen_frac = 0.5_wp
+      cfg%ocean%thermo%sw_source = "net_heat"
+      call check(error, atm_forcing_prereq_code(cfg) == ATM_PREREQ_SW_SOURCE, &
+                 "sw_pen_frac > 0 with sw_source='net_heat'")
+      if (allocated(error)) return
+      cfg = base
+      cfg%ocean%dataovr%tau_x%file = "a.nc"
+      call check(error, atm_forcing_prereq_code(cfg) == ATM_PREREQ_DATAOVR, "dataovr tau_x file set")
+      if (allocated(error)) return
+      cfg = base
+      cfg%ocean%dataovr%salt%file = "a.nc"
+      call check(error, atm_forcing_prereq_code(cfg) == ATM_PREREQ_OK, &
+                 "a dataovr salt file may coexist with atm forcing")
+      if (allocated(error)) return
+      cfg = base
+      cfg%ocean%bulk_flux%enable = .false.
+      call check(error, atm_forcing_prereq_code(cfg) == ATM_PREREQ_BULK_FLUX, "bulk_flux enable off")
+      if (allocated(error)) return
+      cfg = base
+      cfg%ocean%bulk_flux%n_iter = 0
+      call check(error, atm_forcing_prereq_code(cfg) == ATM_PREREQ_N_ITER, "bulk_flux n_iter = 0")
+      if (allocated(error)) return
+      cfg = base
+      cfg%ocean%atm_forcing%orb_year = 2000
+      call check(error, atm_forcing_prereq_code(cfg) == ATM_PREREQ_ORB_YEAR, "non-default orb_year")
+   end subroutine test_atm_forcing_prereq_codes
+
+   subroutine test_atm_forcing_not_wired_refused(error)
+      !! C2c-1: neither group is wired into the engine yet (C2c-3), so
+      !! `validate_config` refuses `&ocean_atm_forcing_nml enable` even when
+      !! every prerequisite holds, and refuses `&ocean_bulk_flux_nml enable`
+      !! on its own -- a silent no-op would run on the old forcing. Holds on
+      !! NetCDF and no-NetCDF builds alike. C2c-3 turns the first case into
+      !! an acceptance.
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
       integer :: ierr
@@ -890,63 +954,20 @@ contains
       call check(error, ierr == OCEAN_STATUS_OK, "atm_forcing baseline must parse")
       if (allocated(error)) return
       call validate_config(cfg, ierr=ierr)
-      call check(error, ierr == OCEAN_STATUS_OK, "atm_forcing baseline (spherical) must validate")
+      call check(error, ierr /= OCEAN_STATUS_OK, &
+                 "atm_forcing enable=.true. must be refused until it is wired (C2c-3)")
       if (allocated(error)) return
 
       ierr = -999
-      call read_config_from_string(atm_forcing_baseline_nml("cartesian", "", .true.), cfg, ierr=ierr)
-      if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr=ierr)
-      call check(error, ierr /= OCEAN_STATUS_OK, &
-                 "atm_forcing enable=.true. with grid_config='cartesian' must be refused")
-   end subroutine test_atm_forcing_cartesian_conflict
-
-   subroutine test_atm_forcing_dataovr_conflict(error)
-      !! C2c-1: `&ocean_atm_forcing_nml enable=.true.` conflicts with any
-      !! of `&ocean_dataovr_nml tau_x/tau_y/heat/evap/lprec` naming a
-      !! file (both would write the same surface-flux components); a
-      !! `salt_file` MAY coexist (independent SSS restoring).
-      type(error_type), allocatable, intent(out) :: error
-      type(config_t) :: cfg
-      integer :: ierr
-
-      ierr = -999
-      call read_config_from_string( &
-         atm_forcing_baseline_nml("spherical", &
-                                  "&ocean_dataovr_nml salt_file = 'a.txt', salt_var = 's' /", &
-                                  .true.), &
-         cfg, ierr=ierr)
-      call check(error, ierr == OCEAN_STATUS_OK, "atm_forcing + salt_file namelist must parse")
+      call read_config_from_string("&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+                                   "&ocean_bulk_flux_nml enable = .true. /"//new_line('a'), &
+                                   cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "bulk_flux-only namelist must parse")
       if (allocated(error)) return
       call validate_config(cfg, ierr=ierr)
-      call check(error, ierr == OCEAN_STATUS_OK, &
-                 "atm_forcing + a coexisting dataovr salt_file must validate")
-      if (allocated(error)) return
-
-      ierr = -999
-      call read_config_from_string( &
-         atm_forcing_baseline_nml("spherical", &
-                                  "&ocean_dataovr_nml tau_x_file = 'a.txt', tau_x_var = 'u' /", &
-                                  .true.), &
-         cfg, ierr=ierr)
-      if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr=ierr)
       call check(error, ierr /= OCEAN_STATUS_OK, &
-                 "atm_forcing enable=.true. with dataovr tau_x_file set must be refused")
-   end subroutine test_atm_forcing_dataovr_conflict
-
-   subroutine test_atm_forcing_bulk_flux_conflict(error)
-      !! C2c-1: `&ocean_bulk_flux_nml enable` is implied by
-      !! `&ocean_atm_forcing_nml enable` -- an explicit `enable=.false.`
-      !! on the bulk-flux group while atm_forcing is on is a conflict.
-      type(error_type), allocatable, intent(out) :: error
-      type(config_t) :: cfg
-      integer :: ierr
-
-      ierr = -999
-      call read_config_from_string(atm_forcing_baseline_nml("spherical", "", .false.), cfg, ierr=ierr)
-      if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr=ierr)
-      call check(error, ierr /= OCEAN_STATUS_OK, &
-                 "atm_forcing enable=.true. with bulk_flux enable=.false. must be refused")
-   end subroutine test_atm_forcing_bulk_flux_conflict
+                 "bulk_flux enable=.true. on its own must be refused until it is wired (C2c-3)")
+   end subroutine test_atm_forcing_not_wired_refused
 
    subroutine test_missing_file(error)
       !! Missing file should not crash, defaults should be preserved
