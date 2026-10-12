@@ -38,6 +38,8 @@ module rdb_regrid_latlon
       !! Max vertex count carried through the Sutherland-Hodgman clip
       !! (quad or the 7-vertex pole-cap polygon, clipped by one rectangle:
       !! at most 7+4 = 11 vertices in practice).
+   real(wp), parameter :: POLE_TOL_DEG = 1.0e-9_wp
+      !! A target corner within this of +-90 deg is treated as AT the pole.
 
    type :: regrid_weights_t
       !! ELL/padded regridding weights, physical target cells only.
@@ -442,6 +444,24 @@ contains
       call clip_halfplane(na, ax, ay, 0.0_wp, -1.0_wp, -ymin, n_out, qx, qy)
    end subroutine clip_box
 
+   pure function segments_cross(ax, ay, bx, by, cx, cy, dx, dy) result(cross)
+      !! True when the open segments AB and CD properly cross (each pair of
+      !! endpoints strictly on opposite sides of the other segment's line).
+      !! The relative tolerance keeps touching / collinear / coincident
+      !! endpoints (a collapsed cell edge) from counting as a crossing.
+      real(wp), intent(in) :: ax, ay, bx, by, cx, cy, dx, dy
+      logical :: cross
+      real(wp) :: o1, o2, o3, o4, tol
+
+      tol = 1.0e-12_wp*max(abs(bx - ax) + abs(by - ay), abs(dx - cx) + abs(dy - cy))**2
+      o1 = (bx - ax)*(cy - ay) - (by - ay)*(cx - ax)
+      o2 = (bx - ax)*(dy - ay) - (by - ay)*(dx - ax)
+      o3 = (dx - cx)*(ay - cy) - (dy - cy)*(ax - cx)
+      o4 = (dx - cx)*(by - cy) - (dy - cy)*(bx - cx)
+      cross = ((o1 > tol .and. o2 < -tol) .or. (o1 < -tol .and. o2 > tol)) .and. &
+              ((o3 > tol .and. o4 < -tol) .or. (o3 < -tol .and. o4 > tol))
+   end function segments_cross
+
    pure function poly_area2(n, px, py) result(a2)
       !! Twice the SIGNED shoelace area (CCW positive).
       integer, intent(in) :: n
@@ -482,6 +502,8 @@ contains
       integer :: cap, i, j, ip, jp, k, kc
       integer :: ncur, nmax_used, jmin_g, jmax_g
       logical :: lat_flip, is_cap, degenerate
+      logical :: at_pole(4)
+      integer :: kref
       real(wp) :: lat_e_rad(nlat + 1), mu_e_inc(nlat + 1)
       real(wp) :: lon_e_rad(nlon + 1)
       real(wp) :: c_lon0(4), c_lat0(4), lam(4), mu(4)
@@ -489,7 +511,7 @@ contains
       real(wp) :: px(REGRID_POLY_MAXV), py(REGRID_POLY_MAXV)
       real(wp) :: qx(REGRID_POLY_MAXV), qy(REGRID_POLY_MAXV)
       integer :: npoly
-      real(wp) :: span, t1, t2, lam1, mu1
+      real(wp) :: span, lam1, mu1
       real(wp) :: lam_min, lam_max, mu_min, mu_max
       real(wp) :: cand_area(LOCAL_MAXCAND)
       integer :: cand_i(LOCAL_MAXCAND), cand_j(LOCAL_MAXCAND)
@@ -550,25 +572,56 @@ contains
             c_lat0(3) = geolatBu(ip + 1, jp + 1)
             c_lon0(4) = geolonBu(ip, jp + 1)
             c_lat0(4) = geolatBu(ip, jp + 1)
-            do k = 2, 4
-               c_lon0(k) = c_lon0(1) + (modulo(c_lon0(k) - c_lon0(1) + 180.0_wp, 360.0_wp) &
-                                        - 180.0_wp)
+            ! A corner AT a geographic pole has no meaningful longitude:
+            ! unwrap around the first non-pole corner and leave pole
+            ! corners out of the span (they are expanded below).
+            do k = 1, 4
+               at_pole(k) = abs(c_lat0(k)) >= 90.0_wp - POLE_TOL_DEG
+            end do
+            kref = 1
+            do k = 4, 1, -1
+               if (.not. at_pole(k)) kref = k
+            end do
+            do k = 1, 4
+               c_lon0(k) = c_lon0(kref) + (modulo(c_lon0(k) - c_lon0(kref) + 180.0_wp, &
+                                                  360.0_wp) - 180.0_wp)
             end do
             do k = 1, 4
                lam(k) = c_lon0(k)*DEG2RAD
                mu(k) = sin(c_lat0(k)*DEG2RAD)
             end do
-            span = maxval(c_lon0) - minval(c_lon0)
+            span = maxval(c_lon0, mask=.not. at_pole) - minval(c_lon0, mask=.not. at_pole)
             is_cap = span > 180.0_wp
 
             degenerate = .false.
             if (.not. is_cap) then
-               npoly = 4
-               px(1:4) = lam
-               py(1:4) = mu
-               t1 = (px(2) - px(1))*(py(3) - py(1)) - (px(3) - px(1))*(py(2) - py(1))
-               t2 = (px(3) - px(1))*(py(4) - py(1)) - (px(4) - px(1))*(py(3) - py(1))
-               degenerate = (t1*t2 < 0.0_wp)
+               ! In (lam, mu) a pole is the whole line mu = +-1, so a pole
+               ! corner becomes two points on it at its neighbours'
+               ! longitudes (meridian edges stay vertical, so the cells
+               ! sharing the pole still tile the plane exactly).
+               npoly = 0
+               do k = 1, 4
+                  if (at_pole(k)) then
+                     npoly = npoly + 1
+                     px(npoly) = lam(mod(k + 2, 4) + 1)
+                     py(npoly) = sign(1.0_wp, c_lat0(k))
+                     npoly = npoly + 1
+                     px(npoly) = lam(mod(k, 4) + 1)
+                     py(npoly) = sign(1.0_wp, c_lat0(k))
+                  else
+                     npoly = npoly + 1
+                     px(npoly) = lam(k)
+                     py(npoly) = mu(k)
+                  end if
+               end do
+               ! Only a SELF-INTERSECTING (bow-tie) quad is degenerate:
+               ! Sutherland-Hodgman against a convex box is exact for any
+               ! simple polygon, concave ones included (cells touching the
+               ! pole), and a collapsed edge (bipole cells) is harmless.
+               if (npoly == 4) degenerate = segments_cross(px(1), py(1), px(2), py(2), &
+                                                           px(3), py(3), px(4), py(4)) .or. &
+                                            segments_cross(px(2), py(2), px(3), py(3), &
+                                                           px(4), py(4), px(1), py(1))
             else
                sorted_lon = c_lon0
                sorted_mu = mu
