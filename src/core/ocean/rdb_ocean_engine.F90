@@ -147,6 +147,7 @@ module rdb_ocean_engine
    use rdb_ocean_diag_netcdf, only: open_stream, close_stream
    use rdb_ocean_data_input, only: ocean_data_input_update_all
    use rdb_ocean_data_forcing, only: ocean_data_forcing_configure, ocean_data_forcing_apply
+   use rdb_atm_state, only: atm_state_configure, atm_state_update
    use rdb_io_netcdf, only: output_rank_filename, ensure_directory_exists
 #endif
    use rdb_ice_evp, only: ice_evp_params_t, ice_evp_params_from_config, ice_evp_step
@@ -840,6 +841,15 @@ contains
                                         engine%state%surface_stress, engine%state%surface_flux, &
                                         engine%state%bc, engine%state%data_forcing, ierr=ierr)
       if (setup_failed(ierr)) return
+
+      ! JRA55-do-style prescribed atmospheric state (OM3 C2c-2a): registers
+      ! the nine-field reader + builds the regrid weights, before
+      ! enter_data (registration allocates the reader's bracket buffers;
+      ! weight-building allocates this slot's own arrays). No-op when
+      ! `&ocean_atm_forcing_nml enable = .false.` (the default). NetCDF-only.
+      call atm_state_configure(cfg, engine%state%data_input, engine%grid, engine%state%metrics, &
+                               engine%state%atm, ierr=ierr)
+      if (setup_failed(ierr)) return
 #else
       if (cfg%ocean%dataovr%enable) then
          call fail("engine_setup: &ocean_dataovr_nml enable = .true. but this build has no "// &
@@ -1523,6 +1533,12 @@ contains
       call ocean_data_forcing_apply(engine%state%data_forcing, engine%state%data_input, &
                                     engine%grid, engine%state%surface_stress, &
                                     engine%state%surface_flux, engine%state%bc, t)
+      ! JRA55-do-style prescribed atmospheric state (OM3 C2c-2a): a no-op
+      ! when `&ocean_atm_forcing_nml enable = .false.` (the default).
+      ! Order vs `ocean_data_forcing_apply` above does not matter -- both
+      ! read the SAME reader brackets `ocean_data_input_update_all` just
+      ! refreshed, and neither writes a slot the other reads.
+      call atm_state_update(engine%state%atm, engine%state%data_input, t)
 #endif
 
       call engine%bc_source%update(t, engine%state%bc)
