@@ -47,36 +47,47 @@
          !! Coefficients of `p`, `p^2`, `p^3` (Pa-powers folded in).
 
       real(wp) :: zt_roq, zs_roq, x2_roq, xx_roq, yy_roq, hh_roq
-      real(wp) :: c0_roq, c1_roq, c2_roq, c3_roq, c4_roq, c5_roq, c6_roq, c7_roq
       real(wp) :: svts0_roq, sv0s0_roq
 
-      ! CT = ct_from_pt(SR, PT) -- identical to `roquet_spv_point`.
+      ! CT = ct_from_pt(SR, PT) -- the verified GSW surface polynomial
+      ! (McDougall & Barker 2011; GSW gsw_ct_from_pt), same nesting as
+      ! `rdb_teos10_convert`'s `ct_from_pt`. Kept as an inline, module-local
+      ! copy (not a call into `rdb_teos10_convert`) so this stays the
+      ! inlinable body the file header documents -- a cross-module call
+      ! here would reintroduce the exact "not inlined" cost that module
+      ! split was written to avoid (see file header). Until 2026-10 this
+      ! copy MISPLACED two terms (`123.59576582457964`,
+      ! `-48.5891069025409`, which belong to the pure-salinity y^0 Horner
+      ! coefficient) onto the y^1/y^2 coefficients instead -- the same bug
+      ! `rdb_eos`'s `roquet_spv_point`/`roquet_rho_point` carried before
+      ! being wired to `rdb_teos10_convert`.
       x2_roq = max(ROQ_CT_SFAC*(s_roq*ROQ_SR_FACTOR), 1.0e-20_wp)
       xx_roq = sqrt(x2_roq)
       yy_roq = t_roq*0.025_wp
-      c0_roq = 61.01362420681071_wp &
+      hh_roq = 61.01362420681071_wp &
+               + yy_roq*(168776.46138048015_wp &
+                         + yy_roq*(-2735.2785605119625_wp &
+                                   + yy_roq*(2574.2164453821433_wp &
+                                             + yy_roq*(-1536.6644434977543_wp &
+                                                       + yy_roq*(545.7340497931629_wp &
+                                                                 + (-50.91091728474331_wp - 18.30489878927802_wp*yy_roq)*yy_roq))))) &
                + x2_roq*(268.5520265845071_wp &
+                         + yy_roq*(-12019.028203559312_wp &
+                                   + yy_roq*(3734.858026725145_wp &
+                                             + yy_roq*(-2046.7671145057618_wp &
+                                                       + yy_roq*(465.28655623826234_wp &
+                                                                 + (-0.6370820302376359_wp - 10.650848542359153_wp*yy_roq)*yy_roq)))) &
                          + xx_roq*(937.2099110620707_wp &
-                                   + xx_roq*(-1687.914374187449_wp + xx_roq*246.9598888781377_wp)))
-      c1_roq = 168776.46138048015_wp &
-               + x2_roq*(-12019.028203559312_wp &
-                         + xx_roq*(588.1802812170108_wp &
-                                   + xx_roq*(936.3206544460336_wp + xx_roq*123.59576582457964_wp)))
-      c2_roq = -2735.2785605119625_wp &
-               + x2_roq*(3734.858026725145_wp &
-                         + xx_roq*(248.39476522971285_wp &
-                                   + xx_roq*(-942.7827304544439_wp + xx_roq*(-48.5891069025409_wp))))
-      c3_roq = 2574.2164453821433_wp &
-               + x2_roq*(-2046.7671145057618_wp &
-                         + xx_roq*(-3.871557904936333_wp + xx_roq*369.4389437509002_wp))
-      c4_roq = -1536.6644434977543_wp &
-               + x2_roq*(465.28655623126450_wp + xx_roq*(-2.6268019854268356_wp + xx_roq*(-33.83664947895248_wp)))
-      c5_roq = 545.7340497931629_wp &
-               + x2_roq*(-0.6370820302831379_wp + xx_roq*(-9.987880382780322_wp))
-      c6_roq = -50.91091728474331_wp + x2_roq*(-10.650848542359153_wp)
-      c7_roq = -18.30489878927802_wp
-      hh_roq = c0_roq + yy_roq*(c1_roq + yy_roq*(c2_roq + yy_roq*(c3_roq + yy_roq*(c4_roq &
-                                                                                   + yy_roq*(c5_roq + yy_roq*(c6_roq + yy_roq*c7_roq))))))
+                                   + yy_roq*(588.1802812170108_wp &
+                                             + yy_roq*(248.39476522971285_wp &
+                                                       + (-3.871557904936333_wp - 2.6268019854268356_wp*yy_roq)*yy_roq)) &
+                                   + xx_roq*(-1687.914374187449_wp &
+                                             + xx_roq*(246.9598888781377_wp &
+                                                       + xx_roq*(123.59576582457964_wp - 48.5891069025409_wp*xx_roq)) &
+                                             + yy_roq*(936.3206544460336_wp &
+                                                       + yy_roq*(-942.7827304544439_wp &
+                                                                 + yy_roq*(369.4389437509002_wp &
+                                                                           + (-33.83664947895248_wp - 9.987880382780322_wp*yy_roq)*yy_roq))))))
       zt_roq = hh_roq/ROQ_CP0
       zs_roq = sqrt(abs(s_roq*ROQ_SR_FACTOR + ROQ_RDELTAS)*ROQ_R1_S0)
 

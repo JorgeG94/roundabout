@@ -30,20 +30,29 @@ module rdb_teos10_convert
    !! callers outside the library (a test executable's own kernel cannot
    !! resolve a library `routine seq` symbol at device link).
    !!
-   !! NOT YET WIRED into `rdb_eos`: `roquet_spv_point` / `roquet_rho_point`
-   !! carry their OWN copy of a similarly-shaped PT->CT surface
-   !! polynomial, independently transcribed, and are NOT bit-identical to
-   !! `ct_from_pt` here (see that module's docstrings) -- a later PR either
-   !! reconciles the two or documents the gap; this module does not
-   !! change `rdb_eos`'s existing behaviour.
+   !! WIRED into `rdb_eos`: `roquet_spv_point` / `roquet_rho_point` call
+   !! `ct_from_pt_derivs` here for their PT->CT conversion + analytic
+   !! dCT/dPT, dCT/dSA (chain-ruled to the model (PT, SP) at the call
+   !! site) instead of carrying an inline copy of the surface polynomial.
+   !! Both `rdb_eos` branches previously carried their OWN independently
+   !! transcribed copy that MISPLACED two terms (the degree-6/7-in-sqrt(SA)
+   !! coefficients `123.59576582457964` and `-48.5891069025409`, which
+   !! belong in the pure-salinity, y^0 Horner coefficient, landed on the
+   !! y^1/y^2 coefficients instead) -- a ~0.009 degC CT error at
+   !! S=35, theta=10 degC that the two `rdb_eos` copies agreed with each
+   !! other on because both carried the identical mistake, which is why no
+   !! regression test caught it until checked against the real GSW
+   !! `gsw_ct_from_pt`. Fixed by wiring both branches through this
+   !! verified module.
    use rdb_constants, only: wp
    implicit none
    private
 
    public :: sr_from_sp
-   public :: ct_from_pt_impl, pt_from_ct_impl, ct_freezing_poly_impl
+   public :: ct_from_pt_impl, pt_from_ct_impl, ct_freezing_poly_impl, ct_from_pt_derivs_impl
    public :: sp_from_sr
    public :: ct_from_pt
+   public :: ct_from_pt_derivs
    public :: pt_from_ct
    public :: ct_freezing_poly
    public :: pt_freezing_poly
@@ -188,6 +197,75 @@ contains
       ct = pot_enthalpy/CP0
    end function ct_from_pt
 
+   pure elemental subroutine ct_from_pt_derivs(sa, pt, ct, dct_dpt, dct_dsa)
+      !! CT (bit-identical to `ct_from_pt`) plus its ANALYTIC derivatives
+      !! `dct_dpt` = dCT/dPT and `dct_dsa` = dCT/dSA, obtained by
+      !! regrouping the SAME surface polynomial `ct_from_pt` evaluates
+      !! (McDougall & Barker 2011; GSW `gsw_ct_from_pt`) into explicit
+      !! coefficients of y = 0.025*PT, `c_k(x)` (x = sqrt(CT_SFAC*SA)),
+      !! each itself a short polynomial in x -- so dCT/dPT is a plain
+      !! Horner-in-y derivative and dCT/dSA follows the chain rule through
+      !! dCT/dx and dx/dSA = CT_SFAC/(2x). Regrouping is exact (no
+      !! re-derivation of the published nesting, just re-association of
+      !! terms already present in it) -- verified against
+      !! `ct_from_pt` to < 5e-11 and against centred finite differences
+      !! of `ct_from_pt` to <= 1e-7 relative (`tests/test_ocean_teos10_convert.F90`).
+      !!
+      !! `sa` is floored at a tiny positive value (not 0) purely for the
+      !! `dct_dsa` chain factor `CT_SFAC/(2x)`, which has a removable 0/0
+      !! singularity at SA=0 (fresh water): `dh_dx` is itself proportional
+      !! to x near x=0 (lowest surviving term `2*B0*x`), so the ratio has
+      !! a finite limit the floor reproduces instead of NaN. `ct` itself
+      !! is computed by calling `ct_from_pt` directly (its own sa>=0
+      !! clamp, no floor), so the returned CT is exactly `ct_from_pt`'s.
+      !$acc routine seq
+      real(wp), intent(in) :: sa  !! Reference/Absolute Salinity (g/kg).
+      real(wp), intent(in) :: pt  !! Potential temperature, p_ref=0 (degC).
+      real(wp), intent(out) :: ct  !! Conservative Temperature (degC).
+      real(wp), intent(out) :: dct_dpt  !! dCT/dPT (dimensionless).
+      real(wp), intent(out) :: dct_dsa  !! dCT/dSA ((degC)/(g/kg)).
+      real(wp) :: x2, x, y, dh_dy, dh_dx
+      real(wp) :: c1, c2, c3, c4, c5, c6, c7
+      real(wp) :: dc0, dc1, dc2, dc3, dc4, dc5, dc6
+
+      ct = ct_from_pt(sa, pt)
+
+      x2 = max(CT_SFAC*max(sa, 0.0_wp), 1.0e-20_wp)
+      x = sqrt(x2)
+      y = pt*0.025_wp
+
+      ! c_k(x): the y^k Horner coefficient of the pot_enthalpy polynomial,
+      ! k=1..7 (c0 is not needed -- dh_dy does not use it).
+      c1 = 168776.46138048015_wp + x2*(-12019.028203559312_wp + x*(588.1802812170108_wp + x*936.3206544460336_wp))
+      c2 = -2735.2785605119625_wp + x2*(3734.858026725145_wp + x*(248.39476522971285_wp + x*(-942.7827304544439_wp)))
+      c3 = 2574.2164453821433_wp + x2*(-2046.7671145057618_wp + x*(-3.871557904936333_wp + x*369.4389437509002_wp))
+      c4 = -1536.6644434977543_wp &
+           + x2*(465.28655623826234_wp + x*(-2.6268019854268356_wp + x*(-33.83664947895248_wp)))
+      c5 = 545.7340497931629_wp + x2*(-0.6370820302376359_wp + x2*(-9.987880382780322_wp))
+      c6 = -50.91091728474331_wp - x2*10.650848542359153_wp
+      c7 = -18.30489878927802_wp
+      dh_dy = c1 + y*(2.0_wp*c2 + y*(3.0_wp*c3 + y*(4.0_wp*c4 &
+                                                    + y*(5.0_wp*c5 + y*(6.0_wp*c6 + y*7.0_wp*c7)))))
+
+      ! dc_k/dx, k=0..6 (dc7/dx == 0: c7 has no x dependence).
+      dc0 = x*(2.0_wp*268.5520265845071_wp &
+               + x*(3.0_wp*937.2099110620707_wp &
+                    + x*(4.0_wp*(-1687.914374187449_wp) &
+                         + x*(5.0_wp*246.9598888781377_wp &
+                              + x*(6.0_wp*123.59576582457964_wp - 7.0_wp*48.5891069025409_wp*x)))))
+      dc1 = x*(2.0_wp*(-12019.028203559312_wp) + x*(3.0_wp*588.1802812170108_wp + x*4.0_wp*936.3206544460336_wp))
+      dc2 = x*(2.0_wp*3734.858026725145_wp + x*(3.0_wp*248.39476522971285_wp + x*4.0_wp*(-942.7827304544439_wp)))
+      dc3 = x*(2.0_wp*(-2046.7671145057618_wp) + x*(3.0_wp*(-3.871557904936333_wp) + x*4.0_wp*369.4389437509002_wp))
+      dc4 = x*(2.0_wp*465.28655623826234_wp &
+               + x*(3.0_wp*(-2.6268019854268356_wp) + x*4.0_wp*(-33.83664947895248_wp)))
+      dc5 = x*(2.0_wp*(-0.6370820302376359_wp) - 4.0_wp*9.987880382780322_wp*x2)
+      dc6 = -2.0_wp*10.650848542359153_wp*x
+      dh_dx = dc0 + y*(dc1 + y*(dc2 + y*(dc3 + y*(dc4 + y*(dc5 + y*dc6)))))
+
+      dct_dpt = 0.025_wp*dh_dy/CP0
+      dct_dsa = dh_dx*(CT_SFAC/(2.0_wp*x))/CP0
+   end subroutine ct_from_pt_derivs
+
    pure elemental function gibbs_pt0_pt0(sa, pt0) result(g_tt)
       !! Second temperature derivative of the Gibbs function at p = 0,
       !! g_TT(SA, pt0, 0) in J/(kg K²) (McDougall & Barker 2011; GSW
@@ -314,6 +392,18 @@ contains
          ct(i) = ct_from_pt(sa(i), pt(i))
       end do
    end subroutine ct_from_pt_impl
+
+   pure subroutine ct_from_pt_derivs_impl(n, sa, pt, ct, dct_dpt, dct_dsa)
+      !! `(ct, dct_dpt, dct_dsa) = ct_from_pt_derivs(sa, pt)` over `n`
+      !! points, on the device when the arrays are mapped.
+      integer, intent(in) :: n
+      real(wp), intent(in) :: sa(n), pt(n)
+      real(wp), intent(out) :: ct(n), dct_dpt(n), dct_dsa(n)
+      integer :: i
+      do concurrent(i=1:n)
+         call ct_from_pt_derivs(sa(i), pt(i), ct(i), dct_dpt(i), dct_dsa(i))
+      end do
+   end subroutine ct_from_pt_derivs_impl
 
    pure subroutine pt_from_ct_impl(n, sa, ct, pt)
       !! `pt = pt_from_ct(sa, ct)` over `n` points.

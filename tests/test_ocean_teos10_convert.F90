@@ -20,7 +20,8 @@ module test_ocean_teos10_convert
    use rdb_constants, only: wp
    use rdb_teos10_convert, only: sr_from_sp, sp_from_sr, ct_from_pt, pt_from_ct, &
                                  ct_freezing_poly, pt_freezing_poly, ct_from_pt_impl, &
-                                 pt_from_ct_impl, ct_freezing_poly_impl
+                                 pt_from_ct_impl, ct_freezing_poly_impl, &
+                                 ct_from_pt_derivs, ct_from_pt_derivs_impl
    use testdrive, only: new_unittest, unittest_type, error_type, check
    implicit none
    private
@@ -152,6 +153,8 @@ contains
                   new_unittest("teos10_round_trip", test_round_trip), &
                   new_unittest("teos10_ct_freezing_poly", test_ct_freezing_poly), &
                   new_unittest("teos10_pt_freezing_poly_consistency", test_pt_freezing_poly_consistency), &
+                  new_unittest("teos10_ct_from_pt_derivs_vs_fd", test_ct_from_pt_derivs_vs_fd), &
+                  new_unittest("teos10_ct_from_pt_derivs_value_matches", test_ct_from_pt_derivs_value_matches), &
                   new_unittest("teos10_gpu_residency", test_gpu_residency) &
                   ]
    end subroutine collect_ocean_teos10_convert_tests
@@ -227,6 +230,47 @@ contains
       call check(error, mx <= 1.0e-8_wp, "pt_freezing_poly vs t_freezing_poly at p=0")
    end subroutine test_pt_freezing_poly_consistency
 
+   subroutine test_ct_from_pt_derivs_value_matches(error)
+      !! ct_from_pt_derivs's `ct` output is bit-identical to `ct_from_pt`
+      !! (it is computed by calling it directly) -- i.e. adding the
+      !! derivative routine does not create a second, possibly-diverging
+      !! CT value.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: ct(N), dpt(N), dsa(N)
+      integer :: i
+      do i = 1, N
+         call ct_from_pt_derivs(SA(i), PT_FROM_CT_REF(i), ct(i), dpt(i), dsa(i))
+      end do
+      call check(error, maxval(abs(ct - ct_from_pt(SA, PT_FROM_CT_REF))) <= 1.0e-14_wp, &
+                 "ct_from_pt_derivs value != ct_from_pt")
+   end subroutine test_ct_from_pt_derivs_value_matches
+
+   subroutine test_ct_from_pt_derivs_vs_fd(error)
+      !! dct_dpt, dct_dsa <= 1e-7 relative vs centred finite differences
+      !! of `ct_from_pt` itself (a step of 1e-5 leaves O(h^2) ~ 1e-10
+      !! truncation and ~1e-11 round-off, so 1e-7 has wide margin) -- the regression that
+      !! would catch a mis-differentiated Horner regrouping the way the
+      !! original rdb_eos.F90 copy mis-differentiated its own (buggy)
+      !! nesting.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp), parameter :: H_PT = 1.0e-5_wp, H_SA = 1.0e-5_wp
+      real(wp) :: ct, dct_dpt, dct_dsa, fd_pt, fd_sa, rel_pt, rel_sa
+      integer :: i
+      do i = 1, N
+         call ct_from_pt_derivs(SA(i), PT_FROM_CT_REF(i), ct, dct_dpt, dct_dsa)
+         fd_pt = (ct_from_pt(SA(i), PT_FROM_CT_REF(i) + H_PT) &
+                  - ct_from_pt(SA(i), PT_FROM_CT_REF(i) - H_PT))/(2.0_wp*H_PT)
+         fd_sa = (ct_from_pt(SA(i) + H_SA, PT_FROM_CT_REF(i)) &
+                  - ct_from_pt(SA(i) - H_SA, PT_FROM_CT_REF(i)))/(2.0_wp*H_SA)
+         rel_pt = abs(dct_dpt - fd_pt)/abs(fd_pt)
+         rel_sa = abs(dct_dsa - fd_sa)/abs(fd_sa)
+         call check(error, rel_pt <= 1.0e-7_wp, "dct_dpt vs centred FD of ct_from_pt")
+         if (allocated(error)) return
+         call check(error, rel_sa <= 1.0e-7_wp, "dct_dsa vs centred FD of ct_from_pt")
+         if (allocated(error)) return
+      end do
+   end subroutine test_ct_from_pt_derivs_vs_fd
+
    subroutine test_zero_salinity_finite(error)
       !! Fresh water (SA = SP = 0) is a legal input (rivers, ice melt): every
       !! primitive returns a finite value there, and CT/pt round-trip.
@@ -256,7 +300,9 @@ contains
       integer, parameter :: M = 6
       real(wp) :: sa_l(M), pt_l(M), p_l(M), sat_l(M)
       real(wp) :: ct_dev(M), pt_dev(M), ctf_dev(M)
+      real(wp) :: ctd_dev(M), dpt_dev(M), dsa_dev(M)
       real(wp) :: ct_host(M), pt_host(M), ctf_host(M)
+      real(wp) :: ctd_host(M), dpt_host(M), dsa_host(M)
       integer :: i
 
       sa_l = SA(1:M)
@@ -264,19 +310,23 @@ contains
       p_l = P(1:M)
       sat_l = SAT_FRAC
 
-      !$acc enter data copyin(sa_l, pt_l, p_l, sat_l) create(ct_dev, pt_dev, ctf_dev)
+      !$acc enter data copyin(sa_l, pt_l, p_l, sat_l) &
+      !$acc    create(ct_dev, pt_dev, ctf_dev, ctd_dev, dpt_dev, dsa_dev)
       ! Library kernels: a test's own kernel cannot device-link a library
       ! `routine seq` function.
       call ct_from_pt_impl(M, sa_l, pt_l, ct_dev)
       call pt_from_ct_impl(M, sa_l, ct_dev, pt_dev)
       call ct_freezing_poly_impl(M, sa_l, p_l, sat_l, ctf_dev)
-      !$acc update self(ct_dev, pt_dev, ctf_dev)
-      !$acc exit data delete(sa_l, pt_l, p_l, sat_l, ct_dev, pt_dev, ctf_dev)
+      call ct_from_pt_derivs_impl(M, sa_l, pt_l, ctd_dev, dpt_dev, dsa_dev)
+      !$acc update self(ct_dev, pt_dev, ctf_dev, ctd_dev, dpt_dev, dsa_dev)
+      !$acc exit data delete(sa_l, pt_l, p_l, sat_l, ct_dev, pt_dev, ctf_dev, &
+      !$acc                  ctd_dev, dpt_dev, dsa_dev)
 
       do i = 1, M
          ct_host(i) = ct_from_pt(sa_l(i), pt_l(i))
          pt_host(i) = pt_from_ct(sa_l(i), ct_host(i))
          ctf_host(i) = ct_freezing_poly(sa_l(i), p_l(i), sat_l(i))
+         call ct_from_pt_derivs(sa_l(i), pt_l(i), ctd_host(i), dpt_host(i), dsa_host(i))
       end do
 
       call check(error, maxval(abs(ct_dev - ct_host)) < 1.0e-12_wp, &
@@ -287,6 +337,15 @@ contains
       if (allocated(error)) return
       call check(error, maxval(abs(ctf_dev - ctf_host)) < 1.0e-12_wp, &
                  "ct_freezing_poly device result != host result")
+      if (allocated(error)) return
+      call check(error, maxval(abs(ctd_dev - ctd_host)) < 1.0e-12_wp, &
+                 "ct_from_pt_derivs ct device result != host result")
+      if (allocated(error)) return
+      call check(error, maxval(abs(dpt_dev - dpt_host)) < 1.0e-12_wp, &
+                 "ct_from_pt_derivs dct_dpt device result != host result")
+      if (allocated(error)) return
+      call check(error, maxval(abs(dsa_dev - dsa_host)) < 1.0e-12_wp, &
+                 "ct_from_pt_derivs dct_dsa device result != host result")
    end subroutine test_gpu_residency
 
 end module test_ocean_teos10_convert

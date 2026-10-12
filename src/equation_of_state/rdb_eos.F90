@@ -21,8 +21,8 @@ module rdb_eos
    !! `rdb_ocean_eos_compute` (core/ocean/state/), and the coastal
    !! shim in `rdb_ml_eos`.
    use rdb_constants, only: wp, H_VANISHED
-   use rdb_teos10_convert, only: SR_FACTOR
    use rdb_grid, only: hgrid_t
+   use rdb_teos10_convert, only: SR_FACTOR, ct_from_pt, ct_from_pt_derivs
    implicit none
    private
 
@@ -1105,15 +1105,18 @@ contains
       !! ~5e-3 relative error against the true total derivative, so we
       !! keep the full chain — this is what the FD regression locks.
       !!
-      !! dCT/dPT and dCT/dSR are analytic derivatives of the ct_from_pt
-      !! poly: with yy = 0.025·PT, x2 = sfac·SR, xx = sqrt(x2), each
-      !! yy-coefficient c_k(xx) = A + B·xx² + C·xx³ + D·xx⁴ + E·xx⁵, so
-      !!   dCT/dPT = 0.025·(dhh/dyy)/cp0
-      !!   dCT/dSR = (dhh/dxx)·(sfac/(2·xx))/cp0.
+      !! dCT/dPT and dCT/dSR come from `ct_from_pt_derivs` in
+      !! `rdb_teos10_convert` — the verified GSW surface polynomial,
+      !! regrouped into explicit Horner-in-y coefficients so the
+      !! derivatives are analytic rather than finite-differenced. Prior
+      !! to 2026-10 this routine carried its OWN independently
+      !! transcribed copy of the polynomial that MISPLACED two terms
+      !! (`123.59576582457964`, `-48.5891069025409`, which belong to the
+      !! pure-salinity y^0 Horner coefficient) onto the y^1/y^2
+      !! coefficients instead — see `rdb_teos10_convert`'s docstring.
       !!
       !! Transcribed from the verified prototype roquet_spv_eos.py.  One
-      !! sqrt for zs (shared by SV and both derivatives) + one sqrt for
-      !! the ct_from_pt poly normalisation.
+      !! sqrt for zs (shared by SV and both derivatives).
       !$acc routine seq
       real(wp), intent(in) :: T_pt, S_sp, p
       real(wp), intent(out) :: sv, dsv_dt_model, dsv_ds_model
@@ -1123,73 +1126,14 @@ contains
       real(wp) :: sv_ts0, sv_ts1, sv_ts2, sv_ts3, sv_0s0, sv_00p
       real(wp) :: dvdzt0, dvdzt1, dvdzt2, dvdzt3, dsv_dct
       real(wp) :: dvdzs0, dvdzs1, dvdzs2, dvdzs3, dsv_dsa
-      real(wp) :: x2, xx, yy, hh, dh_dy, dh_dx
-      real(wp) :: c0, c1, c2, c3, c4, c5, c6, c7
-      real(wp) :: d0, d1, d2, d3, d4, d5, d6, d7
 
       SR = S_sp*ROQ_SR_FACTOR
 
-      ! CT = ct_from_pt(SR, PT): the 7-term gsw surface poly is degree 7 in
-      ! yy = 0.025*PT.  Each yy-coefficient c_k is a polynomial in xx =
-      ! sqrt(sfac*SR): c_k = A + B*xx^2 + C*xx^3 + D*xx^4 + E*xx^5 (x2 = xx^2).
-      ! Building c_k and dc_k/dxx (= d_k) gives exact analytic dCT/dPT and
-      ! dCT/dSR by Horner — no risk of mis-differentiating the published
-      ! nesting.
-      ! Floor x2 to a tiny positive so the `dct_dsr = dh_dx/(2*xx)` below
-      ! never hits 0/0 at SP=0 (fresh water): dh_dx is itself proportional
-      ! to xx (lowest term 2B*xx), so dh_dx/xx has a finite limit — the
-      ! floor reproduces it (xx tiny-but-nonzero) instead of NaN.  The
-      ! floor only bites at SP < ~1e-9 PSU, so it is bit-identical for any
-      ! real-ocean salinity.
-      x2 = max(ROQ_CT_SFAC*SR, 1.0e-20_wp)
-      xx = sqrt(x2)
-      yy = T_pt*0.025_wp
-      c0 = 61.01362420681071_wp &
-           + x2*(268.5520265845071_wp &
-                 + xx*(937.2099110620707_wp &
-                       + xx*(-1687.914374187449_wp + xx*246.9598888781377_wp)))
-      c1 = 168776.46138048015_wp &
-           + x2*(-12019.028203559312_wp &
-                 + xx*(588.1802812170108_wp &
-                       + xx*(936.3206544460336_wp + xx*123.59576582457964_wp)))
-      c2 = -2735.2785605119625_wp &
-           + x2*(3734.858026725145_wp &
-                 + xx*(248.39476522971285_wp &
-                       + xx*(-942.7827304544439_wp + xx*(-48.5891069025409_wp))))
-      c3 = 2574.2164453821433_wp &
-           + x2*(-2046.7671145057618_wp &
-                 + xx*(-3.871557904936333_wp + xx*369.4389437509002_wp))
-      c4 = -1536.6644434977543_wp &
-           + x2*(465.28655623126450_wp + xx*(-2.6268019854268356_wp + xx*(-33.83664947895248_wp)))
-      c5 = 545.7340497931629_wp &
-           + x2*(-0.6370820302831379_wp + xx*(-9.987880382780322_wp))
-      c6 = -50.91091728474331_wp + x2*(-10.650848542359153_wp)
-      c7 = -18.30489878927802_wp
-      ! dc_k/dxx = 2B*xx + 3C*xx^2 + 4D*xx^3 + 5E*xx^4 (A and the xx^0/xx^1
-      ! terms vanish; B,C,D,E read off the c_k expansions above).
-      d0 = xx*(2.0_wp*268.5520265845071_wp &
-               + xx*(3.0_wp*937.2099110620707_wp &
-                     + xx*(4.0_wp*(-1687.914374187449_wp) + xx*5.0_wp*246.9598888781377_wp)))
-      d1 = xx*(2.0_wp*(-12019.028203559312_wp) &
-               + xx*(3.0_wp*588.1802812170108_wp &
-                     + xx*(4.0_wp*936.3206544460336_wp + xx*5.0_wp*123.59576582457964_wp)))
-      d2 = xx*(2.0_wp*3734.858026725145_wp &
-               + xx*(3.0_wp*248.39476522971285_wp &
-                     + xx*(4.0_wp*(-942.7827304544439_wp) + xx*5.0_wp*(-48.5891069025409_wp))))
-      d3 = xx*(2.0_wp*(-2046.7671145057618_wp) &
-               + xx*(3.0_wp*(-3.871557904936333_wp) + xx*4.0_wp*369.4389437509002_wp))
-      d4 = xx*(2.0_wp*465.28655623126450_wp &
-               + xx*(3.0_wp*(-2.6268019854268356_wp) + xx*4.0_wp*(-33.83664947895248_wp)))
-      d5 = xx*(2.0_wp*(-0.6370820302831379_wp) + xx*3.0_wp*(-9.987880382780322_wp))
-      d6 = xx*2.0_wp*(-10.650848542359153_wp)
-      d7 = 0.0_wp
-      hh = c0 + yy*(c1 + yy*(c2 + yy*(c3 + yy*(c4 + yy*(c5 + yy*(c6 + yy*c7))))))
-      dh_dy = c1 + yy*(2.0_wp*c2 + yy*(3.0_wp*c3 + yy*(4.0_wp*c4 &
-                                                       + yy*(5.0_wp*c5 + yy*(6.0_wp*c6 + yy*7.0_wp*c7)))))
-      dh_dx = d0 + yy*(d1 + yy*(d2 + yy*(d3 + yy*(d4 + yy*(d5 + yy*(d6 + yy*d7))))))
-      CT = hh/ROQ_CP0
-      dct_dpt = 0.025_wp*dh_dy/ROQ_CP0
-      dct_dsr = dh_dx*(ROQ_CT_SFAC/(2.0_wp*xx))/ROQ_CP0
+      ! CT = ct_from_pt(SR, PT) + analytic dCT/dPT, dCT/dSR.  The module
+      ! floors its internal x2 at a tiny positive so dct_dsr never hits
+      ! 0/0 at SP=0 (fresh water) -- bit-identical for any real-ocean
+      ! salinity (the floor only bites below ~1e-9 PSU).
+      call ct_from_pt_derivs(SR, T_pt, CT, dct_dpt, dct_dsr)
 
       zt = CT
       zs = sqrt(abs(S_sp*ROQ_SR_FACTOR + ROQ_RDELTAS)*ROQ_R1_S0)
@@ -1312,9 +1256,8 @@ contains
       !! independent of, and NOT bit-identical to, the polyTEOS10_75t
       !! SPECIFIC-VOLUME fit `roquet_spv_point` evaluates (ΔS = 24
       !! g/kg).  Same conversion chain as `roquet_spv_point` — SR =
-      !! SP·(35.16504/35), CT = ct_from_pt(SR, PT) — COPIED here rather
-      !! than shared (a later PR lifts both into a common conversion
-      !! module); `roquet_spv_point` stays bit-identical.
+      !! SP·(35.16504/35), CT = ct_from_pt_derivs(SR, PT) from
+      !! `rdb_teos10_convert`, shared rather than copied now.
       !$acc routine seq
       real(wp), intent(in) :: T_pt, S_sp, p
       real(wp), intent(out) :: rho, drho_dt_model, drho_ds_model
@@ -1324,61 +1267,13 @@ contains
       real(wp) :: rho_ts0, rho_ts1, rho_ts2, rho_ts3, rho_0s0, rho_00p
       real(wp) :: drdzt0, drdzt1, drdzt2, drdzt3, drho_dct
       real(wp) :: drdzs0, drdzs1, drdzs2, drdzs3, drho_dsa
-      real(wp) :: x2, xx, yy, hh, dh_dy, dh_dx
-      real(wp) :: c0, c1, c2, c3, c4, c5, c6, c7
-      real(wp) :: d0, d1, d2, d3, d4, d5, d6, d7
 
       SR = S_sp*ROQ_SR_FACTOR
 
-      ! CT = ct_from_pt(SR, PT): identical poly to roquet_spv_point (see
-      ! its docstring for the floor-at-SP=0 rationale).
-      x2 = max(ROQ_CT_SFAC*SR, 1.0e-20_wp)
-      xx = sqrt(x2)
-      yy = T_pt*0.025_wp
-      c0 = 61.01362420681071_wp &
-           + x2*(268.5520265845071_wp &
-                 + xx*(937.2099110620707_wp &
-                       + xx*(-1687.914374187449_wp + xx*246.9598888781377_wp)))
-      c1 = 168776.46138048015_wp &
-           + x2*(-12019.028203559312_wp &
-                 + xx*(588.1802812170108_wp &
-                       + xx*(936.3206544460336_wp + xx*123.59576582457964_wp)))
-      c2 = -2735.2785605119625_wp &
-           + x2*(3734.858026725145_wp &
-                 + xx*(248.39476522971285_wp &
-                       + xx*(-942.7827304544439_wp + xx*(-48.5891069025409_wp))))
-      c3 = 2574.2164453821433_wp &
-           + x2*(-2046.7671145057618_wp &
-                 + xx*(-3.871557904936333_wp + xx*369.4389437509002_wp))
-      c4 = -1536.6644434977543_wp &
-           + x2*(465.28655623126450_wp + xx*(-2.6268019854268356_wp + xx*(-33.83664947895248_wp)))
-      c5 = 545.7340497931629_wp &
-           + x2*(-0.6370820302831379_wp + xx*(-9.987880382780322_wp))
-      c6 = -50.91091728474331_wp + x2*(-10.650848542359153_wp)
-      c7 = -18.30489878927802_wp
-      d0 = xx*(2.0_wp*268.5520265845071_wp &
-               + xx*(3.0_wp*937.2099110620707_wp &
-                     + xx*(4.0_wp*(-1687.914374187449_wp) + xx*5.0_wp*246.9598888781377_wp)))
-      d1 = xx*(2.0_wp*(-12019.028203559312_wp) &
-               + xx*(3.0_wp*588.1802812170108_wp &
-                     + xx*(4.0_wp*936.3206544460336_wp + xx*5.0_wp*123.59576582457964_wp)))
-      d2 = xx*(2.0_wp*3734.858026725145_wp &
-               + xx*(3.0_wp*248.39476522971285_wp &
-                     + xx*(4.0_wp*(-942.7827304544439_wp) + xx*5.0_wp*(-48.5891069025409_wp))))
-      d3 = xx*(2.0_wp*(-2046.7671145057618_wp) &
-               + xx*(3.0_wp*(-3.871557904936333_wp) + xx*4.0_wp*369.4389437509002_wp))
-      d4 = xx*(2.0_wp*465.28655623126450_wp &
-               + xx*(3.0_wp*(-2.6268019854268356_wp) + xx*4.0_wp*(-33.83664947895248_wp)))
-      d5 = xx*(2.0_wp*(-0.6370820302831379_wp) + xx*3.0_wp*(-9.987880382780322_wp))
-      d6 = xx*2.0_wp*(-10.650848542359153_wp)
-      d7 = 0.0_wp
-      hh = c0 + yy*(c1 + yy*(c2 + yy*(c3 + yy*(c4 + yy*(c5 + yy*(c6 + yy*c7))))))
-      dh_dy = c1 + yy*(2.0_wp*c2 + yy*(3.0_wp*c3 + yy*(4.0_wp*c4 &
-                                                       + yy*(5.0_wp*c5 + yy*(6.0_wp*c6 + yy*7.0_wp*c7)))))
-      dh_dx = d0 + yy*(d1 + yy*(d2 + yy*(d3 + yy*(d4 + yy*(d5 + yy*(d6 + yy*d7))))))
-      CT = hh/ROQ_CP0
-      dct_dpt = 0.025_wp*dh_dy/ROQ_CP0
-      dct_dsr = dh_dx*(ROQ_CT_SFAC/(2.0_wp*xx))/ROQ_CP0
+      ! CT = ct_from_pt(SR, PT) + analytic dCT/dPT, dCT/dSR (same shared
+      ! routine roquet_spv_point calls -- see its docstring for the
+      ! floor-at-SP=0 rationale).
+      call ct_from_pt_derivs(SR, T_pt, CT, dct_dpt, dct_dsr)
 
       zt = CT
       zs = sqrt(abs(SR + ROQ_RHO_RDELTAS)*ROQ_R1_S0)
@@ -1449,36 +1344,9 @@ contains
       real(wp) :: SR, CT
       real(wp) :: zt, zs, zp
       real(wp) :: rho_ts0, rho_ts1, rho_ts2, rho_ts3, rho_0s0, rho_00p
-      real(wp) :: x2, xx, yy, hh
-      real(wp) :: c0, c1, c2, c3, c4, c5, c6, c7
 
       SR = S_sp*ROQ_SR_FACTOR
-      x2 = max(ROQ_CT_SFAC*SR, 1.0e-20_wp)
-      xx = sqrt(x2)
-      yy = T_pt*0.025_wp
-      c0 = 61.01362420681071_wp &
-           + x2*(268.5520265845071_wp &
-                 + xx*(937.2099110620707_wp &
-                       + xx*(-1687.914374187449_wp + xx*246.9598888781377_wp)))
-      c1 = 168776.46138048015_wp &
-           + x2*(-12019.028203559312_wp &
-                 + xx*(588.1802812170108_wp &
-                       + xx*(936.3206544460336_wp + xx*123.59576582457964_wp)))
-      c2 = -2735.2785605119625_wp &
-           + x2*(3734.858026725145_wp &
-                 + xx*(248.39476522971285_wp &
-                       + xx*(-942.7827304544439_wp + xx*(-48.5891069025409_wp))))
-      c3 = 2574.2164453821433_wp &
-           + x2*(-2046.7671145057618_wp &
-                 + xx*(-3.871557904936333_wp + xx*369.4389437509002_wp))
-      c4 = -1536.6644434977543_wp &
-           + x2*(465.28655623126450_wp + xx*(-2.6268019854268356_wp + xx*(-33.83664947895248_wp)))
-      c5 = 545.7340497931629_wp &
-           + x2*(-0.6370820302831379_wp + xx*(-9.987880382780322_wp))
-      c6 = -50.91091728474331_wp + x2*(-10.650848542359153_wp)
-      c7 = -18.30489878927802_wp
-      hh = c0 + yy*(c1 + yy*(c2 + yy*(c3 + yy*(c4 + yy*(c5 + yy*(c6 + yy*c7))))))
-      CT = hh/ROQ_CP0
+      CT = ct_from_pt(SR, T_pt)
 
       zt = CT
       zs = sqrt(abs(SR + ROQ_RHO_RDELTAS)*ROQ_R1_S0)

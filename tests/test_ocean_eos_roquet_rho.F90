@@ -59,6 +59,7 @@ module test_ocean_eos_roquet_rho
                       EOS_VARIANT_ROQUET_SPV, EOS_VARIANT_ROQUET_RHO
    use rdb_ocean_eos_compute, only: ocean_eos_compute
    use rdb_ocean_pressure_force, only: OPGF_VARIANT_FV_WRIGHT, OPGF_VARIANT_FV_LITE
+   use rdb_teos10_convert, only: ct_from_pt
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use testdrive, only: new_unittest, unittest_type, error_type, check
@@ -103,7 +104,7 @@ contains
       hi = ct_target + 5.0_wp
       do while (hi - lo > 1.0e-13_wp)
          mid = 0.5_wp*(lo + hi)
-         c = ct_from_pt_local(sp*SR_FACTOR, mid)
+         c = ct_from_pt(sp*SR_FACTOR, mid)
          if (c < ct_target) then
             lo = mid
          else
@@ -112,45 +113,6 @@ contains
       end do
       pt = 0.5_wp*(lo + hi)
    end function pt_for_ct
-
-   pure function ct_from_pt_local(sr, pt) result(ct)
-      !! Local copy of the 7-term gsw_CT_from_pt surface polynomial --
-      !! the SAME Horner grouping `roquet_rho_point` uses internally --
-      !! so the Newton inversion targets exactly the branch's own
-      !! conversion (identical to the copy in `test_ocean_eos_roquet`).
-      real(wp), intent(in) :: sr, pt
-      real(wp) :: ct
-      real(wp), parameter :: cp0 = 3991.86795711963_wp
-      real(wp), parameter :: sfac = 0.0248826675584615_wp
-      real(wp) :: x2, xx, yy, hh
-      real(wp) :: c0, c1, c2, c3, c4, c5, c6, c7
-      x2 = sfac*sr
-      xx = sqrt(x2)
-      yy = pt*0.025_wp
-      c0 = 61.01362420681071_wp &
-           + x2*(268.5520265845071_wp &
-                 + xx*(937.2099110620707_wp &
-                       + xx*(-1687.914374187449_wp + xx*246.9598888781377_wp)))
-      c1 = 168776.46138048015_wp &
-           + x2*(-12019.028203559312_wp &
-                 + xx*(588.1802812170108_wp &
-                       + xx*(936.3206544460336_wp + xx*123.59576582457964_wp)))
-      c2 = -2735.2785605119625_wp &
-           + x2*(3734.858026725145_wp &
-                 + xx*(248.39476522971285_wp &
-                       + xx*(-942.7827304544439_wp + xx*(-48.5891069025409_wp))))
-      c3 = 2574.2164453821433_wp &
-           + x2*(-2046.7671145057618_wp &
-                 + xx*(-3.871557904936333_wp + xx*369.4389437509002_wp))
-      c4 = -1536.6644434977543_wp &
-           + x2*(465.28655623126450_wp + xx*(-2.6268019854268356_wp + xx*(-33.83664947895248_wp)))
-      c5 = 545.7340497931629_wp &
-           + x2*(-0.6370820302831379_wp + xx*(-9.987880382780322_wp))
-      c6 = -50.91091728474331_wp + x2*(-10.650848542359153_wp)
-      c7 = -18.30489878927802_wp
-      hh = c0 + yy*(c1 + yy*(c2 + yy*(c3 + yy*(c4 + yy*(c5 + yy*(c6 + yy*c7))))))
-      ct = hh/cp0
-   end function ct_from_pt_local
 
    subroutine test_paper_checkvalue(error)
       !! Roquet et al. (2015) Sec. 5 check value: rho(SA=30, CT=10,
