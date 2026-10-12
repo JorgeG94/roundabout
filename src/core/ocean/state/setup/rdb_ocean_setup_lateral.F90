@@ -630,15 +630,18 @@ contains
       end if
       ! FV_WRIGHT re-evaluates the Wright (1997) rational EOS inside its
       ! Picard pressure sweep, so it cannot honour a non-Wright rho_layer.
-      ! Roquet + FV_WRIGHT is therefore unsupported (FV_LITE / FV_MOM6 /
-      ! gprime read rho_layer generically and are fine).  Fail loud — a
+      ! Roquet (either fit — SpV or the in-situ-density ROQUET_RHO) +
+      ! FV_WRIGHT is therefore unsupported (FV_LITE / FV_MOM6 / gprime
+      ! read rho_layer generically and are fine).  Fail loud — a
       ! follow-up could add a Roquet column sweep.
-      if (ocean_state%eos%variant == EOS_VARIANT_ROQUET_SPV .and. &
+      if ((ocean_state%eos%variant == EOS_VARIANT_ROQUET_SPV .or. &
+           ocean_state%eos%variant == EOS_VARIANT_ROQUET_RHO) .and. &
           ocean_state%pressure_force%variant == OPGF_VARIANT_FV_WRIGHT) then
-         call fail("configure_ocean_pgf: eos='roquet_spv' is "// &
+         call fail("configure_ocean_pgf: eos='roquet_spv'/'roquet_rho' is "// &
                    "incompatible with pgf form='fv_wright' (the FV_WRIGHT "// &
                    "Picard sweep re-evaluates Wright internally). Use "// &
-                   "fv_lite, fv_mom6, or gprime with roquet_spv.", ierr, OCEAN_STATUS_ERR_SETUP)
+                   "fv_lite, fv_mom6, or gprime with roquet_spv/roquet_rho.", &
+                   ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
 

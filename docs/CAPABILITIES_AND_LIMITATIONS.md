@@ -101,7 +101,7 @@ More acronyms (CWC, PGF, PP81, ALE, EPBL, MEKE) and concept definitions (vanishi
 | Gap | Status | What exists instead |
 |---|---|---|
 | GLS, k-ω and MY2.5 turbulence closures | Not implemented | PP81, KPP, EPBL, kappa-shear, tidal mixing, convective adjustment, double diffusion, two background schemes |
-| TEOS-10 GSW equation of state | Not implemented | Wright (1997) and a Roquet et al. (2015) polynomial |
+| TEOS-10 GSW equation of state | Not implemented | Wright (1997) and two Roquet et al. (2015) polynomials (`roquet_spv`, `roquet_rho`) |
 | Sediment transport, biogeochemistry, vegetation drag | Not implemented | Surface and bottom flux set only |
 | Online bulk aerodynamic fluxes | Standalone kernel only | Large and Yeager (2004, 2009) is in `rdb_ocean_bulk_flux` but is wired to no forcing source or namelist. Forcing is pre-computed and read by `&ocean_dataovr_nml`. COARE and Zeng are not implemented. |
 | Complete sea-ice model | Partial | See [section 9](#9-sea-ice). |
@@ -153,7 +153,7 @@ Both schemes wrap the same nonlinear barotropic fast loop. The stability suite r
 | Pressure gradient: Montgomery | **Shipped, default** | `&ocean_pgf_nml form = "mont"` | Valid over slopes and every vertical coordinate. Equals `fv_lite` when two columns have equal layer thicknesses. |
 | Pressure gradient: FV-lite, FV-Wright, FV-MOM6 | Shipped | `form = "fv_lite"`, `"fv_wright"`, `"fv_mom6"` | Over a slope with unequal thicknesses no form is exact. That residual is the open sigma-coordinate PGF error. |
 | Pressure gradient: reduced gravity | Shipped, 2 layers only | `form = "gprime"` | Refused unless `nz_layers = 2`. |
-| Equation of state | Shipped | `&ocean_eos_nml eos` | Wright (1997) for production, a linear EOS for validation, and a Roquet et al. (2015) polynomial. No TEOS-10 GSW. |
+| Equation of state | Shipped | `&ocean_eos_nml eos` | Wright (1997) for production, a linear EOS for validation, and two Roquet et al. (2015) polynomials: `roquet_spv` (specific volume) and `roquet_rho` (in-situ density, OM3's form). No TEOS-10 GSW. |
 | Freezing point | Shipped | `&ocean_eos_nml tfreeze_set` | Linear liquidus with two named coefficient sets: `"seaice"` (default) and `"isomip"`. A nonlinear liquidus is not implemented. |
 | Coriolis | Shipped | `&ocean_coriolis_nml form`, `pv_adv_scheme` | `sadourny` (default), `sadourny_energy` and `sadourny_hk`. The full Hollingsworth-Källén refinement is deferred. `weno5` and `weno7` PV interpolation need `nghost` of 4 and 5. |
 | Barotropic wave drag | Shipped, opt-in | `&ocean_bt_nml wave_drag` | `form = "file"` is refused. `"roughness_proxy"` is a placeholder for a true subgrid roughness map. |

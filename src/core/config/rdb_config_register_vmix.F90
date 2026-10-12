@@ -497,7 +497,7 @@ contains
       ps => cfg%ocean%eos%eos
       call g%add(nml_enum("eos", ps, "Equation-of-state variant", &
                           allowed=[character(len=10) :: "linear", "wright", &
-                                   "roquet_spv", "teos10"]))
+                                   "roquet_spv", "roquet_rho", "teos10"]))
       ps => cfg%ocean%eos%tfreeze_set
       call g%add(nml_enum("tfreeze_set", ps, &
                           "Named liquidus coefficient set for eos_freezing_point "// &

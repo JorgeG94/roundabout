@@ -27,7 +27,7 @@ module rdb_ocean_setup
                                        OPGF_VARIANT_FV_WRIGHT, parse_opgf_variant, &
                                        nonoverlap_vanish_tol_for
    use rdb_eos, only: parse_eos_variant, eos_validate, &
-                      EOS_VARIANT_ROQUET_SPV, &
+                      EOS_VARIANT_ROQUET_SPV, EOS_VARIANT_ROQUET_RHO, &
                       parse_tfreeze_set, eos_apply_tfreeze_set, &
                       TFREEZE_SET_SEAICE
    use rdb_ocean_vcoord, only: parse_ocean_vcoord_type, VCOORD_EULERIAN_Z, &

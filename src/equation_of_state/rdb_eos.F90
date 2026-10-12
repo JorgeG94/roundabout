@@ -70,6 +70,27 @@ module rdb_eos
       !! Reference Salinity and CT = ct_from_pt(SR, PT) locally, so it
       !! stays device-callable and returns derivatives w.r.t. the model
       !! (PT, SP) via the analytic chain rule.
+   integer, parameter, public :: EOS_VARIANT_ROQUET_RHO = 5
+      !! Roquet et al. (2015) "Accurate polynomial expressions for the
+      !! density and specific volume of seawater using the TEOS-10
+      !! standard." Ocean Modelling 90:29-43 — the IN-SITU DENSITY
+      !! (polyTEOS10_55t) polynomial variant (NEMO / MOM6
+      !! `Roquet_rho`), ΔS = 32 g/kg.  Independent fit from
+      !! `EOS_VARIANT_ROQUET_SPV`'s specific-volume (polyTEOS10_75t,
+      !! ΔS = 24 g/kg) branch — the two agree to the paper's stated rms
+      !! accuracy (~1e-3 kg/m^3 class), not to round-off, so switching
+      !! between them is a real (if small) answer change.  This branch
+      !! returns ρ directly (`r0(zp) + r'(zs,zt,zp)`, 6 pressure-only
+      !! terms plus a ~49-term (zs,zt,zp) polynomial) rather than
+      !! specific volume, so it needs no `1/SV` division and is
+      !! Boussinesq-friendly + cheaper per point than the SpV branch.
+      !! Same conversion chain as `EOS_VARIANT_ROQUET_SPV`: consumers
+      !! work in model (PT, SP); this branch converts SR = SP·(35.16504/
+      !! 35) for Reference Salinity and CT = ct_from_pt(SR, PT) locally
+      !! (copied from `roquet_spv_point`, not shared — a later PR lifts
+      !! both into a common conversion module), so it stays
+      !! device-callable and returns derivatives w.r.t. the model
+      !! (PT, SP) via the analytic chain rule.
 
    integer, parameter, public :: TS_POT_PRAC = 1
       !! Tracer T/S convention: potential temperature + practical
@@ -332,6 +353,140 @@ module rdb_eos
              SPV500, SPV510, SPV600
    public :: ROQ_CP0, ROQ_CT_SFAC, ROQ_R1_S0, ROQ_RDELTAS, ROQ_SR_FACTOR
 
+   ! ======================================================================
+   ! Roquet et al. (2015) in-situ DENSITY polynomial coefficients
+   ! (the "polyTEOS10_55t" fit, ΔS = 32 g/kg — distinct from the
+   ! specific-volume "polyTEOS10_75t" fit above, ΔS = 24 g/kg).
+   ! ----------------------------------------------------------------------
+   ! Citation of record (same paper as the SpV table above):
+   !   Roquet, F., Madec, G., McDougall, T. J., Barker, P. M. (2015):
+   !   "Accurate polynomial expressions for the density and specific volume
+   !    of seawater using the TEOS-10 standard." Ocean Modelling 90:29-43.
+   !
+   ! This branch returns IN-SITU DENSITY directly (rho = R0(zp) +
+   ! R'(zs,zt,zp): 6 pressure-only terms + a ~49-term (zs,zt,zp)
+   ! polynomial) rather than specific volume, so it needs no 1/SV
+   ! division — the NEMO-side density fit of the same paper, shipped
+   ! as an independent, NOT bit-identical EOS form alongside the SpV
+   ! fit (MOM6 ships both the same way).  The I_Ts / Pa2kb / r1_S0
+   ! normalisation constants are the SAME ones the SpV table above
+   ! folds in (`ROQ_I_TS`, `ROQ_PA2KB`, `ROQ_R1_S0`); only the salinity
+   ! offset differs (`ROQ_RHO_RDELTAS` = 32, vs `ROQ_RDELTAS` = 24 for
+   ! SpV).
+   real(wp), parameter :: ROQ_RHO_RDELTAS = 32.0_wp
+      !! Salinity offset before the sqrt (g/kg), this fit's ΔS.
+
+   ! Reference-profile (rho00p) pressure coefficients, in Pa-powers --
+   ! same Horner shape as `ROQ_V00..ROQ_V05` above.
+   real(wp), parameter :: ROQ_RHO_R00 = 4.6494977072e+01_wp*ROQ_PA2KB
+   real(wp), parameter :: ROQ_RHO_R01 = -5.2099962525_wp*ROQ_PA2KB**2
+   real(wp), parameter :: ROQ_RHO_R02 = 2.2601900708e-01_wp*ROQ_PA2KB**3
+   real(wp), parameter :: ROQ_RHO_R03 = 6.4326772569e-02_wp*ROQ_PA2KB**4
+   real(wp), parameter :: ROQ_RHO_R04 = 1.5616995503e-02_wp*ROQ_PA2KB**5
+   real(wp), parameter :: ROQ_RHO_R05 = -1.7243708991e-03_wp*ROQ_PA2KB**6
+
+   ! RHO(zs,zt,zp) term coefficients  RHO_abc * zs**a * zt**b * zp**c.
+   real(wp), parameter :: RHO000 = 8.0189615746e+02_wp
+   real(wp), parameter :: RHO100 = 8.6672408165e+02_wp
+   real(wp), parameter :: RHO200 = -1.7864682637e+03_wp
+   real(wp), parameter :: RHO300 = 2.0375295546e+03_wp
+   real(wp), parameter :: RHO400 = -1.2849161071e+03_wp
+   real(wp), parameter :: RHO500 = 4.3227585684e+02_wp
+   real(wp), parameter :: RHO600 = -6.0579916612e+01_wp
+   real(wp), parameter :: RHO010 = 2.6010145068e+01_wp*ROQ_I_TS
+   real(wp), parameter :: RHO110 = -6.5281885265e+01_wp*ROQ_I_TS
+   real(wp), parameter :: RHO210 = 8.1770425108e+01_wp*ROQ_I_TS
+   real(wp), parameter :: RHO310 = -5.6888046321e+01_wp*ROQ_I_TS
+   real(wp), parameter :: RHO410 = 1.7681814114e+01_wp*ROQ_I_TS
+   real(wp), parameter :: RHO510 = -1.9193502195_wp*ROQ_I_TS
+   real(wp), parameter :: RHO020 = -3.7074170417e+01_wp*ROQ_I_TS**2
+   real(wp), parameter :: RHO120 = 6.1548258127e+01_wp*ROQ_I_TS**2
+   real(wp), parameter :: RHO220 = -6.0362551501e+01_wp*ROQ_I_TS**2
+   real(wp), parameter :: RHO320 = 2.9130021253e+01_wp*ROQ_I_TS**2
+   real(wp), parameter :: RHO420 = -5.4723692739_wp*ROQ_I_TS**2
+   real(wp), parameter :: RHO030 = 2.1661789529e+01_wp*ROQ_I_TS**3
+   real(wp), parameter :: RHO130 = -3.3449108469e+01_wp*ROQ_I_TS**3
+   real(wp), parameter :: RHO230 = 1.9717078466e+01_wp*ROQ_I_TS**3
+   real(wp), parameter :: RHO330 = -3.1742946532_wp*ROQ_I_TS**3
+   real(wp), parameter :: RHO040 = -8.3627885467_wp*ROQ_I_TS**4
+   real(wp), parameter :: RHO140 = 1.1311538584e+01_wp*ROQ_I_TS**4
+   real(wp), parameter :: RHO240 = -5.3563304045_wp*ROQ_I_TS**4
+   real(wp), parameter :: RHO050 = 5.4048723791e-01_wp*ROQ_I_TS**5
+   real(wp), parameter :: RHO150 = 4.8169980163e-01_wp*ROQ_I_TS**5
+   real(wp), parameter :: RHO060 = -1.9083568888e-01_wp*ROQ_I_TS**6
+   real(wp), parameter :: RHO001 = 1.9681925209e+01_wp*ROQ_PA2KB
+   real(wp), parameter :: RHO101 = -4.2549998214e+01_wp*ROQ_PA2KB
+   real(wp), parameter :: RHO201 = 5.0774768218e+01_wp*ROQ_PA2KB
+   real(wp), parameter :: RHO301 = -3.0938076334e+01_wp*ROQ_PA2KB
+   real(wp), parameter :: RHO401 = 6.6051753097_wp*ROQ_PA2KB
+   real(wp), parameter :: RHO011 = -1.3336301113e+01_wp*(ROQ_I_TS*ROQ_PA2KB)
+   real(wp), parameter :: RHO111 = -4.4870114575_wp*(ROQ_I_TS*ROQ_PA2KB)
+   real(wp), parameter :: RHO211 = 5.0042598061_wp*(ROQ_I_TS*ROQ_PA2KB)
+   real(wp), parameter :: RHO311 = -6.5399043664e-01_wp*(ROQ_I_TS*ROQ_PA2KB)
+   real(wp), parameter :: RHO021 = 6.7080479603_wp*(ROQ_I_TS**2*ROQ_PA2KB)
+   real(wp), parameter :: RHO121 = 3.5063081279_wp*(ROQ_I_TS**2*ROQ_PA2KB)
+   real(wp), parameter :: RHO221 = -1.8795372996_wp*(ROQ_I_TS**2*ROQ_PA2KB)
+   real(wp), parameter :: RHO031 = -2.4649669534_wp*(ROQ_I_TS**3*ROQ_PA2KB)
+   real(wp), parameter :: RHO131 = -5.5077101279e-01_wp*(ROQ_I_TS**3*ROQ_PA2KB)
+   real(wp), parameter :: RHO041 = 5.5927935970e-01_wp*(ROQ_I_TS**4*ROQ_PA2KB)
+   real(wp), parameter :: RHO002 = 2.0660924175_wp*ROQ_PA2KB**2
+   real(wp), parameter :: RHO102 = -4.9527603989_wp*ROQ_PA2KB**2
+   real(wp), parameter :: RHO202 = 2.5019633244_wp*ROQ_PA2KB**2
+   real(wp), parameter :: RHO012 = 2.0564311499_wp*(ROQ_I_TS*ROQ_PA2KB**2)
+   real(wp), parameter :: RHO112 = -2.1311365518e-01_wp*(ROQ_I_TS*ROQ_PA2KB**2)
+   real(wp), parameter :: RHO022 = -1.2419983026_wp*(ROQ_I_TS**2*ROQ_PA2KB**2)
+   real(wp), parameter :: RHO003 = -2.3342758797e-02_wp*ROQ_PA2KB**3
+   real(wp), parameter :: RHO103 = -1.8507636718e-02_wp*ROQ_PA2KB**3
+   real(wp), parameter :: RHO013 = 3.7969820455e-01_wp*(ROQ_I_TS*ROQ_PA2KB**3)
+
+   ! d(RHO)/dzt (-> d(rho)/dCT) coefficients -- mirrors RHO* exactly as
+   ! the SpV table's ALP* mirrors SPV* (differentiate-the-Horner, one
+   ! derivative order lower in zt per group).
+   real(wp), parameter :: RALP000 = RHO010, RALP100 = RHO110, RALP200 = RHO210
+   real(wp), parameter :: RALP300 = RHO310, RALP400 = RHO410, RALP500 = RHO510
+   real(wp), parameter :: RALP010 = 2.0_wp*RHO020, RALP110 = 2.0_wp*RHO120
+   real(wp), parameter :: RALP210 = 2.0_wp*RHO220, RALP310 = 2.0_wp*RHO320
+   real(wp), parameter :: RALP410 = 2.0_wp*RHO420
+   real(wp), parameter :: RALP020 = 3.0_wp*RHO030, RALP120 = 3.0_wp*RHO130
+   real(wp), parameter :: RALP220 = 3.0_wp*RHO230, RALP320 = 3.0_wp*RHO330
+   real(wp), parameter :: RALP030 = 4.0_wp*RHO040, RALP130 = 4.0_wp*RHO140
+   real(wp), parameter :: RALP230 = 4.0_wp*RHO240
+   real(wp), parameter :: RALP040 = 5.0_wp*RHO050, RALP140 = 5.0_wp*RHO150
+   real(wp), parameter :: RALP050 = 6.0_wp*RHO060
+   real(wp), parameter :: RALP001 = RHO011, RALP101 = RHO111, RALP201 = RHO211
+   real(wp), parameter :: RALP301 = RHO311
+   real(wp), parameter :: RALP011 = 2.0_wp*RHO021, RALP111 = 2.0_wp*RHO121
+   real(wp), parameter :: RALP211 = 2.0_wp*RHO221
+   real(wp), parameter :: RALP021 = 3.0_wp*RHO031, RALP121 = 3.0_wp*RHO131
+   real(wp), parameter :: RALP031 = 4.0_wp*RHO041
+   real(wp), parameter :: RALP002 = RHO012, RALP102 = RHO112
+   real(wp), parameter :: RALP012 = 2.0_wp*RHO022
+   real(wp), parameter :: RALP003 = RHO013
+
+   ! d(RHO)/dzs (-> d(rho)/dSA, via the /zs below) coefficients -- mirrors
+   ! the SpV table's BET*, with the SAME 0.5*r1_S0-per-order folding.
+   real(wp), parameter :: RBET000 = 0.5_wp*RHO100*ROQ_R1_S0, RBET100 = RHO200*ROQ_R1_S0
+   real(wp), parameter :: RBET200 = 1.5_wp*RHO300*ROQ_R1_S0, RBET300 = 2.0_wp*RHO400*ROQ_R1_S0
+   real(wp), parameter :: RBET400 = 2.5_wp*RHO500*ROQ_R1_S0, RBET500 = 3.0_wp*RHO600*ROQ_R1_S0
+   real(wp), parameter :: RBET010 = 0.5_wp*RHO110*ROQ_R1_S0, RBET110 = RHO210*ROQ_R1_S0
+   real(wp), parameter :: RBET210 = 1.5_wp*RHO310*ROQ_R1_S0, RBET310 = 2.0_wp*RHO410*ROQ_R1_S0
+   real(wp), parameter :: RBET410 = 2.5_wp*RHO510*ROQ_R1_S0
+   real(wp), parameter :: RBET020 = 0.5_wp*RHO120*ROQ_R1_S0, RBET120 = RHO220*ROQ_R1_S0
+   real(wp), parameter :: RBET220 = 1.5_wp*RHO320*ROQ_R1_S0, RBET320 = 2.0_wp*RHO420*ROQ_R1_S0
+   real(wp), parameter :: RBET030 = 0.5_wp*RHO130*ROQ_R1_S0, RBET130 = RHO230*ROQ_R1_S0
+   real(wp), parameter :: RBET230 = 1.5_wp*RHO330*ROQ_R1_S0
+   real(wp), parameter :: RBET040 = 0.5_wp*RHO140*ROQ_R1_S0, RBET140 = RHO240*ROQ_R1_S0
+   real(wp), parameter :: RBET050 = 0.5_wp*RHO150*ROQ_R1_S0
+   real(wp), parameter :: RBET001 = 0.5_wp*RHO101*ROQ_R1_S0, RBET101 = RHO201*ROQ_R1_S0
+   real(wp), parameter :: RBET201 = 1.5_wp*RHO301*ROQ_R1_S0, RBET301 = 2.0_wp*RHO401*ROQ_R1_S0
+   real(wp), parameter :: RBET011 = 0.5_wp*RHO111*ROQ_R1_S0, RBET111 = RHO211*ROQ_R1_S0
+   real(wp), parameter :: RBET211 = 1.5_wp*RHO311*ROQ_R1_S0
+   real(wp), parameter :: RBET021 = 0.5_wp*RHO121*ROQ_R1_S0, RBET121 = RHO221*ROQ_R1_S0
+   real(wp), parameter :: RBET031 = 0.5_wp*RHO131*ROQ_R1_S0
+   real(wp), parameter :: RBET002 = 0.5_wp*RHO102*ROQ_R1_S0, RBET102 = RHO202*ROQ_R1_S0
+   real(wp), parameter :: RBET012 = 0.5_wp*RHO112*ROQ_R1_S0
+   real(wp), parameter :: RBET003 = 0.5_wp*RHO103*ROQ_R1_S0
+
    type :: eos_t
       logical :: is_init = .false.
          !! True between `init` and `destroy`.  Prefer this to
@@ -450,7 +605,7 @@ contains
          !! `OCEAN_STATUS_ERR_SETUP` on an unsupported/unknown EOS variant
          !! when present; absent behaves as today (`error stop`).
       select case (eos%variant)
-      case (EOS_VARIANT_LINEAR, EOS_VARIANT_WRIGHT_97, EOS_VARIANT_ROQUET_SPV)
+      case (EOS_VARIANT_LINEAR, EOS_VARIANT_WRIGHT_97, EOS_VARIANT_ROQUET_SPV, EOS_VARIANT_ROQUET_RHO)
          ! Device-callable — OK.
       case (EOS_VARIANT_TEOS10)
          call fail("ocean_eos: TEOS-10 variant is not yet device-callable", ierr, &
@@ -483,6 +638,8 @@ contains
          code = EOS_VARIANT_WRIGHT_97
       case ("roquet_spv", "ROQUET_SPV", "roquet", "ROQUET")
          code = EOS_VARIANT_ROQUET_SPV
+      case ("roquet_rho", "ROQUET_RHO")
+         code = EOS_VARIANT_ROQUET_RHO
       case ("teos10", "TEOS10", "teos-10")
          code = EOS_VARIANT_TEOS10
       case default
@@ -586,6 +743,10 @@ contains
                               nx, ny, nz)
       case (EOS_VARIANT_ROQUET_SPV)
          call eos_roquet_spv_impl(h_layer, hS_layer, hT_layer, rho_layer, &
+                                  eos%rho0, eos%p_ref, &
+                                  nx, ny, nz)
+      case (EOS_VARIANT_ROQUET_RHO)
+         call eos_roquet_rho_impl(h_layer, hS_layer, hT_layer, rho_layer, &
                                   eos%rho0, eos%p_ref, &
                                   nx, ny, nz)
       case default
@@ -743,6 +904,41 @@ contains
          end if
       end do
    end subroutine eos_roquet_spv_impl
+
+   pure subroutine eos_roquet_rho_impl(h_layer, hS_layer, hT_layer, rho_layer, &
+                                       rho_0, p_ref, nx, ny, nz)
+      !! Roquet et al. (2015) in-situ-density EOS (polyTEOS10_55t)
+      !! evaluated at a single reference pressure `p_ref` (a SCALAR by
+      !! design — see the horizontal-uniformity contract in
+      !! `eos_compute_arrays`).  Same outer-shim signature as
+      !! `eos_roquet_spv_impl` — bare 3D arrays, model (PT, SP)
+      !! tracers, vanishing-layer fallback to `rho_0` — but returns RHO
+      !! directly (no 1/SV division): `roquet_rho_value` is the density
+      !! polynomial, not specific volume.
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in) :: h_layer(nx, ny, nz)
+      real(wp), intent(in) :: hS_layer(nx, ny, nz)
+      real(wp), intent(in) :: hT_layer(nx, ny, nz)
+      real(wp), intent(out) :: rho_layer(nx, ny, nz)
+      real(wp), intent(in) :: rho_0, p_ref
+
+      integer :: i, j, k
+      real(wp) :: inv_h, S_k, T_k
+
+      do concurrent(k=1:nz, j=1:ny, i=1:nx) &
+         local(inv_h, S_k, T_k)
+         ! vanished-ok: substitutes rho_0 on a vanished layer, the same
+         ! fallback eos_linear_impl/eos_wright_impl/eos_roquet_spv_impl use.
+         if (h_layer(i, j, k) > H_VANISHED) then
+            inv_h = 1.0_wp/h_layer(i, j, k)
+            S_k = hS_layer(i, j, k)*inv_h
+            T_k = hT_layer(i, j, k)*inv_h
+            rho_layer(i, j, k) = roquet_rho_value(T_k, S_k, p_ref)
+         else
+            rho_layer(i, j, k) = rho_0
+         end if
+      end do
+   end subroutine eos_roquet_rho_impl
 
    pure subroutine eos_wright_pgf_column_sweep_impl(h_layer, hS_layer, hT_layer, &
                                                     rho_layer_seed, p_top, p_edge_out, &
@@ -1102,6 +1298,210 @@ contains
       sv = rdb_roq_spv_p(sv0, sv1, sv2, sv3, p)
    end function roquet_spv_value
 
+   pure subroutine roquet_rho_point(T_pt, S_sp, p, rho, drho_dt_model, drho_ds_model)
+      !! Fused Roquet et al. (2015) in-situ DENSITY evaluation at a
+      !! point, in MODEL variables (potential temperature `T_pt` degC,
+      !! practical salinity `S_sp` PSU, pressure `p` Pa).  Returns
+      !! density `rho` (kg/m^3) and the analytic sensitivities w.r.t.
+      !! the MODEL variables (`drho_dt_model` = d(rho)/dPT,
+      !! `drho_ds_model` = d(rho)/dSP).
+      !!
+      !! This is the polyTEOS10_55t DENSITY fit (ΔS = 32 g/kg) —
+      !! independent of, and NOT bit-identical to, the polyTEOS10_75t
+      !! SPECIFIC-VOLUME fit `roquet_spv_point` evaluates (ΔS = 24
+      !! g/kg).  Same conversion chain as `roquet_spv_point` — SR =
+      !! SP·(35.16504/35), CT = ct_from_pt(SR, PT) — COPIED here rather
+      !! than shared (a later PR lifts both into a common conversion
+      !! module); `roquet_spv_point` stays bit-identical.
+      !$acc routine seq
+      real(wp), intent(in) :: T_pt, S_sp, p
+      real(wp), intent(out) :: rho, drho_dt_model, drho_ds_model
+
+      real(wp) :: SR, CT, dct_dpt, dct_dsr
+      real(wp) :: zt, zs, zp
+      real(wp) :: rho_ts0, rho_ts1, rho_ts2, rho_ts3, rho_0s0, rho_00p
+      real(wp) :: drdzt0, drdzt1, drdzt2, drdzt3, drho_dct
+      real(wp) :: drdzs0, drdzs1, drdzs2, drdzs3, drho_dsa
+      real(wp) :: x2, xx, yy, hh, dh_dy, dh_dx
+      real(wp) :: c0, c1, c2, c3, c4, c5, c6, c7
+      real(wp) :: d0, d1, d2, d3, d4, d5, d6, d7
+
+      SR = S_sp*ROQ_SR_FACTOR
+
+      ! CT = ct_from_pt(SR, PT): identical poly to roquet_spv_point (see
+      ! its docstring for the floor-at-SP=0 rationale).
+      x2 = max(ROQ_CT_SFAC*SR, 1.0e-20_wp)
+      xx = sqrt(x2)
+      yy = T_pt*0.025_wp
+      c0 = 61.01362420681071_wp &
+           + x2*(268.5520265845071_wp &
+                 + xx*(937.2099110620707_wp &
+                       + xx*(-1687.914374187449_wp + xx*246.9598888781377_wp)))
+      c1 = 168776.46138048015_wp &
+           + x2*(-12019.028203559312_wp &
+                 + xx*(588.1802812170108_wp &
+                       + xx*(936.3206544460336_wp + xx*123.59576582457964_wp)))
+      c2 = -2735.2785605119625_wp &
+           + x2*(3734.858026725145_wp &
+                 + xx*(248.39476522971285_wp &
+                       + xx*(-942.7827304544439_wp + xx*(-48.5891069025409_wp))))
+      c3 = 2574.2164453821433_wp &
+           + x2*(-2046.7671145057618_wp &
+                 + xx*(-3.871557904936333_wp + xx*369.4389437509002_wp))
+      c4 = -1536.6644434977543_wp &
+           + x2*(465.28655623126450_wp + xx*(-2.6268019854268356_wp + xx*(-33.83664947895248_wp)))
+      c5 = 545.7340497931629_wp &
+           + x2*(-0.6370820302831379_wp + xx*(-9.987880382780322_wp))
+      c6 = -50.91091728474331_wp + x2*(-10.650848542359153_wp)
+      c7 = -18.30489878927802_wp
+      d0 = xx*(2.0_wp*268.5520265845071_wp &
+               + xx*(3.0_wp*937.2099110620707_wp &
+                     + xx*(4.0_wp*(-1687.914374187449_wp) + xx*5.0_wp*246.9598888781377_wp)))
+      d1 = xx*(2.0_wp*(-12019.028203559312_wp) &
+               + xx*(3.0_wp*588.1802812170108_wp &
+                     + xx*(4.0_wp*936.3206544460336_wp + xx*5.0_wp*123.59576582457964_wp)))
+      d2 = xx*(2.0_wp*3734.858026725145_wp &
+               + xx*(3.0_wp*248.39476522971285_wp &
+                     + xx*(4.0_wp*(-942.7827304544439_wp) + xx*5.0_wp*(-48.5891069025409_wp))))
+      d3 = xx*(2.0_wp*(-2046.7671145057618_wp) &
+               + xx*(3.0_wp*(-3.871557904936333_wp) + xx*4.0_wp*369.4389437509002_wp))
+      d4 = xx*(2.0_wp*465.28655623126450_wp &
+               + xx*(3.0_wp*(-2.6268019854268356_wp) + xx*4.0_wp*(-33.83664947895248_wp)))
+      d5 = xx*(2.0_wp*(-0.6370820302831379_wp) + xx*3.0_wp*(-9.987880382780322_wp))
+      d6 = xx*2.0_wp*(-10.650848542359153_wp)
+      d7 = 0.0_wp
+      hh = c0 + yy*(c1 + yy*(c2 + yy*(c3 + yy*(c4 + yy*(c5 + yy*(c6 + yy*c7))))))
+      dh_dy = c1 + yy*(2.0_wp*c2 + yy*(3.0_wp*c3 + yy*(4.0_wp*c4 &
+                                                       + yy*(5.0_wp*c5 + yy*(6.0_wp*c6 + yy*7.0_wp*c7)))))
+      dh_dx = d0 + yy*(d1 + yy*(d2 + yy*(d3 + yy*(d4 + yy*(d5 + yy*(d6 + yy*d7))))))
+      CT = hh/ROQ_CP0
+      dct_dpt = 0.025_wp*dh_dy/ROQ_CP0
+      dct_dsr = dh_dx*(ROQ_CT_SFAC/(2.0_wp*xx))/ROQ_CP0
+
+      zt = CT
+      zs = sqrt(abs(SR + ROQ_RHO_RDELTAS)*ROQ_R1_S0)
+      zp = p
+
+      ! --- density RHO(zs, zt, zp) ---
+      rho_ts3 = RHO003 + (zs*RHO103 + zt*RHO013)
+      rho_ts2 = RHO002 + (zs*(RHO102 + zs*RHO202) &
+                          + zt*(RHO012 + (zs*RHO112 + zt*RHO022)))
+      rho_ts1 = RHO001 + (zs*(RHO101 + zs*(RHO201 + zs*(RHO301 + zs*RHO401))) &
+                          + zt*(RHO011 + (zs*(RHO111 + zs*(RHO211 + zs*RHO311)) &
+                                          + zt*(RHO021 + (zs*(RHO121 + zs*RHO221) &
+                                                          + zt*(RHO031 + (zs*RHO131 + zt*RHO041)))))))
+      rho_ts0 = zt*(RHO010 &
+                    + (zs*(RHO110 + zs*(RHO210 + zs*(RHO310 + zs*(RHO410 + zs*RHO510)))) &
+                       + zt*(RHO020 + (zs*(RHO120 + zs*(RHO220 + zs*(RHO320 + zs*RHO420))) &
+                                       + zt*(RHO030 + (zs*(RHO130 + zs*(RHO230 + zs*RHO330)) &
+                                                       + zt*(RHO040 + (zs*(RHO140 + zs*RHO240) &
+                                                                       + zt*(RHO050 + (zs*RHO150 + zt*RHO060))))))))))
+      rho_0s0 = RHO000 + zs*(RHO100 + zs*(RHO200 + zs*(RHO300 + zs*(RHO400 &
+                                                                    + zs*(RHO500 + zs*RHO600)))))
+      rho_00p = zp*(ROQ_RHO_R00 + zp*(ROQ_RHO_R01 + zp*(ROQ_RHO_R02 + zp*(ROQ_RHO_R03 &
+                                                                          + zp*(ROQ_RHO_R04 + zp*ROQ_RHO_R05)))))
+      rho = ((rho_ts0 + rho_0s0) + zp*(rho_ts1 + zp*(rho_ts2 + zp*rho_ts3))) + rho_00p
+
+      ! --- d(rho)/dCT ---
+      drdzt3 = RALP003
+      drdzt2 = RALP002 + (zs*RALP102 + zt*RALP012)
+      drdzt1 = RALP001 + (zs*(RALP101 + zs*(RALP201 + zs*RALP301)) &
+                          + zt*(RALP011 + (zs*(RALP111 + zs*RALP211) &
+                                           + zt*(RALP021 + (zs*RALP121 + zt*RALP031)))))
+      drdzt0 = RALP000 + (zs*(RALP100 + zs*(RALP200 + zs*(RALP300 + zs*(RALP400 + zs*RALP500)))) &
+                          + zt*(RALP010 + (zs*(RALP110 + zs*(RALP210 + zs*(RALP310 + zs*RALP410))) &
+                                           + zt*(RALP020 + (zs*(RALP120 + zs*(RALP220 + zs*RALP320)) &
+                                                            + zt*(RALP030 + (zt*(RALP040 + (zs*RALP140 + zt*RALP050)) &
+                                                                             + zs*(RALP130 + zs*RALP230))))))))
+      drho_dct = drdzt0 + zp*(drdzt1 + zp*(drdzt2 + zp*drdzt3))
+
+      ! --- d(rho)/dSA (per-coef 0.5*r1_S0 folded into RBET; residual /zs) ---
+      drdzs3 = RBET003
+      drdzs2 = RBET002 + (zs*RBET102 + zt*RBET012)
+      drdzs1 = RBET001 + (zs*(RBET101 + zs*(RBET201 + zs*RBET301)) &
+                          + zt*(RBET011 + (zs*(RBET111 + zs*RBET211) &
+                                           + zt*(RBET021 + (zs*RBET121 + zt*RBET031)))))
+      drdzs0 = RBET000 + (zs*(RBET100 + zs*(RBET200 + zs*(RBET300 + zs*(RBET400 + zs*RBET500)))) &
+                          + zt*(RBET010 + (zs*(RBET110 + zs*(RBET210 + zs*(RBET310 + zs*RBET410))) &
+                                           + zt*(RBET020 + (zs*(RBET120 + zs*(RBET220 + zs*RBET320)) &
+                                                            + zt*(RBET030 + (zt*(RBET040 + (zs*RBET140 + zt*RBET050)) &
+                                                                             + zs*(RBET130 + zs*RBET230))))))))
+      drho_dsa = (drdzs0 + zp*(drdzs1 + zp*(drdzs2 + zp*drdzs3)))/zs
+
+      ! Chain rule to the model variables (PT, SP); same structure as
+      ! roquet_spv_point's chain rule, for density instead of SV.
+      drho_dt_model = drho_dct*dct_dpt
+      drho_ds_model = (drho_dsa + drho_dct*dct_dsr)*ROQ_SR_FACTOR
+   end subroutine roquet_rho_point
+
+   pure function roquet_rho_value(T_pt, S_sp, p) result(rho)
+      !! VALUE-ONLY Roquet et al. (2015) in-situ density (kg/m^3) at a
+      !! point, model variables (PT degC, SP PSU, p Pa).  The same
+      !! number as `roquet_rho_point`'s `rho` without the d(rho)/dT,
+      !! d(rho)/dS Horner work a density-only consumer
+      !! (`eos_density_point`, the 3D fill kernel) would discard.
+      !$acc routine seq
+      real(wp), intent(in) :: T_pt, S_sp, p
+      real(wp) :: rho
+
+      real(wp) :: SR, CT
+      real(wp) :: zt, zs, zp
+      real(wp) :: rho_ts0, rho_ts1, rho_ts2, rho_ts3, rho_0s0, rho_00p
+      real(wp) :: x2, xx, yy, hh
+      real(wp) :: c0, c1, c2, c3, c4, c5, c6, c7
+
+      SR = S_sp*ROQ_SR_FACTOR
+      x2 = max(ROQ_CT_SFAC*SR, 1.0e-20_wp)
+      xx = sqrt(x2)
+      yy = T_pt*0.025_wp
+      c0 = 61.01362420681071_wp &
+           + x2*(268.5520265845071_wp &
+                 + xx*(937.2099110620707_wp &
+                       + xx*(-1687.914374187449_wp + xx*246.9598888781377_wp)))
+      c1 = 168776.46138048015_wp &
+           + x2*(-12019.028203559312_wp &
+                 + xx*(588.1802812170108_wp &
+                       + xx*(936.3206544460336_wp + xx*123.59576582457964_wp)))
+      c2 = -2735.2785605119625_wp &
+           + x2*(3734.858026725145_wp &
+                 + xx*(248.39476522971285_wp &
+                       + xx*(-942.7827304544439_wp + xx*(-48.5891069025409_wp))))
+      c3 = 2574.2164453821433_wp &
+           + x2*(-2046.7671145057618_wp &
+                 + xx*(-3.871557904936333_wp + xx*369.4389437509002_wp))
+      c4 = -1536.6644434977543_wp &
+           + x2*(465.28655623126450_wp + xx*(-2.6268019854268356_wp + xx*(-33.83664947895248_wp)))
+      c5 = 545.7340497931629_wp &
+           + x2*(-0.6370820302831379_wp + xx*(-9.987880382780322_wp))
+      c6 = -50.91091728474331_wp + x2*(-10.650848542359153_wp)
+      c7 = -18.30489878927802_wp
+      hh = c0 + yy*(c1 + yy*(c2 + yy*(c3 + yy*(c4 + yy*(c5 + yy*(c6 + yy*c7))))))
+      CT = hh/ROQ_CP0
+
+      zt = CT
+      zs = sqrt(abs(SR + ROQ_RHO_RDELTAS)*ROQ_R1_S0)
+      zp = p
+
+      rho_ts3 = RHO003 + (zs*RHO103 + zt*RHO013)
+      rho_ts2 = RHO002 + (zs*(RHO102 + zs*RHO202) &
+                          + zt*(RHO012 + (zs*RHO112 + zt*RHO022)))
+      rho_ts1 = RHO001 + (zs*(RHO101 + zs*(RHO201 + zs*(RHO301 + zs*RHO401))) &
+                          + zt*(RHO011 + (zs*(RHO111 + zs*(RHO211 + zs*RHO311)) &
+                                          + zt*(RHO021 + (zs*(RHO121 + zs*RHO221) &
+                                                          + zt*(RHO031 + (zs*RHO131 + zt*RHO041)))))))
+      rho_ts0 = zt*(RHO010 &
+                    + (zs*(RHO110 + zs*(RHO210 + zs*(RHO310 + zs*(RHO410 + zs*RHO510)))) &
+                       + zt*(RHO020 + (zs*(RHO120 + zs*(RHO220 + zs*(RHO320 + zs*RHO420))) &
+                                       + zt*(RHO030 + (zs*(RHO130 + zs*(RHO230 + zs*RHO330)) &
+                                                       + zt*(RHO040 + (zs*(RHO140 + zs*RHO240) &
+                                                                       + zt*(RHO050 + (zs*RHO150 + zt*RHO060))))))))))
+      rho_0s0 = RHO000 + zs*(RHO100 + zs*(RHO200 + zs*(RHO300 + zs*(RHO400 &
+                                                                    + zs*(RHO500 + zs*RHO600)))))
+      rho_00p = zp*(ROQ_RHO_R00 + zp*(ROQ_RHO_R01 + zp*(ROQ_RHO_R02 + zp*(ROQ_RHO_R03 &
+                                                                          + zp*(ROQ_RHO_R04 + zp*ROQ_RHO_R05)))))
+      rho = ((rho_ts0 + rho_0s0) + zp*(rho_ts1 + zp*(rho_ts2 + zp*rho_ts3))) + rho_00p
+   end function roquet_rho_value
+
    pure subroutine eos_specvol_derivs(eos, T, S, p, dsv_dt, dsv_ds)
       !! Analytic specific-volume sensitivities dSV/dT and dSV/dS
       !! (SV = 1/rho) at a point.  Needed by the EPBL energy
@@ -1142,9 +1542,16 @@ contains
       real(wp) :: T_sq, p_0, lambda, big_p, inv_p, inv_p2
       real(wp) :: dp0_dt, dlam_dt, dp0_ds, dlam_ds
       real(wp) :: sv_roq
+      real(wp) :: rho_roq, drho_dt_roq, drho_ds_roq, inv_rho2
 
       if (eos%variant == EOS_VARIANT_ROQUET_SPV) then
          call roquet_spv_point(T, S, p, sv_roq, dsv_dt, dsv_ds)
+      else if (eos%variant == EOS_VARIANT_ROQUET_RHO) then
+         ! dSV/dX = -drho/dX / rho^2 (SV = 1/rho).
+         call roquet_rho_point(T, S, p, rho_roq, drho_dt_roq, drho_ds_roq)
+         inv_rho2 = 1.0_wp/(rho_roq*rho_roq)
+         dsv_dt = -drho_dt_roq*inv_rho2
+         dsv_ds = -drho_ds_roq*inv_rho2
       else if (eos%variant == EOS_VARIANT_WRIGHT_97) then
          T_sq = T*T
          p_0 = WRIGHT_B0 + WRIGHT_B1*T + WRIGHT_B2*T_sq + WRIGHT_B3*T_sq*T + &
@@ -1247,12 +1654,19 @@ contains
       real(wp) :: T_sq, alpha_0, p_0, lambda, big_p, denom, inv_d2
       real(wp) :: dp0_dt, dlam_dt, dp0_ds, dlam_ds
       real(wp) :: sv_roq, dsv_dt_roq, dsv_ds_roq, inv_sv2
+      real(wp) :: rho_roq, drho_dt_roq, drho_ds_roq
 
       if (eos%variant == EOS_VARIANT_ROQUET_SPV) then
          call roquet_spv_point(T, S, p, sv_roq, dsv_dt_roq, dsv_ds_roq)
          inv_sv2 = 1.0_wp/(sv_roq*sv_roq)
          alpha_T = dsv_dt_roq*inv_sv2
          beta_S = -dsv_ds_roq*inv_sv2
+      else if (eos%variant == EOS_VARIANT_ROQUET_RHO) then
+         ! alpha_T = -d(rho)/dT, beta_S = +d(rho)/dS, direct from the
+         ! density-form point routine (no SV round-trip needed).
+         call roquet_rho_point(T, S, p, rho_roq, drho_dt_roq, drho_ds_roq)
+         alpha_T = -drho_dt_roq
+         beta_S = drho_ds_roq
       else if (eos%variant == EOS_VARIANT_WRIGHT_97) then
          T_sq = T*T
          alpha_0 = WRIGHT_A0 + WRIGHT_A1*T + WRIGHT_A2*S
@@ -1330,6 +1744,8 @@ contains
       if (eos%variant == EOS_VARIANT_ROQUET_SPV) then
          ! Value-only: no discarded derivative work.
          rho = 1.0_wp/roquet_spv_value(T, S, p)
+      else if (eos%variant == EOS_VARIANT_ROQUET_RHO) then
+         rho = roquet_rho_value(T, S, p)
       else if (eos%variant == EOS_VARIANT_WRIGHT_97) then
          T_sq = T*T
          alpha_0 = WRIGHT_A0 + WRIGHT_A1*T + WRIGHT_A2*S
@@ -1368,10 +1784,16 @@ contains
       real(wp) :: T_sq, alpha_0, p_0, lambda, p_plus_p0, inv_p, inv_p2
       real(wp) :: dp0_dt, dlam_dt, dp0_ds, dlam_ds
       real(wp) :: sv_roq
+      real(wp) :: drho_dt_roq, drho_ds_roq, inv_rho2
 
       if (eos%variant == EOS_VARIANT_ROQUET_SPV) then
          call roquet_spv_point(T, S, p, sv_roq, dsv_dt, dsv_ds)
          rho = 1.0_wp/sv_roq
+      else if (eos%variant == EOS_VARIANT_ROQUET_RHO) then
+         call roquet_rho_point(T, S, p, rho, drho_dt_roq, drho_ds_roq)
+         inv_rho2 = 1.0_wp/(rho*rho)
+         dsv_dt = -drho_dt_roq*inv_rho2
+         dsv_ds = -drho_ds_roq*inv_rho2
       else if (eos%variant == EOS_VARIANT_WRIGHT_97) then
          T_sq = T*T
          alpha_0 = WRIGHT_A0 + WRIGHT_A1*T + WRIGHT_A2*S

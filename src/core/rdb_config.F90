@@ -1161,10 +1161,16 @@ module rdb_config
       character(len=16) :: eos = "linear"
          !! Equation-of-state variant: "linear" (default, two-tracer),
          !! "wright" (Wright 1997 rational), "roquet_spv" (Roquet et al.
-         !! 2015 specific-volume polynomial).  "roquet_spv" is incompatible
+         !! 2015 specific-volume polynomial, polyTEOS10_75t, ΔS=24),
+         !! "roquet_rho" (Roquet et al. 2015 IN-SITU DENSITY polynomial,
+         !! polyTEOS10_55t, ΔS=32 — an independent fit of the same paper;
+         !! returns ρ directly with no 1/SV division, so it is cheaper
+         !! per point, but is NOT bit-identical to "roquet_spv" — the two
+         !! agree only to the paper's stated rms accuracy, ~1e-3 kg/m³
+         !! class).  Both "roquet_spv" and "roquet_rho" are incompatible
          !! with the "fv_wright" PGF (fails loud at configure).  "teos10"
-         !! parses but is refused at configure (not implemented; Roquet SpV
-         !! IS the 75-term TEOS-10 polynomial fit).
+         !! parses but is refused at configure (not implemented; the two
+         !! Roquet branches above ARE the TEOS-10 polynomial fits).
          !!
          !! Per-EOS cost.  One point evaluation: linear ~5 flops; Wright
          !! ~20 flops + 1 division; Roquet ~130 flops, 2 sqrt, 2 divisions
