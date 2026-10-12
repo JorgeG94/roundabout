@@ -161,7 +161,7 @@ contains
 
       do j = 1, wts%ny
          do i = 1, wts%nx
-            call check(error, abs(dst(i, j) - 1.0_wp) < 1.0e-13_wp)
+            call check(error, abs(dst(i, j) - 1.0_wp) < 1.0e-14_wp)
             if (allocated(error)) return
             do k = 1, wts%nmax
                call check(error, wts%idx_i(i, j, k) >= 1 .and. wts%idx_i(i, j, k) <= wts%nsx)
@@ -246,7 +246,7 @@ contains
          do i = 1, wts%nx
             lon_t = metrics%geolonT(grid%nghost + i, grid%nghost + j)
             expect = A + B*lon_t + C*lat_t
-            call check(error, abs(dst(i, j) - expect) < 1.0e-10_wp)
+            call check(error, abs(dst(i, j) - expect) < 1.0e-12_wp)
             if (allocated(error)) return
          end do
       end do
@@ -492,12 +492,12 @@ contains
          sum_src_area = sum_src_area + (lon_e(nlon + 1) - lon_e(1))*DEG2RAD* &
                         (sin(lat_e(j + 1)*DEG2RAD) - sin(lat_e(j)*DEG2RAD))
       end do
-      call check(error, abs(total_area_t - sum_src_area) <= 1.0e-10_wp)
+      call check(error, abs(total_area_t - sum_src_area) <= 1.0e-12_wp*sum_src_area)
       if (allocated(error)) then
          call destroy_cartesian_metrics(metrics)
          return
       end if
-      call check(error, abs(sum_src_area - 4.0_wp*acos(-1.0_wp)) <= 1.0e-10_wp)
+      call check(error, abs(sum_src_area - 4.0_wp*acos(-1.0_wp)) <= 1.0e-12_wp)
       if (allocated(error)) then
          call destroy_cartesian_metrics(metrics)
          return
