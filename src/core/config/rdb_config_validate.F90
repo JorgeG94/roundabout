@@ -3558,6 +3558,83 @@ contains
          end if
       end if
 
+      ! ---- &ocean_atm_forcing_nml (PR-C2c: JRA55-do prescribed atm state) ----
+      if (cfg%ocean%atm_forcing%enable) then
+#ifdef RDB_NO_NETCDF
+         call logger%error("&ocean_atm_forcing_nml enable=.true. requires a NetCDF "// &
+                           "build (RDB_ENABLE_NETCDF=ON); the reader is compiled out here")
+         has_error = .true.
+#endif
+         if (len_trim(cfg%start_date) == 0) then
+            call logger%error("&ocean_atm_forcing_nml enable=.true. requires "// &
+                              "&time_nml start_date (absolute file-time axes need "// &
+                              "a model-clock epoch)")
+            has_error = .true.
+         end if
+         if (.not. cfg%ocean%forcing%enable_components) then
+            call logger%error("&ocean_atm_forcing_nml enable=.true. requires "// &
+                              "&ocean_forcing_nml enable_components=.true. "// &
+                              "(the bulk-flux outputs land on the component set)")
+            has_error = .true.
+         end if
+         if (trim(cfg%ocean%grid%grid_config) == "cartesian") then
+            call logger%error("&ocean_atm_forcing_nml enable=.true. requires a "// &
+                              "non-cartesian &ocean_grid_nml grid_config "// &
+                              "(spherical/supergrid/tripolar) -- a cartesian grid "// &
+                              "has no geographic lon/lat to regrid the atmosphere onto")
+            has_error = .true.
+         end if
+         if (trim(cfg%ocean%atm_forcing%states_regrid) == "patch") then
+            call logger%error("&ocean_atm_forcing_nml states_regrid='patch' is not "// &
+                              "implemented (no xESMF-equivalent patch recovery in this "// &
+                              "tree); use 'bilinear'")
+            has_error = .true.
+         end if
+         if (len_trim(cfg%ocean%atm_forcing%filelist_tas) == 0 .or. &
+             len_trim(cfg%ocean%atm_forcing%filelist_huss) == 0 .or. &
+             len_trim(cfg%ocean%atm_forcing%filelist_uas) == 0 .or. &
+             len_trim(cfg%ocean%atm_forcing%filelist_vas) == 0 .or. &
+             len_trim(cfg%ocean%atm_forcing%filelist_psl) == 0 .or. &
+             len_trim(cfg%ocean%atm_forcing%filelist_rlds) == 0 .or. &
+             len_trim(cfg%ocean%atm_forcing%filelist_rsds) == 0 .or. &
+             len_trim(cfg%ocean%atm_forcing%filelist_prra) == 0 .or. &
+             len_trim(cfg%ocean%atm_forcing%filelist_prsn) == 0) then
+            call logger%error("&ocean_atm_forcing_nml enable=.true. requires all nine "// &
+                              "filelist_<field> paths (tas/huss/uas/vas/psl/rlds/rsds/"// &
+                              "prra/prsn) -- a blank one is a fail-loud setup, never a "// &
+                              "silently-skipped field")
+            has_error = .true.
+         end if
+         if (cfg%ocean%thermo%sw_pen_frac > 0.0_wp .and. &
+             trim(cfg%ocean%thermo%sw_source) /= "q_sw") then
+            call logger%error("&ocean_atm_forcing_nml enable=.true. with "// &
+                              "&ocean_thermo_nml sw_pen_frac > 0 requires sw_source='q_sw' "// &
+                              "(the atmosphere writes q_sw, not net_heat)")
+            has_error = .true.
+         end if
+         if (len_trim(cfg%ocean%dataovr%tau_x%file) > 0 .or. &
+             len_trim(cfg%ocean%dataovr%tau_y%file) > 0 .or. &
+             len_trim(cfg%ocean%dataovr%heat%file) > 0 .or. &
+             len_trim(cfg%ocean%dataovr%evap%file) > 0 .or. &
+             len_trim(cfg%ocean%dataovr%lprec%file) > 0) then
+            call logger%error("&ocean_atm_forcing_nml enable=.true. conflicts with "// &
+                              "&ocean_dataovr_nml tau_x/tau_y/heat/evap/lprec -- both "// &
+                              "would write the same surface-flux components (a salt_file "// &
+                              "MAY coexist: SSS restoring is independent of the atmosphere)")
+            has_error = .true.
+         end if
+         if (.not. cfg%ocean%bulk_flux%enable) then
+            call logger%error("&ocean_atm_forcing_nml enable=.true. requires "// &
+                              "&ocean_bulk_flux_nml enable=.true. (bulk_flux%enable is "// &
+                              "implied by atm_forcing -- an explicit .false. is a conflict)")
+            has_error = .true.
+         end if
+         if (.not. bulk_flux_config_n_iter_ok(cfg%ocean%bulk_flux)) then
+            call logger%error("&ocean_bulk_flux_nml n_iter must be >= 1")
+            has_error = .true.
+         end if
+      end if
+
       if (has_error) then
          ! NOTE: this is a terminal ROLLUP over many independent checks above
          ! (most of which log their own specific reason via `logger%error`

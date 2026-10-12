@@ -150,6 +150,15 @@ module rdb_ocean_data_input
       real(wp) :: t_offset = 0.0_wp
       real(wp) :: cycle_period = 0.0_wp
 
+      logical :: hold = .false.
+         !! When `.true.`, `data_input_refresh_brackets` forces `w = 0`
+         !! right after the bracket search -- piecewise-constant hold at
+         !! record `n0` (the record whose interval contains `t`), rather
+         !! than the ordinary linear blend toward `n1`.  Set only by
+         !! `register_2d_filelist`'s `hold` argument (the held-interval
+         !! shortwave path, paired with a separate diurnal coszen
+         !! factor applied by the consumer).
+
       integer :: nt = 0
       real(wp), allocatable :: t_axis(:)
          !! File time axis, converted to seconds (scale + t_offset NOT
@@ -754,7 +763,8 @@ contains
                                                     dest_i0, dest_j0, start_date, id, &
                                                     oor_mode, time_mode, ryf_start_date, &
                                                     ryf_period_days, scale, add_offset, &
-                                                    t_offset, ierr)
+                                                    t_offset, win_i0, win_j0, win_nx, win_ny, &
+                                                    hold, ierr)
       !! Register a 2-D time-varying field backed by an ORDERED LIST of
       !! files sharing one variable name — the JRA55-do-style "one file
       !! per variable per year" layout a glob-free Fortran reader needs
@@ -782,6 +792,26 @@ contains
       !! file's first record (the registration does not re-slice a
       !! bigger interannual axis down to the window; that composition
       !! is left to the C2c atmospheric-forcing provider PR).
+      !!
+      !! `win_i0`/`win_j0`/`win_nx`/`win_ny` (all four, or none) override
+      !! the file-side read hyperslab: absent, it stays hard-wired to
+      !! THIS rank's own model tile (`grid%i_offset_global+1`,
+      !! `grid%j_offset_global+1`, `grid%nx_phys`, `grid%ny_phys` — the
+      !! unchanged behaviour); present, the slab is whatever
+      !! `(win_i0, win_j0, win_nx, win_ny)` names (1-based file-index
+      !! start/count), independent of the rank's tile -- e.g. a full
+      !! longitude circle by a latitude band for an atmospheric-state
+      !! regrid window that is shared by every column the rank owns.
+      !! The caller's `dest_n1`/`dest_n2`/`dest_i0`/`dest_j0` are
+      !! unaffected: they place THIS slab inside the caller's own
+      !! destination array exactly as before.
+      !!
+      !! `hold` (default `.false.`) makes `data_input_refresh_brackets`
+      !! force the blend weight to 0 after every bracket search, so the
+      !! field reads as piecewise-constant at record `n0` (the record
+      !! whose interval contains the query time) instead of linearly
+      !! blending toward `n1` -- the held-interval-mean shortwave path,
+      !! paired with a diurnal coszen factor the consumer applies on top.
       class(ocean_data_input_t), intent(inout) :: this
       character(len=*), intent(in) :: files(:)
       character(len=*), intent(in) :: var
@@ -794,6 +824,8 @@ contains
       character(len=*), intent(in), optional :: ryf_start_date
       real(wp), intent(in), optional :: ryf_period_days
       real(wp), intent(in), optional :: scale, add_offset, t_offset
+      integer, intent(in), optional :: win_i0, win_j0, win_nx, win_ny
+      logical, intent(in), optional :: hold
       integer, intent(out), optional :: ierr
 
       type(date_t) :: epoch_date, file_epoch, file_date, ryf_date
@@ -853,6 +885,21 @@ contains
          return
       end if
 
+      if (present(win_i0) .or. present(win_j0) .or. present(win_nx) .or. present(win_ny)) then
+         if (.not. (present(win_i0) .and. present(win_j0) .and. &
+                    present(win_nx) .and. present(win_ny))) then
+            call fail("ocean_data_input: register_2d_filelist win_i0/win_j0/win_nx/win_ny "// &
+                      "must be given all four together, or not at all", &
+                      ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+         if (win_nx < 1 .or. win_ny < 1) then
+            call fail("ocean_data_input: register_2d_filelist win_nx/win_ny must be >= 1", &
+                      ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+      end if
+
       id = this%nfields + 1
       associate (fld => this%fields(id))
          fld%multifile = .true.
@@ -870,10 +917,19 @@ contains
          if (present(add_offset)) fld%add_offset = add_offset
          fld%t_offset = 0.0_wp
          if (present(t_offset)) fld%t_offset = t_offset
-         fld%i0 = grid%i_offset_global + 1
-         fld%j0 = grid%j_offset_global + 1
-         fld%nx = grid%nx_phys
-         fld%ny = grid%ny_phys
+         if (present(win_nx)) then
+            fld%i0 = win_i0
+            fld%j0 = win_j0
+            fld%nx = win_nx
+            fld%ny = win_ny
+         else
+            fld%i0 = grid%i_offset_global + 1
+            fld%j0 = grid%j_offset_global + 1
+            fld%nx = grid%nx_phys
+            fld%ny = grid%ny_phys
+         end if
+         fld%hold = .false.
+         if (present(hold)) fld%hold = hold
          fld%nfiles = nfiles
          fld%nt = 0
          allocate (fld%file_ncid(nfiles), fld%file_varid(nfiles), &
@@ -1391,6 +1447,7 @@ contains
          end if
          call data_input_locate(fld%t_axis, fld%nt, fld%time_mode, fld%cycle_period, &
                                 t_eff, n0, n1, w, oor)
+         if (fld%hold) w = 0.0_wp
 
          if (oor) then
             if (fld%oor == DATA_OOR_ERROR) then

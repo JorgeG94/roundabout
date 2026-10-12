@@ -19,6 +19,7 @@ module rdb_config
    use rdb_ice_init, only: ice_ic_parse_conc_config, ICE_IC_CONC_INVALID
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_PARSE, &
                                OCEAN_STATUS_ERR_CONFIG_VALIDATE
+   use rdb_ocean_bulk_flux, only: bulk_flux_config_t, bulk_flux_config_n_iter_ok
    implicit none
    private
 
@@ -77,6 +78,7 @@ module rdb_config
              ocean_ic_config_t, ocean_zinit_config_t, &
              ocean_data_config_t, &
              ocean_dataovr_config_t, dataovr_entry_config_t, &
+             ocean_atm_forcing_config_t, &
              ocean_diag_config_t, ocean_bc_config_t, &
              ocean_wetdry_config_t, ocean_mpi_config_t
    public :: read_config
@@ -3028,6 +3030,93 @@ module rdb_config
          !! Surface salt flux (kg salt/m^2/s, positive salinifies) ->
          !! `surface_flux%salt_flux`.
    end type ocean_dataovr_config_t
+
+   type :: ocean_atm_forcing_config_t
+      !! `&ocean_atm_forcing_nml`: JRA55-do-style prescribed atmospheric
+      !! state (PR-C2c), read through nine `register_2d_filelist`
+      !! instances and driving the bulk-flux-computed ocean/ice surface
+      !! fluxes.  Default `enable = .false.` registers nothing ⇒
+      !! bit-identical.  Field tags throughout are the 9 CMOR/JRA55-do
+      !! names: `tas, huss, uas, vas, psl` (instantaneous states),
+      !! `rlds, rsds, prra, prsn` (interval-mean fluxes).
+      logical :: enable = .false.
+         !! Master switch.
+      character(len=16) :: source = "jra55do"
+         !! Provider tag (currently only `"jra55do"` is implemented).
+      character(len=256) :: filelist_tas = ""
+         !! Path to a `tools/jra_filelist.py`-style one-file-per-line
+         !! list for `tas` (air temperature). Blank = fail loud when
+         !! `enable = .true.`.
+      character(len=256) :: filelist_huss = ""
+         !! Filelist for `huss` (specific humidity).
+      character(len=256) :: filelist_uas = ""
+         !! Filelist for `uas` (eastward 10 m wind).
+      character(len=256) :: filelist_vas = ""
+         !! Filelist for `vas` (northward 10 m wind).
+      character(len=256) :: filelist_psl = ""
+         !! Filelist for `psl` (sea-level pressure).
+      character(len=256) :: filelist_rlds = ""
+         !! Filelist for `rlds` (downwelling longwave).
+      character(len=256) :: filelist_rsds = ""
+         !! Filelist for `rsds` (downwelling shortwave, interval mean).
+      character(len=256) :: filelist_prra = ""
+         !! Filelist for `prra` (liquid precipitation rate).
+      character(len=256) :: filelist_prsn = ""
+         !! Filelist for `prsn` (frozen precipitation rate).
+      character(len=64) :: var_tas = "tas"
+         !! Variable name inside the `tas` filelist's files.
+      character(len=64) :: var_huss = "huss"
+         !! Variable name inside the `huss` filelist's files.
+      character(len=64) :: var_uas = "uas"
+         !! Variable name inside the `uas` filelist's files.
+      character(len=64) :: var_vas = "vas"
+         !! Variable name inside the `vas` filelist's files.
+      character(len=64) :: var_psl = "psl"
+         !! Variable name inside the `psl` filelist's files.
+      character(len=64) :: var_rlds = "rlds"
+         !! Variable name inside the `rlds` filelist's files.
+      character(len=64) :: var_rsds = "rsds"
+         !! Variable name inside the `rsds` filelist's files.
+      character(len=64) :: var_prra = "prra"
+         !! Variable name inside the `prra` filelist's files.
+      character(len=64) :: var_prsn = "prsn"
+         !! Variable name inside the `prsn` filelist's files.
+      character(len=16) :: time_mode = "interannual"
+         !! `"interannual"` (default) or `"repeat_year"` (RYF), passed
+         !! straight to `register_2d_filelist`.
+      character(len=32) :: ryf_start_date = "1990-05-01"
+         !! RYF window start date (`time_mode = "repeat_year"` only).
+      real(wp) :: ryf_period_days = 365.0_wp
+         !! RYF window length in days (`time_mode = "repeat_year"` only).
+      character(len=16) :: states_regrid = "bilinear"
+         !! Horizontal regrid for the instantaneous states (`tas, huss,
+         !! uas, vas, psl`). Only `"bilinear"` is implemented --
+         !! `"patch"` fails loud at configure, naming the xESMF gap.
+      character(len=16) :: fluxes_regrid = "conservative"
+         !! Horizontal regrid for the interval-mean fluxes (`rlds, rsds,
+         !! prra, prsn`): `"conservative"` (default) or `"bilinear"`.
+      character(len=16) :: sw_interp = "coszen"
+         !! `"coszen"` (default): hold the shortwave record constant
+         !! over its interval and modulate by a diurnal cosine-zenith
+         !! factor. `"linear"`: plain time-blend like every other flux
+         !! (disables the hold + the coszen kernel).
+      real(wp) :: sw_offset_s = -5400.0_wp
+         !! Time offset (s) applied to the `rsds` query time before the
+         !! bracket search -- moves an interval-centred timestamp onto
+         !! the interval start for the hold (`sw_interp = "coszen"`).
+      integer :: orb_year = 1990
+         !! Orbital-parameter year, carried for a future Berger (1978)
+         !! upgrade; the v1 coszen kernel uses the fixed Spencer (1971)
+         !! Fourier-fit coefficients regardless of this value.
+      logical :: wind_relative = .true.
+         !! Subtract the ocean surface current from the atmospheric wind
+         !! before computing the bulk-flux relative wind speed.
+      real(wp) :: ocean_albedo = 0.066_wp
+         !! Ocean surface shortwave albedo (Large & Yeager 2009).
+      logical :: verbose = .false.
+         !! Log every bracket advance of the 9 underlying readers.
+   end type ocean_atm_forcing_config_t
+
    type :: ocean_diag_config_t
       logical :: enabled = .true.
          !! Enable per-step diag-manager hook in driver_run_ocean.
@@ -3340,6 +3429,15 @@ module rdb_config
          !! File-backed surface forcing (`&ocean_dataovr_nml`, PR-15) —
          !! the first production consumer of `data`.  Default-OFF ⇒
          !! bit-identical.
+      type(ocean_atm_forcing_config_t) :: atm_forcing
+         !! JRA55-do-style prescribed atmospheric state
+         !! (`&ocean_atm_forcing_nml`, PR-C2c).  Default-OFF ⇒
+         !! bit-identical.
+      type(bulk_flux_config_t)        :: bulk_flux
+         !! Bulk-flux kernel configuration (`&ocean_bulk_flux_nml`).
+         !! Default-OFF ⇒ bit-identical; `enable` is implied `.true.`
+         !! whenever `atm_forcing%enable` is -- `validate_config` fails
+         !! loud on an explicit `.false.` conflict.
       type(ocean_diag_config_t)       :: diag
       type(ocean_bc_config_t)         :: bc
          !! Open-boundary condition config (`&ocean_bc_nml`).
@@ -4373,6 +4471,20 @@ module rdb_config
          type(config_t), target, intent(in) :: cfg
          type(nml_schema_t), intent(inout) :: schema
       end subroutine register_ocean_forcing
+
+      module subroutine register_ocean_atm_forcing(cfg, schema)
+            !! See submodule [[rdb_config_register_forcing]].
+         implicit none
+         type(config_t), target, intent(in) :: cfg
+         type(nml_schema_t), intent(inout) :: schema
+      end subroutine register_ocean_atm_forcing
+
+      module subroutine register_ocean_bulk_flux(cfg, schema)
+            !! See submodule [[rdb_config_register_forcing]].
+         implicit none
+         type(config_t), target, intent(in) :: cfg
+         type(nml_schema_t), intent(inout) :: schema
+      end subroutine register_ocean_bulk_flux
 
       module subroutine register_ocean_ice(cfg, schema)
             !! See submodule [[rdb_config_register_forcing]].
