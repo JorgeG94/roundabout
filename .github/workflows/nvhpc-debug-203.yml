@@ -80,18 +80,13 @@ jobs:
           cmd=$(ctest -R '^rdb_test_ocean_vanished_constancy$' -N -V | sed -n 's/.*Test command: //p' | head -1)
           dir=$(dirname "$cmd")
           cp "$cmd" "$dir/stripped_vc" && objcopy --strip-debug "$dir/stripped_vc"
-          file "$cmd"
-          (cd "$dir" && gdb -q -nx -batch -ex run -ex 'info registers' -ex 'info proc mappings' \
-              -ex 'x/96a $rsp' -ex 'x/8i $pc' --args ./stripped_vc) > gdb.out 2>&1
-          echo "### gdb (stripped) output"
-          sed -n '/SIGSEGV/,$p' gdb.out | grep -v '^\s*$' | head -n 260
-          base=$(awk '/stripped_vc/ {print $1; exit}' gdb.out)
-          echo "### exe base: $base"
-          echo "### addr2line of every stack word inside the executable"
-          end=$(awk '/stripped_vc/ {e=$2} END{print e}' gdb.out)
-          grep -oE '0x[0-9a-f]+' gdb.out | sort -u | while read a; do
-            if [ -n "$base" ] && [ $((a)) -ge $((base)) ] && [ $((a)) -lt $((end)) ]; then
-              if file "$cmd" | grep -q 'pie executable'; then off=$(printf '0x%x' $((a - base))); else off=$a; fi
-              echo "$a -> $(addr2line -f -i -C -e "$cmd" "$off" | paste -sd' ')"
-            fi
-          done
+          echo "### ldd"; ldd "$cmd" | grep -v -E 'linux-vdso|ld-linux'
+          (cd "$dir" && gdb -q -nx -batch -ex run -ex 'echo ### STACK\n' -ex 'x/160a $rsp' \
+              -ex 'echo ### END\n' -ex 'info registers rip' -ex 'x/8i $pc' \
+              -ex 'info proc mappings' --args ./stripped_vc) > gdb.out 2>&1
+          echo "### stack (raw, with gdb's minimal-symbol names)"
+          sed -n '/### STACK/,/### END/p' gdb.out
+          echo "### x/8i"
+          sed -n '/### END/,/Start Addr/p' gdb.out | head -n 20
+          echo "### resolved (object+offset -> function file:line)"
+          python3 "$GITHUB_WORKSPACE/.github/resolve_stack_203.py" gdb.out "$cmd"
