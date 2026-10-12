@@ -805,4 +805,149 @@ contains
       call schema%add_group(g)
    end subroutine register_ocean_bc
 
+   module subroutine register_ocean_atm_forcing(cfg, schema)
+      !! `&ocean_atm_forcing_nml` (PR-C2c): JRA55-do-style prescribed
+      !! atmospheric state.  See `ocean_atm_forcing_config_t` for the
+      !! per-knob docs.
+      type(config_t), target, intent(in) :: cfg
+      type(nml_schema_t), intent(inout) :: schema
+      type(nml_group_t) :: g
+      logical, pointer :: pl
+      integer, pointer :: pi
+      real(wp), pointer :: pr
+      character(len=:), pointer :: ps
+
+      g%name = "ocean_atm_forcing"
+      g%doc = "JRA55-do-style prescribed atmospheric state driving "// &
+              "bulk-flux ocean/ice surface forcing (PR-C2c)."
+
+      pl => cfg%ocean%atm_forcing%enable
+      call g%add(nml_logical("enable", pl, "Master switch"))
+      ps => cfg%ocean%atm_forcing%source
+      call g%add(nml_enum("source", ps, "Atmospheric-state provider", &
+                          allowed=[character(len=16) :: "jra55do"]))
+
+      ps => cfg%ocean%atm_forcing%filelist_tas
+      call g%add(nml_string("filelist_tas", ps, &
+                            "tools/jra_filelist.py-style file list for tas "// &
+                            "(air temperature); blank = fail loud when enable=.true."))
+      ps => cfg%ocean%atm_forcing%filelist_huss
+      call g%add(nml_string("filelist_huss", ps, "File list for huss (specific humidity)"))
+      ps => cfg%ocean%atm_forcing%filelist_uas
+      call g%add(nml_string("filelist_uas", ps, "File list for uas (eastward 10 m wind)"))
+      ps => cfg%ocean%atm_forcing%filelist_vas
+      call g%add(nml_string("filelist_vas", ps, "File list for vas (northward 10 m wind)"))
+      ps => cfg%ocean%atm_forcing%filelist_psl
+      call g%add(nml_string("filelist_psl", ps, "File list for psl (sea-level pressure)"))
+      ps => cfg%ocean%atm_forcing%filelist_rlds
+      call g%add(nml_string("filelist_rlds", ps, "File list for rlds (downwelling longwave)"))
+      ps => cfg%ocean%atm_forcing%filelist_rsds
+      call g%add(nml_string("filelist_rsds", ps, &
+                            "File list for rsds (downwelling shortwave, interval mean)"))
+      ps => cfg%ocean%atm_forcing%filelist_prra
+      call g%add(nml_string("filelist_prra", ps, "File list for prra (liquid precip rate)"))
+      ps => cfg%ocean%atm_forcing%filelist_prsn
+      call g%add(nml_string("filelist_prsn", ps, "File list for prsn (frozen precip rate)"))
+
+      ps => cfg%ocean%atm_forcing%var_tas
+      call g%add(nml_string("var_tas", ps, "Variable name inside the tas filelist"))
+      ps => cfg%ocean%atm_forcing%var_huss
+      call g%add(nml_string("var_huss", ps, "Variable name inside the huss filelist"))
+      ps => cfg%ocean%atm_forcing%var_uas
+      call g%add(nml_string("var_uas", ps, "Variable name inside the uas filelist"))
+      ps => cfg%ocean%atm_forcing%var_vas
+      call g%add(nml_string("var_vas", ps, "Variable name inside the vas filelist"))
+      ps => cfg%ocean%atm_forcing%var_psl
+      call g%add(nml_string("var_psl", ps, "Variable name inside the psl filelist"))
+      ps => cfg%ocean%atm_forcing%var_rlds
+      call g%add(nml_string("var_rlds", ps, "Variable name inside the rlds filelist"))
+      ps => cfg%ocean%atm_forcing%var_rsds
+      call g%add(nml_string("var_rsds", ps, "Variable name inside the rsds filelist"))
+      ps => cfg%ocean%atm_forcing%var_prra
+      call g%add(nml_string("var_prra", ps, "Variable name inside the prra filelist"))
+      ps => cfg%ocean%atm_forcing%var_prsn
+      call g%add(nml_string("var_prsn", ps, "Variable name inside the prsn filelist"))
+
+      ps => cfg%ocean%atm_forcing%time_mode
+      call g%add(nml_enum("time_mode", ps, &
+                          "interannual (default) or repeat_year (RYF)", &
+                          allowed=[character(len=16) :: "interannual", "repeat_year"]))
+      ps => cfg%ocean%atm_forcing%ryf_start_date
+      call g%add(nml_string("ryf_start_date", ps, &
+                            "RYF window start date (time_mode=repeat_year only)"))
+      pr => cfg%ocean%atm_forcing%ryf_period_days
+      call g%add(nml_real("ryf_period_days", pr, &
+                          "RYF window length (time_mode=repeat_year only)", units="days"))
+
+      ps => cfg%ocean%atm_forcing%states_regrid
+      call g%add(nml_enum("states_regrid", ps, &
+                          "Horizontal regrid for tas/huss/uas/vas/psl; only "// &
+                          "'bilinear' is implemented -- 'patch' fails loud "// &
+                          "naming the xESMF gap", &
+                          allowed=[character(len=16) :: "bilinear", "patch"]))
+      ps => cfg%ocean%atm_forcing%fluxes_regrid
+      call g%add(nml_enum("fluxes_regrid", ps, &
+                          "Horizontal regrid for rlds/rsds/prra/prsn", &
+                          allowed=[character(len=16) :: "conservative", "bilinear"]))
+      ps => cfg%ocean%atm_forcing%sw_interp
+      call g%add(nml_enum("sw_interp", ps, &
+                          "coszen (default, held interval + diurnal cosine-zenith "// &
+                          "factor) or linear (plain time-blend)", &
+                          allowed=[character(len=16) :: "coszen", "linear"]))
+      pr => cfg%ocean%atm_forcing%sw_offset_s
+      call g%add(nml_real("sw_offset_s", pr, &
+                          "Time offset applied to the rsds query time before the "// &
+                          "bracket search (sw_interp=coszen)", units="s"))
+      pi => cfg%ocean%atm_forcing%orb_year
+      call g%add(nml_int("orb_year", pi, &
+                         "Orbital-parameter year (reserved; v1 coszen uses fixed "// &
+                         "Spencer (1971) coefficients regardless)"))
+      pl => cfg%ocean%atm_forcing%wind_relative
+      call g%add(nml_logical("wind_relative", pl, &
+                             "Subtract the ocean surface current from the "// &
+                             "atmospheric wind before the bulk flux"))
+      pr => cfg%ocean%atm_forcing%ocean_albedo
+      call g%add(nml_real("ocean_albedo", pr, &
+                          "Ocean surface shortwave albedo (Large & Yeager 2009)"))
+      pl => cfg%ocean%atm_forcing%verbose
+      call g%add(nml_logical("verbose", pl, &
+                             "Log every bracket advance of the 9 underlying readers"))
+
+      call schema%add_group(g)
+   end subroutine register_ocean_atm_forcing
+
+   module subroutine register_ocean_bulk_flux(cfg, schema)
+      !! `&ocean_bulk_flux_nml`: Monin-Obukhov bulk-flux kernel knobs
+      !! (`bulk_flux_config_t`, `rdb_ocean_bulk_flux`).  `enable` is
+      !! implied `.true.` whenever `&ocean_atm_forcing_nml enable` is --
+      !! `validate_config` fails loud on an explicit `.false.` conflict.
+      type(config_t), target, intent(in) :: cfg
+      type(nml_schema_t), intent(inout) :: schema
+      type(nml_group_t) :: g
+      logical, pointer :: pl
+      integer, pointer :: pi
+      real(wp), pointer :: pr
+
+      g%name = "ocean_bulk_flux"
+      g%doc = "Monin-Obukhov bulk-flux kernel (Large & Yeager 2004/2009)."
+
+      pl => cfg%ocean%bulk_flux%enable
+      call g%add(nml_logical("enable", pl, &
+                             "Master switch (implied by &ocean_atm_forcing_nml "// &
+                             "enable; an explicit .false. with atm_forcing on "// &
+                             "is a conflict)"))
+      pi => cfg%ocean%bulk_flux%n_iter
+      call g%add(nml_int("n_iter", pi, "Monin-Obukhov iteration count", min=1))
+      pr => cfg%ocean%bulk_flux%z_wind
+      call g%add(nml_real("z_wind", pr, "Wind reference height", units="m"))
+      pr => cfg%ocean%bulk_flux%z_ta
+      call g%add(nml_real("z_ta", pr, &
+                          "Air temperature / specific humidity reference height", &
+                          units="m"))
+      pr => cfg%ocean%bulk_flux%emissivity
+      call g%add(nml_real("emissivity", pr, "Longwave emissivity of seawater"))
+
+      call schema%add_group(g)
+   end subroutine register_ocean_bulk_flux
+
 end submodule rdb_config_register_forcing

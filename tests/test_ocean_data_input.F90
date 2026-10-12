@@ -96,7 +96,9 @@ contains
                   new_unittest("data_input_fill_static_host", test_fill_static_host), &
                   new_unittest("data_input_filelist_year_boundary", test_filelist_year_boundary), &
                   new_unittest("data_input_filelist_ryf_wrap", test_filelist_ryf_wrap), &
-                  new_unittest("data_input_filelist_oor_mapping", test_filelist_oor_mapping) &
+                  new_unittest("data_input_filelist_oor_mapping", test_filelist_oor_mapping), &
+                  new_unittest("data_input_filelist_window", test_filelist_window), &
+                  new_unittest("data_input_filelist_hold", test_filelist_hold) &
                   ]
    end subroutine collect_ocean_data_input_tests
 
@@ -1019,5 +1021,134 @@ contains
       call check(error,.not. ok, "oor_from_iaf: unknown tag must report ok=.false.")
       if (allocated(error)) return
    end subroutine test_filelist_oor_mapping
+
+   subroutine test_filelist_window(error)
+      !! `register_2d_filelist`'s optional `win_i0/win_j0/win_nx/win_ny`
+      !! (C2c-1): on a 32x16 synthetic file with `field(i,j) =
+      !! 100*i + j` (constant across both time records, so the blend
+      !! weight cannot matter), a window `(win_i0=5, win_j0=3, win_nx=10,
+      !! win_ny=6)` must read EXACTLY that hyperslab -- independent of
+      !! `grid` (a 1x1 grid is passed to prove the override bypasses the
+      !! model-tile default entirely).
+      type(error_type), allocatable, intent(out) :: error
+
+      integer, parameter :: NXF = 32, NYF = 16, NT = 2
+      integer, parameter :: WI0 = 5, WJ0 = 3, WNX = 10, WNY = 6
+      type(ocean_data_input_t) :: reader
+      type(hgrid_t) :: grid
+      character(len=256) :: fname
+      character(len=256) :: files(1)
+      real(wp) :: t_axis(NT), field(NXF, NYF, NT), dest(WNX, WNY)
+      integer :: i, j, id
+
+      t_axis = [0.0_wp, 10.0_wp]
+      do j = 1, NYF
+         do i = 1, NXF
+            field(i, j, :) = real(100*i + j, wp)
+         end do
+      end do
+
+      fname = "tmp_local_artifacts/test_data_input_filelist_window.nc"
+      call write_2d_time_file(trim(fname), NXF, NYF, NT, t_axis, field, &
+                              tunits="days since 1958-01-01 00:00:00")
+      files(1) = fname
+
+      grid = make_grid(1, 1)
+      call reader%init()
+      call ocean_data_input_register_2d_filelist(reader, files, "field", grid, &
+                                                 WNX, WNY, 1, 1, "1958-01-01", id, &
+                                                 win_i0=WI0, win_j0=WJ0, win_nx=WNX, win_ny=WNY)
+
+      dest = -999.0_wp
+      !$acc enter data copyin(reader)
+      call reader%enter_data()
+      !$acc enter data copyin(dest)
+      call ocean_data_input_update_all(reader, 5.0_wp*86400.0_wp)
+      call ocean_data_input_update_2d(reader, id, 5.0_wp*86400.0_wp, WNX, WNY, dest)
+      !$acc update self(dest)
+      !$acc exit data delete(dest)
+      call reader%exit_data()
+      !$acc exit data delete(reader)
+
+      do j = 1, WNY
+         do i = 1, WNX
+            call check(error, abs(dest(i, j) - real(100*(WI0 + i - 1) + (WJ0 + j - 1), wp)) < 1.0e-9_wp, &
+                       "filelist window: dest does not match the file's (win_i0,win_j0,win_nx,win_ny) hyperslab")
+            if (allocated(error)) return
+         end do
+      end do
+
+      call reader%destroy()
+   end subroutine test_filelist_window
+
+   subroutine test_filelist_hold(error)
+      !! `register_2d_filelist(hold=.true.)` (C2c-1): a two-record file
+      !! at absolute days 0 and 100 with values 10 and 20. Queried at the
+      !! midpoint (day 50), the ordinary (hold=.false.) reader blends to
+      !! 15; `hold=.true.` forces w=0 right after the bracket search, so
+      !! the field holds record n0's exact value (10) -- the "record
+      !! whose interval contains t" semantics for a held interval-mean
+      !! shortwave field paired with a separate diurnal factor.
+      type(error_type), allocatable, intent(out) :: error
+
+      integer, parameter :: NX = 1, NY = 1, NT = 2
+      type(ocean_data_input_t) :: reader_hold, reader_blend
+      type(hgrid_t) :: grid
+      character(len=256) :: fname
+      character(len=256) :: files(1)
+      real(wp) :: t_axis(NT), field(NX, NY, NT), dest(NX, NY)
+      real(wp) :: tq
+      integer :: id_hold, id_blend
+
+      t_axis = [0.0_wp, 100.0_wp]
+      field(1, 1, 1) = 10.0_wp
+      field(1, 1, 2) = 20.0_wp
+
+      fname = "tmp_local_artifacts/test_data_input_filelist_hold.nc"
+      call write_2d_time_file(trim(fname), NX, NY, NT, t_axis, field, &
+                              tunits="days since 1958-01-01 00:00:00")
+      files(1) = fname
+      grid = make_grid(NX, NY)
+
+      call reader_hold%init()
+      call ocean_data_input_register_2d_filelist(reader_hold, files, "field", grid, &
+                                                 NX, NY, 1, 1, "1958-01-01", id_hold, hold=.true.)
+      call reader_blend%init()
+      call ocean_data_input_register_2d_filelist(reader_blend, files, "field", grid, &
+                                                 NX, NY, 1, 1, "1958-01-01", id_blend)
+
+      tq = 50.0_wp*86400.0_wp
+
+      dest = -999.0_wp
+      !$acc enter data copyin(reader_hold)
+      call reader_hold%enter_data()
+      !$acc enter data copyin(dest)
+      call ocean_data_input_update_all(reader_hold, tq)
+      call ocean_data_input_update_2d(reader_hold, id_hold, tq, NX, NY, dest)
+      !$acc update self(dest)
+      call check(error, abs(dest(1, 1) - 10.0_wp) < 1.0e-9_wp, &
+                 "filelist hold: w was not forced to 0 (held value should be record n0's exact value)")
+      !$acc exit data delete(dest)
+      call reader_hold%exit_data()
+      !$acc exit data delete(reader_hold)
+      if (allocated(error)) return
+
+      dest = -999.0_wp
+      !$acc enter data copyin(reader_blend)
+      call reader_blend%enter_data()
+      !$acc enter data copyin(dest)
+      call ocean_data_input_update_all(reader_blend, tq)
+      call ocean_data_input_update_2d(reader_blend, id_blend, tq, NX, NY, dest)
+      !$acc update self(dest)
+      call check(error, abs(dest(1, 1) - 15.0_wp) < 1.0e-9_wp, &
+                 "filelist hold: the hold=.false. control reader should still blend linearly")
+      !$acc exit data delete(dest)
+      call reader_blend%exit_data()
+      !$acc exit data delete(reader_blend)
+      if (allocated(error)) return
+
+      call reader_hold%destroy()
+      call reader_blend%destroy()
+   end subroutine test_filelist_hold
 
 end module test_ocean_data_input

@@ -77,6 +77,8 @@ contains
       call register_ocean_zinit(cfg, schema)
       call register_ocean_data(cfg, schema)
       call register_ocean_dataovr(cfg, schema)
+      call register_ocean_atm_forcing(cfg, schema)
+      call register_ocean_bulk_flux(cfg, schema)
       call register_ocean_diag(cfg, schema)
       call register_ocean_bc(cfg, schema)
    end subroutine build_rdb_schema
