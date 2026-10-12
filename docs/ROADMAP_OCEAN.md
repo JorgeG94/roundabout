@@ -37,7 +37,7 @@ Cross-cutting numerics and engineering (WENO, SSP-RK3, IMEX, mixed precision, DA
 | Periodic boundaries (PBCs) | Per-axis ghost-wrap, bit-exact seam (`test_ocean_periodic`). Eady runs as a periodic-x channel. |
 | Tripolar north fold | Bit-identical on every split, including `px > 1` (`b35c5f63e`, `e8d614aa1`, `42adac5ff`, `6d91130b2`, `40236aba0`, `11ed42542`). |
 | Hollingsworth-Källén Coriolis | `sadourny_hk` ships opt-in (Phase 3c). Promotion is still open, see §2. |
-| Vertical coordinates | All ten `VCOORD_*` families dispatch through one ALE remap path (`src/core/rdb_constants.F90:147-204`). |
+| Vertical coordinates | All ten `VCOORD_*` families dispatch through one ALE remap path (the `VCOORD_*` enum in `src/core/rdb_constants.F90`). |
 | True isopycnal coordinate | `VCOORD_RHO` and `VCOORD_HYCOM` (Bleck hybrid). |
 | Partial bed cells on `z_fixed` | Partial bed cell, bed fillers and closed-face mask ship (`tests/test_ocean_zfixed_closed_faces.F90`, `test_ocean_zfixed_k_bot.F90`). General cut cells are still open, see §3. |
 
@@ -57,8 +57,8 @@ Cross-cutting numerics and engineering (WENO, SSP-RK3, IMEX, mixed precision, DA
 | Item | What shipped |
 |---|---|
 | C-grid MPI halo | Face, centre and corner halos. Gated by `tests/mpi/` and the decomposition-invariance suite. |
-| Cross-rank bitwise reproducibility | `tests/mpi/test_ocean_decomp_bitid_mpi.F90` compares every restart-registry field bitwise on every `px x py` split. The console uses EFP reproducing sums, now the default (`src/core/rdb_config.F90:3079`). |
-| Porous barriers on many ranks | Covered by the decomposition bit-identity test (`tests/mpi/test_ocean_decomp_bitid_mpi.F90:33`). |
+| Cross-rank bitwise reproducibility | `tests/mpi/test_ocean_decomp_bitid_mpi.F90` compares every restart-registry field bitwise on every `px x py` split. The console uses EFP reproducing sums, now the default (`reproducing_sums` in `ocean_diag_config_t`, `src/core/rdb_config.F90`). |
+| Porous barriers on many ranks | Covered by the decomposition bit-identity test (the `periodic_channel_zstar` case in `tests/mpi/test_ocean_decomp_bitid_mpi.F90`). |
 
 ### Boundaries, validation and ACCESS-OM3 parity
 
@@ -92,7 +92,7 @@ Cross-cutting numerics and engineering (WENO, SSP-RK3, IMEX, mixed precision, DA
 |---|---|---|
 | `[M]` **C2c** atmospheric-state provider | JRA55-do reader, regrid and bulk-flux wiring, in three chunks. | C2c-1 (config and reader window) is open PR [#205](https://github.com/JorgeG94/roundabout/pull/205). Blocked on #202 for the conservative regrid at 1440x1080. |
 | **C3 wiring** | Connect the bulk-flux kernel to a namelist, an atmospheric-state reader and an engine call site. | Not started. The C3 commit (`babb12d6e`) names C2b/C2c as the work packages for the reader and regridder. |
-| `[M]` **OBC nesting data** | A file-backed data source, so a one-way nest reproduces its parent. | Only the `constant` backend exists (`src/core/ocean/rdb_ocean_engine.F90:192`). `OBC_NESTED` is tag-reserved and behaves as OPEN (`src/core/ocean/boundary/rdb_ocean_boundary_types.F90:50`). |
+| `[M]` **OBC nesting data** | A file-backed data source, so a one-way nest reproduces its parent. | Only the `constant` backend exists (`ocean_boundary_data_constant_t` in `src/core/ocean/boundary/rdb_ocean_boundary_data.F90`, held as `bc_source` in `ocean_engine_t`). `OBC_NESTED` is tag-reserved and behaves as OPEN (`OBC_NESTED` in `src/core/ocean/boundary/rdb_ocean_boundary_types.F90`). |
 | `[M]` **Tide validation** | Australia-wide barotropic run against TPXO M2/S2/K1/O1. | Forcing ships. No TPXO comparison in `validation_examples/ocean/tides/`. |
 | `[M]` **MOM6 cross-comparison** | Phillips/Eady, overflow/DOME, seamount/internal tide against published MOM6. | Not started beyond the double-gyre. |
 | `[M]` **ACC channel** | An ACC transport run on the periodic channel. | Eady part done; ACC run pending (`validation_examples/ocean/acc_channel/` exists). |
@@ -123,6 +123,7 @@ Cross-cutting numerics and engineering (WENO, SSP-RK3, IMEX, mixed precision, DA
 | `[M]` **Remaining single-rank features** | Ice-shelf cavity, wet/dry, Chapman edges, `dt_tracer_advect_ratio > 1`, sea ice under the tripolar fold, in-memory geometry injection. Each fails loud on more than one rank. |
 | `[M]` **Restarts across a rank-count change** | Restarts resume on the same decomposition only. |
 | `[M]` **Strong-scaling characterisation** | Multi-GPU strong scaling is not yet measured. |
+| `[M]` **Large-rank-count reproducibility re-run** | The decomposition bit-identity test covers 1, 2 and 4 ranks. A 104 vs 208 rank comparison of the console time series (`En`, `MaxCFL`) has not been re-run on this tree. *Validate:* identical time series at 104 and 208 ranks. |
 
 ### Coordinates and mixing
 
@@ -151,7 +152,7 @@ Cross-cutting numerics and engineering (WENO, SSP-RK3, IMEX, mixed precision, DA
 
 | Item | Note |
 |---|---|
-| TEOS-10 | `EOS_VARIANT_TEOS10` is declared but marked "future" (`src/equation_of_state/rdb_eos.F90:54`). |
+| TEOS-10 | `EOS_VARIANT_TEOS10` is declared but marked "future" (`EOS_VARIANT_TEOS10` in `src/equation_of_state/rdb_eos.F90`). |
 | Stochastic parameterisations | Nothing in `src/`. |
 | Rivers | Runoff fields exist in `rdb_ocean_surface_flux.F90`. The `ocean_river_t` slot listed in `src/core/ocean/README.md` has no source file. |
 
@@ -327,7 +328,7 @@ PBC shipped. Eady runs as a periodic-x channel (`validation_examples/ocean/eady/
 
 The original item read: "`En`/`MaxCFL` diverge across rank counts while mass stays bit-identical; non-reproducible FP reductions are the suspect. EFP reproducing sums ship (`reproducing_sums`, default off). *Validate:* identical time series at 104 vs 208 ranks."
 
-Since then `reproducing_sums` became the default (`src/core/rdb_config.F90:3079`), and `tests/mpi/test_ocean_decomp_bitid_mpi.F90` gates bitwise equality of the full restart registry across every `px x py` factorisation at 1, 2 and 4 ranks. The 104 vs 208 rank comparison itself has not been re-run on this tree.
+Since then `reproducing_sums` became the default (`ocean_diag_config_t` in `src/core/rdb_config.F90`), and `tests/mpi/test_ocean_decomp_bitid_mpi.F90` gates bitwise equality of the full restart registry across every `px x py` factorisation at 1, 2 and 4 ranks. The 104 vs 208 rank comparison is tracked as an open item in §3 (Regional enabling).
 
 </details>
 
