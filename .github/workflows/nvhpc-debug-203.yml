@@ -42,7 +42,7 @@ jobs:
       - name: Install netcdf-c and build netcdf-fortran
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq libnetcdf-dev valgrind
+          sudo apt-get install -y -qq libnetcdf-dev gdb binutils file
           tools/build_netcdf_fortran.sh --fc "${{ env.FC }}" --netcdf-c /usr --prefix "$HOME/netcdff"
           echo "RDB_NETCDFF=$HOME/netcdff" >> "$GITHUB_ENV"
 
@@ -72,14 +72,26 @@ jobs:
           echo "exit=$?"
           tail -n 80 trace.out
 
-      - name: Crashing test under valgrind memcheck (symbolised stacks, no gdb)
+      - name: Caller of pgf90_lentrima via gdb on a debug-stripped copy + addr2line
         working-directory: build
         continue-on-error: true
         run: |
           set +e
           cmd=$(ctest -R '^rdb_test_ocean_vanished_constancy$' -N -V | sed -n 's/.*Test command: //p' | head -1)
-          (cd "$(dirname "$cmd")" && valgrind --num-callers=40 --error-limit=no --track-origins=yes $cmd) > vg.out 2>&1
-          echo "exit=$?"
-          echo "### error summary"; grep -E 'ERROR SUMMARY|Process terminating|SIGSEGV' vg.out
-          echo "### first 6 valgrind error records"
-          awk '/^==[0-9]+== (Invalid|Conditional|Use of uninit|Process terminating|Argument|Syscall|Source and dest)/{n++} n>=1 && n<=6' vg.out | head -n 400
+          dir=$(dirname "$cmd")
+          cp "$cmd" "$dir/stripped_vc" && objcopy --strip-debug "$dir/stripped_vc"
+          file "$cmd"
+          (cd "$dir" && gdb -q -nx -batch -ex run -ex 'info registers' -ex 'info proc mappings' \
+              -ex 'x/96a $rsp' -ex 'x/8i $pc' --args ./stripped_vc) > gdb.out 2>&1
+          echo "### gdb (stripped) output"
+          sed -n '/SIGSEGV/,$p' gdb.out | grep -v '^\s*$' | head -n 260
+          base=$(awk '/stripped_vc/ {print $1; exit}' gdb.out)
+          echo "### exe base: $base"
+          echo "### addr2line of every stack word inside the executable"
+          end=$(awk '/stripped_vc/ {e=$2} END{print e}' gdb.out)
+          grep -oE '0x[0-9a-f]+' gdb.out | sort -u | while read a; do
+            if [ -n "$base" ] && [ $((a)) -ge $((base)) ] && [ $((a)) -lt $((end)) ]; then
+              if file "$cmd" | grep -q 'pie executable'; then off=$(printf '0x%x' $((a - base))); else off=$a; fi
+              echo "$a -> $(addr2line -f -i -C -e "$cmd" "$off" | paste -sd' ')"
+            fi
+          done
