@@ -109,6 +109,10 @@ set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/diag/rdb_ocean_chksum.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/diag/rdb_ocean_ke_probe.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/io/rdb_ocean_restart.F90
+    # Grid-agnostic lat-lon regridding library (bilinear + first-order
+    # conservative weights, ELL apply kernel): no NetCDF, no namelist knob, not
+    # wired into the engine yet -- unconditional like the rest of core.
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/io/rdb_regrid_latlon.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/vcoord/rdb_ocean_vcoord.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/rdb_massless.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/rdb_ocean_bipolar.F90
