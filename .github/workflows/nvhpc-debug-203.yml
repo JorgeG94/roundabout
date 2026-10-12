@@ -23,7 +23,7 @@ jobs:
       fail-fast: false
       matrix:
         build_type: [Debug]
-        rep: [1, 2, 3, 4]
+        rep: [1, 2]
     steps:
       - uses: actions/checkout@v4
 
@@ -72,21 +72,19 @@ jobs:
           echo "exit=$?"
           tail -n 80 trace.out
 
-      - name: Caller of pgf90_lentrima via gdb on a debug-stripped copy + addr2line
+      - name: Disassemble the seed -> topo_length_to_grid_units call site
         working-directory: build
         continue-on-error: true
         run: |
           set +e
-          cmd=$(ctest -R '^rdb_test_ocean_vanished_constancy$' -N -V | sed -n 's/.*Test command: //p' | head -1)
-          dir=$(dirname "$cmd")
-          cp "$cmd" "$dir/stripped_vc" && objcopy --strip-debug "$dir/stripped_vc"
-          echo "### ldd"; ldd "$cmd" | grep -v -E 'linux-vdso|ld-linux'
-          (cd "$dir" && gdb -q -nx -batch -ex run -ex 'echo ### STACK\n' -ex 'x/160a $rsp' \
-              -ex 'echo ### END\n' -ex 'info registers rip' -ex 'x/8i $pc' \
-              -ex 'info proc mappings' --args ./stripped_vc) > gdb.out 2>&1
-          echo "### stack (raw, with gdb's minimal-symbol names)"
-          sed -n '/### STACK/,/### END/p' gdb.out
-          echo "### x/8i"
-          sed -n '/### END/,/Start Addr/p' gdb.out | head -n 20
-          echo "### resolved (object+offset -> function file:line)"
-          python3 "$GITHUB_WORKSPACE/.github/resolve_stack_203.py" gdb.out "$cmd"
+          lib=$(ls librdb_core.so.* | head -1)
+          sym() { nm "$lib" | awk -v n="$1" '$3 == n {print "0x"$1}'; }
+          callee=$(sym rdb_ocean_state_topo_length_to_grid_units_)
+          caller=$(sym rdb_ocean_state_ocean_state_seed_from_cfg_)
+          echo "callee=$callee caller=$caller"
+          echo "### callee entry .. +0x40"
+          objdump -d --no-show-raw-insn "$lib" --start-address=$((callee)) --stop-address=$((callee + 0x40)) | tail -n +7
+          echo "### caller: 0x160 bytes before the return address seed_from_cfg+4216"
+          objdump -d --no-show-raw-insn "$lib" --start-address=$((caller + 4216 - 0x160)) --stop-address=$((caller + 4216 + 0x10)) | tail -n +7
+          echo "### every call to topo_length_to_grid_units in the library, with the 12 preceding instructions"
+          objdump -d --no-show-raw-insn "$lib" | grep -B12 "call.*topo_length_to_grid_units" | head -n 200
