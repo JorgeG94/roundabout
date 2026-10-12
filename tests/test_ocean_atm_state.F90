@@ -455,7 +455,7 @@ contains
       call atm_state_update(atm, reader, tq)
       v2 = atm%tas(1 + NGHOST, 1 + NGHOST)
 
-      call check(error, abs(v1 - v2) < 1.0e-6_wp, &
+      call check(error, v1 == v2, &
                  "ryf wrap: one period later must reproduce the same wrapped value")
       if (allocated(error)) return
 
