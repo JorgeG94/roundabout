@@ -237,7 +237,7 @@ not tabulated here yet. See the TODO comment at the end of
 | Linear two-tracer | **default** | `&ocean_eos_nml eos = "linear"` | Uses the `&ocean_ic_nml` coefficients below. |
 | Wright (1997) | available | `eos = "wright"` | Nonlinear. |
 | Roquet et al. (2015) SpV | available | `eos = "roquet_spv"` | TEOS-10 class: 75-term specific-volume fit, ΔS = 24. Not with the `fv_wright` PGF. |
-| Roquet et al. (2015) in-situ density | available | `eos = "roquet_rho"` | TEOS-10 class: 55-term density fit, ΔS = 32 (OM3's `ROQUET_RHO`). An independent fit from `roquet_spv`: they agree to ~1e-3 kg/m³, not bitwise. Not with the `fv_wright` PGF. `test_ocean_eos_roquet_rho` |
+| Roquet et al. (2015) in-situ density | available | `eos = "roquet_rho"` | TEOS-10 class: 55-term density fit, ΔS = 32 (OM3's `ROQUET_RHO`). An independent fit from `roquet_spv`: they agree to ~1e-3 kg/m³, not bitwise. Not with the `fv_wright` PGF. **Refused with the FV-MOM6 in-situ density PGF** (`&ocean_pgf_nml insitu_density`, the default): that PGF has Wright and SpV kernels only; `insitu_density = .false.` opts into the potential-density integral explicitly. `test_ocean_eos_roquet_rho`, `test_config :: roquet_rho_insitu_pgf_refused` |
 
 Linear-EOS reference state: `ρ = ρ_0 + β_S·(S−S_ref) − α_T·(T−T_ref)`.
 `α_T` and `β_S` are **dimensional** (kg/m³ per unit). Multiply a fractional

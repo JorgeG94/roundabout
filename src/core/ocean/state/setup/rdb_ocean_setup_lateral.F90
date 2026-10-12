@@ -675,6 +675,18 @@ contains
       ocean_state%pressure_force%reconstruct_for_pressure = &
          cfg%ocean%pgf%reconstruct_for_pressure
       ocean_state%pressure_force%insitu_density = cfg%ocean%pgf%insitu_density
+      ! Mirrors the validate_config refusal for API callers: the in-situ PCM
+      ! kernels cover Wright and Roquet-SpV only, so roquet_rho would silently
+      ! drop to the potential-density integral at p_ref.
+      if (ocean_state%eos%variant == EOS_VARIANT_ROQUET_RHO .and. &
+          ocean_state%pressure_force%variant == OPGF_VARIANT_FV_MOM6 .and. &
+          .not. cfg%ocean%pgf%reconstruct_for_pressure .and. &
+          cfg%ocean%pgf%insitu_density) then
+         call fail("configure_ocean_pgf: eos='roquet_rho' has no FV-MOM6 in-situ "// &
+                   "density PGF path yet; use eos='roquet_spv' or set "// &
+                   "&ocean_pgf_nml insitu_density=.false.", ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
       ocean_state%pressure_force%recon_scheme = cfg%ocean%pgf%recon_scheme
       ocean_state%pressure_force%p_top_in_bc = cfg%ocean%pgf%p_top_in_bc
       ! The top-of-column load enters the `pa` stack's surface boundary

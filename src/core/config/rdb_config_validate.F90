@@ -315,6 +315,21 @@ contains
       ! sea-ice set in place.  At S = 34.5 the two shipped sets differ by
       ! ~0.03 degC, which is enough to flip the sign of an ice-shelf
       ! basal melt rate — a mistyped liquidus must stop the run.
+      ! The FV-MOM6 in-situ PCM PGF (the default under a pressure-dependent
+      ! EOS) has Wright and Roquet-SpV kernels only. Under roquet_rho it would
+      ! silently fall back to the potential-density integral at p_ref, so
+      ! refuse until a roquet_rho in-situ path ships.
+      if (trim(adjustl(cfg%ocean%eos%eos)) == "roquet_rho" .and. &
+          trim(adjustl(cfg%ocean%pgf%form)) == "fv_mom6" .and. &
+          .not. cfg%ocean%pgf%reconstruct_for_pressure .and. &
+          cfg%ocean%pgf%insitu_density) then
+         call logger%error("&ocean_eos_nml eos='roquet_rho' has no FV-MOM6 in-situ "// &
+                           "density PGF path yet (&ocean_pgf_nml insitu_density=.true., "// &
+                           "the default); it would silently use the potential-density "// &
+                           "integral at p_ref. Use eos='roquet_spv', or set "// &
+                           "insitu_density=.false. to accept that integral explicitly")
+         has_error = .true.
+      end if
       if (parse_tfreeze_set(cfg%ocean%eos%tfreeze_set) == TFREEZE_SET_INVALID) then
          call logger%error("&ocean_eos_nml tfreeze_set = '"// &
                            trim(cfg%ocean%eos%tfreeze_set)// &
