@@ -69,18 +69,18 @@ jobs:
         continue-on-error: true
         run: |
           set +e
-          for t in rdb_test_ocean_vanished_constancy rdb_test_ocean_salinity_ic; do
+          for t in rdb_test_ocean_vanished_constancy; do
             cmd=$(ctest -R "^${t}\$" -N -V | sed -n 's/.*Test command: //p' | head -1)
             dir=$(dirname "$cmd")
             crashes=0
-            for i in $(seq 1 30); do
-              out=$(cd "$dir" && gdb -q -batch -ex run -ex bt -ex 'frame 1' -ex 'info locals' --args $cmd 2>&1 || true)
+            for i in $(seq 1 3); do
+              out=$(cd "$dir" && gdb -q -batch -ex run -ex 'x/6i $pc-0x16' -ex 'info registers rdi rsi rdx rcx rsp rbp' -ex 'x/16a $rsp' -ex 'info symbol *(long*)$rsp' -ex 'info symbol *(long*)($rsp+8)' -ex 'set backtrace limit 6' -ex 'bt' --args $cmd 2>&1 || true)
               if echo "$out" | grep -q 'SIGSEGV'; then
                 crashes=$((crashes+1))
-                if [ $crashes -le 2 ]; then echo "=== $t run $i: SIGSEGV"; echo "$out" | sed -n '/SIGSEGV/,$p' | head -60; fi
+                if [ $crashes -le 2 ]; then echo "=== $t run $i: SIGSEGV"; echo "$out" | sed -n '/SIGSEGV/,$p' | head -120; fi
               fi
             done
-            echo "### $t: $crashes / 30 runs crashed"
+            echo "### $t: $crashes / 30 runs crashed (of 3)"
           done
 
       - name: Full rdb suite
