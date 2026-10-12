@@ -21,6 +21,7 @@ module rdb_eos
    !! `rdb_ocean_eos_compute` (core/ocean/state/), and the coastal
    !! shim in `rdb_ml_eos`.
    use rdb_constants, only: wp, H_VANISHED
+   use rdb_teos10_convert, only: SR_FACTOR
    use rdb_grid, only: hgrid_t
    implicit none
    private
@@ -220,8 +221,9 @@ module rdb_eos
       !! Inverse plausible salinity range (kg/g).
    real(wp), parameter :: ROQ_I_TS = 0.025_wp
       !! Inverse plausible temperature range (1/degC).
-   real(wp), parameter :: ROQ_SR_FACTOR = 35.16504_wp/35.0_wp
-      !! SP -> SR (Reference Salinity) conversion factor.
+   real(wp), parameter :: ROQ_SR_FACTOR = SR_FACTOR
+      !! SP -> SR (Reference Salinity) conversion factor; the one copy
+      !! lives in `rdb_teos10_convert`.
 
    ! Reference-profile (SV00p) pressure coefficients, in Pa-powers.  Public
    ! -- with the SV table and the SR / CT constants below (the `public`

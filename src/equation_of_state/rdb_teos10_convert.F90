@@ -1,5 +1,6 @@
-!! Pure TEOS-10 conversion primitives (no EOS state, no namelist knobs).
 module rdb_teos10_convert
+   !! Pure TEOS-10 conversion primitives (no EOS state, no namelist knobs).
+   !!
    !! Salinity-scale and temperature-scale converters between the
    !! "model" variables this tree has used historically (practical
    !! salinity SP, potential temperature PT) and the TEOS-10 variables
@@ -53,15 +54,18 @@ module rdb_teos10_convert
       !! value that makes CT a conserved-like quantity: potential
       !! enthalpy = CP0 * CT.  Also the GSW toolbox's `gsw_cp0`.
 
-   real(wp), parameter :: SR_FACTOR = 35.16504_wp/35.0_wp
-      !! SR = SP * SR_FACTOR (Reference Salinity from Practical
-      !! Salinity; TEOS-10 manual eq. 2.4.1 at the global-average
-      !! composition, no spatial anomaly -- see the OM3-parity note
-      !! above). Same constant as `rdb_eos`'s `ROQ_SR_FACTOR`.
+   real(wp), parameter, public :: SR_FACTOR = 35.16504_wp/35.0_wp
+      !! SR = SP * SR_FACTOR, in (g/kg) per unit Practical Salinity
+      !! (Reference Salinity from Practical Salinity; TEOS-10 manual
+      !! eq. 2.4.1 at the global-average composition, no spatial anomaly
+      !! -- see the OM3-parity note above). The single copy:
+      !! `rdb_eos`'s `ROQ_SR_FACTOR` is defined from it.
 
    real(wp), parameter :: CT_SFAC = 0.0248826675584615_wp
-      !! Normalisation `x2 = CT_SFAC*SA` in the `ct_from_pt` surface
-      !! polynomial (McDougall & Barker 2011; GSW `gsw_sfac`).
+      !! Salinity normalisation, in kg/g: `x2 = CT_SFAC*SA` (SA in g/kg)
+      !! makes `x2` dimensionless in the `ct_from_pt` and
+      !! `gibbs_pt0_pt0` polynomials. Equals 1/(40·35.16504/35)
+      !! (McDougall & Barker 2011; GSW `gsw_sfac`).
 
    ! --- TEOS-10 polynomial freezing-point coefficients (manual §3.33;
    ! McDougall & Barker 2011, the `ct_freezing_poly` fit).  `a`, `b` are
@@ -93,17 +97,30 @@ module rdb_teos10_convert
    real(wp), parameter :: FZ_A = 0.014289763856964_wp
    real(wp), parameter :: FZ_B = 0.057000649899720_wp
 
-   ! --- pt_from_ct rational initial guess (McDougall & Barker 2011). ---
+   ! --- pt_from_ct rational initial guess (McDougall & Barker 2011):
+   ! pt0 = (PA0 + PA1*s1 + PA2*s1**2 + CT*(PA3 + PA4*s1 + PA5*CT))
+   !       / (PB0 + PB1*s1 + CT*(PB2 + PB3*CT)), s1 = SA/SR_FACTOR (SP-like),
+   ! CT and pt0 in degC. Coefficients as shipped in the GSW toolbox. ---
    real(wp), parameter :: PA0 = -1.446013646344788e-2_wp
+      !! Constant term of the numerator (degC).
    real(wp), parameter :: PA1 = -3.305308995852924e-3_wp
+      !! Numerator coefficient of s1, s1 = SA/SR_FACTOR (degC per unit s1).
    real(wp), parameter :: PA2 = 1.062415929128982e-4_wp
+      !! Numerator coefficient of s1² (degC per unit s1²).
    real(wp), parameter :: PA3 = 9.477566673794488e-1_wp
+      !! Numerator coefficient of CT (dimensionless).
    real(wp), parameter :: PA4 = 2.166591947736613e-3_wp
+      !! Numerator coefficient of s1·CT (per unit s1).
    real(wp), parameter :: PA5 = 3.828842955039902e-3_wp
+      !! Numerator coefficient of CT² (1/degC).
    real(wp), parameter :: PB0 = 1.0_wp
+      !! Constant term of the denominator (dimensionless).
    real(wp), parameter :: PB1 = 6.506097115635800e-4_wp
+      !! Denominator coefficient of s1 (per unit s1).
    real(wp), parameter :: PB2 = 3.830289486850898e-3_wp
+      !! Denominator coefficient of CT (1/degC).
    real(wp), parameter :: PB3 = 1.247811760368034e-6_wp
+      !! Denominator coefficient of CT² (1/degC²).
    real(wp), parameter :: T0_KELVIN = 273.15_wp
       !! Celsius -> Kelvin offset (TEOS-10 manual eq. 2.2).
 
@@ -172,13 +189,14 @@ contains
    end function ct_from_pt
 
    pure elemental function gibbs_pt0_pt0(sa, pt0) result(g_tt)
-      !! Second temperature derivative of the Gibbs function at p=0
-      !! (McDougall & Barker 2011; GSW `gsw_gibbs_pt0_pt0`) -- the one
-      !! extra primitive the modified Newton-McDougall step in
-      !! `pt_from_ct` needs beyond `ct_from_pt` itself.
+      !! Second temperature derivative of the Gibbs function at p = 0,
+      !! g_TT(SA, pt0, 0) in J/(kg K²) (McDougall & Barker 2011; GSW
+      !! `gsw_gibbs_pt0_pt0`) -- the one extra primitive the modified
+      !! Newton-McDougall step in `pt_from_ct` needs beyond `ct_from_pt`.
       !$acc routine seq
-      real(wp), intent(in) :: sa, pt0
-      real(wp) :: g_tt
+      real(wp), intent(in) :: sa   !! Reference/Absolute Salinity (g/kg).
+      real(wp), intent(in) :: pt0  !! Potential temperature, p_ref = 0 (degC).
+      real(wp) :: g_tt  !! d²g/dT² at p = 0 (J/(kg K²)).
       real(wp) :: x2, x, y, g03, g08
 
       x2 = CT_SFAC*max(sa, 0.0_wp)

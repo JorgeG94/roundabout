@@ -1,12 +1,22 @@
-!! Tests for the pure TEOS-10 conversion module `rdb_teos10_convert`.
 module test_ocean_teos10_convert
+   !! Tests for the pure TEOS-10 conversion module `rdb_teos10_convert`.
+   !!
    !! Check values extracted ONCE (python3.10 + netCDF4, never pip) from
    !! the third-party TEOS-10/GSW toolbox's own reference-check dataset
    !! `gsw_data_v3_0.nc` (`SA/SP/CT/p_chck_cast` + the `*_from_*`/
    !! `*_freezing_poly` result arrays it ships, sat_frac=0.5 as its own
    !! check driver uses) into the `parameter` tables below -- 11 cast
-   !! points spanning low/high salinity, warm/cold, shallow/deep. Refs:
-   !! IOC/SCOR/IAPSO (2010) TEOS-10 manual; McDougall & Barker (2011).
+   !! points spanning low/high salinity, warm/cold, shallow/deep. The
+   !! values are the dataset's AS SHIPPED (`gsw_data_v3_0.nc`, unmodified,
+   !! not recomputed here), so they are an independent reference.
+   !!
+   !! Tolerances: each is a fixed bound set ABOVE the GSW dataset's own
+   !! `computation_accuracy` attribute for that function (the toolbox's
+   !! declared reproducibility across platforms), with headroom for
+   !! FMA/reassociation differences between gfortran, nvfortran and ifx.
+   !! Measured errors on gfortran are ~1e-15 (2e-14 for SR).
+   !! Refs: IOC/SCOR/IAPSO (2010) TEOS-10 manual; McDougall & Barker (2011).
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_constants, only: wp
    use rdb_teos10_convert, only: sr_from_sp, sp_from_sr, ct_from_pt, pt_from_ct, &
                                  ct_freezing_poly, pt_freezing_poly, ct_from_pt_impl, &
@@ -135,6 +145,7 @@ contains
       type(unittest_type), allocatable, intent(out) :: testsuite(:)
       testsuite = [ &
                   new_unittest("teos10_sr_from_sp", test_sr_from_sp), &
+                  new_unittest("teos10_zero_salinity_finite", test_zero_salinity_finite), &
                   new_unittest("teos10_sp_from_sr_inverse", test_sp_from_sr_inverse), &
                   new_unittest("teos10_pt_from_ct", test_pt_from_ct), &
                   new_unittest("teos10_ct_from_pt", test_ct_from_pt), &
@@ -146,7 +157,7 @@ contains
    end subroutine collect_ocean_teos10_convert_tests
 
    subroutine test_sr_from_sp(error)
-      !! SR_from_SP <= 1e-9 (plan tolerance).
+      !! |SR_from_SP - GSW| <= 1e-9 g/kg: GSW declares 1.3e-10.
       type(error_type), allocatable, intent(out) :: error
       real(wp) :: mx
       mx = maxval(abs(sr_from_sp(SP) - SR_FROM_SP_REF))
@@ -162,7 +173,7 @@ contains
    end subroutine test_sp_from_sr_inverse
 
    subroutine test_pt_from_ct(error)
-      !! pt_from_ct(SA, CT) <= 1e-8 degC (plan tolerance).
+      !! |pt_from_ct(SA, CT) - GSW| <= 1e-8 degC: GSW declares 6.1e-10.
       type(error_type), allocatable, intent(out) :: error
       real(wp) :: mx
       mx = maxval(abs(pt_from_ct(SA, CT) - PT_FROM_CT_REF))
@@ -170,7 +181,8 @@ contains
    end subroutine test_pt_from_ct
 
    subroutine test_ct_from_pt(error)
-      !! ct_from_pt(SA, PT_FROM_CT_REF) <= 1e-8 degC (plan tolerance) --
+      !! |ct_from_pt(SA, PT_FROM_CT_REF) - GSW| <= 1e-8 degC (GSW declares
+      !! 6.3e-10) --
       !! PT_FROM_CT_REF is itself the GSW-reference pt_from_CT(SA,CT), so
       !! this exercises ct_from_pt directly against the matching
       !! reference CT_from_pt output, exactly as the GSW check driver
@@ -182,8 +194,9 @@ contains
    end subroutine test_ct_from_pt
 
    subroutine test_round_trip(error)
-      !! ct_from_pt(SA, pt_from_ct(SA, CT)) == CT to <= 1e-10 (plan
-      !! tolerance) -- the two primitives are near-exact inverses.
+      !! ct_from_pt(SA, pt_from_ct(SA, CT)) == CT to <= 1e-10 degC: the
+      !! 1.5-step Newton-McDougall inverse converges to ~1e-12 degC
+      !! (McDougall & Barker 2011), so 1e-10 checks inversion, not GSW.
       type(error_type), allocatable, intent(out) :: error
       real(wp) :: mx
       mx = maxval(abs(ct_from_pt(SA, pt_from_ct(SA, CT)) - CT))
@@ -191,7 +204,8 @@ contains
    end subroutine test_round_trip
 
    subroutine test_ct_freezing_poly(error)
-      !! ct_freezing_poly(SA, p[dbar], 0.5) <= 1e-8 degC (plan tolerance).
+      !! |ct_freezing_poly(SA, p[dbar], 0.5) - GSW| <= 1e-8 degC: GSW
+      !! declares 2.3e-11.
       type(error_type), allocatable, intent(out) :: error
       real(wp) :: mx
       mx = maxval(abs(ct_freezing_poly(SA, P, SAT_FRAC) - CT_FREEZING_REF))
@@ -202,7 +216,7 @@ contains
       !! At p=0, in-situ temperature == potential temperature, so GSW's
       !! own t_freezing_poly(SA,0,sat_frac) check value doubles as the
       !! independent reference for pt_freezing_poly(SA,0,sat_frac) here
-      !! (plan tolerance <= 1e-8).  Three of the eleven cast points have
+      !! (<= 1e-8 degC; GSW declares 2.2e-11).  Three of the eleven cast points have
       !! p=0 (indices 1, 10, 11).
       type(error_type), allocatable, intent(out) :: error
       real(wp) :: mx
@@ -212,6 +226,22 @@ contains
       mx = maxval(abs(pt_f - T_FREEZING_REF(IDX)))
       call check(error, mx <= 1.0e-8_wp, "pt_freezing_poly vs t_freezing_poly at p=0")
    end subroutine test_pt_freezing_poly_consistency
+
+   subroutine test_zero_salinity_finite(error)
+      !! Fresh water (SA = SP = 0) is a legal input (rivers, ice melt): every
+      !! primitive returns a finite value there, and CT/pt round-trip.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: ct, pt, ctf, ptf
+      ct = ct_from_pt(0.0_wp, 10.0_wp)
+      pt = pt_from_ct(0.0_wp, ct)
+      ctf = ct_freezing_poly(0.0_wp, 0.0_wp, SAT_FRAC)
+      ptf = pt_freezing_poly(0.0_wp, 0.0_wp, SAT_FRAC)
+      call check(error, ieee_is_finite(ct) .and. ieee_is_finite(pt) .and. &
+                 ieee_is_finite(ctf) .and. ieee_is_finite(ptf) .and. &
+                 ieee_is_finite(sr_from_sp(0.0_wp)), "non-finite result at zero salinity")
+      if (allocated(error)) return
+      call check(error, abs(pt - 10.0_wp) <= 1.0e-10_wp, "zero-salinity CT/pt round trip")
+   end subroutine test_zero_salinity_finite
 
    subroutine test_gpu_residency(error)
       !! `mem:separate` contract (see test_open_boundary_out_closes in
