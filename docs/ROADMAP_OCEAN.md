@@ -1,6 +1,6 @@
 # Roundabout Ocean dyn-core — roadmap
 
-Last reconciled with the code: **2026-10-12** (beta at `cdcbdcd16`).
+Last reconciled with the code: **2026-10-12** (beta at `635f35d92`).
 
 ## Where we are today
 
@@ -8,7 +8,7 @@ Last reconciled with the code: **2026-10-12** (beta at `cdcbdcd16`).
 - It is a MOM6-style ALE core on an Arakawa C-grid. Ten vertical-coordinate families ship, including isopycnal (`RHO`) and hybrid (`HYCOM`).
 - The mesoscale stack (GM, Redi, VarMix, MEKE), sea ice, periodic boundaries, tides (forcing), and the multi-rank C-grid halo all ship. A decomposed run is bit-identical to a serial run.
 - The biggest gaps are **file-backed open-boundary data (nesting)**, **tide validation against TPXO**, and **non-hydrostatic physics**.
-- Current push: **ACCESS-OM3 parity**. C1, C7 part 1, C3 and C2a are merged. C2b is an open PR.
+- Current push: **ACCESS-OM3 parity**. C1, C7 part 1, C3, C2a and C2b are merged. C2c (the atmospheric-state provider) is in progress.
 
 ## How to read this file
 
@@ -49,7 +49,7 @@ Cross-cutting numerics and engineering (WENO, SSP-RK3, IMEX, mixed precision, DA
 | Tides (forcing) | Equilibrium body force, scalar SAL, nodal correction (also for OBC_TIDAL), barotropic wave drag. The TPXO validation is still open, see §2. |
 | Sea ice | `src/core/ice/`: Winton thermodynamics, multi-category ITD, ITD-aware transport, C-grid EVP, frazil, ice-ocean couplers. All under `&ocean_ice_nml` (default off). |
 | Sea ice on many ranks | Thermo, EVP and stress blend on the ocean decomposition (`84ddefc87`); category transport across ranks and periodic seams (`313a8c0c1`); restart round trip (`9df1c5b90`). |
-| Sea ice under the tripolar fold | One rank only (`cc75df88f`). More than one rank is still refused. |
+| Sea ice under the tripolar fold | One rank only: category state (`cc75df88f`) and EVP dynamics (A6, `e1ae86fa7`). More than one rank is still refused (A7, #143). |
 | Windowed tracer advection | `dt_tracer_advect_ratio`; single-rank. |
 
 ### Parallelism and reproducibility
@@ -71,6 +71,7 @@ Cross-cutting numerics and engineering (WENO, SSP-RK3, IMEX, mixed precision, DA
 | **C7 part 1** OM3 diagnostics | `umo`/`vmo`, `tauuo`/`tauvo`, `Kd_interface` (`89f78f07c`, `src/core/ocean/diag/rdb_ocean_diag_derived.F90`). |
 | **C3** Large-Yeager bulk flux | Standalone column kernel plus a 2-D driver (`babb12d6e`, review fixes `e963d3469`; `src/parameterizations/vertical/rdb_ocean_bulk_flux.F90`). **Not wired in:** no namelist, no engine call site. |
 | **C2a** calendar and multi-file time axis | `rdb_calendar`, `&time_nml start_date`/`calendar`, `register_2d_filelist` (`3d4ff94d7`, review fixes `d3921d57a`; `src/core/rdb_calendar.F90`). |
+| **C2b** lat-lon regridding weights | Bilinear and first-order conservative weights onto spherical, supergrid or tripolar grids (`b1b4b94b3`, `c9006a540`; `src/core/ocean/io/rdb_regrid_latlon.F90`). **Not wired in:** no reader, no namelist. Conservative scratch scaling is #202. |
 
 ### Code health (October 2026)
 
@@ -89,7 +90,7 @@ Cross-cutting numerics and engineering (WENO, SSP-RK3, IMEX, mixed precision, DA
 
 | Item | Goal | Status |
 |---|---|---|
-| `[M]` **C2b** lat-lon regridder | In-model regridding weights for atmospheric forcing. | Open PR [#201](https://github.com/JorgeG94/roundabout/pull/201). |
+| `[M]` **C2c** atmospheric-state provider | JRA55-do reader, regrid and bulk-flux wiring, in three chunks. | C2c-1 (config and reader window) is open PR [#205](https://github.com/JorgeG94/roundabout/pull/205). Blocked on #202 for the conservative regrid at 1440x1080. |
 | **C3 wiring** | Connect the bulk-flux kernel to a namelist, an atmospheric-state reader and an engine call site. | Not started. The C3 commit (`babb12d6e`) names C2b/C2c as the work packages for the reader and regridder. |
 | `[M]` **OBC nesting data** | A file-backed data source, so a one-way nest reproduces its parent. | Only the `constant` backend exists (`src/core/ocean/rdb_ocean_engine.F90:192`). `OBC_NESTED` is tag-reserved and behaves as OPEN (`src/core/ocean/boundary/rdb_ocean_boundary_types.F90:50`). |
 | `[M]` **Tide validation** | Australia-wide barotropic run against TPXO M2/S2/K1/O1. | Forcing ships. No TPXO comparison in `validation_examples/ocean/tides/`. |
@@ -164,7 +165,7 @@ See "Performance and scaling" in [`CAPABILITIES_AND_LIMITATIONS.md`](CAPABILITIE
 
 0. **Keep the gates honest.** The two-tier stability suite (`tests/regression/stability.py`) asserts on each run's own time series, not on goldens. It runs every unpinned case under both outer schemes. New physics lands with a case that fails without it.
 1. **Regional enabling.** Nesting data and tide validation. This unlocks real regional domains, which is the distinctive GPU-native value.
-2. **ACCESS-OM3 parity.** Finish C2b, then wire C3.
+2. **ACCESS-OM3 parity.** Finish C2c, which wires C3.
 3. **NH-on-ocean and 1 km global.** Larger and later.
 
 The old "fork decision" between regional tool and isopycnal fidelity is resolved: the RHO/HYCOM coordinates and the neutral/GM/VarMix/MEKE stack shipped.
