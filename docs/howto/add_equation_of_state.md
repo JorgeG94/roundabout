@@ -19,8 +19,8 @@ in `eos_validate` — it is not device-callable). Each arm calls a `pure *_impl`
 lives on `eos_t%variant`.
 
 **Config wiring** — `&ocean_eos_nml eos` (default `"linear"`) is parsed by
-`parse_eos_variant` and assigned in `configure_ocean_*`
-(`src/core/ocean/state/rdb_ocean_setup.F90`):
+`parse_eos_variant` and assigned in `configure_ocean_drag`
+(`src/core/ocean/state/setup/rdb_ocean_setup_vmix.F90`):
 `ocean_state%eos%variant = parse_eos_variant(cfg%ocean%eos%eos)`, followed by
 `eos_validate`. Note `parse_eos_variant` falls back to `EOS_VARIANT_LINEAR` on
 an unrecognised string (bit-identity default); the *fail-loud* gate is
@@ -135,5 +135,6 @@ Analytical point-value asserts, one per branch of the formula:
 - `src/core/ocean/dynamics/split_rk2/rdb_ocean_dyn.F90` — EOS-before-PGF call order.
 - `src/core/config/rdb_config_register_vmix.F90` — `register_ocean_eos`
   (`&ocean_eos_nml`);
-  `src/core/ocean/state/rdb_ocean_setup.F90` — the `parse_eos_variant` assignment.
+  `src/core/ocean/state/setup/rdb_ocean_setup_vmix.F90` — the `parse_eos_variant`
+  assignment (`configure_ocean_drag`).
 - The "Equation of state" section of [`docs/CLOSURE_MATRIX.md`](../CLOSURE_MATRIX.md).

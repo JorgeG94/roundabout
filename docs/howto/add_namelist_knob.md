@@ -71,7 +71,8 @@ type field (default)  ->  registered in the group's register_* routine
    group's `configure_*` routine.
    Set `has_error` / log and let the routine `error stop`. Never silently
    downgrade a bad combination.
-4. **Propagate to state.** In `src/core/ocean/state/rdb_ocean_setup.F90`, in the
+4. **Propagate to state.** In `src/core/ocean/state/rdb_ocean_setup.F90` (or its
+   `setup/rdb_ocean_setup_<group>.F90` submodule, grouped by concern), in the
    relevant `configure_ocean_*` block: `ocean_state%hvisc%foo = cfg%ocean%hvisc%foo`.
    (Diagnostics are the exception — `configure_ocean_diag` lives in
    `src/driver/rdb_driver.F90`.)
@@ -176,8 +177,8 @@ form, …).
   `render_markdown`.
 - `src/core/rdb_config_schema.F90` — the re-export shim (`build_rdb_schema`,
   `nml_dirname`).
-- `src/core/ocean/state/rdb_ocean_setup.F90` — the `configure_ocean_*`
-  propagation + cross-knob validation; `src/driver/rdb_driver.F90` —
-  `configure_ocean_diag`.
+- `src/core/ocean/state/rdb_ocean_setup.F90` (+ its `setup/rdb_ocean_setup_<group>.F90`
+  submodules) — the `configure_ocean_*` propagation + cross-knob validation;
+  `src/driver/rdb_driver.F90` — `configure_ocean_diag`.
 - `app/nml_doc.F90` (`rdb_nml_doc`) → `docs/generated_nml_knobs.md`.
 - `tools/check_closure_matrix.py`, `tools/nml_split.py`, `docs/CLOSURE_MATRIX.md`.

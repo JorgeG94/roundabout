@@ -73,7 +73,7 @@ per-layer apply, and the config.
    group still on the native reader — it is registered with
    `schema%add_external_group("ocean_bc")` so the strict parser accepts it. Add
    any range/consistency check to `validate_config`.
-6. `src/core/ocean/state/rdb_ocean_setup.F90` — copy the parsed config onto the
+6. `src/core/ocean/state/setup/rdb_ocean_setup_bc.F90` — copy the parsed config onto the
    edge tags in `configure_ocean_bc`.
 7. **GPU map** any new *allocatable* persistent ghost array in
    `ocean_bc_state_enter_data` **and** confirm the slot is reached from the
@@ -149,5 +149,5 @@ without your BC is byte-for-byte unchanged.
   mass-flux zeroing.
 - `src/core/rdb_config.F90` — `read_ocean_bc_nml`;
   `src/core/config/rdb_config_validate.F90` — `validate_config`;
-  `src/core/ocean/state/rdb_ocean_setup.F90` — `configure_ocean_bc`.
+  `src/core/ocean/state/setup/rdb_ocean_setup_bc.F90` — `configure_ocean_bc`.
 - The "Boundaries" bullet of the top-level [`CLAUDE.md`](../../CLAUDE.md).

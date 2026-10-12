@@ -84,7 +84,9 @@ use_closure` is the master on/off switch.
    EPBL are mutually exclusive — that exclusion is enforced fail-loud at
    configure).
 6. **Configure step** — a `configure_ocean_<name>(cfg, ocean_state, ...)` in
-   `src/core/ocean/state/rdb_ocean_setup.F90` copies `cfg%ocean%<name>%*` onto
+   `src/core/ocean/state/rdb_ocean_setup.F90` (or the matching
+   `setup/rdb_ocean_setup_<group>.F90` submodule — grid/vmix/lateral/bt/bc/cavity,
+   grouped by concern) copies `cfg%ocean%<name>%*` onto
    the slot and does the cross-knob validation the schema cannot express
    (mutual exclusions, "requires X" checks). Fail loud; never silently downgrade.
 7. **Test + matrix row** — add `tests/test_ocean_<name>.F90` to
@@ -183,8 +185,9 @@ limit (decay law, log layer, similarity profile) where one exists.
 - `src/parameterizations/vertical/{rdb_ocean_epbl,rdb_ocean_kappa_shear,rdb_ocean_tidal_mixing}.F90`
   — worked contributor examples.
 - `src/parameterizations/lateral/{rdb_ocean_lateral_mix,rdb_ocean_horizontal_viscosity,rdb_ocean_meke}.F90`.
-- `src/core/ocean/state/rdb_ocean_setup.F90` — `configure_ocean_vmix`,
+- `src/core/ocean/state/setup/rdb_ocean_setup_vmix.F90` — `configure_ocean_vmix`,
   `configure_ocean_epbl`, `configure_ocean_kappa_shear`,
-  `configure_ocean_tidal_mixing`, `configure_ocean_conv`, `configure_ocean_lateral`.
+  `configure_ocean_tidal_mixing`, `configure_ocean_conv`;
+  `src/core/ocean/state/setup/rdb_ocean_setup_lateral.F90` — `configure_ocean_lateral`.
 - `docs/CLOSURE_MATRIX.md` — which closure is on + the knobs;
   `docs/CLOSURE_MATRIX.md` — the per-closure detail (drift-checked).

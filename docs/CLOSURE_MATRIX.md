@@ -654,13 +654,13 @@ constraint.
 
 | Horizontal tracer advect | Vertical (in-z) advect | ALE vertical remap |
 |---|---|---|
-| **PPM, HARDCODED (no knob)** (`tracer_advect_zonal_one_impl:1314`, `tracer_advect_meridional_one_impl:1384`; 2-cell near-wall band drops to 1st-order PCM/donor) | **1st-order UPWIND** (`src/core/ocean/kernels/vertical_advection/rdb_ocean_vertical_advection.F90:247` `tracer_advect_vertical_one_impl`, docstring "first-order upwind-in-z") | PCM/PLM/PPM via `remap_method` (default `"ppm"`); the parsed method is threaded through `rdb_ocean_setup.F90:500` → `vcoord%remap_method` → `rdb_ocean_dyn.F90:1061` |
+| **PPM, HARDCODED (no knob)** (`tracer_advect_zonal_one_impl:1314`, `tracer_advect_meridional_one_impl:1384`; 2-cell near-wall band drops to 1st-order PCM/donor) | **1st-order UPWIND** (`src/core/ocean/kernels/vertical_advection/rdb_ocean_vertical_advection.F90:247` `tracer_advect_vertical_one_impl`, docstring "first-order upwind-in-z") | PCM/PLM/PPM via `remap_method` (default `"ppm"`); the parsed method is threaded through `configure_ocean_lateral` (`src/core/ocean/state/setup/rdb_ocean_setup_lateral.F90`) → `vcoord%remap_method` → `rdb_ocean_dyn.F90:1061` |
 
 ### (c) Knobs
 
 | Knob | file:line (decl) | Default | Selects | Scope |
 |---|---|---|---|---|
-| `remap_method` | `src/core/config/rdb_config_register_core.F90 :: register_vcoord` (parse `src/ALE/rdb_vcoord.F90:628`) | `"ppm"` (pcm/plm/ppm/ppm_h4/pqm) | vertical ALE remap order | the ocean setup parses it into `vcoord%remap_method` (`rdb_ocean_setup.F90:838`) and the ocean remap caller passes it (`rdb_ocean_dyn.F90:1061`) |
+| `remap_method` | `src/core/config/rdb_config_register_core.F90 :: register_vcoord` (parse `src/ALE/rdb_vcoord.F90:628`) | `"ppm"` (pcm/plm/ppm/ppm_h4/pqm) | vertical ALE remap order | the ocean setup parses it into `vcoord%remap_method` (`configure_ocean_lateral`, `src/core/ocean/state/setup/rdb_ocean_setup_lateral.F90`) and the ocean remap caller passes it (`rdb_ocean_dyn.F90:1061`) |
 | `ppm_limit_pos` | `src/core/config/rdb_config_register_vmix.F90 :: register_ocean_continuity` | `.false.` | positivity-limiter **modifier** on the ocean continuity PPM face values — not a scheme-family selector | ocean continuity |
 | `positive_definite` | `src/core/config/rdb_config_register_vmix.F90` (`register_ocean_continuity`) | `.false.` | positive-definite split continuity **modifier**: `2·h_lim` PPM edge floor + per-donor θ outflux limiter ⇒ every layer `h ≥ h_lim` with zero mass created; `h_lim = angstrom_h` on VCOORD_LAGRANGIAN else 0. Mutually exclusive with `&ocean_wetdry_nml enable` | ocean continuity |
 
@@ -668,7 +668,8 @@ constraint.
 
 1. **`remap_method` drives the ocean ALE remap.** The ocean ALE remap honors it:
    `parse_remap_method(cfg%remap_method)` → `vcoord%remap_method`
-   (`rdb_ocean_setup.F90:500`), passed through to the remap call
+   (`configure_ocean_lateral`, `src/core/ocean/state/setup/rdb_ocean_setup_lateral.F90`),
+   passed through to the remap call
    (`rdb_ocean_dyn.F90:1061`). The `m = REMAP_PPM` in `rdb_ocean_remap.F90:121`
    is only the *fallback default for the optional `method` argument* — the
    caller always supplies one. (The *horizontal* tracer advect is the only

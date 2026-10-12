@@ -196,6 +196,15 @@ set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/coupling/rdb_ice_ocean_coupler.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/rdb_ocean_state.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/rdb_ocean_setup.F90
+    # Submodules of rdb_ocean_setup (R2 split, 5.4k-line monolith -> parent +
+    # bodies-by-concern): grid/vmix/lateral/bt/bc/cavity configure_ocean_*
+    # groups.
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/setup/rdb_ocean_setup_grid.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/setup/rdb_ocean_setup_vmix.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/setup/rdb_ocean_setup_lateral.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/setup/rdb_ocean_setup_bt.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/setup/rdb_ocean_setup_bc.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/setup/rdb_ocean_setup_cavity.F90
     # Configure-time numerical-stability audit (viscous CFL, tracer diffusive
     # number, Munk-layer resolution, ah_max/nu_h clamp): depends on rdb_config +
     # rdb_ocean_metrics (both declared above).

@@ -35,7 +35,8 @@ dependency.
 3. Validation that the engine can't express (exclusive bounds, cross-knob
    requirements involving non-config state) stays where it is
    (`validate_config` in `src/core/config/rdb_config_validate.F90`, and the `configure_ocean_*`
-   routines in `src/core/ocean/state/rdb_ocean_setup.F90`) — migrating a group
+   routines in `src/core/ocean/state/rdb_ocean_setup.F90` and its
+   `setup/rdb_ocean_setup_<group>.F90` submodules) — migrating a group
    must never weaken an existing check.
 4. **A string knob with a fixed accepted set becomes `nml_enum`**, and its
    `allowed=` list must match the physics module's `parse_*` routine

@@ -149,7 +149,8 @@ when every CI leg is green.
 A new namelist knob (`docs/howto/add_namelist_knob.md`) needs **all** of:
 the field and its default in `src/core/rdb_config.F90`; registration in that
 group's `register_ocean_<group>`; validation if any combination is illegal
-(fail loud); propagation in `src/core/ocean/state/rdb_ocean_setup.F90`; the
+(fail loud); propagation in `src/core/ocean/state/rdb_ocean_setup.F90` (or its
+`setup/rdb_ocean_setup_<group>.F90` submodule); the
 kernel gated on it; a `!!` docstring on the field;
 `docs/generated_nml_knobs.md` regenerated; and the Python ledger —
 `python/rdb/_config_generated.py` (descriptors and `N_KNOBS`) plus the count
