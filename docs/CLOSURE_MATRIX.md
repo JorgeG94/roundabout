@@ -27,6 +27,9 @@ Last reconciled with the code: **2026-10-06**. The dated change log is in
 - **Defaults** in the tables were checked against `src/core/rdb_config.F90`.
   When this page and the code disagree, **the code is the authority and this
   page is the bug**.
+- **Defaults are a convenience copy.** The authoritative, generated
+  knob-to-default list is [`generated_nml_knobs.md`](generated_nml_knobs.md).
+  The source of truth behind it is `src/core/rdb_config.F90`.
 
 ### Status words
 
