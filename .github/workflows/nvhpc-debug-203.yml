@@ -22,8 +22,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        build_type: [Debug, Release]
-        rep: [1, 2, 3]
+        build_type: [Debug]
+        rep: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
 
@@ -42,7 +42,7 @@ jobs:
       - name: Install netcdf-c and build netcdf-fortran
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq libnetcdf-dev valgrind
+          sudo apt-get install -y -qq libnetcdf-dev valgrind gdb
           tools/build_netcdf_fortran.sh --fc "${{ env.FC }}" --netcdf-c /usr --prefix "$HOME/netcdff"
           echo "RDB_NETCDFF=$HOME/netcdff" >> "$GITHUB_ENV"
 
@@ -64,18 +64,25 @@ jobs:
         continue-on-error: true
         run: ctest -R 'salinity_ic|vanished_constancy' -V
 
+      - name: Loop the crashing tests under gdb (backtrace on SIGSEGV)
+        working-directory: build
+        continue-on-error: true
+        run: |
+          for t in rdb_test_ocean_vanished_constancy rdb_test_ocean_salinity_ic; do
+            cmd=$(ctest -R "^${t}\$" -N -V | sed -n 's/.*Test command: //p' | head -1)
+            dir=$(dirname "$cmd")
+            crashes=0
+            for i in $(seq 1 30); do
+              out=$(cd "$dir" && gdb -q -batch -ex run -ex bt -ex 'frame 1' -ex 'info locals' --args $cmd 2>&1)
+              if echo "$out" | grep -q 'SIGSEGV'; then
+                crashes=$((crashes+1))
+                if [ $crashes -le 2 ]; then echo "=== $t run $i: SIGSEGV"; echo "$out" | sed -n '/SIGSEGV/,$p' | head -60; fi
+              fi
+            done
+            echo "### $t: $crashes / 30 runs crashed"
+          done
+
       - name: Full rdb suite
         working-directory: build
         continue-on-error: true
         run: ctest -R rdb --output-on-failure
-
-      - name: valgrind on the crashing tests
-        if: matrix.build_type == 'Release'
-        working-directory: build
-        continue-on-error: true
-        run: |
-          for t in rdb_test_ocean_salinity_ic rdb_test_ocean_vanished_constancy; do
-            cmd=$(ctest -R "^${t}\$" -N -V | sed -n 's/.*Test command: //p' | head -1)
-            echo "=== $t: $cmd"
-            valgrind --track-origins=yes --error-exitcode=0 $cmd 2>&1 | tail -80
-          done
