@@ -1027,6 +1027,56 @@ File-backed surface forcing (PR-15): wind stress, heat, freshwater.
 | `salt_scale` | `0.1000000000E+01` | kg m-2 s-1 | Multiplier applied to the surface salt flux (positive salinifies) slab at read |
 | `salt_add` | `0.0000000000E+00` | kg m-2 s-1 | Offset added to the surface salt flux (positive salinifies) slab after scale |
 
+### &ocean_atm_forcing_nml
+
+JRA55-do-style prescribed atmospheric state driving bulk-flux ocean/ice surface forcing (PR-C2c).
+
+| Knob | Default | Units | Description |
+|------|---------|-------|-------------|
+| `enable` | `.false.` |  | Master switch |
+| `source` | `"jra55do"` |  | Atmospheric-state provider |
+| `filelist_tas` | `""` |  | tools/jra_filelist.py-style file list for tas (air temperature); blank = fail loud when enable=.true. |
+| `filelist_huss` | `""` |  | File list for huss (specific humidity) |
+| `filelist_uas` | `""` |  | File list for uas (eastward 10 m wind) |
+| `filelist_vas` | `""` |  | File list for vas (northward 10 m wind) |
+| `filelist_psl` | `""` |  | File list for psl (sea-level pressure) |
+| `filelist_rlds` | `""` |  | File list for rlds (downwelling longwave) |
+| `filelist_rsds` | `""` |  | File list for rsds (downwelling shortwave, interval mean) |
+| `filelist_prra` | `""` |  | File list for prra (liquid precip rate) |
+| `filelist_prsn` | `""` |  | File list for prsn (frozen precip rate) |
+| `var_tas` | `"tas"` |  | Variable name inside the tas filelist |
+| `var_huss` | `"huss"` |  | Variable name inside the huss filelist |
+| `var_uas` | `"uas"` |  | Variable name inside the uas filelist |
+| `var_vas` | `"vas"` |  | Variable name inside the vas filelist |
+| `var_psl` | `"psl"` |  | Variable name inside the psl filelist |
+| `var_rlds` | `"rlds"` |  | Variable name inside the rlds filelist |
+| `var_rsds` | `"rsds"` |  | Variable name inside the rsds filelist |
+| `var_prra` | `"prra"` |  | Variable name inside the prra filelist |
+| `var_prsn` | `"prsn"` |  | Variable name inside the prsn filelist |
+| `time_mode` | `"interannual"` |  | interannual (default) or repeat_year (RYF) |
+| `ryf_start_date` | `"1990-05-01"` |  | RYF window start date (time_mode=repeat_year only) |
+| `ryf_period_days` | `0.3650000000E+03` | days | RYF window length (time_mode=repeat_year only) |
+| `states_regrid` | `"bilinear"` |  | Horizontal regrid for tas/huss/uas/vas/psl; only 'bilinear' is implemented -- 'patch' fails loud naming the xESMF gap |
+| `fluxes_regrid` | `"conservative"` |  | Horizontal regrid for rlds/rsds/prra/prsn |
+| `sw_interp` | `"coszen"` |  | coszen (default, held interval + diurnal cosine-zenith factor) or linear (plain time-blend) |
+| `sw_offset_s` | `-0.5400000000E+04` | s | Time offset applied to the rsds query time before the bracket search (sw_interp=coszen) |
+| `orb_year` | `1990` |  | Orbital-parameter year (reserved; v1 coszen uses fixed Spencer (1971) coefficients regardless) |
+| `wind_relative` | `.true.` |  | Subtract the ocean surface current from the atmospheric wind before the bulk flux |
+| `ocean_albedo` | `0.6600000000E-01` |  | Ocean surface shortwave albedo (Large & Yeager 2009) |
+| `verbose` | `.false.` |  | Log every bracket advance of the 9 underlying readers |
+
+### &ocean_bulk_flux_nml
+
+Monin-Obukhov bulk-flux kernel (Large & Yeager 2004/2009).
+
+| Knob | Default | Units | Description |
+|------|---------|-------|-------------|
+| `enable` | `.false.` |  | Master switch (implied by &ocean_atm_forcing_nml enable; an explicit .false. with atm_forcing on is a conflict) |
+| `n_iter` | `5` |  | Monin-Obukhov iteration count |
+| `z_wind` | `0.1000000000E+02` | m | Wind reference height |
+| `z_ta` | `0.2000000000E+01` | m | Air temperature / specific humidity reference height |
+| `emissivity` | `0.9700000000E+00` |  | Longwave emissivity of seawater |
+
 ### &ocean_diag_nml
 
 Ocean diag-manager output controls.

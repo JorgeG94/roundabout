@@ -5635,6 +5635,326 @@ class OceanDataovr(Group):
     )
 
 
+class OceanAtmForcing(Group):
+    """`&ocean_atm_forcing_nml` -- JRA55-do-style prescribed atmospheric state driving bulk-flux ocean/ice surface forcing (PR-C2c)."""
+
+    _nml_name = 'ocean_atm_forcing'
+
+    enable = Bool('enable', doc='Master switch', units='', required=False, default=False)
+
+    source = Enum(
+        'source',
+        doc='Atmospheric-state provider',
+        units='',
+        required=False,
+        default='jra55do',
+        allowed=('jra55do',),
+    )
+
+    filelist_tas = Str(
+        'filelist_tas',
+        doc='tools/jra_filelist.py-style file list for tas (air temperature); blank = fail loud when enable=.true.',
+        units='',
+        required=False,
+        default='',
+        max_len=256,
+    )
+
+    filelist_huss = Str(
+        'filelist_huss',
+        doc='File list for huss (specific humidity)',
+        units='',
+        required=False,
+        default='',
+        max_len=256,
+    )
+
+    filelist_uas = Str(
+        'filelist_uas',
+        doc='File list for uas (eastward 10 m wind)',
+        units='',
+        required=False,
+        default='',
+        max_len=256,
+    )
+
+    filelist_vas = Str(
+        'filelist_vas',
+        doc='File list for vas (northward 10 m wind)',
+        units='',
+        required=False,
+        default='',
+        max_len=256,
+    )
+
+    filelist_psl = Str(
+        'filelist_psl',
+        doc='File list for psl (sea-level pressure)',
+        units='',
+        required=False,
+        default='',
+        max_len=256,
+    )
+
+    filelist_rlds = Str(
+        'filelist_rlds',
+        doc='File list for rlds (downwelling longwave)',
+        units='',
+        required=False,
+        default='',
+        max_len=256,
+    )
+
+    filelist_rsds = Str(
+        'filelist_rsds',
+        doc='File list for rsds (downwelling shortwave, interval mean)',
+        units='',
+        required=False,
+        default='',
+        max_len=256,
+    )
+
+    filelist_prra = Str(
+        'filelist_prra',
+        doc='File list for prra (liquid precip rate)',
+        units='',
+        required=False,
+        default='',
+        max_len=256,
+    )
+
+    filelist_prsn = Str(
+        'filelist_prsn',
+        doc='File list for prsn (frozen precip rate)',
+        units='',
+        required=False,
+        default='',
+        max_len=256,
+    )
+
+    var_tas = Str(
+        'var_tas',
+        doc='Variable name inside the tas filelist',
+        units='',
+        required=False,
+        default='tas',
+        max_len=64,
+    )
+
+    var_huss = Str(
+        'var_huss',
+        doc='Variable name inside the huss filelist',
+        units='',
+        required=False,
+        default='huss',
+        max_len=64,
+    )
+
+    var_uas = Str(
+        'var_uas',
+        doc='Variable name inside the uas filelist',
+        units='',
+        required=False,
+        default='uas',
+        max_len=64,
+    )
+
+    var_vas = Str(
+        'var_vas',
+        doc='Variable name inside the vas filelist',
+        units='',
+        required=False,
+        default='vas',
+        max_len=64,
+    )
+
+    var_psl = Str(
+        'var_psl',
+        doc='Variable name inside the psl filelist',
+        units='',
+        required=False,
+        default='psl',
+        max_len=64,
+    )
+
+    var_rlds = Str(
+        'var_rlds',
+        doc='Variable name inside the rlds filelist',
+        units='',
+        required=False,
+        default='rlds',
+        max_len=64,
+    )
+
+    var_rsds = Str(
+        'var_rsds',
+        doc='Variable name inside the rsds filelist',
+        units='',
+        required=False,
+        default='rsds',
+        max_len=64,
+    )
+
+    var_prra = Str(
+        'var_prra',
+        doc='Variable name inside the prra filelist',
+        units='',
+        required=False,
+        default='prra',
+        max_len=64,
+    )
+
+    var_prsn = Str(
+        'var_prsn',
+        doc='Variable name inside the prsn filelist',
+        units='',
+        required=False,
+        default='prsn',
+        max_len=64,
+    )
+
+    time_mode = Enum(
+        'time_mode',
+        doc='interannual (default) or repeat_year (RYF)',
+        units='',
+        required=False,
+        default='interannual',
+        allowed=('interannual', 'repeat_year'),
+    )
+
+    ryf_start_date = Str(
+        'ryf_start_date',
+        doc='RYF window start date (time_mode=repeat_year only)',
+        units='',
+        required=False,
+        default='1990-05-01',
+        max_len=32,
+    )
+
+    ryf_period_days = Real(
+        'ryf_period_days',
+        doc='RYF window length (time_mode=repeat_year only)',
+        units='days',
+        required=False,
+        default=365.0,
+    )
+
+    states_regrid = Enum(
+        'states_regrid',
+        doc="Horizontal regrid for tas/huss/uas/vas/psl; only 'bilinear' is implemented -- 'patch' fails loud naming the xESMF gap",
+        units='',
+        required=False,
+        default='bilinear',
+        allowed=('bilinear', 'patch'),
+    )
+
+    fluxes_regrid = Enum(
+        'fluxes_regrid',
+        doc='Horizontal regrid for rlds/rsds/prra/prsn',
+        units='',
+        required=False,
+        default='conservative',
+        allowed=('conservative', 'bilinear'),
+    )
+
+    sw_interp = Enum(
+        'sw_interp',
+        doc='coszen (default, held interval + diurnal cosine-zenith factor) or linear (plain time-blend)',
+        units='',
+        required=False,
+        default='coszen',
+        allowed=('coszen', 'linear'),
+    )
+
+    sw_offset_s = Real(
+        'sw_offset_s',
+        doc='Time offset applied to the rsds query time before the bracket search (sw_interp=coszen)',
+        units='s',
+        required=False,
+        default=-5400.0,
+    )
+
+    orb_year = Int(
+        'orb_year',
+        doc='Orbital-parameter year (reserved; v1 coszen uses fixed Spencer (1971) coefficients regardless)',
+        units='',
+        required=False,
+        default=1990,
+    )
+
+    wind_relative = Bool(
+        'wind_relative',
+        doc='Subtract the ocean surface current from the atmospheric wind before the bulk flux',
+        units='',
+        required=False,
+        default=True,
+    )
+
+    ocean_albedo = Real(
+        'ocean_albedo',
+        doc='Ocean surface shortwave albedo (Large & Yeager 2009)',
+        units='',
+        required=False,
+        default=0.066,
+    )
+
+    verbose = Bool(
+        'verbose',
+        doc='Log every bracket advance of the 9 underlying readers',
+        units='',
+        required=False,
+        default=False,
+    )
+
+
+class OceanBulkFlux(Group):
+    """`&ocean_bulk_flux_nml` -- Monin-Obukhov bulk-flux kernel (Large & Yeager 2004/2009)."""
+
+    _nml_name = 'ocean_bulk_flux'
+
+    enable = Bool(
+        'enable',
+        doc='Master switch (implied by &ocean_atm_forcing_nml enable; an explicit .false. with atm_forcing on is a conflict)',
+        units='',
+        required=False,
+        default=False,
+    )
+
+    n_iter = Int(
+        'n_iter',
+        doc='Monin-Obukhov iteration count',
+        units='',
+        required=False,
+        default=5,
+        has_min=True,
+        vmin=1,
+    )
+
+    z_wind = Real(
+        'z_wind',
+        doc='Wind reference height',
+        units='m',
+        required=False,
+        default=10.0,
+    )
+
+    z_ta = Real(
+        'z_ta',
+        doc='Air temperature / specific humidity reference height',
+        units='m',
+        required=False,
+        default=2.0,
+    )
+
+    emissivity = Real(
+        'emissivity',
+        doc='Longwave emissivity of seawater',
+        units='',
+        required=False,
+        default=0.97,
+    )
+
+
 class OceanDiag(Group):
     """`&ocean_diag_nml` -- Ocean diag-manager output controls."""
 
@@ -6320,9 +6640,11 @@ GENERATED_GROUPS = {
     'ocean_zinit': OceanZinit,
     'ocean_data': OceanData,
     'ocean_dataovr': OceanDataovr,
+    'ocean_atm_forcing': OceanAtmForcing,
+    'ocean_bulk_flux': OceanBulkFlux,
     'ocean_diag': OceanDiag,
     'ocean_bc': OceanBc,
 }
 
-N_GROUPS = 60
-N_KNOBS = 693
+N_GROUPS = 62
+N_KNOBS = 729
