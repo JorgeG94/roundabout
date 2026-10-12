@@ -1,0 +1,81 @@
+# TEMPORARY diagnostic for #203 (nvfortran 26.9 SIGSEGV in pgf90_lentrima,
+# host-CPU dependent). Lives only on the scratch branch ci/nvhpc-debug-203;
+# delete the branch when done. Not for merging.
+#
+# Splits "real memory bug in our code" from "nvfortran -O3 -fast codegen":
+#   * Debug   = -g -O0 -Mbounds -Mchkptr -traceback (compiler_flags.cmake)
+#   * Release = -O3 -fast, as CI runs today
+# Three reps each, to land on both Zen 3 (EPYC 7763) and Zen 5 (EPYC 9V45)
+# runners; the Release reps also run the two crashing tests under valgrind.
+name: nvhpc debug #203
+
+on:
+  push:
+    branches: [ci/nvhpc-debug-203]
+  workflow_dispatch:
+
+jobs:
+  diag:
+    name: nvhpc ${{ matrix.build_type }} rep${{ matrix.rep }}
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug, Release]
+        rep: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Fortran compiler
+        uses: fortran-lang/setup-fortran@v1.9.0
+        with:
+          compiler: nvidia-hpc
+          version: latest
+
+      - name: Report toolchain and CPU
+        run: |
+          ${{ env.FC }} --version || true
+          grep -m1 'model name' /proc/cpuinfo || true
+          lscpu | grep -E '^(Model name|Flags)' | cut -c1-200 || true
+
+      - name: Install netcdf-c and build netcdf-fortran
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libnetcdf-dev valgrind
+          tools/build_netcdf_fortran.sh --fc "${{ env.FC }}" --netcdf-c /usr --prefix "$HOME/netcdff"
+          echo "RDB_NETCDFF=$HOME/netcdff" >> "$GITHUB_ENV"
+
+      - name: Configure
+        run: >-
+          cmake -B build -S .
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DCMAKE_Fortran_COMPILER=${{ env.FC }}
+          -DCMAKE_PREFIX_PATH="${{ env.RDB_NETCDFF }};/usr"
+          -DRDB_EXTRA_FORTRAN_FLAGS="-tp=haswell"
+          -DRDB_ENABLE_NETCDF=ON -DRDB_ENABLE_MPI=OFF
+          -DRDB_ENABLE_GPU=OFF -DRDB_ENABLE_TESTING=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: The two crashing tests, verbose
+        working-directory: build
+        continue-on-error: true
+        run: ctest -R 'salinity_ic|vanished_constancy' -V
+
+      - name: Full rdb suite
+        working-directory: build
+        continue-on-error: true
+        run: ctest -R rdb --output-on-failure
+
+      - name: valgrind on the crashing tests
+        if: matrix.build_type == 'Release'
+        working-directory: build
+        continue-on-error: true
+        run: |
+          for t in rdb_test_ocean_salinity_ic rdb_test_ocean_vanished_constancy; do
+            cmd=$(ctest -R "^${t}\$" -N -V | sed -n 's/.*Test command: //p' | head -1)
+            echo "=== $t: $cmd"
+            valgrind --track-origins=yes --error-exitcode=0 $cmd 2>&1 | tail -80
+          done
