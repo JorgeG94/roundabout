@@ -881,10 +881,9 @@ contains
 
       ps => cfg%ocean%atm_forcing%states_regrid
       call g%add(nml_enum("states_regrid", ps, &
-                          "Horizontal regrid for tas/huss/uas/vas/psl; only "// &
-                          "'bilinear' is implemented -- 'patch' fails loud "// &
-                          "naming the xESMF gap", &
-                          allowed=[character(len=16) :: "bilinear", "patch"]))
+                          "Horizontal regrid for tas/huss/uas/vas/psl "// &
+                          "(only 'bilinear' is implemented)", &
+                          allowed=[character(len=16) :: "bilinear"]))
       ps => cfg%ocean%atm_forcing%fluxes_regrid
       call g%add(nml_enum("fluxes_regrid", ps, &
                           "Horizontal regrid for rlds/rsds/prra/prsn", &
@@ -900,8 +899,9 @@ contains
                           "bracket search (sw_interp=coszen)", units="s"))
       pi => cfg%ocean%atm_forcing%orb_year
       call g%add(nml_int("orb_year", pi, &
-                         "Orbital-parameter year (reserved; v1 coszen uses fixed "// &
-                         "Spencer (1971) coefficients regardless)"))
+                         "Orbital-parameter year (reserved: v1 coszen uses fixed "// &
+                         "Spencer (1971) coefficients, so a non-default value "// &
+                         "is refused)"))
       pl => cfg%ocean%atm_forcing%wind_relative
       call g%add(nml_logical("wind_relative", pl, &
                              "Subtract the ocean surface current from the "// &
@@ -919,8 +919,8 @@ contains
    module subroutine register_ocean_bulk_flux(cfg, schema)
       !! `&ocean_bulk_flux_nml`: Monin-Obukhov bulk-flux kernel knobs
       !! (`bulk_flux_config_t`, `rdb_ocean_bulk_flux`).  `enable` is
-      !! implied `.true.` whenever `&ocean_atm_forcing_nml enable` is --
-      !! `validate_config` fails loud on an explicit `.false.` conflict.
+      !! REQUIRED whenever `&ocean_atm_forcing_nml enable` is on --
+      !! `validate_config` refuses atm forcing without it.
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
@@ -933,9 +933,8 @@ contains
 
       pl => cfg%ocean%bulk_flux%enable
       call g%add(nml_logical("enable", pl, &
-                             "Master switch (implied by &ocean_atm_forcing_nml "// &
-                             "enable; an explicit .false. with atm_forcing on "// &
-                             "is a conflict)"))
+                             "Master switch (required when &ocean_atm_forcing_nml "// &
+                             "enable is on)"))
       pi => cfg%ocean%bulk_flux%n_iter
       call g%add(nml_int("n_iter", pi, "Monin-Obukhov iteration count", min=1))
       pr => cfg%ocean%bulk_flux%z_wind

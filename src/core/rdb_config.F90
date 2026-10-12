@@ -93,6 +93,31 @@ module rdb_config
    public :: p_top_has_producer
    public :: substep_drag_ignores_bdrag_form
    public :: bbl_glue_is_effective
+   public :: atm_forcing_prereq_code, atm_forcing_prereq_message
+   public :: ATM_PREREQ_OK, ATM_PREREQ_START_DATE, ATM_PREREQ_COMPONENTS, &
+             ATM_PREREQ_CARTESIAN, ATM_PREREQ_FILELIST, ATM_PREREQ_SW_SOURCE, &
+             ATM_PREREQ_DATAOVR, ATM_PREREQ_BULK_FLUX, ATM_PREREQ_N_ITER, &
+             ATM_PREREQ_ORB_YEAR
+   integer, parameter :: ATM_PREREQ_OK = 0
+      !! `atm_forcing_prereq_code`: every prerequisite holds.
+   integer, parameter :: ATM_PREREQ_START_DATE = 1
+      !! `&time_nml start_date` is blank.
+   integer, parameter :: ATM_PREREQ_COMPONENTS = 2
+      !! `&ocean_forcing_nml enable_components` is off.
+   integer, parameter :: ATM_PREREQ_CARTESIAN = 3
+      !! `grid_config = "cartesian"` (no geographic lon/lat).
+   integer, parameter :: ATM_PREREQ_FILELIST = 4
+      !! A `filelist_<field>` path is blank.
+   integer, parameter :: ATM_PREREQ_SW_SOURCE = 5
+      !! `sw_pen_frac > 0` without `sw_source = "q_sw"`.
+   integer, parameter :: ATM_PREREQ_DATAOVR = 6
+      !! A `&ocean_dataovr_nml` wind/heat/evap/lprec file is set.
+   integer, parameter :: ATM_PREREQ_BULK_FLUX = 7
+      !! `&ocean_bulk_flux_nml enable` is not set.
+   integer, parameter :: ATM_PREREQ_N_ITER = 8
+      !! `&ocean_bulk_flux_nml n_iter < 1`.
+   integer, parameter :: ATM_PREREQ_ORB_YEAR = 9
+      !! `orb_year` is not the default (not wired into the coszen kernel).
    public :: ocean_bt_forcing_visc_rem_on
    public :: ocean_bt_renorm_visc_rem_on
    public :: ocean_bt_rem_from_visc_rem_on
@@ -3090,8 +3115,8 @@ module rdb_config
          !! RYF window length in days (`time_mode = "repeat_year"` only).
       character(len=16) :: states_regrid = "bilinear"
          !! Horizontal regrid for the instantaneous states (`tas, huss,
-         !! uas, vas, psl`). Only `"bilinear"` is implemented --
-         !! `"patch"` fails loud at configure, naming the xESMF gap.
+         !! uas, vas, psl`). Only `"bilinear"` is implemented; a
+         !! patch-recovery option is not offered.
       character(len=16) :: fluxes_regrid = "conservative"
          !! Horizontal regrid for the interval-mean fluxes (`rlds, rsds,
          !! prra, prsn`): `"conservative"` (default) or `"bilinear"`.
@@ -3105,9 +3130,10 @@ module rdb_config
          !! bracket search -- moves an interval-centred timestamp onto
          !! the interval start for the hold (`sw_interp = "coszen"`).
       integer :: orb_year = 1990
-         !! Orbital-parameter year, carried for a future Berger (1978)
-         !! upgrade; the v1 coszen kernel uses the fixed Spencer (1971)
-         !! Fourier-fit coefficients regardless of this value.
+         !! Orbital-parameter year, reserved for a future Berger (1978)
+         !! upgrade. The v1 coszen kernel uses the fixed Spencer (1971)
+         !! Fourier-fit coefficients, so a non-default value is refused
+         !! at configure rather than silently ignored.
       logical :: wind_relative = .true.
          !! Subtract the ocean surface current from the atmospheric wind
          !! before computing the bulk-flux relative wind speed.
@@ -3435,9 +3461,9 @@ module rdb_config
          !! bit-identical.
       type(bulk_flux_config_t)        :: bulk_flux
          !! Bulk-flux kernel configuration (`&ocean_bulk_flux_nml`).
-         !! Default-OFF ⇒ bit-identical; `enable` is implied `.true.`
-         !! whenever `atm_forcing%enable` is -- `validate_config` fails
-         !! loud on an explicit `.false.` conflict.
+         !! Default-OFF ⇒ bit-identical. `enable` is REQUIRED (set it
+         !! explicitly) whenever `atm_forcing%enable` is on --
+         !! `validate_config` refuses atm forcing without it.
       type(ocean_diag_config_t)       :: diag
       type(ocean_bc_config_t)         :: bc
          !! Open-boundary condition config (`&ocean_bc_nml`).
@@ -4089,6 +4115,20 @@ module rdb_config
          logical, intent(in) :: use_components
          logical :: bad
       end function dataovr_freshwater_needs_components
+
+      pure module function atm_forcing_prereq_code(cfg) result(code)
+            !! See submodule [[rdb_config_validate]].
+         implicit none
+         type(config_t), intent(in) :: cfg
+         integer :: code
+      end function atm_forcing_prereq_code
+
+      pure module function atm_forcing_prereq_message(code) result(msg)
+            !! See submodule [[rdb_config_validate]].
+         implicit none
+         integer, intent(in) :: code
+         character(len=:), allocatable :: msg
+      end function atm_forcing_prereq_message
 
       pure module function dataovr_any_tag_set(cfg) result(any_set)
             !! See submodule [[rdb_config_validate]].
