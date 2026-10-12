@@ -192,14 +192,14 @@ contains
                                            1041.666252567_wp, 1022.345597301_wp, &
                                            1030.937452325_wp, 1008.687812318_wp]
       real(wp) :: sp, pt, rho, p_pa
-      integer :: n
+      integer :: ip
       eos = make_roquet_rho()
-      do n = 1, N
-         sp = SA_T(n)/SR_FACTOR
-         pt = pt_for_ct(CT_T(n), sp)
-         p_pa = P_DBAR(n)*1.0e4_wp
+      do ip = 1, N
+         sp = SA_T(ip)/SR_FACTOR
+         pt = pt_for_ct(CT_T(ip), sp)
+         p_pa = P_DBAR(ip)*1.0e4_wp
          rho = eos_density_point(eos, pt, sp, p_pa)
-         call check(error, abs(rho - RHO_GSW(n)) <= 1.0e-2_wp, &
+         call check(error, abs(rho - RHO_GSW(ip)) <= 1.0e-2_wp, &
                     "Roquet_rho vs GSW TEOS-10 exact cast point exceeds fit-accuracy bound")
          if (allocated(error)) return
       end do
@@ -251,9 +251,9 @@ contains
                  - sv_at(eos, PTS_T(n), PTS_S(n) - HS, PTS_P(n)))/(2.0_wp*HS)
          rt = abs(dsv_dt - fd_t)/abs(fd_t)
          rs = abs(dsv_ds - fd_s)/abs(fd_s)
-         call check(error, rt <= 1.0e-6_wp, "Roquet_rho dSV/dT (model PT) chain-rule mismatch vs FD")
+         call check(error, rt <= 1.0e-7_wp, "Roquet_rho dSV/dT (model PT) chain-rule mismatch vs FD")
          if (allocated(error)) return
-         call check(error, rs <= 1.0e-6_wp, "Roquet_rho dSV/dS (model SP) chain-rule mismatch vs FD")
+         call check(error, rs <= 1.0e-7_wp, "Roquet_rho dSV/dS (model SP) chain-rule mismatch vs FD")
          if (allocated(error)) return
       end do
    end subroutine test_chain_rule_derivs

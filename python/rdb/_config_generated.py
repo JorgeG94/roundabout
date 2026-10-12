@@ -4065,7 +4065,7 @@ class OceanEos(Group):
         units='',
         required=False,
         default='linear',
-        allowed=('linear', 'wright', 'roquet_spv', 'teos10'),
+        allowed=('linear', 'wright', 'roquet_spv', 'roquet_rho', 'teos10'),
     )
 
     tfreeze_set = Enum(
