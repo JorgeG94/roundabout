@@ -68,12 +68,13 @@ jobs:
         working-directory: build
         continue-on-error: true
         run: |
+          set +e
           for t in rdb_test_ocean_vanished_constancy rdb_test_ocean_salinity_ic; do
             cmd=$(ctest -R "^${t}\$" -N -V | sed -n 's/.*Test command: //p' | head -1)
             dir=$(dirname "$cmd")
             crashes=0
             for i in $(seq 1 30); do
-              out=$(cd "$dir" && gdb -q -batch -ex run -ex bt -ex 'frame 1' -ex 'info locals' --args $cmd 2>&1)
+              out=$(cd "$dir" && gdb -q -batch -ex run -ex bt -ex 'frame 1' -ex 'info locals' --args $cmd 2>&1 || true)
               if echo "$out" | grep -q 'SIGSEGV'; then
                 crashes=$((crashes+1))
                 if [ $crashes -le 2 ]; then echo "=== $t run $i: SIGSEGV"; echo "$out" | sed -n '/SIGSEGV/,$p' | head -60; fi
