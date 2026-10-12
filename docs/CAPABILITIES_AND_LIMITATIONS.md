@@ -1753,9 +1753,18 @@ category ghosts there (an answer change against older builds on such
 configurations). On ONE rank the ice category state is also folded across a
 tripolar north seam (`ocean_fold_wrap_centre_flat`, applied in the ice state,
 flux and transport exchanges), and ice transport no longer treats the fold
-line as a wall. Still refused: the ice with `north="tripolar_fold"` on
-more than one rank (the multi-rank ice fold is not wired, #143), and
-`dynamics` with a tripolar fold at all (#164);
+line as a wall. **EVP dynamics across the fold ships on one rank too**
+(A6, #164): `ice_evp_step` stops walling the fold row (`land_n` now
+excludes `bc%north_fold`) and folds `ui`/`vi` (Cu/Cv, true-vector) with
+`ocean_fold_wrap_face_pair` — the same `rdb_ocean_fold_apply` dispatcher
+wind stress uses — at the top of every EVP subcycle and once after the
+loop, plus the restart-carried stresses (`str_d`/`str_t` centre,
+`str_s` corner, pseudoscalar) once before the subcycle loop; requires
+`nghost >= 2` (fails loud in `ice_evp_step` otherwise), every shipped
+tripolar config already carries `nghost = 3`
+(`test_ocean_ice_evp_fold`). Still refused: the ice with
+`north="tripolar_fold"` on more than one rank — both the category fold
+and EVP's own fold (the multi-rank ice fold is not wired, #143);
 `dynamics` with any OBC/tidal/sponge/clamped/Chapman edge — there is no
 open-boundary support for ice at all.
 

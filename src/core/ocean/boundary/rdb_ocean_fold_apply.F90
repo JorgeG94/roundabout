@@ -49,6 +49,7 @@ module rdb_ocean_fold_apply
    public :: ocean_fold_wrap_eta_2d
    public :: ocean_fold_wrap_time_means
    public :: ocean_fold_wrap_stress
+   public :: ocean_fold_wrap_face_pair
    public :: ocean_fold_wrap_visc_rem
    public :: ocean_fold_wrap_centre_flat
 
@@ -267,12 +268,37 @@ contains
       !! Fold the surface-stress pair: `tau_x` (u, −) and `tau_y` (v, − +
       !! fold-row projection) — true vector components.  Call after the
       !! pair's exchange + periodic wrap.  No-op when not folding.
+      !!
+      !! One-line forwarder onto the general `ocean_fold_wrap_face_pair`
+      !! (A6, #164) — body unchanged, so this stays bit-identical.  Any
+      !! Cu/Cv true-vector pair (wind stress, EVP ice velocity, …) can call
+      !! the general name directly instead of growing a per-field twin.
       type(hgrid_t), intent(in) :: grid
       type(ocean_bc_state_t), intent(in) :: bc
       real(wp), intent(inout) :: tau_x(grid%nx_total + 1, grid%ny_total)
          !! x-face stress (nx_total+1, ny_total).
       real(wp), intent(inout) :: tau_y(grid%nx_total, grid%ny_total + 1)
          !! y-face stress (nx_total, ny_total+1).
+      logical, intent(in), optional :: device_resident
+         !! px > 1 only: `.false.` for host-side calls.
+
+      call ocean_fold_wrap_face_pair(grid, bc, tau_x, tau_y, device_resident)
+   end subroutine ocean_fold_wrap_stress
+
+   subroutine ocean_fold_wrap_face_pair(grid, bc, u, v, device_resident)
+      !! Fold a Cu/Cv true-vector pair across the north seam: `u` (x-face,
+      !! −) and `v` (y-face, − + fold-row projection).  Call after the
+      !! pair's exchange + periodic wrap.  No-op when not folding.  General
+      !! name for `ocean_fold_wrap_stress`'s body (A6, #164) — the EVP ice
+      !! velocity (`ui`, `vi`) is the same Cu/Cv stagger as wind stress, so
+      !! it rides the SAME px dispatch (and inherits the px>1 distributed
+      !! path for free, A7/#143) instead of a hand-duplicated twin.
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_bc_state_t), intent(in) :: bc
+      real(wp), intent(inout) :: u(grid%nx_total + 1, grid%ny_total)
+         !! x-face field (nx_total+1, ny_total).
+      real(wp), intent(inout) :: v(grid%nx_total, grid%ny_total + 1)
+         !! y-face field (nx_total, ny_total+1).
       logical, intent(in), optional :: device_resident
          !! px > 1 only: `.false.` for host-side calls.
 
@@ -284,18 +310,18 @@ contains
 
       if (ocean_fold_is_distributed()) then
          call ocean_fold_begin(2*(grid%nghost + 1))
-         call ocean_fold_pack(tau_x, nxt + 1, nyt, FOLD_STAG_U, device_resident)
-         call ocean_fold_pack(tau_y, nxt, nyt + 1, FOLD_STAG_V, device_resident)
+         call ocean_fold_pack(u, nxt + 1, nyt, FOLD_STAG_U, device_resident)
+         call ocean_fold_pack(v, nxt, nyt + 1, FOLD_STAG_V, device_resident)
          call ocean_fold_exchange(device_resident)
-         call ocean_fold_unpack(tau_x, nxt + 1, nyt, FOLD_STAG_U, .true., device_resident)
-         call ocean_fold_unpack(tau_y, nxt, nyt + 1, FOLD_STAG_V, .true., device_resident)
+         call ocean_fold_unpack(u, nxt + 1, nyt, FOLD_STAG_U, .true., device_resident)
+         call ocean_fold_unpack(v, nxt, nyt + 1, FOLD_STAG_V, .true., device_resident)
          call ocean_fold_end()
          return
       end if
 
-      call fold_north_u_face(tau_x, nxt + 1, nyt, grid%nx_phys, grid%ny_phys, grid%nghost)
-      call fold_north_v_face(tau_y, nxt, nyt + 1, grid%nx_phys, grid%ny_phys, grid%nghost)
-   end subroutine ocean_fold_wrap_stress
+      call fold_north_u_face(u, nxt + 1, nyt, grid%nx_phys, grid%ny_phys, grid%nghost)
+      call fold_north_v_face(v, nxt, nyt + 1, grid%nx_phys, grid%ny_phys, grid%nghost)
+   end subroutine ocean_fold_wrap_face_pair
 
    subroutine ocean_fold_wrap_visc_rem(grid, bc, visc_rem_u, visc_rem_v, device_resident)
       !! Fold the viscous-remnant pair: `visc_rem_u` (u-face) and

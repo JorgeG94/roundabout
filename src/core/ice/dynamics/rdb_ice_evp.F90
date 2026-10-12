@@ -90,7 +90,34 @@ module rdb_ice_evp
    !!   D5  `ncat==1` lumped concentration: `ci = 1` where `m_ice > 0`
    !!       (SIS2 has no lumped mode) — see `ice_cell_concentration_impl`
    !!       in `rdb_ice_state` (shared with the tau coupler).
-   !!   D6  domain edges wall-or-periodic only; no OBC, no tripolar fold.
+   !!   D6  domain edges wall-or-periodic, OR a single-rank tripolar north
+   !!       fold (A6, #164; no OBC, px>1 ice+fold stays refused at
+   !!       configure, A7/#143).  `ice_evp_step` flips `land_n` off
+   !!       (`bc%has_north .and. .not. bc%periodic_y .and. .not.
+   !!       bc%north_fold`) so the fold row is no longer walled, and
+   !!       threads `bc` through `ice_evp_dynamics`/`_impl` (an OPTIONAL
+   !!       trailing argument -- absent => `fold_n=.false.`, so every
+   !!       pre-A6 call compiles and runs unchanged).  `ui`/`vi` (Cu/Cv,
+   !!       true-vector) are folded with `ocean_fold_wrap_face_pair`
+   !!       (`rdb_ocean_fold_apply`, the general form of
+   !!       `ocean_fold_wrap_stress`'s body -- same px dispatch, so A7
+   !!       inherits the px>1 path for free) right after EVERY periodic
+   !!       wrap of the pair: top of every subcycle and once post-loop
+   !!       (transport's donor read is otherwise one subcycle stale across
+   !!       the seam, pre-existing for a periodic run too -- tracked, not
+   !!       fixed here).  The restart-carried stresses (`str_d`/`str_t`,
+   !!       T-stagger, invariant under the fold's 180 deg rotation;
+   !!       `str_s`, SW-corner, a pseudoscalar like vorticity) are folded
+   !!       ONCE before the subcycle loop (`fold_north_centre`/
+   !!       `fold_north_corner(negate=.false.)`, direct from
+   !!       `rdb_ocean_fold`) -- hygiene for a stale restart halo; every
+   !!       per-step consumer below is point-local/4-cell-corner in
+   !!       already-folded inputs and recomputes its own ghost
+   !!       redundantly, same as the multi-rank halo story two sentences
+   !!       down.  Requires `nghost >= 2` (`ice_evp_step` fails loud
+   !!       otherwise); every shipped tripolar config already carries
+   !!       `nghost = 3`.
+   !!
    !!       Multi-rank (`ice_evp_step` with a decomposed `bc`): the ice uses
    !!       the OCEAN's decomposition and `nghost`.  `ui`/`vi` are
    !!       halo-exchanged (`ocean_halo_face_x/_y`, D1 seam ownership) at
@@ -190,6 +217,8 @@ module rdb_ice_evp
    use rdb_ocean_boundary_types, only: ocean_bc_state_t
    use rdb_ocean_halo, only: ocean_halo_face_x, ocean_halo_face_y, &
                              ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y
+   use rdb_ocean_fold, only: fold_north_centre, fold_north_corner
+   use rdb_ocean_fold_apply, only: ocean_fold_wrap_face_pair
    implicit none
    private
 
@@ -358,6 +387,16 @@ contains
          return
       end if
 
+      ! A6 (#164): the north fold needs one row of EVP's own stencil past
+      ! the seam (the corner projection at the fold row reads nghost+1..
+      ! nghost+nx_phys, the halo-row mirror reads one row further) --
+      ! `nghost >= 2` is the floor; every shipped tripolar config carries
+      ! `nghost = 3` already (the Coriolis/PGF stencils' own floor).
+      if (bc%north_fold .and. grid%nghost < 2) then
+         error stop "ice_evp_step: tripolar north fold under EVP dynamics "// &
+            "requires nghost >= 2 (#164)"
+      end if
+
       ! An axis split across ranks is the halo's: exchange there, and run
       ! the local periodic wrap only on an axis it does not own.
       halo_x = ocean_halo_is_decomposed_x()
@@ -384,7 +423,9 @@ contains
                             land_w=bc%has_west .and. .not. bc%periodic_x, &
                             land_e=bc%has_east .and. .not. bc%periodic_x, &
                             land_s=bc%has_south .and. .not. bc%periodic_y, &
-                            land_n=bc%has_north .and. .not. bc%periodic_y)
+                            land_n=bc%has_north .and. .not. bc%periodic_y &
+                            .and. .not. bc%north_fold, &
+                            bc=bc)
    end subroutine ice_evp_step
 
    ! =====================================================================
@@ -395,7 +436,7 @@ contains
                                tau_ax, tau_ay, ui, vi, str_d, str_t, str_s, &
                                fxoc, fyoc, dt_slow, par, periodic_x, periodic_y, ws, &
                                dt_transport, n_trunc, halo_x, halo_y, &
-                               land_w, land_e, land_s, land_n)
+                               land_w, land_e, land_s, land_n, bc)
       !! One outer (slow) EVP call: `evp_sub_steps` subcycles advancing
       !! `ui`/`vi`/`str_d`/`str_t`/`str_s`, plus the subcycle-averaged
       !! ice->ocean stress `fxoc`/`fyoc`.
@@ -434,6 +475,11 @@ contains
          !! Pin that ghost band of `mask_t` to land (a physical,
          !! non-periodic edge).  Absent => `.not. periodic_x` (W/E) /
          !! `.not. periodic_y` (S/N): the single-rank wall-or-wrap policy.
+      type(ocean_bc_state_t), intent(in), optional :: bc
+         !! A6 (#164): the tripolar north-fold policy (`bc%north_fold`).
+         !! Absent => no fold (the 30 pre-A6 EVP tests compile and run
+         !! unchanged -- this is why `ice_evp_dynamics` keeps its
+         !! periodic-flag signature rather than requiring `bc`).
       integer :: nx, ny
       logical :: hx, hy, lw, le, ls, ln
 
@@ -460,7 +506,7 @@ contains
                                  ws%del_sh_w, ws%mask_t_w, ws%mi_u_w, ws%mask_u_w, &
                                  ws%u_tmp_w, ws%mi_v_w, ws%mask_v_w, ws%a_u_w, ws%a_v_w, &
                                  ws%sh_ds_w, ws%mi_ratio_a_q_w, ws%q_w, ws%mask_q_w, &
-                                 hx, hy, lw, le, ls, ln, dt_transport, n_trunc)
+                                 hx, hy, lw, le, ls, ln, dt_transport, n_trunc, bc)
    end subroutine ice_evp_dynamics
 
    subroutine ice_evp_dynamics_impl(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
@@ -471,7 +517,7 @@ contains
                                     mi_u_w, mask_u_w, u_tmp_w, mi_v_w, mask_v_w, a_u_w, a_v_w, &
                                     sh_ds_w, mi_ratio_a_q_w, q_w, mask_q_w, &
                                     halo_x, halo_y, land_w, land_e, land_s, land_n, &
-                                    dt_transport, n_trunc)
+                                    dt_transport, n_trunc, bc)
       !! Flat-impl core of `ice_evp_dynamics`: the EVP subcycle body with
       !! the persistent scratch passed as EXPLICIT-SHAPE dummies (memory:
       !! never assumed-shape into a `do concurrent` feeder — NVHPC would
@@ -528,13 +574,16 @@ contains
       integer, intent(out), optional :: n_trunc
          !! PR 36: count of ice-bearing faces (`mi_u`/`mi_v > m_neglect`)
          !! the FINAL clip touched. `0` when `par%cfl_trunc <= 0`.
+      type(ocean_bc_state_t), intent(in), optional :: bc
+         !! A6 (#164): tripolar north-fold policy.  Absent => no fold (see
+         !! `ice_evp_dynamics`).
 
       integer :: nx_phys, ny_phys, nghost, n
       real(wp) :: dt, tdamp_eff, dt_2tdamp, i_1pdt_t, ec2, i_ec2
       real(wp) :: cdrho, i_cdrhodt, p0_rho, m_neglect, m_neglect2, m_neglect4
       real(wp) :: dt_tr, dt_cum
       logical :: a_face_on, do_trunc_its, do_trunc_fin
-      logical :: wrap_x, wrap_y
+      logical :: wrap_x, wrap_y, fold_n
       integer :: n_out
 
       nx_phys = grid%nx_phys
@@ -545,6 +594,11 @@ contains
       ! a ghost band the neighbour rank owns.
       wrap_x = periodic_x .and. .not. halo_x
       wrap_y = periodic_y .and. .not. halo_y
+      ! A6 (#164): single-rank tripolar north fold for the EVP velocity
+      ! pair + the restart-carried stresses -- `present(bc)` first, since
+      ! `bc%north_fold` is undefined otherwise.
+      fold_n = present(bc)
+      if (fold_n) fold_n = bc%north_fold
 
       ! ---- Scalar precompute (hoisted before the substep loop) ----
       a_face_on = par%a_face_stress
@@ -623,6 +677,21 @@ contains
                                          wrap_x, wrap_y)
       call evp_wrap_corner_impl(str_s, nx + 1, ny + 1, nx_phys, ny_phys, nghost, &
                                 wrap_x, wrap_y)
+      ! A6 (#164): fold the restart-carried stresses ONCE before the
+      ! subcycle loop -- hygiene for a stale restart halo, not a per-step
+      ! necessity (every per-step consumer below is point-local/4-cell-
+      ! corner in already-folded inputs and recomputes its own ghost
+      ! redundantly, see module docstring D6).  `str_d`/`str_t` are T-
+      ! stagger invariants under the fold's 180 deg rotation (sigma_11+
+      ! sigma_22, sigma_11-sigma_22) -- centre fold, no sign flip.  `str_s`
+      ! is the SW-corner shear stress sigma_12, a PSEUDOSCALAR under the
+      ! fold's reflect+rotate (like vorticity) -- `negate=.false.`.
+      if (fold_n) then
+         call fold_north_centre(str_d, nx, ny, nx_phys, ny_phys, nghost)
+         call fold_north_centre(str_t, nx, ny, nx_phys, ny_phys, nghost)
+         call fold_north_corner(str_s, nx + 1, ny + 1, nx_phys, ny_phys, nghost, &
+                                negate=.false.)
+      end if
 
       ! ---- Zero the subcycle-averaged ice->ocean stress (F1: an explicit
       ! device kernel, NOT a bare host whole-array assignment — fxoc/fyoc
@@ -651,6 +720,10 @@ contains
                                             wrap_x, wrap_y)
          call ocean_periodic_wrap_face_y_2d(vi, nx, ny + 1, nx_phys, ny_phys, nghost, &
                                             wrap_x, wrap_y)
+         ! A6 (#164): the tripolar seam's own "halo" -- every subcycle,
+         ! same spot as the periodic wrap it reads AFTER (the fold-row
+         ! projection consumes the already-wrapped periodic image).
+         if (fold_n) call ocean_fold_wrap_face_pair(grid, bc, ui, vi)
 
          call evp_sh_ds_impl(metrics%dx_dyBu, metrics%dy_dxBu, metrics%idxCu, metrics%idyCv, &
                              mask_q_w, ui, vi, sh_ds_w, nx, ny)
@@ -724,6 +797,10 @@ contains
                                          wrap_x, wrap_y)
       call ocean_periodic_wrap_face_y_2d(vi, nx, ny + 1, nx_phys, ny_phys, nghost, &
                                          wrap_x, wrap_y)
+      ! A6 (#164): same refresh, once post-loop -- transport's donor read
+      ! (and a periodic run's own ghost, X3 above) would otherwise be one
+      ! subcycle stale across the seam too.
+      if (fold_n) call ocean_fold_wrap_face_pair(grid, bc, ui, vi)
       if (present(n_trunc)) n_trunc = n_out
 
       ! ---- fxoc/fyoc average + mask (:1415-1441) ----

@@ -782,7 +782,9 @@ the ocean decomposition, bit-identical to one rank (`test_ocean_decomp_bitid_mpi
 `sea_ice` / `sea_ice_transport`), except under a tripolar fold on more than one
 rank (fail-loud at configure until the distributed fold lands); `transport`
 runs across periodic edges and MPI seams; `dynamics` (EVP) allows wall/periodic
-edges only, no tripolar fold, no OBC/tidal/sponge/clamped/Chapman edge. The authoritative knob set lives in the
+edges or a single-rank tripolar fold (`ui`/`vi` + the restart-carried stresses
+folded, A6 #164; `nghost >= 2` required), no OBC/tidal/sponge/clamped/Chapman
+edge, px>1 fold not yet wired (A7 #143). The authoritative knob set lives in the
 `ocean_ice_config_t` / `&ocean_ice_nml` block of `src/core/rdb_config.F90`.
 
 | Capability | ocean | Test |
@@ -802,7 +804,8 @@ edges only, no tripolar fold, no OBC/tidal/sponge/clamped/Chapman edge. The auth
 | Ice initial condition (analytic seeding: seeds a live pack before the first step — no frazil growth required; mass binned into the ITD via `ice%mh_lim`, `enth_ice`/`enth_snow` set from `t_ice`/`s_ice` via the exact `ice_enth_from_ts` inversion) | `&ocean_ice_ic_nml conc_config` = `"zero"` (default, no-op) / `"uniform"` (scalar `h_ice`/`conc`/`h_snow`/`t_ice`/`s_ice`) / `"latitudes"` (SIS2 polar-cap 0/1 step off `geolatT`, needs a non-cartesian grid). v1 analytic-only — file-backed ICs deferred to PR-14 | `test_ocean_ice_init` |
 
 Notes: `transport` and EVP `dynamics` both run under wall or periodic edges
-and across MPI seams. With
+and across MPI seams; `dynamics` additionally runs across a single-rank
+tripolar fold (`test_ocean_ice_evp_fold`, A6 #164). With
 `dynamics=.false.` ice velocity falls back to the ocean-surface-layer sampler;
 with it on, `rdb_ice_evp` writes `ice%u_ice`/`v_ice` from the momentum solve.
 `tdamp < 0` is the SIS2 special case `|tdamp|·dt_slow` for the elastic damping
