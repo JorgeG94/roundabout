@@ -9,7 +9,7 @@ follow the links at the end of each section to the
 [archive](CLOSURE_MATRIX_ARCHIVE.md). Nothing was dropped when this page was
 restructured; the long text moved into the archive.
 
-Last reconciled with the code: **2026-10-06**. The dated change log is in
+Last reconciled with the code: **2026-10-13** (`roquet_rho` added; `roquet_spv` and `roquet_rho` answers changed by the PT→CT fix, see §6). The dated change log is in
 [Appendix A](#appendix-a-change-history).
 
 ## How to read this page
@@ -238,6 +238,13 @@ not tabulated here yet. See the TODO comment at the end of
 | Wright (1997) | available | `eos = "wright"` | Nonlinear. |
 | Roquet et al. (2015) SpV | available | `eos = "roquet_spv"` | TEOS-10 class: 75-term specific-volume fit, ΔS = 24. Not with the `fv_wright` PGF. |
 | Roquet et al. (2015) in-situ density | available | `eos = "roquet_rho"` | TEOS-10 class: 55-term density fit, ΔS = 32 (OM3's `ROQUET_RHO`). An independent fit from `roquet_spv`: they agree to ~1e-3 kg/m³, not bitwise. Not with the `fv_wright` PGF. **Refused with the FV-MOM6 in-situ density PGF** (`&ocean_pgf_nml insitu_density`, the default): that PGF has Wright and SpV kernels only; `insitu_density = .false.` opts into the potential-density integral explicitly. `test_ocean_eos_roquet_rho`, `test_config :: roquet_rho_insitu_pgf_refused` |
+
+Both Roquet variants take the model's potential temperature and practical
+salinity and convert them to CT and SR with the GSW-verified
+`rdb_teos10_convert` (`roquet_model_ct`). **Answers changed 2026-10-13:** the
+old conversion misplaced two polynomial terms. Over SP 0–42, θ −2 to 32 °C and
+p 0/1000/5000 dbar the fix moves CT by up to 2.3e-2 °C and ρ by up to
+4.5e-3 kg/m³. No regression golden selects either variant.
 
 Linear-EOS reference state: `ρ = ρ_0 + β_S·(S−S_ref) − α_T·(T−T_ref)`.
 `α_T` and `β_S` are **dimensional** (kg/m³ per unit). Multiply a fractional
@@ -750,5 +757,12 @@ non-conservative — increment mirrored into the surface heat/salt budget)
 
 Dated reconciliation log, kept verbatim. Read it for the history of why a row
 looks the way it does. It is not needed to use the tables.
+
+- **2026-10-13** — `eos = "roquet_rho"` added (§6). **Answer change for
+  `roquet_spv` and `roquet_rho`:** their PT→CT conversion carried two
+  misplaced polynomial terms; it now uses the GSW-verified
+  `rdb_teos10_convert`. Over SP 0–42, θ −2 to 32 °C, p 0/1000/5000 dbar:
+  max |ΔCT| = 2.3e-2 °C, max |Δρ| = 4.5e-3 kg/m³ (both variants). Pinned by
+  `test_ocean_eos_roquet :: roquet_model_ct_pins_gsw`.
 
 **Full notes in the archive:** [the full dated change log (2026-08-04 to 2026-10-06)](CLOSURE_MATRIX_ARCHIVE.md#a26)

@@ -36,7 +36,7 @@ module test_ocean_eos_roquet
    use rdb_constants, only: wp
    use rdb_eos, only: eos_t, eos_density_point, eos_specvol_derivs, &
                       EOS_VARIANT_LINEAR, EOS_VARIANT_WRIGHT_97, &
-                      EOS_VARIANT_ROQUET_SPV
+                      EOS_VARIANT_ROQUET_SPV, roquet_model_ct, roquet_model_ct_derivs
    use rdb_ocean_eos_compute, only: ocean_eos_compute
    use rdb_ocean_pressure_force, only: OPGF_VARIANT_FV_WRIGHT, OPGF_VARIANT_FV_LITE
    use rdb_teos10_convert, only: ct_from_pt
@@ -61,7 +61,8 @@ contains
                   new_unittest("roquet_default_off_bit_identity", test_default_off), &
                   new_unittest("roquet_fail_loud_fv_wright", test_fail_loud_fv_wright), &
                   new_unittest("roquet_fresh_water_finite", test_fresh_water_finite), &
-                  new_unittest("roquet_3d_fill_matches_point", test_3d_fill_matches_point) &
+                  new_unittest("roquet_3d_fill_matches_point", test_3d_fill_matches_point), &
+                  new_unittest("roquet_model_ct_pins_gsw", test_model_ct_pins_gsw) &
                   ]
    end subroutine collect_ocean_eos_roquet_tests
 
@@ -149,6 +150,40 @@ contains
          if (allocated(error)) return
       end do
    end subroutine test_chain_rule_derivs
+
+   subroutine test_model_ct_pins_gsw(error)
+      !! Regression pin for the misplaced-term PT->CT bug: the conversion
+      !! every Roquet EOS path uses (`roquet_model_ct`, and its derivative
+      !! twin) must reproduce the TEOS-10 GSW Conservative Temperature.
+      !! References, independent of this tree:
+      !!  * three TEOS-10 check-cast points, `CT_from_pt` at (SA, pt) from
+      !!    the GSW toolbox's `gsw_data_v3_0.nc` as shipped (SP = SA/SR);
+      !!  * (SP = 35, pt = 10 degC): the GSW algorithm (McDougall & Barker
+      !!    2011) evaluated in double precision outside Fortran.
+      !! The old polynomial was off by 8.1e-3 degC at (35, 10); the 1e-10
+      !! degC bound is eight orders below that and above round-off.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NP = 4
+      real(wp), parameter :: SA_REF(NP) = [3.450749946569206e+01_wp, 3.470686385140788e+01_wp, &
+                                           6.669904340924572e+00_wp, 35.16504_wp]
+      real(wp), parameter :: PT_REF(NP) = [2.796200000000000e+01_wp, 1.294495427573772e+01_wp, &
+                                           1.004599999999999e+01_wp, 10.0_wp]
+      real(wp), parameter :: CT_REF(NP) = [2.799482733197866e+01_wp, 1.294428999745330e+01_wp, &
+                                           1.050276773530223e+01_wp, 9.989811727177308_wp]
+      real(wp), parameter :: SR_PER_SP = 35.16504_wp/35.0_wp
+      real(wp) :: sr, ct, dct_dpt, dct_dsr
+      integer :: ip
+      do ip = 1, NP
+         ct = roquet_model_ct(PT_REF(ip), SA_REF(ip)/SR_PER_SP)
+         call check(error, abs(ct - CT_REF(ip)) <= 1.0e-10_wp, &
+                    "roquet_model_ct differs from the TEOS-10 GSW Conservative Temperature")
+         if (allocated(error)) return
+         call roquet_model_ct_derivs(PT_REF(ip), SA_REF(ip)/SR_PER_SP, sr, ct, dct_dpt, dct_dsr)
+         call check(error, abs(ct - CT_REF(ip)) <= 1.0e-10_wp, &
+                    "roquet_model_ct_derivs differs from the TEOS-10 GSW Conservative Temperature")
+         if (allocated(error)) return
+      end do
+   end subroutine test_model_ct_pins_gsw
 
    subroutine test_3d_fill_matches_point(error)
       !! Exercises the 3D fill kernel `eos_roquet_spv_impl` ON DEVICE (via

@@ -29,6 +29,13 @@
 ! `ROQ_V00 .. ROQ_V05`.  Everything here is `pure` and device-callable.
 !
 ! Do NOT add state, logging, or anything impure to this file.
+!
+! The PT->CT surface polynomial in `rdb_roq_ts_coeffs` below is one of THREE
+! copies of the same TEOS-10 polynomial: the others are `ct_from_pt` and
+! `ct_from_pt_derivs` in `rdb_teos10_convert` (what `rdb_eos`'s Roquet points
+! call, through `roquet_model_ct`). Change one, change all three:
+! `test_ocean_eos_roquet :: roquet_3d_fill_matches_point` ties this copy to the
+! point routine (1e-9) and `roquet_model_ct_pins_gsw` ties that to TEOS-10.
 
    pure subroutine rdb_roq_ts_coeffs(t_roq, s_roq, sv0_roq, sv1_roq, sv2_roq, sv3_roq)
       !$acc routine seq

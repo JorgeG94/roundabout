@@ -38,8 +38,10 @@ module rdb_teos10_convert
    !! transcribed copy that MISPLACED two terms (the degree-6/7-in-sqrt(SA)
    !! coefficients `123.59576582457964` and `-48.5891069025409`, which
    !! belong in the pure-salinity, y^0 Horner coefficient, landed on the
-   !! y^1/y^2 coefficients instead) -- a ~0.009 degC CT error at
-   !! S=35, theta=10 degC that the two `rdb_eos` copies agreed with each
+   !! y^1/y^2 coefficients instead) -- 8.1e-3 degC of CT error at
+   !! S=35, theta=10 degC, and up to 2.3e-2 degC CT / 4.5e-3 kg/m^3 of
+   !! density over SP 0-42, theta -2..32 degC, p 0-5000 dbar (both
+   !! Roquet variants) -- that the two `rdb_eos` copies agreed with each
    !! other on because both carried the identical mistake, which is why no
    !! regression test caught it until checked against the real GSW
    !! `gsw_ct_from_pt`. Fixed by wiring both branches through this
@@ -70,7 +72,7 @@ module rdb_teos10_convert
       !! -- see the OM3-parity note above). The single copy:
       !! `rdb_eos`'s `ROQ_SR_FACTOR` is defined from it.
 
-   real(wp), parameter :: CT_SFAC = 0.0248826675584615_wp
+   real(wp), parameter, public :: CT_SFAC = 0.0248826675584615_wp
       !! Salinity normalisation, in kg/g: `x2 = CT_SFAC*SA` (SA in g/kg)
       !! makes `x2` dimensionless in the `ct_from_pt` and
       !! `gibbs_pt0_pt0` polynomials. Equals 1/(40·35.16504/35)

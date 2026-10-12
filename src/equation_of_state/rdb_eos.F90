@@ -22,7 +22,7 @@ module rdb_eos
    !! shim in `rdb_ml_eos`.
    use rdb_constants, only: wp, H_VANISHED
    use rdb_grid, only: hgrid_t
-   use rdb_teos10_convert, only: SR_FACTOR, ct_from_pt, ct_from_pt_derivs
+   use rdb_teos10_convert, only: SR_FACTOR, CP0, CT_SFAC, ct_from_pt, ct_from_pt_derivs
    implicit none
    private
 
@@ -340,9 +340,11 @@ module rdb_eos
    real(wp), parameter :: BET012 = 0.5_wp*SPV112*ROQ_R1_S0
    real(wp), parameter :: BET003 = 0.5_wp*SPV103*ROQ_R1_S0
 
-   ! PT->CT conversion (7-term gsw_CT_from_pt surface polynomial, in SR, PT).
-   real(wp), parameter :: ROQ_CP0 = 3991.86795711963_wp
-   real(wp), parameter :: ROQ_CT_SFAC = 0.0248826675584615_wp
+   ! PT->CT conversion constants, aliased from their single copies in
+   ! `rdb_teos10_convert` for the consumers of `rdb_roquet_spv.inc`.
+   real(wp), parameter :: ROQ_CP0 = CP0
+      !! TEOS-10 cp0 (J/(kg K)).
+   real(wp), parameter :: ROQ_CT_SFAC = CT_SFAC
       !! (35.16504/35)/40  [(g/kg)^-1] — normalises SR for the poly.
 
    ! The value half of the SpV table + the SR / CT constants, for the
@@ -354,6 +356,7 @@ module rdb_eos
              SPV300, SPV301, SPV310, SPV311, SPV320, SPV330, SPV400, SPV401, SPV410, SPV420, &
              SPV500, SPV510, SPV600
    public :: ROQ_CP0, ROQ_CT_SFAC, ROQ_R1_S0, ROQ_RDELTAS, ROQ_SR_FACTOR
+   public :: roquet_model_ct, roquet_model_ct_derivs
 
    ! ======================================================================
    ! Roquet et al. (2015) in-situ DENSITY polynomial coefficients
@@ -1079,6 +1082,32 @@ contains
       end do
    end subroutine eos_wright_pgf_column_sweep_impl
 
+   pure function roquet_model_ct(T_pt, S_sp) result(ct)
+      !! Conservative Temperature (degC) of the model's (potential
+      !! temperature degC, practical salinity) state, as every Roquet EOS
+      !! path converts it: SR = SP·ROQ_SR_FACTOR, CT = ct_from_pt(SR, PT)
+      !! (McDougall & Barker 2011). Public so the conversion the EOS
+      !! actually uses can be pinned against the TEOS-10 check value.
+      !$acc routine seq
+      real(wp), intent(in) :: T_pt  !! Potential temperature, p_ref = 0 (degC).
+      real(wp), intent(in) :: S_sp  !! Practical salinity.
+      real(wp) :: ct
+      ct = ct_from_pt(S_sp*ROQ_SR_FACTOR, T_pt)
+   end function roquet_model_ct
+
+   pure subroutine roquet_model_ct_derivs(T_pt, S_sp, SR, CT, dct_dpt, dct_dsr)
+      !! `roquet_model_ct` plus SR and the analytic dCT/dPT (1) and
+      !! dCT/dSR (degC per g/kg) the Roquet points chain-rule through.
+      !$acc routine seq
+      real(wp), intent(in) :: T_pt  !! Potential temperature, p_ref = 0 (degC).
+      real(wp), intent(in) :: S_sp  !! Practical salinity.
+      real(wp), intent(out) :: SR   !! Reference Salinity (g/kg).
+      real(wp), intent(out) :: CT   !! Conservative Temperature (degC).
+      real(wp), intent(out) :: dct_dpt, dct_dsr
+      SR = S_sp*ROQ_SR_FACTOR
+      call ct_from_pt_derivs(SR, T_pt, CT, dct_dpt, dct_dsr)
+   end subroutine roquet_model_ct_derivs
+
    pure subroutine roquet_spv_point(T_pt, S_sp, p, sv, dsv_dt_model, dsv_ds_model)
       !! Fused Roquet et al. (2015) SpV evaluation at a point, in MODEL
       !! variables (potential temperature `T_pt` degC, practical salinity
@@ -1127,13 +1156,11 @@ contains
       real(wp) :: dvdzt0, dvdzt1, dvdzt2, dvdzt3, dsv_dct
       real(wp) :: dvdzs0, dvdzs1, dvdzs2, dvdzs3, dsv_dsa
 
-      SR = S_sp*ROQ_SR_FACTOR
-
-      ! CT = ct_from_pt(SR, PT) + analytic dCT/dPT, dCT/dSR.  The module
-      ! floors its internal x2 at a tiny positive so dct_dsr never hits
-      ! 0/0 at SP=0 (fresh water) -- bit-identical for any real-ocean
-      ! salinity (the floor only bites below ~1e-9 PSU).
-      call ct_from_pt_derivs(SR, T_pt, CT, dct_dpt, dct_dsr)
+      ! SR and CT = ct_from_pt(SR, PT) + analytic dCT/dPT, dCT/dSR, through
+      ! the one conversion both Roquet points share. The module floors its
+      ! internal x2 at a tiny positive so dct_dsr never hits 0/0 at SP=0
+      ! (fresh water) -- bit-identical for any real-ocean salinity.
+      call roquet_model_ct_derivs(T_pt, S_sp, SR, CT, dct_dpt, dct_dsr)
 
       zt = CT
       zs = sqrt(abs(S_sp*ROQ_SR_FACTOR + ROQ_RDELTAS)*ROQ_R1_S0)
@@ -1268,12 +1295,8 @@ contains
       real(wp) :: drdzt0, drdzt1, drdzt2, drdzt3, drho_dct
       real(wp) :: drdzs0, drdzs1, drdzs2, drdzs3, drho_dsa
 
-      SR = S_sp*ROQ_SR_FACTOR
-
-      ! CT = ct_from_pt(SR, PT) + analytic dCT/dPT, dCT/dSR (same shared
-      ! routine roquet_spv_point calls -- see its docstring for the
-      ! floor-at-SP=0 rationale).
-      call ct_from_pt_derivs(SR, T_pt, CT, dct_dpt, dct_dsr)
+      ! Same shared conversion as `roquet_spv_point`.
+      call roquet_model_ct_derivs(T_pt, S_sp, SR, CT, dct_dpt, dct_dsr)
 
       zt = CT
       zs = sqrt(abs(SR + ROQ_RHO_RDELTAS)*ROQ_R1_S0)
@@ -1346,7 +1369,7 @@ contains
       real(wp) :: rho_ts0, rho_ts1, rho_ts2, rho_ts3, rho_0s0, rho_00p
 
       SR = S_sp*ROQ_SR_FACTOR
-      CT = ct_from_pt(SR, T_pt)
+      CT = roquet_model_ct(T_pt, S_sp)
 
       zt = CT
       zs = sqrt(abs(SR + ROQ_RHO_RDELTAS)*ROQ_R1_S0)
