@@ -284,10 +284,12 @@ contains
       call atm_state_configure(cfg, reader, grid, metrics, atm, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "atm_state_configure failed")
       if (allocated(error)) return
+      call map_atm(reader, atm)
 
       tq = 1.37_wp*86400.0_wp
       call ocean_data_input_update_all(reader, tq)
       call atm_state_update(atm, reader, tq)
+      call sync_atm(atm)
 
       do j = 1, NY_PHYS
          do i = 1, NX_PHYS
@@ -302,10 +304,41 @@ contains
          end do
       end do
 
+      call unmap_atm(reader, atm)
       call destroy_cartesian_metrics(metrics)
       call atm%destroy()
       call reader%destroy()
    end subroutine test_time_interp_exactness
+
+   subroutine map_atm(reader, atm)
+      !! Map the reader and the atm state for a device-side update, as the
+      !! engine's `enter_data` does (mem:separate: nothing reaches the
+      !! device implicitly).
+      type(ocean_data_input_t), intent(inout) :: reader
+      type(atm_state_t), intent(inout) :: atm
+      !$acc enter data copyin(reader)
+      call reader%enter_data()
+      !$acc enter data copyin(atm)
+      call atm%enter_data()
+   end subroutine map_atm
+
+   subroutine sync_atm(atm)
+      !! Bring the nine regridded fields back to the host for the asserts
+      !! (component arrays only, never the aggregate).
+      type(atm_state_t), intent(inout) :: atm
+      !$acc update self(atm%tas, atm%huss, atm%uas, atm%vas, atm%psl)
+      !$acc update self(atm%rlds, atm%rsds, atm%prra, atm%prsn)
+   end subroutine sync_atm
+
+   subroutine unmap_atm(reader, atm)
+      !! Inverse of `map_atm`.
+      type(ocean_data_input_t), intent(inout) :: reader
+      type(atm_state_t), intent(inout) :: atm
+      call atm%exit_data()
+      !$acc exit data delete(atm)
+      call reader%exit_data()
+      !$acc exit data delete(reader)
+   end subroutine unmap_atm
 
    pure function field_value(atm, v, i, j) result(val)
       !! Index into the nine named field arrays by VARNAMES order --
@@ -380,10 +413,12 @@ contains
       call atm_state_configure(cfg, reader, grid, metrics, atm, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "atm_state_configure failed")
       if (allocated(error)) return
+      call map_atm(reader, atm)
 
       tq = 1.5_wp*86400.0_wp
       call ocean_data_input_update_all(reader, tq)
       call atm_state_update(atm, reader, tq)
+      call sync_atm(atm)
 
       ll = query_lon_lat(1, 1, metrics)
       expect = coefs(1, 1) + coefs(2, 1)*ll(1) + coefs(3, 1)*ll(2) + coefs(4, 1)*1.5_wp
@@ -391,6 +426,7 @@ contains
                  "file-boundary bracket: tas wrong at the cross-file query")
       if (allocated(error)) return
 
+      call unmap_atm(reader, atm)
       call destroy_cartesian_metrics(metrics)
       call atm%destroy()
       call reader%destroy()
@@ -444,21 +480,25 @@ contains
       call atm_state_configure(cfg, reader, grid, metrics, atm, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "atm_state_configure failed")
       if (allocated(error)) return
+      call map_atm(reader, atm)
 
       tq = 350.0_wp*86400.0_wp
       call ocean_data_input_update_all(reader, tq)
       call atm_state_update(atm, reader, tq)
+      call sync_atm(atm)
       v1 = atm%tas(1 + NGHOST, 1 + NGHOST)
 
       tq = (350.0_wp + 400.0_wp)*86400.0_wp
       call ocean_data_input_update_all(reader, tq)
       call atm_state_update(atm, reader, tq)
+      call sync_atm(atm)
       v2 = atm%tas(1 + NGHOST, 1 + NGHOST)
 
       call check(error, v1 == v2, &
                  "ryf wrap: one period later must reproduce the same wrapped value")
       if (allocated(error)) return
 
+      call unmap_atm(reader, atm)
       call destroy_cartesian_metrics(metrics)
       call atm%destroy()
       call reader%destroy()
@@ -536,11 +576,13 @@ contains
       call atm_state_configure(cfg, reader, grid, metrics, atm, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "atm_state_configure failed")
       if (allocated(error)) return
+      call map_atm(reader, atm)
 
       tq_hours = 5.0_wp
       tq = tq_hours*3600.0_wp
       call ocean_data_input_update_all(reader, tq)
       call atm_state_update(atm, reader, tq)
+      call sync_atm(atm)
 
       ! tas: bracket [3,6]h, weight (5-3)/3 = 0.667 -- exact recovery
       ! proves the STATE reader id/bracket was used.
@@ -557,6 +599,7 @@ contains
                  "cadence asymmetry: rlds (3hr-mean-like axis) wrong")
       if (allocated(error)) return
 
+      call unmap_atm(reader, atm)
       call destroy_cartesian_metrics(metrics)
       call atm%destroy()
       call reader%destroy()
