@@ -307,14 +307,6 @@ contains
          has_error = .true.
       end if
 
-      ! Freezing-point (liquidus) coefficient set.  Belt-and-braces on top
-      ! of the `nml_enum allowed=` list, in the style of the
-      ! `conc_config` check above — and NOT optional: `parse_tfreeze_set`
-      ! deliberately has no default fallback, so a string that reaches
-      ! `eos_apply_tfreeze_set` unrecognised would silently leave the
-      ! sea-ice set in place.  At S = 34.5 the two shipped sets differ by
-      ! ~0.03 degC, which is enough to flip the sign of an ice-shelf
-      ! basal melt rate — a mistyped liquidus must stop the run.
       ! The FV-MOM6 in-situ PCM PGF (the default under a pressure-dependent
       ! EOS) has Wright and Roquet-SpV kernels only. Under roquet_rho it would
       ! silently fall back to the potential-density integral at p_ref, so
@@ -330,6 +322,14 @@ contains
                            "insitu_density=.false. to accept that integral explicitly")
          has_error = .true.
       end if
+      ! Freezing-point (liquidus) coefficient set.  Belt-and-braces on top
+      ! of the `nml_enum allowed=` list, in the style of the
+      ! `conc_config` check above — and NOT optional: `parse_tfreeze_set`
+      ! deliberately has no default fallback, so a string that reaches
+      ! `eos_apply_tfreeze_set` unrecognised would silently leave the
+      ! sea-ice set in place.  At S = 34.5 the two shipped sets differ by
+      ! ~0.03 degC, which is enough to flip the sign of an ice-shelf
+      ! basal melt rate — a mistyped liquidus must stop the run.
       if (parse_tfreeze_set(cfg%ocean%eos%tfreeze_set) == TFREEZE_SET_INVALID) then
          call logger%error("&ocean_eos_nml tfreeze_set = '"// &
                            trim(cfg%ocean%eos%tfreeze_set)// &

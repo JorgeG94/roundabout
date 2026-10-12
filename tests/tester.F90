@@ -29,6 +29,7 @@ program rdb_tests
    use test_ocean_eos, only: ocean_eos_collect => collect_ocean_eos_tests
    use test_ocean_eos_handle, only: ocean_eos_handle_collect => collect_ocean_eos_handle_tests
    use test_ocean_eos_roquet, only: ocean_eos_roquet_collect => collect_ocean_eos_roquet_tests
+   use test_ocean_eos_roquet_rho, only: ocean_eos_roquet_rho_collect => collect_ocean_eos_roquet_rho_tests
    use test_ocean_eos_p_top, only: ocean_eos_p_top_collect => collect_ocean_eos_p_top_tests
    use test_ocean_eos_buoyancy, only: ocean_eos_buoyancy_collect => &
                                       collect_ocean_eos_buoyancy_tests
@@ -285,6 +286,7 @@ program rdb_tests
                 new_testsuite("ocean_eos", ocean_eos_collect), &
                 new_testsuite("ocean_eos_handle", ocean_eos_handle_collect), &
                 new_testsuite("ocean_eos_roquet", ocean_eos_roquet_collect), &
+                new_testsuite("ocean_eos_roquet_rho", ocean_eos_roquet_rho_collect), &
                 new_testsuite("ocean_eos_p_top", ocean_eos_p_top_collect), &
                 new_testsuite("ocean_eos_buoyancy", ocean_eos_buoyancy_collect), &
                 new_testsuite("ocean_linear_eos_knobs", ocean_linear_eos_knobs_collect), &
