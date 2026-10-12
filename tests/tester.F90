@@ -139,6 +139,8 @@ program rdb_tests
                                        collect_ocean_ice_transport_tests
    use test_ocean_ice_fold, only: ocean_ice_fold_collect => collect_ocean_ice_fold_tests
    use test_ocean_ice_evp, only: ocean_ice_evp_collect => collect_ocean_ice_evp_tests
+   use test_ocean_ice_evp_fold, only: ocean_ice_evp_fold_collect => &
+                                      collect_ocean_ice_evp_fold_tests
    use test_ocean_ice_diags, only: ocean_ice_diags_collect => collect_ocean_ice_diags_tests
    use test_ocean_ice_init, only: ocean_ice_init_collect => collect_ocean_ice_init_tests
    use test_ocean_sw_penetration, only: ocean_sw_penetration_collect => collect_ocean_sw_penetration_tests
@@ -359,6 +361,7 @@ program rdb_tests
                 new_testsuite("ocean_ice_transport", ocean_ice_transport_collect), &
                 new_testsuite("ocean_ice_fold", ocean_ice_fold_collect), &
                 new_testsuite("ocean_ice_evp", ocean_ice_evp_collect), &
+                new_testsuite("ocean_ice_evp_fold", ocean_ice_evp_fold_collect), &
                 new_testsuite("ocean_ice_diags", ocean_ice_diags_collect), &
                 new_testsuite("ocean_ice_init", ocean_ice_init_collect), &
                 new_testsuite("ocean_sw_penetration", ocean_sw_penetration_collect), &

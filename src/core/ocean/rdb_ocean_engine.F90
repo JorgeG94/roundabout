@@ -441,11 +441,14 @@ contains
          ! under-reservation `ocean_fold_begin` only warns and grows
          ! mid-run, not a correctness bug, but it does defeat the
          ! CUDA-aware-MPI IPC-handle-reuse this reserve exists for.  EVP
-         ! (`&ocean_ice_nml dynamics`) additionally has no fold of its
-         ! own at any rank count and stays out of scope here.  Lifting
-         ! this for `px > 1` needs both the reserve sizing and a
-         ! `test_ocean_decomp_bitid_mpi` ice+fold case; tracked as a
-         ! follow-up, not done in this PR.
+         ! (`&ocean_ice_nml dynamics`) now ALSO folds (A6, #164) -- `ui`/
+         ! `vi` via `ocean_fold_wrap_face_pair`, the restart-carried
+         ! stresses once before the subcycle loop -- but, like the
+         ! category state, only on `px = 1` (`test_ocean_ice_evp_fold`);
+         ! this refusal still blocks it reaching `px > 1` here, same as
+         ! the category state.  Lifting this for `px > 1` needs both the
+         ! reserve sizing and a `test_ocean_decomp_bitid_mpi` ice+fold
+         ! case (A7); tracked as a follow-up, not done in this PR.
          if (cfg%ocean%ice%enable .and. &
              ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD) then
             call fail("&ocean_ice_nml enable = .true. with north = 'tripolar_fold' on "// &

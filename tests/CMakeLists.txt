@@ -228,6 +228,7 @@ set(RDB_TESTS
     "test_ocean_ice_transport|test_ocean_ice_transport|collect_ocean_ice_transport_tests|ocean_ice_transport|ocean"
     "test_ocean_ice_fold|test_ocean_ice_fold|collect_ocean_ice_fold_tests|ocean_ice_fold|ocean"
     "test_ocean_ice_evp|test_ocean_ice_evp|collect_ocean_ice_evp_tests|ocean_ice_evp|ocean"
+    "test_ocean_ice_evp_fold|test_ocean_ice_evp_fold|collect_ocean_ice_evp_fold_tests|ocean_ice_evp_fold|ocean"
     "test_ocean_ice_restart|test_ocean_ice_restart|collect_ocean_ice_restart_tests|ocean_ice_restart|ocean"
     "test_ocean_ice_diags|test_ocean_ice_diags|collect_ocean_ice_diags_tests|ocean_ice_diags|ocean"
     "test_ocean_ice_init|test_ocean_ice_init|collect_ocean_ice_init_tests|ocean_ice_init|ocean"
