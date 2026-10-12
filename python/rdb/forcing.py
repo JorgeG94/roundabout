@@ -417,7 +417,8 @@ class StratifiedInitialCondition:
     (k=1) at `T_bottom`, surface (k=nz) at `T_surface`.
 
     The Fortran only builds this linear profile when BOTH are non-zero
-    AND `nz > 1` (`rdb_ocean_state.F90:1204`'s `stratify` condition);
+    AND `nz > 1` (the `stratify` condition in `ocean_state_seed_from_cfg`,
+    `src/core/ocean/state/ocean_state/rdb_ocean_state_seed.F90`);
     otherwise it falls back to the UNIFORM `tracer.initial_temperature`
     (`UniformInitialCondition`). Passing `T_surface == T_bottom` (both
     non-zero) is the documented way to get a genuinely uniform T while

@@ -32,7 +32,8 @@ module rdb_barotropic_state
          !! cell is land iff `b < LAND_DEPTH_THRESHOLD` (2 m,
          !! `rdb_constants`).  Fixed by the SSH identity
          !! `eta = sum_k h_layer - b` (`rdb_ocean_diag_fills.F90:157`) and by
-         !! `barotropic%h = b + eta` (`rdb_ocean_state.F90:2482`).
+         !! `barotropic%h = b + eta` (`ocean_state_seed_from_cfg`,
+         !! `src/core/ocean/state/ocean_state/rdb_ocean_state_seed.F90`).
          !!
          !! NOTE the opposite sign of the topographic HEIGHTS used by the
          !! porous-barrier statistics (`rdb_ocean_porous.F90:17-21`) and by

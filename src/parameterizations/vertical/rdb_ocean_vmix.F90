@@ -184,7 +184,7 @@ module rdb_ocean_vmix
          !! `allocated(...)` — tracks GPU device attachment too.
       logical :: kv_from_restart = .false.
          !! PR-2 (bt-rem-from-av-rem review): set by `ocean_state_restart_read`
-         !! (`rdb_ocean_state.F90`) immediately after a restart read, from
+         !! (`ocean_state/rdb_ocean_state_restart.F90`) immediately after a restart read, from
          !! the registry's `entry_found("vmix_kv")` — `.true.` iff THIS
          !! read actually found `vmix_kv` in the checkpoint (an older
          !! checkpoint without the field, or a cold start, both leave it

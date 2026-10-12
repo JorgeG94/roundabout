@@ -608,7 +608,7 @@ contains
       !! lag, by design, mirroring MOM6's `vertvisc_coef` -- and `vmix%kv`
       !! itself was never checkpointed.  Registering `vmix_kv`
       !! (`ocean_state_build_restart_registry`,
-      !! `src/core/ocean/state/rdb_ocean_state.F90`) closes the gap: this
+      !! `src/core/ocean/state/ocean_state/rdb_ocean_state_restart.F90`) closes the gap: this
       !! now runs the FULL round trip (N_AFTER steps post-restart, not
       !! just the at-resume-point snapshot) and is bit-exact end to end.
       type(error_type), allocatable, intent(out) :: error
@@ -622,7 +622,8 @@ contains
       !! `seamount_periodic_zstar_visc_rem_kshear_vertex` docstring for the
       !! mechanism. Fails before the `kd_corner` early-allocation +
       !! restart-registration fix (`rdb_ocean_engine.F90`,
-      !! `rdb_ocean_state.F90`); bit-exact end to end after it.
+      !! `ocean_state_build_restart_registry` in
+      !! `ocean_state/rdb_ocean_state_restart.F90`); bit-exact end to end after it.
       type(error_type), allocatable, intent(out) :: error
       integer :: n_ice
       call run_round_trip(error, "seamount_periodic_zstar_visc_rem_kshear_vertex", 12, 12, n_ice)

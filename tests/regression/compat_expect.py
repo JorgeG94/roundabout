@@ -470,7 +470,7 @@ ROWS = [
     # the root cause (`visc_rem_precompute` reading the PREVIOUS stage's
     # `vmix%kv`, which the restart registry did not carry) is fixed by
     # registering `vmix_kv` (`ocean_state_build_restart_registry`,
-    # `src/core/ocean/state/rdb_ocean_state.F90`) -- `test_engine_bit_exact_
+    # `src/core/ocean/state/ocean_state/rdb_ocean_state_restart.F90`) -- `test_engine_bit_exact_
     # visc_rem` (`tests/test_ocean_restart_engine.F90`) now runs the FULL
     # round trip (not resume-point-only) and is bit-exact.  Row deleted so
     # it does not XPASS.

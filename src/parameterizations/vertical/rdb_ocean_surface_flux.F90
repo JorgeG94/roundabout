@@ -81,7 +81,8 @@
 !!       time-varying (`registry_register_2d`, `optional=.true.`,
 !!       `device_mapped=.true.`) — the assembler's own outputs
 !!       (`Q_heat`/`Q_salt`, `heat_content_massin/massout`) are never
-!!       registered (derived-field rule, `rdb_ocean_state.F90`).
+!!       registered (derived-field rule, `ocean_state_build_restart_registry`
+!!       in `ocean_state/rdb_ocean_state_restart.F90`).
 module rdb_ocean_surface_flux
    use rdb_constants, only: wp
    use rdb_grid, only: hgrid_t

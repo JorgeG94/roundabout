@@ -195,6 +195,9 @@ set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/thermo/rdb_ice_snow.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/coupling/rdb_ice_ocean_coupler.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/rdb_ocean_state.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/ocean_state/rdb_ocean_state_seed.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/ocean_state/rdb_ocean_state_topo.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/ocean_state/rdb_ocean_state_restart.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/rdb_ocean_setup.F90
     # Submodules of rdb_ocean_setup (R2 split, 5.4k-line monolith -> parent +
     # bodies-by-concern): grid/vmix/lateral/bt/bc/cavity configure_ocean_*
