@@ -893,8 +893,10 @@ contains
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
-         if (win_nx < 1 .or. win_ny < 1) then
-            call fail("ocean_data_input: register_2d_filelist win_nx/win_ny must be >= 1", &
+         if (win_nx < 1 .or. win_ny < 1 .or. win_i0 < 1 .or. win_j0 < 1) then
+            call fail("ocean_data_input: register_2d_filelist window must have "// &
+                      "win_i0, win_j0, win_nx, win_ny >= 1 (the far edge is checked "// &
+                      "against each file's dimensions at open)", &
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if

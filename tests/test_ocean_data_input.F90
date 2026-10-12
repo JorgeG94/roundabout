@@ -51,6 +51,7 @@ module test_ocean_data_input
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
    use rdb_grid, only: hgrid_t
+   use rdb_ocean_status, only: OCEAN_STATUS_ERR_SETUP, OCEAN_STATUS_ERR_IO
    use rdb_ocean_data_input, only: ocean_data_input_t, &
                                    ocean_data_input_register_2d, &
                                    ocean_data_input_register_3d, &
@@ -98,6 +99,7 @@ contains
                   new_unittest("data_input_filelist_ryf_wrap", test_filelist_ryf_wrap), &
                   new_unittest("data_input_filelist_oor_mapping", test_filelist_oor_mapping), &
                   new_unittest("data_input_filelist_window", test_filelist_window), &
+                  new_unittest("data_input_filelist_window_bad", test_filelist_window_bad), &
                   new_unittest("data_input_filelist_hold", test_filelist_hold) &
                   ]
    end subroutine collect_ocean_data_input_tests
@@ -1080,6 +1082,50 @@ contains
 
       call reader%destroy()
    end subroutine test_filelist_window
+
+   subroutine test_filelist_window_bad(error)
+      !! A bad `register_2d_filelist` window fails loud, never reads: a
+      !! zero start index is refused before any file is opened
+      !! (`OCEAN_STATUS_ERR_SETUP`), and a window running past the file's
+      !! far edge is refused when the file's dimensions are checked at
+      !! open (`OCEAN_STATUS_ERR_IO`).
+      type(error_type), allocatable, intent(out) :: error
+
+      integer, parameter :: NXF = 32, NYF = 16, NT = 2
+      type(ocean_data_input_t) :: reader
+      type(hgrid_t) :: grid
+      character(len=256) :: fname
+      character(len=256) :: files(1)
+      real(wp) :: t_axis(NT), field(NXF, NYF, NT)
+      integer :: id, ierr
+
+      t_axis = [0.0_wp, 10.0_wp]
+      field = 1.0_wp
+      fname = "tmp_local_artifacts/test_data_input_filelist_window_bad.nc"
+      call write_2d_time_file(trim(fname), NXF, NYF, NT, t_axis, field, &
+                              tunits="days since 1958-01-01 00:00:00")
+      files(1) = fname
+      grid = make_grid(1, 1)
+
+      call reader%init()
+      call ocean_data_input_register_2d_filelist(reader, files, "field", grid, &
+                                                 4, 4, 1, 1, "1958-01-01", id, &
+                                                 win_i0=0, win_j0=1, win_nx=4, win_ny=4, &
+                                                 ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_ERR_SETUP, &
+                 "filelist window: win_i0 = 0 must be refused with ERR_SETUP")
+      call reader%destroy()
+      if (allocated(error)) return
+
+      call reader%init()
+      call ocean_data_input_register_2d_filelist(reader, files, "field", grid, &
+                                                 10, 4, 1, 1, "1958-01-01", id, &
+                                                 win_i0=NXF - 4, win_j0=1, win_nx=10, win_ny=4, &
+                                                 ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_ERR_IO, &
+                 "filelist window past the file's far edge must be refused with ERR_IO")
+      call reader%destroy()
+   end subroutine test_filelist_window_bad
 
    subroutine test_filelist_hold(error)
       !! `register_2d_filelist(hold=.true.)` (C2c-1): a two-record file
