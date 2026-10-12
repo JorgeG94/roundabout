@@ -22,9 +22,12 @@ module rdb_teos10_convert
    !! (or, under the cons_abs convention a later PR adds, the model's SA
    !! tracer taken as-is); there is no separate `sa_from_sp`.
    !!
-   !! All routines are `pure elemental` and `!$acc routine seq` --
+   !! All point routines are `pure elemental` and `!$acc routine seq` --
    !! parameters only, no allocation, fixed iteration counts -- so they
-   !! are device-callable from inside a `do concurrent` kernel.
+   !! are device-callable from inside a `do concurrent` kernel in this
+   !! library. The explicit-shape 1-D `*_impl` kernels below wrap them for
+   !! callers outside the library (a test executable's own kernel cannot
+   !! resolve a library `routine seq` symbol at device link).
    !!
    !! NOT YET WIRED into `rdb_eos`: `roquet_spv_point` / `roquet_rho_point`
    !! carry their OWN copy of a similarly-shaped PT->CT surface
@@ -37,6 +40,7 @@ module rdb_teos10_convert
    private
 
    public :: sr_from_sp
+   public :: ct_from_pt_impl, pt_from_ct_impl, ct_freezing_poly_impl
    public :: sp_from_sr
    public :: ct_from_pt
    public :: pt_from_ct
@@ -280,5 +284,39 @@ contains
       real(wp) :: pt_f
       pt_f = pt_from_ct(sa, ct_freezing_poly(sa, p, sat_frac))
    end function pt_freezing_poly
+
+   pure subroutine ct_from_pt_impl(n, sa, pt, ct)
+      !! `ct = ct_from_pt(sa, pt)` over `n` points, on the device when the
+      !! arrays are mapped.
+      integer, intent(in) :: n
+      real(wp), intent(in) :: sa(n), pt(n)
+      real(wp), intent(out) :: ct(n)
+      integer :: i
+      do concurrent(i=1:n)
+         ct(i) = ct_from_pt(sa(i), pt(i))
+      end do
+   end subroutine ct_from_pt_impl
+
+   pure subroutine pt_from_ct_impl(n, sa, ct, pt)
+      !! `pt = pt_from_ct(sa, ct)` over `n` points.
+      integer, intent(in) :: n
+      real(wp), intent(in) :: sa(n), ct(n)
+      real(wp), intent(out) :: pt(n)
+      integer :: i
+      do concurrent(i=1:n)
+         pt(i) = pt_from_ct(sa(i), ct(i))
+      end do
+   end subroutine pt_from_ct_impl
+
+   pure subroutine ct_freezing_poly_impl(n, sa, p, sat_frac, ct_f)
+      !! `ct_f = ct_freezing_poly(sa, p, sat_frac)` over `n` points.
+      integer, intent(in) :: n
+      real(wp), intent(in) :: sa(n), p(n), sat_frac(n)
+      real(wp), intent(out) :: ct_f(n)
+      integer :: i
+      do concurrent(i=1:n)
+         ct_f(i) = ct_freezing_poly(sa(i), p(i), sat_frac(i))
+      end do
+   end subroutine ct_freezing_poly_impl
 
 end module rdb_teos10_convert

@@ -9,7 +9,8 @@ module test_ocean_teos10_convert
    !! IOC/SCOR/IAPSO (2010) TEOS-10 manual; McDougall & Barker (2011).
    use rdb_constants, only: wp
    use rdb_teos10_convert, only: sr_from_sp, sp_from_sr, ct_from_pt, pt_from_ct, &
-                                 ct_freezing_poly, pt_freezing_poly
+                                 ct_freezing_poly, pt_freezing_poly, ct_from_pt_impl, &
+                                 pt_from_ct_impl, ct_freezing_poly_impl
    use testdrive, only: new_unittest, unittest_type, error_type, check
    implicit none
    private
@@ -234,11 +235,11 @@ contains
       sat_l = SAT_FRAC
 
       !$acc enter data copyin(sa_l, pt_l, p_l, sat_l) create(ct_dev, pt_dev, ctf_dev)
-      do concurrent(i=1:M)
-         ct_dev(i) = ct_from_pt(sa_l(i), pt_l(i))
-         pt_dev(i) = pt_from_ct(sa_l(i), ct_dev(i))
-         ctf_dev(i) = ct_freezing_poly(sa_l(i), p_l(i), sat_l(i))
-      end do
+      ! Library kernels: a test's own kernel cannot device-link a library
+      ! `routine seq` function.
+      call ct_from_pt_impl(M, sa_l, pt_l, ct_dev)
+      call pt_from_ct_impl(M, sa_l, ct_dev, pt_dev)
+      call ct_freezing_poly_impl(M, sa_l, p_l, sat_l, ctf_dev)
       !$acc update self(ct_dev, pt_dev, ctf_dev)
       !$acc exit data delete(sa_l, pt_l, p_l, sat_l, ct_dev, pt_dev, ctf_dev)
 
