@@ -83,6 +83,10 @@ set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/lateral/rdb_ocean_redi.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/lateral/rdb_ocean_horizontal_viscosity.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/lateral/rdb_ocean_hdiff_tracer.F90
+    # Pure TEOS-10 conversion primitives (SR<->SP, CT<->PT, freezing-point
+    # polynomials). No dependency on rdb_eos -- declared before it so a later PR
+    # can wire rdb_eos to call into it.
+    ${CMAKE_CURRENT_SOURCE_DIR}/equation_of_state/rdb_teos10_convert.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/equation_of_state/rdb_eos.F90
     # Ocean-side EOS shim over the C-grid multilayer state — keeps rdb_eos
     # itself free of ocean-state dependencies; depends on rdb_eos +
