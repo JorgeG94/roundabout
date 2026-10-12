@@ -66,6 +66,7 @@ module rdb_ocean_state
                                    ocean_restart_metadata_t
    use rdb_ocean_data_input, only: ocean_data_input_t, ocean_data_input_load_static_2d
    use rdb_ocean_data_forcing, only: ocean_data_forcing_t
+   use rdb_atm_state, only: atm_state_t
 #endif
    use rdb_decomp, only: decomp_t
    use rdb_ocean_vcoord, only: ocean_vcoord_t, parse_ocean_vcoord_type, &
@@ -340,6 +341,16 @@ module rdb_ocean_state
          !! `ocean_state_enter_data`: there is nothing to map.  The
          !! arrays it writes are mapped by `surface_stress` /
          !! `surface_flux`.
+      type(atm_state_t) :: atm
+         !! JRA55-do-style prescribed atmospheric state (OM3 C2c-2a) --
+         !! `tas, huss, uas, vas, psl, rlds, rsds, prra, prsn` on the
+         !! model T-grid. Unlike `data_forcing`, this slot OWNS real
+         !! device-mapped arrays (the nine fields + regrid weights +
+         !! window/scratch buffers), so it DOES carry terms in
+         !! `ocean_state_enter_data`/`exit_data`/`bytes`/`destroy`
+         !! below. Default off (`&ocean_atm_forcing_nml enable =
+         !! .false.`) => every array stays unallocated => bit-identical.
+         !! No consumer yet (the bulk-flux driver + ice seam are C2c-3).
 #endif
       type(ocean_restart_t) :: restart
          !! Restart / checkpoint manager.
@@ -933,7 +944,7 @@ contains
                + this%bc%bytes() &
                + this%sponge%bytes()
 #ifndef RDB_NO_NETCDF
-      nbytes = nbytes + this%data_input%bytes()
+      nbytes = nbytes + this%data_input%bytes() + this%atm%bytes()
 #endif
       if (this%use_multilayer) nbytes = nbytes + this%multilayer%bytes()
    end function ocean_state_bytes
@@ -1063,6 +1074,9 @@ contains
       call profiler_start("ed_data_input", nvtx_only=.true.)
       call state%data_input%enter_data()
       call profiler_stop("ed_data_input")
+      call profiler_start("ed_atm", nvtx_only=.true.)
+      call state%atm%enter_data()
+      call profiler_stop("ed_atm")
 #endif
    end subroutine ocean_state_enter_data
 
@@ -1072,6 +1086,9 @@ contains
       type(ocean_state_t), intent(inout) :: state
 
 #ifndef RDB_NO_NETCDF
+      call profiler_start("xd_atm", nvtx_only=.true.)
+      call state%atm%exit_data()
+      call profiler_stop("xd_atm")
       call profiler_start("xd_data_input", nvtx_only=.true.)
       call state%data_input%exit_data()
       call profiler_stop("xd_data_input")
@@ -1187,6 +1204,7 @@ contains
       this%is_init = .false.
       call this%restart%destroy()
 #ifndef RDB_NO_NETCDF
+      call this%atm%destroy()
       call this%data_input%destroy()
 #endif
       call this%diag%destroy()
