@@ -268,7 +268,7 @@ contains
       type(barotropic_workstate_t) :: bt
       type(ocean_metrics_t) :: metrics
       real(wp) :: h(NZ_STACK), u0(NZ_STACK), u1(NZ_STACK), op(NZ_STACK)
-      real(wp) :: ho, ubar_o, dke, dke_bt
+      real(wp) :: ho, ubar_o, dke, dke_bt, vr
       integer :: n_live, n_closed, i, j, pass
       character(len=200) :: msg
       call stretched_column(h, n_live)
@@ -294,8 +294,9 @@ contains
                do j = 1, NZ_STACK                ! damped near the bed
                   ! u- and v-face arrays differ in shape ((nx+1,ny) vs (nx,ny+1)),
                   ! so each gets the layer value; never copy one into the other.
-                  bt%visc_rem_u(:, :, j) = max(0.05_wp, min(1.0_wp, 0.3_wp + 0.05_wp*real(j - n_closed, wp)))
-                  bt%visc_rem_v(:, :, j) = max(0.05_wp, min(1.0_wp, 0.3_wp + 0.05_wp*real(j - n_closed, wp)))
+                  vr = max(0.05_wp, min(1.0_wp, 0.3_wp + 0.05_wp*real(j - n_closed, wp)))
+                  bt%visc_rem_u(:, :, j) = vr
+                  bt%visc_rem_v(:, :, j) = vr
                end do
             end if
             call apply_bt_correction(bt, ms, 1.0_wp, metrics, skip_h_rescale=.true., &
