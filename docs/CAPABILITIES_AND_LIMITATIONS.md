@@ -375,7 +375,7 @@ Other boundary facts:
 | Winton (2000) two-layer column thermodynamics with enthalpy | Shipped | `&ocean_ice_nml enable`, `nk_ice = 2` | Stefan melt verified to under 1 %. |
 | Multi-category ice thickness distribution (ITD) restore | Shipped | `ncat > 1` | Whole-category shift, not a Lipscomb (2001) remap. SIS2 does not ship one either. |
 | Category ice and snow transport | Shipped | `&ocean_ice_nml transport` | `compress_ice` is not a ridging scheme. |
-| C-grid EVP rheology | Shipped | `&ocean_ice_nml dynamics` | Refused with any open, tidal, sponge, clamped or Chapman edge. Runs across a tripolar fold on one rank only (A6, #164; needs `nghost >= 2`). |
+| C-grid EVP rheology | Shipped | `&ocean_ice_nml dynamics` | Refused with any open, tidal, sponge, clamped or Chapman edge. Runs across a tripolar fold on any `px` (A6, #164; A7, #143; needs `nghost >= 2`). |
 | Frazil bank and uptake | Shipped | – | Checks only the top layer (`k = nz`). |
 | Ice-to-ocean coupling | Shipped, partial | – | Salt is closed (virtual). Heat is closed, including transmitted shortwave. No freshwater or mass coupling. Ice applies no sea-surface loading. |
 | Momentum conserved at fractional cover | Shipped, opt-in | `&ocean_ice_nml a_face_stress` | The default legacy form leaks `(1-a)(tau_a-fxoc)` per face. |
@@ -393,7 +393,7 @@ Other boundary facts:
 - **No ridging.** Under convergence the ice thickens uniformly instead of building a thick ridged tail. The ITD is wrong in a convergent regime, and the EVP ice strength is biased with it. This bites hardest in convergent, near-shore and Antarctic-shear regimes. Porting SIS2's ridging option means vendoring Icepack. It is not a small follow-up.
 - **No melt ponds.** The CSIM4 melting-albedo ramp is a crude stand-in.
 - **Partial coupling.** The ocean's own background shortwave is not weighted by ice cover, and the ocean shortwave is a single broadband. The ice feels the full wind-stress snapshot, not a concentration-weighted drag law, unless `a_face_stress` is on.
-- **Ice cannot sit under a tripolar fold on more than one rank.** On one rank, the category state and `dynamics` (EVP) both fold across the seam.
+- **Ice under a tripolar fold on `px > 1` folds once per field group.** The six category-state fields fold as six separate exchanges per site (batching them into one is a later performance step), and EVP adds one stress group plus one velocity-pair group per subcycle on the north rank row, so that row waits on latency the others do not.
 
 **Full notes in the archive:** [overview, line counts and the full limits list](CAPABILITIES_ARCHIVE.md#a31)
 
@@ -464,11 +464,11 @@ Under `z_fixed` plus a cavity, melt and top drag are accepted, and `kappa_h /= 0
 | Feature | Status | Key knob | Limits |
 |---|---|---|---|
 | Rectangular domain decomposition | Shipped | `&mpi_nml px`, `py` | Left at `1 x 1` on several ranks, the engine picks the split. It is north-south under a tripolar fold. An explicit `px*py` that does not match the rank count is refused. |
-| Bit-identity with the serial run | Shipped | – | Checked on sixteen configurations and every `px x py` split of 1, 2 and 4 ranks, under both split schemes. |
+| Bit-identity with the serial run | Shipped | – | Checked on eighteen configurations and every `px x py` split of 1, 2 and 4 ranks, under both split schemes. |
 | Tripolar north fold | Shipped | `north = "tripolar_fold"` | East-west splits (`px > 1`) must be asked for explicitly. |
 | Per-rank file readers | Shipped | – | Supergrid, bathymetry, z-level T/S initial condition and `&ocean_dataovr_nml` forcing are windowed per rank. |
 | Console totals | Shipped | `&ocean_diag_nml reproducing_sums` (default on) | The status block prints the same digits on any rank count. |
-| Sea ice | Shipped | – | Bit-identical, except under a tripolar north fold (refused). |
+| Sea ice | Shipped | – | Bit-identical on every split, including under a tripolar north fold with `px > 1` (category state, flux diagnostics, EVP velocity and stresses and the blended stress all cross the distributed fold; covered by the `sea_ice_fold` decomposition cases, write/resume leg included). |
 | Per-rank restart | Shipped | – | Resumes only on the same decomposition. |
 | Restart on a different rank count | **Not implemented** | – | – |
 | Parallel (collective) NetCDF | **Not implemented** | – | Output is per rank, merged offline by `tools/merge_output.py`. |
@@ -483,7 +483,6 @@ Each check is fail-loud on every rank and names the knob. The check keys on the 
 |---|---|
 | `&ocean_cavity_dyn_nml enable` (and the melt / top-drag paths that require it) | the grounding statistics are global reductions the configure does not take; `draft_config="file"` has no windowed reader |
 | `&ocean_wetdry_nml enable` | the wet-mask / outflow-limiter halo exchange is not implemented |
-| `&ocean_ice_nml enable` with a tripolar north fold | the single-rank fold ships (the ice category state and the EVP velocities are folded across the north seam), but the multi-rank ice fold is not wired: the fold-exchange reserve is not sized for the ice group and there is no decomposition bit-identity case for it (#143) |
 | `&ocean_bc_nml` `'chapman'` edges | the edge-uniform eta target is a per-rank partial mean |
 | `&ocean_vmix_nml dt_tracer_advect_ratio > 1` | the windowed drain's halo is not wired |
 | `&ocean_bulk_flux_nml enable` (the atm-driven bulk forcing, OM3 C2c-3a) | its surface stress runs through the centre halo, the seam refresh and the tripolar fold, and it has no decomposition bit-identity case yet; the 1 vs 2x2 gate is part of C2c-3b |

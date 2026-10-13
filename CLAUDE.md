@@ -301,7 +301,7 @@ non-hydrostatic on the C-grid, per-layer Orlanski
 phase-speed radiation + file-backed boundary-data backends (Flather +
 zero-gradient anomaly and the constant backend ship today), MPI
 per-feature multi-rank support for the
-single-rank closures (wet/dry, sea ice under the fold, the ice-shelf cavity, Chapman
+single-rank closures (wet/dry, the ice-shelf cavity, Chapman
 edges, windowed tracer-advect drain), restarts across a rank-count change,
 a bit-identical barotropic march-in — the C-grid MPI halo itself ships,
 bit-identical to one rank.

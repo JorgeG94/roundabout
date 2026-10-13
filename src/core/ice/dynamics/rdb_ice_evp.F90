@@ -91,8 +91,7 @@ module rdb_ice_evp
    !!       (SIS2 has no lumped mode) — see `ice_cell_concentration_impl`
    !!       in `rdb_ice_state` (shared with the tau coupler).
    !!   D6  domain edges wall-or-periodic, OR a single-rank tripolar north
-   !!       fold (A6, #164; no OBC, px>1 ice+fold stays refused at
-   !!       configure, A7/#143).  `ice_evp_step` flips `land_n` off
+   !!       fold (A6, #164; no OBC; px>1 ice+fold ships, A7/#143).  `ice_evp_step` flips `land_n` off
    !!       (`bc%has_north .and. .not. bc%periodic_y .and. .not.
    !!       bc%north_fold`) so the fold row is no longer walled, and
    !!       threads `bc` through `ice_evp_dynamics`/`_impl` (an OPTIONAL
@@ -100,17 +99,16 @@ module rdb_ice_evp
    !!       pre-A6 call compiles and runs unchanged).  `ui`/`vi` (Cu/Cv,
    !!       true-vector) are folded with `ocean_fold_wrap_face_pair`
    !!       (`rdb_ocean_fold_apply`, the general form of
-   !!       `ocean_fold_wrap_stress`'s body -- same px dispatch, so A7
-   !!       inherits the px>1 path for free) right after EVERY periodic
+   !!       `ocean_fold_wrap_stress`'s body -- same px dispatch, so
+   !!       the px>1 path is the distributed exchange) right after EVERY periodic
    !!       wrap of the pair: top of every subcycle and once post-loop
    !!       (transport's donor read is otherwise one subcycle stale across
    !!       the seam, pre-existing for a periodic run too -- tracked, not
    !!       fixed here).  The restart-carried stresses (`str_d`/`str_t`,
    !!       T-stagger, invariant under the fold's 180 deg rotation;
    !!       `str_s`, SW-corner, a pseudoscalar like vorticity) are folded
-   !!       ONCE before the subcycle loop (`fold_north_centre`/
-   !!       `fold_north_corner(negate=.false.)`, direct from
-   !!       `rdb_ocean_fold`) -- hygiene for a stale restart halo; every
+   !!       ONCE before the subcycle loop as one grouped, px-aware fold
+   !!       (`ocean_fold_wrap_evp_stress`, copy, no sign flip) -- hygiene for a stale restart halo; every
    !!       per-step consumer below is point-local/4-cell-corner in
    !!       already-folded inputs and recomputes its own ghost
    !!       redundantly, same as the multi-rank halo story two sentences
@@ -217,8 +215,8 @@ module rdb_ice_evp
    use rdb_ocean_boundary_types, only: ocean_bc_state_t
    use rdb_ocean_halo, only: ocean_halo_face_x, ocean_halo_face_y, &
                              ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y
-   use rdb_ocean_fold, only: fold_north_centre, fold_north_corner
-   use rdb_ocean_fold_apply, only: ocean_fold_wrap_face_pair
+   use rdb_ocean_fold_apply, only: ocean_fold_wrap_face_pair, &
+                                   ocean_fold_wrap_evp_stress
    implicit none
    private
 
@@ -686,12 +684,8 @@ contains
       ! sigma_22, sigma_11-sigma_22) -- centre fold, no sign flip.  `str_s`
       ! is the SW-corner shear stress sigma_12, a PSEUDOSCALAR under the
       ! fold's reflect+rotate (like vorticity) -- `negate=.false.`.
-      if (fold_n) then
-         call fold_north_centre(str_d, nx, ny, nx_phys, ny_phys, nghost)
-         call fold_north_centre(str_t, nx, ny, nx_phys, ny_phys, nghost)
-         call fold_north_corner(str_s, nx + 1, ny + 1, nx_phys, ny_phys, nghost, &
-                                negate=.false.)
-      end if
+      ! A7 (#143): one grouped, px-aware fold (`ocean_fold_wrap_evp_stress`).
+      if (fold_n) call ocean_fold_wrap_evp_stress(grid, bc, str_d, str_t, str_s)
 
       ! ---- Zero the subcycle-averaged ice->ocean stress (F1: an explicit
       ! device kernel, NOT a bare host whole-array assignment — fxoc/fyoc

@@ -93,6 +93,7 @@ module rdb_ocean_fold_exchange
    public :: ocean_fold_exchange_init
    public :: ocean_fold_exchange_destroy
    public :: ocean_fold_exchange_reserve
+   public :: ocean_fold_exchange_grow_count
    public :: ocean_fold_is_distributed
    public :: ocean_fold_begin
    public :: ocean_fold_pack
@@ -191,6 +192,8 @@ module rdb_ocean_fold_exchange
       !! Send / receive buffers, `fx_cap` values per peer region.
    integer :: fx_cap = 0
       !! Per-peer capacity (values).
+   integer :: fx_grow_count = 0
+      !! Mid-run regrows (`ocean_fold_begin` finding the reserve too small).
    integer :: fx_slab_cap = 0
       !! Per-peer capacity in (row x layer) slabs of `fx_nmax` entries.
    type(request_t), allocatable :: fx_reqs(:)
@@ -232,6 +235,7 @@ contains
       if (present(ierr)) ierr = OCEAN_STATUS_OK
       if (fx_initialised) call ocean_fold_exchange_destroy()
 
+      fx_grow_count = 0
       fx_ng = nghost
       fx_nxl = decomp%nx_local
       fx_nyl = decomp%ny_local
@@ -323,6 +327,14 @@ contains
       if (nslab > fx_slab_cap) call grow_buffers(nslab)
    end subroutine ocean_fold_exchange_reserve
 
+   pure function ocean_fold_exchange_grow_count() result(n)
+      !! Number of mid-run buffer regrows since init (an under-sized
+      !! `ocean_fold_exchange_reserve`).  A correctly reserved run keeps this
+      !! at 0, so a test can turn the regrow warning into a failure.
+      integer :: n
+      n = fx_grow_count
+   end function ocean_fold_exchange_grow_count
+
    pure function ocean_fold_is_distributed() result(flag)
       !! True iff this rank folds through the exchange (`px > 1` and a
       !! folded north edge on this rank).  False on every `px = 1` run and
@@ -365,6 +377,7 @@ contains
          call logger%warning("ocean_fold_begin: growing the fold buffers mid-run ("// &
                              to_string(fx_slab_cap)//" -> "//to_string(nslab)// &
                              " slabs). Call ocean_fold_exchange_reserve at init.")
+         fx_grow_count = fx_grow_count + 1
          call grow_buffers(nslab)
       end if
       fx_poff = 0

@@ -88,6 +88,16 @@
 !!     constant wind, with the double-Drake land reaching the fold line; its
 !!     x splits (2x1, 4x1 = 8/8/7/7, 2x2) fold through the distributed fold
 !!     exchange, its 1xN splits through the local kernels.
+!!   * sea_ice_fold / sea_ice_fold_nodyn (A7, #143) -- sea ice (thermo + ITD +
+!!     EVP + CAS transport + the stress blend) on the tripolar cap, so the
+!!     category state, the flux diagnostics, the EVP ice velocity and
+!!     stresses and the blended stress all fold across the north seam.  The
+!!     serial reference must carry nonzero ice to the seam with an exactly
+!!     antisymmetric v_ice fold row, every rank layout (2x1, 4x1 = 8/8/7/7,
+!!     2x2 through the distributed fold; 1xN through the local kernels) must
+!!     equal it bitwise with zero fold-buffer regrows, and the write/resume
+!!     leg runs under fold + MPI.  `_nodyn` has `dynamics = .false.` so a
+!!     thermo / transport seam bug is separable from an EVP one.
 !!   * visc_rem_chain — the island_basin topology with the visc_rem chain
 !!     live (`&ocean_vdiff_nml hvel_mom6 + bbl_glue`, `&ocean_bt_nml
 !!     visc_rem_chain`) AND the frhat port's `frhat_scheme = "hybrid"`
@@ -133,6 +143,7 @@ program test_ocean_decomp_bitid_mpi
    use rdb_console_stats, only: console_stats_t, conservation_budget_t
    use rdb_ocean_console_stats, only: ocean_console_stats_report, ocean_budget_stage_weight
    use rdb_ocean_dyn, only: SPLIT_SCHEME_PRED_CORR
+   use rdb_ocean_fold_exchange, only: ocean_fold_exchange_grow_count
 #ifndef RDB_NO_NETCDF
    use rdb_io_netcdf, only: nc_create_file, nc_close, nc_def_dim, nc_def_var_2d, &
                             nc_def_var_3d, nc_enddef, nc_put_var_2d, rdb_def_var_1d, &
@@ -165,6 +176,8 @@ program test_ocean_decomp_bitid_mpi
       integer :: n = 0
       type(field_t) :: f(MAXF)
       integer :: io = 0, jo = 0, nxl = 0, nyl = 0, ng = 0
+      integer :: ngrow = 0
+         !! Mid-run regrows of the fold-exchange buffers (must stay 0).
       type(conservation_budget_t) :: bud
          !! Closed-budget mass/salt/heat out+src totals at the final step —
          !! EFP-reduced (`reproducing_sums`, default on), so these must be
@@ -175,7 +188,7 @@ program test_ocean_decomp_bitid_mpi
    integer :: rank, nprocs, n_fail, total_fail, ic
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(16) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(18) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -185,7 +198,8 @@ program test_ocean_decomp_bitid_mpi
                                                 "file_readers_zstar_full", &
                                                 "file_readers_zstar", "sea_ice", &
                                                 "sea_ice_transport", "tripolar", &
-                                                "visc_rem_chain"]
+                                                "visc_rem_chain", "sea_ice_fold", &
+                                                "sea_ice_fold_nodyn"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -234,7 +248,7 @@ contains
       character(len=:), allocatable :: nml
       character(len=*), parameter :: NL = new_line("a")
       character(len=16) :: spx, spy, snx, sny
-      character(len=:), allocatable :: common, bt_extra
+      character(len=:), allocatable :: common, bt_extra, ice_dyn
 
       ! The visc_rem chain rides on the common &ocean_bt_nml group (one
       ! group per namelist).  D1 follow-up (2026-10): the weighted
@@ -243,6 +257,9 @@ contains
       ! z* open-step case under bbl_glue -- so both cases below now
       ! exercise `visc_rem_chain` (producer + bt_rem_from_av_rem + wt_u
       ! forcing + renorm_visc_rem, UNIFORM BT-correction fold) instead.
+      ice_dyn = "dynamics = .true., evp_sub_steps = 30, cfl_trunc = 0.01, "// &
+                "project_ci = .true., "
+      if (label == "sea_ice_fold_nodyn") ice_dyn = "dynamics = .false., "
       bt_extra = ""
       if (label == "visc_rem_zstar") bt_extra = ", visc_rem_chain = .true."
       if (label == "visc_rem_chain") then
@@ -519,6 +536,39 @@ contains
                "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.7 /"//NL// &
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'wall' /"//NL
+      case ("sea_ice_fold", "sea_ice_fold_nodyn")
+         ! Sea ice on the tripolar cap (A7, #143): the `tripolar` grid / land /
+         ! fold + the `sea_ice_transport` ice block (cold column just above
+         ! the liquidus, partial uniform cover, CFL clip live, `project_ci`,
+         ! 2 advective substeps), under an oblique wind so the ice drifts
+         ! into the fold row.  `_nodyn` switches the EVP off.
+         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
+               "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
+               "&time_nml t_end = 86400.0, dt_fixed = 900.0 /"//NL// &
+               "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
+               "&tracer_nml initial_temperature = -1.83, initial_salinity = 34.0, "// &
+               "T_init_surface = -1.82, T_init_bottom = -1.835 /"//NL// &
+               "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"' /"//NL// &
+               "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
+               "smag_ah = .true. /"//NL// &
+               "&ocean_diag_nml enabled = .false. /"//NL// &
+               "&grid_nml nx = 30, ny = 24, nghost = 3, dx = 12.0, dy = 1.0 /"//NL// &
+               "&ocean_grid_nml grid_config = 'tripolar', lon_west = 0.0, lat_south = 59.0, "// &
+               "phi_join = 74.0, lon_pole = 0.0, rad_earth = 6.378e6, "// &
+               "coriolis_scheme = 'planetary' /"//NL// &
+               "&physics_nml wind_stress_x = 0.1, wind_stress_y = 0.04 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'double_drake', max_depth = 1000.0, "// &
+               "slope_scale = 0.2 /"//NL// &
+               "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -100.0 /"//NL// &
+               "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL// &
+               "&ocean_ice_nml enable = .true., ncat = 5, nk_ice = 2, air_temp = -20.0, "// &
+               "restore_lambda = 20.0, sw_down = 0.0, "// &
+               ice_dyn// &
+               "transport = .true., adv_substeps = 2 /"//NL// &
+               "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.7 /"//NL// &
+               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+               "north = 'tripolar_fold' /"//NL
       case default
          error stop "test_ocean_decomp_bitid_mpi: unknown case"
       end select
@@ -689,6 +739,7 @@ contains
       s%nxl = engine%grid%nx_phys
       s%nyl = engine%grid%ny_phys
       s%ng = engine%grid%nghost
+      s%ngrow = ocean_fold_exchange_grow_count()
    end subroutine take_snapshot
 
 #ifndef RDB_NO_NETCDF
@@ -881,6 +932,60 @@ contains
       end do
    end subroutine compare
 
+   pure logical function is_ice_fold_case(label)
+      !! The sea-ice-on-the-tripolar-cap cases (A7).
+      character(len=*), intent(in) :: label
+      is_ice_fold_case = label == "sea_ice_fold" .or. label == "sea_ice_fold_nodyn"
+   end function is_ice_fold_case
+
+   subroutine check_ice_seam(ref, tag)
+      !! On the SERIAL reference of an ice-on-fold case: (1) ice must have
+      !! reached the seam (nonzero `ice_m_ice` in the last physical row, and
+      !! under EVP nonzero `ice_v_ice` in the top rows), else bit-identity of
+      !! the folds would be vacuous; (2) the `ice_v_ice` fold row must be
+      !! exactly antisymmetric under the 180-degree cap rotation
+      !! (`v(i) + v(2*ng + nx + 1 - i) == 0`, Murray 1996 bipolar fold).
+      !! Bitwise equality with the reference then carries both properties to
+      !! every rank layout.  Failures count into `n_fail`.
+      type(snap_t), intent(in) :: ref
+      character(len=*), intent(in) :: tag
+      integer :: e, i, im, jf, nbad_anti
+      real(wp) :: seam_mice, seam_v
+      logical :: have_v
+
+      seam_mice = 0.0_wp
+      seam_v = 0.0_wp
+      nbad_anti = 0
+      have_v = .false.
+      jf = ref%ng + ref%nyl + 1
+      do e = 1, ref%n
+         if (trim(ref%f(e)%tag) == "ice_m_ice") then
+            seam_mice = maxval(abs(ref%f(e)%a(ref%ng + 1:ref%ng + ref%nxl, &
+                                              ref%ng + ref%nyl, :)))
+         else if (trim(ref%f(e)%tag) == "ice_v_ice") then
+            have_v = .true.
+            seam_v = maxval(abs(ref%f(e)%a(ref%ng + 1:ref%ng + ref%nxl, jf - 3:jf, 1)))
+            do i = ref%ng + 1, ref%ng + ref%nxl
+               im = 2*ref%ng + ref%nxl + 1 - i
+               if (ref%f(e)%a(i, jf, 1) + ref%f(e)%a(im, jf, 1) /= 0.0_wp) nbad_anti = nbad_anti + 1
+            end do
+         end if
+      end do
+      if (.not. (seam_mice > 0.0_wp)) then
+         write (*, '(3a,i0)') "FAIL ", tag, ": no ice reaches the fold seam, rank ", rank
+         n_fail = n_fail + 1
+      end if
+      if (have_v .and. .not. (seam_v > 0.0_wp)) then
+         write (*, '(3a,i0)') "FAIL ", tag, ": v_ice is zero at the fold seam, rank ", rank
+         n_fail = n_fail + 1
+      end if
+      if (nbad_anti > 0) then
+         write (*, '(3a,i0,a,i0)') "FAIL ", tag, ": v_ice fold row not antisymmetric, cells=", &
+            nbad_anti, " rank ", rank
+         n_fail = n_fail + 1
+      end if
+   end subroutine check_ice_seam
+
    pure logical function carried_tendency(tag)
       !! The `pred_corr` predictor's carried viscous tendency
       !! (`hvisc_du_visc` / `hvisc_dv_visc`) is restart state -- the
@@ -920,6 +1025,8 @@ contains
          return
       end if
 
+      if (is_ice_fold_case(label)) call check_ice_seam(ref, trim(label)//"/"//scheme)
+
       nbud = 0
       do px = nprocs, 1, -1
          if (mod(nprocs, px) /= 0) cycle
@@ -930,9 +1037,12 @@ contains
             glob = [1, 0, 1]
          else
             call compare(dec, ref, nbad, nfin, trim(tag))
+            ! A7: the fold-exchange reserve must cover every ice group.
+            if (is_ice_fold_case(label)) nbad = nbad + dec%ngrow
             glob = [nbad, nfin, 0]
 #ifndef RDB_NO_NETCDF
-            if ((label == "sea_ice" .or. label == "sea_ice_transport") .and. &
+            if ((label == "sea_ice" .or. label == "sea_ice_transport" .or. &
+                 is_ice_fold_case(label)) .and. &
                 (nprocs/px == 1 .or. px == nprocs/px) .and. nprocs > 1) then
                ! 4x1 and 2x2 at np = 4 (and 2x1 at np = 2).
                call check_resume_leg(case_nml(label, scheme, px, nprocs/px), dec, &
@@ -1133,13 +1243,8 @@ contains
       !! the engine auto-factors and which `validate_config`'s px*py fences
       !! cannot see), so the engine-side gate is the one exercised.
       character(len=*), parameter :: NL = new_line("a")
-      character(len=*), parameter :: ICE_FOLD = "&ocean_ice_nml enable = .true. /"//NL// &
-                                     "&ocean_grid_nml grid_config = 'tripolar' /"//NL// &
-                                     "&ocean_bc_nml west = 'periodic', east = 'periodic', "// &
-                                     "north = 'tripolar_fold' /"
-      character(len=160), parameter :: KNOBS(4) = [character(len=160) :: &
+      character(len=160), parameter :: KNOBS(3) = [character(len=160) :: &
                                                    "&ocean_wetdry_nml enable = .true. /", &
-                                                   ICE_FOLD, &
                                                    "&ocean_cavity_dyn_nml enable = .true. /", &
                                                    "&ocean_bc_nml east = 'chapman' /"]
       type(ocean_engine_t) :: engine

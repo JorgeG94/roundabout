@@ -36,11 +36,12 @@ module rdb_ocean_fold_apply
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_ocean_boundary_types, only: ocean_bc_state_t
    use rdb_ocean_fold, only: fold_north_centre, fold_north_u_face, &
-                             fold_north_v_face
+                             fold_north_v_face, fold_north_corner
    use rdb_ocean_fold_exchange, only: ocean_fold_is_distributed, ocean_fold_begin, &
                                       ocean_fold_pack, ocean_fold_exchange, &
                                       ocean_fold_unpack, ocean_fold_end, &
-                                      FOLD_STAG_T, FOLD_STAG_U, FOLD_STAG_V
+                                      FOLD_STAG_T, FOLD_STAG_U, FOLD_STAG_V, &
+                                      FOLD_STAG_CORNER
    implicit none
    private
 
@@ -52,6 +53,7 @@ module rdb_ocean_fold_apply
    public :: ocean_fold_wrap_face_pair
    public :: ocean_fold_wrap_visc_rem
    public :: ocean_fold_wrap_centre_flat
+   public :: ocean_fold_wrap_evp_stress
 
 contains
 
@@ -408,5 +410,53 @@ contains
 
       call fold_north_centre(fld, nxt, nyt, nz, grid%nx_phys, grid%ny_phys, grid%nghost)
    end subroutine ocean_fold_wrap_centre_flat
+
+   subroutine ocean_fold_wrap_evp_stress(grid, bc, str_d, str_t, str_s, device_resident)
+      !! Fold the EVP internal-stress invariants across the north seam as
+      !! ONE exchange group: `str_d = sigma_11 + sigma_22` and
+      !! `str_t = sigma_11 - sigma_22` (T stagger) and `str_s = sigma_12`
+      !! (SW corner).  The fold is a 180 degree rotation of the cap (Murray
+      !! 1996), under which the trace, the deviatoric normal stress and the
+      !! shear stress of a rank-2 tensor are all invariant (both axes flip,
+      !! so sigma_12 keeps its sign; Hunke and Dukowicz 1997 for the
+      !! stress variables) -- every field is a COPY, `negate = .false.`.
+      !! `px = 1`: the three local kernels verbatim (bit-identical).
+      !! No-op when `bc%north_fold` is `.false.`.
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_bc_state_t), intent(in) :: bc
+      real(wp), intent(inout) :: str_d(grid%nx_total, grid%ny_total)
+         !! T-stagger stress trace.
+      real(wp), intent(inout) :: str_t(grid%nx_total, grid%ny_total)
+         !! T-stagger deviatoric normal stress.
+      real(wp), intent(inout) :: str_s(grid%nx_total + 1, grid%ny_total + 1)
+         !! Corner-stagger shear stress.
+      logical, intent(in), optional :: device_resident
+         !! px > 1 only: `.false.` for host-side calls.
+
+      integer :: nxt, nyt
+
+      if (.not. bc%north_fold) return
+      nxt = grid%nx_total
+      nyt = grid%ny_total
+
+      if (ocean_fold_is_distributed()) then
+         call ocean_fold_begin(3*grid%nghost + 1)
+         call ocean_fold_pack(str_d, nxt, nyt, FOLD_STAG_T, device_resident)
+         call ocean_fold_pack(str_t, nxt, nyt, FOLD_STAG_T, device_resident)
+         call ocean_fold_pack(str_s, nxt + 1, nyt + 1, FOLD_STAG_CORNER, device_resident)
+         call ocean_fold_exchange(device_resident)
+         call ocean_fold_unpack(str_d, nxt, nyt, FOLD_STAG_T, .false., device_resident)
+         call ocean_fold_unpack(str_t, nxt, nyt, FOLD_STAG_T, .false., device_resident)
+         call ocean_fold_unpack(str_s, nxt + 1, nyt + 1, FOLD_STAG_CORNER, .false., &
+                                device_resident)
+         call ocean_fold_end()
+         return
+      end if
+
+      call fold_north_centre(str_d, nxt, nyt, grid%nx_phys, grid%ny_phys, grid%nghost)
+      call fold_north_centre(str_t, nxt, nyt, grid%nx_phys, grid%ny_phys, grid%nghost)
+      call fold_north_corner(str_s, nxt + 1, nyt + 1, grid%nx_phys, grid%ny_phys, &
+                             grid%nghost, negate=.false.)
+   end subroutine ocean_fold_wrap_evp_stress
 
 end module rdb_ocean_fold_apply

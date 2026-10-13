@@ -30,7 +30,7 @@ contains
                                VCOORD_ZSTAR_FULL, VCOORD_Z_FIXED, VCOORD_RHO, VCOORD_HYCOM, &
                                H_VANISHED
       use rdb_ocean_boundary_types, only: ocean_bc_type_from_string, OBC_PERIODIC, OBC_WALL, &
-                                          OBC_INVALID
+                                          OBC_INVALID, OBC_TRIPOLAR_FOLD
       use rdb_coriolis_adv, only: parse_pv_variant, pv_variant_is_implemented, &
                                   parse_pv_adv_scheme, pv_adv_scheme_is_implemented, &
                                   pv_adv_required_nghost
@@ -2854,17 +2854,10 @@ contains
       ! ---- Sea-ice: whole-slot envelope (applies to enable=.true.) ----
       ! The sea ice runs on the ocean's decomposition: the category state,
       ! the EVP ice velocity and the blended surface stress are
-      ! halo-exchanged (`engine_step_ice`).  The ice fields are NOT folded
-      ! across a tripolar north seam, so a folded grid stays single-rank.
-      ! (The engine repeats this on the ACTUAL rank count, which an unset
-      ! process grid does not show here.)
+      ! halo-exchanged (`engine_step_ice`) and, on a tripolar north fold,
+      ! folded across the seam through the same px-aware fold dispatcher
+      ! as the ocean state (A7, #143), so a folded grid runs on any px.
       if (cfg%ocean%ice%enable) then
-         if (cfg%px*cfg%py > 1 .and. trim(cfg%ocean%bc%north) == "tripolar_fold") then
-            call logger%error("&ocean_ice_nml enable=.true. with north='tripolar_fold' "// &
-                              "is single-rank (px*py = 1): the ice fields are not "// &
-                              "folded across the north seam")
-            has_error = .true.
-         end if
          ! Sea ice is tuned for global, ice-covered basins — not for
          ! regional/coastal runs.  It runs every outer step and is NOT
          ! performance-tuned; expect a large throughput hit.  Warn loudly
@@ -2939,18 +2932,20 @@ contains
              .not. any(ocean_bc_type_from_string(cfg%ocean%bc%south) == &
                        [OBC_WALL, OBC_PERIODIC]) .or. &
              .not. any(ocean_bc_type_from_string(cfg%ocean%bc%north) == &
-                       [OBC_WALL, OBC_PERIODIC])) then
+                       [OBC_WALL, OBC_PERIODIC, OBC_TRIPOLAR_FOLD])) then
             call logger%error("&ocean_ice_nml dynamics=.true. requires every "// &
-                              "&ocean_bc_nml edge to be 'wall' or 'periodic' (v1: no "// &
+                              "&ocean_bc_nml edge to be 'wall' or 'periodic' (the north "// &
+                              "edge may also be 'tripolar_fold'; v1: no "// &
                               "OBC/tidal/sponge/clamped/Chapman edges for ice dynamics)")
             has_error = .true.
          end if
-         ! No tripolar north fold: the EVP ghost-wrap contract is plain
-         ! periodic/wall only.
-         if (trim(cfg%ocean%bc%north) == "tripolar_fold") then
-            call logger%error("&ocean_ice_nml dynamics=.true. is incompatible with "// &
-                              "north='tripolar_fold' (v1: plain periodic/wall ghost "// &
-                              "policy only)")
+         ! Tripolar north fold (A6, #164; multi-rank A7, #143): EVP folds the
+         ! ice velocity every subcycle and recomputes its stencil one row past
+         ! the seam, which needs two ghost rows.
+         if (trim(cfg%ocean%bc%north) == "tripolar_fold" .and. cfg%nghost < 2) then
+            call logger%error("&ocean_ice_nml dynamics=.true. with north='tripolar_fold' "// &
+                              "needs nghost >= 2 (the EVP stencil reads one row past "// &
+                              "the fold line); nghost = "//to_string(cfg%nghost))
             has_error = .true.
          end if
          if (cfg%ocean%ice%evp_sub_steps < 1) then

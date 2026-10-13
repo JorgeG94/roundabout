@@ -49,7 +49,7 @@ Cross-cutting numerics and engineering (WENO, SSP-RK3, IMEX, mixed precision, DA
 | Tides (forcing) | Equilibrium body force, scalar SAL, nodal correction (also for OBC_TIDAL), barotropic wave drag. The TPXO validation is still open, see §2. |
 | Sea ice | `src/core/ice/`: Winton thermodynamics, multi-category ITD, ITD-aware transport, C-grid EVP, frazil, ice-ocean couplers. All under `&ocean_ice_nml` (default off). |
 | Sea ice on many ranks | Thermo, EVP and stress blend on the ocean decomposition (`84ddefc87`); category transport across ranks and periodic seams (`313a8c0c1`); restart round trip (`9df1c5b90`). |
-| Sea ice under the tripolar fold | One rank only: category state (`cc75df88f`) and EVP dynamics (A6, `e1ae86fa7`). More than one rank is still refused (A7, #143). |
+| Sea ice under the tripolar fold | Category state (`cc75df88f`) and EVP dynamics (A6, `e1ae86fa7`); multi-rank with the `sea_ice_fold` bit-identity cases (A7, #143). |
 | Windowed tracer advection | `dt_tracer_advect_ratio`; single-rank. |
 
 ### Parallelism and reproducibility
@@ -243,7 +243,7 @@ Tier-1 operational: double-gyre stable to day 580; 2 km Tasman eddy-resolving at
 
 The C-grid MPI multi-rank halo ships and is gated by a decomposition-invariance suite (1 rank vs N, same answer) plus the `tests/mpi/` set. OBC dispatch is wired; file-backed nesting data is the remaining regional-enabling gap (tidal forcing ships; its validation campaign does not).
 
-Several individual features remain single-rank: the ice-shelf cavity, wet/dry, sea ice under the tripolar fold and the windowed tracer-advection drain. (Porous barriers, sea ice and the tripolar north fold with `px > 1` have since gone multi-rank; see §1.)
+Several individual features remain single-rank: the ice-shelf cavity, wet/dry, and the windowed tracer-advection drain. (Porous barriers, sea ice, sea ice under the tripolar fold and the tripolar north fold with `px > 1` have since gone multi-rank; see §1.)
 
 The user guide is a Sphinx site under `rdb_docs/` (theory, discretisation, coordinates, PGF, closures, running simulations, the Python driver, validation). Per-procedure reference comes from the FORD `!!` docstrings and is built separately.
 

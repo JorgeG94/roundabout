@@ -428,39 +428,15 @@ contains
          end if
          ! Sea ice runs on the ocean's decomposition: the category state,
          ! the EVP ice velocity, the transport's CAS state and the blended
-         ! surface stress are halo-exchanged (`engine_step_ice`).  The
-         ! category state (part_size/m_ice/m_snow/enth_ice/sal_ice/
-         ! enth_snow/mca_ice/mca_snow) IS now folded across the tripolar
-         ! north seam (`ocean_fold_wrap_centre_flat`, fold-seam fix) --
-         ! on `px = 1` this is exercised and tested
-         ! (`test_ocean_ice_fold`).  The refusal below stays for `px > 1`
-         ! only: the ice fold rides the SAME px-aware dispatcher as the
-         ! ocean prognostics (`ocean_fold_is_distributed`), but that path
-         ! has (a) no MPI test coverage for ice (no decomp-bitid case),
-         ! and (b) `ocean_fold_exchange_reserve` below is sized for the
-         ! ml_state group only (`nz_layers*(3+ntr)`), not for the ice
-         ! category group (up to `ncat*nk_ice`/`ncat+1` levels) -- an
-         ! under-reservation `ocean_fold_begin` only warns and grows
-         ! mid-run, not a correctness bug, but it does defeat the
-         ! CUDA-aware-MPI IPC-handle-reuse this reserve exists for.  EVP
-         ! (`&ocean_ice_nml dynamics`) now ALSO folds (A6, #164) -- `ui`/
-         ! `vi` via `ocean_fold_wrap_face_pair`, the restart-carried
-         ! stresses once before the subcycle loop -- but, like the
-         ! category state, only on `px = 1` (`test_ocean_ice_evp_fold`);
-         ! this refusal still blocks it reaching `px > 1` here, same as
-         ! the category state.  Lifting this for `px > 1` needs both the
-         ! reserve sizing and a `test_ocean_decomp_bitid_mpi` ice+fold
-         ! case (A7); tracked as a follow-up, not done in this PR.
-         if (cfg%ocean%ice%enable .and. &
-             ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD) then
-            call fail("&ocean_ice_nml enable = .true. with north = 'tripolar_fold' on "// &
-                      to_string(csize)//" ranks: the ice category fold is untested under "// &
-                      "MPI (no decomp-bitid coverage) and its fold-exchange buffers are "// &
-                      "not reserved for the ice group.  Run on 1 rank (px=1 is fully "// &
-                      "folded and tested).", &
-                      ierr, OCEAN_STATUS_ERR_SETUP)
-            return
-         end if
+         ! surface stress are halo-exchanged (`engine_step_ice`) and, under
+         ! a tripolar north fold, folded across the seam through the SAME
+         ! px-aware dispatcher as the ocean prognostics
+         ! (`ocean_fold_is_distributed`): category state, flux diagnostics,
+         ! EVP ice velocity and the restart-carried stresses
+         ! (`ocean_fold_wrap_evp_stress`), and the blended surface stress.
+         ! Ice + fold on `px > 1` is covered by the `sea_ice_fold*` cases of
+         ! `test_ocean_decomp_bitid_mpi` (A7, #143); the fold-exchange
+         ! reserve is sized for the widest ice group below.
          ! In-memory geometry injection (the API's staged bathymetry /
          ! supergrid arrays) hands over WHOLE-grid arrays.
          if (allocated(engine%staged_bathymetry) .or. allocated(engine%staged_metrics_x)) then
@@ -1043,16 +1019,25 @@ contains
       ! Distributed tripolar fold (px > 1): routing plan + buffers, built
       ! from the same decomposition.  Inactive (no plan, no buffers) unless
       ! this rank folds the north edge of an east-west split, so a no-op on
-      ! every px = 1 run.  Reserve the largest group (the `ml_state` one:
-      ! h, u, v and every tracer, at most ng+1 rows each).
+      ! every px = 1 run.  Reserve the largest group: the `ml_state` one
+      ! (h, u, v and every tracer, at most ng+1 rows each) or, with sea ice,
+      ! the widest ice group (one category field of `ncat*nk_ice` /
+      ! `ncat+1` levels, `ng` rows; the EVP stress group is `3*ng+1`).
       call ocean_fold_exchange_init(engine%decomp, engine%grid%nghost, &
                                     engine%state%bc%north_fold, ierr=ierr)
       if (setup_failed(ierr)) return
       block
-         integer :: ntr
+         integer :: ntr, nslab
          ntr = 0
          if (allocated(engine%state%multilayer%tracers)) ntr = size(engine%state%multilayer%tracers)
-         call ocean_fold_exchange_reserve((engine%grid%nghost + 1)*cfg%nz_layers*(3 + ntr))
+         nslab = (engine%grid%nghost + 1)*cfg%nz_layers*(3 + ntr)
+         if (cfg%ocean%ice%enable) then
+            nslab = max(nslab, &
+                        engine%grid%nghost*max(cfg%ocean%ice%ncat*cfg%ocean%ice%nk_ice, &
+                                               cfg%ocean%ice%ncat + 1), &
+                        3*engine%grid%nghost + 1)
+         end if
+         call ocean_fold_exchange_reserve(nslab)
       end block
 
       ! Host-side seam ghost fill (D0 init-halo, O2): single-rank

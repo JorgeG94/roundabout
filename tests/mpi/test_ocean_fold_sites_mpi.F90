@@ -26,6 +26,14 @@
 !!   M   `ocean_fold_wrap_time_means`       u_av, v_av, h_av (D3)
 !!   F   `ocean_fold_north_v_face`          mass_flux_y_layer (C2)
 !!   H   `ocean_seam_refresh_surface_stress` tau_x, tau_y, stress_mag (H1)
+!! and, with sea ice live on the same cap (A7, #143), the ice fold sites:
+!!   I   `ocean_halo_exchange_ice_state`     part_size, m_ice, m_snow,
+!!       enth_ice, sal_ice, enth_snow (T-centre copy, up to ncat*nk_ice slabs)
+!!   T   `ocean_halo_exchange_ice_transport` mca_ice, mca_snow + the above
+!!   X   `ocean_halo_exchange_ice_fluxes`    salt/heat/sw_thru diagnostics
+!!   V   `ocean_fold_wrap_evp_stress` (str_d, str_t T-copy; str_s corner copy)
+!!       + `ocean_fold_wrap_face_pair` (u_ice, v_ice: negate + v fold-row
+!!       projection) -- the EVP pre-loop stress hygiene and subcycle folds
 !! On the GPU build the D..H legs run the device pack/unpack and hand MPI
 !! device buffers, exactly as at step time.
 #ifdef RDB_ENABLE_MPI
@@ -38,10 +46,15 @@ program test_ocean_fold_sites_mpi
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_exit_data, engine_teardown
    use rdb_ocean_halo_state, only: ocean_halo_exchange_ml_state, &
-                                   ocean_seam_refresh_surface_stress
+                                   ocean_seam_refresh_surface_stress, &
+                                   ocean_halo_exchange_ice_state, &
+                                   ocean_halo_exchange_ice_transport, &
+                                   ocean_halo_exchange_ice_fluxes
    use rdb_ocean_fold_apply, only: ocean_fold_wrap_state, ocean_fold_wrap_centre_3d_state, &
-                                   ocean_fold_wrap_time_means
-   use rdb_ocean_fold_exchange, only: ocean_fold_north_v_face, ocean_fold_is_distributed
+                                   ocean_fold_wrap_time_means, ocean_fold_wrap_evp_stress, &
+                                   ocean_fold_wrap_face_pair
+   use rdb_ocean_fold_exchange, only: ocean_fold_north_v_face, ocean_fold_is_distributed, &
+                                      ocean_fold_exchange_grow_count
    use rdb_comm_env, only: comm_env_init, comm_env_setup_roles, comm_env_finalize, &
                            comm_env_rank, comm_env_size, comm_env_compute_comm
    use pic_mpi_lib, only: comm_t, allreduce, MPI_SUM
@@ -70,6 +83,8 @@ program test_ocean_fold_sites_mpi
       logical :: has_south = .true.
       logical :: has_north = .true.
       logical :: distributed = .false.
+      integer :: ngrow = 0
+         !! Fold-buffer regrows over the run (the reserve must cover every group).
    end type run_t
 
    integer :: rank, nprocs, n_fail, total_fail
@@ -136,6 +151,10 @@ contains
             "north = 'tripolar_fold' /"//NL// &
             "&ocean_hvisc_nml nu_h = 2000.0 /"//NL// &
             "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
+            "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
+            "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL// &
+            "&ocean_ice_nml enable = .true., ncat = 3, nk_ice = 2, dynamics = .true., "// &
+            "transport = .true., adv_substeps = 2 /"//NL// &
             "&ocean_diag_nml enabled = .false., reproducing_sums = .true. /"//NL// &
             "&output_nml output_to_file = .false. /"//NL
    end function case_nml
@@ -169,6 +188,25 @@ contains
       logical, intent(in) :: yface
       call snap3(r, name, reshape(a, [size(a, 1), size(a, 2), 1]), yface)
    end subroutine snap2
+
+   subroutine snap4(r, name, a)
+      !! Snapshot a rank-3/4 category array flattened to (nx, ny, nz*nk).
+      type(run_t), intent(inout) :: r
+      character(len=*), intent(in) :: name
+      real(wp), intent(in) :: a(:, :, :, :)
+      call snap3(r, name, reshape(a, [size(a, 1), size(a, 2), size(a, 3)*size(a, 4)]), .false.)
+   end subroutine snap4
+
+   subroutine fill4(a, e, fid)
+      !! `fill3` for a rank-4 category array (north ghosts NaN).
+      real(wp), intent(inout) :: a(:, :, :, :)
+      type(ocean_engine_t), intent(in) :: e
+      integer, intent(in) :: fid
+      real(wp), allocatable :: t(:, :, :)
+      allocate (t(size(a, 1), size(a, 2), size(a, 3)*size(a, 4)))
+      call fill3(t, e, fid, 0)
+      a = reshape(t, shape(a))
+   end subroutine fill4
 
    subroutine snap_ml(r, tag, e)
       type(run_t), intent(inout) :: r
@@ -383,10 +421,84 @@ contains
          call snap2(r, "H stress_mag", ss%stress_mag, .false.)
       end associate
 
+      if (e%state%ice%is_init) call ice_legs(e, r)
+      r%ngrow = ocean_fold_exchange_grow_count()
+
       call engine_exit_data(e)
       call engine_teardown(e)
       ok = .true.
    end subroutine run_one
+
+   subroutine ice_legs(e, r)
+      !! Legs I, T, X, V: every sea-ice fold site, each on an index-encoded
+      !! field set pushed to the device (north ghosts NaN, fold-line row of
+      !! the face / corner fields unprojected).
+      type(ocean_engine_t), intent(inout) :: e
+      type(run_t), intent(inout) :: r
+
+      associate (ic => e%state%ice)
+         ! I: category state (also fills ghosts through the halo first).
+         call fill3(ic%part_size, e, 50, 0)
+         call fill3(ic%m_ice, e, 51, 0)
+         call fill3(ic%m_snow, e, 52, 0)
+         call fill4(ic%enth_ice, e, 53)
+         call fill4(ic%sal_ice, e, 54)
+         call fill4(ic%enth_snow, e, 55)
+         !$acc update device(ic%part_size, ic%m_ice, ic%m_snow, ic%enth_ice, ic%sal_ice, ic%enth_snow)
+         call ocean_halo_exchange_ice_state(ic, e%grid, e%state%bc)
+         !$acc update self(ic%part_size, ic%m_ice, ic%m_snow, ic%enth_ice, ic%sal_ice, ic%enth_snow)
+         call snap3(r, "I part_size", ic%part_size, .false.)
+         call snap3(r, "I m_ice", ic%m_ice, .false.)
+         call snap3(r, "I m_snow", ic%m_snow, .false.)
+         call snap4(r, "I enth_ice", ic%enth_ice)
+         call snap4(r, "I sal_ice", ic%sal_ice)
+         call snap4(r, "I enth_snow", ic%enth_snow)
+
+         ! T: transport (CAS) state.
+         call fill3(ic%mca_ice, e, 60, 0)
+         call fill3(ic%mca_snow, e, 61, 0)
+         call fill3(ic%m_ice, e, 62, 0)
+         call fill4(ic%enth_snow, e, 63)
+         call fill4(ic%enth_ice, e, 64)
+         call fill4(ic%sal_ice, e, 65)
+         !$acc update device(ic%mca_ice, ic%mca_snow, ic%m_ice, ic%enth_snow, ic%enth_ice, ic%sal_ice)
+         call ocean_halo_exchange_ice_transport(ic, e%grid, e%state%bc)
+         !$acc update self(ic%mca_ice, ic%mca_snow, ic%m_ice, ic%enth_snow, ic%enth_ice, ic%sal_ice)
+         call snap3(r, "T mca_ice", ic%mca_ice, .false.)
+         call snap3(r, "T mca_snow", ic%mca_snow, .false.)
+         call snap3(r, "T m_ice", ic%m_ice, .false.)
+         call snap4(r, "T enth_snow", ic%enth_snow)
+         call snap4(r, "T enth_ice", ic%enth_ice)
+         call snap4(r, "T sal_ice", ic%sal_ice)
+
+         ! X: per-cell flux diagnostics.
+         call fill2(ic%salt_flux_diag, e, 70, 0)
+         call fill2(ic%heat_flux_diag, e, 71, 0)
+         call fill2(ic%sw_thru_diag, e, 72, 0)
+         !$acc update device(ic%salt_flux_diag, ic%heat_flux_diag, ic%sw_thru_diag)
+         call ocean_halo_exchange_ice_fluxes(ic, e%grid, e%state%bc)
+         !$acc update self(ic%salt_flux_diag, ic%heat_flux_diag, ic%sw_thru_diag)
+         call snap2(r, "X salt_flux_diag", ic%salt_flux_diag, .false.)
+         call snap2(r, "X heat_flux_diag", ic%heat_flux_diag, .false.)
+         call snap2(r, "X sw_thru_diag", ic%sw_thru_diag, .false.)
+
+         ! V: EVP stresses (one group) and the velocity pair.
+         call fill2(ic%str_d, e, 80, 0)
+         call fill2(ic%str_t, e, 81, 0)
+         call fill2(ic%str_s, e, 82, 1)
+         call fill2(ic%u_ice, e, 83, 0)
+         call fill2(ic%v_ice, e, 84, 1)
+         !$acc update device(ic%str_d, ic%str_t, ic%str_s, ic%u_ice, ic%v_ice)
+         call ocean_fold_wrap_evp_stress(e%grid, e%state%bc, ic%str_d, ic%str_t, ic%str_s)
+         call ocean_fold_wrap_face_pair(e%grid, e%state%bc, ic%u_ice, ic%v_ice)
+         !$acc update self(ic%str_d, ic%str_t, ic%str_s, ic%u_ice, ic%v_ice)
+         call snap2(r, "V str_d", ic%str_d, .false.)
+         call snap2(r, "V str_t", ic%str_t, .false.)
+         call snap2(r, "V str_s", ic%str_s, .true.)
+         call snap2(r, "V u_ice", ic%u_ice, .false.)
+         call snap2(r, "V v_ice", ic%v_ice, .true.)
+      end associate
+   end subroutine ice_legs
 
    subroutine run_case(px, py)
       integer, intent(in) :: px, py
@@ -406,6 +518,11 @@ contains
       end if
       if (dec%has_north .and. .not. dec%distributed) then
          write (*, '(3a,i0)') "FAIL ", trim(lbl), ": the distributed fold is not active on rank ", rank
+         n_fail = n_fail + 1
+      end if
+      if (dec%ngrow /= 0) then
+         write (*, '(3a,i0,a,i0)') "FAIL ", trim(lbl), ": fold buffers regrew mid-run on rank ", &
+            rank, ", times=", dec%ngrow
          n_fail = n_fail + 1
       end if
       if (ref%n /= dec%n) then
