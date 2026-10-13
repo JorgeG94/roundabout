@@ -42,7 +42,7 @@ module rdb_eos
    public :: roquet_spv_ts_coeffs
    public :: roquet_spv_value
    public :: roquet_rho_ts_coeffs
-   public :: roquet_rho_value
+   public :: roquet_rho_value, roquet_rho_point
 
    integer, parameter, public :: EOS_VARIANT_LINEAR = 1
       !! Linear T/S (debug / lock-exchange / Eady).
