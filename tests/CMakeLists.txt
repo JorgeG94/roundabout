@@ -757,6 +757,26 @@ if(RDB_ENABLE_MPI)
   set_tests_properties(
     rdb_test_ocean_decomp_bitid_mpi_1rank rdb_test_ocean_decomp_bitid_mpi_4rank
     PROPERTIES LABELS "ocean" ENVIRONMENT "OMP_NUM_THREADS=1")
+  # OM3 C2c-3b: atm-state provider + ocean bulk-flux consumer, 1 vs 2x2
+  # bit-identity (atm%tas, ss%tau_x/tau_y, sf%q_sens physical cells). Not part
+  # of the generic MPI_TESTS foreach above (it needs exactly the {1,4}rank legs
+  # below, no unsuffixed default) -- writes + reads a synthetic NetCDF file like
+  # test_ocean_decomp_bitid_mpi's file_readers case, hence OMP_NUM_THREADS=1.
+  add_executable(test_ocean_atm_state_mpi mpi/test_ocean_atm_state_mpi.F90)
+  target_include_directories(
+    test_ocean_atm_state_mpi PRIVATE "${CMAKE_BINARY_DIR}/modules"
+                                     "${RDB_SHARED_INCLUDE_DIR}")
+  target_link_libraries(test_ocean_atm_state_mpi PRIVATE ${main_lib}
+                                                         test-drive::test-drive)
+  add_test(NAME rdb_test_ocean_atm_state_mpi_1rank
+           COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 1
+                   $<TARGET_FILE:test_ocean_atm_state_mpi>)
+  add_test(NAME rdb_test_ocean_atm_state_mpi_4rank
+           COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4
+                   $<TARGET_FILE:test_ocean_atm_state_mpi>)
+  set_tests_properties(
+    rdb_test_ocean_atm_state_mpi_1rank rdb_test_ocean_atm_state_mpi_4rank
+    PROPERTIES LABELS "ocean" ENVIRONMENT "OMP_NUM_THREADS=1")
 endif()
 
 # --------------------------------------------------------------------------
