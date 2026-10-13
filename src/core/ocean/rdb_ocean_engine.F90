@@ -485,6 +485,18 @@ contains
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
+         ! The atm-driven bulk-flux consumer (OM3 C2c-3a) feeds the surface
+         ! stress through the centre halo, the seam refresh and the tripolar
+         ! fold, none of which `test_ocean_decomp_bitid_mpi` covers for it
+         ! yet. Single-rank until C2c-3b brings the 1 vs 2x2 gate.
+         if (cfg%ocean%bulk_flux%enable) then
+            call fail("&ocean_bulk_flux_nml enable = .true. is single-rank ("// &
+                      to_string(csize)//" ranks requested): the atm-driven bulk "// &
+                      "forcing has no multi-rank bit-identity gate yet (C2c-3b).  "// &
+                      "Run on 1 rank.", &
+                      ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
       end if
 
       call decomp_init_from_config(engine%decomp, cfg, csize, rank)
