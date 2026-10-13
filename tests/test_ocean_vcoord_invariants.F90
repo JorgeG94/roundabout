@@ -765,9 +765,11 @@ contains
       !! against `q ~ 34`, i.e. 8e-16 to 2.5e-15 relative — 4 to 12 ulp of
       !! `real64`.  The fix is a short circuit on `dz_new == dz_old`, which
       !! this branch does not carry.  What IS gated here is that the error
-      !! stays at that scale: the bound below is 20 ulp relative, so a
+      !! stays at that scale: the bound below is 32 ulp relative, so a
       !! reconstruction change that turned the identity into a real
-      !! diffusion would fail it.
+      !! diffusion would fail it.  32, not 20: an unoptimised build rounds
+      !! differently (nvfortran 26.9 -O0 puts pqm at 23 ulp, 2.06e-13 at
+      !! nz = 60), and the bar must hold on every toolchain and build type.
       type(error_type), allocatable, intent(out) :: error
       integer, parameter :: NZ_MAX = 60
       integer, parameter :: NZR(4) = [1, 2, 15, NZ_MAX]
@@ -787,11 +789,11 @@ contains
                call remap_column(M_CODE(im), nz, dz(1:nz), dz(1:nz), &
                                  q_old(1:nz), q_new(1:nz))
                worst = maxval(abs(q_new(1:nz) - q_old(1:nz)))
-               bar = 20.0_wp*epsilon(1.0_wp)*maxval(abs(q_old(1:nz)))
+               bar = 32.0_wp*epsilon(1.0_wp)*maxval(abs(q_old(1:nz)))
                if (.not. is_finite(worst) .or. worst > bar) then
                   write (msg, '(a,es12.5,a,es12.5,a,i0)') &
                      "remap "//trim(M_NAME(im))// &
-                     " R1 identity: worst |dq| = ", worst, " over the 20-ulp bar ", &
+                     " R1 identity: worst |dq| = ", worst, " over the 32-ulp bar ", &
                      bar, " at nz = ", nz
                   call check(error, .false., trim(msg))
                   exit sweep
