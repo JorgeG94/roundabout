@@ -962,14 +962,14 @@ silent clobber, not a merge.
 
 | Component | Owner | Sign / units | Notes |
 |---|---|---|---|
-| `q_sw`, `q_lw`, `q_lat`, `q_sens` | a forcing reader (`rdb_ocean_data_forcing`) | W/m², positive DOWN | `q_sw` also gates `has_q_sw` |
+| `q_sw`, `q_lw`, `q_lat`, `q_sens` | a forcing reader (`rdb_ocean_data_forcing`) OR the bulk-flux consumer (`rdb_ocean_bulk_forcing`, OM3 C2c-3a) | W/m², positive DOWN | Mutually exclusive by `validate_config` (`ATM_PREREQ_DATAOVR`: `&ocean_atm_forcing_nml enable` conflicts with any `&ocean_dataovr_nml tau_x/tau_y/heat/evap/lprec` file). `q_sw` also gates `has_q_sw` |
 | `heat_added` | the sea-ice coupler (`ice_ocean_heat_flux`) | W/m², either sign, positive down | **FULL OVERWRITE.** Do not add a second contributor here |
 | `salt_flux` | the sea-ice coupler (`ice_ocean_brine_flux`) | positive SALINIFIES | **FULL OVERWRITE.** Same rule |
 | `heat_cavity` | the ice-shelf cavity (`ocean_cavity_flux_step`) | W/m², positive down; `= −q_ocean` | Separate from `heat_added` *because* the ice coupler overwrites that one. Melting cools |
 | `salt_cavity` | the ice-shelf cavity (`ocean_cavity_flux_step`) | same as `salt_flux`; `= −m_mass·(S_far − s_ice)` | The fixed-mass dilution equivalent. Under `&ocean_cavity_melt_nml freshwater="virtual"` (default) it IS the meltwater's effect on salinity; under `"mass"` it stays assembled UNCHANGED as the `B_0` buoyancy forcing KPP/EPBL read, and `ocean_cavity_mass_step` removes it again from the tracer. Melting freshens either way |
-| mass fluxes + their `heat_content_*` twins | a forcing reader | see the type's docstrings | a mass flux owes its enthalpy companion |
+| mass fluxes + their `heat_content_*` twins | a forcing reader OR `rdb_ocean_bulk_forcing` | see the type's docstrings | a mass flux owes its enthalpy companion. The bulk-flux consumer fills `heat_content_lprec`/`heat_content_fprec` isothermally at the ocean's own SST |
 | `heat_content_massin` / `massout` | **the assembler** | W/m² | never a filler |
-| `p_surf_atm` | a reader / configure seed | Pa | `p_surf` is the assembled total |
+| `p_surf_atm` | a reader / configure seed / `rdb_ocean_bulk_forcing` (`= psl`) | Pa | `p_surf` is the assembled total; NOT open-water weighted (a pressure-loading term, not a flux) |
 | `Q_heat` / `Q_salt` | **the assembler** | derived | a filler writing these is a bug |
 
 #### Real mass: what IS and what is NOT a column-mass change

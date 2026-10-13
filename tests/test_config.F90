@@ -72,7 +72,7 @@ contains
                   new_unittest("calendar_names_fit_and_validate", test_calendar_names), &
                   new_unittest("roquet_rho_insitu_pgf_accepted", test_roquet_rho_insitu_pgf_accepted), &
                   new_unittest("atm_forcing_prereq_codes", test_atm_forcing_prereq_codes), &
-                  new_unittest("atm_forcing_not_wired_refused", test_atm_forcing_not_wired_refused) &
+                  new_unittest("atm_forcing_wired_accepted", test_atm_forcing_wired_accepted) &
                   ]
    end subroutine collect_config_tests
 
@@ -974,13 +974,16 @@ contains
       call check(error, atm_forcing_prereq_code(cfg) == ATM_PREREQ_ORB_YEAR, "non-default orb_year")
    end subroutine test_atm_forcing_prereq_codes
 
-   subroutine test_atm_forcing_not_wired_refused(error)
-      !! C2c-1: neither group is wired into the engine yet (C2c-3), so
-      !! `validate_config` refuses `&ocean_atm_forcing_nml enable` even when
-      !! every prerequisite holds, and refuses `&ocean_bulk_flux_nml enable`
-      !! on its own -- a silent no-op would run on the old forcing. Holds on
-      !! NetCDF and no-NetCDF builds alike. C2c-3 turns the first case into
-      !! an acceptance.
+   subroutine test_atm_forcing_wired_accepted(error)
+      !! C2c-3a: both the atm-state provider (`atm_state_update`) and the
+      !! ocean bulk-flux consumer (`bulk_forcing_apply`) are wired into the
+      !! engine, so the atm_forcing baseline -- every `atm_forcing_prereq_code`
+      !! prerequisite met, which already requires `&ocean_bulk_flux_nml
+      !! enable` -- is now ACCEPTED on a NetCDF build (on a no-NetCDF build
+      !! the explicit `RDB_ENABLE_NETCDF=ON` requirement still refuses it).
+      !! `&ocean_bulk_flux_nml enable` on its OWN (no atm provider) is still
+      !! refused -- it has no atmospheric state to act on standalone -- with
+      !! its own honest message, not the old generic "not yet wired" one.
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
       integer :: ierr
@@ -990,8 +993,13 @@ contains
       call check(error, ierr == OCEAN_STATUS_OK, "atm_forcing baseline must parse")
       if (allocated(error)) return
       call validate_config(cfg, ierr=ierr)
+#ifdef RDB_NO_NETCDF
       call check(error, ierr /= OCEAN_STATUS_OK, &
-                 "atm_forcing enable=.true. must be refused until it is wired (C2c-3)")
+                 "atm_forcing enable=.true. must still be refused on a no-NetCDF build")
+#else
+      call check(error, ierr == OCEAN_STATUS_OK, &
+                 "atm_forcing enable=.true. with every prerequisite met must now validate (C2c-3a)")
+#endif
       if (allocated(error)) return
 
       ierr = -999
@@ -1002,8 +1010,8 @@ contains
       if (allocated(error)) return
       call validate_config(cfg, ierr=ierr)
       call check(error, ierr /= OCEAN_STATUS_OK, &
-                 "bulk_flux enable=.true. on its own must be refused until it is wired (C2c-3)")
-   end subroutine test_atm_forcing_not_wired_refused
+                 "bulk_flux enable=.true. on its own (no atm provider) must still be refused")
+   end subroutine test_atm_forcing_wired_accepted
 
    subroutine test_missing_file(error)
       !! Missing file should not crash, defaults should be preserved

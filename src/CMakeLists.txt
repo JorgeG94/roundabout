@@ -236,7 +236,8 @@ if(RDB_ENABLE_NETCDF)
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/io/rdb_ocean_z_init.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/io/rdb_ocean_data_input.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/forcing/rdb_ocean_data_forcing.F90
-    ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/forcing/rdb_atm_state.F90)
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/forcing/rdb_atm_state.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/forcing/rdb_ocean_bulk_forcing.F90)
 endif()
 
 # Communication layer — ONE implementation, always compiled.
