@@ -3572,13 +3572,20 @@ contains
             has_error = .true.
          end if
       end if
-      ! C2c-3 removes this refusal: until the provider and the bulk-flux
-      ! consumer are wired into the engine, enabling either group would be
-      ! a silent no-op that runs on whatever forcing was there before.
-      if (cfg%ocean%atm_forcing%enable .or. cfg%ocean%bulk_flux%enable) then
-         call logger%error("&ocean_atm_forcing_nml / &ocean_bulk_flux_nml enable=.true. "// &
-                           "is configured but not yet wired into the engine (lands "// &
-                           "with C2c-3); refusing rather than running on the old forcing")
+      ! C2c-3a wires both the provider (`atm_state_update`) and the ocean
+      ! bulk-flux consumer (`bulk_forcing_apply`) into the engine -- the
+      ! generic "not yet wired" refusal that used to block this group is
+      ! gone (`atm_forcing_prereq_code` above already requires
+      ! `&ocean_bulk_flux_nml enable` whenever `&ocean_atm_forcing_nml
+      ! enable` is set). `&ocean_bulk_flux_nml enable` on its OWN has no
+      ! atmospheric state to act on -- the ocean consumer reads `atm%tas`
+      ! etc, which stay unallocated unless the provider is configured --
+      ! so that combination is still refused, honestly, rather than
+      ! silently running as a no-op.
+      if (cfg%ocean%bulk_flux%enable .and. .not. cfg%ocean%atm_forcing%enable) then
+         call logger%error("&ocean_bulk_flux_nml enable=.true. requires "// &
+                           "&ocean_atm_forcing_nml enable=.true. -- the bulk-flux "// &
+                           "kernel has no atmospheric state to act on standalone")
          has_error = .true.
       end if
 

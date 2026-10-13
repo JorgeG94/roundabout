@@ -148,6 +148,7 @@ module rdb_ocean_engine
    use rdb_ocean_data_input, only: ocean_data_input_update_all
    use rdb_ocean_data_forcing, only: ocean_data_forcing_configure, ocean_data_forcing_apply
    use rdb_atm_state, only: atm_state_configure, atm_state_update
+   use rdb_ocean_bulk_forcing, only: bulk_forcing_configure, bulk_forcing_apply
    use rdb_io_netcdf, only: output_rank_filename, ensure_directory_exists
 #endif
    use rdb_ice_evp, only: ice_evp_params_t, ice_evp_params_from_config, ice_evp_step
@@ -850,6 +851,12 @@ contains
       call atm_state_configure(cfg, engine%state%data_input, engine%grid, engine%state%metrics, &
                                engine%state%atm, ierr=ierr)
       if (setup_failed(ierr)) return
+
+      ! Ocean consumer of the atm provider above (OM3 C2c-3a): persistent
+      ! stress scratch + open-water fraction. No-op when
+      ! `&ocean_bulk_flux_nml enable = .false.` (the default).
+      call bulk_forcing_configure(cfg, engine%grid, engine%state%surface_flux, &
+                                  engine%state%bulk_forcing)
 #else
       if (cfg%ocean%dataovr%enable) then
          call fail("engine_setup: &ocean_dataovr_nml enable = .true. but this build has no "// &
@@ -1540,6 +1547,14 @@ contains
       ! refreshed, and neither writes a slot the other reads.
       call atm_state_update(engine%state%atm, engine%state%data_input, &
                             engine%state%metrics, t)
+
+      ! Ocean bulk-flux consumer (OM3 C2c-3a): no-op unless
+      ! `&ocean_bulk_flux_nml enable = .true.` (which `validate_config`
+      ! requires to travel together with `&ocean_atm_forcing_nml enable`).
+      call bulk_forcing_apply(engine%grid, engine%state%metrics, engine%state%bc, &
+                              engine%state%atm, engine%state%multilayer, engine%state%ice, &
+                              engine%state%bulk_forcing, engine%state%surface_stress, &
+                              engine%state%surface_flux)
 #endif
 
       call engine%bc_source%update(t, engine%state%bc)

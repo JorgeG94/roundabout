@@ -67,6 +67,7 @@ module rdb_ocean_state
    use rdb_ocean_data_input, only: ocean_data_input_t, ocean_data_input_load_static_2d
    use rdb_ocean_data_forcing, only: ocean_data_forcing_t
    use rdb_atm_state, only: atm_state_t
+   use rdb_ocean_bulk_forcing, only: bulk_forcing_t
 #endif
    use rdb_decomp, only: decomp_t
    use rdb_ocean_vcoord, only: ocean_vcoord_t, parse_ocean_vcoord_type, &
@@ -351,6 +352,13 @@ module rdb_ocean_state
          !! below. Default off (`&ocean_atm_forcing_nml enable =
          !! .false.`) => every array stays unallocated => bit-identical.
          !! No consumer yet (the bulk-flux driver + ice seam are C2c-3).
+      type(bulk_forcing_t) :: bulk_forcing
+         !! Ocean consumer of `atm` (OM3 C2c-3a): persistent cell-centred
+         !! stress scratch (`taux_c`/`tauy_c`) + the open-water fraction
+         !! used to weight every component when sea ice is enabled.
+         !! Default off (`&ocean_bulk_flux_nml enable = .false.`) =>
+         !! unallocated => bit-identical. No ice-seam consumer yet
+         !! (`ice_atm_forcing_from_atm` is C2c-3b).
 #endif
       type(ocean_restart_t) :: restart
          !! Restart / checkpoint manager.
@@ -944,7 +952,7 @@ contains
                + this%bc%bytes() &
                + this%sponge%bytes()
 #ifndef RDB_NO_NETCDF
-      nbytes = nbytes + this%data_input%bytes() + this%atm%bytes()
+      nbytes = nbytes + this%data_input%bytes() + this%atm%bytes() + this%bulk_forcing%bytes()
 #endif
       if (this%use_multilayer) nbytes = nbytes + this%multilayer%bytes()
    end function ocean_state_bytes
@@ -1077,6 +1085,9 @@ contains
       call profiler_start("ed_atm", nvtx_only=.true.)
       call state%atm%enter_data()
       call profiler_stop("ed_atm")
+      call profiler_start("ed_bulk_forcing", nvtx_only=.true.)
+      call state%bulk_forcing%enter_data()
+      call profiler_stop("ed_bulk_forcing")
 #endif
    end subroutine ocean_state_enter_data
 
@@ -1086,6 +1097,9 @@ contains
       type(ocean_state_t), intent(inout) :: state
 
 #ifndef RDB_NO_NETCDF
+      call profiler_start("xd_bulk_forcing", nvtx_only=.true.)
+      call state%bulk_forcing%exit_data()
+      call profiler_stop("xd_bulk_forcing")
       call profiler_start("xd_atm", nvtx_only=.true.)
       call state%atm%exit_data()
       call profiler_stop("xd_atm")
@@ -1204,6 +1218,7 @@ contains
       this%is_init = .false.
       call this%restart%destroy()
 #ifndef RDB_NO_NETCDF
+      call this%bulk_forcing%destroy()
       call this%atm%destroy()
       call this%data_input%destroy()
 #endif

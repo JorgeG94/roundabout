@@ -174,6 +174,7 @@ set(RDB_TESTS
     "test_ocean_data_input|test_ocean_data_input|collect_ocean_data_input_tests|ocean_data_input|ocean"
     "test_ocean_data_forcing|test_ocean_data_forcing|collect_ocean_data_forcing_tests|ocean_data_forcing|ocean"
     "test_ocean_atm_state|test_ocean_atm_state|collect_ocean_atm_state_tests|ocean_atm_state|ocean"
+    "test_ocean_bulk_forcing|test_ocean_bulk_forcing|collect_ocean_bulk_forcing_tests|ocean_bulk_forcing|ocean"
     "test_ocean_epbl|test_ocean_epbl|collect_ocean_epbl_tests|ocean_epbl|ocean"
     "test_ocean_wave_speed|test_ocean_wave_speed|collect_ocean_wave_speed_tests|ocean_wave_speed|ocean"
     "test_ocean_foxkemper|test_ocean_foxkemper|collect_ocean_foxkemper_tests|ocean_foxkemper|ocean"
@@ -434,6 +435,7 @@ set(NETCDF_REQUIRED_TESTS
     test_ocean_data_input
     test_ocean_data_forcing
     test_ocean_atm_state
+    test_ocean_bulk_forcing
     test_ocean_driver_diag
     test_ocean_restart
     test_ocean_restart_engine
