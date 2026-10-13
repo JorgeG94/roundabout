@@ -34,7 +34,7 @@
 module test_ocean_pgf_roquet_rho
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp, GRAVITY
-   use rdb_eos, only: eos_t, eos_density_point, roquet_rho_value, &
+   use rdb_eos, only: eos_t, eos_density_point, roquet_rho_value, roquet_rho_point, &
                       EOS_VARIANT_ROQUET_RHO
    use rdb_ocean_pressure_force, only: roquet_rho_pcm_dpa_intz, roquet_rho_pcm_dpa_face
    use rdb_ocean_pgf_reconstruct, only: boole_dpa_intz_layer, boole_dpa_face_pcm
@@ -295,36 +295,43 @@ contains
    end function gl_face_pcm
 
    subroutine test_rho_inc_matches_point(error)
-      !! `roquet_rho_value(T, S, p)` against `eos_density_point` -- for
-      !! `EOS_VARIANT_ROQUET_RHO`, `eos_density_point` calls
-      !! `roquet_rho_value` directly, so this locks that wiring bitwise
-      !! (the inc IS the value half) rather than re-deriving the paper
-      !! check value from scratch (`test_ocean_eos_roquet_rho ::
-      !! roquet_rho_paper_checkvalue` already does that, to 1e-5, against
-      !! the production `eos_density_point` path).
+      !! The inc (`roquet_rho_value`, what `eos_density_point` and the PGF
+      !! kernels evaluate) against the INDEPENDENT `roquet_rho_point` (the
+      !! value-and-derivative routine `eos_specvol_derivs` uses, its own
+      !! Horner code): two implementations of the same 55-term table must
+      !! agree, so a dropped or mistyped coefficient in either shows up
+      !! here. Also locks the `eos_density_point` wiring to the inc bitwise.
+      !! The paper check value itself is pinned in `test_ocean_eos_roquet_rho`.
       type(error_type), allocatable, intent(out) :: error
       real(wp), parameter :: T_GRID(4) = [-1.9_wp, 2.0_wp, 15.0_wp, 30.0_wp]
       real(wp), parameter :: S_GRID(4) = [0.0_wp, 30.0_wp, 34.7_wp, 37.0_wp]
       real(wp), parameter :: P_GRID(5) = [0.0_wp, 1.0e5_wp, 1.0e6_wp, 2.0e7_wp, 6.0e7_wp]
       type(eos_t) :: eos
-      real(wp) :: v_inc, v_point, max_diff
+      real(wp) :: v_inc, v_point, v_indep, d_dt, d_ds, max_diff, max_rel
       integer :: it, is, ip
       character(len=200) :: msg
 
       call make_eos(eos, EOS_VARIANT_ROQUET_RHO)
       max_diff = 0.0_wp
+      max_rel = 0.0_wp
       do ip = 1, size(P_GRID)
          do is = 1, size(S_GRID)
             do it = 1, size(T_GRID)
                v_inc = roquet_rho_value(T_GRID(it), S_GRID(is), P_GRID(ip))
                v_point = eos_density_point(eos, T_GRID(it), S_GRID(is), P_GRID(ip))
                max_diff = max(max_diff, abs(v_inc - v_point))
+               call roquet_rho_point(T_GRID(it), S_GRID(is), P_GRID(ip), v_indep, d_dt, d_ds)
+               max_rel = max(max_rel, abs(v_inc - v_indep)/abs(v_indep))
             end do
          end do
       end do
       write (msg, '(a,es10.3)') "roquet_rho_value vs eos_density_point: max abs diff ", max_diff
       call global_logger%info(trim(msg))
       call check(error, max_diff == 0.0_wp, trim(msg))
+      if (allocated(error)) return
+      write (msg, '(a,es10.3)') "roquet_rho_value vs roquet_rho_point: max rel diff ", max_rel
+      call global_logger%info(trim(msg))
+      call check(error, max_rel <= 1.0e-14_wp, trim(msg))
    end subroutine test_rho_inc_matches_point
 
 end module test_ocean_pgf_roquet_rho
