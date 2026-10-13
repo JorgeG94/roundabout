@@ -577,6 +577,35 @@ module rdb_ice_state
          !! it, so a resume does not cold-start the ice-SW contribution for
          !! one thermo window.  Distinct from the per-category `sw_thru`
          !! above (SCRATCH, recomputed, `delete`-mapped).
+      real(wp), allocatable :: melt_top_ice(:, :, :)
+         !! ICE-only top-melt share per category this thermo window
+         !! (kg/m², layers k >= 1; the snow share is excluded), shape
+         !! (nx_total, ny_total, ncat), >= 0. SCRATCH (recomputed every
+         !! thermo step, `delete`-mapped). Diagnostic input for `meltt`.
+      real(wp), allocatable :: melt_bot_ice(:, :, :)
+         !! ICE-only bottom-melt share per category this thermo window
+         !! (kg/m², layers k >= 1), shape (nx_total, ny_total, ncat), >= 0.
+         !! SCRATCH. Diagnostic input for `meltb`.
+      real(wp), allocatable :: m_congel_win(:, :)
+         !! Window congelation mass (kg/m² of CELL, part-weighted over
+         !! categories) = Σ_cat w·h2o_ocn_to_ice of the LAST thermo
+         !! window. OVERWRITTEN each thermo step, zeroed on land / ghost /
+         !! ice-free cells. Restart-carried (like `m_frozen_diag`).
+         !! Source of the `congel` rate diagnostic.
+      real(wp), allocatable :: m_meltt_win(:, :)
+         !! Window top ICE melt mass (kg/m² of cell, Σ w·melt_top_ice).
+         !! Source of `meltt`. Same lifecycle as `m_congel_win`.
+      real(wp), allocatable :: m_meltb_win(:, :)
+         !! Window bottom ICE melt mass (kg/m² of cell, Σ w·melt_bot_ice).
+         !! Source of `meltb`. Same lifecycle as `m_congel_win`.
+      real(wp), allocatable :: m_snoice_win(:, :)
+         !! Window snow-ice conversion mass (kg/m² of cell, Σ w·snow_to_ice).
+         !! Source of `snoice`. Same lifecycle as `m_congel_win`.
+      real(wp) :: dt_win = 0.0_wp
+         !! Length (s) of the last thermo window that produced the `m_*_win`
+         !! masses. Host scalar set by `ice_thermo_driver_step`; the rate
+         !! fills divide by it. 0 until the first thermo step of a run
+         !! (rates read 0 before then, never a divide by zero).
       real(wp), allocatable :: m_melt_diag(:, :)
          !! Net meltwater mass to the ocean in the last window (kg/m^2 of
          !! cell, = h2o_ice_to_ocn - h2o_ocn_to_ice summed over cats;
@@ -716,6 +745,12 @@ contains
       allocate (this%heat_to_ocn(this%nx_total, this%ny_total, this%ncat), source=0.0_wp)
       allocate (this%sw_thru(this%nx_total, this%ny_total, this%ncat), source=0.0_wp)
       allocate (this%snow_to_ice(this%nx_total, this%ny_total, this%ncat), source=0.0_wp)
+      allocate (this%melt_top_ice(this%nx_total, this%ny_total, this%ncat), source=0.0_wp)
+      allocate (this%melt_bot_ice(this%nx_total, this%ny_total, this%ncat), source=0.0_wp)
+      allocate (this%m_congel_win(this%nx_total, this%ny_total), source=0.0_wp)
+      allocate (this%m_meltt_win(this%nx_total, this%ny_total), source=0.0_wp)
+      allocate (this%m_meltb_win(this%nx_total, this%ny_total), source=0.0_wp)
+      allocate (this%m_snoice_win(this%nx_total, this%ny_total), source=0.0_wp)
 
       allocate (this%heat_flux_diag(this%nx_total, this%ny_total), source=0.0_wp)
       allocate (this%sw_thru_diag(this%nx_total, this%ny_total), source=0.0_wp)
@@ -814,6 +849,12 @@ contains
       if (allocated(this%heat_to_ocn)) deallocate (this%heat_to_ocn)
       if (allocated(this%sw_thru)) deallocate (this%sw_thru)
       if (allocated(this%snow_to_ice)) deallocate (this%snow_to_ice)
+      if (allocated(this%melt_top_ice)) deallocate (this%melt_top_ice)
+      if (allocated(this%melt_bot_ice)) deallocate (this%melt_bot_ice)
+      if (allocated(this%m_congel_win)) deallocate (this%m_congel_win)
+      if (allocated(this%m_meltt_win)) deallocate (this%m_meltt_win)
+      if (allocated(this%m_meltb_win)) deallocate (this%m_meltb_win)
+      if (allocated(this%m_snoice_win)) deallocate (this%m_snoice_win)
       if (allocated(this%heat_flux_diag)) deallocate (this%heat_flux_diag)
       if (allocated(this%sw_thru_diag)) deallocate (this%sw_thru_diag)
       if (allocated(this%m_melt_diag)) deallocate (this%m_melt_diag)
@@ -904,6 +945,9 @@ contains
       !$acc enter data copyin(this%fb, this%sst_seam, this%ssurf_seam, this%tfw_seam)
       !$acc enter data copyin(this%tsurf_out, this%h2o_ocn_to_ice, this%h2o_ice_to_ocn)
       !$acc enter data copyin(this%heat_to_ocn, this%sw_thru, this%snow_to_ice)
+      !$acc enter data copyin(this%melt_top_ice, this%melt_bot_ice)
+      !$acc enter data copyin(this%m_congel_win, this%m_meltt_win, this%m_meltb_win)
+      !$acc enter data copyin(this%m_snoice_win)
       !$acc enter data copyin(this%heat_flux_diag, this%sw_thru_diag, this%m_melt_diag, &
       !$acc&                   this%fprec_ocn_diag)
       !$acc enter data copyin(this%h_lim, this%mh_lim, this%fb_part_sum, this%snow_part_ocn)
@@ -973,6 +1017,9 @@ contains
       !$acc exit data delete(this%fb, this%sst_seam, this%ssurf_seam, this%tfw_seam)
       !$acc exit data delete(this%tsurf_out, this%h2o_ocn_to_ice, this%h2o_ice_to_ocn)
       !$acc exit data delete(this%heat_to_ocn, this%sw_thru, this%snow_to_ice)
+      !$acc exit data delete(this%melt_top_ice, this%melt_bot_ice)
+      !$acc exit data copyout(this%m_congel_win, this%m_meltt_win, this%m_meltb_win)
+      !$acc exit data copyout(this%m_snoice_win)
       !$acc exit data copyout(this%heat_flux_diag, this%sw_thru_diag, this%m_melt_diag)
       !$acc exit data delete(this%fprec_ocn_diag)
       !$acc exit data delete(this%h_lim, this%mh_lim, this%fb_part_sum, this%snow_part_ocn)
@@ -1023,6 +1070,12 @@ contains
                + arr_bytes(this%heat_to_ocn) &
                + arr_bytes(this%sw_thru) &
                + arr_bytes(this%snow_to_ice) &
+               + arr_bytes(this%melt_top_ice) &
+               + arr_bytes(this%melt_bot_ice) &
+               + arr_bytes(this%m_congel_win) &
+               + arr_bytes(this%m_meltt_win) &
+               + arr_bytes(this%m_meltb_win) &
+               + arr_bytes(this%m_snoice_win) &
                + arr_bytes(this%heat_flux_diag) &
                + arr_bytes(this%sw_thru_diag) &
                + arr_bytes(this%m_melt_diag) &

@@ -627,7 +627,8 @@ contains
                                    sf_0, dsf_dt, sw_dn, tfw, fb, sst, s_surf, dtt, &
                                    do_snow_ice, &
                                    snow, tsurf, h2o_ocn_to_ice, h2o_ice_to_ocn, &
-                                   heat_to_ocn, sw_thru, snow_to_ice)
+                                   heat_to_ocn, sw_thru, snow_to_ice, &
+                                   melt_top_ice, melt_bot_ice)
       !! Per-(cell,category) orchestrator: gather (bottom-up -> top-down
       !! flip, TRAP #2), optics, conduction (`ice_temp_sis2`), resize
       !! (snow add, bottom-freeze, top/bottom melt peel, rebalance),
@@ -695,9 +696,17 @@ contains
          !! Shortwave transmitted through the ice to the ocean (W/m²).
       real(wp), intent(out) :: snow_to_ice
          !! Mass converted from snow to the top ice layer this call
-         !! (kg/m²), >= 0 — SIS2 `SN2IC` (PR 27). 0 when `do_snow_ice`
+         !! (kg/m²), >= 0 — snow-to-ice conversion (PR 27). 0 when `do_snow_ice`
          !! is `.false.` or the column is not flooded.
+      real(wp), intent(out), optional :: melt_top_ice
+         !! ICE-only share of the top melt (kg/m², layers k >= 1; the
+         !! snow share k = 0 is excluded). Optional: the window-mass
+         !! diagnostics (`congel`/`meltt`/`meltb`) read it; callers that
+         !! do not want it omit the argument.
+      real(wp), intent(out), optional :: melt_bot_ice
+         !! ICE-only share of the bottom melt (kg/m², layers k >= 1).
 
+      real(wp) :: m_top_ice, m_bot_ice
       real(wp) :: enth_loc(0:ICE_NK_MAX), sal_loc(ICE_NK_MAX)
       real(wp) :: albedo, abs_sfc, abs_snow, abs_ocn, abs_int, pen
       real(wp) :: abs_ice_lay(ICE_NK_MAX), sol(0:ICE_NK_MAX)
@@ -780,10 +789,14 @@ contains
 
       heat_to_ocn = 0.0_wp
       h2o_ice_to_ocn = 0.0_wp
+      m_top_ice = 0.0_wp
+      m_bot_ice = 0.0_wp
       call ice_top_melt_peel(nk, m_lay(0:nk), enthalpy(0:nk), salin(0:nk), tmelt, &
-                             heat_to_ocn, h2o_ice_to_ocn)
+                             heat_to_ocn, h2o_ice_to_ocn, m_top_ice)
       call ice_bottom_melt_peel(nk, m_lay(0:nk), enthalpy(0:nk), salin(0:nk), bmelt, &
-                                heat_to_ocn, h2o_ice_to_ocn)
+                                heat_to_ocn, h2o_ice_to_ocn, m_bot_ice)
+      if (present(melt_top_ice)) melt_top_ice = m_top_ice
+      if (present(melt_bot_ice)) melt_bot_ice = m_bot_ice
 
       ! PR 27: Archimedes freeboard flood — AFTER the melt peels (so the
       ! freshly-converted mass is not re-melted this step and m_i
@@ -813,7 +826,8 @@ contains
                                       m_ice, m_snow, enth_ice, enth_snow, sal_ice, &
                                       sf_0, dsf_dt, sw_dn, fprec, tfw, fb, sst, s_surf, &
                                       tsurf_out, h2o_ocn_to_ice, h2o_ice_to_ocn, &
-                                      heat_to_ocn, sw_thru, snow_to_ice)
+                                      heat_to_ocn, sw_thru, snow_to_ice, &
+                                      melt_top_ice, melt_bot_ice)
       !! `do concurrent` cell driver: PHYSICAL cells only, inner `if`
       !! gate (never a masked DC header), serial `do cat` loop inside.
       !! Per (i,j,cat): outputs zeroed unconditionally, then gated on
@@ -872,24 +886,31 @@ contains
          !! Shortwave transmitted through the ice to the ocean (W/m²).
       real(wp), intent(inout) :: snow_to_ice(nx, ny, ncat)
          !! Mass converted from snow to the top ice layer this call
-         !! (kg/m²), >= 0 — SIS2 `SN2IC` (PR 27). Zeroed unconditionally
+         !! (kg/m²), >= 0 — snow-to-ice conversion (PR 27). Zeroed unconditionally
          !! every thermo step, same lifecycle as `sw_thru`.
+      real(wp), intent(inout), optional :: melt_top_ice(nx, ny, ncat)
+         !! ICE-only top-melt share per category (kg/m², k >= 1). Optional
+         !! (the window-mass diagnostics); zeroed every step when present.
+      real(wp), intent(inout), optional :: melt_bot_ice(nx, ny, ncat)
+         !! ICE-only bottom-melt share per category (kg/m², k >= 1).
 
       integer :: i, j, cat, i_lo, i_hi, j_lo, j_hi
+      logical :: want_melt
       real(wp) :: m_snow_pt, m_ice_pt, enth_snow_pt
       real(wp) :: enth_ice_col(ICE_NK_MAX), sal_ice_col(ICE_NK_MAX)
       real(wp) :: tsurf_pt, h2o_ocn_to_ice_pt, h2o_ice_to_ocn_pt, heat_to_ocn_pt, sw_thru_pt
-      real(wp) :: snow_to_ice_pt
+      real(wp) :: snow_to_ice_pt, melt_top_pt, melt_bot_pt
 
       i_lo = nghost + 1
       i_hi = nx - nghost
       j_lo = nghost + 1
       j_hi = ny - nghost
+      want_melt = present(melt_top_ice) .and. present(melt_bot_ice)
 
       do concurrent(j=j_lo:j_hi, i=i_lo:i_hi) &
          local(cat, m_snow_pt, m_ice_pt, enth_snow_pt, enth_ice_col, sal_ice_col, &
                tsurf_pt, h2o_ocn_to_ice_pt, h2o_ice_to_ocn_pt, heat_to_ocn_pt, sw_thru_pt, &
-               snow_to_ice_pt)
+               snow_to_ice_pt, melt_top_pt, melt_bot_pt)
          do cat = 1, ncat
             tsurf_out(i, j, cat) = 0.0_wp
             h2o_ocn_to_ice(i, j, cat) = 0.0_wp
@@ -897,6 +918,10 @@ contains
             heat_to_ocn(i, j, cat) = 0.0_wp
             sw_thru(i, j, cat) = 0.0_wp
             snow_to_ice(i, j, cat) = 0.0_wp
+            if (want_melt) then
+               melt_top_ice(i, j, cat) = 0.0_wp
+               melt_bot_ice(i, j, cat) = 0.0_wp
+            end if
 
             if (wet_mask(i, j) > 0.5_wp .and. m_ice(i, j, cat) > ICE_RHO_ICE*H_VANISHED) then
                m_snow_pt = m_snow(i, j, cat)
@@ -912,7 +937,7 @@ contains
                                     do_snow_ice, &
                                     fprec(i, j)*dtt, tsurf_pt, h2o_ocn_to_ice_pt, &
                                     h2o_ice_to_ocn_pt, heat_to_ocn_pt, sw_thru_pt, &
-                                    snow_to_ice_pt)
+                                    snow_to_ice_pt, melt_top_pt, melt_bot_pt)
 
                m_snow(i, j, cat) = m_snow_pt
                m_ice(i, j, cat) = m_ice_pt
@@ -925,6 +950,10 @@ contains
                heat_to_ocn(i, j, cat) = heat_to_ocn_pt
                sw_thru(i, j, cat) = sw_thru_pt
                snow_to_ice(i, j, cat) = snow_to_ice_pt
+               if (want_melt) then
+                  melt_top_ice(i, j, cat) = melt_top_pt
+                  melt_bot_ice(i, j, cat) = melt_bot_pt
+               end if
             end if
          end do
       end do

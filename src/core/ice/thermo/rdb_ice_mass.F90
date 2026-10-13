@@ -1,18 +1,18 @@
-!! Sea-ice column mass bookkeeping (SIS2 port, PR 3a).
+!! Sea-ice column mass bookkeeping (Winton 2000 column port, PR 3a).
 module rdb_ice_mass
-   !! Ports of the subset of `ice_resize_SIS2` (SIS2_ice_thm.F90:1010-1338)
+   !! Ports of the subset of the Winton (2000) resize step
    !! needed by the Winton column step: bottom freezing, top/bottom melt
    !! peel, and equal-mass layer rebalancing
-   !! (`rebalance_ice_layers`, SIS2_ice_thm.F90:1448-1512). Ported from
-   !! the validated prototype `sis2_resize.py` (Apache-2.0 source
-   !! attribution as above).
+   !! (`rebalance_ice_layers`, Winton 2000). The equal-mass repartition
+   !! follows the column-thermodynamics description of Winton (2000) and
+   !! the CICE v5 user guide (Hunke et al. 2015).
    !!
    !! PR 26 ports the snow source term (`ice_snow_accumulate`, below) —
-   !! the first branch SIS2 runs in `ice_resize_SIS2`
-   !! (SIS2_ice_thm.F90:1122), so it sits first in this module too.
+   !! the first branch CICE-family runs in the resize step
+   !! (Winton 2000 column order), so it sits first in this module too.
    !! PR 27 ports the Archimedes freeboard snow-ice flooding conversion
    !! (`ice_snow_ice_flood`, below) — the FINAL substantive block of
-   !! `ice_resize_SIS2` (SIS2_ice_thm.F90:1303-1320), so it sits last in
+   !! the resize step (Archimedes flooding), so it sits last in
    !! this module too. Pond/evap/rain mass paths remain deliberately NOT
    !! ported. TODO(PR-35): pond mass paths. Evap/rain need atmospheric
    !! fields Roundabout does not carry (PR-55 at the earliest).
@@ -33,18 +33,18 @@ module rdb_ice_mass
 contains
 
    pure subroutine ice_snow_accumulate(nk, m_lay, snow)
-      !! Snow source-term branch of `ice_resize_SIS2`
-      !! (SIS2_ice_thm.F90:1122): `m_lay(0) = m_lay(0) + snow`. The
+      !! Snow source-term branch of the resize step
+      !! (Winton 2000 column order): `m_lay(0) = m_lay(0) + snow`. The
       !! snow layer's specific enthalpy `enthalpy(0)` is UNCHANGED by
-      !! snowfall -- SIS2 is explicit that this "should do nothing"
-      !! (SIS_slow_thermo.F90:1032-1033) and books the implied energy
+      !! snowfall -- the CICE convention notes this "should do nothing"
+      !! (CICE v5 user guide, snowfall energy) and books the implied energy
       !! against the atmosphere (`enth_snowfall = snow*enthalpy(0)` ->
       !! `Enth_Mass_in_atm`). Roundabout's atmosphere is a prescribed slab
       !! with no energy budget to charge, so that bookkeeping is not
       !! ported -- a documented v1 divergence (PLAN_PR26_snowfall.md, S3).
       !!
-      !! The SIS2 guard `if (mtot_ice == 0.0) m_lay(0) = 0.0`
-      !! (SIS2_ice_thm.F90:1121, needed because SIS2 gates its column on
+      !! The CICE-family guard `if (mtot_ice == 0.0) m_lay(0) = 0.0`
+      !! (needed because CICE gates its column on
       !! `part_size > 0` and so can reach a category with zero ice mass)
       !! is deliberately NOT ported: `ice_column_step`'s caller only
       !! ever reaches this routine on a category that already passed
@@ -71,8 +71,8 @@ contains
 
    pure subroutine ice_bottom_freeze(nk, m_lay, enthalpy, salin, bmelt, &
                                      enth_ocean, salin_freeze, h2o_ocn_to_ice)
-      !! Bottom-freezing branch of `ice_resize_SIS2`
-      !! (SIS2_ice_thm.F90:1164-1188; prototype sis2_resize.py:20-45).
+      !! Bottom-freezing branch of the resize step
+      !! (Winton 2000, bottom freezing).
       !! When `bmelt < 0` (net upward heat deficit at the base), freeze
       !! ocean water onto the bottom ice layer: `enth_freeze =
       !! min(enthalpy(nk), enth_ocean - min_denth_freeze)`,
@@ -120,15 +120,15 @@ contains
    end subroutine ice_bottom_freeze
 
    pure subroutine ice_top_melt_peel(nk, m_lay, enthalpy, salin, tmelt, &
-                                     heat_to_ocn, h2o_ice_to_ocn)
-      !! Top melt peel (SIS2_ice_thm.F90:1217-1242; prototype
-      !! sis2_resize.py:48-80). Peels mass from k=0 (snow) upward
+                                     heat_to_ocn, h2o_ice_to_ocn, m_ice_share)
+      !! Top melt peel (Winton 2000, top melt peel; prototype
+      !! Hunke et al. 2015 melt-energy accounting). Peels mass from k=0 (snow) upward
       !! through k=nk until `tmelt` is spent; a massless layer is
       !! skipped; the partial layer takes `m_melt = melt_left/(enth_fr
       !! - enthalpy)`; any leftover melt energy (all layers exhausted)
       !! drains to `heat_to_ocn`. Snow/pond-free path — `tmelt` is
       !! assumed already >= 0 on entry (the caller folds any negative
-      !! top-melt into `bmelt` upstream, SIS2:1159-1163).
+      !! top-melt into `bmelt` upstream, Hunke et al. 2015, top-melt folding).
       !$acc routine seq
       integer, intent(in) :: nk
          !! Number of ice layers (declared first — decl-order).
@@ -145,6 +145,11 @@ contains
          !! accumulator, caller zeroes once per step.
       real(wp), intent(inout) :: h2o_ice_to_ocn
          !! Meltwater mass flux to the ocean (kg/m²) — accumulator.
+      real(wp), intent(inout), optional :: m_ice_share
+         !! ICE-only share of the melt (kg/m², layers k >= 1) — the
+         !! snow share (k = 0) is NOT added here. Optional accumulator
+         !! (the existing peel tests omit it); the caller zeroes it. Diagnostic only: `h2o_ice_to_ocn` (the
+         !! coupling sink) is updated exactly as before.
 
       real(wp) :: enth_fr(0:ICE_NK_MAX)
       real(wp) :: melt_left, avail, m_melt
@@ -169,6 +174,7 @@ contains
             end if
             m_lay(k) = m_lay(k) - m_melt
             h2o_ice_to_ocn = h2o_ice_to_ocn + m_melt
+            if (k >= 1 .and. present(m_ice_share)) m_ice_share = m_ice_share + m_melt
             if (melt_left <= 0.0_wp) exit
          end do
          heat_to_ocn = heat_to_ocn + melt_left
@@ -176,9 +182,9 @@ contains
    end subroutine ice_top_melt_peel
 
    pure subroutine ice_bottom_melt_peel(nk, m_lay, enthalpy, salin, bmelt, &
-                                        heat_to_ocn, h2o_ice_to_ocn)
-      !! Bottom melt peel (SIS2_ice_thm.F90:1246-1271; prototype
-      !! sis2_resize.py:83-111). Same peel as `ice_top_melt_peel` but
+                                        heat_to_ocn, h2o_ice_to_ocn, m_ice_share)
+      !! Bottom melt peel (Winton 2000, bottom melt peel; prototype
+      !! Hunke et al. 2015 melt-energy accounting). Same peel as `ice_top_melt_peel` but
       !! from k=nk down to k=0. The prototype's separate `ablation`
       !! return is dropped (it is `h2o_ice_to_ocn` restricted to this
       !! call; PR 3b can re-derive it if needed).
@@ -201,6 +207,11 @@ contains
          !! accumulator, caller zeroes once per step.
       real(wp), intent(inout) :: h2o_ice_to_ocn
          !! Meltwater mass flux to the ocean (kg/m²) — accumulator.
+      real(wp), intent(inout), optional :: m_ice_share
+         !! ICE-only share of the melt (kg/m², layers k >= 1) — the
+         !! snow share (k = 0) is NOT added here. Optional accumulator
+         !! (the existing peel tests omit it); the caller zeroes it. Diagnostic only: `h2o_ice_to_ocn` (the
+         !! coupling sink) is updated exactly as before.
 
       real(wp) :: enth_fr(0:ICE_NK_MAX)
       real(wp) :: melt_left, avail, m_melt
@@ -225,6 +236,7 @@ contains
             end if
             m_lay(k) = m_lay(k) - m_melt
             h2o_ice_to_ocn = h2o_ice_to_ocn + m_melt
+            if (k >= 1 .and. present(m_ice_share)) m_ice_share = m_ice_share + m_melt
             if (melt_left <= 0.0_wp) exit
          end do
          heat_to_ocn = heat_to_ocn + melt_left
@@ -233,12 +245,12 @@ contains
 
    pure subroutine ice_rebalance_layers(nk, m_lay, enthalpy, salin, mtot_ice)
       !! Equal-mass repartition of ice layers 1..nk, mass-weighting
-      !! enthalpy and salinity (SIS2_ice_thm.F90:1448-1512; prototype
-      !! sis2_resize.py:114-161). The snow slot (`m_lay(0)`,
+      !! enthalpy and salinity (Winton 2000 equal-mass repartition; prototype
+      !! Hunke et al. 2015 layer rebalancing). The snow slot (`m_lay(0)`,
       !! `enthalpy(0)`) is untouched. `mtot_ice = sum(m_lay(1:nk))` is
       !! returned; `mtot_ice == 0` is an early exit leaving the ice
       !! layers untouched (there is no ice to rebalance). The k1/k2
-      !! two-pointer drain loop follows the SIS2/prototype branch
+      !! two-pointer drain loop follows the CICE-family/prototype branch
       !! order exactly, including the
       !! `(m_ice_avg - mlay_new(k2) > src_m(k1)) .or. (k2 == nk)` test.
       !$acc routine seq
@@ -308,7 +320,7 @@ contains
 
    pure subroutine ice_snow_ice_flood(nk, m_lay, enthalpy, salin, rho_ratio, snow_to_ice)
       !! Archimedes freeboard snow-ice flooding — the FINAL substantive
-      !! block of `ice_resize_SIS2` (SIS2_ice_thm.F90:1303-1320; PR 27).
+      !! block of the resize step (Archimedes flooding, PR 27).
       !! Standard closure: Leppäranta (1983), *A growth model for black
       !! ice, snow ice and snow thickness in subarctic basins*, Nordic
       !! Hydrology 14, 59-70; Fichefet & Morales Maqueda (1997), JGR 102,
@@ -332,7 +344,7 @@ contains
       !! `rdb_ice_column`), so the `min(...)` clamp is PROVABLY DEAD
       !! CODE here: it binds iff `m_lay(0) < -m_i`, impossible for
       !! non-negative masses (see the plan §9.2 sweep test). Kept for
-      !! SIS2 parity — ponds would resurrect it.
+      !! Winton-2000 / CICE parity — ponds would resurrect it.
       !!
       !! Mass-, enthalpy- and salt-conserving WITHIN THE COLUMN, exactly
       !! (`(m_0-s)*E_0 + (m_1+s)*[(m_1*E_1+s*E_0)/(m_1+s)] = m_0*E_0 +
@@ -341,16 +353,16 @@ contains
       !! `enthalpy(1)` and `salin(1)` both DECREASE — snow's cold, fresh
       !! mass lands in the ice.
       !!
-      !! **Known physical incompleteness, inherited from SIS2 (not fixed
+      !! **Known physical incompleteness, inherited from the CICE family (not fixed
       !! here — true seawater flooding is a materially larger, separate
       !! closure, see the plan's §12/§14 Q1).** Real flooding draws
       !! SEAWATER into the pore space, which then refreezes, releasing
-      !! latent heat and rejecting brine. SIS2 instead moves snow mass
+      !! latent heat and rejecting brine. the CICE-family convention instead moves snow mass
       !! with the SNOW's enthalpy and ZERO salinity — snow enthalpy
       !! (<= -L_f ~ -3.34e5 J/kg) is far more negative than near-freezing
       !! seawater, so the new ice is too COLD; `S_snow == 0` means it is
-      !! too FRESH. `snow_to_ice` is diagnostic-only (SIS2's SN2IC):
-      !! flooding exchanges NOTHING with the ocean (SIS2_ice_thm.F90:1273,
+      !! too FRESH. `snow_to_ice` is diagnostic-only (snow-to-ice conversion):
+      !! flooding exchanges NOTHING with the ocean (see the conservation note below,
       !! "There are no further heat or mass losses or gains by the
       !! ice+snow").
       !$acc routine seq
@@ -369,7 +381,7 @@ contains
          !! `use rdb_ice_column` (that module `use`s this one).
       real(wp), intent(out) :: snow_to_ice
          !! Mass converted from snow to the top ice layer this call
-         !! (kg/m²), >= 0 — SIS2 `SN2IC`.
+         !! (kg/m²), >= 0 — snow-to-ice conversion.
 
       real(wp) :: m_i, m_submerged
 
