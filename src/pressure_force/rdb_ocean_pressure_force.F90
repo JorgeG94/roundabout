@@ -37,7 +37,7 @@ module rdb_ocean_pressure_force
                              scratch_3d_buffer_enter_data_impl, &
                              scratch_3d_buffer_exit_data_impl
    use rdb_eos, only: eos_wright_pgf_column_sweep_impl, eos_t, &
-                      EOS_VARIANT_WRIGHT_97, EOS_VARIANT_ROQUET_SPV, &
+                      EOS_VARIANT_WRIGHT_97, EOS_VARIANT_ROQUET_SPV, EOS_VARIANT_ROQUET_RHO, &
                       WRIGHT_A0, WRIGHT_A1, WRIGHT_A2, &
                       WRIGHT_B0, WRIGHT_B1, WRIGHT_B2, WRIGHT_B3, WRIGHT_B4, WRIGHT_B5, &
                       WRIGHT_C0, WRIGHT_C1, WRIGHT_C2, WRIGHT_C3, WRIGHT_C4, WRIGHT_C5, &
@@ -93,6 +93,8 @@ module rdb_ocean_pressure_force
    public :: boole_dpa_face_wright
    public :: roquet_recon_dpa_intz
    public :: roquet_recon_dpa_face
+   public :: roquet_rho_recon_dpa_intz
+   public :: roquet_rho_recon_dpa_face
 
    integer, parameter :: N_BOOLE = 5
       !! Sub-points of the in-layer Boole (5-point closed Newton-Cotes) rule;
@@ -1762,11 +1764,14 @@ contains
       ! Passes 1b and 2 come in one loop copy per EOS, selected here, outside
       ! the loops (same sub-points, weights and summation order in every
       ! copy): Wright calls its Boole twins (density inline, no `eos_t`
-      ! handle); Roquet calls this module's twins `roquet_recon_dpa_intz` /
-      ! `roquet_recon_dpa_face`, whose SpV value comes from the included
-      ! `rdb_roquet_spv.inc` and is inlined into the kernel (the generic
+      ! handle); Roquet SpV calls this module's twins `roquet_recon_dpa_intz`
+      ! / `roquet_recon_dpa_face`, whose value comes from the included
+      ! `rdb_roquet_spv.inc`; Roquet in-situ density (`EOS_VARIANT_ROQUET_RHO`)
+      ! calls the sibling twins `roquet_rho_recon_dpa_intz` /
+      ! `roquet_rho_recon_dpa_face` (`rdb_roquet_rho.inc`, no `1/SV`
+      ! reciprocal) -- both inlined into the kernel, where the generic
       ! chain's out-of-line `eos_density_point` calls were this path's
-      ! device cost); anything else (the linear EOS) takes the generic
+      ! device cost; anything else (the linear EOS) takes the generic
       ! `eos_density_point` rule.
       do concurrent(j=1:ny, i=1:nx) local(k)
          e_face(i, j, 1) = -b(i, j)
@@ -1800,6 +1805,18 @@ contains
                                        S_t(i, j, k), S_b(i, j, k), &
                                        conc_S(i, j, k), &
                                        parabolic, dpa_kk, intz_kk)
+            pa(i, j, k) = dpa_kk
+            intz_dpa(i, j, k) = intz_kk
+         end do
+      else if (eos_variant == EOS_VARIANT_ROQUET_RHO) then
+         do concurrent(k=1:nz, j=1:ny, i=1:nx) local(dpa_kk, intz_kk)
+            call roquet_rho_recon_dpa_intz(rho0, rho_ref, &
+                                           e_face(i, j, k + 1), h_layer(i, j, k), &
+                                           T_t(i, j, k), T_b(i, j, k), &
+                                           conc_T(i, j, k), &
+                                           S_t(i, j, k), S_b(i, j, k), &
+                                           conc_S(i, j, k), &
+                                           parabolic, dpa_kk, intz_kk)
             pa(i, j, k) = dpa_kk
             intz_dpa(i, j, k) = intz_kk
          end do
@@ -1866,6 +1883,25 @@ contains
                                        S_t(i - 1, j, k), S_b(i - 1, j, k), s_m_L, &
                                        S_t(i, j, k), S_b(i, j, k), s_m_R, &
                                        dpa_L, dpa_R, parabolic, dpa_kk)
+            intx_dpa(i, j, k) = dpa_kk
+         end do
+      else if (eos_variant == EOS_VARIANT_ROQUET_RHO) then
+         do concurrent(k=1:nz, j=1:ny, i=2:nx) &
+            local(dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R)
+            t_m_L = conc_T(i - 1, j, k)
+            t_m_R = conc_T(i, j, k)
+            s_m_L = conc_S(i - 1, j, k)
+            s_m_R = conc_S(i, j, k)
+            dpa_L = pa(i - 1, j, k) - pa(i - 1, j, k + 1)
+            dpa_R = pa(i, j, k) - pa(i, j, k + 1)
+            call roquet_rho_recon_dpa_face(rho0, rho_ref, &
+                                           e_face(i - 1, j, k + 1), e_face(i, j, k + 1), &
+                                           h_layer(i - 1, j, k), h_layer(i, j, k), &
+                                           T_t(i - 1, j, k), T_b(i - 1, j, k), t_m_L, &
+                                           T_t(i, j, k), T_b(i, j, k), t_m_R, &
+                                           S_t(i - 1, j, k), S_b(i - 1, j, k), s_m_L, &
+                                           S_t(i, j, k), S_b(i, j, k), s_m_R, &
+                                           dpa_L, dpa_R, parabolic, dpa_kk)
             intx_dpa(i, j, k) = dpa_kk
          end do
       else
@@ -1942,6 +1978,25 @@ contains
                                        S_t(i, j - 1, k), S_b(i, j - 1, k), s_m_L, &
                                        S_t(i, j, k), S_b(i, j, k), s_m_R, &
                                        dpa_L, dpa_R, parabolic, dpa_kk)
+            inty_dpa(i, j, k) = dpa_kk
+         end do
+      else if (eos_variant == EOS_VARIANT_ROQUET_RHO) then
+         do concurrent(k=1:nz, j=2:ny, i=1:nx) &
+            local(dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R)
+            t_m_L = conc_T(i, j - 1, k)
+            t_m_R = conc_T(i, j, k)
+            s_m_L = conc_S(i, j - 1, k)
+            s_m_R = conc_S(i, j, k)
+            dpa_L = pa(i, j - 1, k) - pa(i, j - 1, k + 1)
+            dpa_R = pa(i, j, k) - pa(i, j, k + 1)
+            call roquet_rho_recon_dpa_face(rho0, rho_ref, &
+                                           e_face(i, j - 1, k + 1), e_face(i, j, k + 1), &
+                                           h_layer(i, j - 1, k), h_layer(i, j, k), &
+                                           T_t(i, j - 1, k), T_b(i, j - 1, k), t_m_L, &
+                                           T_t(i, j, k), T_b(i, j, k), t_m_R, &
+                                           S_t(i, j - 1, k), S_b(i, j - 1, k), s_m_L, &
+                                           S_t(i, j, k), S_b(i, j, k), s_m_R, &
+                                           dpa_L, dpa_R, parabolic, dpa_kk)
             inty_dpa(i, j, k) = dpa_kk
          end do
       else
@@ -2053,7 +2108,14 @@ contains
       !! can change the answer: the knob is on, there is an EOS handle and
       !! T/S to evaluate it on, and the EOS depends on pressure.  For the
       !! linear EOS `ms%rho_layer` already IS the in-situ density, so the
-      !! legacy path runs, bit-identical.
+      !! legacy path runs, bit-identical. Admits Wright (`EOS_VARIANT_WRIGHT_97`)
+      !! and both Roquet et al. (2015) fits -- specific volume
+      !! (`EOS_VARIANT_ROQUET_SPV`) and in-situ density (`EOS_VARIANT_ROQUET_RHO`).
+      !! Configure-time refusals (`rdb_config_validate`,
+      !! `rdb_ocean_setup_lateral`) currently keep `EOS_VARIANT_ROQUET_RHO`
+      !! out of every accepted namelist, so this third branch is reachable
+      !! only from the unit tests in `tests/test_ocean_pgf_roquet_rho.F90`
+      !! until that refusal is lifted.
       type(ocean_pressure_force_t), intent(in) :: pgf
       type(multilayer_state_t), intent(in) :: ms
       type(eos_t), intent(in), optional :: eos
@@ -2063,7 +2125,8 @@ contains
       if (.not. present(eos)) return
       if (ms%idx_salinity <= 0 .or. ms%idx_temperature <= 0) return
       yes = eos%variant == EOS_VARIANT_WRIGHT_97 .or. &
-            eos%variant == EOS_VARIANT_ROQUET_SPV
+            eos%variant == EOS_VARIANT_ROQUET_SPV .or. &
+            eos%variant == EOS_VARIANT_ROQUET_RHO
    end function use_insitu_pcm
 
    pure subroutine compute_fv_mom6_insitu_pcm_impl(h_layer, hS, hT, b, conc_T, conc_S, &
@@ -2109,8 +2172,9 @@ contains
       !!   * Passes 3–5: the face assembly, identical to the other two
       !!     FV_MOM6 branches.
       !!
-      !! Under Wright (`wright_analytic`) Passes 1–2 replace each vertical
-      !! Boole rule by the closed-form integral `wright_pcm_dpa_intz` (MOM6
+      !! Under Wright (`eos_variant == EOS_VARIANT_WRIGHT_97`) Passes 1–2
+      !! replace each vertical Boole rule by the closed-form integral
+      !! `wright_pcm_dpa_intz` (MOM6
       !! `int_density_dz_wright`), keeping the 5-point cross-face Boole
       !! rule and the same sub-columns (`wright_pcm_dpa_face`).  The
       !! vertical Boole rule it replaces is accurate to
@@ -2121,17 +2185,28 @@ contains
       !! days, one V100): `ocean_pgf` 10.26 s → 1.90 s, against 1.09 s for
       !! `insitu_density = .false.`.
       !!
-      !! Under Roquet the vertical rule stays 5-point Boole (no closed form
-      !! for `int dz/SV(p)`), factored: `roquet_pcm_dpa_intz` evaluates the
-      !! (T, S) part of the SpV polynomial once per sub-column and only the
-      !! pressure Horner per point — the same five densities as
-      !! `boole_dpa_intz_layer`, so answers are unchanged (to the digit on
-      !! the global 1° run's `[stats]` and En).  `ocean_pgf` 10.73 s →
-      !! 3.64 s on the same run, → 2.55 s (1.36x Wright) with the SpV value
-      !! from the module-local include `rdb_roquet_spv.inc`: as a call into
-      !! `rdb_eos` the (T, S) part was NOT inlined on the device (a real
-      !! `call`, its four results through the stack, 130+ registers in the
-      !! face kernels against 88 inlined).
+      !! Under Roquet SpV (`EOS_VARIANT_ROQUET_SPV`) the vertical rule stays
+      !! 5-point Boole (no closed form for `int dz/SV(p)`), factored:
+      !! `roquet_pcm_dpa_intz` evaluates the (T, S) part of the SpV
+      !! polynomial once per sub-column and only the pressure Horner per
+      !! point — the same five densities as `boole_dpa_intz_layer`, so
+      !! answers are unchanged (to the digit on the global 1° run's
+      !! `[stats]` and En).  `ocean_pgf` 10.73 s → 3.64 s on the same run,
+      !! → 2.55 s (1.36x Wright) with the SpV value from the module-local
+      !! include `rdb_roquet_spv.inc`: as a call into `rdb_eos` the (T, S)
+      !! part was NOT inlined on the device (a real `call`, its four
+      !! results through the stack, 130+ registers in the face kernels
+      !! against 88 inlined).
+      !!
+      !! Under Roquet in-situ density (`EOS_VARIANT_ROQUET_RHO`, the final
+      !! `else` copies) the same reasoning applies with ONE difference: this
+      !! fit's polynomial already IS density, so `roquet_rho_pcm_dpa_intz`
+      !! / `roquet_rho_pcm_dpa_face` pay no `1/SV` reciprocal per pressure
+      !! point. Reachable only from `tests/test_ocean_pgf_roquet_rho.F90`
+      !! while the configure-time refusal of `eos='roquet_rho'` with
+      !! `form='fv_mom6'` stands (`rdb_config_validate`,
+      !! `rdb_ocean_setup_lateral`) -- no shipped namelist exercises this
+      !! branch yet.
       !!
       !! Pass 1 and Pass 2 each run their integrals as a 3-D `do concurrent`
       !! over (k, j, i) — every layer's and every face's integral is
@@ -2171,14 +2246,19 @@ contains
          !! `eos%variant`, selected ONCE here, outside the loops -- each
          !! variant has its own loop copies with its integrals inlined, no
          !! generic `eos_t` dispatch in the hot loop.  `use_insitu_pcm`
-         !! admits exactly two:
+         !! admits exactly three:
          !!   * `EOS_VARIANT_WRIGHT_97`: the ANALYTIC Wright layer integral
          !!     (`wright_pcm_dpa_intz` / `wright_pcm_dpa_face`, MOM6
          !!     `int_density_dz_wright`).
-         !!   * `EOS_VARIANT_ROQUET_SPV` (the `else` copies): the 5-point
-         !!     Boole rule of MOM6 `int_density_dz_generic_pcm`, with the
-         !!     (T, S) part of the EOS evaluated once per sub-column
-         !!     (`roquet_pcm_dpa_intz` / `roquet_pcm_dpa_face`).
+         !!   * `EOS_VARIANT_ROQUET_SPV`: the 5-point Boole rule of MOM6
+         !!     `int_density_dz_generic_pcm` over Roquet et al. (2015)
+         !!     specific volume, with the (T, S) part of the EOS evaluated
+         !!     once per sub-column (`roquet_pcm_dpa_intz` /
+         !!     `roquet_pcm_dpa_face`).
+         !!   * `EOS_VARIANT_ROQUET_RHO` (the final `else` copies): the same
+         !!     5-point Boole rule over Roquet et al. (2015) in-situ density
+         !!     (ΔS = 32, no `1/SV` reciprocal), same (T, S) hoist
+         !!     (`roquet_rho_pcm_dpa_intz` / `roquet_rho_pcm_dpa_face`).
       real(wp), intent(in)    :: p_top(nx, ny)
          !! Top-of-column pressure (Pa, `>= 0`), `multilayer_state_t%p_top`.
       logical, intent(in)    :: p_top_in_bc
@@ -2193,11 +2273,9 @@ contains
       real(wp) :: h_L, h_R, e_bot_L, e_bot_R
       real(wp) :: pa_h_intz_L, pa_h_intz_R, numer, denom
       real(wp) :: dM_coeff, ddM_dx, ddM_dy
-      logical  :: wright_analytic
       integer  :: k_top_c, k_don_c
 
       inv_rho0 = 1.0_wp/rho0
-      wright_analytic = (eos_variant == EOS_VARIANT_WRIGHT_97)
 
       ! ---- Pass C (per column): the layer-mean T/S every pass reads ----
       ! `hT/h` on a live layer and, on a vanished one, its I1′ DONOR's:
@@ -2267,7 +2345,7 @@ contains
       ! CELL.
       ! Two loop copies (not a branch inside one kernel) so the analytic
       ! Wright kernel carries none of the Boole path's register pressure.
-      if (wright_analytic) then
+      if (eos_variant == EOS_VARIANT_WRIGHT_97) then
          do concurrent(k=1:nz, j=1:ny, i=1:nx) local(dpa_kk, intz_kk, t_m, s_m)
             t_m = conc_T(i, j, k)
             s_m = conc_S(i, j, k)
@@ -2276,12 +2354,21 @@ contains
             pa(i, j, k) = dpa_kk
             intz_dpa(i, j, k) = intz_kk
          end do
-      else
+      else if (eos_variant == EOS_VARIANT_ROQUET_SPV) then
          do concurrent(k=1:nz, j=1:ny, i=1:nx) local(dpa_kk, intz_kk, t_m, s_m)
             t_m = conc_T(i, j, k)
             s_m = conc_S(i, j, k)
             call roquet_pcm_dpa_intz(t_m, s_m, e_face(i, j, k + 1), h_layer(i, j, k), &
                                      rho0, rho_ref, dpa_kk, intz_kk)
+            pa(i, j, k) = dpa_kk
+            intz_dpa(i, j, k) = intz_kk
+         end do
+      else
+         do concurrent(k=1:nz, j=1:ny, i=1:nx) local(dpa_kk, intz_kk, t_m, s_m)
+            t_m = conc_T(i, j, k)
+            s_m = conc_S(i, j, k)
+            call roquet_rho_pcm_dpa_intz(t_m, s_m, e_face(i, j, k + 1), h_layer(i, j, k), &
+                                         rho0, rho_ref, dpa_kk, intz_kk)
             pa(i, j, k) = dpa_kk
             intz_dpa(i, j, k) = intz_kk
          end do
@@ -2294,7 +2381,7 @@ contains
       end do
 
       ! ---- Pass 2a: u-face horizontal integrals ----
-      if (wright_analytic) then
+      if (eos_variant == EOS_VARIANT_WRIGHT_97) then
          do concurrent(k=1:nz, j=1:ny, i=2:nx) &
             local(dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R, hwt_ll, hwt_lr, hwt_rr, hwt_rl)
             call fv_mom6_mass_weights(mass_weight, e_face(i - 1, j, 1), e_face(i, j, 1), &
@@ -2313,7 +2400,7 @@ contains
                                      hwt_ll, hwt_lr, hwt_rr, hwt_rl, rho0, rho_ref, dpa_kk)
             intx_dpa(i, j, k) = dpa_kk
          end do
-      else
+      else if (eos_variant == EOS_VARIANT_ROQUET_SPV) then
          do concurrent(k=1:nz, j=1:ny, i=2:nx) &
             local(dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R, hwt_ll, hwt_lr, hwt_rr, hwt_rl)
             call fv_mom6_mass_weights(mass_weight, e_face(i - 1, j, 1), e_face(i, j, 1), &
@@ -2330,6 +2417,25 @@ contains
                                      h_layer(i - 1, j, k), h_layer(i, j, k), &
                                      t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R, &
                                      hwt_ll, hwt_lr, hwt_rr, hwt_rl, rho0, rho_ref, dpa_kk)
+            intx_dpa(i, j, k) = dpa_kk
+         end do
+      else
+         do concurrent(k=1:nz, j=1:ny, i=2:nx) &
+            local(dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R, hwt_ll, hwt_lr, hwt_rr, hwt_rl)
+            call fv_mom6_mass_weights(mass_weight, e_face(i - 1, j, 1), e_face(i, j, 1), &
+                                      e_face(i - 1, j, k + 1), e_face(i, j, k + 1), &
+                                      h_layer(i - 1, j, k), h_layer(i, j, k), h_neglect, &
+                                      hwt_ll, hwt_lr, hwt_rr, hwt_rl)
+            t_m_L = conc_T(i - 1, j, k)
+            t_m_R = conc_T(i, j, k)
+            s_m_L = conc_S(i - 1, j, k)
+            s_m_R = conc_S(i, j, k)
+            dpa_L = pa(i - 1, j, k) - pa(i - 1, j, k + 1)
+            dpa_R = pa(i, j, k) - pa(i, j, k + 1)
+            call roquet_rho_pcm_dpa_face(e_face(i - 1, j, k + 1), e_face(i, j, k + 1), &
+                                         h_layer(i - 1, j, k), h_layer(i, j, k), &
+                                         t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R, &
+                                         hwt_ll, hwt_lr, hwt_rr, hwt_rl, rho0, rho_ref, dpa_kk)
             intx_dpa(i, j, k) = dpa_kk
          end do
       end if
@@ -2351,7 +2457,7 @@ contains
       end do
 
       ! ---- Pass 2b: v-face horizontal integrals ----
-      if (wright_analytic) then
+      if (eos_variant == EOS_VARIANT_WRIGHT_97) then
          do concurrent(k=1:nz, j=2:ny, i=1:nx) &
             local(dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R, hwt_ll, hwt_lr, hwt_rr, hwt_rl)
             call fv_mom6_mass_weights(mass_weight, e_face(i, j - 1, 1), e_face(i, j, 1), &
@@ -2370,7 +2476,7 @@ contains
                                      hwt_ll, hwt_lr, hwt_rr, hwt_rl, rho0, rho_ref, dpa_kk)
             inty_dpa(i, j, k) = dpa_kk
          end do
-      else
+      else if (eos_variant == EOS_VARIANT_ROQUET_SPV) then
          do concurrent(k=1:nz, j=2:ny, i=1:nx) &
             local(dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R, hwt_ll, hwt_lr, hwt_rr, hwt_rl)
             call fv_mom6_mass_weights(mass_weight, e_face(i, j - 1, 1), e_face(i, j, 1), &
@@ -2387,6 +2493,25 @@ contains
                                      h_layer(i, j - 1, k), h_layer(i, j, k), &
                                      t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R, &
                                      hwt_ll, hwt_lr, hwt_rr, hwt_rl, rho0, rho_ref, dpa_kk)
+            inty_dpa(i, j, k) = dpa_kk
+         end do
+      else
+         do concurrent(k=1:nz, j=2:ny, i=1:nx) &
+            local(dpa_kk, t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R, hwt_ll, hwt_lr, hwt_rr, hwt_rl)
+            call fv_mom6_mass_weights(mass_weight, e_face(i, j - 1, 1), e_face(i, j, 1), &
+                                      e_face(i, j - 1, k + 1), e_face(i, j, k + 1), &
+                                      h_layer(i, j - 1, k), h_layer(i, j, k), h_neglect, &
+                                      hwt_ll, hwt_lr, hwt_rr, hwt_rl)
+            t_m_L = conc_T(i, j - 1, k)
+            t_m_R = conc_T(i, j, k)
+            s_m_L = conc_S(i, j - 1, k)
+            s_m_R = conc_S(i, j, k)
+            dpa_L = pa(i, j - 1, k) - pa(i, j - 1, k + 1)
+            dpa_R = pa(i, j, k) - pa(i, j, k + 1)
+            call roquet_rho_pcm_dpa_face(e_face(i, j - 1, k + 1), e_face(i, j, k + 1), &
+                                         h_layer(i, j - 1, k), h_layer(i, j, k), &
+                                         t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R, &
+                                         hwt_ll, hwt_lr, hwt_rr, hwt_rl, rho0, rho_ref, dpa_kk)
             inty_dpa(i, j, k) = dpa_kk
          end do
       end if
@@ -3442,6 +3567,118 @@ contains
       end do
       dpa_face = acc/90.0_wp
    end subroutine roquet_recon_dpa_face
+
+   pure subroutine roquet_rho_recon_dpa_intz(rho0, rho_ref, e_top, dz, &
+                                             t_t, t_b, t_mean, s_t, s_b, s_mean, &
+                                             parabolic, dpa, intz_dpa)
+      !$acc routine seq
+      !! `boole_dpa_intz_layer` (the reconstruct-for-pressure in-layer
+      !! 5-point Boole rule over a PLM / PPM T/S profile) specialised to
+      !! Roquet et al. (2015) in-situ density (ΔS = 32, "polyTEOS10_55t"):
+      !! the same five sub-points, weights and summation order, with the
+      !! density from this module's copy of the in-situ-density value
+      !! (`rdb_roq_rho_ts_coeffs` + `rdb_roq_rho_p`, `rdb_roquet_rho.inc`) --
+      !! no `eos_t` handle, no per-point variant dispatch, and a body the
+      !! compiler inlines into the kernel.  T and S vary through the layer,
+      !! so unlike `roquet_rho_pcm_dpa_intz` there is no (T, S) hoist: each
+      !! point is a full EOS evaluation.  UNLIKE `roquet_recon_dpa_intz`
+      !! (the SpV twin), this fit returns density directly -- no `1/SV`
+      !! reciprocal per pressure point.
+      real(wp), intent(in)  :: rho0, rho_ref
+         !! Pressure-estimate density / anomaly reference (kg/m^3).
+      real(wp), intent(in)  :: e_top, dz
+         !! Shallower-interface height / layer thickness (m).
+      real(wp), intent(in)  :: t_t, t_b, t_mean, s_t, s_b, s_mean
+         !! T / S top edge, bottom edge, layer mean.
+      logical, intent(in)   :: parabolic
+         !! .true. -> PPM curvature.
+      real(wp), intent(out) :: dpa, intz_dpa
+         !! As `boole_dpa_intz_layer`.
+
+      real(wp) :: gxrho, wt_t, wt_b, t6, s6, t5, s5, p5, rho_anom
+      real(wp) :: r0, r1, r2, r3
+      real(wp) :: r5(N_BOOLE)
+      integer  :: n
+
+      gxrho = GRAVITY*rho0
+
+      ! PPM curvature (zero for PLM).
+      t6 = 0.0_wp
+      s6 = 0.0_wp
+      if (parabolic) then
+         t6 = 3.0_wp*(2.0_wp*t_mean - (t_t + t_b))
+         s6 = 3.0_wp*(2.0_wp*s_mean - (s_t + s_b))
+      end if
+
+      !GCC$ unroll 5
+      do n = 1, N_BOOLE
+         wt_t = 0.25_wp*real(N_BOOLE - n, wp)   ! 1, .75, .5, .25, 0
+         wt_b = 1.0_wp - wt_t
+         t5 = wt_t*t_t + wt_b*t_b + t6*wt_t*wt_b
+         s5 = wt_t*s_t + wt_b*s_b + s6*wt_t*wt_b
+         p5 = -gxrho*(e_top - 0.25_wp*real(n - 1, wp)*dz)
+         call rdb_roq_rho_ts_coeffs(t5, s5, r0, r1, r2, r3)
+         r5(n) = rdb_roq_rho_p(r0, r1, r2, r3, p5) - rho_ref
+      end do
+
+      rho_anom = (1.0_wp/90.0_wp)*(7.0_wp*(r5(1) + r5(5)) &
+                                   + 32.0_wp*(r5(2) + r5(4)) + 12.0_wp*r5(3))
+      dpa = GRAVITY*dz*rho_anom
+      intz_dpa = 0.5_wp*GRAVITY*dz*dz*(rho_anom &
+                                       - (1.0_wp/90.0_wp)*(16.0_wp*(r5(4) - r5(2)) + 7.0_wp*(r5(5) - r5(1))))
+   end subroutine roquet_rho_recon_dpa_intz
+
+   pure subroutine roquet_rho_recon_dpa_face(rho0, rho_ref, &
+                                             e_top_l, e_top_r, dz_l, dz_r, &
+                                             t_t_l, t_b_l, t_m_l, t_t_r, t_b_r, t_m_r, &
+                                             s_t_l, s_b_l, s_m_l, s_t_r, s_b_r, s_m_r, &
+                                             dpa_l, dpa_r, parabolic, dpa_face)
+      !$acc routine seq
+      !! `boole_dpa_face` (the reconstruct-for-pressure cross-face 5-point
+      !! Boole rule) with the Roquet in-situ-density vertical rule
+      !! `roquet_rho_recon_dpa_intz` at the three interior sub-columns --
+      !! identical sub-columns, weights and summation order; the end points
+      !! are the columns' own `dpa`.  15 inlined Roquet in-situ-density
+      !! evaluations per face per layer.
+      real(wp), intent(in)  :: rho0, rho_ref
+         !! Pressure-estimate density / anomaly reference (kg/m^3).
+      real(wp), intent(in)  :: e_top_l, e_top_r, dz_l, dz_r
+         !! Left / right shallower-interface heights and thicknesses (m).
+      real(wp), intent(in)  :: t_t_l, t_b_l, t_m_l, t_t_r, t_b_r, t_m_r
+         !! Left / right temperature triples (top, bottom, mean).
+      real(wp), intent(in)  :: s_t_l, s_b_l, s_m_l, s_t_r, s_b_r, s_m_r
+         !! Left / right salinity triples.
+      real(wp), intent(in)  :: dpa_l, dpa_r
+         !! The left / right columns' own layer `dpa` (Pa), the end points.
+      logical, intent(in)   :: parabolic
+         !! .true. -> PPM curvature.
+      real(wp), intent(out) :: dpa_face
+         !! Along-face mean of `g * int rho' dz` over the layer (Pa).
+
+      real(wp) :: wr, wl, dpa_m, intz_m, acc
+      integer  :: m
+      real(wp), parameter :: BOOLE_W(N_BOOLE) = &
+                             [7.0_wp, 32.0_wp, 12.0_wp, 32.0_wp, 7.0_wp]
+
+      acc = BOOLE_W(1)*dpa_l + BOOLE_W(N_BOOLE)*dpa_r
+      !GCC$ unroll 3
+      do m = 2, N_BOOLE - 1
+         wr = 0.25_wp*real(m - 1, wp)   ! 0 at the left column .. 1 at the right
+         wl = 1.0_wp - wr
+         call roquet_rho_recon_dpa_intz(rho0, rho_ref, &
+                                        wl*e_top_l + wr*e_top_r, &
+                                        wl*dz_l + wr*dz_r, &
+                                        wl*t_t_l + wr*t_t_r, &
+                                        wl*t_b_l + wr*t_b_r, &
+                                        wl*t_m_l + wr*t_m_r, &
+                                        wl*s_t_l + wr*s_t_r, &
+                                        wl*s_b_l + wr*s_b_r, &
+                                        wl*s_m_l + wr*s_m_r, &
+                                        parabolic, dpa_m, intz_m)
+         acc = acc + BOOLE_W(m)*dpa_m
+      end do
+      dpa_face = acc/90.0_wp
+   end subroutine roquet_rho_recon_dpa_face
 
    pure subroutine fv_mom6_mass_weights(mass_weight, e_bed_l, e_bed_r, e_top_l, e_top_r, &
                                         h_l, h_r, h_neglect, &
