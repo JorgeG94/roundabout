@@ -68,8 +68,10 @@ contains
 
       integer :: nz_ml, idx_S, idx_T, i, j, k, nx, ny, local_ierr
       logical :: per_x, per_y, north_fold
-      logical :: seeded_on_eta0_target
       logical :: geographic
+         !! Grid positions are in degrees (spherical/supergrid/tripolar):
+         !! the input to `topo_length_to_grid_units` (#203).
+      logical :: seeded_on_eta0_target
          !! The FOURTH or FIFTH `h_layer` seed branch (`zstar_full` under
          !! `zfixed_closed_faces`; MOM6 `zstar` under the knob or zinit) was
          !! taken ⇒ establish I1′ after the tracer IC.
@@ -1701,6 +1703,8 @@ contains
       integer :: sign_code, local_ierr
       real(wp) :: per_metre, x0_g, x1_g, y0_g, y1_g, slope_g, amp
       logical :: geographic
+         !! Grid positions are in degrees: the input to
+         !! `topo_length_to_grid_units` (#203).
       real(wp) :: grounded_frac
 
       ierr = OCEAN_STATUS_OK
