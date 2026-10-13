@@ -824,6 +824,19 @@ Snapshot output itself is driven by the diagnostics manager
 selection knob, per-diag output vcoord remap, `output_precision`).
 Per-rank files merge offline via `tools/merge_output.py`.
 
+**Sea-ice diagnostics, CICE names** (canonical set, default on when
+`&ocean_ice_nml enable`; the thickness-tendency rates also need
+`&ocean_thermo_nml enable_thermodynamics`): `aice` (area fraction), `hi`
+(grid-mean ice thickness, m), `hs` (grid-mean snow thickness, m), `Tsfc`
+(aggregate surface temperature, degC; open water at the seawater freezing
+point), and the rates `congel`, `frazil`, `snoice`, `meltt`, `meltb`,
+`meltl`, `dvidtt` in **cm day⁻¹** (CICE `mps_to_cmpdy`), time-averaged over
+the output window. `meltl` is identically 0 (no lateral melt scheme). `dvidtt`
+is the thermodynamic volume tendency, not `dvidtd`. The former default
+`ice_conc`/`ice_thick` are opt-in aliases (name them in `diags`). Derived
+`uvel`/`vvel` are the cell-centre drift velocities under the CICE names
+(CICE's own `uvel`/`vvel` sit on the U/V points).
+
 **Ice-shelf cavity diagnostics** (derived catalog, opt in through
 `diags`): `melt` (kg m⁻² s⁻¹, **+ = melting**), `melt_m_per_yr` (the
 ISOMIP+ reporting unit — `/ ρ_fw = 1000 kg m⁻³` × a 365-day year, i.e.
