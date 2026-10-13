@@ -40,10 +40,14 @@ module test_ocean_bulk_forcing
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_ice_state, only: ocean_sea_ice_t
    use rdb_atm_state, only: atm_state_t
-   use rdb_ocean_bulk_flux, only: bulk_flux_column, bulk_flux_longwave_up, BULK_T0_KELVIN
+   use rdb_ocean_bulk_flux, only: bulk_flux_column, bulk_flux_longwave_up, bulk_flux_qsat_ice, &
+                                  bulk_flux_config_t, BULK_T0_KELVIN, BULK_STEFAN_BOLTZMANN, &
+                                  BULK_GAS_CONST_AIR, BULK_TVQ_AIR, BULK_CP_AIR, &
+                                  BULK_LATENT_SUBLIMATION, BULK_QSAT_ICE_COEF_B, BULK_WIND_MIN
    use rdb_ocean_surface_stress, only: ocean_surface_stress_t
    use rdb_ocean_surface_flux, only: ocean_surface_flux_t
    use rdb_ocean_bulk_forcing, only: bulk_forcing_t, bulk_forcing_apply
+   use rdb_ice_atm_forcing, only: ice_atm_forcing_from_atm
    implicit none
    private
 
@@ -72,7 +76,8 @@ contains
       testsuite = [ &
                   new_unittest("bulk_forcing_matches_column", test_matches_column), &
                   new_unittest("bulk_forcing_rotation_exact", test_rotation_exact), &
-                  new_unittest("bulk_forcing_open_water_halves", test_open_water_halves) &
+                  new_unittest("bulk_forcing_open_water_halves", test_open_water_halves), &
+                  new_unittest("ice_atm_forcing_seb_linearization", test_ice_seb_linearization) &
                   ]
    end subroutine collect_ocean_bulk_forcing_tests
 
@@ -123,6 +128,15 @@ contains
       allocate (this%rsds_rec(nx, ny), source=RSDS)
       allocate (this%cosz(nx, ny), source=0.0_wp)
       allocate (this%cosz_mean(nx, ny), source=0.0_wp)
+      ! Cached geometry (`atm_state_configure`'s own job in production):
+      ! `ice_atm_forcing_from_atm` reads `this%nx_phys/ny_phys/nghost` --
+      ! unlike `bulk_forcing_apply`, which takes `grid` separately and
+      ! never looks at these -- so a hand-built atm must set them too.
+      this%nx_total = nx
+      this%ny_total = ny
+      this%nx_phys = grid%nx_phys
+      this%ny_phys = grid%ny_phys
+      this%nghost = grid%nghost
       this%enable = .true.
    end subroutine make_atm
 
@@ -470,5 +484,80 @@ contains
       call atm%exit_data()
       !$acc exit data delete(atm, ms, bf, ss, sf)
    end subroutine run_apply
+
+   ! =================================================================
+   ! Test 5 (ice half) — SEB linearisation matches a hand computation
+   ! =================================================================
+
+   subroutine test_ice_seb_linearization(error)
+      !! PLAN_C2c.md S5 test 5 (ice half): `ice_atm_forcing_from_atm`'s
+      !! `atm_sf0`/`atm_dsfdt` match an independently-written evaluation
+      !! of the LY09 over-ice SEB linearisation at `T_s = 0 degC`, built
+      !! from the SAME public primitives (`bulk_flux_qsat_ice`,
+      !! `BULK_STEFAN_BOLTZMANN`, ...) the production kernel uses but
+      !! written out as its own expression here (not a call to a shared
+      !! "reference" routine, since none exists -- the formula IS the
+      !! implementation). `atm_sw_dn`/`atm_fprec` are plain pass-through
+      !! checks (`rsds`/`prsn`).
+      type(error_type), allocatable, intent(out) :: error
+
+      type(hgrid_t) :: grid
+      type(atm_state_t) :: atm
+      type(ocean_sea_ice_t) :: ice
+      type(bulk_flux_config_t) :: cfg_bulk
+
+      real(wp), parameter :: ICE_BULK_CH = 1.63e-3_wp, ICE_BULK_CE = 1.63e-3_wp
+      real(wp) :: rho_air, wv, qsat0, dqsat0_dt, lw_t3, sens_coef, lat_coef
+      real(wp) :: sf0_ref, dsfdt_ref
+      integer :: ip, jp
+
+      checks: block
+         call make_grid(grid)
+         call make_atm(grid, atm)
+
+         ice%ncat = 1
+         call ice%init(grid)
+
+         cfg_bulk%emissivity = EMISSIVITY
+
+         ! Production device residency (mem:separate: no implicit copies):
+         ! map both objects, run the seam, bring the four outputs back.
+         !$acc enter data copyin(atm, ice)
+         call atm%enter_data()
+         call ice%enter_data()
+         call ice_atm_forcing_from_atm(ice, atm, cfg_bulk)
+         !$acc update self(ice%atm_sf0, ice%atm_dsfdt, ice%atm_sw_dn, ice%atm_fprec)
+         call ice%exit_data()
+         call atm%exit_data()
+         !$acc exit data delete(atm, ice)
+
+         ip = grid%nghost + 2
+         jp = grid%nghost + 2
+
+         ! Independent evaluation of the plan's S4 formula.
+         rho_air = PSL/(BULK_GAS_CONST_AIR*TAS*(1.0_wp + BULK_TVQ_AIR*HUSS))
+         wv = max(sqrt(UAS**2 + VAS**2), BULK_WIND_MIN)
+         qsat0 = bulk_flux_qsat_ice(BULK_T0_KELVIN, rho_air)
+         dqsat0_dt = qsat0*BULK_QSAT_ICE_COEF_B/(BULK_T0_KELVIN*BULK_T0_KELVIN)
+         lw_t3 = EMISSIVITY*BULK_STEFAN_BOLTZMANN*BULK_T0_KELVIN**3
+         sens_coef = rho_air*BULK_CP_AIR*ICE_BULK_CH*wv
+         lat_coef = rho_air*BULK_LATENT_SUBLIMATION*ICE_BULK_CE*wv
+
+         sf0_ref = lw_t3*BULK_T0_KELVIN - RLDS + sens_coef*(BULK_T0_KELVIN - TAS) + &
+                   lat_coef*(qsat0 - HUSS)
+         dsfdt_ref = 4.0_wp*lw_t3 + sens_coef + lat_coef*dqsat0_dt
+
+         call check(error, ice%atm_sf0(ip, jp), sf0_ref, "atm_sf0 == hand-computed SEB intercept", &
+                    thr=1.0e-12_wp, rel=.true.)
+         if (allocated(error)) exit checks
+         call check(error, ice%atm_dsfdt(ip, jp), dsfdt_ref, "atm_dsfdt == hand-computed SEB slope", &
+                    thr=1.0e-12_wp, rel=.true.)
+         if (allocated(error)) exit checks
+         call check(error, ice%atm_sw_dn(ip, jp), RSDS, "atm_sw_dn == rsds", thr=TOL)
+         if (allocated(error)) exit checks
+         call check(error, ice%atm_fprec(ip, jp), PRSN, "atm_fprec == prsn", thr=TOL)
+         if (allocated(error)) exit checks
+      end block checks
+   end subroutine test_ice_seb_linearization
 
 end module test_ocean_bulk_forcing

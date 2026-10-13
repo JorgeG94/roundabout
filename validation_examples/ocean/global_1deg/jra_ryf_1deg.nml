@@ -1,0 +1,267 @@
+! Global 1-degree tripolar ocean + sea ice, forced end-to-end by JRA55-do
+! through the bulk-flux atmospheric-state provider (OM3 forcing wave-3,
+! C2c) -- global_1deg_ice.nml's grid/bathymetry/vertical-grid/IC/physics
+! base, with the scalar ice-restoring forcing REPLACED by the real
+! atm-state -> bulk-flux -> ocean/ice seam (`&ocean_atm_forcing_nml` +
+! `&ocean_bulk_flux_nml`) and `vcoord_type` switched from `z_fixed` to
+! `zstar` (MOM6 z*) per PLAN_C2c.md S6.
+!
+! RYF ("repeat year forcing") 1990-05-01: `time_mode = "repeat_year"`
+! wraps the reader onto the single 1990-05-01 .. 1991-04-30 JRA55-do
+! year forever -- the standard OMIP/JRA55-do spin-up forcing, not the
+! full interannual 1958-2024 record.
+!
+! INPUT FILES (as global_1deg_ice.nml):
+!     ln -s "$RDB_DATA_DIR/OM_1deg" INPUT
+!
+! The nine `filelist_<field>` knobs below each want a
+! `tools/jra_filelist.py`-style one-path-per-line text file, generated
+! once from the JRA55-do (MRI-JRA55-do-1-6-0) tree, e.g. on Gadi:
+!
+!     python3 tools/jra_filelist.py /g/data/qv56/replicas/input4MIPs/.../\
+!       MRI-JRA55-do-1-6-0/atmos/3hrPt tas -o INPUT/filelists/tas.txt
+!     python3 tools/jra_filelist.py /g/data/qv56/replicas/input4MIPs/.../\
+!       MRI-JRA55-do-1-6-0/atmos/3hrPt huss -o INPUT/filelists/huss.txt
+!     python3 tools/jra_filelist.py /g/data/qv56/replicas/input4MIPs/.../\
+!       MRI-JRA55-do-1-6-0/atmos/3hrPt uas -o INPUT/filelists/uas.txt
+!     python3 tools/jra_filelist.py /g/data/qv56/replicas/input4MIPs/.../\
+!       MRI-JRA55-do-1-6-0/atmos/3hrPt vas -o INPUT/filelists/vas.txt
+!     python3 tools/jra_filelist.py /g/data/qv56/replicas/input4MIPs/.../\
+!       MRI-JRA55-do-1-6-0/atmos/3hrPt psl -o INPUT/filelists/psl.txt
+!     python3 tools/jra_filelist.py /g/data/qv56/replicas/input4MIPs/.../\
+!       MRI-JRA55-do-1-6-0/atmos/3hr rlds -o INPUT/filelists/rlds.txt
+!     python3 tools/jra_filelist.py /g/data/qv56/replicas/input4MIPs/.../\
+!       MRI-JRA55-do-1-6-0/atmos/3hr rsds -o INPUT/filelists/rsds.txt
+!     python3 tools/jra_filelist.py /g/data/qv56/replicas/input4MIPs/.../\
+!       MRI-JRA55-do-1-6-0/atmos/3hr prra -o INPUT/filelists/prra.txt
+!     python3 tools/jra_filelist.py /g/data/qv56/replicas/input4MIPs/.../\
+!       MRI-JRA55-do-1-6-0/atmos/3hr prsn -o INPUT/filelists/prsn.txt
+!
+! (`tas`/`huss`/`uas`/`vas`/`psl` are the instantaneous "3hrPt" stamps;
+! `rlds`/`rsds`/`prra`/`prsn` are the interval-mean "3hr" stamps -- JRA55-
+! do's own split, which is why the atm-state provider tracks two
+! independent brackets.) If the local site instead ships a DATM
+! `datm.streams.xml` descriptor (an ACCESS-OM3/CESM-style deployment),
+! use `tools/jra_filelist.py --streams datm.streams.xml --stream-name
+! <name> -o INPUT/filelists/<field>.txt` per field/stream instead of the
+! directory walk.
+!
+! SUCCESS CRITERIA for the first real run (PLAN_C2c.md S6; Gadi, this
+! namelist, RYF 1990-05-01, 1 simulated year):
+!   - no NaN, no CFL truncation, through the full year;
+!   - global-mean |tau| in 0.05-0.10 Pa;
+!   - global-mean net heat flux within +-10 W/m^2 after 3 months (OM3's
+!     own 1-degree spin-up sits ~ -2 to +5 W/m^2);
+!   - zonal-mean SST drift < 2 K/yr;
+!   - zonal-mean evaporation 1-1.4 m/yr in the subtropics;
+!   - sea-ice extent seasonal cycle 3-20e6 km^2 in the NH;
+!   - diag `atm_tas` vs a `cdo remapbil` of the raw file at one 3-h
+!     stamp, <= 1e-5 K (Gadi env has cdo/xESMF for that comparison).
+! Also compare one day of `q_sw` against OM3's own `coszen` output to
+! bound the Spencer (1971)-vs-Berger (1978) orbital error (PLAN_C2c.md
+! S7 risk 2) -- `orb_year` stays at its default (any other value is
+! refused at configure, S3).
+
+&sim_nml
+   sim_type = "ocean"
+/
+
+&grid_nml
+   nx     = 360
+   ny     = 320
+   nghost = 3
+/
+
+&ocean_grid_nml
+   grid_config     = "supergrid"
+   supergrid_file  = "INPUT/ocean_hgrid.nc"
+   coriolis_scheme = "planetary"
+   rad_earth       = 6.371e6
+/
+
+&time_nml
+   start_date   = "1958-01-01"
+   t_end        = 365.0
+   time_unit    = "day"
+   dt_fixed     = 1800.0
+   cfl_interval = 1
+/
+
+&physics_nml
+   wind_stress_x = 0.0
+   wind_stress_y = 0.0
+/
+
+&ocean_forcing_nml
+   ! Required by `&ocean_atm_forcing_nml enable` (PLAN_C2c.md S3) --
+   ! this run's surface fluxes are the bulk-flux components, not the
+   ! legacy scalar wind/heat knobs.
+   enable_components = .true.
+/
+
+&ocean_atm_forcing_nml
+   ! JRA55-do-style prescribed atmospheric state -> bulk-flux ocean/ice
+   ! surface forcing (OM3 forcing wave-3). RYF 1990-05-01 (the OMIP/
+   ! JRA55-do spin-up convention): the reader wraps the single 1990-05-
+   ! 01 .. 1991-04-30 year forever, independent of `&time_nml
+   ! start_date` above (which only sets the model's own calendar/
+   ! coszen epoch).
+   enable          = .true.
+   time_mode       = "repeat_year"
+   ryf_start_date  = "1990-05-01"
+   ryf_period_days = 365.0
+   filelist_tas    = "INPUT/filelists/tas.txt"
+   filelist_huss   = "INPUT/filelists/huss.txt"
+   filelist_uas    = "INPUT/filelists/uas.txt"
+   filelist_vas    = "INPUT/filelists/vas.txt"
+   filelist_psl    = "INPUT/filelists/psl.txt"
+   filelist_rlds   = "INPUT/filelists/rlds.txt"
+   filelist_rsds   = "INPUT/filelists/rsds.txt"
+   filelist_prra   = "INPUT/filelists/prra.txt"
+   filelist_prsn   = "INPUT/filelists/prsn.txt"
+   states_regrid   = "bilinear"
+   fluxes_regrid   = "conservative"
+   sw_interp       = "coszen"
+   wind_relative   = .true.
+   ocean_albedo    = 0.066
+/
+
+&ocean_bulk_flux_nml
+   ! Large & Yeager (2004/2009) Monin-Obukhov bulk-flux kernel. JRA55-do
+   ! measures BOTH wind and air temperature/humidity at 10 m (unlike the
+   ! CORE/OMIP convention of 2 m for the latter pair) -- set z_ta = 10
+   ! to match (PLAN_C2c.md S3 "z_ta=2 ... JRA: both 10 m => ship
+   ! namelists set z_ta=10").
+   enable      = .true.
+   n_iter      = 5
+   z_wind      = 10.0
+   z_ta        = 10.0
+   ! LY09's net-longwave formula uses emissivity = 1 (see the C3 flag in
+   ! PLAN_C2c.md S3); this run keeps the seawater default (0.97, Konda
+   ! et al. 1994) explicit so the choice is visible, and the first real
+   ! run compares the resulting q_lw against OM3's own rlds - sigma*SST^4
+   ! to decide between them (PLAN_C2c.md S7 risk 3).
+   emissivity  = 0.97
+/
+
+&nonhydrostatic_nml
+   nz_layers = 50
+/
+
+&vcoord_nml
+   ! MOM6 z* (PLAN_C2c.md S6), not the global_1deg_ice.nml base's
+   ! z_fixed -- the nominal-depth table (`z_fixed_profile`) is shared by
+   ! both families (CLAUDE.md "Vertical Coordinates" S VCOORD_ZSTAR).
+   vcoord_type            = "zstar"
+   z_fixed_profile        = "tanh"
+   z_fixed_dz_top         = 2.0
+   z_fixed_tanh_center    = 0.5
+   z_fixed_tanh_width     = 0.25
+   check_vanished_content = .true.
+/
+
+&ocean_topo_nml
+   topo_config    = "file"
+   max_depth      = 6500.0
+   wind_config    = "constant"
+   taux_magnitude = 0.0
+/
+
+&output_nml
+   bathymetry_file = "INPUT/bathy_om1deg.nc"
+   output_dir      = "./output"
+   output_to_file  = .false.
+/
+
+&ocean_bc_nml
+   west  = "periodic"
+   east  = "periodic"
+   south = "wall"
+   north = "tripolar_fold"
+/
+
+&ocean_zinit_nml
+   enable = .true.
+   source = "file"
+   file   = "INPUT/ic_woa13_jan.nc"
+/
+
+&ocean_pgf_nml
+   form   = "fv_mom6"
+   maxvel = 6.0
+/
+
+&ocean_coriolis_nml
+   form = "sadourny_energy"
+/
+
+&ocean_hvisc_nml
+   nu_h            = 2000.0
+   lateral_closure = "smagorinsky"
+   c_smag          = 0.15
+   smag_ah         = .true.
+   smag_bi_const   = 0.06
+   bound_kh        = .true.
+/
+
+&ocean_bdrag_nml
+   form   = "quadratic"
+   cd     = 3.0e-3
+   hbbl   = 10.0
+   bg_vel = 0.1
+/
+
+&ocean_bt_nml
+   split_scheme = "pred_corr"
+   auto_n_inner = .true.
+/
+
+&ocean_eos_nml
+   eos = "wright"
+/
+
+&ocean_thermo_nml
+   ! The bulk-flux SW component (`sf%q_sw`) is the real per-cell
+   ! `(1-albedo)*rsds`, not the legacy uniform `q_heat` -- `sw_source =
+   ! "q_sw"` tells the shortwave-penetration deposition kernel + both
+   ! boundary-layer schemes to read it (PLAN_C2c.md S6). Two-band
+   ! Paulson & Simpson (1977) transmission, open-ocean defaults.
+   sw_source      = "q_sw"
+   sw_pen_frac    = 0.42
+   sw_band_ratio  = 0.58
+   sw_zeta1       = 0.35
+   sw_zeta2       = 23.0
+/
+
+&ocean_ice_nml
+   ! SIS2-port thermodynamics + multi-category ITD + category transport
+   ! (as global_1deg_ice.nml); the restoring knobs (air_temp/
+   ! restore_lambda/sw_down/snowfall) are now INERT -- the engine
+   ! dispatches the ice atmospheric seam to `ice_atm_forcing_from_atm`
+   ! whenever `&ocean_atm_forcing_nml enable` holds (PLAN_C2c.md S4),
+   ! left at their defaults here rather than set-and-ignored. dynamics
+   ! stays OFF: EVP is refused at configure under
+   ! `north = "tripolar_fold"`, on any rank count (see
+   ! global_1deg_ice.nml's header).
+   enable    = .true.
+   ncat      = 5
+   nk_ice    = 2
+   transport = .true.
+   dynamics  = .false.
+/
+
+&ocean_diag_nml
+   enabled          = .true.
+   filename         = "jra_ryf_1deg"
+   dt_out           = 30.0
+   output_precision = "single"
+   ! NOTE: `bulk_cd`/`bulk_ch`/`bulk_ce` (the driver's own transfer
+   ! coefficients) are not yet a registered diag -- `bulk_flux_column`
+   ! computes them per cell but `bulk_forcing_core_impl` does not keep
+   ! them, so they are left off this list pending that follow-up.
+   diags            = "SSH  temperature:off  salinity:off  u:off  v:off  KE:off  ice_conc  ice_thick  atm_tas  atm_huss  atm_uas  atm_vas  atm_psl  atm_rsds  atm_rlds  atm_prra  atm_prsn  atm_cosz"
+/
+
+&logging_nml
+   status_interval = 1.0
+/
