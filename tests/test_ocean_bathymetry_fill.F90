@@ -23,7 +23,7 @@ module test_ocean_bathymetry_fill
    use rdb_constants, only: wp, DEG2RAD
    use rdb_grid, only: hgrid_t
    use rdb_ocean_state, only: set_bathymetry_spoon, set_bathymetry_seamount, &
-                              topo_length_to_grid_units
+                              topo_length_to_grid_units, grid_config_is_geographic
    implicit none
    private
 
@@ -54,14 +54,14 @@ contains
       m_per_deg = RAD_EARTH*DEG2RAD
       checks: block
          ! Cartesian: identity.
-         call check(error, abs(topo_length_to_grid_units(25000.0_wp, "cartesian", RAD_EARTH) &
+         call check(error, abs(topo_length_to_grid_units(25000.0_wp, grid_config_is_geographic("cartesian"), RAD_EARTH) &
                                - 25000.0_wp) < 1.0e-9_wp, "cartesian passes metres through")
          if (allocated(error)) exit checks
          ! Spherical: one metre-per-degree of length => 1 degree.
-         call check(error, abs(topo_length_to_grid_units(m_per_deg, "spherical", RAD_EARTH) &
+         call check(error, abs(topo_length_to_grid_units(m_per_deg, grid_config_is_geographic("spherical"), RAD_EARTH) &
                                - 1.0_wp) < 1.0e-9_wp, "spherical metres->degrees")
          if (allocated(error)) exit checks
-         call check(error, abs(topo_length_to_grid_units(m_per_deg, "tripolar", RAD_EARTH) &
+         call check(error, abs(topo_length_to_grid_units(m_per_deg, grid_config_is_geographic("tripolar"), RAD_EARTH) &
                                - 1.0_wp) < 1.0e-9_wp, "tripolar metres->degrees")
       end block checks
    end subroutine test_length_conversion
@@ -88,7 +88,7 @@ contains
       allocate (b(nx, ny), source=0.0_wp)
       checks: block
          ! Fixed path: convert the metres half-width to grid degrees.
-         hw_grid = topo_length_to_grid_units(HALF_WIDTH_M, "spherical", RAD_EARTH)
+         hw_grid = topo_length_to_grid_units(HALF_WIDTH_M, grid_config_is_geographic("spherical"), RAD_EARTH)
          call set_bathymetry_seamount(b, grid, MAX_DEPTH, PEAK_DEPTH, hw_grid)
          call check(error, maxval(b) - minval(b) > 1000.0_wp, &
                     "spherical seamount must vary by > 1000 m (not a flat basin)")

@@ -69,6 +69,7 @@ contains
       integer :: nz_ml, idx_S, idx_T, i, j, k, nx, ny, local_ierr
       logical :: per_x, per_y, north_fold
       logical :: seeded_on_eta0_target
+      logical :: geographic
          !! The FOURTH or FIFTH `h_layer` seed branch (`zstar_full` under
          !! `zfixed_closed_faces`; MOM6 `zstar` under the knob or zinit) was
          !! taken ⇒ establish I1′ after the tracer IC.
@@ -142,18 +143,26 @@ contains
             call bathymetry_fill_ghosts_array(state%barotropic%b, grid)
          end block
       else
+         ! Inline, NOT `grid_config_is_geographic(cfg%ocean%grid%grid_config)`:
+         ! in this routine nvfortran 26.9 drops the hidden length on the first
+         ! user call that passes this component, and the callee's `trim` then
+         ! segfaults (#203). Intrinsic comparisons pass their lengths
+         ! explicitly. Keep in step with `grid_config_is_geographic`.
+         geographic = cfg%ocean%grid%grid_config == "spherical" .or. &
+                      cfg%ocean%grid%grid_config == "supergrid" .or. &
+                      cfg%ocean%grid%grid_config == "tripolar"
          select case (trim(cfg%ocean%topo%topo_config))
          case ("spoon")
             call set_bathymetry_spoon(state%barotropic%b, grid, &
                                       cfg%ocean%topo%max_depth, cfg%ocean%topo%edge_depth, &
                                       topo_length_to_grid_units(cfg%ocean%topo%slope_scale, &
-                                                                cfg%ocean%grid%grid_config, &
+                                                                geographic, &
                                                                 cfg%ocean%grid%rad_earth))
          case ("seamount")
             call set_bathymetry_seamount(state%barotropic%b, grid, &
                                          cfg%ocean%topo%max_depth, cfg%ocean%topo%edge_depth, &
                                          topo_length_to_grid_units(cfg%ocean%topo%slope_scale, &
-                                                                   cfg%ocean%grid%grid_config, &
+                                                                   geographic, &
                                                                    cfg%ocean%grid%rad_earth))
          case ("neverworld2")
             call set_bathymetry_neverworld2(state%barotropic%b, grid, &
@@ -191,7 +200,7 @@ contains
                                             cfg%ocean%topo%max_depth, &
                                             cfg%ocean%topo%x_origin, &
                                             1.0_wp/topo_length_to_grid_units(1.0_wp, &
-                                                                             cfg%ocean%grid%grid_config, &
+                                                                             geographic, &
                                                                              cfg%ocean%grid%rad_earth))
          case ("file")
             ! Real bathymetry from NetCDF.  File must be pre-projected onto
@@ -1691,6 +1700,7 @@ contains
       integer :: n_over_land, n_grounded, n_interior
       integer :: sign_code, local_ierr
       real(wp) :: per_metre, x0_g, x1_g, y0_g, y1_g, slope_g, amp
+      logical :: geographic
       real(wp) :: grounded_frac
 
       ierr = OCEAN_STATUS_OK
@@ -1728,8 +1738,12 @@ contains
       ! GRID units per metre (1 on Cartesian; degrees-per-metre otherwise).
       ! The "no limit" sentinels pass through UNCONVERTED so they stay
       ! sentinels on every grid.
-      per_metre = topo_length_to_grid_units(1.0_wp, cfg%ocean%grid%grid_config, &
-                                            cfg%ocean%grid%rad_earth)
+      ! Inline intrinsic comparisons, not a user call with `grid_config`:
+      ! see the #203 note in `ocean_state_seed_from_cfg`.
+      geographic = cfg%ocean%grid%grid_config == "spherical" .or. &
+                   cfg%ocean%grid%grid_config == "supergrid" .or. &
+                   cfg%ocean%grid%grid_config == "tripolar"
+      per_metre = topo_length_to_grid_units(1.0_wp, geographic, cfg%ocean%grid%rad_earth)
       x0_g = cavity_bound_to_grid(cfg%ocean%cavity_dyn%draft_x0, per_metre)
       x1_g = cavity_bound_to_grid(cfg%ocean%cavity_dyn%draft_x1, per_metre)
       y0_g = cavity_bound_to_grid(cfg%ocean%cavity_dyn%draft_y0, per_metre)
