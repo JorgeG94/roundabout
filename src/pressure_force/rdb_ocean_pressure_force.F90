@@ -2112,10 +2112,11 @@ contains
       !! and both Roquet et al. (2015) fits -- specific volume
       !! (`EOS_VARIANT_ROQUET_SPV`) and in-situ density (`EOS_VARIANT_ROQUET_RHO`).
       !! All three are accepted at configure time with the default
-      !! `insitu_density = .true.`; `rdb_config_validate` /
-      !! `rdb_ocean_setup_lateral` only refuse `EOS_VARIANT_ROQUET_RHO` /
-      !! `EOS_VARIANT_ROQUET_SPV` combined with PGF form `fv_wright` (its
-      !! Picard sweep re-evaluates Wright internally, not this path).
+      !! `insitu_density = .true.`; only `configure_ocean_pgf`
+      !! (`rdb_ocean_setup_lateral`, so also `--validate-only`) refuses
+      !! `EOS_VARIANT_ROQUET_RHO` / `EOS_VARIANT_ROQUET_SPV` combined with
+      !! PGF form `fv_wright` (its Picard sweep re-evaluates Wright
+      !! internally, not this path).
       type(ocean_pressure_force_t), intent(in) :: pgf
       type(multilayer_state_t), intent(in) :: ms
       type(eos_t), intent(in), optional :: eos
