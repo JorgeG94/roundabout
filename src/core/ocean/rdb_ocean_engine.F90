@@ -1538,7 +1538,8 @@ contains
       ! Order vs `ocean_data_forcing_apply` above does not matter -- both
       ! read the SAME reader brackets `ocean_data_input_update_all` just
       ! refreshed, and neither writes a slot the other reads.
-      call atm_state_update(engine%state%atm, engine%state%data_input, t)
+      call atm_state_update(engine%state%atm, engine%state%data_input, &
+                            engine%state%metrics, t)
 #endif
 
       call engine%bc_source%update(t, engine%state%bc)

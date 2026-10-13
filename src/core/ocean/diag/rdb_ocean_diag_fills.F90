@@ -8,7 +8,9 @@ module rdb_ocean_diag_fills
    !! default variable is `(nx, ny, nz)`.
    !! Defaults: SSH (m), temperature (°C), salinity (PSU), u/v_centre (m/s),
    !! ke (m²/s²); conditionally ice_conc (1) / ice_thick (m) when
-   !! `&ocean_ice_nml enable`.
+   !! `&ocean_ice_nml enable`; conditionally the ten `atm_*` prescribed-
+   !! forcing passthroughs (tas/huss/uas/vas/psl/rlds/rsds/prra/prsn/cosz)
+   !! when `&ocean_atm_forcing_nml enable`.
 #ifdef LFORTRAN_PASSING
    use rdb_constants, only: wp, H_VANISHED, &
                             REMAP_PCM, REMAP_PLM, REMAP_PPM, REMAP_PPM_H4
@@ -46,6 +48,8 @@ module rdb_ocean_diag_fills
    public :: fill_mld_epbl, fill_kd_epbl
    public :: fill_kd_kshear
    public :: fill_ice_conc, fill_ice_thick
+   public :: fill_atm_tas, fill_atm_huss, fill_atm_uas, fill_atm_vas, fill_atm_psl
+   public :: fill_atm_rlds, fill_atm_rsds, fill_atm_prra, fill_atm_prsn, fill_atm_cosz
    public :: remap_layer_to_z
    public :: remap_layer_to_sigma, remap_layer_to_zstar
    public :: remap_layer_to_density
@@ -72,13 +76,15 @@ module rdb_ocean_diag_fills
       !! the device `_impl`.  Default `.false.` => below-bottom cells read 0
       !! (bit-identical to the legacy remap).
 
-   integer, parameter :: N_CANONICAL_DIAGS = 14
+   integer, parameter :: N_CANONICAL_DIAGS = 24
    character(len=16), parameter :: CANONICAL_DIAG_NAMES(N_CANONICAL_DIAGS) = &
                                    [character(len=16) :: &
                                     "SSH", "temperature", "salinity", "age", "u", "v", "KE", &
                                     "MLD_EPBL", "Kd_EPBL", "Kd_KSHEAR", &
                                     "ice_conc", "ice_thick", &
-                                    "pseudo_salt", "pseudo_salt_diff"]
+                                    "pseudo_salt", "pseudo_salt_diff", &
+                                    "atm_tas", "atm_huss", "atm_uas", "atm_vas", "atm_psl", &
+                                    "atm_rlds", "atm_rsds", "atm_prra", "atm_prsn", "atm_cosz"]
       !! The single source of truth for `is_canonical_diag_name` AND the
       !! P7 discoverability getters (`canonical_diag_catalog_size`/
       !! `_name`, wrapped by the C ABI as `rdb_ocean_canonical_*`) —
@@ -378,6 +384,187 @@ contains
                                        state%ice%m_ice, .true., buf)
       end select
    end subroutine fill_ice_thick
+
+   subroutine fill_atm_tas(state_handle, buf)
+      !! Prescribed 2 m air temperature (K), straight passthrough of
+      !! `atm_state_t%tas`. Registered by `register_default_diags` only
+      !! when `&ocean_atm_forcing_nml enable`. Public only for the
+      !! unit-test suite.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         if (.not. state%atm%enable) then
+            call fill_zero_impl(buf)
+            return
+         end if
+         call fill_atm_field_impl(size(state%atm%tas, 1), size(state%atm%tas, 2), &
+                                  state%atm%tas, buf)
+      end select
+   end subroutine fill_atm_tas
+
+   subroutine fill_atm_huss(state_handle, buf)
+      !! Prescribed 2 m specific humidity (1), straight passthrough of
+      !! `atm_state_t%huss`. Gated as `fill_atm_tas`.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         if (.not. state%atm%enable) then
+            call fill_zero_impl(buf)
+            return
+         end if
+         call fill_atm_field_impl(size(state%atm%huss, 1), size(state%atm%huss, 2), &
+                                  state%atm%huss, buf)
+      end select
+   end subroutine fill_atm_huss
+
+   subroutine fill_atm_uas(state_handle, buf)
+      !! Prescribed 10 m eastward wind (m/s), straight passthrough of
+      !! `atm_state_t%uas`. Gated as `fill_atm_tas`.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         if (.not. state%atm%enable) then
+            call fill_zero_impl(buf)
+            return
+         end if
+         call fill_atm_field_impl(size(state%atm%uas, 1), size(state%atm%uas, 2), &
+                                  state%atm%uas, buf)
+      end select
+   end subroutine fill_atm_uas
+
+   subroutine fill_atm_vas(state_handle, buf)
+      !! Prescribed 10 m northward wind (m/s), straight passthrough of
+      !! `atm_state_t%vas`. Gated as `fill_atm_tas`.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         if (.not. state%atm%enable) then
+            call fill_zero_impl(buf)
+            return
+         end if
+         call fill_atm_field_impl(size(state%atm%vas, 1), size(state%atm%vas, 2), &
+                                  state%atm%vas, buf)
+      end select
+   end subroutine fill_atm_vas
+
+   subroutine fill_atm_psl(state_handle, buf)
+      !! Prescribed sea-level pressure (Pa), straight passthrough of
+      !! `atm_state_t%psl`. Gated as `fill_atm_tas`.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         if (.not. state%atm%enable) then
+            call fill_zero_impl(buf)
+            return
+         end if
+         call fill_atm_field_impl(size(state%atm%psl, 1), size(state%atm%psl, 2), &
+                                  state%atm%psl, buf)
+      end select
+   end subroutine fill_atm_psl
+
+   subroutine fill_atm_rlds(state_handle, buf)
+      !! Prescribed downward longwave (W/m2), straight passthrough of
+      !! `atm_state_t%rlds`. Gated as `fill_atm_tas`.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         if (.not. state%atm%enable) then
+            call fill_zero_impl(buf)
+            return
+         end if
+         call fill_atm_field_impl(size(state%atm%rlds, 1), size(state%atm%rlds, 2), &
+                                  state%atm%rlds, buf)
+      end select
+   end subroutine fill_atm_rlds
+
+   subroutine fill_atm_rsds(state_handle, buf)
+      !! Prescribed downward shortwave (W/m2) -- the coszen-shaped (or,
+      !! under `sw_interp="linear"`, plain-blended) FINAL field, straight
+      !! passthrough of `atm_state_t%rsds`. Gated as `fill_atm_tas`.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         if (.not. state%atm%enable) then
+            call fill_zero_impl(buf)
+            return
+         end if
+         call fill_atm_field_impl(size(state%atm%rsds, 1), size(state%atm%rsds, 2), &
+                                  state%atm%rsds, buf)
+      end select
+   end subroutine fill_atm_rsds
+
+   subroutine fill_atm_prra(state_handle, buf)
+      !! Prescribed liquid precipitation rate (kg/m2/s), straight
+      !! passthrough of `atm_state_t%prra`. Gated as `fill_atm_tas`.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         if (.not. state%atm%enable) then
+            call fill_zero_impl(buf)
+            return
+         end if
+         call fill_atm_field_impl(size(state%atm%prra, 1), size(state%atm%prra, 2), &
+                                  state%atm%prra, buf)
+      end select
+   end subroutine fill_atm_prra
+
+   subroutine fill_atm_prsn(state_handle, buf)
+      !! Prescribed solid (snow) precipitation rate (kg/m2/s), straight
+      !! passthrough of `atm_state_t%prsn`. Gated as `fill_atm_tas`.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         if (.not. state%atm%enable) then
+            call fill_zero_impl(buf)
+            return
+         end if
+         call fill_atm_field_impl(size(state%atm%prsn, 1), size(state%atm%prsn, 2), &
+                                  state%atm%prsn, buf)
+      end select
+   end subroutine fill_atm_prsn
+
+   subroutine fill_atm_cosz(state_handle, buf)
+      !! Instantaneous cosine of the solar zenith angle, straight
+      !! passthrough of `atm_state_t%cosz` -- stays 0 under
+      !! `sw_interp="linear"` (never computed there). Gated as
+      !! `fill_atm_tas` (`&ocean_atm_forcing_nml enable`, not
+      !! `sw_interp`-specific -- a "linear" run simply reports 0).
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         if (.not. state%atm%enable) then
+            call fill_zero_impl(buf)
+            return
+         end if
+         call fill_atm_field_impl(size(state%atm%cosz, 1), size(state%atm%cosz, 2), &
+                                  state%atm%cosz, buf)
+      end select
+   end subroutine fill_atm_cosz
+
+   pure subroutine fill_atm_field_impl(nx, ny, src, buf)
+      !! Shared device kernel for the ten `atm_*` diagnostics: a plain
+      !! elementwise copy into the `k=1` plane of `buf`. Explicit-shape
+      !! throughout (CLAUDE.md `do-concurrent` dummy rule).
+      integer, intent(in) :: nx, ny
+      real(wp), intent(in) :: src(nx, ny)
+      real(wp), intent(inout) :: buf(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      integer :: i, j, nxl, nyl
+      nxl = min(nx, size(buf, 1))
+      nyl = min(ny, size(buf, 2))
+      do concurrent(j=1:nyl, i=1:nxl)
+         buf(i, j, 1) = src(i, j)
+      end do
+   end subroutine fill_atm_field_impl
 
    pure subroutine fill_ice_conc_thick_impl(ncat, nx, ny, wet_T, part_size, &
                                             m_ice, emit_thick, buf)
@@ -1062,6 +1249,32 @@ contains
                                      fill_ice_thick, 1, DIAG_OP_MEAN, &
                                      "grid_mean_sea_ice_thickness")
       end if
+      if (state%atm%enable) then
+         call register_one_canonical(state, specs, dcoord, dtout, "atm_tas", "K", &
+                                     fill_atm_tas, 1, DIAG_OP_MEAN, "air_temperature")
+         call register_one_canonical(state, specs, dcoord, dtout, "atm_huss", "1", &
+                                     fill_atm_huss, 1, DIAG_OP_MEAN, "specific_humidity")
+         call register_one_canonical(state, specs, dcoord, dtout, "atm_uas", "m s-1", &
+                                     fill_atm_uas, 1, DIAG_OP_MEAN, "eastward_wind")
+         call register_one_canonical(state, specs, dcoord, dtout, "atm_vas", "m s-1", &
+                                     fill_atm_vas, 1, DIAG_OP_MEAN, "northward_wind")
+         call register_one_canonical(state, specs, dcoord, dtout, "atm_psl", "Pa", &
+                                     fill_atm_psl, 1, DIAG_OP_MEAN, "air_pressure_at_sea_level")
+         call register_one_canonical(state, specs, dcoord, dtout, "atm_rlds", "W m-2", &
+                                     fill_atm_rlds, 1, DIAG_OP_MEAN, &
+                                     "surface_downwelling_longwave_flux_in_air")
+         call register_one_canonical(state, specs, dcoord, dtout, "atm_rsds", "W m-2", &
+                                     fill_atm_rsds, 1, DIAG_OP_MEAN, &
+                                     "surface_downwelling_shortwave_flux_in_air")
+         call register_one_canonical(state, specs, dcoord, dtout, "atm_prra", "kg m-2 s-1", &
+                                     fill_atm_prra, 1, DIAG_OP_MEAN, "rainfall_flux")
+         call register_one_canonical(state, specs, dcoord, dtout, "atm_prsn", "kg m-2 s-1", &
+                                     fill_atm_prsn, 1, DIAG_OP_MEAN, "snowfall_flux")
+         ! atm_cosz carries no CF standard_name (not a CF quantity).
+         call register_one_canonical(state, specs, dcoord, dtout, "atm_cosz", "1", &
+                                     fill_atm_cosz, 1, DIAG_OP_MEAN, &
+                                     "cosine_of_solar_zenith_angle")
+      end if
    end subroutine register_default_diags
 
    subroutine register_one_canonical(state, specs, default_coord, dtout, name, units, &
@@ -1205,6 +1418,9 @@ contains
          hint = "&ocean_kappa_shear_nml enable"
       case ("ice_conc", "ice_thick")
          hint = "&ocean_ice_nml enable"
+      case ("atm_tas", "atm_huss", "atm_uas", "atm_vas", "atm_psl", &
+            "atm_rlds", "atm_rsds", "atm_prra", "atm_prsn", "atm_cosz")
+         hint = "&ocean_atm_forcing_nml enable"
       case default
          hint = ""
       end select

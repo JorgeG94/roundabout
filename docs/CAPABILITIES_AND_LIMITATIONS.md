@@ -344,7 +344,8 @@ Other boundary facts:
 | Boundary-tide nodal correction | Shipped | `&ocean_bc_nml obc_tidal_nodal` | – |
 | Geothermal bottom heat | Shipped, opt-in | `&ocean_geothermal_nml enable`, `q_geo` | Constant flux, heat only. |
 | Bulk aerodynamic fluxes (Large and Yeager) | Standalone kernel | – | Not wired to a forcing source or a namelist. |
-| In-model lat-lon regridding weights | Library only | – | `rdb_regrid_latlon`: bilinear and first-order conservative, onto spherical, supergrid or tripolar grids; decomposition bit-identical. Not wired to a reader or a namelist. No `patch` variant. |
+| In-model lat-lon regridding weights | Shipped, library + provider | – | `rdb_regrid_latlon`: bilinear and first-order conservative, onto spherical, supergrid or tripolar grids; decomposition bit-identical. Wired into the prescribed atmospheric-state provider below (not yet into `&ocean_dataovr_nml`). No `patch` variant. |
+| Prescribed atmospheric state (JRA55-do) | Shipped, opt-in | `&ocean_atm_forcing_nml enable` | Nine fields (`tas, huss, uas, vas, psl, rlds, rsds, prra, prsn`) time-blended off the shared multi-file reader and regridded onto the model T-grid every step. `rsds` defaults to `sw_interp = "coszen"`: the 3-hour interval mean is held (not blended) and reshaped by a diurnal cosine-zenith factor (Spencer 1971 Fourier fit for declination + equation of time; `orb_year` reserved for a future Berger 1978 orbital model, refused non-default). `sw_interp = "linear"` falls back to a plain blend, like every other field. No bulk-flux/ice-seam consumer yet (reads the nine fields into `atm_state_t`; the surface-flux and sea-ice wiring is a separate chunk) -- refused with a cartesian grid (nothing to regrid onto) and with `&ocean_dataovr_nml` tau/heat/evap/lprec files set. |
 | File-driven `p_surf` (reanalysis pressure) | Not implemented | – | `p_surf` is not one of the six tags. Adding it is a `register_tag` entry plus a destination slot. |
 | Sea-ice mass loading into `p_surf` | Not implemented | – | The `eta_ib` seam is in place for it. |
 | Real freshwater mass fluxes | Not implemented | – | Mass fluxes are stored, not applied. Meltwater under a shelf has an opt-in mass form. |
@@ -356,6 +357,7 @@ Other boundary facts:
 - **Sea ice and wind.** The sea-ice atmospheric stress snapshot is taken once at configure, so it does not follow a time-varying wind.
 - **Inverse barometer.** An atmospheric high depresses sea level about 1 cm per hPa. The term lands on the barotropic `eta_forcing` seam shared with the tide and SAL. Only the gradient of `p_surf` is physical, so a uniform load changes nothing. A genuine load needs `p_surf` wired up as a dataovr tag.
 - **Tides.** Internal-tide drag on the barotropic mode ships separately, as `&ocean_bt_nml wave_drag` (see [section 4](#4-dynamical-core)).
+- **Coszen: Spencer (1971), not Berger (1978).** The diurnal shortwave factor's declination and equation of time come from Spencer's fixed-coefficient Fourier fit (accurate to about 0.01 degrees in declination and a few seconds in time, no year dependence). It does not track the slow (multi-millennial) drift of eccentricity and obliquity a Berger (1978) orbital-parameter model would give for a specific `orb_year`; the knob is reserved for that upgrade and a non-default value is refused rather than silently ignored.
 
 **Full notes in the archive:**
 

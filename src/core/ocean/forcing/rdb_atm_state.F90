@@ -1,4 +1,4 @@
-!! JRA55-do-style prescribed atmospheric-state provider (OM3 wave-3, C2c-2a).
+!! JRA55-do-style prescribed atmospheric-state provider (OM3 wave-3, C2c-2b).
 module rdb_atm_state
    !! Builds the nine-field atmospheric state `tas, huss, uas, vas, psl,
    !! rlds, rsds, prra, prsn` (Tsujino et al. 2018, JRA55-do) on the model
@@ -10,16 +10,42 @@ module rdb_atm_state
    !! hyperslab (the reader's `win_i0/win_j0/win_nx/win_ny` override, C2c-1)
    !! and regrids independently.
    !!
-   !! **Scope of this chunk (C2c-2a).**  `rsds` is registered and blended
-   !! exactly like every other interval-mean flux -- a plain time-blend,
-   !! `hold = .false.` -- i.e. it behaves as `sw_interp = "linear"`
-   !! regardless of the namelist value.  `sw_interp = "coszen"` (the
-   !! namelist default) is refused at `atm_state_configure` with a fail-loud
-   !! `ierr`, naming the follow-up chunk that adds the held-interval +
-   !! diurnal cosine-zenith kernel (C2c-2b).  There is NO consumer here
-   !! (the bulk-flux driver and the ice seam are C2c-3) -- the engine only
-   !! configures this slot and refreshes it every step; nothing reads
-   !! `tas`/`huss`/... yet.
+   !! **`rsds` -- held interval + diurnal cosine-zenith factor
+   !! (`sw_interp = "coszen"`, the namelist default, C2c-2b).**  The JRA55-
+   !! do `rsds` file carries 3-hour interval MEANS; registering it with
+   !! `hold = .true.` and `t_offset = sw_offset_s` (default -5400 s, half
+   !! the 3-hour bucket) makes the shared reader return that bucket's
+   !! value PIECEWISE-CONSTANT (`rsds_rec`, weight forced to 0 -- no
+   !! blend toward the next record) rather than linearly interpolated.
+   !! The diurnal shape within the bucket is restored by
+   !! `rsds = rsds_rec * cosz / cosz_mean` (0 where `cosz_mean < 1e-6`,
+   !! i.e. the whole bucket is night): `cosz` is the INSTANTANEOUS cosine
+   !! of the solar zenith angle at the query time `t`; `cosz_mean` is a
+   !! 12-point midpoint quadrature of `max(0, cos Z)` over the bucket
+   !! `[t_rec, t_rec + 3h)` that `rsds_rec` itself represents (`t_rec =
+   !! floor(t / 3h) * 3h`, the JRA55-do bucket boundary) -- so
+   !! `cosz_mean * 3h` is (to the quadrature's own accuracy) the bucket's
+   !! true clear-sky-insolation-weighted mean, matching the file's
+   !! interval-mean convention and preserving the daily energy total
+   !! exactly in the limit where the model's own step cadence samples the
+   !! same 12 nodes (`test_ocean_atm_state`'s energy-identity gate).  The
+   !! solar position (declination + equation of time) comes from the
+   !! Spencer (1971) Fourier fit -- a `day-of-year` + `hour-of-day`
+   !! function only, computed HOST-SIDE via `rdb_calendar` (calendar
+   !! arithmetic is not device-safe) and handed to the per-cell device
+   !! kernel as a handful of scalars/short arrays; the kernel itself does
+   !! only elementwise trigonometry on `geolonT`/`geolatT`, never touches
+   !! the calendar.  `orb_year` is the reserved Berger (1978) orbital-
+   !! parameter follow-up -- `validate_config` refuses any value other
+   !! than its default, since this chunk's declination uses the FIXED
+   !! Spencer coefficients.  `sw_interp = "linear"` disables all of the
+   !! above (`hold = .false.`, `t_offset = 0`, plain blend, same answer as
+   !! every other flux) -- `rsds` is then `rsds_rec` copied straight
+   !! through.
+   !!
+   !! There is NO bulk-flux/ice-seam CONSUMER here (that is C2c-3) -- the
+   !! engine only configures this slot and refreshes it every step;
+   !! nothing reads `tas`/`huss`/... yet.
    !!
    !! **Two reusable window buffers, not one per field.**  `win_bl`/`win_cv`
    !! are each sized to ONE weight set's source footprint
@@ -44,7 +70,7 @@ module rdb_atm_state
    !! one is the data-forcing anti-pattern `rdb_ocean_data_forcing`'s
    !! docstring already warns against.
    use, intrinsic :: iso_fortran_env, only: int64
-   use rdb_constants, only: wp
+   use rdb_constants, only: wp, TWO_PI, DEG2RAD
    use rdb_grid, only: hgrid_t
    use rdb_config, only: config_t
    use rdb_ocean_metrics, only: ocean_metrics_t
@@ -54,6 +80,7 @@ module rdb_atm_state
    use rdb_regrid_latlon, only: regrid_weights_t, regrid_bnds_to_edges, &
                                 regrid_weights_bilinear, regrid_weights_conservative, &
                                 regrid_apply_2d_impl
+   use rdb_calendar, only: date_t, parse_date, seconds_to_date, gregorian_day_number
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_SETUP, OCEAN_STATUS_ERR_IO
    use rdb_error_ring, only: fail
    use rdb_io_netcdf, only: nc_open_read, nc_close, nc_get_varid, nc_get_var_1d, &
@@ -70,6 +97,14 @@ module rdb_atm_state
    integer, parameter :: IDX_RLDS = 6, IDX_PRRA = 7, IDX_PRSN = 8, IDX_RSDS = 9
    integer, parameter :: N_ATM_FIELDS = 9
 
+   real(wp), parameter :: ATM_SW_BUCKET_S = 10800.0_wp
+      !! JRA55-do shortwave accumulation bucket width (3 h; Tsujino et al.
+      !! 2018) -- the `coszen` kernel's quadrature window, fixed by the
+      !! dataset convention rather than derived from the reader's own
+      !! bracket (see the module docstring's `rsds` paragraph).
+   integer, parameter :: ATM_COSZ_NQUAD = 12
+      !! Midpoint-quadrature node count for `cosz_mean`.
+
    type :: atm_state_t
       !! Nine-field atmospheric state, device-resident, physical cells
       !! only.  Owns its own regrid weights + window/scratch buffers --
@@ -81,6 +116,17 @@ module rdb_atm_state
          !! makes `atm_state_update` (and every lifecycle method below)
          !! an immediate no-op -- the default, bit-identical state.
       logical :: on_device = .false.
+      logical :: sw_coszen = .false.
+         !! `.true.` iff `&ocean_atm_forcing_nml sw_interp = "coszen"`
+         !! (the default) -- `rsds` is registered `hold = .true.` with
+         !! `t_offset = sw_offset_s` and `atm_state_update` runs the
+         !! diurnal cosine-zenith kernel every step.  `.false.`
+         !! (`sw_interp = "linear"`) reproduces the plain interval-mean
+         !! blend every other field uses.
+      type(date_t) :: epoch
+         !! `&time_nml start_date`, parsed once at configure -- the
+         !! calendar epoch `atm_state_update`'s Spencer (1971) solar
+         !! position needs every step (`t` is seconds since this).
       logical :: fluxes_conservative = .false.
          !! `.true.` => `rlds/rsds/prra/prsn` regrid through `wc`
          !! (`fluxes_regrid = "conservative"`, the namelist default);
@@ -110,8 +156,22 @@ module rdb_atm_state
       real(wp), allocatable :: tas(:, :), huss(:, :), uas(:, :), vas(:, :), psl(:, :)
          !! Instantaneous states, blended (no hold).
       real(wp), allocatable :: rlds(:, :), prra(:, :), prsn(:, :), rsds(:, :)
-         !! Interval-mean fluxes, blended (no hold in this chunk -- see
-         !! the module docstring's C2c-2a scope note for `rsds`).
+         !! Interval-mean fluxes, blended. `rsds` is the FINAL consumer-
+         !! facing shortwave field -- see `rsds_rec`/`cosz`/`cosz_mean`
+         !! and the module docstring's `rsds` paragraph.
+      real(wp), allocatable :: rsds_rec(:, :)
+         !! The held (or, under `sw_interp = "linear"`, blended) bucket
+         !! value straight off the reader -- `rsds = rsds_rec *
+         !! cosz / cosz_mean` under `coszen`, `rsds = rsds_rec` under
+         !! `linear`.
+      real(wp), allocatable :: cosz(:, :)
+         !! Instantaneous cosine of the solar zenith angle at the
+         !! current query time `t`, clamped to `>= 0` (night is not
+         !! negative insolation). `coszen` only -- stays 0 under
+         !! `linear`.
+      real(wp), allocatable :: cosz_mean(:, :)
+         !! 12-point midpoint quadrature of `max(0, cos Z)` over the
+         !! `rsds_rec` bucket `[t_rec, t_rec+3h)`. `coszen` only.
    contains
       procedure, non_overridable :: enter_data => atm_state_enter_data
       procedure, non_overridable :: exit_data => atm_state_exit_data
@@ -130,6 +190,7 @@ contains
       if (.not. this%enable) return
       !$acc enter data copyin(this%tas, this%huss, this%uas, this%vas, this%psl)
       !$acc enter data copyin(this%rlds, this%prra, this%prsn, this%rsds)
+      !$acc enter data copyin(this%rsds_rec, this%cosz, this%cosz_mean)
       !$acc enter data create(this%win_bl, this%win_cv, this%tgt_bl, this%tgt_cv)
       call this%wb%enter_data()
       call this%wc%enter_data()
@@ -144,6 +205,7 @@ contains
       !$acc exit data delete(this%win_bl, this%win_cv, this%tgt_bl, this%tgt_cv)
       !$acc exit data delete(this%tas, this%huss, this%uas, this%vas, this%psl)
       !$acc exit data delete(this%rlds, this%prra, this%prsn, this%rsds)
+      !$acc exit data delete(this%rsds_rec, this%cosz, this%cosz_mean)
       this%on_device = .false.
    end subroutine atm_state_exit_data
 
@@ -158,6 +220,7 @@ contains
       nbytes = arr2_bytes(this%tas) + arr2_bytes(this%huss) + arr2_bytes(this%uas) + &
                arr2_bytes(this%vas) + arr2_bytes(this%psl) + arr2_bytes(this%rlds) + &
                arr2_bytes(this%prra) + arr2_bytes(this%prsn) + arr2_bytes(this%rsds) + &
+               arr2_bytes(this%rsds_rec) + arr2_bytes(this%cosz) + arr2_bytes(this%cosz_mean) + &
                arr2_bytes(this%win_bl) + arr2_bytes(this%win_cv) + &
                arr2_bytes(this%tgt_bl) + arr2_bytes(this%tgt_cv) + &
                this%wb%bytes() + this%wc%bytes()
@@ -188,7 +251,11 @@ contains
       if (allocated(this%prra)) deallocate (this%prra)
       if (allocated(this%prsn)) deallocate (this%prsn)
       if (allocated(this%rsds)) deallocate (this%rsds)
+      if (allocated(this%rsds_rec)) deallocate (this%rsds_rec)
+      if (allocated(this%cosz)) deallocate (this%cosz)
+      if (allocated(this%cosz_mean)) deallocate (this%cosz_mean)
       this%enable = .false.
+      this%sw_coszen = .false.
       this%nlon = 0
       this%nlat = 0
       this%nx_total = 0
@@ -208,13 +275,12 @@ contains
       !! default) -- nothing registers, `this%enable` stays `.false.`,
       !! `atm_state_update` is then a no-op too: bit-identical.
       !!
-      !! Fails loud (never silently falls back) on: `sw_interp =
-      !! "coszen"` (not implemented by this chunk -- `"linear"` is the
-      !! only behaviour `atm_state_update` has), an unrecognised
-      !! `sw_interp`/`fluxes_regrid`/`states_regrid` value, a missing or
-      !! empty filelist, or a `rdb_regrid_latlon` weight-build failure.
-      !! `validate_config` has already refused a cartesian grid, a blank
-      !! `&time_nml start_date`, a missing ninth filelist, and
+      !! Fails loud (never silently falls back) on: an unrecognised
+      !! `sw_interp`/`fluxes_regrid`/`states_regrid` value, a malformed
+      !! `&time_nml start_date`, a missing or empty filelist, or a
+      !! `rdb_regrid_latlon` weight-build failure. `validate_config` has
+      !! already refused a cartesian grid, a blank `start_date`, a
+      !! missing ninth filelist, a non-default `orb_year`, and
       !! `states_regrid = "patch"` before this ever runs.
       type(config_t), intent(in) :: cfg
       type(ocean_data_input_t), intent(inout) :: reader
@@ -229,21 +295,31 @@ contains
       integer :: win_j0_flux, nsy_flux
       real(wp), allocatable :: lon_c(:), lat_c(:), lon_bnds(:, :), lat_bnds(:, :)
       real(wp), allocatable :: lon_e(:), lat_e(:)
+      real(wp) :: sw_offset_eff
+      logical :: epoch_ok
 
       if (present(ierr)) ierr = OCEAN_STATUS_OK
       this%enable = .false.
       if (.not. cfg%ocean%atm_forcing%enable) return
 
       sw_interp_l = trim(cfg%ocean%atm_forcing%sw_interp)
-      if (sw_interp_l == "coszen") then
-         call fail("atm_state_configure: &ocean_atm_forcing_nml sw_interp='coszen' is not "// &
-                   "implemented yet -- coszen lands in C2c-2b; set sw_interp='linear' for "// &
-                   "this chunk's plain interval-mean blend", ierr, OCEAN_STATUS_ERR_SETUP)
-         return
-      end if
-      if (sw_interp_l /= "linear") then
+      select case (sw_interp_l)
+      case ("coszen")
+         this%sw_coszen = .true.
+      case ("linear")
+         this%sw_coszen = .false.
+      case default
          call fail("atm_state_configure: unknown &ocean_atm_forcing_nml sw_interp '"// &
                    trim(sw_interp_l)//"' (expected 'coszen' or 'linear')", &
+                   ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end select
+
+      call parse_date(trim(cfg%start_date), this%epoch, epoch_ok)
+      if (.not. epoch_ok) then
+         call fail("atm_state_configure: bad &time_nml start_date '"//trim(cfg%start_date)// &
+                   "' (want 'YYYY-MM-DD' or 'YYYY-MM-DD hh:mm:ss') -- the coszen kernel's "// &
+                   "Spencer (1971) solar position needs a calendar epoch", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
@@ -386,6 +462,9 @@ contains
       allocate (this%prra(this%nx_total, this%ny_total), source=0.0_wp)
       allocate (this%prsn(this%nx_total, this%ny_total), source=0.0_wp)
       allocate (this%rsds(this%nx_total, this%ny_total), source=0.0_wp)
+      allocate (this%rsds_rec(this%nx_total, this%ny_total), source=0.0_wp)
+      allocate (this%cosz(this%nx_total, this%ny_total), source=0.0_wp)
+      allocate (this%cosz_mean(this%nx_total, this%ny_total), source=0.0_wp)
 
       ! --- Registration: states always on wb; fluxes on wb or wc. ---
       call register_field(reader, grid, trim(cfg%ocean%atm_forcing%filelist_tas), &
@@ -460,12 +539,15 @@ contains
                           win_j0_flux, nlon, nsy_flux, this%id(IDX_PRSN), ierr=ierr)
       if (setup_failed(ierr)) return
 
+      sw_offset_eff = 0.0_wp
+      if (this%sw_coszen) sw_offset_eff = cfg%ocean%atm_forcing%sw_offset_s
       call register_field(reader, grid, trim(cfg%ocean%atm_forcing%filelist_rsds), &
                           trim(cfg%ocean%atm_forcing%var_rsds), trim(cfg%start_date), &
                           trim(cfg%ocean%atm_forcing%time_mode), &
                           trim(cfg%ocean%atm_forcing%ryf_start_date), &
                           cfg%ocean%atm_forcing%ryf_period_days, "extend", &
-                          win_j0_flux, nlon, nsy_flux, this%id(IDX_RSDS), ierr=ierr)
+                          win_j0_flux, nlon, nsy_flux, this%id(IDX_RSDS), &
+                          hold=this%sw_coszen, t_offset=sw_offset_eff, ierr=ierr)
       if (setup_failed(ierr)) return
 
       this%enable = .true.
@@ -473,11 +555,13 @@ contains
 
    subroutine register_field(reader, grid, filelist_path, var, start_date, time_mode, &
                              ryf_start_date, ryf_period_days, oor_mode, win_j0, nlon, nsy, &
-                             id, ierr)
+                             id, hold, t_offset, ierr)
       !! Read `filelist_path` into a path array, then register it on the
       !! shared reader with the given weight set's window
       !! `(win_i0=1, win_j0, win_nx=nlon, win_ny=nsy)` -- destination is
-      !! the FULL window buffer (`dest_i0=dest_j0=1`).
+      !! the FULL window buffer (`dest_i0=dest_j0=1`). `hold`/`t_offset`
+      !! (both optional, forwarded as-is -- absent stays absent) are the
+      !! `rsds` coszen knobs; every other field leaves them off.
       type(ocean_data_input_t), intent(inout) :: reader
       type(hgrid_t), intent(in) :: grid
       character(len=*), intent(in) :: filelist_path, var, start_date, time_mode
@@ -485,6 +569,8 @@ contains
       integer, intent(in) :: win_j0, nlon, nsy
       real(wp), intent(in) :: ryf_period_days
       integer, intent(out) :: id
+      logical, intent(in), optional :: hold
+      real(wp), intent(in), optional :: t_offset
       integer, intent(out), optional :: ierr
 
       character(len=:), allocatable :: files(:)
@@ -501,7 +587,8 @@ contains
                                                  ryf_start_date=ryf_start_date, &
                                                  ryf_period_days=ryf_period_days, &
                                                  win_i0=1, win_j0=win_j0, win_nx=nlon, &
-                                                 win_ny=nsy, ierr=ierr)
+                                                 win_ny=nsy, hold=hold, t_offset=t_offset, &
+                                                 ierr=ierr)
    end subroutine register_field
 
    subroutine read_filelist(path, files, ierr)
@@ -576,14 +663,19 @@ contains
    ! Per-step update (immediately after ocean_data_input_update_all)
    ! ======================================================================
 
-   subroutine atm_state_update(this, reader, t)
-      !! Blend + regrid every one of the nine fields' current bracket.
-      !! `t` must be the same model time `ocean_data_input_update_all`
-      !! was just called with -- the reader enforces this and aborts
-      !! otherwise (see `ocean_data_input_update_2d`'s fail-loud
-      !! freshness check).
+   subroutine atm_state_update(this, reader, metrics, t)
+      !! Blend + regrid every one of the nine fields' current bracket,
+      !! then (`sw_interp = "coszen"`) restore `rsds`'s diurnal shape
+      !! from the held bucket mean -- see the module docstring's `rsds`
+      !! paragraph. `t` must be the same model time
+      !! `ocean_data_input_update_all` was just called with -- the
+      !! reader enforces this and aborts otherwise (see
+      !! `ocean_data_input_update_2d`'s fail-loud freshness check).
+      !! `metrics` supplies `geolonT`/`geolatT` for the coszen kernel
+      !! (unused, and not read, when `sw_interp = "linear"`).
       class(atm_state_t), intent(inout) :: this
       type(ocean_data_input_t), intent(in) :: reader
+      type(ocean_metrics_t), intent(in) :: metrics
       real(wp), intent(in) :: t
 
       if (.not. this%enable) return
@@ -643,7 +735,7 @@ contains
                               this%nx_total, this%ny_total, &
                               this%wc%nmax, this%wc%nsx, this%wc%nsy, &
                               this%wc%idx_i, this%wc%idx_j, this%wc%w, &
-                              this%win_cv, this%tgt_cv, this%rsds)
+                              this%win_cv, this%tgt_cv, this%rsds_rec)
       else
          call atm_apply_field(reader, this%id(IDX_RLDS), t, &
                               this%nx_phys, this%ny_phys, this%nghost, &
@@ -668,9 +760,142 @@ contains
                               this%nx_total, this%ny_total, &
                               this%wb%nmax, this%wb%nsx, this%wb%nsy, &
                               this%wb%idx_i, this%wb%idx_j, this%wb%w, &
-                              this%win_bl, this%tgt_bl, this%rsds)
+                              this%win_bl, this%tgt_bl, this%rsds_rec)
+      end if
+
+      if (this%sw_coszen) then
+         call atm_sw_coszen_refresh(this, metrics, t)
+      else
+         call atm_state_copy_impl(this%nx_total, this%ny_total, this%rsds_rec, this%rsds)
       end if
    end subroutine atm_state_update
+
+   subroutine atm_sw_coszen_refresh(this, metrics, t)
+      !! Host-side Spencer (1971) solar-position scalars (calendar
+      !! arithmetic, not device-safe) for the instantaneous query time
+      !! `t` and `ATM_COSZ_NQUAD` midpoint-quadrature nodes spanning the
+      !! `rsds_rec` bucket `[t_rec, t_rec+3h)`, then ONE device kernel
+      !! (`atm_coszen_apply_impl`) doing the per-cell trigonometry.
+      class(atm_state_t), intent(inout) :: this
+      type(ocean_metrics_t), intent(in) :: metrics
+      real(wp), intent(in) :: t
+
+      real(wp) :: t_rec, t_node, dt_node
+      real(wp) :: hour_frac_inst, decl_inst, eqtime_inst
+      real(wp) :: hour_frac_q(ATM_COSZ_NQUAD), decl_q(ATM_COSZ_NQUAD), &
+                  eqtime_q(ATM_COSZ_NQUAD)
+      integer :: k
+
+      call atm_spencer_sun(this%epoch, t, hour_frac_inst, decl_inst, eqtime_inst)
+
+      t_rec = floor(t/ATM_SW_BUCKET_S)*ATM_SW_BUCKET_S
+      dt_node = ATM_SW_BUCKET_S/real(ATM_COSZ_NQUAD, wp)
+      do k = 1, ATM_COSZ_NQUAD
+         t_node = t_rec + (real(k, wp) - 0.5_wp)*dt_node
+         call atm_spencer_sun(this%epoch, t_node, hour_frac_q(k), decl_q(k), eqtime_q(k))
+      end do
+
+      call atm_coszen_apply_impl(this%nx_total, this%ny_total, this%nghost, &
+                                 this%nx_phys, this%ny_phys, ATM_COSZ_NQUAD, &
+                                 hour_frac_q, decl_q, eqtime_q, &
+                                 hour_frac_inst, decl_inst, eqtime_inst, &
+                                 metrics%geolonT, metrics%geolatT, &
+                                 this%rsds_rec, this%cosz, this%cosz_mean, this%rsds)
+   end subroutine atm_sw_coszen_refresh
+
+   pure subroutine atm_spencer_sun(epoch, t, hour_frac, decl, eqtime_min)
+      !! Spencer (1971) Fourier fit: UTC hour-of-day `hour_frac`, solar
+      !! declination `decl` (radians) and equation of time `eqtime_min`
+      !! (minutes) at model time `t` seconds after `epoch`. HOST-ONLY --
+      !! `rdb_calendar`'s date arithmetic is not `!$acc routine`-safe
+      !! (module docstring); called from `atm_sw_coszen_refresh`, never
+      !! from inside a `do concurrent`.
+      type(date_t), intent(in) :: epoch
+      real(wp), intent(in) :: t
+      real(wp), intent(out) :: hour_frac, decl, eqtime_min
+
+      type(date_t) :: d
+      integer :: doy
+      real(wp) :: gamma
+
+      call seconds_to_date(t, epoch, d)
+      doy = int(gregorian_day_number(d%y, d%m, d%d) - gregorian_day_number(d%y, 1, 1)) + 1
+      hour_frac = real(d%h, wp) + real(d%mi, wp)/60.0_wp + d%s/3600.0_wp
+
+      gamma = TWO_PI*(real(doy - 1, wp) + (hour_frac - 12.0_wp)/24.0_wp)/365.0_wp
+
+      decl = 0.006918_wp - 0.399912_wp*cos(gamma) + 0.070257_wp*sin(gamma) &
+             - 0.006758_wp*cos(2.0_wp*gamma) + 0.000907_wp*sin(2.0_wp*gamma) &
+             - 0.002697_wp*cos(3.0_wp*gamma) + 0.001480_wp*sin(3.0_wp*gamma)
+
+      eqtime_min = 229.18_wp*(0.000075_wp + 0.001868_wp*cos(gamma) - 0.032077_wp*sin(gamma) &
+                              - 0.014615_wp*cos(2.0_wp*gamma) - 0.040849_wp*sin(2.0_wp*gamma))
+   end subroutine atm_spencer_sun
+
+   pure subroutine atm_coszen_apply_impl(nx_total, ny_total, nghost, nx_phys, ny_phys, nq, &
+                                         hour_frac_q, decl_q, eqtime_q, &
+                                         hour_frac_inst, decl_inst, eqtime_inst, &
+                                         geolonT, geolatT, rsds_rec, cosz, cosz_mean, rsds)
+      !! The ONE device kernel: per physical T-cell, the instantaneous
+      !! `cos Z` (clamped >= 0) at `(hour_frac_inst, decl_inst,
+      !! eqtime_inst)`, the `nq`-point midpoint-quadrature mean of
+      !! `max(0, cos Z)` over the `(hour_frac_q, decl_q, eqtime_q)`
+      !! nodes, and the coszen-restored `rsds`. Explicit-shape
+      !! throughout; no cross-module calls -- every quantity but
+      !! `geolonT`/`geolatT` is a host-precomputed scalar/short array
+      !! (CLAUDE.md `do-concurrent` dummy + device-safety rules).
+      integer, intent(in) :: nx_total, ny_total, nghost, nx_phys, ny_phys, nq
+      real(wp), intent(in) :: hour_frac_q(nq), decl_q(nq), eqtime_q(nq)
+      real(wp), intent(in) :: hour_frac_inst, decl_inst, eqtime_inst
+      real(wp), intent(in) :: geolonT(nx_total, ny_total), geolatT(nx_total, ny_total)
+      real(wp), intent(in) :: rsds_rec(nx_total, ny_total)
+      real(wp), intent(inout) :: cosz(nx_total, ny_total), cosz_mean(nx_total, ny_total)
+      real(wp), intent(inout) :: rsds(nx_total, ny_total)
+
+      integer :: i, j, ii, jj, k
+      real(wp) :: lat_r, lon_deg, tst_min, ha, cz, acc, mean_val
+
+      do concurrent(j=1:ny_phys, i=1:nx_phys)
+         ii = nghost + i
+         jj = nghost + j
+         lat_r = geolatT(ii, jj)*DEG2RAD
+         lon_deg = geolonT(ii, jj)
+
+         tst_min = hour_frac_inst*60.0_wp + eqtime_inst + 4.0_wp*lon_deg
+         ha = (tst_min/4.0_wp - 180.0_wp)*DEG2RAD
+         cz = sin(lat_r)*sin(decl_inst) + cos(lat_r)*cos(decl_inst)*cos(ha)
+         cosz(ii, jj) = max(0.0_wp, cz)
+
+         acc = 0.0_wp
+         do k = 1, nq
+            tst_min = hour_frac_q(k)*60.0_wp + eqtime_q(k) + 4.0_wp*lon_deg
+            ha = (tst_min/4.0_wp - 180.0_wp)*DEG2RAD
+            cz = sin(lat_r)*sin(decl_q(k)) + cos(lat_r)*cos(decl_q(k))*cos(ha)
+            acc = acc + max(0.0_wp, cz)
+         end do
+         mean_val = acc/real(nq, wp)
+         cosz_mean(ii, jj) = mean_val
+
+         if (mean_val < 1.0e-6_wp) then
+            rsds(ii, jj) = 0.0_wp
+         else
+            rsds(ii, jj) = rsds_rec(ii, jj)*cosz(ii, jj)/mean_val
+         end if
+      end do
+   end subroutine atm_coszen_apply_impl
+
+   pure subroutine atm_state_copy_impl(n1, n2, src, dst)
+      !! `sw_interp = "linear"` path: `rsds = rsds_rec`, unchanged.
+      !! Explicit-shape `do concurrent` copy (never a bare whole-array
+      !! assignment -- CLAUDE.md `do-concurrent` dummy rule).
+      integer, intent(in) :: n1, n2
+      real(wp), intent(in) :: src(n1, n2)
+      real(wp), intent(inout) :: dst(n1, n2)
+      integer :: i, j
+      do concurrent(j=1:n2, i=1:n1)
+         dst(i, j) = src(i, j)
+      end do
+   end subroutine atm_state_copy_impl
 
    subroutine atm_apply_field(reader, id, t, nx_phys, ny_phys, nghost, nx_total, ny_total, &
                               nmax, nsx, nsy, idx_i, idx_j, w, win, tgt, dst)
