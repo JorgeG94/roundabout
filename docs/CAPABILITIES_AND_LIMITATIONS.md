@@ -89,7 +89,7 @@ More acronyms (CWC, PGF, PP81, ALE, EPBL, MEKE) and concept definitions (vanishi
 | Run on AMD or Intel GPUs | Not supported | Not a supported or CI-tested target. GPU offload goes through NVHPC (`-stdpar=gpu` plus OpenACC), and there is no HIP or SYCL backend. The code is also built with Intel and AMD toolchains to find compiler bugs, but that is not a GPU port. |
 | Study an ice-shelf cavity with basal melt | Partly | Single rank only. The ISOMIP+ files are configuration deliverables, not validated results. See [section 10](#10-ice-shelf-cavities). |
 | Include sea ice | Partly | A dynamical core and column model. No ridging, melt ponds or lateral melt. See [section 9](#9-sea-ice). |
-| Run an ice-coupled global climate model | No | The multi-rank sea-ice fold is not wired, and the Hollingsworth-Källén Coriolis correction is not implemented. |
+| Run an ice-coupled global climate model | No | The Hollingsworth-Källén Coriolis correction is not implemented. |
 | Study coastal flooding, dam breaks, bores, estuaries | No | That work lives in the separate coastal repository. |
 | Resolve non-hydrostatic or phase-resolving wave physics | No | The core is hydrostatic. There is no SWAN or WW3 coupling. |
 | Use a semi-implicit (SCHISM or Casulli style) free surface | No | The gravity-wave mode is sub-cycled explicitly. There is no implicit `eta` solve. |

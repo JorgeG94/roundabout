@@ -120,7 +120,7 @@ Cross-cutting numerics and engineering (WENO, SSP-RK3, IMEX, mixed precision, DA
 |---|---|
 | `[E]` **Song-Haidvogel `dsig` stretch** | Expose ROMS stretching as `stretch_type="song_haidvogel"` feeding the sigma path (`dsig` builder, about 30 lines). The dead `VCOORD_SCOORD` enum is gone (D7). Not in `src/` today. *Validate:* generated `dsig` matches the S&H formula for given `(θ_s, θ_b, h_c)`. |
 | `[H]` **Adaptive barotropic Orlanski radiation** | Per-layer implicit-upwind Orlanski on the baroclinic normal velocity ships (`&ocean_bc_nml radiation_scheme = "orlanski"`, `RAD_ORLANSKI` in `rdb_ocean_obc_baroclinic.F90`; default `"anomaly"`). Still missing: a per-cell adaptive phase speed for the barotropic eta (Chapman uses one edge-mean value, `rdb_barotropic_substep.F90`), and restart state for the radiation memory (`rx`, `u_prev`). |
-| `[M]` **Remaining single-rank features** | Ice-shelf cavity, wet/dry, Chapman edges, `dt_tracer_advect_ratio > 1`, sea ice under the tripolar fold, in-memory geometry injection. Each fails loud on more than one rank. |
+| `[M]` **Remaining single-rank features** | Ice-shelf cavity, wet/dry, Chapman edges, `dt_tracer_advect_ratio > 1`, in-memory geometry injection. Each fails loud on more than one rank. |
 | `[M]` **Restarts across a rank-count change** | Restarts resume on the same decomposition only. |
 | `[M]` **Strong-scaling characterisation** | Multi-GPU strong scaling is not yet measured. |
 | `[M]` **Large-rank-count reproducibility re-run** | The decomposition bit-identity test covers 1, 2 and 4 ranks. A 104 vs 208 rank comparison of the console time series (`En`, `MaxCFL`) has not been re-run on this tree. *Validate:* identical time series at 104 and 208 ranks. |
