@@ -30,7 +30,7 @@ module rdb_ocean_diag_fills
    use rdb_eos, only: eos_t, eos_density_point
    use rdb_ocean_vcoord, only: invert_density_targets
    use rdb_remap_column, only: remap_column
-   use rdb_ice_column, only: ICE_RHO_ICE
+   use rdb_ice_column, only: ICE_RHO_ICE, ICE_RHO_SNOW
    use rdb_ocean_pseudo_salt, only: ocean_pseudo_salt_deviation
    implicit none
    private
@@ -48,6 +48,9 @@ module rdb_ocean_diag_fills
    public :: fill_mld_epbl, fill_kd_epbl
    public :: fill_kd_kshear
    public :: fill_ice_conc, fill_ice_thick
+   public :: fill_ice_hs, fill_ice_tsfc, fill_ice_congel, fill_ice_frazil
+   public :: fill_ice_snoice, fill_ice_meltt, fill_ice_meltb, fill_ice_meltl
+   public :: fill_ice_dvidtt
    public :: fill_atm_tas, fill_atm_huss, fill_atm_uas, fill_atm_vas, fill_atm_psl
    public :: fill_atm_rlds, fill_atm_rsds, fill_atm_prra, fill_atm_prsn, fill_atm_cosz
    public :: remap_layer_to_z
@@ -76,12 +79,19 @@ module rdb_ocean_diag_fills
       !! the device `_impl`.  Default `.false.` => below-bottom cells read 0
       !! (bit-identical to the legacy remap).
 
-   integer, parameter :: N_CANONICAL_DIAGS = 24
+   integer, parameter :: N_CANONICAL_DIAGS = 35
+   real(wp), parameter :: CM_DAY_PER_M_S = 8.64e6_wp
+      !! Unit conversion for the CICE thickness-rate diagnostics: m/s -> cm/day
+      !! (86400 s/day x 100 cm/m). CICE writes every thickness-tendency field
+      !! in cm/day via this same factor (`mps_to_cmpdy`).
    character(len=16), parameter :: CANONICAL_DIAG_NAMES(N_CANONICAL_DIAGS) = &
                                    [character(len=16) :: &
                                     "SSH", "temperature", "salinity", "age", "u", "v", "KE", &
                                     "MLD_EPBL", "Kd_EPBL", "Kd_KSHEAR", &
                                     "ice_conc", "ice_thick", &
+                                    "aice", "hi", "hs", "Tsfc", &
+                                    "congel", "frazil", "snoice", "meltt", "meltb", "meltl", &
+                                    "dvidtt", &
                                     "pseudo_salt", "pseudo_salt_diff", &
                                     "atm_tas", "atm_huss", "atm_uas", "atm_vas", "atm_psl", &
                                     "atm_rlds", "atm_rsds", "atm_prra", "atm_prsn", "atm_cosz"]
@@ -384,6 +394,162 @@ contains
                                        state%ice%m_ice, .true., buf)
       end select
    end subroutine fill_ice_thick
+
+   subroutine fill_ice_hs(state_handle, buf)
+      !! CICE `hs`: grid-cell mean snow thickness (m) at T-centres,
+      !! sum over categories of part_size*m_snow/ICE_RHO_SNOW (ncat>1; at
+      !! ncat==1 the lumped per-cell m_snow/ICE_RHO_SNOW). Land/ghost = NaN.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         if (.not. state%ice%is_init) then
+            call fill_zero_impl(buf)
+            return
+         end if
+         call fill_ice_hs_impl(state%ice%ncat, size(state%ice%m_snow, 1), &
+                               size(state%ice%m_snow, 2), state%metrics%wet_T, &
+                               state%ice%part_size, state%ice%m_snow, buf)
+      end select
+   end subroutine fill_ice_hs
+
+   subroutine fill_ice_tsfc(state_handle, buf)
+      !! CICE `Tsfc`: aggregate surface temperature (degC) — the
+      !! ice-area-weighted mean of the per-category skin temperatures,
+      !! with the open-water share of the cell at the seawater freezing
+      !! temperature (CICE's aggregate convention). Land/ghost = NaN.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         if (.not. state%ice%is_init) then
+            call fill_zero_impl(buf)
+            return
+         end if
+         call fill_ice_tsfc_impl(state%ice%ncat, size(state%ice%m_ice, 1), &
+                                 size(state%ice%m_ice, 2), state%metrics%wet_T, &
+                                 state%ice%part_size, state%ice%m_ice, state%ice%tsurf_out, &
+                                 state%ice%tfw_seam, buf)
+      end select
+   end subroutine fill_ice_tsfc
+
+   subroutine fill_ice_congel(state_handle, buf)
+      !! CICE `congel`: basal congelation growth rate (cm/day), the
+      !! window mass `m_congel_win` over the last thermo window.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call fill_ice_rate_src(state, state%ice%m_congel_win, 1.0_wp, buf)
+      end select
+   end subroutine fill_ice_congel
+
+   subroutine fill_ice_frazil(state_handle, buf)
+      !! CICE `frazil`: frazil growth rate (cm/day) from the per-cell
+      !! frazil mass `m_frozen_diag` of the last thermo window.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call fill_ice_rate_src(state, state%ice%m_frozen_diag, 1.0_wp, buf)
+      end select
+   end subroutine fill_ice_frazil
+
+   subroutine fill_ice_snoice(state_handle, buf)
+      !! CICE `snoice`: snow-ice (flooding) formation rate (cm/day).
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call fill_ice_rate_src(state, state%ice%m_snoice_win, 1.0_wp, buf)
+      end select
+   end subroutine fill_ice_snoice
+
+   subroutine fill_ice_meltt(state_handle, buf)
+      !! CICE `meltt`: top ICE melt rate (cm/day; snow melt is excluded).
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call fill_ice_rate_src(state, state%ice%m_meltt_win, 1.0_wp, buf)
+      end select
+   end subroutine fill_ice_meltt
+
+   subroutine fill_ice_meltb(state_handle, buf)
+      !! CICE `meltb`: basal ICE melt rate (cm/day).
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call fill_ice_rate_src(state, state%ice%m_meltb_win, 1.0_wp, buf)
+      end select
+   end subroutine fill_ice_meltb
+
+   subroutine fill_ice_meltl(state_handle, buf)
+      !! CICE `meltl`: lateral melt rate (cm/day). This model has NO lateral
+      !! melt scheme (CLOSURE_MATRIX: absent), so the field is identically 0
+      !! on ice-covered wet cells -- registered so CICE-named notebooks read
+      !! it, documented as a structural zero, never a computed quantity.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call fill_ice_rate_src(state, state%ice%m_meltb_win, 0.0_wp, buf)
+      end select
+   end subroutine fill_ice_meltl
+
+   subroutine fill_ice_dvidtt(state_handle, buf)
+      !! CICE `dvidtt`: thermodynamic ice-volume tendency (cm/day),
+      !! congel + frazil + snoice - meltt - meltb (the CICE identity; there
+      !! is no ice sublimation term in this model's melt paths and no
+      !! evaporation at all, so the identity is exact). The lateral term is
+      !! structurally zero. Not the dynamics tendency (`dvidtd`, deferred).
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      real(wp) :: scale
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         scale = ice_rate_scale(state%ice%dt_win)
+         if (.not. state%ice%is_init) then
+            call fill_zero_impl(buf)
+            return
+         end if
+         call fill_ice_dvidtt_impl(size(state%ice%m_congel_win, 1), &
+                                   size(state%ice%m_congel_win, 2), state%metrics%wet_T, &
+                                   state%ice%m_congel_win, state%ice%m_frozen_diag, &
+                                   state%ice%m_snoice_win, state%ice%m_meltt_win, &
+                                   state%ice%m_meltb_win, scale, buf)
+      end select
+   end subroutine fill_ice_dvidtt
+
+   pure function ice_rate_scale(dt_win) result(scale)
+      !! Window mass (kg/m^2 of cell) -> cm/day rate factor:
+      !! rate = m/(rho_ice*dt_win) [m/s] * 8.64e6 [cm/day per m/s].
+      !! `dt_win <= 0` (no thermo window yet) gives 0 -- never a divide by 0.
+      real(wp), intent(in) :: dt_win
+      real(wp) :: scale
+      if (dt_win > 0.0_wp) then
+         scale = CM_DAY_PER_M_S/(ICE_RHO_ICE*dt_win)
+      else
+         scale = 0.0_wp
+      end if
+   end function ice_rate_scale
+
+   subroutine fill_ice_rate_src(state, src, mult, buf)
+      !! Shared host shim for the window-mass rate fills: `buf = mult *
+      !! src * scale(dt_win)`, NaN on land/ghost (fill_ice_rate_impl).
+      type(ocean_state_t), intent(in) :: state
+      real(wp), intent(in) :: src(:, :)
+      real(wp), intent(in) :: mult
+      real(wp), intent(inout) :: buf(:, :, :)
+      real(wp) :: scale
+      if (.not. state%ice%is_init) then
+         call fill_zero_impl(buf)
+         return
+      end if
+      scale = mult*ice_rate_scale(state%ice%dt_win)
+      call fill_ice_rate_impl(size(src, 1), size(src, 2), state%metrics%wet_T, src, scale, buf)
+   end subroutine fill_ice_rate_src
 
    subroutine fill_atm_tas(state_handle, buf)
       !! Prescribed 2 m air temperature (K), straight passthrough of
@@ -690,6 +856,137 @@ contains
          end do
       end if
    end subroutine fill_ice_conc_thick_impl
+
+   pure subroutine fill_ice_rate_impl(nx, ny, wet_T, src, scale, buf)
+      !! buf = scale * src on wet cells, the NaN sentinel on land/ghost
+      !! (same convention as fill_ice_conc_thick_impl). Shared by the
+      !! window-mass rate diagnostics.
+      integer, intent(in) :: nx, ny
+      real(wp), intent(in) :: wet_T(nx, ny)
+      real(wp), intent(in) :: src(nx, ny)
+      real(wp), intent(in) :: scale
+      real(wp), intent(inout) :: buf(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      integer :: i, j, nxl, nyl
+      real(wp) :: qnan
+
+      nxl = min(nx, size(buf, 1))
+      nyl = min(ny, size(buf, 2))
+      qnan = ieee_value(0.0_wp, ieee_quiet_nan)
+      do concurrent(j=1:nyl, i=1:nxl)
+         if (wet_T(i, j) > 0.5_wp) then
+            buf(i, j, 1) = scale*src(i, j)
+         else
+            buf(i, j, 1) = qnan
+         end if
+      end do
+   end subroutine fill_ice_rate_impl
+
+   pure subroutine fill_ice_dvidtt_impl(nx, ny, wet_T, congel, frazil, snoice, meltt, meltb, &
+                                        scale, buf)
+      !! buf = scale*(congel + frazil + snoice - meltt - meltb) on wet cells
+      !! (the CICE thermodynamic volume-tendency identity), NaN elsewhere.
+      integer, intent(in) :: nx, ny
+      real(wp), intent(in) :: wet_T(nx, ny)
+      real(wp), intent(in) :: congel(nx, ny), frazil(nx, ny), snoice(nx, ny)
+      real(wp), intent(in) :: meltt(nx, ny), meltb(nx, ny)
+      real(wp), intent(in) :: scale
+      real(wp), intent(inout) :: buf(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      integer :: i, j, nxl, nyl
+      real(wp) :: qnan
+
+      nxl = min(nx, size(buf, 1))
+      nyl = min(ny, size(buf, 2))
+      qnan = ieee_value(0.0_wp, ieee_quiet_nan)
+      do concurrent(j=1:nyl, i=1:nxl)
+         if (wet_T(i, j) > 0.5_wp) then
+            buf(i, j, 1) = scale*(congel(i, j) + frazil(i, j) + snoice(i, j) &
+                                  - meltt(i, j) - meltb(i, j))
+         else
+            buf(i, j, 1) = qnan
+         end if
+      end do
+   end subroutine fill_ice_dvidtt_impl
+
+   pure subroutine fill_ice_hs_impl(ncat, nx, ny, wet_T, part_size, m_snow, buf)
+      !! Grid-mean snow thickness: sum_c w_c*m_snow_c/ICE_RHO_SNOW with
+      !! w_c = part_size (ncat>1) or 1 (ncat==1). NaN on land/ghost.
+      integer, intent(in) :: ncat, nx, ny
+      real(wp), intent(in) :: wet_T(nx, ny)
+      real(wp), intent(in) :: part_size(nx, ny, 0:ncat)
+      real(wp), intent(in) :: m_snow(nx, ny, ncat)
+      real(wp), intent(inout) :: buf(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      integer :: i, j, c, nxl, nyl
+      real(wp) :: hs_val, w, qnan
+
+      nxl = min(nx, size(buf, 1))
+      nyl = min(ny, size(buf, 2))
+      qnan = ieee_value(0.0_wp, ieee_quiet_nan)
+      do concurrent(j=1:nyl, i=1:nxl) local(c, hs_val, w)
+         if (wet_T(i, j) > 0.5_wp) then
+            hs_val = 0.0_wp
+            do c = 1, ncat
+               if (ncat == 1) then
+                  w = 1.0_wp
+               else
+                  w = part_size(i, j, c)
+               end if
+               hs_val = hs_val + w*m_snow(i, j, c)
+            end do
+            buf(i, j, 1) = hs_val/ICE_RHO_SNOW
+         else
+            buf(i, j, 1) = qnan
+         end if
+      end do
+   end subroutine fill_ice_hs_impl
+
+   pure subroutine fill_ice_tsfc_impl(ncat, nx, ny, wet_T, part_size, m_ice, tsurf, tfw, buf)
+      !! CICE aggregate surface temperature: ice-covered categories (the
+      !! column's own entry gate, m_ice > ICE_RHO_ICE*H_VANISHED) weighted
+      !! by their area, plus the open-water share at the seawater freezing
+      !! temperature `tfw`. ncat==1 is the lumped cell (one category, or
+      !! `tfw` when the cell is ice-free). NaN on land/ghost.
+      integer, intent(in) :: ncat, nx, ny
+      real(wp), intent(in) :: wet_T(nx, ny)
+      real(wp), intent(in) :: part_size(nx, ny, 0:ncat)
+      real(wp), intent(in) :: m_ice(nx, ny, ncat)
+      real(wp), intent(in) :: tsurf(nx, ny, ncat)
+      real(wp), intent(in) :: tfw(nx, ny)
+      real(wp), intent(inout) :: buf(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      integer :: i, j, c, nxl, nyl
+      real(wp) :: t_ice, cover, qnan
+
+      nxl = min(nx, size(buf, 1))
+      nyl = min(ny, size(buf, 2))
+      qnan = ieee_value(0.0_wp, ieee_quiet_nan)
+      do concurrent(j=1:nyl, i=1:nxl) local(c, t_ice, cover)
+         if (wet_T(i, j) > 0.5_wp) then
+            t_ice = 0.0_wp
+            cover = 0.0_wp
+            do c = 1, ncat
+               if (m_ice(i, j, c) > ICE_RHO_ICE*H_VANISHED) then
+                  if (ncat == 1) then
+                     t_ice = tsurf(i, j, c)
+                     cover = 1.0_wp
+                  else
+                     t_ice = t_ice + part_size(i, j, c)*tsurf(i, j, c)
+                     cover = cover + part_size(i, j, c)
+                  end if
+               end if
+            end do
+            if (ncat == 1) then
+               if (cover > 0.0_wp) then
+                  buf(i, j, 1) = t_ice
+               else
+                  buf(i, j, 1) = tfw(i, j)
+               end if
+            else
+               buf(i, j, 1) = t_ice + max(0.0_wp, 1.0_wp - cover)*tfw(i, j)
+            end if
+         else
+            buf(i, j, 1) = qnan
+         end if
+      end do
+   end subroutine fill_ice_tsfc_impl
 
    pure subroutine fill_zero_impl(buf)
       !! Device-side zero of `buf` — used when a fill's input is missing
@@ -1298,16 +1595,62 @@ contains
                                      "kappa_shear_diffusivity_at_layer_bottom_interface")
       end if
       if (state%ice%enable) then
-         call register_one_canonical(state, specs, dcoord, dtout, "ice_conc", "1", &
+         ! CICE-named grid-cell means (CICE history names). `aice`/`hi`
+         ! replace the former default `ice_conc`/`ice_thick` outputs (same
+         ! numbers); the old names stay opt-in aliases (below).
+         call register_one_canonical(state, specs, dcoord, dtout, "aice", "1", &
                                      fill_ice_conc, 1, DIAG_OP_MEAN, &
                                      "sea_ice_area_fraction", "sea_ice_area_fraction")
-         ! ice_thick carries NO CF standard_name: the CF `sea_ice_thickness`
+         ! hi carries NO CF standard_name: the CF `sea_ice_thickness`
          ! conventionally means actual floe thickness, but this is the
          ! grid-mean (effective) thickness mice/ICE_RHO_ICE — so only the
          ! long_name identifies it (omit standard_name, as u/v/KE do).
-         call register_one_canonical(state, specs, dcoord, dtout, "ice_thick", "m", &
+         call register_one_canonical(state, specs, dcoord, dtout, "hi", "m", &
                                      fill_ice_thick, 1, DIAG_OP_MEAN, &
                                      "grid_mean_sea_ice_thickness")
+         call register_one_canonical(state, specs, dcoord, dtout, "hs", "m", &
+                                     fill_ice_hs, 1, DIAG_OP_MEAN, &
+                                     "grid_mean_snow_thickness")
+         call register_one_canonical(state, specs, dcoord, dtout, "Tsfc", "degC", &
+                                     fill_ice_tsfc, 1, DIAG_OP_MEAN, &
+                                     "sea_ice_aggregate_surface_temperature")
+         ! Opt-in aliases: registered ONLY when named in `diags` (and not
+         ! `:off`), so the default ice-on output is the CICE set above.
+         if (spec_requested(specs, "ice_conc")) then
+            call register_one_canonical(state, specs, dcoord, dtout, "ice_conc", "1", &
+                                        fill_ice_conc, 1, DIAG_OP_MEAN, &
+                                        "sea_ice_area_fraction", "sea_ice_area_fraction")
+         end if
+         if (spec_requested(specs, "ice_thick")) then
+            call register_one_canonical(state, specs, dcoord, dtout, "ice_thick", "m", &
+                                        fill_ice_thick, 1, DIAG_OP_MEAN, &
+                                        "grid_mean_sea_ice_thickness")
+         end if
+         ! Thickness-tendency rates (cm/day, CICE convention): window masses
+         ! exist only when the thermodynamic column runs.
+         if (state%dyn%enable_thermodynamics) then
+            call register_one_canonical(state, specs, dcoord, dtout, "congel", "cm/day", &
+                                        fill_ice_congel, 1, DIAG_OP_MEAN, &
+                                        "congelation_ice_growth_rate")
+            call register_one_canonical(state, specs, dcoord, dtout, "frazil", "cm/day", &
+                                        fill_ice_frazil, 1, DIAG_OP_MEAN, &
+                                        "frazil_ice_growth_rate")
+            call register_one_canonical(state, specs, dcoord, dtout, "snoice", "cm/day", &
+                                        fill_ice_snoice, 1, DIAG_OP_MEAN, &
+                                        "snow_ice_formation_rate")
+            call register_one_canonical(state, specs, dcoord, dtout, "meltt", "cm/day", &
+                                        fill_ice_meltt, 1, DIAG_OP_MEAN, &
+                                        "top_ice_melt_rate")
+            call register_one_canonical(state, specs, dcoord, dtout, "meltb", "cm/day", &
+                                        fill_ice_meltb, 1, DIAG_OP_MEAN, &
+                                        "basal_ice_melt_rate")
+            call register_one_canonical(state, specs, dcoord, dtout, "meltl", "cm/day", &
+                                        fill_ice_meltl, 1, DIAG_OP_MEAN, &
+                                        "lateral_ice_melt_rate")
+            call register_one_canonical(state, specs, dcoord, dtout, "dvidtt", "cm/day", &
+                                        fill_ice_dvidtt, 1, DIAG_OP_MEAN, &
+                                        "thermodynamic_ice_volume_tendency")
+         end if
       end if
 #ifndef RDB_NO_NETCDF
       if (state%atm%enable) then
@@ -1413,6 +1756,22 @@ contains
       end do
    end subroutine resolve_canonical_spec
 
+   pure function spec_requested(specs, name) result(yes)
+      !! `.true.` when the parsed `diags` list names `name` and does not
+      !! turn it off -- the opt-in test for the CICE aliases that are NOT
+      !! in the default ice-on set (`ice_conc`/`ice_thick`).
+      type(diag_spec_t), intent(in), optional :: specs(:)
+      character(len=*), intent(in) :: name
+      logical :: yes
+      integer :: i
+
+      yes = .false.
+      if (.not. present(specs)) return
+      do i = 1, size(specs)
+         if (trim(specs(i)%name) == trim(name) .and. .not. specs(i)%off) yes = .true.
+      end do
+   end function spec_requested
+
    pure function is_canonical_diag_name(name) result(yes)
       !! `.true.` if `name` is one of the canonical default diagnostics
       !! registered by `register_default_diags` (including the
@@ -1478,8 +1837,10 @@ contains
          hint = "&ocean_epbl_nml enable"
       case ("Kd_KSHEAR")
          hint = "&ocean_kappa_shear_nml enable"
-      case ("ice_conc", "ice_thick")
+      case ("ice_conc", "ice_thick", "aice", "hi", "hs", "Tsfc")
          hint = "&ocean_ice_nml enable"
+      case ("congel", "frazil", "snoice", "meltt", "meltb", "meltl", "dvidtt")
+         hint = "&ocean_ice_nml enable (+ thermodynamics)"
       case ("atm_tas", "atm_huss", "atm_uas", "atm_vas", "atm_psl", &
             "atm_rlds", "atm_rsds", "atm_prra", "atm_prsn", "atm_cosz")
          hint = "&ocean_atm_forcing_nml enable"
