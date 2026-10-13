@@ -9,13 +9,17 @@
 !! density vs specific volume.
 !!
 !! The dispatch through `compute_fv_mom6_insitu_pcm_impl` /
-!! `compute_fv_mom6_reconstruct_impl` is wired (Chunk B: `use_insitu_pcm`
-!! admits `EOS_VARIANT_ROQUET_RHO`, both FV-MOM6 branches carry a third loop
-!! copy for it), but the configure-time refusal of `eos='roquet_rho'` with
-!! `form='fv_mom6'` (`rdb_config_validate`, `rdb_ocean_setup_lateral`) still
-!! stands -- lifting it is Chunk C. So the kernels below, including the new
-!! reconstruct-for-pressure twins, are tested directly, not through a
-!! namelist-driven run:
+!! `compute_fv_mom6_reconstruct_impl` is wired (`use_insitu_pcm` admits
+!! `EOS_VARIANT_ROQUET_RHO`, both FV-MOM6 branches carry a third loop copy
+!! for it), and the configure-time refusal of `eos='roquet_rho'` with
+!! `form='fv_mom6'` is lifted (`rdb_config_validate`,
+!! `rdb_ocean_setup_lateral`) -- the combination now validates and runs this
+!! branch by default. The full-kernel, device-executing coverage of that
+!! namelist-driven path lives in `tests/test_ocean_pgf_insitu.F90`
+!! (`thermobaric_face_matches_insitu_oracle_roquet_rho` /
+!! `rest_partial_steps_zero_pgf_roquet_rho`); the kernels below, including
+!! the reconstruct-for-pressure twins, are tested directly against
+!! analytic/quadrature oracles instead:
 !!
 !! 1. rho_layer_matches_quadrature -- `roquet_rho_pcm_dpa_intz` (5-point
 !!    Boole, the (T, S) part of the EOS evaluated once) against a composite

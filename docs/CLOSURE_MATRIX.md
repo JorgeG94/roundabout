@@ -237,7 +237,7 @@ not tabulated here yet. See the TODO comment at the end of
 | Linear two-tracer | **default** | `&ocean_eos_nml eos = "linear"` | Uses the `&ocean_ic_nml` coefficients below. |
 | Wright (1997) | available | `eos = "wright"` | Nonlinear. |
 | Roquet et al. (2015) SpV | available | `eos = "roquet_spv"` | TEOS-10 class: 75-term specific-volume fit, ΔS = 24. Not with the `fv_wright` PGF. |
-| Roquet et al. (2015) in-situ density | available | `eos = "roquet_rho"` | TEOS-10 class: 55-term density fit, ΔS = 32 (OM3's `ROQUET_RHO`). An independent fit from `roquet_spv`: they agree to ~1e-3 kg/m³, not bitwise. Not with the `fv_wright` PGF. **Refused with the FV-MOM6 in-situ density PGF** (`&ocean_pgf_nml insitu_density`, the default): that PGF has Wright and SpV kernels only; `insitu_density = .false.` opts into the potential-density integral explicitly. `test_ocean_eos_roquet_rho`, `test_config :: roquet_rho_insitu_pgf_refused` |
+| Roquet et al. (2015) in-situ density | available | `eos = "roquet_rho"` | TEOS-10 class: 55-term density fit, ΔS = 32 (OM3's `ROQUET_RHO`). An independent fit from `roquet_spv`: they agree to ~1e-3 kg/m³, not bitwise. Not with the `fv_wright` PGF. The FV-MOM6 in-situ density PGF (`&ocean_pgf_nml insitu_density`, the default) has its own factored roquet_rho PCM + reconstruction kernels (Adcroft, Hallberg & Harrison 2008 analytic-FV form), so the combination VALIDATES and runs the in-situ path by default; `insitu_density = .false.` still opts into the potential-density integral explicitly. `test_ocean_eos_roquet_rho`, `test_ocean_pgf_roquet_rho`, `test_ocean_pgf_insitu :: thermobaric_face_matches_insitu_oracle_roquet_rho` / `rest_partial_steps_zero_pgf_roquet_rho`, `test_config :: roquet_rho_insitu_pgf_accepted` |
 
 Both Roquet variants take the model's potential temperature and practical
 salinity and convert them to CT and SR with the GSW-verified
@@ -764,5 +764,21 @@ looks the way it does. It is not needed to use the tables.
   `rdb_teos10_convert`. Over SP 0–42, θ −2 to 32 °C, p 0/1000/5000 dbar:
   max |ΔCT| = 2.3e-2 °C, max |Δρ| = 4.5e-3 kg/m³ (both variants). Pinned by
   `test_ocean_eos_roquet :: roquet_model_ct_pins_gsw`.
+- **2026-10-13** — `eos = "roquet_rho"` through the FV-MOM6 in-situ density
+  PGF: `roquet_rho` now has its own factored in-situ PCM + reconstruction
+  kernels (`roquet_rho_pcm_dpa_intz`/`_face`, `roquet_rho_recon_dpa_intz`/
+  `_face` in `rdb_ocean_pressure_force.F90`, mirroring the Wright and
+  Roquet-SpV paths; Adcroft, Hallberg & Harrison 2008 analytic-FV form),
+  wired into the 3-way dispatch of `compute_fv_mom6_insitu_pcm_impl` and
+  `compute_fv_mom6_reconstruct_impl`. The configure-time refusal of
+  `eos="roquet_rho"` + `&ocean_pgf_nml form="fv_mom6"` with the default
+  `insitu_density=.true.` is **lifted** — the combination now validates and
+  runs the in-situ path by default, matching `roquet_spv`. Knob surface is
+  unchanged (no new namelist key), and `roquet_rho` was refused before this
+  change, so no existing accepted run re-baselines. Gated by
+  `test_ocean_pgf_roquet_rho`, `test_ocean_pgf_insitu ::
+  thermobaric_face_matches_insitu_oracle_roquet_rho` /
+  `rest_partial_steps_zero_pgf_roquet_rho`, `test_config ::
+  roquet_rho_insitu_pgf_accepted`.
 
 **Full notes in the archive:** [the full dated change log (2026-08-04 to 2026-10-06)](CLOSURE_MATRIX_ARCHIVE.md#a26)

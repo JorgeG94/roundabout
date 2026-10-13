@@ -70,7 +70,7 @@ contains
                   new_unittest("pv_weno_nghost_gate_radius_plus_one", test_pv_weno_nghost_gate), &
                   new_unittest("implicit_drag_hbbl_needs_effective_glue", test_glue_hbbl_gate), &
                   new_unittest("calendar_names_fit_and_validate", test_calendar_names), &
-                  new_unittest("roquet_rho_insitu_pgf_refused", test_roquet_rho_insitu_pgf_refused), &
+                  new_unittest("roquet_rho_insitu_pgf_accepted", test_roquet_rho_insitu_pgf_accepted), &
                   new_unittest("atm_forcing_prereq_codes", test_atm_forcing_prereq_codes), &
                   new_unittest("atm_forcing_not_wired_refused", test_atm_forcing_not_wired_refused) &
                   ]
@@ -877,11 +877,13 @@ contains
       if (len_trim(dataovr_block) > 0) nml = nml//trim(dataovr_block)//new_line('a')
    end function atm_forcing_baseline_nml
 
-   subroutine test_roquet_rho_insitu_pgf_refused(error)
+   subroutine test_roquet_rho_insitu_pgf_accepted(error)
       !! `eos='roquet_rho'` with the FV-MOM6 in-situ density PGF (the
-      !! default) is refused: that PGF has no roquet_rho kernel and would
-      !! silently use the potential-density integral. `insitu_density=.false.`
-      !! (explicit opt-in to that integral) and `roquet_spv` both validate.
+      !! default) now has its own factored in-situ PCM + reconstruction
+      !! kernels (mirroring the Wright and Roquet-SpV paths), so the
+      !! combination VALIDATES with the default `insitu_density=.true.`.
+      !! `insitu_density=.false.` (explicit opt-in to the potential-density
+      !! integral) and `roquet_spv` both still validate too.
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
       integer :: ierr
@@ -892,8 +894,8 @@ contains
       call check(error, ierr == OCEAN_STATUS_OK, "roquet_rho + fv_mom6 namelist must parse")
       if (allocated(error)) return
       call validate_config(cfg, ierr=ierr)
-      call check(error, ierr /= OCEAN_STATUS_OK, &
-                 "roquet_rho + fv_mom6 in-situ PGF must be refused")
+      call check(error, ierr == OCEAN_STATUS_OK, &
+                 "roquet_rho + fv_mom6 in-situ PGF (default insitu_density) must validate")
       if (allocated(error)) return
 
       call read_config_from_string(HEAD//"&ocean_eos_nml eos = 'roquet_rho' /"//new_line('a')// &
@@ -908,7 +910,7 @@ contains
                                    "&ocean_pgf_nml form = 'fv_mom6' /"//new_line('a'), cfg, ierr=ierr)
       call validate_config(cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "roquet_spv + fv_mom6 in-situ PGF must validate")
-   end subroutine test_roquet_rho_insitu_pgf_refused
+   end subroutine test_roquet_rho_insitu_pgf_accepted
 
    subroutine test_atm_forcing_prereq_codes(error)
       !! C2c-1: every `&ocean_atm_forcing_nml enable` prerequisite, one at a
