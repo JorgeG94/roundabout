@@ -123,7 +123,7 @@ module rdb_ocean_state
    public :: set_bathymetry_seamount
    public :: seed_h_layer_uniform_impl
    public :: seed_h_layer_uniform_z_impl
-   public :: topo_length_to_grid_units
+   public :: topo_length_to_grid_units, grid_config_is_geographic
    public :: set_bathymetry_neverworld2
    public :: set_bathymetry_island
    public :: set_bathymetry_isomip_plus
@@ -1603,7 +1603,7 @@ contains
       end do
    end subroutine seed_h_layer_uniform_z_impl
 
-   pure function topo_length_to_grid_units(length_m, grid_config, rad_earth) result(len_grid)
+   pure function topo_length_to_grid_units(length_m, geographic, rad_earth) result(len_grid)
       !! Convert a metres length scale (`slope_scale` / `half_width`) into the
       !! GRID coordinate units the formula bathymetry setters operate in.
       !! Cartesian grids carry positions in metres, so the scale passes
@@ -1616,16 +1616,36 @@ contains
       !! Zonal cells are narrower by `cos(lat)`, so a degree-isotropic bump is
       !! mildly elongated zonally in physical space — acceptable for these
       !! idealised topographies; the degeneracy is what this fixes.
+      !!
+      !! `geographic` is `grid_config_is_geographic(grid_config)`. The grid
+      !! kind is passed as a logical, not as the `grid_config` string:
+      !! nvfortran 26.9 drops the hidden length of a `character(len=*)` dummy
+      !! sitting between two other arguments on the first such call in a
+      !! routine, and the `trim` then reads a garbage length and segfaults
+      !! (#203). Keep character dummies out of this signature.
       real(wp), intent(in) :: length_m, rad_earth
-      character(len=*), intent(in) :: grid_config
+      logical, intent(in) :: geographic  !! Grid positions are in degrees.
       real(wp) :: len_grid
+      if (geographic) then
+         len_grid = length_m/(rad_earth*DEG2RAD)
+      else
+         len_grid = length_m
+      end if
+   end function topo_length_to_grid_units
+
+   pure function grid_config_is_geographic(grid_config) result(geographic)
+      !! `.true.` when `&ocean_grid_nml grid_config` carries positions in
+      !! DEGREES (spherical, supergrid, tripolar); `.false.` for cartesian
+      !! (metres). The input to `topo_length_to_grid_units`.
+      character(len=*), intent(in) :: grid_config
+      logical :: geographic
       select case (trim(grid_config))
       case ("spherical", "supergrid", "tripolar")
-         len_grid = length_m/(rad_earth*DEG2RAD)
+         geographic = .true.
       case default
-         len_grid = length_m
+         geographic = .false.
       end select
-   end function topo_length_to_grid_units
+   end function grid_config_is_geographic
 
    pure function isomip_logistic(t) result(r)
       !! `1/(1 + exp(t))`, saturated instead of overflowing.
