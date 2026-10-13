@@ -44,7 +44,8 @@ module test_ocean_pgf_insitu
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_ocean_metrics, only: ocean_metrics_t
    use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
-   use rdb_eos, only: eos_t, eos_density_point, EOS_VARIANT_LINEAR, EOS_VARIANT_WRIGHT_97
+   use rdb_eos, only: eos_t, eos_density_point, EOS_VARIANT_LINEAR, EOS_VARIANT_WRIGHT_97, &
+                      EOS_VARIANT_ROQUET_RHO
    use rdb_ocean_pressure_force, only: ocean_pressure_force_t, &
                                        ocean_pressure_force_compute, &
                                        OPGF_VARIANT_FV_MOM6
@@ -68,7 +69,11 @@ contains
       type(unittest_type), allocatable, intent(out) :: testsuite(:)
       testsuite = [ &
                   new_unittest("thermobaric_face_matches_insitu_oracle", test_thermobaric), &
+                  new_unittest("thermobaric_face_matches_insitu_oracle_roquet_rho", &
+                               test_thermobaric_roquet_rho), &
                   new_unittest("rest_partial_steps_zero_pgf", test_rest_partial_steps), &
+                  new_unittest("rest_partial_steps_zero_pgf_roquet_rho", &
+                               test_rest_partial_steps_roquet_rho), &
                   new_unittest("linear_eos_bit_identical", test_linear_bitident), &
                   new_unittest("open_step_filler_faces_pcm", test_open_step_pcm), &
                   new_unittest("open_step_filler_faces_plm", test_open_step_plm), &
@@ -82,6 +87,13 @@ contains
       eos%rho0 = RHO0
       eos%is_init = .true.
    end subroutine make_wright
+
+   subroutine make_roquet_rho(eos)
+      type(eos_t), intent(out) :: eos
+      eos%variant = EOS_VARIANT_ROQUET_RHO
+      eos%rho0 = RHO0
+      eos%is_init = .true.
+   end subroutine make_roquet_rho
 
    subroutine run_pgf(grid, ms, pgf, eos)
       !! One compute pass on the device (or host), results back on the host.
@@ -250,6 +262,98 @@ contains
       call ms%destroy()
    end subroutine test_thermobaric
 
+   subroutine test_thermobaric_roquet_rho(error)
+      !! Roquet et al. (2015) in-situ-density twin of `test_thermobaric`
+      !! above: identical setup and bounds, EOS swapped from Wright (1997)
+      !! to the Roquet in-situ fit — the only device-executing coverage of
+      !! the roquet_rho FV-MOM6 in-situ PCM kernel (the library
+      !! `compute_fv_mom6_insitu_pcm_impl`, not a test-local kernel).
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NZ = 20
+      real(wp), parameter :: HLAY = 200.0_wp
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_pressure_force_t) :: pgf_new, pgf_old
+      type(eos_t) :: eos
+      real(wp), allocatable :: b(:, :), tcol(:), scol(:)
+      real(wp) :: rho_target, oracle, err_new, err_old, omax, vmax, depth_top
+      integer :: i, j, k, nx, ny, jc
+      character(len=160) :: msg
+      checks: block
+         call grid%init(NXP, NYP, NGHOST, DX, DX)
+         ms%nz_ml = NZ
+         call ms%init(grid)
+         call make_roquet_rho(eos)
+         nx = grid%nx_total
+         ny = grid%ny_total
+         allocate (b(nx, ny), source=real(NZ, wp)*HLAY)
+         allocate (tcol(nx), scol(nx))
+         ! Cold/fresh to warm/salty in x, compensated at the surface.
+         rho_target = eos_density_point(eos, 1.0_wp, 34.7_wp, 0.0_wp)
+         do i = 1, nx
+            tcol(i) = 1.0_wp + 1.5_wp*real(i - 1, wp)
+            scol(i) = salinity_for_sigma0(eos, tcol(i), rho_target)
+         end do
+         do k = 1, NZ
+            do j = 1, ny
+               do i = 1, nx
+                  ms%h_layer(i, j, k) = HLAY
+                  ms%tracers(ms%idx_temperature)%hTr(i, j, k) = tcol(i)*HLAY
+                  ms%tracers(ms%idx_salinity)%hTr(i, j, k) = scol(i)*HLAY
+                  ! Legacy consumer: potential density at p_ref = 0.
+                  ms%rho_layer(i, j, k) = eos_density_point(eos, tcol(i), scol(i), 0.0_wp)
+               end do
+            end do
+         end do
+
+         call make_pgf(pgf_new, grid, NZ, b, .true., .false.)
+         call run_pgf(grid, ms, pgf_new, eos)
+         call make_pgf(pgf_old, grid, NZ, b, .false., .false.)
+         call run_pgf(grid, ms, pgf_old, eos)
+
+         jc = NGHOST + NYP/2
+         err_new = 0.0_wp
+         err_old = 0.0_wp
+         omax = 0.0_wp
+         do k = 1, NZ
+            ! k = 1 is the bed layer; its top sits (NZ - k) layers down.
+            depth_top = real(NZ - k, wp)*HLAY
+            do i = NGHOST + 2, NGHOST + NXP
+               oracle = -(layer_mean_pressure(eos, tcol(i), scol(i), depth_top, HLAY) - &
+                          layer_mean_pressure(eos, tcol(i - 1), scol(i - 1), depth_top, HLAY)) &
+                        /(RHO0*DX)
+               omax = max(omax, abs(oracle))
+               err_new = max(err_new, abs(pgf_new%dpdx_face%data(i, jc, k) - oracle))
+               err_old = max(err_old, abs(pgf_old%dpdx_face%data(i, jc, k) - oracle))
+            end do
+         end do
+         vmax = maxval(abs(pgf_new%dpdy_face%data(NGHOST + 2:NGHOST + NXP, &
+                                                  NGHOST + 2:NGHOST + NYP, :)))
+         write (msg, '(a,es10.3,a,es10.3,a,es10.3,a,es10.3)') "max|oracle| ", omax, &
+            " err in-situ ", err_new, " err legacy ", err_old, " max|PFv| ", vmax
+         ! The thermobaric signal is real and sizeable at 4000 m.
+         call check(error, omax > 1.0e-7_wp, &
+                    "thermobaric roquet_rho: oracle PGF unexpectedly small: "//trim(msg))
+         if (allocated(error)) exit checks
+         call check(error, err_new <= 1.0e-6_wp*omax, &
+                    "thermobaric roquet_rho: in-situ PCM PGF does not match the "// &
+                    "in-situ oracle: "//trim(msg))
+         if (allocated(error)) exit checks
+         ! Fails-before: the potential-density integral sees a uniform
+         ! density and misses the whole signal.
+         call check(error, err_old >= 0.5_wp*omax, &
+                    "thermobaric roquet_rho: legacy potential-density path "// &
+                    "unexpectedly matches: "//trim(msg))
+         if (allocated(error)) exit checks
+         call check(error, vmax <= 1.0e-12_wp, &
+                    "thermobaric roquet_rho: spurious meridional PGF: "//trim(msg))
+      end block checks
+      if (allocated(b)) deallocate (b)
+      call pgf_new%destroy()
+      call pgf_old%destroy()
+      call ms%destroy()
+   end subroutine test_thermobaric_roquet_rho
+
    subroutine seed_zlevel_steps(ms, eos, nz, hlay, depth, b)
       !! z-level layers of thickness `hlay` down to each column's depth,
       !! a PARTIAL bottom cell, inert fillers below (h = H_FILL).  T/S are
@@ -340,6 +444,69 @@ contains
       if (allocated(b)) deallocate (b)
       call ms%destroy()
    end subroutine test_rest_partial_steps
+
+   subroutine test_rest_partial_steps_roquet_rho(error)
+      !! Roquet et al. (2015) in-situ-density twin of `test_rest_partial_steps`
+      !! above: identical setup and bound, EOS swapped from Wright (1997)
+      !! to the Roquet in-situ fit.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NZ = 16
+      real(wp), parameter :: HLAY = 250.0_wp
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_pressure_force_t) :: pgf
+      type(eos_t) :: eos
+      real(wp), allocatable :: b(:, :), depth(:)
+      real(wp) :: worst(2), pmax
+      integer :: i, j, k, nx, ny, imw
+      logical :: mw
+      character(len=96) :: msg
+      checks: block
+         call grid%init(NXP, NYP, NGHOST, DX, DX)
+         ms%nz_ml = NZ
+         call ms%init(grid)
+         call make_roquet_rho(eos)
+         nx = grid%nx_total
+         ny = grid%ny_total
+         allocate (b(nx, ny), source=0.0_wp)
+         allocate (depth(nx))
+         ! Column depths with partial bottom cells of every size.
+         do i = 1, nx
+            depth(i) = 2600.0_wp + 137.0_wp*real(mod(7*i, 10), wp)
+         end do
+         call seed_zlevel_steps(ms, eos, NZ, HLAY, depth, b)
+         do imw = 1, 2
+            mw = imw == 2
+            call make_pgf(pgf, grid, NZ, b, .true., mw)
+            call run_pgf(grid, ms, pgf, eos)
+            pmax = 0.0_wp
+            do k = 1, NZ
+               do j = NGHOST + 1, NGHOST + NYP
+                  do i = NGHOST + 2, NGHOST + NXP
+                     ! Open faces only: a filler on either side is a
+                     ! closed (masked) face in the dynamics.
+                     if (ms%h_layer(i - 1, j, k) > H_FILL .and. &
+                         ms%h_layer(i, j, k) > H_FILL) then
+                        pmax = max(pmax, abs(pgf%dpdx_face%data(i, j, k)))
+                     end if
+                  end do
+               end do
+            end do
+            worst(imw) = pmax
+            call pgf%destroy()
+         end do
+         write (msg, '(a,es10.3,a,es10.3)') "max|PFu| no-mw ", worst(1), " mw ", worst(2)
+         call check(error, worst(1) <= 1.0e-10_wp, &
+                    "rest steps roquet_rho: spurious in-situ PGF at partial cells "// &
+                    "(no mass weight): "//trim(msg))
+         if (allocated(error)) exit checks
+         call check(error, worst(2) <= 1.0e-10_wp, &
+                    "rest steps roquet_rho: spurious in-situ PGF at partial cells "// &
+                    "(mass weight): "//trim(msg))
+      end block checks
+      if (allocated(b)) deallocate (b)
+      call ms%destroy()
+   end subroutine test_rest_partial_steps_roquet_rho
 
    subroutine test_linear_bitident(error)
       type(error_type), allocatable, intent(out) :: error

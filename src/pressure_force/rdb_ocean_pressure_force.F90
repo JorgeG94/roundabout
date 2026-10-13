@@ -2111,11 +2111,11 @@ contains
       !! legacy path runs, bit-identical. Admits Wright (`EOS_VARIANT_WRIGHT_97`)
       !! and both Roquet et al. (2015) fits -- specific volume
       !! (`EOS_VARIANT_ROQUET_SPV`) and in-situ density (`EOS_VARIANT_ROQUET_RHO`).
-      !! Configure-time refusals (`rdb_config_validate`,
-      !! `rdb_ocean_setup_lateral`) currently keep `EOS_VARIANT_ROQUET_RHO`
-      !! out of every accepted namelist, so this third branch is reachable
-      !! only from the unit tests in `tests/test_ocean_pgf_roquet_rho.F90`
-      !! until that refusal is lifted.
+      !! All three are accepted at configure time with the default
+      !! `insitu_density = .true.`; `rdb_config_validate` /
+      !! `rdb_ocean_setup_lateral` only refuse `EOS_VARIANT_ROQUET_RHO` /
+      !! `EOS_VARIANT_ROQUET_SPV` combined with PGF form `fv_wright` (its
+      !! Picard sweep re-evaluates Wright internally, not this path).
       type(ocean_pressure_force_t), intent(in) :: pgf
       type(multilayer_state_t), intent(in) :: ms
       type(eos_t), intent(in), optional :: eos
@@ -2202,11 +2202,10 @@ contains
       !! `else` copies) the same reasoning applies with ONE difference: this
       !! fit's polynomial already IS density, so `roquet_rho_pcm_dpa_intz`
       !! / `roquet_rho_pcm_dpa_face` pay no `1/SV` reciprocal per pressure
-      !! point. Reachable only from `tests/test_ocean_pgf_roquet_rho.F90`
-      !! while the configure-time refusal of `eos='roquet_rho'` with
-      !! `form='fv_mom6'` stands (`rdb_config_validate`,
-      !! `rdb_ocean_setup_lateral`) -- no shipped namelist exercises this
-      !! branch yet.
+      !! point. `eos='roquet_rho'` with `form='fv_mom6'` and the default
+      !! `insitu_density=.true.` now validates and runs this branch by
+      !! default; gated by `tests/test_ocean_pgf_roquet_rho.F90` and the
+      !! full-kernel twins in `tests/test_ocean_pgf_insitu.F90`.
       !!
       !! Pass 1 and Pass 2 each run their integrals as a 3-D `do concurrent`
       !! over (k, j, i) — every layer's and every face's integral is
