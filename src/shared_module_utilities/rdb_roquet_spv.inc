@@ -30,44 +30,47 @@
 !
 ! Do NOT add state, logging, or anything impure to this file.
 !
-! The PT->CT surface polynomial in `rdb_roq_ts_coeffs` below is one of THREE
+! The PT->CT surface polynomial, below, is `rdb_roq_ct_of` -- ONE of THREE
 ! copies of the same TEOS-10 polynomial: the others are `ct_from_pt` and
 ! `ct_from_pt_derivs` in `rdb_teos10_convert` (what `rdb_eos`'s Roquet points
 ! call, through `roquet_model_ct`). Change one, change all three:
 ! `test_ocean_eos_roquet :: roquet_3d_fill_matches_point` ties this copy to the
 ! point routine (1e-9) and `roquet_model_ct_pins_gsw` ties that to TEOS-10.
+! `rdb_roq_ts_coeffs` below AND `rdb_roquet_rho.inc`'s `rdb_roq_rho_ts_coeffs`
+! (the in-situ DENSITY fit's (T, S) coefficients, ΔS = 32 instead of this
+! fit's ΔS = 24) both call `rdb_roq_ct_of` rather than each carrying their own
+! inline copy -- a consumer of the density inc must `#include` this SpV inc
+! FIRST, in the same module `contains`, so the helper is in scope.
 
-   pure subroutine rdb_roq_ts_coeffs(t_roq, s_roq, sv0_roq, sv1_roq, sv2_roq, sv3_roq)
+   pure function rdb_roq_ct_of(t_roq, s_roq) result(ct_roq)
       !$acc routine seq
-      !! The (T, S)-dependent coefficients of the Roquet SpV polynomial viewed
-      !! as a polynomial in PRESSURE.  Everything expensive in the EOS -- two
-      !! sqrt, the degree-7 PT->CT polynomial and the ~50-term (zs, zt) sums
-      !! -- is here; a caller evaluating ONE parcel at several pressures pays
-      !! it once and `rdb_roq_spv_p` per pressure.
+      !! CT = ct_from_pt(SR, PT) -- the verified GSW surface polynomial
+      !! (McDougall & Barker 2011; GSW `gsw_ct_from_pt`), same nesting as
+      !! `rdb_teos10_convert`'s `ct_from_pt`. Kept as an inline, module-local
+      !! copy (not a call into `rdb_teos10_convert`) so this stays the
+      !! inlinable body the file header documents -- a cross-module call
+      !! here would reintroduce the exact "not inlined" cost that module
+      !! split was written to avoid (see file header). Until 2026-10 this
+      !! copy MISPLACED two terms (`123.59576582457964`,
+      !! `-48.5891069025409`, which belong to the pure-salinity y^0 Horner
+      !! coefficient) onto the y^1/y^2 coefficients instead -- the same bug
+      !! `rdb_eos`'s `roquet_spv_point`/`roquet_rho_point` carried before
+      !! being wired to `rdb_teos10_convert`.
+      !!
+      !! Shared by `rdb_roq_ts_coeffs` (this file, ΔS = 24) and
+      !! `rdb_roq_rho_ts_coeffs` (`rdb_roquet_rho.inc`, ΔS = 32): the PT->CT
+      !! conversion does not depend on which ΔS offset the caller folds into
+      !! `zs` afterwards, so both fits call this ONE copy instead of each
+      !! carrying their own.
       real(wp), intent(in)  :: t_roq
          !! Potential temperature (degC).
       real(wp), intent(in)  :: s_roq
          !! Practical salinity (PSU).
-      real(wp), intent(out) :: sv0_roq
-         !! Pressure-independent part, `sv_ts0 + sv_0s0` (m^3/kg).
-      real(wp), intent(out) :: sv1_roq, sv2_roq, sv3_roq
-         !! Coefficients of `p`, `p^2`, `p^3` (Pa-powers folded in).
+      real(wp) :: ct_roq
+         !! Conservative Temperature (degC).
 
-      real(wp) :: zt_roq, zs_roq, x2_roq, xx_roq, yy_roq, hh_roq
-      real(wp) :: svts0_roq, sv0s0_roq
+      real(wp) :: x2_roq, xx_roq, yy_roq, hh_roq
 
-      ! CT = ct_from_pt(SR, PT) -- the verified GSW surface polynomial
-      ! (McDougall & Barker 2011; GSW gsw_ct_from_pt), same nesting as
-      ! `rdb_teos10_convert`'s `ct_from_pt`. Kept as an inline, module-local
-      ! copy (not a call into `rdb_teos10_convert`) so this stays the
-      ! inlinable body the file header documents -- a cross-module call
-      ! here would reintroduce the exact "not inlined" cost that module
-      ! split was written to avoid (see file header). Until 2026-10 this
-      ! copy MISPLACED two terms (`123.59576582457964`,
-      ! `-48.5891069025409`, which belong to the pure-salinity y^0 Horner
-      ! coefficient) onto the y^1/y^2 coefficients instead -- the same bug
-      ! `rdb_eos`'s `roquet_spv_point`/`roquet_rho_point` carried before
-      ! being wired to `rdb_teos10_convert`.
       x2_roq = max(ROQ_CT_SFAC*(s_roq*ROQ_SR_FACTOR), 1.0e-20_wp)
       xx_roq = sqrt(x2_roq)
       yy_roq = t_roq*0.025_wp
@@ -95,7 +98,30 @@
                                                        + yy_roq*(-942.7827304544439_wp &
                                                                  + yy_roq*(369.4389437509002_wp &
                                                                            + (-33.83664947895248_wp - 9.987880382780322_wp*yy_roq)*yy_roq))))))
-      zt_roq = hh_roq/ROQ_CP0
+      ct_roq = hh_roq/ROQ_CP0
+   end function rdb_roq_ct_of
+
+   pure subroutine rdb_roq_ts_coeffs(t_roq, s_roq, sv0_roq, sv1_roq, sv2_roq, sv3_roq)
+      !$acc routine seq
+      !! The (T, S)-dependent coefficients of the Roquet SpV polynomial viewed
+      !! as a polynomial in PRESSURE.  Everything expensive in the EOS -- two
+      !! sqrt, the degree-7 PT->CT polynomial and the ~50-term (zs, zt) sums
+      !! -- is here; a caller evaluating ONE parcel at several pressures pays
+      !! it once and `rdb_roq_spv_p` per pressure.
+      real(wp), intent(in)  :: t_roq
+         !! Potential temperature (degC).
+      real(wp), intent(in)  :: s_roq
+         !! Practical salinity (PSU).
+      real(wp), intent(out) :: sv0_roq
+         !! Pressure-independent part, `sv_ts0 + sv_0s0` (m^3/kg).
+      real(wp), intent(out) :: sv1_roq, sv2_roq, sv3_roq
+         !! Coefficients of `p`, `p^2`, `p^3` (Pa-powers folded in).
+
+      real(wp) :: zt_roq, zs_roq
+      real(wp) :: svts0_roq, sv0s0_roq
+
+      ! CT, through the one shared helper (`rdb_roq_ct_of` above).
+      zt_roq = rdb_roq_ct_of(t_roq, s_roq)
       zs_roq = sqrt(abs(s_roq*ROQ_SR_FACTOR + ROQ_RDELTAS)*ROQ_R1_S0)
 
       sv3_roq = SPV003 + (zs_roq*SPV103 + zt_roq*SPV013)
