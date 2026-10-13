@@ -488,6 +488,7 @@ and no open, tidal, sponge, clamped or Chapman edge.
 | Snow-ice flooding | opt-in | `snow_ice` (`.false.`; same prerequisites) | One Archimedes step, SIS2 `SN2IC`. Exchanges nothing with the ocean. | `test_ocean_ice_column` |
 | Melt ponds | **not available** | — | `m_pond` is a dead local. | — |
 | Lateral melt and floe size | **not available** | — | Surface and basal melt only. | — |
+| CICE-named diagnostics | with `enable` | `&ocean_diag_nml diags` | Window masses from the column outputs (`congel`, `meltt`/`meltb` ice-only, `snoice`, `frazil`); rates in cm/day. `dvidtt` closes against the actual volume change. `meltl` is a structural zero. | `test_ocean_ice_driver_column` (`window_mass_closure_*`), `test_ocean_ice_diags` |
 | Frazil | with `enable` (no knob) | none | Surface layer only. Virtual salt flux. | `test_ocean_frazil`, `test_ocean_ice_coupling` |
 | Atmospheric forcing | v1 stub | `air_temp`, `restore_lambda`, `sw_down` (all `0.0`) | Scalar, uniform, slab-restoring. No bulk formulae, fields, files or time dependence. | `test_ocean_ice_driver_column` |
 | Ice to ocean coupling | with `enable` | none | Salt closed (virtual). Heat closed, including transmitted shortwave. Momentum **not conserved** at fractional cover. Freshwater and mass **not coupled**. | `test_ocean_ice_coupling`, `test_ocean_ice_driver_column` |

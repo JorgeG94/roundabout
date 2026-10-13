@@ -397,6 +397,8 @@ Other boundary facts:
 
 **Full notes in the archive:** [overview, line counts and the full limits list](CAPABILITIES_ARCHIVE.md#a31)
 
+**CICE-named sea-ice diagnostics.** With `&ocean_ice_nml enable`, the default output carries `aice`, `hi`, `hs`, `Tsfc` and the thickness-tendency rates `congel`, `frazil`, `snoice`, `meltt`, `meltb`, `meltl`, `dvidtt` (cm/day, CICE `mps_to_cmpdy`), so ACCESS-OM3-style notebooks read the same names. The rates are the thermo-window masses divided by the window length, time-averaged over the output interval. `meltl` is a structural zero because there is no lateral melt. `dvidtd` (the dynamics tendency) is **not** provided. `uvel`/`vvel` are cell-centre drift velocities, not CICE's U/V-point fields. The former default names `ice_conc`/`ice_thick` are opt-in aliases: name them in `diags` to get them back. Gates: `test_ocean_ice_driver_column` (window-mass closure to round-off), `test_ocean_ice_diags` (fills, aliases, gates).
+
 ## 10. Ice-shelf cavities
 
 An ice-shelf cavity is a **static, prescribed ice draft** over the ocean. The model treats the ice as a lid with a pressure load, a basal melt flux and an optional drag. Everything here is default off and byte-identical when off. All of it is **single rank** and runs only with the split solver.
