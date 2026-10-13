@@ -41,6 +41,8 @@ module rdb_eos
    public :: eos_apply_tfreeze_set
    public :: roquet_spv_ts_coeffs
    public :: roquet_spv_value
+   public :: roquet_rho_ts_coeffs
+   public :: roquet_rho_value
 
    integer, parameter, public :: EOS_VARIANT_LINEAR = 1
       !! Linear T/S (debug / lock-exchange / Eady).
@@ -443,6 +445,19 @@ module rdb_eos
    real(wp), parameter :: RHO003 = -2.3342758797e-02_wp*ROQ_PA2KB**3
    real(wp), parameter :: RHO103 = -1.8507636718e-02_wp*ROQ_PA2KB**3
    real(wp), parameter :: RHO013 = 3.7969820455e-01_wp*(ROQ_I_TS*ROQ_PA2KB**3)
+
+   ! The value half of the in-situ-density table + its ΔS offset, for the
+   ! consumers of `rdb_roquet_rho.inc` (see that file's header). The RALP*/
+   ! RBET* derivative tables below stay module-private -- only `roquet_rho_point`
+   ! (the derivative oracle) needs them.
+   public :: RHO000, RHO001, RHO002, RHO003, RHO010, RHO011, RHO012, RHO013, RHO020, &
+             RHO021, RHO022, RHO030, RHO031, RHO040, RHO041, RHO050, RHO060, RHO100, RHO101, &
+             RHO102, RHO103, RHO110, RHO111, RHO112, RHO120, RHO121, RHO130, RHO131, RHO140, &
+             RHO150, RHO200, RHO201, RHO202, RHO210, RHO211, RHO220, RHO221, RHO230, RHO240, &
+             RHO300, RHO301, RHO310, RHO311, RHO320, RHO330, RHO400, RHO401, RHO410, RHO420, &
+             RHO500, RHO510, RHO600
+   public :: ROQ_RHO_R00, ROQ_RHO_R01, ROQ_RHO_R02, ROQ_RHO_R03, ROQ_RHO_R04, ROQ_RHO_R05
+   public :: ROQ_RHO_RDELTAS
 
    ! d(RHO)/dzt (-> d(rho)/dCT) coefficients -- mirrors RHO* exactly as
    ! the SpV table's ALP* mirrors SPV* (differentiate-the-Horner, one
@@ -1271,6 +1286,37 @@ contains
       sv = rdb_roq_spv_p(sv0, sv1, sv2, sv3, p)
    end function roquet_spv_value
 
+   pure subroutine roquet_rho_ts_coeffs(T_pt, S_sp, r0, r1, r2, r3)
+      !! The (T, S)-dependent coefficients of the Roquet et al. (2015)
+      !! in-situ-DENSITY polynomial viewed as a polynomial in PRESSURE, in
+      !! model variables (potential temperature `T_pt` degC, practical
+      !! salinity `S_sp` PSU):
+      !!
+      !!   rho(p) = (r0 + p*(r1 + p*(r2 + p*r3))) + R00p(p),
+      !!   R00p(p) = p*(ROQ_RHO_R00 + p*(ROQ_RHO_R01 + ... + p*ROQ_RHO_R05)),
+      !!
+      !! with `R00p` the (T, S)-independent reference profile. This is the
+      !! value half of `roquet_rho_point`, term for term (same SR / CT
+      !! conversion, same Horner nesting, ΔS = 32 vs the SpV fit's 24), with
+      !! none of the derivative work.
+      !!
+      !! The body is `rdb_roq_rho_ts_coeffs` (`rdb_roquet_rho.inc`, included
+      !! here): kernel modules include the same file (after the SpV inc, for
+      !! the shared `rdb_roq_ct_of` helper) for a local, inlinable copy
+      !! rather than calling this out-of-line entry point.
+      !$acc routine seq
+      real(wp), intent(in)  :: T_pt
+         !! Potential temperature (degC).
+      real(wp), intent(in)  :: S_sp
+         !! Practical salinity (PSU).
+      real(wp), intent(out) :: r0
+         !! Pressure-independent part, `rho_ts0 + rho_0s0` (kg/m^3).
+      real(wp), intent(out) :: r1, r2, r3
+         !! Coefficients of `p`, `p^2`, `p^3` (Pa-powers folded in).
+
+      call rdb_roq_rho_ts_coeffs(T_pt, S_sp, r0, r1, r2, r3)
+   end subroutine roquet_rho_ts_coeffs
+
    pure subroutine roquet_rho_point(T_pt, S_sp, p, rho, drho_dt_model, drho_ds_model)
       !! Fused Roquet et al. (2015) in-situ DENSITY evaluation at a
       !! point, in MODEL variables (potential temperature `T_pt` degC,
@@ -1360,39 +1406,22 @@ contains
       !! number as `roquet_rho_point`'s `rho` without the d(rho)/dT,
       !! d(rho)/dS Horner work a density-only consumer
       !! (`eos_density_point`, the 3D fill kernel) would discard.
+      !!
+      !! The body is `rdb_roq_rho_ts_coeffs` + `rdb_roq_rho_p`
+      !! (`rdb_roquet_rho.inc`, included here): kernel modules include the
+      !! same file (after the SpV inc) for a local, inlinable copy rather
+      !! than calling this out-of-line entry point. Bit-identical to the
+      !! hand-expanded form this function carried before the inc existed
+      !! (same SR/CT conversion via the shared `rdb_roq_ct_of` helper, same
+      !! Horner nesting, same evaluation order).
       !$acc routine seq
       real(wp), intent(in) :: T_pt, S_sp, p
       real(wp) :: rho
 
-      real(wp) :: SR, CT
-      real(wp) :: zt, zs, zp
-      real(wp) :: rho_ts0, rho_ts1, rho_ts2, rho_ts3, rho_0s0, rho_00p
+      real(wp) :: r0, r1, r2, r3
 
-      SR = S_sp*ROQ_SR_FACTOR
-      CT = roquet_model_ct(T_pt, S_sp)
-
-      zt = CT
-      zs = sqrt(abs(SR + ROQ_RHO_RDELTAS)*ROQ_R1_S0)
-      zp = p
-
-      rho_ts3 = RHO003 + (zs*RHO103 + zt*RHO013)
-      rho_ts2 = RHO002 + (zs*(RHO102 + zs*RHO202) &
-                          + zt*(RHO012 + (zs*RHO112 + zt*RHO022)))
-      rho_ts1 = RHO001 + (zs*(RHO101 + zs*(RHO201 + zs*(RHO301 + zs*RHO401))) &
-                          + zt*(RHO011 + (zs*(RHO111 + zs*(RHO211 + zs*RHO311)) &
-                                          + zt*(RHO021 + (zs*(RHO121 + zs*RHO221) &
-                                                          + zt*(RHO031 + (zs*RHO131 + zt*RHO041)))))))
-      rho_ts0 = zt*(RHO010 &
-                    + (zs*(RHO110 + zs*(RHO210 + zs*(RHO310 + zs*(RHO410 + zs*RHO510)))) &
-                       + zt*(RHO020 + (zs*(RHO120 + zs*(RHO220 + zs*(RHO320 + zs*RHO420))) &
-                                       + zt*(RHO030 + (zs*(RHO130 + zs*(RHO230 + zs*RHO330)) &
-                                                       + zt*(RHO040 + (zs*(RHO140 + zs*RHO240) &
-                                                                       + zt*(RHO050 + (zs*RHO150 + zt*RHO060))))))))))
-      rho_0s0 = RHO000 + zs*(RHO100 + zs*(RHO200 + zs*(RHO300 + zs*(RHO400 &
-                                                                    + zs*(RHO500 + zs*RHO600)))))
-      rho_00p = zp*(ROQ_RHO_R00 + zp*(ROQ_RHO_R01 + zp*(ROQ_RHO_R02 + zp*(ROQ_RHO_R03 &
-                                                                          + zp*(ROQ_RHO_R04 + zp*ROQ_RHO_R05)))))
-      rho = ((rho_ts0 + rho_0s0) + zp*(rho_ts1 + zp*(rho_ts2 + zp*rho_ts3))) + rho_00p
+      call rdb_roq_rho_ts_coeffs(T_pt, S_sp, r0, r1, r2, r3)
+      rho = rdb_roq_rho_p(r0, r1, r2, r3, p)
    end function roquet_rho_value
 
    pure subroutine eos_specvol_derivs(eos, T, S, p, dsv_dt, dsv_ds)
@@ -1816,5 +1845,6 @@ contains
    end function eos_freezing_point
 
 #include "rdb_roquet_spv.inc"
+#include "rdb_roquet_rho.inc"
 
 end module rdb_eos

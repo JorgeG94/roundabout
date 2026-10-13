@@ -49,9 +49,19 @@ module rdb_ocean_pressure_force
                       SPV120, SPV121, SPV130, SPV131, SPV140, SPV150, SPV200, SPV201, &
                       SPV202, SPV210, SPV211, SPV220, SPV221, SPV230, SPV240, SPV300, &
                       SPV301, SPV310, SPV311, SPV320, SPV330, SPV400, SPV401, SPV410, &
-                      SPV420, SPV500, SPV510, SPV600
-   ! (The Roquet coefficient table feeds `rdb_roquet_spv.inc`, included in
-   ! `contains` for a module-local, inlinable copy of the SpV value.)
+                      SPV420, SPV500, SPV510, SPV600, &
+                      ROQ_RHO_RDELTAS, ROQ_RHO_R00, ROQ_RHO_R01, ROQ_RHO_R02, ROQ_RHO_R03, &
+                      ROQ_RHO_R04, ROQ_RHO_R05, &
+                      RHO000, RHO001, RHO002, RHO003, RHO010, RHO011, RHO012, RHO013, &
+                      RHO020, RHO021, RHO022, RHO030, RHO031, RHO040, RHO041, RHO050, &
+                      RHO060, RHO100, RHO101, RHO102, RHO103, RHO110, RHO111, RHO112, &
+                      RHO120, RHO121, RHO130, RHO131, RHO140, RHO150, RHO200, RHO201, &
+                      RHO202, RHO210, RHO211, RHO220, RHO221, RHO230, RHO240, RHO300, &
+                      RHO301, RHO310, RHO311, RHO320, RHO330, RHO400, RHO401, RHO410, &
+                      RHO420, RHO500, RHO510, RHO600
+   ! (The Roquet coefficient tables feed `rdb_roquet_spv.inc` + `rdb_roquet_rho.inc`,
+   ! included in `contains` for module-local, inlinable copies of the SpV / in-situ
+   ! density values.)
    use rdb_ocean_pgf_reconstruct, only: boole_dpa_intz_layer, boole_dpa_face, &
                                         PGF_RECON_PLM, PGF_RECON_PPM
    use, intrinsic :: iso_fortran_env, only: int64
@@ -75,6 +85,8 @@ module rdb_ocean_pressure_force
    public :: wright_pcm_dpa_face
    public :: roquet_pcm_dpa_intz
    public :: roquet_pcm_dpa_face
+   public :: roquet_rho_pcm_dpa_intz
+   public :: roquet_rho_pcm_dpa_face
    public :: plm_edges_layer
    public :: ppm_edges_layer
    public :: boole_dpa_intz_layer_wright
@@ -2722,6 +2734,117 @@ contains
       dpa_face = acc/90.0_wp
    end subroutine roquet_pcm_dpa_face
 
+   pure subroutine roquet_rho_pcm_dpa_intz(t, s, e_top, dz, rho0, rho_ref, dpa, intz_dpa)
+      !$acc routine seq
+      !! Vertical integral of the Roquet et al. (2015) in-situ-DENSITY
+      !! (polyTEOS10_55t, ΔS = 32) anomaly over one constant-T/S (PCM)
+      !! layer: the 5-point Boole rule of `boole_dpa_intz_layer` (Adcroft,
+      !! Hallberg & Harrison 2008 analytic-FV PGF; MOM6
+      !! `int_density_dz_generic_pcm`, also what MOM6 runs for
+      !! `ROQUET_RHO` under a Boussinesq PGF), with the EOS FACTORED.
+      !!
+      !! UNLIKE `roquet_pcm_dpa_intz` (the SpV twin), this fit returns
+      !! density directly -- no `1/SV` reciprocal per pressure point, since
+      !! the polynomial IS density, not specific volume. `rdb_roq_rho_ts_coeffs`
+      !! computes the (T, S)-dependent Horner coefficients ONCE per layer;
+      !! each of the five Boole points then costs one degree-3 (T, S)
+      !! Horner plus the shared degree-6 reference profile, no division.
+      !!
+      !! WHY NOT A CLOSED FORM. Same reasoning as `roquet_pcm_dpa_intz`:
+      !! the Boussinesq FV PGF integrates DENSITY in height
+      !! (`p = -g*rho0*z`), and this fit's density is a degree-6 polynomial
+      !! in `p` with no exact antiderivative advantage over 5-point Boole
+      !! at this order -- quadrature, not a closed form, same as MOM6's
+      !! `EOS_QUADRATURE = True` default for every Roquet/TEOS-10 form.
+      real(wp), intent(in)  :: t
+         !! Layer potential temperature (degC), constant through the layer.
+      real(wp), intent(in)  :: s
+         !! Layer practical salinity (PSU), constant through the layer.
+      real(wp), intent(in)  :: e_top
+         !! Height of the SHALLOWER interface (m, geopotential).
+      real(wp), intent(in)  :: dz
+         !! Layer thickness (m, >= 0); the layer spans `[e_top - dz, e_top]`.
+      real(wp), intent(in)  :: rho0
+         !! Boussinesq reference density of the pressure estimate (kg/m^3).
+      real(wp), intent(in)  :: rho_ref
+         !! Anomaly reference subtracted from the in-situ density (kg/m^3).
+      real(wp), intent(out) :: dpa
+         !! `g * int (rho - rho_ref) dz` over the layer (Pa).
+      real(wp), intent(out) :: intz_dpa
+         !! First moment from the top (Pa*m), as `boole_dpa_intz_layer`.
+
+      real(wp) :: r0, r1, r2, r3, gxrho, rho_anom
+      real(wp) :: r_1, r_2, r_3, r_4, r_5
+
+      call rdb_roq_rho_ts_coeffs(t, s, r0, r1, r2, r3)
+      gxrho = GRAVITY*rho0
+      ! The five Boole points, top (n = 1) to bottom (n = 5), at the same
+      ! `z5 = e_top - 0.25*(n-1)*dz` as `boole_dpa_intz_layer`.
+      r_1 = rdb_roq_rho_p(r0, r1, r2, r3, -gxrho*e_top) - rho_ref
+      r_2 = rdb_roq_rho_p(r0, r1, r2, r3, -gxrho*(e_top - 0.25_wp*dz)) - rho_ref
+      r_3 = rdb_roq_rho_p(r0, r1, r2, r3, -gxrho*(e_top - 0.5_wp*dz)) - rho_ref
+      r_4 = rdb_roq_rho_p(r0, r1, r2, r3, -gxrho*(e_top - 0.75_wp*dz)) - rho_ref
+      r_5 = rdb_roq_rho_p(r0, r1, r2, r3, -gxrho*(e_top - dz)) - rho_ref
+
+      rho_anom = (1.0_wp/90.0_wp)*(7.0_wp*(r_1 + r_5) + 32.0_wp*(r_2 + r_4) + 12.0_wp*r_3)
+      dpa = GRAVITY*dz*rho_anom
+      intz_dpa = 0.5_wp*GRAVITY*dz*dz*(rho_anom &
+                                       - (1.0_wp/90.0_wp)*(16.0_wp*(r_4 - r_2) + 7.0_wp*(r_5 - r_1)))
+   end subroutine roquet_rho_pcm_dpa_intz
+
+   pure subroutine roquet_rho_pcm_dpa_face(e_top_l, e_top_r, dz_l, dz_r, &
+                                           t_l, t_r, s_l, s_r, dpa_l, dpa_r, &
+                                           hwt_ll, hwt_lr, hwt_rr, hwt_rl, &
+                                           rho0, rho_ref, dpa_face)
+      !$acc routine seq
+      !! Cross-face 5-point Boole quadrature of the layer `dpa` for a PCM
+      !! column pair under Roquet in-situ density (`intx_dpa` / `inty_dpa`):
+      !! the in-situ-density twin of `roquet_pcm_dpa_face`, and
+      !! `boole_dpa_face_pcm` with the factored vertical rule
+      !! `roquet_rho_pcm_dpa_intz` at the three interior sub-columns (same
+      !! sub-column T/S / height / thickness interpolation, same weights
+      !! and summation order). 3 T/S polynomials + 15 pressure Horners per
+      !! face per layer, against 15 full generic-EOS calls.
+      real(wp), intent(in)  :: e_top_l, e_top_r
+         !! Shallower-interface heights in the left / right column (m).
+      real(wp), intent(in)  :: dz_l, dz_r
+         !! Layer thicknesses in the left / right column (m, >= 0).
+      real(wp), intent(in)  :: t_l, t_r, s_l, s_r
+         !! Layer-mean temperature / salinity in the left / right column.
+      real(wp), intent(in)  :: dpa_l, dpa_r
+         !! The columns' own `g * int rho' dz` over the layer (Pa).
+      real(wp), intent(in)  :: hwt_ll, hwt_lr, hwt_rr, hwt_rl
+         !! MOM6 `hWt_LL/LR/RR/RL` mass-weighting fractions.
+      real(wp), intent(in)  :: rho0, rho_ref
+         !! Boussinesq pressure-estimate density / anomaly reference.
+      real(wp), intent(out) :: dpa_face
+         !! Along-face mean of `g * int rho' dz` over the layer (Pa).
+
+      real(wp) :: wr, wl, wtt_l, wtt_r, dpa_m, intz_m, acc
+      integer  :: m
+
+      acc = 7.0_wp*dpa_l + 7.0_wp*dpa_r
+      ! (`GCC$ unroll`: gfortran unrolls the three sub-columns completely
+      ! before vectorising, so the face loops over this vectorise on the CPU;
+      ! nvfortran keeps the loop, which costs fewer registers on the device.)
+      !GCC$ unroll 3
+      do m = 2, 4
+         wr = 0.25_wp*real(m - 1, wp)   ! 0 at the left column .. 1 at the right
+         wl = 1.0_wp - wr
+         wtt_l = wl*hwt_ll + wr*hwt_rl
+         wtt_r = wl*hwt_lr + wr*hwt_rr
+         call roquet_rho_pcm_dpa_intz(wtt_l*t_l + wtt_r*t_r, wtt_l*s_l + wtt_r*s_r, &
+                                      wl*e_top_l + wr*e_top_r, wl*dz_l + wr*dz_r, &
+                                      rho0, rho_ref, dpa_m, intz_m)
+         if (m == 3) then
+            acc = acc + 12.0_wp*dpa_m
+         else
+            acc = acc + 32.0_wp*dpa_m
+         end if
+      end do
+      dpa_face = acc/90.0_wp
+   end subroutine roquet_rho_pcm_dpa_face
+
    ! ---- Reconstruct-for-pressure PLM / PPM edge values, per layer.  They
    ! live HERE, next to the kernel whose 3-D Pass 0 calls them, so they
    ! inline into it (across the module boundary they were real calls with
@@ -3428,6 +3551,7 @@ contains
    end function ocean_pressure_force_bytes
 
 #include "rdb_roquet_spv.inc"
+#include "rdb_roquet_rho.inc"
 #include "rdb_vanished_layer.inc"
 
 end module rdb_ocean_pressure_force

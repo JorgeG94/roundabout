@@ -1,0 +1,330 @@
+!! Tests for the factored Roquet et al. (2015) in-situ-DENSITY (ΔS = 32,
+!! "polyTEOS10_55t") kernels of the FV-MOM6 in-situ PGF: the layer
+!! integral `roquet_rho_pcm_dpa_intz` and its cross-face twin
+!! `roquet_rho_pcm_dpa_face` (`rdb_roquet_rho.inc`, PGF-side), plus the
+!! `rdb_eos` entry points `roquet_rho_ts_coeffs` / `roquet_rho_value` that
+!! share the same include. This EOS variant is independent of, and NOT
+!! bit-identical to, the already-shipped specific-volume `roquet_spv`
+!! variant (`test_ocean_pgf_eos_fast.F90`) -- same paper, ΔS = 24 vs 32,
+!! density vs specific volume.
+!!
+!! Chunk A scope only (the dispatch through `compute_fv_mom6_insitu_pcm_impl`
+!! / `compute_fv_mom6_reconstruct_impl` is not wired yet -- these kernels are
+!! tested directly):
+!!
+!! 1. rho_layer_matches_quadrature -- `roquet_rho_pcm_dpa_intz` (5-point
+!!    Boole, the (T, S) part of the EOS evaluated once) against a composite
+!!    5-point Gauss-Legendre quadrature (64 panels) of the generic
+!!    `eos_density_point` (eos%variant = ROQUET_RHO), surface to 6000 m
+!!    (p ~ 6.1e7 Pa), 1 mm to 6000 m layers.
+!! 2. rho_matches_generic_boole -- the factored rule and its face twin
+!!    `roquet_rho_pcm_dpa_face` against the generic Boole path they
+!!    replace (`boole_dpa_intz_layer` / `boole_dpa_face_pcm` through the
+!!    `eos_t` handle), to round-off: the same five densities, weights and
+!!    order.
+!! 3. rho_pcm_face_matches_quadrature -- `roquet_rho_pcm_dpa_face` against
+!!    a 2-D Gauss-Legendre reference (16 panels across the face x 64 in
+!!    the vertical), plain linear interpolation only (see
+!!    `test_ocean_pgf_eos_fast.F90`'s twin for why mass weighting has no
+!!    quadrature to compare against).
+!! 4. rho_inc_matches_eos_point -- `roquet_rho_value(T, S, p)` against
+!!    `eos_density_point` at the Roquet et al. (2015) Sec. 5 paper check
+!!    point and on a 4x4x5 (T, S, p) grid: bitwise (the inc IS the value
+!!    half `eos_density_point` calls for this variant).
+module test_ocean_pgf_roquet_rho
+   use testdrive, only: new_unittest, unittest_type, error_type, check
+   use rdb_constants, only: wp, GRAVITY
+   use rdb_eos, only: eos_t, eos_density_point, roquet_rho_value, &
+                      EOS_VARIANT_ROQUET_RHO
+   use rdb_ocean_pressure_force, only: roquet_rho_pcm_dpa_intz, roquet_rho_pcm_dpa_face
+   use rdb_ocean_pgf_reconstruct, only: boole_dpa_intz_layer, boole_dpa_face_pcm
+   use pic_logger, only: global_logger
+   implicit none
+   private
+
+   public :: collect_ocean_pgf_roquet_rho_tests
+
+   real(wp), parameter :: RHO0 = 1035.0_wp
+   integer, parameter :: N_T = 5, N_S = 3, N_LAY = 10
+   real(wp), parameter :: T_SET(N_T) = [-1.9_wp, 2.0_wp, 10.0_wp, 20.0_wp, 30.0_wp]
+      !! Potential temperatures (degC): freezing to tropical surface.
+   real(wp), parameter :: S_SET(N_S) = [32.0_wp, 34.7_wp, 37.0_wp]
+      !! Practical salinities (PSU).
+   real(wp), parameter :: E_TOP_SET(N_LAY) = [0.0_wp, 0.0_wp, 1.0_wp, -50.0_wp, &
+                                              -500.0_wp, -1000.0_wp, -4000.0_wp, &
+                                              -5800.0_wp, 0.0_wp, -5999.0_wp]
+      !! Layer-top heights (m): surface, above the datum, deep.
+   real(wp), parameter :: DZ_SET(N_LAY) = [1.0e-3_wp, 2.0_wp, 5.0_wp, 10.0_wp, &
+                                           100.0_wp, 1000.0_wp, 500.0_wp, &
+                                           200.0_wp, 6000.0_wp, 1.0e-3_wp]
+      !! Layer thicknesses (m): 1 mm to the whole 6000 m column.
+   real(wp), parameter :: TOL_ROUND = 1.0e-13_wp
+      !! Round-off bound relative to the full hydrostatic scale `g*rho0*dz`
+      !! (copied from `test_ocean_pgf_eos_fast.F90`, never loosened).
+   real(wp), parameter :: TOL_BOOLE_ROQ = 2.0e-9_wp
+      !! Bound on the 5-point Boole truncation error of the Roquet layer
+      !! integral, relative to `g*rho0*dz` (same bound as the SpV fit's
+      !! `TOL_BOOLE_ROQ` in `test_ocean_pgf_eos_fast.F90` -- the in-situ
+      !! density fit is degree-6 in p too, so the same Boole-exactness
+      !! argument applies; the actual max is logged, not asserted tighter).
+   real(wp), parameter :: TOL_BOOLE_FACE = 1.0e-10_wp
+      !! Bound on the cross-face Boole truncation, relative to
+      !! `g*rho0*mean(dz)` (copied from `test_ocean_pgf_eos_fast.F90`).
+
+contains
+
+   subroutine collect_ocean_pgf_roquet_rho_tests(testsuite)
+      type(unittest_type), allocatable, intent(out) :: testsuite(:)
+      testsuite = [ &
+                  new_unittest("rho_layer_matches_quadrature", test_rho_quadrature), &
+                  new_unittest("rho_matches_generic_boole", test_rho_generic), &
+                  new_unittest("rho_pcm_face_matches_quadrature", test_rho_pcm_face_quadrature), &
+                  new_unittest("rho_inc_matches_eos_point", test_rho_inc_matches_point) &
+                  ]
+   end subroutine collect_ocean_pgf_roquet_rho_tests
+
+   subroutine make_eos(eos, variant)
+      type(eos_t), intent(out) :: eos
+      integer, intent(in) :: variant
+      eos%variant = variant
+      eos%rho0 = RHO0
+      eos%alpha_T = 0.17_wp
+      eos%beta_S = 0.78_wp
+      eos%is_init = .true.
+   end subroutine make_eos
+
+   pure subroutine gl_layer(eos, t, s, e_top, dz, rho_ref, dpa, intz_dpa)
+      !! Composite 5-point Gauss-Legendre reference for one constant-T/S
+      !! layer: `dpa = g*int_0^dz rho'(s) ds`, `intz_dpa = g*int_0^dz
+      !! rho'(s)*(dz - s) ds`, `s` the depth below the layer top and
+      !! `rho' = EOS(T, S, g*rho0*(s - e_top)) - rho_ref`. Mirrors
+      !! `test_ocean_pgf_eos_fast.F90`'s `gl_layer` exactly.
+      type(eos_t), intent(in) :: eos
+      real(wp), intent(in) :: t, s, e_top, dz, rho_ref
+      real(wp), intent(out) :: dpa, intz_dpa
+      integer, parameter :: NPAN = 64
+      real(wp), parameter :: X5(5) = [-0.9061798459386640_wp, -0.5384693101056831_wp, &
+                                      0.0_wp, 0.5384693101056831_wp, 0.9061798459386640_wp]
+      real(wp), parameter :: W5(5) = [0.2369268850561891_wp, 0.4786286704993665_wp, &
+                                      0.5688888888888889_wp, 0.4786286704993665_wp, &
+                                      0.2369268850561891_wp]
+      real(wp) :: hp, sc, sd, r, acc0, acc1
+      integer :: n, m
+      hp = dz/real(NPAN, wp)
+      acc0 = 0.0_wp
+      acc1 = 0.0_wp
+      do n = 1, NPAN
+         sc = (real(n, wp) - 0.5_wp)*hp
+         do m = 1, 5
+            sd = sc + 0.5_wp*hp*X5(m)
+            r = eos_density_point(eos, t, s, GRAVITY*RHO0*(sd - e_top)) - rho_ref
+            acc0 = acc0 + W5(m)*r
+            acc1 = acc1 + W5(m)*r*(dz - sd)
+         end do
+      end do
+      dpa = GRAVITY*0.5_wp*hp*acc0
+      intz_dpa = GRAVITY*0.5_wp*hp*acc1
+   end subroutine gl_layer
+
+   subroutine test_rho_quadrature(error)
+      type(error_type), allocatable, intent(out) :: error
+      type(eos_t) :: eos
+      real(wp) :: rho_ref, dpa, intz, dpa_q, intz_q, err, max_err, max_err_thin
+      integer :: it, is, il, ir
+      character(len=200) :: msg
+
+      call make_eos(eos, EOS_VARIANT_ROQUET_RHO)
+      max_err = 0.0_wp
+      max_err_thin = 0.0_wp
+      do ir = 1, 2
+         rho_ref = merge(RHO0, 0.0_wp, ir == 1)
+         do il = 1, N_LAY
+            do is = 1, N_S
+               do it = 1, N_T
+                  call roquet_rho_pcm_dpa_intz(T_SET(it), S_SET(is), E_TOP_SET(il), DZ_SET(il), &
+                                               RHO0, rho_ref, dpa, intz)
+                  call gl_layer(eos, T_SET(it), S_SET(is), E_TOP_SET(il), DZ_SET(il), &
+                                rho_ref, dpa_q, intz_q)
+                  err = max(abs(dpa - dpa_q)/(GRAVITY*RHO0*DZ_SET(il)), &
+                            abs(intz - intz_q)/(0.5_wp*GRAVITY*RHO0*DZ_SET(il)**2))
+                  max_err = max(max_err, err)
+                  if (DZ_SET(il) <= 1000.0_wp) max_err_thin = max(max_err_thin, err)
+                  if (err > TOL_BOOLE_ROQ) then
+                     write (msg, '(a,2f7.2,2es11.3,a,es10.3)') "roquet_rho layer T,S,e_top,dz=", &
+                        T_SET(it), S_SET(is), E_TOP_SET(il), DZ_SET(il), " rel err ", err
+                     call check(error, .false., trim(msg))
+                     return
+                  end if
+               end do
+            end do
+         end do
+      end do
+      write (msg, '(a,es10.3,a,es10.3)') "roquet_rho layer vs 64-panel GL: max rel err ", max_err, &
+         " (layers <= 1000 m: ", max_err_thin
+      call global_logger%info(trim(msg)//")")
+   end subroutine test_rho_quadrature
+
+   subroutine test_rho_generic(error)
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NCASE = 5
+      ! Column pairs: (e_top_l, e_top_r, dz_l, dz_r, t_l, t_r, s_l, s_r)
+      real(wp), parameter :: C(8, NCASE) = reshape([ &
+                                                   0.0_wp, 0.5_wp, 2.0_wp, 2.5_wp, 25.0_wp, 18.0_wp, 35.5_wp, 34.0_wp, &
+                                                   -200.0_wp, -260.0_wp, 150.0_wp, 90.0_wp, 12.0_wp, 9.0_wp, 35.0_wp, 34.6_wp, &
+                                                   -3000.0_wp, -3000.0_wp, 800.0_wp, 30.0_wp, 1.5_wp, 2.5_wp, 34.7_wp, 34.9_wp, &
+                                                   -5500.0_wp, -5700.0_wp, 500.0_wp, 300.0_wp, -0.5_wp, 1.0_wp, 34.65_wp, 34.7_wp, &
+                                                   -10.0_wp, -4000.0_wp, 5990.0_wp, 2000.0_wp, 4.0_wp, 1.0_wp, 34.9_wp, 34.7_wp], &
+                                                   [8, NCASE])
+      type(eos_t) :: eos
+      real(wp) :: hw(4, 2), dpa, intz, dpa_b, intz_b, dpa_l, dpa_r, fa, fb, err, max_err
+      integer :: it, is, il, n, iw
+      character(len=200) :: msg
+
+      call make_eos(eos, EOS_VARIANT_ROQUET_RHO)
+      max_err = 0.0_wp
+      do il = 1, N_LAY
+         do is = 1, N_S
+            do it = 1, N_T
+               call roquet_rho_pcm_dpa_intz(T_SET(it), S_SET(is), E_TOP_SET(il), DZ_SET(il), &
+                                            RHO0, RHO0, dpa, intz)
+               call boole_dpa_intz_layer(eos, RHO0, RHO0, E_TOP_SET(il), DZ_SET(il), &
+                                         T_SET(it), T_SET(it), T_SET(it), &
+                                         S_SET(is), S_SET(is), S_SET(is), &
+                                         .false., dpa_b, intz_b)
+               err = max(abs(dpa - dpa_b)/(GRAVITY*RHO0*DZ_SET(il)), &
+                         abs(intz - intz_b)/(0.5_wp*GRAVITY*RHO0*DZ_SET(il)**2))
+               max_err = max(max_err, err)
+            end do
+         end do
+      end do
+      hw(:, 1) = [1.0_wp, 0.0_wp, 1.0_wp, 0.0_wp]
+      hw(:, 2) = [0.8_wp, 0.2_wp, 0.65_wp, 0.35_wp]
+      do iw = 1, 2
+         do n = 1, NCASE
+            call roquet_rho_pcm_dpa_intz(C(5, n), C(7, n), C(1, n), C(3, n), RHO0, RHO0, dpa_l, intz)
+            call roquet_rho_pcm_dpa_intz(C(6, n), C(8, n), C(2, n), C(4, n), RHO0, RHO0, dpa_r, intz)
+            call roquet_rho_pcm_dpa_face(C(1, n), C(2, n), C(3, n), C(4, n), &
+                                         C(5, n), C(6, n), C(7, n), C(8, n), dpa_l, dpa_r, &
+                                         hw(1, iw), hw(2, iw), hw(3, iw), hw(4, iw), &
+                                         RHO0, RHO0, fa)
+            call boole_dpa_face_pcm(eos, RHO0, RHO0, C(1, n), C(2, n), C(3, n), C(4, n), &
+                                    C(5, n), C(6, n), C(7, n), C(8, n), dpa_l, dpa_r, &
+                                    hw(1, iw), hw(2, iw), hw(3, iw), hw(4, iw), fb)
+            max_err = max(max_err, abs(fa - fb)/(GRAVITY*RHO0*0.5_wp*(C(3, n) + C(4, n))))
+         end do
+      end do
+      write (msg, '(a,es10.3)') "roquet_rho factored vs generic Boole: max rel diff ", max_err
+      call global_logger%info(trim(msg))
+      call check(error, max_err <= TOL_ROUND, trim(msg))
+   end subroutine test_rho_generic
+
+   subroutine test_rho_pcm_face_quadrature(error)
+      !! The PCM cross-face rule `roquet_rho_pcm_dpa_face` against
+      !! Gauss-Legendre in both directions of the generic EOS over the
+      !! same sub-columns: the error is the Boole truncation across the
+      !! face. Plain linear interpolation only (see
+      !! `test_ocean_pgf_eos_fast.F90`'s `pcm_face_matches_quadrature` for
+      !! why mass weighting has no quadrature to compare against).
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NCASE = 5
+      real(wp), parameter :: C(8, NCASE) = reshape([ &
+                                                   0.0_wp, 0.5_wp, 2.0_wp, 2.5_wp, 25.0_wp, 18.0_wp, 35.5_wp, 34.0_wp, &
+                                                   -200.0_wp, -260.0_wp, 150.0_wp, 90.0_wp, 12.0_wp, 9.0_wp, 35.0_wp, 34.6_wp, &
+                                                   -3000.0_wp, -3000.0_wp, 800.0_wp, 30.0_wp, 1.5_wp, 2.5_wp, 34.7_wp, 34.9_wp, &
+                                                   -5500.0_wp, -5700.0_wp, 500.0_wp, 300.0_wp, -0.5_wp, 1.0_wp, 34.65_wp, 34.7_wp, &
+                                                   -10.0_wp, -4000.0_wp, 5990.0_wp, 2000.0_wp, 4.0_wp, 1.0_wp, 34.9_wp, 34.7_wp], &
+                                                   [8, NCASE])
+      type(eos_t) :: eos
+      real(wp) :: dpa_l, dpa_r, intz, fa, fq, err, max_err
+      integer :: n
+      character(len=200) :: msg
+
+      call make_eos(eos, EOS_VARIANT_ROQUET_RHO)
+      max_err = 0.0_wp
+      do n = 1, NCASE
+         ! End points: the columns' own integrals (the rule's w = 0, 1).
+         call gl_layer(eos, C(5, n), C(7, n), C(1, n), C(3, n), RHO0, dpa_l, intz)
+         call gl_layer(eos, C(6, n), C(8, n), C(2, n), C(4, n), RHO0, dpa_r, intz)
+         call roquet_rho_pcm_dpa_face(C(1, n), C(2, n), C(3, n), C(4, n), &
+                                      C(5, n), C(6, n), C(7, n), C(8, n), dpa_l, dpa_r, &
+                                      1.0_wp, 0.0_wp, 1.0_wp, 0.0_wp, &
+                                      RHO0, RHO0, fa)
+         fq = gl_face_pcm(eos, C(1, n), C(2, n), C(3, n), C(4, n), &
+                          C(5, n), C(6, n), C(7, n), C(8, n))
+         err = abs(fa - fq)/(GRAVITY*RHO0*0.5_wp*(C(3, n) + C(4, n)))
+         max_err = max(max_err, err)
+      end do
+      write (msg, '(a,es10.3)') "roquet_rho PCM face rule vs 2-D Gauss-Legendre: max rel err ", max_err
+      call global_logger%info(trim(msg))
+      call check(error, max_err <= TOL_BOOLE_FACE, trim(msg))
+   end subroutine test_rho_pcm_face_quadrature
+
+   function gl_face_pcm(eos, e_l, e_r, dz_l, dz_r, t_l, t_r, s_l, s_r) result(dpa_face)
+      !! Along-face mean of the layer `dpa` by composite Gauss-Legendre in
+      !! BOTH directions, specialised to a PCM (constant-T/S) column pair:
+      !! 16 panels x 5 points across the face (fraction `w` from the left
+      !! column), each sub-column integrated in the vertical by `gl_layer`
+      !! (64 panels), the sub-column height/thickness/T/S plain-linearly
+      !! interpolated between the columns -- the PCM specialisation of
+      !! `test_ocean_pgf_eos_fast.F90`'s `gl_face` (no PLM/PPM profile
+      !! needed; T/S is already constant through the layer).
+      type(eos_t), intent(in) :: eos
+      real(wp), intent(in) :: e_l, e_r, dz_l, dz_r, t_l, t_r, s_l, s_r
+      real(wp) :: dpa_face
+      integer, parameter :: NPAN = 16
+      real(wp), parameter :: X5(5) = [-0.9061798459386640_wp, -0.5384693101056831_wp, &
+                                      0.0_wp, 0.5384693101056831_wp, 0.9061798459386640_wp]
+      real(wp), parameter :: W5(5) = [0.2369268850561891_wp, 0.4786286704993665_wp, &
+                                      0.5688888888888889_wp, 0.4786286704993665_wp, &
+                                      0.2369268850561891_wp]
+      real(wp) :: hp, w, wl, wr, dpa, intz, acc
+      integer :: n, m
+      hp = 1.0_wp/real(NPAN, wp)
+      acc = 0.0_wp
+      do n = 1, NPAN
+         do m = 1, 5
+            w = (real(n, wp) - 0.5_wp)*hp + 0.5_wp*hp*X5(m)
+            wr = w
+            wl = 1.0_wp - w
+            call gl_layer(eos, wl*t_l + wr*t_r, wl*s_l + wr*s_r, &
+                          wl*e_l + wr*e_r, wl*dz_l + wr*dz_r, RHO0, dpa, intz)
+            acc = acc + W5(m)*dpa
+         end do
+      end do
+      dpa_face = 0.5_wp*hp*acc
+   end function gl_face_pcm
+
+   subroutine test_rho_inc_matches_point(error)
+      !! `roquet_rho_value(T, S, p)` against `eos_density_point` -- for
+      !! `EOS_VARIANT_ROQUET_RHO`, `eos_density_point` calls
+      !! `roquet_rho_value` directly, so this locks that wiring bitwise
+      !! (the inc IS the value half) rather than re-deriving the paper
+      !! check value from scratch (`test_ocean_eos_roquet_rho ::
+      !! roquet_rho_paper_checkvalue` already does that, to 1e-5, against
+      !! the production `eos_density_point` path).
+      type(error_type), allocatable, intent(out) :: error
+      real(wp), parameter :: T_GRID(4) = [-1.9_wp, 2.0_wp, 15.0_wp, 30.0_wp]
+      real(wp), parameter :: S_GRID(4) = [0.0_wp, 30.0_wp, 34.7_wp, 37.0_wp]
+      real(wp), parameter :: P_GRID(5) = [0.0_wp, 1.0e5_wp, 1.0e6_wp, 2.0e7_wp, 6.0e7_wp]
+      type(eos_t) :: eos
+      real(wp) :: v_inc, v_point, max_diff
+      integer :: it, is, ip
+      character(len=200) :: msg
+
+      call make_eos(eos, EOS_VARIANT_ROQUET_RHO)
+      max_diff = 0.0_wp
+      do ip = 1, size(P_GRID)
+         do is = 1, size(S_GRID)
+            do it = 1, size(T_GRID)
+               v_inc = roquet_rho_value(T_GRID(it), S_GRID(is), P_GRID(ip))
+               v_point = eos_density_point(eos, T_GRID(it), S_GRID(is), P_GRID(ip))
+               max_diff = max(max_diff, abs(v_inc - v_point))
+            end do
+         end do
+      end do
+      write (msg, '(a,es10.3)') "roquet_rho_value vs eos_density_point: max abs diff ", max_diff
+      call global_logger%info(trim(msg))
+      call check(error, max_diff == 0.0_wp, trim(msg))
+   end subroutine test_rho_inc_matches_point
+
+end module test_ocean_pgf_roquet_rho
