@@ -1364,16 +1364,17 @@ contains
    ! ---------------------------------------------------------------------
 
    subroutine test_derived_catalog_size(error)
-      !! Catalog ships 28 entries: 7 base + 3 sea-ice velocity diags +
+      !! Catalog ships 30 entries: 7 base + 3 sea-ice velocity diags +
       !! 13 ice-shelf-cavity diags (11 melt-interface, gated on
       !! `&ocean_cavity_melt_nml`, and 2 geometry, gated on
       !! `&ocean_cavity_dyn_nml`) + 5 ACCESS-OM3-parity diags (C7 part 1:
-      !! umo, vmo, tauuo, tauvo, Kd_interface).  Locks the count so we
-      !! notice if an entry is accidentally dropped.
+      !! umo, vmo, tauuo, tauvo, Kd_interface) + 2 CICE velocity aliases
+      !! (uvel, vvel: the drift velocities under the CICE names).  Locks
+      !! the count so we notice if an entry is accidentally dropped.
       type(error_type), allocatable, intent(out) :: error
       integer :: n
       n = derived_catalog_size()
-      call check(error, n == 28, "derived catalog should hold 28 entries")
+      call check(error, n == 30, "derived catalog should hold 30 entries")
    end subroutine test_derived_catalog_size
 
    subroutine test_derived_h_layer(error)

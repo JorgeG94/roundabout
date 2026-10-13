@@ -86,7 +86,7 @@ module rdb_ocean_diag_derived
          !! transports, not average them — so those entries set `.true.`.
    end type derived_entry_t
 
-   integer, parameter :: N_CATALOG = 28
+   integer, parameter :: N_CATALOG = 30
    type(derived_entry_t) :: CATALOG(N_CATALOG)
    logical :: catalog_initialised = .false.
 
@@ -169,6 +169,21 @@ contains
       CATALOG(10) = derived_entry_t( &
                     name="ice_v", &
                     long_name="northward_sea_ice_velocity_at_cell_centre", &
+                    units="m s-1", &
+                    standard_name="sea_ice_y_velocity", &
+                    fill=fill_ice_v, is_layered=.false.)
+      CATALOG(29) = derived_entry_t( &
+                    name="uvel", &
+                    long_name="eastward_sea_ice_velocity_cell_centre_alias_of_ice_u", &
+                    units="m s-1", &
+                    standard_name="sea_ice_x_velocity", &
+                    fill=fill_ice_u, is_layered=.false.)
+      ! CICE `uvel`/`vvel` are the B-grid U/V-point velocities; this
+      ! catalog value is the cell-CENTRE average of the face velocity
+      ! (`ice_u`), so the staggering differs -- documented, not hidden.
+      CATALOG(30) = derived_entry_t( &
+                    name="vvel", &
+                    long_name="northward_sea_ice_velocity_cell_centre_alias_of_ice_v", &
                     units="m s-1", &
                     standard_name="sea_ice_y_velocity", &
                     fill=fill_ice_v, is_layered=.false.)

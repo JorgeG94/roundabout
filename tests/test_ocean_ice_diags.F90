@@ -13,11 +13,11 @@ module test_ocean_ice_diags
    use rdb_ocean_diag, only: DIAG_OP_INSTANT, diag_field_stats
    use rdb_ocean_diag_fills, only: register_default_diags, is_canonical_diag_name
    use rdb_ocean_diag_derived, only: register_derived, derived_catalog_size, &
-                                     derived_catalog_name
+                                     derived_catalog_name, apply_diag_selection
    use rdb_ocean_metrics, only: metrics_fill_cartesian, metrics_finalize
    use rdb_ocean_console_stats, only: compute_ice_totals
    use rdb_ice_state, only: ice_cell_concentration_impl
-   use rdb_ice_column, only: ICE_RHO_ICE
+   use rdb_ice_column, only: ICE_RHO_ICE, ICE_RHO_SNOW
    use, intrinsic :: ieee_arithmetic, only: ieee_is_nan
    use testdrive, only: error_type, check, new_unittest, unittest_type
    implicit none
@@ -49,7 +49,13 @@ contains
                                test_ice_derived_catalog_has_velocity), &
                   new_unittest("ice_speed_zero_when_ice_off", test_ice_speed_zero_when_ice_off), &
                   new_unittest("ice_conc_thick_ghost_nan_excluded", &
-                               test_ice_conc_thick_ghost_nan_excluded) &
+                               test_ice_conc_thick_ghost_nan_excluded), &
+                  new_unittest("cice_rate_unit_conversion", test_cice_rate_unit_conversion), &
+                  new_unittest("cice_dvidtt_identity_fill", test_cice_dvidtt_identity_fill), &
+                  new_unittest("cice_rate_zero_before_window", test_cice_rate_zero_before_window), &
+                  new_unittest("cice_hs_part_weighted", test_cice_hs_part_weighted), &
+                  new_unittest("cice_tsfc_open_water_freezing", test_cice_tsfc_open_water_freezing), &
+                  new_unittest("cice_aliases_opt_in", test_cice_aliases_opt_in) &
                   ]
    end subroutine collect_ocean_ice_diags_tests
 
@@ -110,7 +116,7 @@ contains
          state%ice%m_ice(:, :, 2) = 800.0_wp
 
          call register_default_diags(state, dt_out=1.0_wp)
-         iconc = find_var(state, "ice_conc")
+         iconc = find_var(state, "aice")
          call check(error, iconc > 0, "ice_conc must be registered when ice is on")
          if (allocated(error)) exit checks
 
@@ -141,7 +147,7 @@ contains
          end do
 
          call register_default_diags(state, dt_out=1.0_wp)
-         iconc = find_var(state, "ice_conc")
+         iconc = find_var(state, "aice")
          call check(error, iconc > 0, "ice_conc must be registered")
          if (allocated(error)) exit checks
 
@@ -178,7 +184,7 @@ contains
          state%ice%part_size(:, :, 2) = 0.6_wp
 
          call register_default_diags(state, dt_out=1.0_wp)
-         iconc = find_var(state, "ice_conc")
+         iconc = find_var(state, "aice")
          call check(error, iconc > 0, "ice_conc must be registered")
          if (allocated(error)) exit checks
 
@@ -206,7 +212,7 @@ contains
          state%ice%m_ice(:, :, 1) = 905.0_wp
 
          call register_default_diags(state, dt_out=1.0_wp)
-         ithick = find_var(state, "ice_thick")
+         ithick = find_var(state, "hi")
          call check(error, ithick > 0, "ice_thick must be registered")
          if (allocated(error)) exit checks
 
@@ -225,7 +231,7 @@ contains
          state%ice%m_ice(:, :, 1) = 452.5_wp
 
          call register_default_diags(state, dt_out=1.0_wp)
-         ithick = find_var(state, "ice_thick")
+         ithick = find_var(state, "hi")
          call check(error, ithick > 0, "ice_thick must be registered (ncat=1)")
          if (allocated(error)) exit checks2
 
@@ -313,8 +319,8 @@ contains
          state%metrics%wet_T(2, 2) = 0.0_wp
 
          call register_default_diags(state, dt_out=1.0_wp)
-         iconc = find_var(state, "ice_conc")
-         ithick = find_var(state, "ice_thick")
+         iconc = find_var(state, "aice")
+         ithick = find_var(state, "hi")
          call check(error, iconc > 0 .and. ithick > 0, "ice diags must be registered")
          if (allocated(error)) exit checks
 
@@ -360,8 +366,8 @@ contains
          end do
 
          call register_default_diags(state, dt_out=1.0_wp)
-         iconc = find_var(state, "ice_conc")
-         ithick = find_var(state, "ice_thick")
+         iconc = find_var(state, "aice")
+         ithick = find_var(state, "hi")
          call check(error, iconc > 0 .and. ithick > 0, "ice diags must be registered")
          if (allocated(error)) exit checks
 
@@ -447,9 +453,9 @@ contains
          call setup_state(grid, state)
          call register_default_diags(state, dt_out=3600.0_wp)
 
-         call check(error, find_var(state, "ice_conc") == 0, "ice_conc absent when ice is off")
+         call check(error, find_var(state, "aice") == 0, "ice_conc absent when ice is off")
          if (allocated(error)) exit checks
-         call check(error, find_var(state, "ice_thick") == 0, "ice_thick absent when ice is off")
+         call check(error, find_var(state, "hi") == 0, "ice_thick absent when ice is off")
       end block checks
       call state%destroy()
    end subroutine test_ice_off_no_ice_diags
@@ -551,8 +557,8 @@ contains
          state%metrics%wet_T(:, grid%ny_total) = 0.0_wp
 
          call register_default_diags(state, dt_out=1.0_wp)
-         iconc = find_var(state, "ice_conc")
-         ithick = find_var(state, "ice_thick")
+         iconc = find_var(state, "aice")
+         ithick = find_var(state, "hi")
          call check(error, iconc > 0 .and. ithick > 0, "ice diags must be registered")
          if (allocated(error)) exit checks
 
@@ -601,5 +607,205 @@ contains
       end block checks
       call state%destroy()
    end subroutine test_ice_conc_thick_ghost_nan_excluded
+
+   subroutine run_one_step(state)
+      !! Enter the device map, take one diag step (cadence fires at dt_out
+      !! = 1), pull the host outputs back. Mirrors the existing read-outs.
+      type(ocean_state_t), intent(inout) :: state
+      call ocean_state_enter_data(state)
+      call state%diag%step(state, dt=1.0_wp, t=1.0_wp)
+      call ocean_state_exit_data(state)
+   end subroutine run_one_step
+
+   subroutine test_cice_rate_unit_conversion(error)
+      !! A window mass m = rho_i*dt_win*1e-6 over dt_win = 3600 s is a
+      !! thickness change of 1e-6 m/s = 8.64 cm/day (CICE `mps_to_cmpdy`).
+      !! Stamps `m_congel_win` and checks the `congel` read-out; `hs` from
+      !! a snow mass of 330*0.2 kg/m^2 at ncat=1 must read 0.2 m; `meltl`
+      !! must be identically zero (no lateral melt scheme).
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_state_t) :: state
+      integer :: icon, ihs, ilat
+      checks: block
+         call setup_state_ice(grid, state, ncat=1)
+         state%ice%dt_win = 3600.0_wp
+         state%ice%m_congel_win = ICE_RHO_ICE*3600.0_wp*1.0e-6_wp
+         state%ice%m_snow(:, :, 1) = ICE_RHO_SNOW*0.2_wp
+         state%ice%part_size(:, :, 1) = 1.0_wp
+         call register_default_diags(state, dt_out=1.0_wp)
+         icon = find_var(state, "congel")
+         ihs = find_var(state, "hs")
+         ilat = find_var(state, "meltl")
+         call check(error, icon > 0 .and. ihs > 0 .and. ilat > 0, &
+                    "congel, hs and meltl must register when ice + thermo are on")
+         if (allocated(error)) exit checks
+         call run_one_step(state)
+         call check(error, maxval(abs(state%diag%vars(icon)%output_buffer(2:NX - 1, 2:NY - 1, 1) &
+                                      - 8.64_wp)) < TOL, &
+                    "congel must read 1e-6 m/s = 8.64 cm/day (mps_to_cmpdy)")
+         if (allocated(error)) exit checks
+         call check(error, maxval(abs(state%diag%vars(ihs)%output_buffer(2:NX - 1, 2:NY - 1, 1) &
+                                      - 0.2_wp)) < TOL, &
+                    "hs must equal m_snow/ICE_RHO_SNOW = 0.2 m")
+         if (allocated(error)) exit checks
+         call check(error, maxval(abs(state%diag%vars(ilat)%output_buffer(2:NX - 1, 2:NY - 1, 1))) &
+                    == 0.0_wp, "meltl must be identically zero")
+      end block checks
+      call state%destroy()
+   end subroutine test_cice_rate_unit_conversion
+
+   subroutine test_cice_dvidtt_identity_fill(error)
+      !! dvidtt = congel + frazil + snoice - meltt - meltb, in cm/day. With
+      !! congel = 1e-6 m/s and meltb = 3e-6 m/s (others 0) the tendency is
+      !! (1 - 3)*8.64 = -17.28 cm/day, and the melt-only read-out is exact.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_state_t) :: state
+      integer :: idv, ibot
+      checks: block
+         call setup_state_ice(grid, state, ncat=1)
+         state%ice%dt_win = 3600.0_wp
+         state%ice%m_congel_win = ICE_RHO_ICE*3600.0_wp*1.0e-6_wp
+         state%ice%m_meltb_win = ICE_RHO_ICE*3600.0_wp*3.0e-6_wp
+         state%ice%part_size(:, :, 1) = 1.0_wp
+         call register_default_diags(state, dt_out=1.0_wp)
+         idv = find_var(state, "dvidtt")
+         ibot = find_var(state, "meltb")
+         call check(error, idv > 0 .and. ibot > 0, "dvidtt and meltb must register")
+         if (allocated(error)) exit checks
+         call run_one_step(state)
+         call check(error, maxval(abs(state%diag%vars(idv)%output_buffer(2:NX - 1, 2:NY - 1, 1) &
+                                      + 17.28_wp)) < TOL, &
+                    "dvidtt must equal (congel - meltb) = -17.28 cm/day")
+         if (allocated(error)) exit checks
+         call check(error, maxval(abs(state%diag%vars(ibot)%output_buffer(2:NX - 1, 2:NY - 1, 1) &
+                                      - 25.92_wp)) < TOL, &
+                    "meltb must read 3e-6 m/s = 25.92 cm/day")
+      end block checks
+      call state%destroy()
+   end subroutine test_cice_dvidtt_identity_fill
+
+   subroutine test_cice_rate_zero_before_window(error)
+      !! Before the first thermo window `dt_win = 0`: a stamped window mass
+      !! must NOT divide by zero -- the rate reads exactly 0 (no Inf/NaN on
+      !! an ice-covered wet cell).
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_state_t) :: state
+      integer :: icon
+      checks: block
+         call setup_state_ice(grid, state, ncat=1)
+         state%ice%part_size(:, :, 1) = 1.0_wp
+         state%ice%m_congel_win = 1.0_wp
+         state%ice%dt_win = 0.0_wp
+         call register_default_diags(state, dt_out=1.0_wp)
+         icon = find_var(state, "congel")
+         call check(error, icon > 0, "congel must register")
+         if (allocated(error)) exit checks
+         call run_one_step(state)
+         call check(error, all(state%diag%vars(icon)%output_buffer(2:NX - 1, 2:NY - 1, 1) == 0.0_wp), &
+                    "congel must read exactly 0 before the first thermo window")
+      end block checks
+      call state%destroy()
+   end subroutine test_cice_rate_zero_before_window
+
+   subroutine test_cice_hs_part_weighted(error)
+      !! ncat=3 ITD: hs = sum_c part_size_c * m_snow_c / ICE_RHO_SNOW.
+      !! part 0.3 with 0.1 m of snow and part 0.4 with 0.2 m ==> 0.11 m.
+      !! A bug that forgets the part weight reads 0.3 m (0.1 + 0.2).
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_state_t) :: state
+      integer :: ihs
+      checks: block
+         call setup_state_ice(grid, state, ncat=3)
+         state%ice%part_size(:, :, 1) = 0.3_wp
+         state%ice%part_size(:, :, 2) = 0.4_wp
+         state%ice%m_ice(:, :, 1) = 500.0_wp
+         state%ice%m_ice(:, :, 2) = 800.0_wp
+         state%ice%m_snow(:, :, 1) = ICE_RHO_SNOW*0.1_wp
+         state%ice%m_snow(:, :, 2) = ICE_RHO_SNOW*0.2_wp
+         call register_default_diags(state, dt_out=1.0_wp)
+         ihs = find_var(state, "hs")
+         call check(error, ihs > 0, "hs must register")
+         if (allocated(error)) exit checks
+         call run_one_step(state)
+         call check(error, maxval(abs(state%diag%vars(ihs)%output_buffer(2:NX - 1, 2:NY - 1, 1) &
+                                      - 0.11_wp)) < TOL, &
+                    "hs must be the part-weighted snow thickness, 0.11 m")
+      end block checks
+      call state%destroy()
+   end subroutine test_cice_hs_part_weighted
+
+   subroutine test_cice_tsfc_open_water_freezing(error)
+      !! CICE aggregate Tsfc: 0.7 ice cover at -4 degC plus 0.3 open water at
+      !! the seawater freezing temperature (-1.8 degC) => -3.34 degC. A bug
+      !! that averages only the ice reads -4.0; one that takes open water as
+      !! 0 degC reads -2.8.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_state_t) :: state
+      integer :: itsfc
+      checks: block
+         call setup_state_ice(grid, state, ncat=3)
+         state%ice%part_size(:, :, 1) = 0.3_wp
+         state%ice%part_size(:, :, 2) = 0.4_wp
+         state%ice%m_ice(:, :, 1) = 500.0_wp
+         state%ice%m_ice(:, :, 2) = 800.0_wp
+         state%ice%tsurf_out(:, :, 1) = -4.0_wp
+         state%ice%tsurf_out(:, :, 2) = -4.0_wp
+         state%ice%tfw_seam(:, :) = -1.8_wp
+         call register_default_diags(state, dt_out=1.0_wp)
+         itsfc = find_var(state, "Tsfc")
+         call check(error, itsfc > 0, "Tsfc must register")
+         if (allocated(error)) exit checks
+         call run_one_step(state)
+         call check(error, maxval(abs(state%diag%vars(itsfc)%output_buffer(2:NX - 1, 2:NY - 1, 1) &
+                                      + 3.34_wp)) < TOL, &
+                    "Tsfc must be the area-weighted mean with open water at freezing (-3.34)")
+      end block checks
+      call state%destroy()
+   end subroutine test_cice_tsfc_open_water_freezing
+
+   subroutine test_cice_aliases_opt_in(error)
+      !! Default ice-on output carries the CICE names (aice, hi) and NOT the
+      !! old ice_conc/ice_thick; naming ice_conc in `diags` brings it back;
+      !! uvel/vvel are derived aliases of the drift velocities. With ice OFF
+      !! the CICE names are absent (gated).
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid, grid2, grid3
+      type(ocean_state_t) :: st_def, st_sel, st_off
+      checks: block
+         call setup_state_ice(grid, st_def, ncat=1)
+         call register_default_diags(st_def, dt_out=1.0_wp)
+         call check(error, find_var(st_def, "aice") > 0 .and. find_var(st_def, "hi") > 0, &
+                    "aice and hi are the default ice-on outputs")
+         if (allocated(error)) exit checks
+         call check(error, find_var(st_def, "ice_conc") == 0 .and. &
+                    find_var(st_def, "ice_thick") == 0, &
+                    "ice_conc / ice_thick are NOT default outputs any more")
+         if (allocated(error)) exit checks
+
+         call setup_state_ice(grid2, st_sel, ncat=1)
+         call apply_diag_selection(st_sel, "ice_conc", dt_out=1.0_wp)
+         call check(error, find_var(st_sel, "ice_conc") > 0, &
+                    "diags = ice_conc must bring the opt-in alias back")
+         if (allocated(error)) exit checks
+         call register_derived(st_sel, "uvel", dt_out=1.0_wp)
+         call register_derived(st_sel, "vvel", dt_out=1.0_wp)
+         call check(error, find_var(st_sel, "uvel") > 0 .and. find_var(st_sel, "vvel") > 0, &
+                    "uvel / vvel must register as derived ice-velocity aliases")
+         if (allocated(error)) exit checks
+
+         call setup_state(grid3, st_off)
+         call register_default_diags(st_off, dt_out=1.0_wp)
+         call check(error, find_var(st_off, "congel") == 0 .and. find_var(st_off, "Tsfc") == 0, &
+                    "CICE ice diagnostics absent when ice is off")
+      end block checks
+      call st_def%destroy()
+      call st_sel%destroy()
+      call st_off%destroy()
+   end subroutine test_cice_aliases_opt_in
 
 end module test_ocean_ice_diags
