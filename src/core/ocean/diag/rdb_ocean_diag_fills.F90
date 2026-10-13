@@ -394,12 +394,18 @@ contains
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
       class is (ocean_state_t)
+#ifndef RDB_NO_NETCDF
          if (.not. state%atm%enable) then
             call fill_zero_impl(buf)
             return
          end if
          call fill_atm_field_impl(size(state%atm%tas, 1), size(state%atm%tas, 2), &
                                   state%atm%tas, buf)
+#else
+         ! No `atm` slot without NetCDF (see `ocean_state_t`); never
+         ! registered in that build, so this branch is unreachable.
+         call fill_zero_impl(buf)
+#endif
       end select
    end subroutine fill_atm_tas
 
@@ -410,12 +416,18 @@ contains
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
       class is (ocean_state_t)
+#ifndef RDB_NO_NETCDF
          if (.not. state%atm%enable) then
             call fill_zero_impl(buf)
             return
          end if
          call fill_atm_field_impl(size(state%atm%huss, 1), size(state%atm%huss, 2), &
                                   state%atm%huss, buf)
+#else
+         ! No `atm` slot without NetCDF (see `ocean_state_t`); never
+         ! registered in that build, so this branch is unreachable.
+         call fill_zero_impl(buf)
+#endif
       end select
    end subroutine fill_atm_huss
 
@@ -426,12 +438,18 @@ contains
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
       class is (ocean_state_t)
+#ifndef RDB_NO_NETCDF
          if (.not. state%atm%enable) then
             call fill_zero_impl(buf)
             return
          end if
          call fill_atm_field_impl(size(state%atm%uas, 1), size(state%atm%uas, 2), &
                                   state%atm%uas, buf)
+#else
+         ! No `atm` slot without NetCDF (see `ocean_state_t`); never
+         ! registered in that build, so this branch is unreachable.
+         call fill_zero_impl(buf)
+#endif
       end select
    end subroutine fill_atm_uas
 
@@ -442,12 +460,18 @@ contains
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
       class is (ocean_state_t)
+#ifndef RDB_NO_NETCDF
          if (.not. state%atm%enable) then
             call fill_zero_impl(buf)
             return
          end if
          call fill_atm_field_impl(size(state%atm%vas, 1), size(state%atm%vas, 2), &
                                   state%atm%vas, buf)
+#else
+         ! No `atm` slot without NetCDF (see `ocean_state_t`); never
+         ! registered in that build, so this branch is unreachable.
+         call fill_zero_impl(buf)
+#endif
       end select
    end subroutine fill_atm_vas
 
@@ -458,12 +482,18 @@ contains
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
       class is (ocean_state_t)
+#ifndef RDB_NO_NETCDF
          if (.not. state%atm%enable) then
             call fill_zero_impl(buf)
             return
          end if
          call fill_atm_field_impl(size(state%atm%psl, 1), size(state%atm%psl, 2), &
                                   state%atm%psl, buf)
+#else
+         ! No `atm` slot without NetCDF (see `ocean_state_t`); never
+         ! registered in that build, so this branch is unreachable.
+         call fill_zero_impl(buf)
+#endif
       end select
    end subroutine fill_atm_psl
 
@@ -474,12 +504,18 @@ contains
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
       class is (ocean_state_t)
+#ifndef RDB_NO_NETCDF
          if (.not. state%atm%enable) then
             call fill_zero_impl(buf)
             return
          end if
          call fill_atm_field_impl(size(state%atm%rlds, 1), size(state%atm%rlds, 2), &
                                   state%atm%rlds, buf)
+#else
+         ! No `atm` slot without NetCDF (see `ocean_state_t`); never
+         ! registered in that build, so this branch is unreachable.
+         call fill_zero_impl(buf)
+#endif
       end select
    end subroutine fill_atm_rlds
 
@@ -491,12 +527,18 @@ contains
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
       class is (ocean_state_t)
+#ifndef RDB_NO_NETCDF
          if (.not. state%atm%enable) then
             call fill_zero_impl(buf)
             return
          end if
          call fill_atm_field_impl(size(state%atm%rsds, 1), size(state%atm%rsds, 2), &
                                   state%atm%rsds, buf)
+#else
+         ! No `atm` slot without NetCDF (see `ocean_state_t`); never
+         ! registered in that build, so this branch is unreachable.
+         call fill_zero_impl(buf)
+#endif
       end select
    end subroutine fill_atm_rsds
 
@@ -507,12 +549,18 @@ contains
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
       class is (ocean_state_t)
+#ifndef RDB_NO_NETCDF
          if (.not. state%atm%enable) then
             call fill_zero_impl(buf)
             return
          end if
          call fill_atm_field_impl(size(state%atm%prra, 1), size(state%atm%prra, 2), &
                                   state%atm%prra, buf)
+#else
+         ! No `atm` slot without NetCDF (see `ocean_state_t`); never
+         ! registered in that build, so this branch is unreachable.
+         call fill_zero_impl(buf)
+#endif
       end select
    end subroutine fill_atm_prra
 
@@ -523,12 +571,18 @@ contains
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
       class is (ocean_state_t)
+#ifndef RDB_NO_NETCDF
          if (.not. state%atm%enable) then
             call fill_zero_impl(buf)
             return
          end if
          call fill_atm_field_impl(size(state%atm%prsn, 1), size(state%atm%prsn, 2), &
                                   state%atm%prsn, buf)
+#else
+         ! No `atm` slot without NetCDF (see `ocean_state_t`); never
+         ! registered in that build, so this branch is unreachable.
+         call fill_zero_impl(buf)
+#endif
       end select
    end subroutine fill_atm_prsn
 
@@ -542,12 +596,18 @@ contains
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
       class is (ocean_state_t)
+#ifndef RDB_NO_NETCDF
          if (.not. state%atm%enable) then
             call fill_zero_impl(buf)
             return
          end if
          call fill_atm_field_impl(size(state%atm%cosz, 1), size(state%atm%cosz, 2), &
                                   state%atm%cosz, buf)
+#else
+         ! No `atm` slot without NetCDF (see `ocean_state_t`); never
+         ! registered in that build, so this branch is unreachable.
+         call fill_zero_impl(buf)
+#endif
       end select
    end subroutine fill_atm_cosz
 
@@ -1249,6 +1309,7 @@ contains
                                      fill_ice_thick, 1, DIAG_OP_MEAN, &
                                      "grid_mean_sea_ice_thickness")
       end if
+#ifndef RDB_NO_NETCDF
       if (state%atm%enable) then
          call register_one_canonical(state, specs, dcoord, dtout, "atm_tas", "K", &
                                      fill_atm_tas, 1, DIAG_OP_MEAN, "air_temperature")
@@ -1275,6 +1336,7 @@ contains
                                      fill_atm_cosz, 1, DIAG_OP_MEAN, &
                                      "cosine_of_solar_zenith_angle")
       end if
+#endif
    end subroutine register_default_diags
 
    subroutine register_one_canonical(state, specs, default_coord, dtout, name, units, &
