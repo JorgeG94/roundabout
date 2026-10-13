@@ -2638,10 +2638,20 @@ contains
          ! consistent with the LIMITED fluxes the pred_corr corrector's
          ! use_state_fluxes CorAdCalc transports with (the flux↔velocity
          ! match is load-bearing).
-         call pd_limit_zonal_impl(nx, ny, nz, dt, this%h_lim, metrics%iareaT, &
-                                  ms%h_layer, ms%mass_flux_x_layer, &
-                                  this%pd_theta%data, this%n_limited_step, &
-                                  u_cor=u_cor)
+         ! Branch on presence instead of forwarding an absent assumed-shape
+         ! `u_cor` into the explicit-shape optional dummy: that forwarding
+         ! builds a copy-in temporary from the absent actual, which
+         ! nvfortran -Mchkptr reports as a null pointer.
+         if (present(u_cor)) then
+            call pd_limit_zonal_impl(nx, ny, nz, dt, this%h_lim, metrics%iareaT, &
+                                     ms%h_layer, ms%mass_flux_x_layer, &
+                                     this%pd_theta%data, this%n_limited_step, &
+                                     u_cor=u_cor)
+         else
+            call pd_limit_zonal_impl(nx, ny, nz, dt, this%h_lim, metrics%iareaT, &
+                                     ms%h_layer, ms%mass_flux_x_layer, &
+                                     this%pd_theta%data, this%n_limited_step)
+         end if
       end if
       if (mode == TR_MODE_ACCUMULATE) then
          ! Windowed mode: accumulate this stage's zonal mass flux (with
@@ -2750,10 +2760,17 @@ contains
       ! scaling of the folded total.  Off ⇒ skipped ⇒ bit-identical.
       if (this%positive_definite) then
          ! v1.1: forward v_cor — see the zonal twin.
-         call pd_limit_meridional_impl(nx, ny, nz, dt, this%h_lim, metrics%iareaT, &
-                                       ms%h_layer, ms%mass_flux_y_layer, &
-                                       this%pd_theta%data, this%n_limited_step, &
-                                       v_cor=v_cor)
+         ! Same presence branch as the zonal pass (see there).
+         if (present(v_cor)) then
+            call pd_limit_meridional_impl(nx, ny, nz, dt, this%h_lim, metrics%iareaT, &
+                                          ms%h_layer, ms%mass_flux_y_layer, &
+                                          this%pd_theta%data, this%n_limited_step, &
+                                          v_cor=v_cor)
+         else
+            call pd_limit_meridional_impl(nx, ny, nz, dt, this%h_lim, metrics%iareaT, &
+                                          ms%h_layer, ms%mass_flux_y_layer, &
+                                          this%pd_theta%data, this%n_limited_step)
+         end if
       end if
       ! Tripolar fold-line flux projection.  The fold-line row (north face
       ! of the last T-row, `rdb_ocean_fold` header) stores ONE physical face
