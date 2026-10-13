@@ -121,7 +121,9 @@ contains
                   new_unittest("sw_thru_beers_law", test_sw_thru_beers_law), &
                   new_unittest("thick_ice_nearly_opaque", test_thick_ice_nearly_opaque), &
                   new_unittest("sw_default_bitident", test_sw_default_bitident), &
-                  new_unittest("sw_components_q_sw", test_sw_components_q_sw) &
+                  new_unittest("sw_components_q_sw", test_sw_components_q_sw), &
+                  new_unittest("window_mass_closure_melt", test_window_mass_closure_melt), &
+                  new_unittest("window_mass_closure_freeze", test_window_mass_closure_freeze) &
                   ]
    end subroutine collect_ocean_ice_driver_column_tests
 
@@ -240,6 +242,8 @@ contains
          !$acc update self(hT, hS, mi, ei, si, mf, sd, hf, md, fb, h2o, h2i, hto, qs, qh, &
          !$acc              fz, ssurf, swd, swc)
       end associate
+      !$acc update self(ice%m_congel_win, ice%m_meltt_win, ice%m_meltb_win)
+      !$acc update self(ice%m_snoice_win, ice%melt_top_ice, ice%melt_bot_ice)
       if (comps) then
          !$acc update self(sf%q_sw)
       end if
@@ -532,6 +536,123 @@ contains
       end block checks
       call teardown(ms, eos, ice, sf)
    end subroutine test_pure_melt_conserves
+
+   subroutine check_window_mass_closure(t_sst, air_temp, restore_lambda, expect_freeze, error)
+      !! CICE-named window-mass closure (PLAN_A1 §4, column-closure gate).
+      !! One thermo window of the REAL chain on a single-category cap at
+      !! the seawater freezing point, SST `t_sst`. Asserts, to round-off,
+      !!   (V1 - V0) == congel + frazil + snoice - meltt - meltb
+      !! where V = the cell ice mass (ncat=1: the per-cell m_ice IS the
+      !! part-weighted total), i.e. the `dvidtt` identity holds against the
+      !! ACTUAL change in ice volume. Also pins the window-mass plumbing:
+      !! `m_congel_win` == `h2o_ocn_to_ice` (ncat=1), `m_meltb_win` ==
+      !! the bottom ICE-only share, and the coupling sink
+      !! `h2o_ice_to_ocn` == meltt + meltb (no snow in this cap).
+      real(wp), intent(in) :: t_sst
+      real(wp), intent(in) :: air_temp, restore_lambda
+         !! Atmospheric slab (`ice_atm_forcing_restoring`). A cold air
+         !! temperature drives the top heat loss that grows ice from its
+         !! base by conduction (the basal flux `fb` is clamped to >= 0, so
+         !! a sub-freezing ocean alone does not freeze the base).
+      logical, intent(in) :: expect_freeze
+         !! `.true.`: the window must be a freeze window (congel > 0, no
+         !! melt); `.false.`: a melt window (meltb > 0, no congel). Guards
+         !! the closure against passing trivially on an idle window.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(eos_t) :: eos
+      type(ocean_sea_ice_t) :: ice
+      type(ocean_surface_flux_t) :: sf
+      real(wp) :: t_f, v0, v1, lhs, rhs, tol
+      real(wp) :: congel, frazil, snoice, meltt, meltb
+      integer :: ip, jp
+      checks: block
+
+         call grid%init(6, 4, NGHOST, 1.0_wp, 1.0_wp)
+         ms%nz_ml = NZ
+         call ms%init(grid)
+         call eos%init(grid)
+         ice%enable = .true.
+         ice%ncat = 1
+         ice%nk_ice = 1
+         call ice%init(grid)
+         call sf%init(grid)
+         call sf%set_surface_flux_const(0.0_wp, 0.0_wp)
+
+         ms%h_layer = H_LAYER
+         ms%tracers(ms%idx_salinity)%hTr = S_INIT*H_LAYER
+         ms%tracers(ms%idx_temperature)%hTr = T_DEEP*H_LAYER
+         t_f = eos_freezing_point(eos, S_INIT, 0.0_wp)
+         ms%tracers(ms%idx_temperature)%hTr(:, :, NZ) = t_sst*H_LAYER
+
+         ip = grid%nx_total/2
+         jp = grid%ny_total/2
+         ice%m_ice(ip, jp, 1) = H_ICE0*ICE_RHO_ICE
+         ice%m_snow(ip, jp, 1) = 0.0_wp
+         ice%enth_snow(ip, jp, 1, 1) = ice_enth_from_ts(0.0_wp, 0.0_wp)
+         ice%enth_ice(ip, jp, 1, 1) = ice_enth_from_ts(t_f, ICE_BULK_SALINITY)
+         ice%sal_ice(ip, jp, 1, 1) = ICE_BULK_SALINITY
+         v0 = ice%m_ice(ip, jp, 1)
+
+         call run_chain(grid, eos, ms, ice, sf, air_temp=air_temp, &
+                        restore_lambda=restore_lambda, sw_down=0.0_wp)
+
+         v1 = ice%m_ice(ip, jp, 1)
+         congel = ice%m_congel_win(ip, jp)
+         frazil = ice%m_frozen_diag(ip, jp)
+         snoice = ice%m_snoice_win(ip, jp)
+         meltt = ice%m_meltt_win(ip, jp)
+         meltb = ice%m_meltb_win(ip, jp)
+
+         if (expect_freeze) then
+            call check(error, congel > 0.0_wp .and. meltb == 0.0_wp .and. meltt == 0.0_wp, &
+                       "freeze case must be a pure freeze window")
+         else
+            call check(error, meltb > 0.0_wp .and. congel == 0.0_wp, &
+                       "melt case must be a pure bottom-melt window")
+         end if
+         if (allocated(error)) exit checks
+
+         ! Plumbing: the window masses are the per-cat column outputs at ncat=1.
+         tol = 1.0e-12_wp*max(1.0_wp, abs(ice%h2o_ocn_to_ice(ip, jp, 1)))
+         call check(error, abs(congel - ice%h2o_ocn_to_ice(ip, jp, 1)) <= tol, &
+                    "m_congel_win must equal h2o_ocn_to_ice at ncat=1")
+         if (allocated(error)) exit checks
+         tol = 1.0e-12_wp*max(1.0_wp, abs(ice%melt_bot_ice(ip, jp, 1)))
+         call check(error, abs(meltb - ice%melt_bot_ice(ip, jp, 1)) <= tol, &
+                    "m_meltb_win must equal the ICE-only bottom melt share")
+         if (allocated(error)) exit checks
+         tol = 1.0e-12_wp*max(1.0_wp, abs(ice%h2o_ice_to_ocn(ip, jp, 1)))
+         call check(error, abs(ice%h2o_ice_to_ocn(ip, jp, 1) - (meltt + meltb)) <= tol, &
+                    "coupling sink h2o_ice_to_ocn must equal meltt + meltb (no snow here)")
+         if (allocated(error)) exit checks
+         call check(error, ice%dt_win == DT_THERM, "dt_win must record the thermo window")
+         if (allocated(error)) exit checks
+
+         ! The closure itself, to round-off (no tolerance loosening).
+         lhs = v1 - v0
+         rhs = congel + frazil + snoice - meltt - meltb
+         tol = 1.0e-12_wp*max(1.0_wp, abs(v0), abs(congel), abs(meltb), abs(meltt))
+         call check(error, abs(lhs - rhs) <= tol, &
+                    "(V1-V0) must equal congel+frazil+snoice-meltt-meltb to 1e-12")
+
+      end block checks
+      call teardown(ms, eos, ice, sf)
+   end subroutine check_window_mass_closure
+
+   subroutine test_window_mass_closure_melt(error)
+      !! Warm SST: pure bottom melt, no freeze -- meltb carries the window.
+      type(error_type), allocatable, intent(out) :: error
+      call check_window_mass_closure(5.0_wp, 0.0_wp, 0.0_wp, .false., error)
+   end subroutine test_window_mass_closure_melt
+
+   subroutine test_window_mass_closure_freeze(error)
+      !! Sub-freezing SST: basal congelation (and frazil if supercooled) --
+      !! congel carries the window; the melt windows must be zero.
+      type(error_type), allocatable, intent(out) :: error
+      call check_window_mass_closure(-2.0_wp, -20.0_wp, 10.0_wp, .true., error)
+   end subroutine test_window_mass_closure_freeze
 
    subroutine test_icefree_ocean_untouched(error)
       !! Case 5 — the OPEN-OCEAN regression gate for the ice-presence gate

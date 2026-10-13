@@ -368,6 +368,26 @@ contains
                               size(state%ice%m_melt_diag, 1), &
                               size(state%ice%m_melt_diag, 2), optional=.true.)
       end if
+      if (allocated(state%ice%m_congel_win)) then
+         call reg%register_2d("ice_m_congel_win", state%ice%m_congel_win, 0, &
+                              size(state%ice%m_congel_win, 1), &
+                              size(state%ice%m_congel_win, 2), optional=.true.)
+      end if
+      if (allocated(state%ice%m_meltt_win)) then
+         call reg%register_2d("ice_m_meltt_win", state%ice%m_meltt_win, 0, &
+                              size(state%ice%m_meltt_win, 1), &
+                              size(state%ice%m_meltt_win, 2), optional=.true.)
+      end if
+      if (allocated(state%ice%m_meltb_win)) then
+         call reg%register_2d("ice_m_meltb_win", state%ice%m_meltb_win, 0, &
+                              size(state%ice%m_meltb_win, 1), &
+                              size(state%ice%m_meltb_win, 2), optional=.true.)
+      end if
+      if (allocated(state%ice%m_snoice_win)) then
+         call reg%register_2d("ice_m_snoice_win", state%ice%m_snoice_win, 0, &
+                              size(state%ice%m_snoice_win, 1), &
+                              size(state%ice%m_snoice_win, 2), optional=.true.)
+      end if
       if (allocated(state%ice%heat_flux_diag)) then
          call reg%register_2d("ice_heat_flux_diag", state%ice%heat_flux_diag, 0, &
                               size(state%ice%heat_flux_diag, 1), &

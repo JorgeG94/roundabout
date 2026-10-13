@@ -121,7 +121,18 @@ contains
                               ice%atm_fprec, ice%tfw_seam, ice%fb, ice%sst_seam, &
                               ice%ssurf_seam, ice%tsurf_out, ice%h2o_ocn_to_ice, &
                               ice%h2o_ice_to_ocn, ice%heat_to_ocn, ice%sw_thru, &
-                              ice%snow_to_ice)
+                              ice%snow_to_ice, ice%melt_top_ice, ice%melt_bot_ice)
+
+      ! CICE-named window masses (diag `congel`/`meltt`/`meltb`/`snoice`/
+      ! `frazil`/`dvidtt`): the window length is recorded host-side so the
+      ! rate fills can divide by it, and the per-cell part-weighted masses
+      ! are written fresh on every thermo step (zero on land/ghost).
+      ice%dt_win = dt_therm
+      call ice_thermo_window_mass_impl(ms%wet_mask, ice%part_size, ice%h2o_ocn_to_ice, &
+                                       ice%melt_top_ice, ice%melt_bot_ice, ice%snow_to_ice, &
+                                       ice%m_congel_win, ice%m_meltt_win, ice%m_meltb_win, &
+                                       ice%m_snoice_win, grid%nghost, ice%ncat, &
+                                       grid%nx_total, grid%ny_total)
 
       if (ice%ncat == 1) then
          call ice_thermo_driver_reduce_impl(ms%wet_mask, ice%h2o_ocn_to_ice, &
@@ -143,6 +154,68 @@ contains
                                                      ice%ncat, grid%nx_total, grid%ny_total)
       end if
    end subroutine ice_thermo_driver_step
+
+   pure subroutine ice_thermo_window_mass_impl(wet_mask, part_size, h2o_ocn_to_ice, &
+                                               melt_top_ice, melt_bot_ice, snow_to_ice, &
+                                               m_congel_win, m_meltt_win, m_meltb_win, &
+                                               m_snoice_win, nghost, ncat, nx, ny)
+      !! Part-weighted per-cell window masses (kg/m^2 of CELL) for the
+      !! CICE-named rate diagnostics: `congel` (basal congelation,
+      !! `h2o_ocn_to_ice`), `meltt`/`meltb` (ICE-only top/bottom melt, the
+      !! snow share excluded), `snoice` (snow-to-ice conversion). Weight
+      !! is `part_size` at ncat>1 and 1 at ncat==1 (the lumped convention
+      !! of the existing reduces). Every entry is written unconditionally:
+      !! wet interior cells get the sum, land/ghost/ice-free cells get 0,
+      !! so a stale window never leaks into the rate fills.
+      !! Decl-order: integer dims before the explicit-shape arrays.
+      integer, intent(in) :: nghost, ncat, nx, ny
+      real(wp), intent(in) :: wet_mask(nx, ny)
+      real(wp), intent(in) :: part_size(nx, ny, 0:ncat)
+      real(wp), intent(in) :: h2o_ocn_to_ice(nx, ny, ncat)
+      real(wp), intent(in) :: melt_top_ice(nx, ny, ncat)
+      real(wp), intent(in) :: melt_bot_ice(nx, ny, ncat)
+      real(wp), intent(in) :: snow_to_ice(nx, ny, ncat)
+      real(wp), intent(inout) :: m_congel_win(nx, ny)
+      real(wp), intent(inout) :: m_meltt_win(nx, ny)
+      real(wp), intent(inout) :: m_meltb_win(nx, ny)
+      real(wp), intent(inout) :: m_snoice_win(nx, ny)
+
+      integer :: i, j, cat, i_lo, i_hi, j_lo, j_hi
+      real(wp) :: w, s_cg, s_mt, s_mb, s_sn
+
+      i_lo = nghost + 1
+      i_hi = nx - nghost
+      j_lo = nghost + 1
+      j_hi = ny - nghost
+
+      do concurrent(j=j_lo:j_hi, i=i_lo:i_hi) local(cat, w, s_cg, s_mt, s_mb, s_sn)
+         m_congel_win(i, j) = 0.0_wp
+         m_meltt_win(i, j) = 0.0_wp
+         m_meltb_win(i, j) = 0.0_wp
+         m_snoice_win(i, j) = 0.0_wp
+         if (wet_mask(i, j) > 0.5_wp) then
+            s_cg = 0.0_wp
+            s_mt = 0.0_wp
+            s_mb = 0.0_wp
+            s_sn = 0.0_wp
+            do cat = 1, ncat
+               if (ncat == 1) then
+                  w = 1.0_wp
+               else
+                  w = part_size(i, j, cat)
+               end if
+               s_cg = s_cg + w*h2o_ocn_to_ice(i, j, cat)
+               s_mt = s_mt + w*melt_top_ice(i, j, cat)
+               s_mb = s_mb + w*melt_bot_ice(i, j, cat)
+               s_sn = s_sn + w*snow_to_ice(i, j, cat)
+            end do
+            m_congel_win(i, j) = s_cg
+            m_meltt_win(i, j) = s_mt
+            m_meltb_win(i, j) = s_mb
+            m_snoice_win(i, j) = s_sn
+         end if
+      end do
+   end subroutine ice_thermo_window_mass_impl
 
    pure subroutine ice_fb_part_sum_fill_impl(wet_mask, part_size, m_ice, fb_part_sum, &
                                              nghost, ncat, nx, ny)
