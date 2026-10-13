@@ -201,7 +201,7 @@ contains
          call sf%init(grid)
          call sf%set_components(grid, .true.)
 
-         call bulk_forcing_apply(grid, metrics, bc, atm, ms, ice, bf, ss, sf)
+         call run_apply(grid, metrics, bc, atm, ms, ice, bf, ss, sf)
 
          ! Direct reference: bulk_flux_column with zero current, the
          ! same uniform atm + SST.
@@ -294,7 +294,7 @@ contains
          call sf%init(grid)
          call sf%set_components(grid, .true.)
 
-         call bulk_forcing_apply(grid, metrics, bc, atm, ms, ice, bf, ss, sf)
+         call run_apply(grid, metrics, bc, atm, ms, ice, bf, ss, sf)
 
          ! Reference #1: bulk_flux_column with the UNROTATED wind.
          call bulk_flux_column(UAS, VAS, 0.0_wp, 0.0_wp, TAS, HUSS, PSL, SST_DEGC, &
@@ -368,7 +368,7 @@ contains
          call ss_off%init(grid)
          call sf_off%init(grid)
          call sf_off%set_components(grid, .true.)
-         call bulk_forcing_apply(grid, metrics, bc, atm, ms, ice_off, bf_off, ss_off, sf_off)
+         call run_apply(grid, metrics, bc, atm, ms, ice_off, bf_off, ss_off, sf_off)
 
          ! ---- ice enabled, 50% open water ----
          ice_on%ncat = 1
@@ -381,7 +381,7 @@ contains
          call ss_on%init(grid)
          call sf_on%init(grid)
          call sf_on%set_components(grid, .true.)
-         call bulk_forcing_apply(grid, metrics, bc, atm, ms, ice_on, bf_on, ss_on, sf_on)
+         call run_apply(grid, metrics, bc, atm, ms, ice_on, bf_on, ss_on, sf_on)
 
          call check(error, sf_on%q_sens(ip, jp), 0.5_wp*sf_off%q_sens(ip, jp), &
                     "50% ice halves q_sens", thr=TOL)
@@ -424,5 +424,51 @@ contains
 
       call destroy_cartesian_metrics(metrics)
    end subroutine test_open_water_halves
+
+   subroutine run_apply(grid, metrics, bc, atm, ms, ice, bf, ss, sf)
+      !! `bulk_forcing_apply` with the production device residency: the
+      !! engine maps every object before stepping, and the GPU build makes
+      !! no implicit host<->device copies (mem:separate), so the stress
+      !! seam refresh in particular needs device-resident state. Map,
+      !! apply, bring back what the tests read (component arrays only,
+      !! never an aggregate), unmap. Directives are inert on CPU builds.
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_metrics_t), intent(inout) :: metrics
+      type(ocean_bc_state_t), intent(in) :: bc
+      type(atm_state_t), intent(inout) :: atm
+      type(multilayer_state_t), intent(inout) :: ms
+      type(ocean_sea_ice_t), intent(inout) :: ice
+      type(bulk_forcing_t), intent(inout) :: bf
+      type(ocean_surface_stress_t), intent(inout) :: ss
+      type(ocean_surface_flux_t), intent(inout) :: sf
+
+      !$acc enter data copyin(atm, ms, bf, ss, sf)
+      call atm%enter_data()
+      call ms%enter_data()
+      call bf%enter_data()
+      call ss%enter_data()
+      call sf%enter_data()
+      if (ice%enable) then
+         !$acc enter data copyin(ice)
+         call ice%enter_data()
+      end if
+
+      call bulk_forcing_apply(grid, metrics, bc, atm, ms, ice, bf, ss, sf)
+
+      !$acc update self(sf%q_sens, sf%q_lat, sf%evap, sf%q_sw, sf%q_lw)
+      !$acc update self(sf%lprec, sf%fprec, sf%p_surf_atm)
+      !$acc update self(bf%taux_c, bf%tauy_c, ss%tau_x, ss%tau_y)
+
+      if (ice%enable) then
+         call ice%exit_data()
+         !$acc exit data delete(ice)
+      end if
+      call sf%exit_data()
+      call ss%exit_data()
+      call bf%exit_data()
+      call ms%exit_data()
+      call atm%exit_data()
+      !$acc exit data delete(atm, ms, bf, ss, sf)
+   end subroutine run_apply
 
 end module test_ocean_bulk_forcing
