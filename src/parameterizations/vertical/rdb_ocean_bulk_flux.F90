@@ -91,12 +91,14 @@
 !! straight through, then re-runs `ocean_surface_flux_assemble`.
 module rdb_ocean_bulk_flux
    use rdb_constants, only: wp, GRAVITY
+   use rdb_ice_enthalpy, only: ICE_LAT_FUS
    implicit none
    private
 
    public :: bulk_flux_config_t
    public :: bulk_flux_config_n_iter_ok
    public :: bulk_flux_qsat_seawater
+   public :: bulk_flux_qsat_ice
    public :: bulk_flux_cdn10_neutral
    public :: bulk_flux_longwave_up
    public :: bulk_flux_column
@@ -155,6 +157,21 @@ module rdb_ocean_bulk_flux
    real(wp), parameter :: BULK_QSAT_COEF_B = 5107.4_wp
       !! Saturation-humidity Clausius-Clapeyron-like exponent constant,
       !! K (Large & Pond 1982 / CORE-OMIP `bulk_flux_qsat_seawater` fit).
+   real(wp), parameter, public :: BULK_QSAT_ICE_COEF_A = 11637800.0_wp
+      !! Saturation-humidity-over-ice prefactor, kg/m^3 (Large & Yeager
+      !! 2004 Table 1 sublimation fit — the same Clausius-Clapeyron-like
+      !! form as `bulk_flux_qsat_seawater`, with ice-specific
+      !! coefficients in place of the 0.98-reduced liquid-water ones).
+   real(wp), parameter, public :: BULK_QSAT_ICE_COEF_B = 5897.8_wp
+      !! Saturation-humidity-over-ice exponent constant, K (Large &
+      !! Yeager 2004 Table 1).
+   real(wp), parameter, public :: BULK_LATENT_SUBLIMATION = &
+                                  BULK_LATENT_VAPORIZATION + ICE_LAT_FUS
+      !! Latent heat of sublimation, J/kg: the standard thermodynamic
+      !! identity `L_s = L_v + L_f` (e.g. Rogers & Yau 1989, "A Short
+      !! Course in Cloud Physics") built from this module's own
+      !! `BULK_LATENT_VAPORIZATION` and `rdb_ice_enthalpy`'s
+      !! `ICE_LAT_FUS` rather than a third hand-copied magic number.
    real(wp), parameter :: BULK_CDN10_FIT_A = 2.7_wp
       !! Large & Yeager (2009) eq. 11a neutral-drag polynomial: 1/u term
       !! coefficient.
@@ -234,6 +251,21 @@ contains
       real(wp) :: qsat
       qsat = BULK_QSAT_SALINITY_FACTOR*BULK_QSAT_COEF_A/rho_air*exp(-BULK_QSAT_COEF_B/sst_k)
    end function bulk_flux_qsat_seawater
+
+   pure function bulk_flux_qsat_ice(t_k, rho_air) result(qsat)
+      !! Saturation specific humidity over ICE/snow (kg/kg) — the Large &
+      !! Yeager (2004) sublimation-vapour-pressure fit, the same
+      !! Clausius-Clapeyron-like form as `bulk_flux_qsat_seawater` with
+      !! ice-specific coefficients (no 0.98 salinity-depression factor —
+      !! that correction is a liquid-seawater effect only).
+      !$acc routine seq
+      real(wp), intent(in) :: t_k
+         !! Ice/snow surface temperature, Kelvin.
+      real(wp), intent(in) :: rho_air
+         !! Ambient air density, kg/m^3.
+      real(wp) :: qsat
+      qsat = BULK_QSAT_ICE_COEF_A/rho_air*exp(-BULK_QSAT_ICE_COEF_B/t_k)
+   end function bulk_flux_qsat_ice
 
    pure function bulk_flux_cdn10_neutral(u10n) result(cdn10)
       !! Neutral-stability, 10 m drag coefficient (Large & Yeager 2009

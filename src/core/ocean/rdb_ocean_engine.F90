@@ -159,7 +159,7 @@ module rdb_ocean_engine
                                     ice_ocean_sw_flux, ice_ocean_stress_flux
    use rdb_ice_frazil, only: ice_frazil_accumulate
    use rdb_ice_frazil_uptake, only: ice_frazil_uptake
-   use rdb_ice_atm_forcing, only: ice_atm_forcing_restoring
+   use rdb_ice_atm_forcing, only: ice_atm_forcing_restoring, ice_atm_forcing_from_atm
    use rdb_ice_basal_flux, only: ice_compute_basal_flux
    use rdb_ice_thermo_driver, only: ice_thermo_driver_step
    use rdb_ice_snow, only: ice_snowfall_ocean_share
@@ -1787,11 +1787,23 @@ contains
             end if
          end if
          call profiler_start("ice_thermo")
-         call ice_atm_forcing_restoring(engine%state%ice, &
-                                        cfg%ocean%ice%air_temp, &
-                                        cfg%ocean%ice%restore_lambda, &
-                                        cfg%ocean%ice%sw_down, &
-                                        cfg%ocean%ice%snowfall)
+         ! OM3 C2c-3b: once the atmospheric-state provider is live
+         ! (`&ocean_atm_forcing_nml enable`), the ice seam comes from the
+         ! prescribed atm fields through the LY09 over-ice bulk
+         ! linearisation instead of the scalar restoring knobs -- a
+         ! no-op swap bit-identically when atm forcing is off (the
+         ! default), since `engine%state%atm%enable` is then `.false.`
+         ! and this branch is never taken.
+         if (engine%state%atm%enable) then
+            call ice_atm_forcing_from_atm(engine%state%ice, engine%state%atm, &
+                                          cfg%ocean%bulk_flux)
+         else
+            call ice_atm_forcing_restoring(engine%state%ice, &
+                                           cfg%ocean%ice%air_temp, &
+                                           cfg%ocean%ice%restore_lambda, &
+                                           cfg%ocean%ice%sw_down, &
+                                           cfg%ocean%ice%snowfall)
+         end if
          call ice_compute_basal_flux(engine%grid, engine%state%eos, &
                                      engine%state%multilayer, engine%state%ice, &
                                      engine%state%dyn%therm_dt(dt))
