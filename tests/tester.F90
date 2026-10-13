@@ -106,6 +106,7 @@ program rdb_tests
    use test_ocean_data_input, only: ocean_data_input_collect => collect_ocean_data_input_tests
    use test_ocean_data_forcing, only: ocean_data_forcing_collect => collect_ocean_data_forcing_tests
    use test_ocean_atm_state, only: ocean_atm_state_collect => collect_ocean_atm_state_tests
+   use test_ocean_bulk_forcing, only: ocean_bulk_forcing_collect => collect_ocean_bulk_forcing_tests
    use test_ocean_cavity_draft_file, only: ocean_cavity_draft_file_collect => &
                                            collect_ocean_cavity_draft_file_tests
    use test_ocean_periodic_seam_file, only: ocean_periodic_seam_file_collect => &
@@ -345,6 +346,7 @@ program rdb_tests
                 new_testsuite("ocean_data_input", ocean_data_input_collect), &
                 new_testsuite("ocean_data_forcing", ocean_data_forcing_collect), &
                 new_testsuite("ocean_atm_state", ocean_atm_state_collect), &
+                new_testsuite("ocean_bulk_forcing", ocean_bulk_forcing_collect), &
 #endif
                 new_testsuite("ocean_barotropic_substep", ocean_barotropic_substep_collect), &
                 new_testsuite("ocean_cor_ref_seiche", ocean_cor_ref_seiche_collect), &
