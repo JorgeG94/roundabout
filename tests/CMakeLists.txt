@@ -767,8 +767,13 @@ if(RDB_ENABLE_MPI)
     test_ocean_atm_state_mpi PRIVATE "${CMAKE_BINARY_DIR}/modules"
                                      "${RDB_SHARED_INCLUDE_DIR}")
   # make_spherical_metrics / destroy_cartesian_metrics from rdb_analytical.
+  # rdb_analytical goes BEFORE the static core: it links no core of its own (see
+  # its definition), and this test only names the ocean_metrics_t TYPE, so
+  # nothing pulls rdb_ocean_metrics.o out of the core archive ahead of it. With
+  # the core first, ld (one scan per archive) left every rdb_ocean_metrics_mp_*
+  # reference from ocean_test_metrics.o undefined on ifx.
   target_link_libraries(
-    test_ocean_atm_state_mpi PRIVATE ${main_lib} rdb_analytical
+    test_ocean_atm_state_mpi PRIVATE rdb_analytical ${main_lib}
                                      test-drive::test-drive)
   add_test(NAME rdb_test_ocean_atm_state_mpi_1rank
            COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 1
