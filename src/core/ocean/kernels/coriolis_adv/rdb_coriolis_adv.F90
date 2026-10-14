@@ -1429,7 +1429,8 @@ contains
       ! q·vh sum is a transport-weighted PV flux (m³/s); idxCu closes it to
       ! a per-length acceleration (= /dx on uniform).
       do concurrent(k=1:nz, j=1:ny, i=2:nx) &
-         local(q_S, q_N, ke_grad_x, pv_part, av_a, av_b, fv1, fv2, fv3, fv4)
+         local(q_S, q_N, ke_grad_x, pv_part, av_a, av_b, fv1, fv2, fv3, fv4) &
+         local(iw, ie, js, jn, aSW, aSE, aNW, aNE, hm_num, hm_den, h_corner)
          q_S = this%q_corner%data(i, j, k)
          q_N = this%q_corner%data(i, j + 1, k)
          ke_grad_x = (this%ke_centre%data(i, j, k) - &
@@ -1445,10 +1446,51 @@ contains
             ! of the four neighbour (f+ζ)·v velocity-form estimates — north
             ! corner (i,j+1) × v(i-1/i,j+1); south corner (i,j) × v(i-1/i,j) —
             ! BEFORE subtracting the KE gradient.  abs_vort = q·h_corner.
-            av_b = corner_abs_vort(i, j + 1, k, nx, ny, nz, q_N, h, &
-                                   metrics%wet_T, metrics%areaT, use_mom6_ch)
-            av_a = corner_abs_vort(i, j, k, nx, ny, nz, q_S, h, &
-                                   metrics%wet_T, metrics%areaT, use_mom6_ch)
+            ! abs_vort recovery: multiply the corner PV back by the corner
+            ! thickness Pass 2 divided by -- the SAME wet-area-weighted 4-cell
+            ! hm_num/hm_den and the SAME `corner_h` variant formula (cell_mean:
+            ! floored by CORIOLIS_H_MIN_PV; mom6_area: (hm_num+PV_VOL_NEGLECT)/
+            ! hm_den), so (f+zeta) comes back to round-off.  Written inline, not
+            ! as a helper call: ANY call in this loop body (even a scalar-
+            ! argument one) stops nvfortran auto-collapsing the nest and one
+            ! loop level runs sequentially -- that made these two passes 40% of
+            ! the 2048^2 double-gyre kernel time at 12 GB/s, bound off or on.
+            iw = max(1, i - 1)
+            ie = min(nx, i)
+            js = max(1, j + 1 - 1)
+            jn = min(ny, j + 1)
+            aSW = metrics%wet_T(iw, js)*metrics%areaT(iw, js)
+            aSE = metrics%wet_T(ie, js)*metrics%areaT(ie, js)
+            aNW = metrics%wet_T(iw, jn)*metrics%areaT(iw, jn)
+            aNE = metrics%wet_T(ie, jn)*metrics%areaT(ie, jn)
+            hm_num = aSW*h(iw, js, k) + aSE*h(ie, js, k) + &
+                     aNW*h(iw, jn, k) + aNE*h(ie, jn, k)
+            hm_den = aSW + aSE + aNW + aNE
+            if (use_mom6_ch) then
+               h_corner = (hm_num + PV_VOL_NEGLECT)/max(hm_den, H_DIV_EPS)
+            else
+               h_corner = hm_num/max(hm_den, H_DIV_EPS)
+               h_corner = max(h_corner, CORIOLIS_H_MIN_PV)
+            end if
+            av_b = q_N*h_corner
+            iw = max(1, i - 1)
+            ie = min(nx, i)
+            js = max(1, j - 1)
+            jn = min(ny, j)
+            aSW = metrics%wet_T(iw, js)*metrics%areaT(iw, js)
+            aSE = metrics%wet_T(ie, js)*metrics%areaT(ie, js)
+            aNW = metrics%wet_T(iw, jn)*metrics%areaT(iw, jn)
+            aNE = metrics%wet_T(ie, jn)*metrics%areaT(ie, jn)
+            hm_num = aSW*h(iw, js, k) + aSE*h(ie, js, k) + &
+                     aNW*h(iw, jn, k) + aNE*h(ie, jn, k)
+            hm_den = aSW + aSE + aNW + aNE
+            if (use_mom6_ch) then
+               h_corner = (hm_num + PV_VOL_NEGLECT)/max(hm_den, H_DIV_EPS)
+            else
+               h_corner = hm_num/max(hm_den, H_DIV_EPS)
+               h_corner = max(h_corner, CORIOLIS_H_MIN_PV)
+            end if
+            av_a = q_S*h_corner
             fv1 = av_b*v(i - 1, j + 1, k)
             fv2 = av_b*v(i, j + 1, k)
             fv3 = av_a*v(i - 1, j, k)
@@ -1465,7 +1507,8 @@ contains
 
       ! ---- Pass 6: v-face energy tendency (2-corner Sadourny, −q·uh) ----
       do concurrent(k=1:nz, j=2:ny, i=1:nx) &
-         local(q_W, q_E, ke_grad_y, pv_part, av_a, av_b, fv1, fv2, fv3, fv4)
+         local(q_W, q_E, ke_grad_y, pv_part, av_a, av_b, fv1, fv2, fv3, fv4) &
+         local(iw, ie, js, jn, aSW, aSE, aNW, aNE, hm_num, hm_den, h_corner)
          q_W = this%q_corner%data(i, j, k)
          q_E = this%q_corner%data(i + 1, j, k)
          ke_grad_y = (this%ke_centre%data(i, j, k) - &
@@ -1480,10 +1523,43 @@ contains
             ! BOUND_CORIOLIS (MOM6): clamp into the four neighbour
             ! −(f+ζ)·u estimates — east corner (i+1,j) × u(i+1,j/j-1); west
             ! corner (i,j) × u(i,j/j-1) — BEFORE subtracting the KE gradient.
-            av_b = corner_abs_vort(i + 1, j, k, nx, ny, nz, q_E, h, &
-                                   metrics%wet_T, metrics%areaT, use_mom6_ch)
-            av_a = corner_abs_vort(i, j, k, nx, ny, nz, q_W, h, &
-                                   metrics%wet_T, metrics%areaT, use_mom6_ch)
+            ! Inline, not a call -- see Pass 5.
+            iw = max(1, i + 1 - 1)
+            ie = min(nx, i + 1)
+            js = max(1, j - 1)
+            jn = min(ny, j)
+            aSW = metrics%wet_T(iw, js)*metrics%areaT(iw, js)
+            aSE = metrics%wet_T(ie, js)*metrics%areaT(ie, js)
+            aNW = metrics%wet_T(iw, jn)*metrics%areaT(iw, jn)
+            aNE = metrics%wet_T(ie, jn)*metrics%areaT(ie, jn)
+            hm_num = aSW*h(iw, js, k) + aSE*h(ie, js, k) + &
+                     aNW*h(iw, jn, k) + aNE*h(ie, jn, k)
+            hm_den = aSW + aSE + aNW + aNE
+            if (use_mom6_ch) then
+               h_corner = (hm_num + PV_VOL_NEGLECT)/max(hm_den, H_DIV_EPS)
+            else
+               h_corner = hm_num/max(hm_den, H_DIV_EPS)
+               h_corner = max(h_corner, CORIOLIS_H_MIN_PV)
+            end if
+            av_b = q_E*h_corner
+            iw = max(1, i - 1)
+            ie = min(nx, i)
+            js = max(1, j - 1)
+            jn = min(ny, j)
+            aSW = metrics%wet_T(iw, js)*metrics%areaT(iw, js)
+            aSE = metrics%wet_T(ie, js)*metrics%areaT(ie, js)
+            aNW = metrics%wet_T(iw, jn)*metrics%areaT(iw, jn)
+            aNE = metrics%wet_T(ie, jn)*metrics%areaT(ie, jn)
+            hm_num = aSW*h(iw, js, k) + aSE*h(ie, js, k) + &
+                     aNW*h(iw, jn, k) + aNE*h(ie, jn, k)
+            hm_den = aSW + aSE + aNW + aNE
+            if (use_mom6_ch) then
+               h_corner = (hm_num + PV_VOL_NEGLECT)/max(hm_den, H_DIV_EPS)
+            else
+               h_corner = hm_num/max(hm_den, H_DIV_EPS)
+               h_corner = max(h_corner, CORIOLIS_H_MIN_PV)
+            end if
+            av_a = q_W*h_corner
             fv1 = -av_b*u(i + 1, j, k)
             fv2 = -av_b*u(i + 1, j - 1, k)
             fv3 = -av_a*u(i, j, k)
@@ -1498,56 +1574,6 @@ contains
          this%pv_flux_y%data(i, ny + 1, k) = 0.0_wp
       end do
    end subroutine coriolis_adv_compute_tendencies_sadourny_energy
-
-   pure function corner_abs_vort(ic, jc, k, nx, ny, nz, q_val, h, wet_T, areaT, &
-                                 use_mom6_ch) result(av)
-      !$acc routine seq
-      !! BOUND_CORIOLIS abs_vort recovery: return `(f+ζ)` at corner `(ic,jc)`
-      !! by multiplying the PV `q_val` back by the corner thickness Pass 2
-      !! divided abs_vort by — recovering `(f+ζ)` to round-off.  Recomputes
-      !! the SAME wet-area-weighted 4-cell `hm_num`/`hm_den`, then reconstructs
-      !! the effective corner thickness with the SAME formula (and floors) the
-      !! active `corner_h` variant used in Pass 2:
-      !!   `cell_mean` (default): h_corner = max(hm_num/max(hm_den,H_DIV_EPS),
-      !!     CORIOLIS_H_MIN_PV); av = q·h_corner.
-      !!   `mom6_area` (`use_mom6_ch`): Pass 2 formed q = abs_vort·hm_den/
-      !!     (hm_num + PV_VOL_NEGLECT), so the consistent inverse is
-      !!     av = q·(hm_num + PV_VOL_NEGLECT)/hm_den (hm_den guarded by
-      !!     H_DIV_EPS for the fully-land corner, where q≡0 ⇒ av≡0 anyway).
-      !! Without matching the variant the recovered abs_vort would be slightly
-      !! inconsistent with how q was made whenever BOTH bound_coriolis and
-      !! corner_h="mom6_area" are on — visible only in the truly-vanishing-
-      !! thickness limit.  Chosen over a persistent abs_vort buffer so the
-      !! default-off knob costs ZERO memory.
-      integer, intent(in) :: ic, jc, k, nx, ny, nz
-      real(wp), intent(in) :: q_val
-      real(wp), intent(in) :: h(nx, ny, nz)
-      real(wp), intent(in) :: wet_T(nx, ny), areaT(nx, ny)
-      logical, intent(in) :: use_mom6_ch
-      real(wp) :: av
-      integer :: iw, ie, js, jn
-      real(wp) :: aSW, aSE, aNW, aNE, hm_num, hm_den, h_corner
-      iw = max(1, ic - 1)
-      ie = min(nx, ic)
-      js = max(1, jc - 1)
-      jn = min(ny, jc)
-      aSW = wet_T(iw, js)*areaT(iw, js)
-      aSE = wet_T(ie, js)*areaT(ie, js)
-      aNW = wet_T(iw, jn)*areaT(iw, jn)
-      aNE = wet_T(ie, jn)*areaT(ie, jn)
-      hm_num = aSW*h(iw, js, k) + aSE*h(ie, js, k) + &
-               aNW*h(iw, jn, k) + aNE*h(ie, jn, k)
-      hm_den = aSW + aSE + aNW + aNE
-      if (use_mom6_ch) then
-         ! Algebraic inverse of Pass 2's mom6_area form (no thickness cap;
-         ! PV_VOL_NEGLECT is the same 1/0 armor Pass 2 added to hm_num).
-         h_corner = (hm_num + PV_VOL_NEGLECT)/max(hm_den, H_DIV_EPS)
-      else
-         h_corner = hm_num/max(hm_den, H_DIV_EPS)
-         h_corner = max(h_corner, CORIOLIS_H_MIN_PV)
-      end if
-      av = q_val*h_corner
-   end function corner_abs_vort
 
    pure function hk_corner_h(ic, jc, k, nx, ny, nz, h, wet_T, areaT) result(hc)
       !$acc routine seq

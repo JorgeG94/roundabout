@@ -1410,7 +1410,7 @@ contains
    pure function recon_h_corner(ic, jc, k, nx, ny, h, wet_T, areaT) result(hc)
       !! Host oracle: the SAME wet-area-weighted 4-cell corner thickness the
       !! energy kernel's Pass 2 builds (so abs_vort = q_corner·hc matches the
-      !! kernel's corner_abs_vort bit-for-bit).
+      !! kernel's inline abs_vort recovery bit-for-bit).
       integer, intent(in) :: ic, jc, k, nx, ny
       real(wp), intent(in) :: h(:, :, :), wet_T(:, :), areaT(:, :)
       real(wp) :: hc
