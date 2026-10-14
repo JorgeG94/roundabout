@@ -59,7 +59,9 @@ module rdb_ice_atm_forcing
    !! cells" contract.
    use rdb_constants, only: wp
    use rdb_ice_state, only: ocean_sea_ice_t
+#ifndef RDB_NO_NETCDF
    use rdb_atm_state, only: atm_state_t
+#endif
    use rdb_ocean_bulk_flux, only: bulk_flux_config_t, bulk_flux_qsat_ice, &
                                   BULK_WIND_MIN, BULK_T0_KELVIN, BULK_STEFAN_BOLTZMANN, &
                                   BULK_GAS_CONST_AIR, BULK_TVQ_AIR, BULK_CP_AIR, &
@@ -67,7 +69,9 @@ module rdb_ice_atm_forcing
    implicit none
    private
    public :: ice_atm_forcing_restoring
+#ifndef RDB_NO_NETCDF
    public :: ice_atm_forcing_from_atm
+#endif
 contains
    pure subroutine ice_atm_forcing_restoring(ice, air_temp, restore_lambda, sw_down, snowfall)
       !! Outer shim: forward the four seam arrays + four scalars to the
@@ -96,6 +100,7 @@ contains
       end do
    end subroutine ice_atm_forcing_restoring_impl
 
+#ifndef RDB_NO_NETCDF
    subroutine ice_atm_forcing_from_atm(ice, atm, cfg)
       !! Outer shim: forward the four seam arrays, the nine-field atm
       !! state's own cached geometry (`atm%nx_phys/ny_phys/nghost/
@@ -114,6 +119,7 @@ contains
                                          atm%nx_total, atm%ny_total, atm%nghost, &
                                          atm%nx_phys, atm%ny_phys)
    end subroutine ice_atm_forcing_from_atm
+#endif
 
    pure subroutine ice_atm_forcing_from_atm_impl(sf0, dsfdt, sw, fpr, uas, vas, tas, huss, &
                                                  psl, rlds, rsds, prsn, emissivity, &
