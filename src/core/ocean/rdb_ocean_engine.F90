@@ -1799,14 +1799,19 @@ contains
             call ice_atm_forcing_from_atm(engine%state%ice, engine%state%atm, &
                                           cfg%ocean%bulk_flux)
          else
-#endif
             call ice_atm_forcing_restoring(engine%state%ice, &
                                            cfg%ocean%ice%air_temp, &
                                            cfg%ocean%ice%restore_lambda, &
                                            cfg%ocean%ice%sw_down, &
                                            cfg%ocean%ice%snowfall)
-#ifndef RDB_NO_NETCDF
          end if
+#else
+         ! No atm-state provider without NetCDF: the restoring filler.
+         call ice_atm_forcing_restoring(engine%state%ice, &
+                                        cfg%ocean%ice%air_temp, &
+                                        cfg%ocean%ice%restore_lambda, &
+                                        cfg%ocean%ice%sw_down, &
+                                        cfg%ocean%ice%snowfall)
 #endif
          call ice_compute_basal_flux(engine%grid, engine%state%eos, &
                                      engine%state%multilayer, engine%state%ice, &
