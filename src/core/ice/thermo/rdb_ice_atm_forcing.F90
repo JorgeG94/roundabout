@@ -101,7 +101,7 @@ contains
    end subroutine ice_atm_forcing_restoring_impl
 
 #ifndef RDB_NO_NETCDF
-   subroutine ice_atm_forcing_from_atm(ice, atm, cfg)
+   pure subroutine ice_atm_forcing_from_atm(ice, atm, cfg)
       !! Outer shim: forward the four seam arrays, the nine-field atm
       !! state's own cached geometry (`atm%nx_phys/ny_phys/nghost/
       !! nx_total/ny_total`) and the bulk-flux emissivity knob to the
