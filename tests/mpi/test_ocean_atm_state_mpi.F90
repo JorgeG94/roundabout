@@ -51,6 +51,7 @@
 #ifdef RDB_ENABLE_MPI
 program test_ocean_atm_state_mpi
    use, intrinsic :: iso_fortran_env, only: int64
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_constants, only: wp
    use rdb_grid, only: hgrid_t
    use rdb_decomp, only: decomp_t, decomp_init
@@ -131,6 +132,17 @@ program test_ocean_atm_state_mpi
    ! communication, same trick `test_ocean_decomp_bitid_mpi::run_one` uses
    ! for its csize=1 call.
    call run_one(1, 1, 0, ref)
+
+   ! Teeth: a reference that came out all-zero (e.g. kernels run on unmapped
+   ! state under mem:separate) would compare equal to an equally broken
+   ! decomposed run.  Require a live, finite stress and sensible-heat field.
+   if (.not. all(ieee_is_finite(ref%tau_x)) .or. .not. all(ieee_is_finite(ref%q_sens)) .or. &
+       maxval(abs(ref%tau_x)) <= 0.0_wp .or. maxval(abs(ref%tau_y)) <= 0.0_wp .or. &
+       maxval(abs(ref%q_sens)) <= 0.0_wp) then
+      if (rank == 0) write (*, '(a)') "test_ocean_atm_state_mpi: serial reference "// &
+         "tau_x/tau_y/q_sens is zero or non-finite -- comparison would be vacuous"
+      n_fail = n_fail + 1
+   end if
 
    if (nprocs == 4) then
       call run_one(2, 2, rank, dec)
@@ -335,9 +347,25 @@ contains
       call atm_state_update(atm, reader, metrics, tq)
       !$acc update self(atm%tas)
 
+      ! Production device residency (as `test_ocean_bulk_forcing::run_apply`):
+      ! the GPU build is mem:separate, so every object `bulk_forcing_apply`
+      ! touches must be mapped -- the stress seam refresh in particular.
+      ! `ice` stays disabled here, so it is not mapped.
+      !$acc enter data copyin(ms, bf, ss, sf)
+      call ms%enter_data()
+      call bf%enter_data()
+      call ss%enter_data()
+      call sf%enter_data()
+
       call bulk_forcing_apply(grid, metrics, bc, atm, ms, ice, bf, ss, sf)
       !$acc update self(ss%tau_x, ss%tau_y)
       !$acc update self(sf%q_sens)
+
+      call sf%exit_data()
+      call ss%exit_data()
+      call bf%exit_data()
+      call ms%exit_data()
+      !$acc exit data delete(ms, bf, ss, sf)
 
       allocate (snap%tas(size(atm%tas, 1), size(atm%tas, 2)))
       snap%tas = atm%tas
