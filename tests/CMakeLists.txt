@@ -766,8 +766,10 @@ if(RDB_ENABLE_MPI)
   target_include_directories(
     test_ocean_atm_state_mpi PRIVATE "${CMAKE_BINARY_DIR}/modules"
                                      "${RDB_SHARED_INCLUDE_DIR}")
-  target_link_libraries(test_ocean_atm_state_mpi PRIVATE ${main_lib}
-                                                         test-drive::test-drive)
+  # make_spherical_metrics / destroy_cartesian_metrics from rdb_analytical.
+  target_link_libraries(
+    test_ocean_atm_state_mpi PRIVATE ${main_lib} rdb_analytical
+                                     test-drive::test-drive)
   add_test(NAME rdb_test_ocean_atm_state_mpi_1rank
            COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 1
                    $<TARGET_FILE:test_ocean_atm_state_mpi>)
