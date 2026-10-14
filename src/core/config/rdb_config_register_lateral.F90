@@ -115,7 +115,7 @@ contains
       call g%add(nml_logical("interpolate_res_fn", pl, &
                              "Interpolate centre Res_fn to faces (else interpolate cg1, MOM6 default)"))
       pi => cfg%ocean%varmix%kh_res_fn_power
-      call g%add(nml_int("kh_res_fn_power", pi, "Resolution-function power p (even)"))
+      call g%add(nml_int("kh_res_fn_power", pi, "Resolution-function power p (integer >= 1; 2 is the production form)"))
       pr => cfg%ocean%varmix%kh_res_scale_coef
       call g%add(nml_real("kh_res_scale_coef", pr, &
                           "Resolution-function alpha ((alpha·cg1)^p denominator coef)", units="nondim"))

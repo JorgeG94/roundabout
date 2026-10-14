@@ -45,9 +45,80 @@ contains
                   new_unittest("varmix_assembly_order", test_assembly_order), &
                   new_unittest("varmix_feeds_gm", test_feeds_gm), &
                   new_unittest("varmix_sn_orthogonal", test_sn_orthogonal), &
-                  new_unittest("varmix_sn_h4_weighted", test_sn_h4_weighted) &
+                  new_unittest("varmix_sn_h4_weighted", test_sn_h4_weighted), &
+                  new_unittest("varmix_resfn_odd_power", test_resfn_odd_power), &
+                  new_unittest("varmix_resfn_even_power", test_resfn_even_power) &
                   ]
    end subroutine collect_ocean_varmix_tests
+
+   ! ------------------------------------------------------------------
+   ! Tests 8-9: resolution-function power p (Hallberg 2013 form).
+   !   Uniform f-plane (beta_dx2 = 0), dx = 10 km, f = 1e-4 s^-1:
+   !   f2_dx2 = (dx_u^2 + dy_u^2)*f^2 = 2*(1e4)^2*(1e-4)^2 = 2 ⇒ dx_term = 2,
+   !   s = sqrt(2).  cg1 = 1, alpha = 1.5 ⇒ alpha*cg1 = 1.5.
+   !   p=3 hand value: s^3/(s^3 + 1.5^3) = 2.8284271/6.2034271 = 0.455946.
+   !   The pre-fix code (integer p/2 = 1 on odd p) gave
+   !   dx_term/(dx_term + 1.5^3) = 2/5.375 = 0.372093 — a 0.084 gap, so this
+   !   test fails on the old formula.
+   !   p=4 hand value: dx_term^2/(dx_term^2 + 1.5^4) = 4/9.0625 = 0.441379
+   !   (even branch unchanged; kept as a regression anchor).
+   ! ------------------------------------------------------------------
+   subroutine test_resfn_odd_power(error)
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: r3, expect, s
+      call resfn_at_power(3, 1.5_wp, r3)
+      s = sqrt(2.0_wp)
+      expect = s**3/(s**3 + 1.5_wp**3)
+      call check(error, abs(r3 - expect) <= 1.0e-14_wp*expect, &
+                 "p=3 Res_fn must be s^3/(s^3+(alpha*cg1)^3) with s = sqrt(dx_term)")
+      if (allocated(error)) return
+      call check(error, abs(r3 - 2.0_wp/5.375_wp) > 0.05_wp, &
+                 "p=3 must differ from the pre-fix dx_term/(dx_term+(alpha*cg1)^3)")
+   end subroutine test_resfn_odd_power
+
+   subroutine test_resfn_even_power(error)
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: r4, expect
+      call resfn_at_power(4, 1.5_wp, r4)
+      expect = 4.0_wp/(4.0_wp + 1.5_wp**4)
+      call check(error, abs(r4 - expect) <= 1.0e-14_wp*expect, &
+                 "p=4 Res_fn must be dx_term^2/(dx_term^2+(alpha*cg1)^4)")
+   end subroutine test_resfn_even_power
+
+   subroutine resfn_at_power(p, alpha, r)
+      !! Run `varmix_compute` on the uniform f-plane described above and read
+      !! back `res_fn_u(3,3)` for power `p` and coefficient `alpha`.
+      integer, intent(in) :: p
+      real(wp), intent(in) :: alpha
+      real(wp), intent(out) :: r
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_metrics_t) :: metrics
+      type(ocean_slopes_t) :: sl
+      type(ocean_wave_speed_t) :: ws
+      type(ocean_varmix_t) :: vm
+      integer, parameter :: NX = 6, NY = 5, NZ = 4
+      real(wp), parameter :: DX = 10000.0_wp, DZ = 50.0_wp, FMID = 1.0e-4_wp
+      real(wp), allocatable :: f_centre(:, :)
+
+      call make_grid(grid, NX, NY, DX)
+      call make_cartesian_metrics(metrics, grid)
+      call setup_ms(ms, grid, NZ, DZ)
+      call setup_slopes(sl, grid, NZ)
+      call setup_ws(ws, grid, cg1_val=1.0_wp, f_val=FMID)
+      call vm%init(grid, nz_ml=NZ)
+      vm%enable = .true.
+      vm%kh_res_fn_power = p
+      vm%kh_res_scale_coef = alpha
+      allocate (f_centre(grid%nx_total, grid%ny_total), source=FMID)
+      call vm%build_static(metrics, f_centre)
+
+      call map_in(ms, sl, ws, vm)
+      call varmix_compute(grid, metrics, vm, sl, ws, ms)
+      call map_out(ms, sl, ws, vm)
+      r = vm%res_fn_u(3, 3)
+      call destroy_all(grid, ms, metrics, sl, ws, vm, f_centre)
+   end subroutine resfn_at_power
 
    ! ------------------------------------------------------------------
    ! Helpers

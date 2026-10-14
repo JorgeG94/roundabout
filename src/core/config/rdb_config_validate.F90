@@ -712,6 +712,14 @@ contains
                               "&ocean_wavespeed_nml enable=.true. (the resolution function needs cg1)")
             has_error = .true.
          end if
+         ! The resolution-function power is an integer >= 1 (Hallberg 2013
+         ! form `s^p/(s^p + (alpha*cg1)^p)`); p < 1 has no meaning and would
+         ! divide by zero or invert the limits.  Refused regardless of enable.
+         if (cfg%ocean%varmix%kh_res_fn_power < 1) then
+            call logger%error("&ocean_varmix_nml kh_res_fn_power must be >= 1 "// &
+                              "(the resolution-function power p; 2 is the production form)")
+            has_error = .true.
+         end if
 
          ! Resolution-scaled momentum viscosity (Gap 1) reads the VarMix
          ! resolution function `Res_fn`, so VarMix MUST be enabled.  Loud

@@ -1227,7 +1227,7 @@ class OceanVarmix(Group):
 
     kh_res_fn_power = Int(
         'kh_res_fn_power',
-        doc='Resolution-function power p (even)',
+        doc='Resolution-function power p (integer >= 1; 2 is the production form)',
         units='',
         required=False,
         default=2,

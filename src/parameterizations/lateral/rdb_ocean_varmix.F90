@@ -127,7 +127,7 @@ module rdb_ocean_varmix
          !! `.false.` (default, MOM6 default): interpolate `cg1` to faces,
          !! then recompute `Res_fn` from the face `f2_dx2/beta_dx2/cg1`.
       integer :: kh_res_fn_power = 2
-         !! Resolution-function power `p` (even; 2 is the production form).
+         !! Resolution-function power `p` (integer >= 1; 2 is the production form).
       real(wp) :: kh_res_scale_coef = 1.0_wp
          !! Resolution-function `alpha` (the `(alpha*cg1)^p` denom coef).
       real(wp) :: khth = 0.0_wp
@@ -587,10 +587,13 @@ contains
 
    pure function varmix_res_fn(f2_dx2, beta_dx2, cg1, alpha, p) result(r)
       !$acc routine seq
-      !! Divide-free resolution function for power `p` (even).  p=2:
-      !! `dx_term/(dx_term + (alpha*cg1)^2)`; general even p:
-      !! `dx_term^(p/2)/(dx_term^(p/2) + (alpha*cg1)^p)`.  `dx_term =
-      !! f2_dx2 + cg1*beta_dx2`.  -> 1 where unresolved, -> 0 where Ld>>dx.
+      !! Divide-free resolution function for integer power `p >= 1`
+      !! (Hallberg 2013, Ocean Modelling 72): with `s = sqrt(dx_term)`,
+      !! `Res_fn = s^p/(s^p + (alpha*cg1)^p)`, where `dx_term =
+      !! f2_dx2 + cg1*beta_dx2` is a squared velocity.  p=2 reduces to
+      !! `dx_term/(dx_term + (alpha*cg1)^2)`; even p uses `dx_term^(p/2)` (exact,
+      !! no sqrt); odd p uses `sqrt(dx_term)^p`.  -> 1 where unresolved,
+      !! -> 0 where Ld>>dx.
       real(wp), intent(in) :: f2_dx2, beta_dx2, cg1, alpha
       integer, intent(in) :: p
       real(wp) :: r, dx_term, num, den_add
@@ -599,9 +602,12 @@ contains
       if (p == 2) then
          num = dx_term
          den_add = (alpha*cg1)*(alpha*cg1)
-      else
+      else if (mod(p, 2) == 0) then
          ph = p/2
          num = dx_term**ph
+         den_add = (alpha*cg1)**p
+      else
+         num = sqrt(max(dx_term, 0.0_wp))**p
          den_add = (alpha*cg1)**p
       end if
       r = num/(num + den_add)

@@ -244,7 +244,7 @@ Spatially-varying GM/Redi lateral-diffusivity coefficients.
 | `resoln_scaled_khtr` | `.false.` |  | Scale the assembled KhTr by the resolution function |
 | `gill_equatorial_ld` | `.true.` |  | Gill (1982) equatorial-Ld convention (factor 2 in beta_dx2) |
 | `interpolate_res_fn` | `.false.` |  | Interpolate centre Res_fn to faces (else interpolate cg1, MOM6 default) |
-| `kh_res_fn_power` | `2` |  | Resolution-function power p (even) |
+| `kh_res_fn_power` | `2` |  | Resolution-function power p (integer >= 1; 2 is the production form) |
 | `kh_res_scale_coef` | `0.1000000000E+01` | nondim | Resolution-function alpha ((alpha·cg1)^p denominator coef) |
 | `khth` | `0.0000000000E+00` | m^2/s | Background thickness diffusivity KhTh |
 | `khtr` | `0.0000000000E+00` | m^2/s | Background tracer diffusivity KhTr (future Redi) |

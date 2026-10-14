@@ -69,6 +69,7 @@ contains
                   new_unittest("nz_stack_guard_refuses_oversized_nz", test_nz_stack_guard), &
                   new_unittest("pv_weno_nghost_gate_radius_plus_one", test_pv_weno_nghost_gate), &
                   new_unittest("implicit_drag_hbbl_needs_effective_glue", test_glue_hbbl_gate), &
+                  new_unittest("varmix_res_fn_power_must_be_positive", test_varmix_resfn_power), &
                   new_unittest("calendar_names_fit_and_validate", test_calendar_names), &
                   new_unittest("roquet_rho_insitu_pgf_accepted", test_roquet_rho_insitu_pgf_accepted), &
                   new_unittest("atm_forcing_prereq_codes", test_atm_forcing_prereq_codes), &
@@ -179,6 +180,39 @@ contains
       call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
                  "glue with cd = 0 is turned off by setup: hbbl > 0 must be refused")
    end subroutine test_glue_hbbl_gate
+
+   subroutine test_varmix_resfn_power(error)
+      !! `kh_res_fn_power` is the integer resolution-function power p; p < 1 is
+      !! refused by `validate_config`, the default p = 2 is accepted.
+      type(error_type), allocatable, intent(out) :: error
+      integer :: ierr
+
+      ierr = validate_resfn_power(0)
+      call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
+                 "kh_res_fn_power = 0 must be refused")
+      if (allocated(error)) return
+      ierr = validate_resfn_power(3)
+      call check(error, ierr == OCEAN_STATUS_OK, "kh_res_fn_power = 3 must be accepted")
+   end subroutine test_varmix_resfn_power
+
+   function validate_resfn_power(p) result(ierr)
+      !! `validate_config` status of a minimal ocean namelist with the given
+      !! VarMix resolution-function power.
+      integer, intent(in) :: p
+      integer :: ierr
+      type(config_t) :: cfg
+      character(len=8) :: sp
+
+      write (sp, '(i0)') p
+      ierr = -999
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+         new_line('a')// &
+         "&ocean_varmix kh_res_fn_power = "//trim(sp)//" /"//new_line('a'), cfg, ierr=ierr)
+      if (ierr /= OCEAN_STATUS_OK) return
+      call validate_config(cfg, ierr=ierr)
+   end function validate_resfn_power
 
    function validate_glue(bdrag) result(ierr)
       !! `validate_config` status of a minimal ocean namelist with

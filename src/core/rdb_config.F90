@@ -1961,7 +1961,7 @@ module rdb_config
          !! Interpolate the centre Res_fn to faces (`.true.`) vs interpolate
          !! cg1 to faces then recompute Res_fn (`.false.`, MOM6 default).
       integer :: kh_res_fn_power = 2
-         !! Resolution-function power p (even).
+         !! Resolution-function power p (integer >= 1).
       real(wp) :: kh_res_scale_coef = 1.0_wp
          !! Resolution-function alpha (the `(alpha·cg1)^p` denom coefficient).
       real(wp) :: khth = 0.0_wp
