@@ -92,6 +92,8 @@ contains
                                test_bound_coriolis_allwet_inert), &
                   new_unittest("bound_coriolis_masked_clamps", &
                                test_bound_coriolis_masked_clamps), &
+                  new_unittest("bound_coriolis_masked_clamps_mom6_area", &
+                               test_bound_coriolis_masked_clamps_mom6_area), &
                   new_unittest("corner_h_mom6_equiv_above_floor", &
                                test_corner_h_equiv), &
                   new_unittest("corner_h_mom6_floor_differs", &
@@ -1527,6 +1529,21 @@ contains
    end subroutine test_bound_coriolis_allwet_inert
 
    subroutine test_bound_coriolis_masked_clamps(error)
+      !! BOUND_CORIOLIS clamp engages under the default `corner_h = "cell_mean"`
+      !! (see `bound_masked_clamps_case`).
+      type(error_type), allocatable, intent(out) :: error
+      call bound_masked_clamps_case(error, CORNER_H_CELL_MEAN)
+   end subroutine test_bound_coriolis_masked_clamps
+
+   subroutine test_bound_coriolis_masked_clamps_mom6_area(error)
+      !! Same constructed case under `corner_h = "mom6_area"`: the inline
+      !! abs_vort recovery in the bound passes uses the MOM6 area-form corner
+      !! thickness, so the clamp must still engage and still hold its guarantee.
+      type(error_type), allocatable, intent(out) :: error
+      call bound_masked_clamps_case(error, CORNER_H_MOM6_AREA)
+   end subroutine test_bound_coriolis_masked_clamps_mom6_area
+
+   subroutine bound_masked_clamps_case(error, corner_variant)
       !! A LAND cell (wet_T=0) breaks the cell↔face thickness telescoping, so
       !! `h_corner` (which excludes the land cell) no longer equals the mean of
       !! the v-face thicknesses (which include it) — the energy PV flux can now
@@ -1537,6 +1554,7 @@ contains
       !! the velocity-form range on ≥1 face) and (ii) the clamp GUARANTEE holds
       !! (bound-on lands inside `[min fv, max fv]` on every face).
       type(error_type), allocatable, intent(out) :: error
+      integer, intent(in) :: corner_variant
       type(hgrid_t) :: grid
       type(multilayer_state_t) :: ms
       type(coriolis_adv_t) :: cor
@@ -1583,6 +1601,7 @@ contains
       cor%f_0 = F0
       cor%pv_variant = PV_VARIANT_SADOURNY_ENERGY
       cor%bound_coriolis = .false.
+      cor%corner_h_variant = corner_variant
       call cor%init(grid, nz_ml=NZ)
       !$acc enter data copyin(ms, cor)
       call ms%enter_data(); call cor%enter_data()
@@ -1599,6 +1618,7 @@ contains
       cor%f_0 = F0
       cor%pv_variant = PV_VARIANT_SADOURNY_ENERGY
       cor%bound_coriolis = .true.
+      cor%corner_h_variant = corner_variant
       call cor%init(grid, nz_ml=NZ)
       !$acc enter data copyin(ms, cor)
       call ms%enter_data(); call cor%enter_data()
@@ -1652,7 +1672,7 @@ contains
       deallocate (fx_off, ke_off, q_off, fx_on)
       call cor%destroy(); call ms%destroy()
       call destroy_cartesian_metrics(metrics)
-   end subroutine test_bound_coriolis_masked_clamps
+   end subroutine bound_masked_clamps_case
 
    ! -----------------------------------------------------------------
    ! corner_h (MOM6 area-weighted PV corner thickness)
