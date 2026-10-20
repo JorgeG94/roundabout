@@ -26,7 +26,7 @@ wind stress through `&ocean_dataovr_nml` and changes nothing else — §6.
 | Time step | `dt = 1800 s` (OM_1deg `DT`), `pred_corr`, barotropic `n_inner` from the per-wet-cell CFL (32) |
 | Physics | Wright EOS, FV-MOM6 PGF, Sadourny energy-conserving Coriolis, Smagorinsky Laplacian (0.15, floor 2000 m²/s) + biharmonic (0.06) with `bound_kh`, quadratic bottom drag distributed over `hbbl = 10 m` (OM_1deg `HBBL`, `DRAG_BG_VEL`), KPP + PP81, `maxvel = 6 m/s` (OM_1deg `MAXVEL`) |
 | Output | daily: SSH, and the top-10 m means of u, v, T, S (one conservative `z_fixed` output level), single precision |
-| Cost | 11.1 s per simulated day on one V100 (a year in ~68 min), 10.4 GB of device memory |
+| Cost | 12.3 s per simulated day on an idle V100 (a year in ~75 min), 10.4 GB of device memory |
 
 ## 1. Reproduce it — one command
 
@@ -96,14 +96,14 @@ grows:
 
   | days | En band | why |
   |---:|---:|---|
-  | 1–10 (`--quick`) | 0.5 % | deterministic adjustment: the barotropic mode answers the baroclinic pressure field within days (En peaks on day 3), then settles; the console prints En to 4 digits (rounding alone is up to 0.2 %) |
+  | 1–10 (`--quick`) | 0.5 % | deterministic adjustment: the barotropic mode answers the baroclinic pressure field within days (En peaks on day 1 and relaxes within ~17 days), then settles; the console prints En to 4 digits (rounding alone is up to 0.2 %) |
   | 11–30 | 2 % | spin-up; the one-cell straits and shelves that carry the fastest water begin to decorrelate |
-  | 31–90 | 5 % | En plateau (~5.0–5.2e-04, a secondary maximum on day 71); the eddying part of the flow has decorrelated |
+  | 31–90 | 5 % | En plateau (~3.9–4.0e-04, a maximum on day 74); the eddying part of the flow has decorrelated |
   | 91–365 | 10 % | slow spin-down of a decorrelated flow, still pinned by the initial state and the closures |
 
   MaxCFL, a pointwise maximum and far more sensitive to where one fast cell
   sits, gets twice En's band and must stay below 0.5 (the reference peaks
-  at 0.243 on day 28). On the reference toolchain the run is deterministic
+  at 0.049 on day 17). On the reference toolchain the run is deterministic
   and matches every printed digit (the previous reference year, before the
   barotropic-split fix, re-ran all 365 days identically) — the bands exist
   for the others. On that previous reference, gfortran 15.1 on the CPU
@@ -223,61 +223,77 @@ map for SSH), a built-in bitmap font, PPM frames, then `ffmpeg` to MP4
 
 ## 4. What the year shows
 
-Measured on one V100 (nvfortran 26.5, `-gpu=cc70,mem:separate`), 2026-10-01,
-on branch `fix/biharmonic-zfixed-closed-faces` (213e4e012) — the flow-aware
-Smagorinsky biharmonic now treats `z_fixed` closed face-layers as free-slip
-walls (it used to read the closed layers' zero velocities as open water,
-i.e. a spurious drag at every staircase step): 365 days, 17 520 steps,
-6771 s wall on a GPU shared with other jobs (the previous year took 4064 s
-on an idle card; the change itself adds no measurable cost). The top-10 m speed
-column is measured directly from this run's own diagnostic file (a small
-stdlib NetCDF scan, the same approach as
-`python_prototypes/global_1deg/wind_analysis.py`).
+Measured on one V100 (nvfortran 26.5, `-gpu=cc70,mem:separate`), 2026-10-19/20,
+on beta `ef4553049` (solver at `34351d384`; beta differs from it only in
+`benchmarks/`): 365 days, 17 520 steps, 4506.1 s wall on an idle card
+(12.3 s per simulated day), `n_inner` = 32. The top-10 m speed
+column is measured directly from this run's own diagnostic file (daily-mean
+`sqrt(u²+v²)` of the one top-10 m level over wet cells, located on the
+OM_1deg supergrid; the same approach as
+`python_prototypes/global_1deg/wind_analysis.py`, with `netCDF4`).
 
 | day | En (m²/s²) | MaxCFL | Mass Error | Salt Error | Heat Error | max top-10 m speed (m/s) and where |
 |---:|---:|---:|---:|---:|---:|---|
-| 1 | 5.779e-04 | 0.049 | -1.80e-14 | -5.2e-16 | -4.2e-16 | 0.58, Cape Hatteras shelf |
-| 10 | 5.307e-04 | 0.241 | -1.80e-13 | -3.7e-15 | -2.7e-15 | 0.86, Taiwan Strait |
-| 30 | 5.259e-04 | 0.235 | -5.41e-13 | -1.2e-14 | -8.6e-15 | 0.83, North Carolina shelf |
-| 60 | 5.330e-04 | 0.229 | -1.08e-12 | -2.3e-14 | -1.9e-14 | 0.72, Taiwan Strait |
-| 90 | 5.352e-04 | 0.230 | -1.62e-12 | -3.6e-14 | -2.8e-14 | 0.67, Taiwan Strait |
-| 180 | 5.160e-04 | 0.177 | -3.25e-12 | -7.1e-14 | -5.7e-14 | 0.70, North Carolina shelf |
-| 240 | 4.841e-04 | 0.128 | -4.33e-12 | -9.5e-14 | -7.5e-14 | 0.71, Bering Strait |
-| 300 | 4.579e-04 | 0.107 | -5.41e-12 | -1.2e-13 | -9.3e-14 | 0.72, Bering Strait |
-| 365 | 4.329e-04 | 0.091 | -6.58e-12 | -1.4e-13 | -1.1e-13 | 0.73, Bering Strait |
+| 1 | 5.403e-04 | 0.034 | -1.78e-14 | -5.2e-16 | -4.2e-16 | 0.24, Agulhas Bank (20.5° E, 36.3° S) |
+| 10 | 3.856e-04 | 0.036 | -1.80e-13 | -3.8e-15 | -3.0e-15 | 0.47, Alboran Sea (2.5° W, 37.1° N) |
+| 30 | 3.879e-04 | 0.046 | -5.41e-13 | -1.2e-14 | -9.1e-15 | 0.42, Kuroshio south of Japan (137.5° E, 33.8° N) |
+| 60 | 3.951e-04 | 0.039 | -1.08e-12 | -2.4e-14 | -1.9e-14 | 0.47, Kuroshio south of Japan (138.5° E, 33.8° N) |
+| 90 | 3.952e-04 | 0.036 | -1.62e-12 | -3.6e-14 | -2.9e-14 | 0.45, Kuroshio south of Japan (139.5° E, 33.8° N) |
+| 180 | 3.847e-04 | 0.031 | -3.25e-12 | -7.2e-14 | -5.9e-14 | 0.43, Kuroshio south of Japan (137.5° E, 33.8° N) |
+| 240 | 3.710e-04 | 0.032 | -4.33e-12 | -9.6e-14 | -7.8e-14 | 0.47, Drake Passage (66.5° W, 56.6° S) |
+| 300 | 3.550e-04 | 0.029 | -5.41e-12 | -1.2e-13 | -9.7e-14 | 0.49, Scotia Sea (54.5° W, 55.5° S) |
+| 365 | 3.379e-04 | 0.027 | -6.58e-12 | -1.5e-13 | -1.2e-13 | 0.45, southern Indian Ocean (50.5° E, 42.5° S) |
 
 (Speeds are the daily means of the diagnostic file's one top-10 m level;
-the file carries no deeper velocity.)
+the file carries no deeper velocity. Place names are read off the cell
+longitude/latitude and are approximate.)
 
 * **No NaN, no CFL truncation, no positive-definite-limiter event, no
   NaN-catch**: each of these is logged when it fires, and the console has
   none. The 6 m/s `maxvel` clamp keeps no counter, and the 3-D maximum
   speed was not re-measured for this year (the diagnostic file holds only
   the top 10 m; an earlier reference year's 3-D maximum was 4.33 m/s, in
-  the Celebes trench, day 38 — see §5). MaxCFL stays at or below 0.24728
-  all year (day 9).
-* **Why the curve differs from the previous reference.** The previous
-  reference (`fix/free-slip-visc-sponge-seed`, 2026-09-30) ran the same
-  physics with the flow-aware Smagorinsky biharmonic reading `z_fixed` closed
-  face-layers as open water: their velocities are held at zero, so every
-  staircase step acted as a no-slip wall for the biharmonic — a spurious
-  drag. With closed faces treated as free-slip walls, the circulation keeps
-  more energy: En is higher by up to 10.7 % and MaxCFL by up to 37 %,
-  relative, over the year (day 365: 4.329e-04 vs 3.946e-04, MaxCFL 0.091 vs
-  0.066). The early spin-up shape (En peaking on day 3) is unchanged; the
-  difference grows through the year, mostly in the slow spin-down.
-* **Energy is bounded.** En peaks at 6.042e-04 m²/s² on day 3, settles to a
-  plateau of 5.2–5.4e-04 through day ~100 (a secondary maximum of 5.388e-04
-  on day 99), and then decays slowly (4.329e-04 at day 365): with no forcing
-  the closures spin it down.
+  the Celebes trench, day 38 — see §5). MaxCFL stays at or below 0.04867
+  all year (day 17).
+* **Why the curve differs from the previous reference.** Two changes, both
+  established by bisect, move the answer; the other ~120 `src` commits in
+  between move it by < 0.2 %.
+  1. `5b0af4a09` (`k_bot`, the bed-side first-live-layer index under
+     `z_fixed`, 2026-10-02): bottom drag, the HBBL band and tidal mixing
+     used to act on the inert filler layers below each column's partial bed
+     cell, so the bed drag never reached water; they now act on the real
+     bed layer. Day-3 MaxCFL 0.1097 → 0.0723, day-1 En 5.779e-04 →
+     5.672e-04. A bug fix.
+  2. The PR-4 barotropic default flip: `feead917a` (`hvel_mom6`, `bbl_glue`
+     and `visc_rem_chain` default ON) and `5c7abf2bb` (`frhat_scheme =
+     "hybrid"`). Day-3 MaxCFL 0.072 → 0.033. Confirmed: beta with those four
+     knobs set back (`visc_rem_chain=.false.`, `frhat_scheme="arithmetic"`,
+     `hvel_mom6=.false.`, `bbl_glue=.false.`) reproduces the pre-flip numbers
+     (day-3 MaxCFL 0.0721 vs 0.0723, day-1 En 5.669e-04 vs 5.670e-04). A
+     deliberate MOM6-parity change.
+
+  The EOS is Wright, so the Roquet/TEOS-10 changes do not touch this case.
+  Against the previous reference, En differs by up to 28 % (day 15) and
+  MaxCFL by up to 86 % (day 9), relative, over the year (day 365: En
+  3.379e-04 vs 4.329e-04, MaxCFL 0.027 vs 0.091). The shape changes: the
+  initial adjustment no longer overshoots to a day-3 peak, and the
+  circulation settles lower. Gadi (NCI, nvfortran, one V100) reproduces this
+  run's console bit-for-bit through day 13.
+* **Energy is bounded.** En peaks at 5.403e-04 m²/s² on day 1 (the
+  initial adjustment; there is no day-3 overshoot any more), relaxes to a
+  minimum of 3.729e-04 on day 17, then holds a plateau of 3.9–4.0e-04
+  through day ~200 (a maximum of 3.974e-04 on day 74), and then decays
+  slowly (3.379e-04 at day 365): with no forcing the closures spin it down.
 * **Budgets close to round-off, linearly.** The relative residuals grow at
-  a constant rate — mass −1.80e-14 per day, salt −4.0e-16, heat −3.1e-16 —
+  a constant rate — mass −1.80e-14 per day, salt −4.0e-16, heat −3.2e-16 --
   i.e. round-off accumulating, not a leak; the tracked boundary fluxes
-  (`out`) stay at round-off size in this closed domain (mass at most 21 kg
-  of 1.4e21, heat at most 3.8e5 J of 5.0e21).
+  (`out`) stay at round-off size in this closed domain (mass at most 6.8 kg
+  of 1.4e21, heat at most 1.2e5 J of 5.0e21).
 * **The fastest surface water is in one-cell shallow straits and shelves.**
-  (Details below measured on the previous reference year; this year's table
-  rows put the daily maximum at the same sites within 0.03 m/s.)
+  (Details below were measured on the previous reference year and were not
+  re-measured: this year's table rows put the daily maximum elsewhere, at
+  0.24–0.63 m/s, with the day-3 maximum, 0.63 m/s, in a 45 m cell near the
+  Sea of Marmara (27.5° E, 41.0° N).)
   The top-10 m daily mean peaks at 0.94 m/s on day 5 in the Taiwan Strait (a
   17 m cell), just above the 0.92 m/s reached on day 2 on the Yucatán shelf
   (9.5 m); after that the domain maximum, 0.6–0.9 m/s, sits mostly in the
@@ -522,7 +538,7 @@ row per day in `wind_gfix_daily.txt` there).
   the barotropic adjustment to the WOA density field, and then stays at
   5.3–6.2e-04 for the rest of the year, higher in austral winter (6.1e-04 on
   days 180–240) with the westerlies. It ends at 5.42e-04. The unforced year
-  over the same days: 5.98e-04 on day 3, 3.95e-04 on day 365.
+  over the same days (previous reference year): 5.98e-04 on day 3, 3.95e-04 on day 365.
 * **Budgets close to round-off, linearly.** The residual grows at the same
   per-day rate as in the unforced run:
 

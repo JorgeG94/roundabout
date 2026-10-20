@@ -41,15 +41,16 @@ band widens:
 days                   En band      reasoning
 ====================  ===========  ==========================================
 1 - 10  (quick mode)   0.5 %        deterministic adjustment (En peaks on
-                                    day 3); the console prints En to 4
+                                    day 1); the console prints En to 4
                                     digits (rounding alone is up to 0.2 %),
                                     cross-toolchain round-off is still far
                                     below that
 11 - 30                2 %          spin-up; the one-cell straits and
                                     shelves that carry the fastest water
                                     start to decorrelate
-31 - 90                5 %          En plateau (secondary maximum on day
-                                    63); eddying part of the flow
+31 - 90                5 %          En plateau (minimum 3.73e-04 on day
+                                    17, secondary maximum on day 81);
+                                    eddying part of the flow
                                     decorrelated
 91 - 365               10 %         slow spin-down of a decorrelated flow; the
                                     global integral is still pinned by the
@@ -58,7 +59,9 @@ days                   En band      reasoning
 
 On the reference toolchain the run is deterministic and matches every
 printed digit (the previous reference year re-ran all 365 days identically),
-so the band is slack there; it exists for the others.  On that previous
+so the band is slack there; it exists for the others.  The current
+reference also reproduces bit-for-bit on NCI Gadi (nvfortran, one V100)
+through day 13.  On that previous
 reference, gfortran 15.1 on the CPU (serial) also matched En and MaxCFL to
 every printed digit over the 10 quick days (not yet repeated on this one).
 The later bands are not measured across toolchains (a CPU year is days of
@@ -66,7 +69,7 @@ wall time); they are set from how the flow evolves, and are the numbers to
 revisit when a second toolchain's year is on record.
 MaxCFL is a pointwise maximum, far more sensitive to where one fast cell
 sits than the integral, so its band is twice En's (and it must stay
-below 0.5 every day, well above the reference maximum of 0.243).
+below 0.5 every day, well above the reference maximum of 0.04867, day 17).
 
 **Budgets (Mass, Salt, Heat Error): round-off in THIS run — not equality
 with the reference.**  The Error is the relative closure residual of a
