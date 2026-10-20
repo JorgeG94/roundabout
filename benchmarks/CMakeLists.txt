@@ -33,5 +33,6 @@ add_test(
     bench_ocean
     "${CMAKE_SOURCE_DIR}/validation_examples/ocean/double_gyre/double_gyre_mom6.nml"
     150)
-set_tests_properties(rdb_bench_ocean_smoke
-                     PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=1" TIMEOUT 300)
+set_tests_properties(
+  rdb_bench_ocean_smoke PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=1" TIMEOUT 300
+                                   LABELS ocean)

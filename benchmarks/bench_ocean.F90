@@ -39,6 +39,8 @@ program bench_ocean
 
    character(len=*), parameter :: DEFAULT_NML = &
                                   "validation_examples/ocean/double_gyre/double_gyre_mom6.nml"
+   real(wp), parameter :: MAXVEL_BLOWN_FRAC = 0.9_wp
+      !! Fraction of the `maxvel` clamp above which the run counts as blown.
 
    type(config_t) :: cfg
    type(ocean_engine_t) :: engine
@@ -60,7 +62,11 @@ program bench_ocean
    if (command_argument_count() >= 2) then
       call get_command_argument(2, arg2)
       read (arg2, *, iostat=ios) max_steps
-      if (ios /= 0) max_steps = 0
+      if (ios /= 0) then
+         write (error_unit, "(a)") "bench_ocean: max_steps must be an integer (got '"// &
+            trim(arg2)//"')"
+         error stop 2
+      end if
    end if
 
    call read_config(trim(nml_path), cfg)
@@ -189,7 +195,8 @@ contains
          else if (.not. all(ieee_is_finite(eta))) then
             bad = "bt_eta"
          else if (cfg%ocean%pgf%maxvel > 0.0_wp .and. &
-                  max(maxval(abs(u)), maxval(abs(v))) >= 0.9_wp*cfg%ocean%pgf%maxvel) then
+                  max(maxval(abs(u)), maxval(abs(v))) >= &
+                  MAXVEL_BLOWN_FRAC*cfg%ocean%pgf%maxvel) then
             ! The velocity-truncation clamp keeps a blown run FINITE (phantom
             ! +-maxvel currents), so finiteness alone cannot catch it.
             bad = "|u| at the maxvel clamp (blown run)"
