@@ -1,0 +1,1908 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>rdb_ocean_restart &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>rdb_ocean_restart
+      <small>Module</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.2% of total for modules and submodules.">137 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_restart.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_restart.f90.html'>rdb_ocean_restart.F90</a></li>
+            <li class="breadcrumb-item active" aria-current="page">rdb_ocean_restart</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+
+  <div class="row">
+    <div class="col-md-3">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_restart.html#variable-restart_schema_version">RESTART_SCHEMA_VERSION</a>
+            <a class="list-group-item" href="../module/rdb_ocean_restart.html#variable-max_restart_entries">MAX_RESTART_ENTRIES</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#types-0"
+         aria-expanded="false" aria-controls="types-0">
+         <h4 class="card-header bg-primary text-white">Derived Types</h4>
+      </a>
+      <div id="types-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_restart.html#type-ocean_restart_t">ocean_restart_t</a>
+            <a class="list-group-item" href="../module/rdb_ocean_restart.html#type-restart_entry_t">restart_entry_t</a>
+            <a class="list-group-item" href="../module/rdb_ocean_restart.html#type-restart_registry_t">restart_registry_t</a>
+        </div>
+      </div>
+    </div>
+
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#funcs-0"
+         aria-expanded="false" aria-controls="funcs-0">
+         <h4 class="card-header bg-primary text-white">Functions</h4>
+      </a>
+      <div id="funcs-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_restart.html#proc-registry_entry_found">registry_entry_found</a>
+        </div>
+      </div>
+    </div>
+
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#subs-0"
+         aria-expanded="false" aria-controls="subs-0">
+         <h4 class="card-header bg-primary text-white">Subroutines</h4>
+      </a>
+      <div id="subs-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_restart.html#proc-ocean_restart_destroy">ocean_restart_destroy</a>
+            <a class="list-group-item" href="../module/rdb_ocean_restart.html#proc-ocean_restart_init">ocean_restart_init</a>
+            <a class="list-group-item" href="../module/rdb_ocean_restart.html#proc-registry_clear">registry_clear</a>
+            <a class="list-group-item" href="../module/rdb_ocean_restart.html#proc-registry_register_2d">registry_register_2d</a>
+            <a class="list-group-item" href="../module/rdb_ocean_restart.html#proc-registry_register_3d">registry_register_3d</a>
+            <a class="list-group-item" href="../module/rdb_ocean_restart.html#proc-registry_register_scalar">registry_register_scalar</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+
+
+  </div>
+
+    </div>
+
+    <div class="col-md-9" id='text'>
+      <p>Restart cadence + per-slot checkpoint registry for the ocean
+dyn-core.  Each prognostic-owning slot registers its arrays at
+birth; the manager walks the registry to do the I/O, so new
+state-carrying slots join by registering rather than editing here.</p>
+<p>Contract (MPI-native):
+  1. FULL local arrays — every registered array is written/read at
+     its TOTAL local extent (interior + ghosts).  Physical wall
+     ghosts are genuine owned boundary state (nothing rebuilds them),
+     so an interior-only write breaks the bit-exact gate; periodic/
+     fold/halo seam ghosts are redundant but harmless to save.
+  2. Decomposition + grid metadata (px, py, dims, i/j_start, nz,
+     nghost, vcoord, tracer set) live in the file; resume requires
+     the SAME decomposition and error-stops on mismatch.  Cross-rank
+     redistribution is an offline tool, never in-Fortran.
+  3. Global scalars (time, step, outer_step_count) are rank-0&rsquo;s.
+  4. A registered field is REQUIRED by default (missing on read is
+     FATAL); mark genuinely optional entries <code>optional=.true.</code>.</p>
+<p>Device sync: <code>device_mapped</code> arrays (default) are pulled with
+<code>!$acc update self</code> before the host NetCDF write; host-only state
+(<code>device_mapped=.false.</code>) is skipped so <code>update self</code> is never
+issued on an unmapped array.  The read path runs BEFORE
+<code>ocean_state_enter_data</code>, writing the host interior so the
+subsequent enter_data carries values up to the device.</p>
+<br>          <div class="card mb-4">
+      <h3 class="card-header card-title bg-light">Uses</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <ul class="list-inline">
+                  <li class="list-inline-item">pic_logger</li>
+                  <li class="list-inline-item"><a href='rdb_constants.html'>rdb_constants</a></li>
+                  <li class="list-inline-item">pic_strings</li>
+              </ul>
+            </li>
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: module~~rdb_ocean_restart~~UsesGraph Pages: 1 -->
+<svg id="modulerdb_ocean_restartUsesGraph" width="338pt" height="116pt"
+ viewBox="0.00 0.00 338.00 116.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~rdb_ocean_restart~~UsesGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 112)">
+<title>module~~rdb_ocean_restart~~UsesGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-112 334,-112 334,4 -4,4"/>
+<!-- module~rdb_ocean_restart -->
+<g id="module~~rdb_ocean_restart~~UsesGraph_node1" class="node">
+<title>module~rdb_ocean_restart</title>
+<polygon fill="none" stroke="black" points="330,-66 221,-66 221,-42 330,-42 330,-66"/>
+<text text-anchor="middle" x="275.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ocean_restart</text>
+</g>
+<!-- module~rdb_constants -->
+<g id="module~~rdb_ocean_restart~~UsesGraph_node2" class="node">
+<title>module~rdb_constants</title>
+<g id="a_module~~rdb_ocean_restart~~UsesGraph_node2"><a xlink:href="../module/rdb_constants.html" xlink:title="rdb_constants">
+<polygon fill="#337ab7" stroke="#337ab7" points="185,-108 98,-108 98,-84 185,-84 185,-108"/>
+<text text-anchor="middle" x="141.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_constants</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_restart&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ocean_restart~~UsesGraph_edge1" class="edge">
+<title>module~rdb_ocean_restart&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M236.67,-66.04C222.18,-70.65 205.44,-75.97 190.14,-80.84"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="188.8,-77.6 180.33,-83.96 190.92,-84.27 188.8,-77.6"/>
+</g>
+<!-- pic_logger -->
+<g id="module~~rdb_ocean_restart~~UsesGraph_node3" class="node">
+<title>pic_logger</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="175.5,-66 107.5,-66 107.5,-42 175.5,-42 175.5,-66"/>
+<text text-anchor="middle" x="141.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_logger</text>
+</g>
+<!-- module~rdb_ocean_restart&#45;&gt;pic_logger -->
+<g id="module~~rdb_ocean_restart~~UsesGraph_edge2" class="edge">
+<title>module~rdb_ocean_restart&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M220.81,-54C209.24,-54 197.14,-54 186.01,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="185.68,-50.5 175.68,-54 185.68,-57.5 185.68,-50.5"/>
+</g>
+<!-- pic_strings -->
+<g id="module~~rdb_ocean_restart~~UsesGraph_node4" class="node">
+<title>pic_strings</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="176,-24 107,-24 107,0 176,0 176,-24"/>
+<text text-anchor="middle" x="141.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_strings</text>
+</g>
+<!-- module~rdb_ocean_restart&#45;&gt;pic_strings -->
+<g id="module~~rdb_ocean_restart~~UsesGraph_edge3" class="edge">
+<title>module~rdb_ocean_restart&#45;&gt;pic_strings</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M236.67,-41.96C220.9,-36.95 202.49,-31.09 186.15,-25.89"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="186.87,-22.45 176.28,-22.75 184.75,-29.12 186.87,-22.45"/>
+</g>
+<!-- pic_types -->
+<g id="module~~rdb_ocean_restart~~UsesGraph_node5" class="node">
+<title>pic_types</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="62,-108 0,-108 0,-84 62,-84 62,-108"/>
+<text text-anchor="middle" x="31" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_types</text>
+</g>
+<!-- module~rdb_constants&#45;&gt;pic_types -->
+<g id="module~~rdb_ocean_restart~~UsesGraph_edge4" class="edge">
+<title>module~rdb_constants&#45;&gt;pic_types</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M97.93,-96C89.5,-96 80.67,-96 72.32,-96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="72.05,-92.5 62.05,-96 72.05,-99.5 72.05,-92.5"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsesGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsesGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="518pt" height="32pt"
+ viewBox="0.00 0.00 517.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 513.5,-28 513.5,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24 0,-24 0,0 54,0 54,-24"/>
+<text text-anchor="middle" x="27" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="145.5,-24 72.5,-24 72.5,0 145.5,0 145.5,-24"/>
+<text text-anchor="middle" x="109" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="234,-24 164,-24 164,0 234,0 234,-24"/>
+<text text-anchor="middle" x="199" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="310,-24 252,-24 252,0 310,0 310,-24"/>
+<text text-anchor="middle" x="281" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="386,-24 328,-24 328,0 386,0 386,-24"/>
+<text text-anchor="middle" x="357" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="509.5,-24 404.5,-24 404.5,0 509.5,0 509.5,-24"/>
+<text text-anchor="middle" x="457" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+          <div class="card">
+      <h3 class="card-header card-title bg-light">Used by</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: module~~rdb_ocean_restart~~UsedByGraph Pages: 1 -->
+<svg id="modulerdb_ocean_restartUsedByGraph" width="641pt" height="225pt"
+ viewBox="0.00 0.00 641.00 224.70" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~rdb_ocean_restart~~UsedByGraph" class="graph" transform="scale(0.54 0.54) rotate(0) translate(4 410.7)">
+<title>module~~rdb_ocean_restart~~UsedByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-410.7 1179,-410.7 1179,4 -4,4"/>
+<!-- module~rdb_ocean_restart -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_node1" class="node">
+<title>module~rdb_ocean_restart</title>
+<polygon fill="none" stroke="black" points="109,-294 0,-294 0,-270 109,-270 109,-294"/>
+<text text-anchor="middle" x="54.5" y="-279.6" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ocean_restart</text>
+</g>
+<!-- module~rdb_ocean_restart_io -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_node2" class="node">
+<title>module~rdb_ocean_restart_io</title>
+<g id="a_module~~rdb_ocean_restart~~UsedByGraph_node2"><a xlink:href="../module/rdb_ocean_restart_io.html" xlink:title="rdb_ocean_restart_io">
+<polygon fill="#337ab7" stroke="#337ab7" points="269,-314 145,-314 145,-290 269,-290 269,-314"/>
+<text text-anchor="middle" x="207" y="-299.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_restart_io</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_restart_io&#45;&gt;module~rdb_ocean_restart -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_edge1" class="edge">
+<title>module~rdb_ocean_restart_io&#45;&gt;module~rdb_ocean_restart</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M144.79,-293.87C136.45,-292.76 127.89,-291.62 119.51,-290.51"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="119.78,-287.01 109.41,-289.16 118.86,-293.95 119.78,-287.01"/>
+</g>
+<!-- module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_node3" class="node">
+<title>module~rdb_ocean_state</title>
+<g id="a_module~~rdb_ocean_restart~~UsedByGraph_node3"><a xlink:href="../module/rdb_ocean_state.html" xlink:title="rdb_ocean_state">
+<polygon fill="#337ab7" stroke="#337ab7" points="405,-294 305,-294 305,-270 405,-270 405,-294"/>
+<text text-anchor="middle" x="355" y="-279.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_state&#45;&gt;module~rdb_ocean_restart -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_edge2" class="edge">
+<title>module~rdb_ocean_state&#45;&gt;module~rdb_ocean_restart</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M304.56,-281.32C292.9,-281.19 280.51,-281.07 269,-281 213.89,-280.68 200.11,-280.69 145,-281 136.74,-281.05 128.04,-281.12 119.45,-281.2"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="119.42,-277.7 109.45,-281.3 119.49,-284.7 119.42,-277.7"/>
+</g>
+<!-- module~rdb_ocean_state&#45;&gt;module~rdb_ocean_restart_io -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_edge3" class="edge">
+<title>module~rdb_ocean_state&#45;&gt;module~rdb_ocean_restart_io</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M304.98,-288.72C296.7,-289.85 287.96,-291.05 279.26,-292.24"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="278.51,-288.81 269.08,-293.63 279.46,-295.74 278.51,-288.81"/>
+</g>
+<!-- module~rdb_driver -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_node4" class="node">
+<title>module~rdb_driver</title>
+<g id="a_module~~rdb_ocean_restart~~UsedByGraph_node4"><a xlink:href="../module/rdb_driver.html" xlink:title="rdb_driver">
+<polygon fill="#337ab7" stroke="#337ab7" points="1045,-395 978,-395 978,-371 1045,-371 1045,-395"/>
+<text text-anchor="middle" x="1011.5" y="-380.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_edge4" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M977.94,-380.8C949.07,-379.37 905.83,-378.51 868.5,-383"/>
+</g>
+<!-- module~rdb_ocean_engine -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_node8" class="node">
+<title>module~rdb_ocean_engine</title>
+<g id="a_module~~rdb_ocean_restart~~UsedByGraph_node8"><a xlink:href="../module/rdb_ocean_engine.html" xlink:title="rdb_ocean_engine">
+<polygon fill="#337ab7" stroke="#337ab7" points="923,-314 812,-314 812,-290 923,-290 923,-314"/>
+<text text-anchor="middle" x="867.5" y="-299.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_edge19" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M989.24,-370.87C965.19,-357.15 925.84,-334.71 898.63,-319.18"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="900.32,-316.12 889.9,-314.21 896.86,-322.2 900.32,-316.12"/>
+</g>
+<!-- module~rdb_handle -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_node5" class="node">
+<title>module~rdb_handle</title>
+<g id="a_module~~rdb_ocean_restart~~UsedByGraph_node5"><a xlink:href="../module/rdb_handle.html" xlink:title="rdb_handle">
+<polygon fill="#337ab7" stroke="#337ab7" points="1048,-353 975,-353 975,-329 1048,-329 1048,-353"/>
+<text text-anchor="middle" x="1011.5" y="-338.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_handle&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_edge5" class="edge">
+<title>module~rdb_handle&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M982.88,-353.03C954.74,-364.36 909.53,-380.02 868.5,-383"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M866.5,-383C677.68,-396.7 615.07,-437.45 441,-363 411.09,-350.21 385.45,-321.9 370.37,-302.38"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="372.99,-300.04 364.21,-294.12 367.38,-304.23 372.99,-300.04"/>
+</g>
+<!-- module~rdb_handle&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_edge20" class="edge">
+<title>module~rdb_handle&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M974.67,-331.16C958.87,-326.82 939.97,-321.63 922.52,-316.84"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="923.01,-313.34 912.45,-314.07 921.16,-320.09 923.01,-313.34"/>
+</g>
+<!-- module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_node6" class="node">
+<title>module~rdb_ocean_diag_derived</title>
+<g id="a_module~~rdb_ocean_restart~~UsedByGraph_node6"><a xlink:href="../module/rdb_ocean_diag_derived.html" xlink:title="rdb_ocean_diag_derived">
+<polygon fill="#337ab7" stroke="#337ab7" points="760,-274 617,-274 617,-250 760,-250 760,-274"/>
+<text text-anchor="middle" x="688.5" y="-259.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_derived</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_edge6" class="edge">
+<title>module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M647.54,-274.05C612.26,-283.98 559.25,-297.18 512,-302"/>
+</g>
+<!-- module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_node7" class="node">
+<title>module~rdb_ocean_diag_fills</title>
+<g id="a_module~~rdb_ocean_restart~~UsedByGraph_node7"><a xlink:href="../module/rdb_ocean_diag_fills.html" xlink:title="rdb_ocean_diag_fills">
+<polygon fill="#337ab7" stroke="#337ab7" points="571.5,-354 450.5,-354 450.5,-330 571.5,-330 571.5,-354"/>
+<text text-anchor="middle" x="511" y="-339.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_fills</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_edge17" class="edge">
+<title>module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M648.13,-274.1C637.72,-277.94 626.69,-282.61 617,-288 599.28,-297.85 598.68,-306.09 581,-316 574.4,-319.7 567.16,-323.08 559.94,-326.08"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="558.18,-323.02 550.16,-329.95 560.75,-329.53 558.18,-323.02"/>
+</g>
+<!-- module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_edge7" class="edge">
+<title>module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M477.65,-329.97C466.07,-325.62 452.93,-320.63 441,-316 426.07,-310.2 409.73,-303.7 395.4,-297.95"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="396.42,-294.59 385.84,-294.11 393.81,-301.08 396.42,-294.59"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_edge8" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M811.84,-300.42C776.83,-299.8 730.46,-299.7 689.5,-302"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M687.5,-302C609.62,-306.37 589.6,-294.08 512,-302"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_edge15" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived</title>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M813.39,-290C794.32,-285.69 772.61,-280.78 752.76,-276.3"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="753.4,-272.85 742.87,-274.06 751.86,-279.68 753.4,-272.85"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_edge18" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M687.5,-302C642.92,-304.5 593.42,-316.68 558.39,-326.94"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="557.04,-323.69 548.46,-329.91 559.05,-330.4 557.04,-323.69"/>
+</g>
+<!-- module~rdb_ocean_setup -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_node9" class="node">
+<title>module~rdb_ocean_setup</title>
+<g id="a_module~~rdb_ocean_restart~~UsedByGraph_node9"><a xlink:href="../module/rdb_ocean_setup.html" xlink:title="rdb_ocean_setup">
+<polygon fill="#337ab7" stroke="#337ab7" points="740,-171 637,-171 637,-147 740,-147 740,-171"/>
+<text text-anchor="middle" x="688.5" y="-156.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_edge22" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M851.41,-289.81C820.45,-264.8 749.58,-207.54 712.72,-177.76"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="714.53,-174.72 704.55,-171.16 710.13,-180.17 714.53,-174.72"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_edge9" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M676.98,-171.22C663.2,-187.24 638.28,-216.21 617,-241 600.99,-259.65 601.76,-269.83 581,-283 554.14,-300.04 543.64,-298.77 512,-302"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M510,-302C478.21,-305.25 442.85,-301.2 414.03,-295.92"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="414.61,-292.46 404.13,-294.01 413.28,-299.34 414.61,-292.46"/>
+</g>
+<!-- module~rdb_ocean_state_restart -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_node10" class="node">
+<title>module~rdb_ocean_state_restart</title>
+<g id="a_module~~rdb_ocean_restart~~UsedByGraph_node10"><a xlink:href="../module/rdb_ocean_state_restart.html" xlink:title="rdb_ocean_state_restart">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="581,-274 441,-274 441,-250 581,-250 581,-274"/>
+<text text-anchor="middle" x="511" y="-259.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_restart</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_state_restart&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_edge10" class="edge">
+<title>module~rdb_ocean_state_restart&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ffff" d="M440.66,-271.01C432.14,-272.11 423.51,-273.23 415.16,-274.32"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="414.62,-270.86 405.16,-275.62 415.53,-277.8 414.62,-270.86"/>
+</g>
+<!-- module~rdb_ocean_state_seed -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_node11" class="node">
+<title>module~rdb_ocean_state_seed</title>
+<g id="a_module~~rdb_ocean_restart~~UsedByGraph_node11"><a xlink:href="../module/rdb_ocean_state_seed.html" xlink:title="rdb_ocean_state_seed">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="576.5,-232 445.5,-232 445.5,-208 576.5,-208 576.5,-232"/>
+<text text-anchor="middle" x="511" y="-217.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_seed</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_state_seed&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_edge11" class="edge">
+<title>module~rdb_ocean_state_seed&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ffff" d="M466.59,-232.1C458.02,-234.8 449.16,-237.81 441,-241 423.05,-248.01 403.66,-257.23 387.93,-265.15"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="385.98,-262.22 378.66,-269.89 389.16,-268.46 385.98,-262.22"/>
+</g>
+<!-- module~rdb_ocean_state_topo -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_node12" class="node">
+<title>module~rdb_ocean_state_topo</title>
+<g id="a_module~~rdb_ocean_restart~~UsedByGraph_node12"><a xlink:href="../module/rdb_ocean_state_topo.html" xlink:title="rdb_ocean_state_topo">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="576,-190 446,-190 446,-166 576,-166 576,-190"/>
+<text text-anchor="middle" x="511" y="-175.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_topo</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_state_topo&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_edge12" class="edge">
+<title>module~rdb_ocean_state_topo&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ffff" d="M460.15,-190.02C453.49,-192.52 446.93,-195.49 441,-199 412.99,-215.58 387.21,-243.27 371.55,-262.06"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="368.69,-260.03 365.1,-270 374.13,-264.44 368.69,-260.03"/>
+</g>
+<!-- module~rdb_ocean_api -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_node13" class="node">
+<title>module~rdb_ocean_api</title>
+<g id="a_module~~rdb_ocean_restart~~UsedByGraph_node13"><a xlink:href="../module/rdb_ocean_api.html" xlink:title="rdb_ocean_api">
+<polygon fill="#337ab7" stroke="#337ab7" points="1175,-333 1084,-333 1084,-309 1175,-309 1175,-333"/>
+<text text-anchor="middle" x="1129.5" y="-318.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_handle -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_edge13" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_handle</title>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M1083.98,-328.68C1075.53,-330.13 1066.68,-331.66 1058.2,-333.12"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="1057.34,-329.72 1048.08,-334.87 1058.53,-336.62 1057.34,-329.72"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_edge14" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_derived</title>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M1083.84,-311.36C1062.39,-307.23 1036.23,-302.91 1012.5,-301"/>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M1010.5,-301C977.61,-298.35 971.5,-286.72 939,-281 883.18,-271.17 819.45,-266.42 770.38,-264.13"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="770.28,-260.62 760.13,-263.68 769.97,-267.62 770.28,-260.62"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_edge16" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1010.5,-301C977.33,-298.75 971.76,-317.33 939,-323 814.46,-344.57 666.62,-345.85 581.62,-344.29"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="581.64,-340.79 571.57,-344.08 581.5,-347.79 581.64,-340.79"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_edge21" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M1010.5,-301C985.34,-298.97 957.6,-298.72 933.36,-299.16"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="933.12,-295.66 923.2,-299.38 933.28,-302.66 933.12,-295.66"/>
+</g>
+<!-- module~rdb_ocean_setup_bc -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_node14" class="node">
+<title>module~rdb_ocean_setup_bc</title>
+<g id="a_module~~rdb_ocean_restart~~UsedByGraph_node14"><a xlink:href="../module/rdb_ocean_setup_bc.html" xlink:title="rdb_ocean_setup_bc">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="928,-108 807,-108 807,-84 928,-84 928,-108"/>
+<text text-anchor="middle" x="867.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_bc</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_bc&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_edge23" class="edge">
+<title>module~rdb_ocean_setup_bc&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#00a9ff" d="M823.81,-108.07C814.59,-110.86 804.93,-113.91 796,-117 773.07,-124.92 747.81,-134.83 727.64,-143.04"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="726.1,-139.88 718.18,-146.91 728.76,-146.36 726.1,-139.88"/>
+</g>
+<!-- module~rdb_ocean_setup_bt -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_node15" class="node">
+<title>module~rdb_ocean_setup_bt</title>
+<g id="a_module~~rdb_ocean_restart~~UsedByGraph_node15"><a xlink:href="../module/rdb_ocean_setup_bt.html" xlink:title="rdb_ocean_setup_bt">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="927,-66 808,-66 808,-42 927,-42 927,-66"/>
+<text text-anchor="middle" x="867.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_bt</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_bt&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_edge24" class="edge">
+<title>module~rdb_ocean_setup_bt&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#00a9ff" d="M817.39,-66C810.04,-68.54 802.69,-71.53 796,-75 762.42,-92.43 729.04,-121.07 708.83,-139.98"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="706.34,-137.52 701.52,-146.95 711.17,-142.59 706.34,-137.52"/>
+</g>
+<!-- module~rdb_ocean_setup_cavity -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_node16" class="node">
+<title>module~rdb_ocean_setup_cavity</title>
+<g id="a_module~~rdb_ocean_restart~~UsedByGraph_node16"><a xlink:href="../module/rdb_ocean_setup_cavity.html" xlink:title="rdb_ocean_setup_cavity">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="937.5,-24 797.5,-24 797.5,0 937.5,0 937.5,-24"/>
+<text text-anchor="middle" x="867.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_cavity</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_cavity&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_edge25" class="edge">
+<title>module~rdb_ocean_setup_cavity&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#00a9ff" d="M813.4,-24.12C807.29,-26.57 801.34,-29.5 796,-33 753.58,-60.75 718.91,-110.36 701.55,-138.33"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="698.53,-136.56 696.34,-146.93 704.52,-140.19 698.53,-136.56"/>
+</g>
+<!-- module~rdb_ocean_setup_grid -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_node17" class="node">
+<title>module~rdb_ocean_setup_grid</title>
+<g id="a_module~~rdb_ocean_restart~~UsedByGraph_node17"><a xlink:href="../module/rdb_ocean_setup_grid.html" xlink:title="rdb_ocean_setup_grid">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="932.5,-234 802.5,-234 802.5,-210 932.5,-210 932.5,-234"/>
+<text text-anchor="middle" x="867.5" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_grid</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_grid&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_edge26" class="edge">
+<title>module~rdb_ocean_setup_grid&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#00a9ff" d="M823.81,-209.93C814.59,-207.14 804.93,-204.09 796,-201 773.07,-193.08 747.81,-183.17 727.64,-174.96"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="728.76,-171.64 718.18,-171.09 726.1,-178.12 728.76,-171.64"/>
+</g>
+<!-- module~rdb_ocean_setup_lateral -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_node18" class="node">
+<title>module~rdb_ocean_setup_lateral</title>
+<g id="a_module~~rdb_ocean_restart~~UsedByGraph_node18"><a xlink:href="../module/rdb_ocean_setup_lateral.html" xlink:title="rdb_ocean_setup_lateral">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="939,-192 796,-192 796,-168 939,-168 939,-192"/>
+<text text-anchor="middle" x="867.5" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_lateral</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_lateral&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_edge27" class="edge">
+<title>module~rdb_ocean_setup_lateral&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#00a9ff" d="M795.78,-171.61C780.68,-169.82 764.86,-167.94 750.18,-166.2"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="750.56,-162.72 740.22,-165.02 749.74,-169.67 750.56,-162.72"/>
+</g>
+<!-- module~rdb_ocean_setup_vmix -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_node19" class="node">
+<title>module~rdb_ocean_setup_vmix</title>
+<g id="a_module~~rdb_ocean_restart~~UsedByGraph_node19"><a xlink:href="../module/rdb_ocean_setup_vmix.html" xlink:title="rdb_ocean_setup_vmix">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="934.5,-150 800.5,-150 800.5,-126 934.5,-126 934.5,-150"/>
+<text text-anchor="middle" x="867.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_vmix</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_vmix&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_ocean_restart~~UsedByGraph_edge28" class="edge">
+<title>module~rdb_ocean_setup_vmix&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#00a9ff" d="M800.34,-145.85C783.99,-147.79 766.55,-149.86 750.46,-151.77"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="749.62,-148.34 740.1,-153 750.45,-155.29 749.62,-148.34"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panmodulerdb_ocean_restartUsedByGraph = svgPanZoom('#modulerdb_ocean_restartUsedByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsedByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsedByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="518pt" height="32pt"
+ viewBox="0.00 0.00 517.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 513.5,-28 513.5,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24 0,-24 0,0 54,0 54,-24"/>
+<text text-anchor="middle" x="27" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="145.5,-24 72.5,-24 72.5,0 145.5,0 145.5,-24"/>
+<text text-anchor="middle" x="109" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="234,-24 164,-24 164,0 234,0 234,-24"/>
+<text text-anchor="middle" x="199" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="310,-24 252,-24 252,0 310,0 310,-24"/>
+<text text-anchor="middle" x="281" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="386,-24 328,-24 328,0 386,0 386,-24"/>
+<text text-anchor="middle" x="357" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="509.5,-24 404.5,-24 404.5,0 509.5,0 509.5,-24"/>
+<text text-anchor="middle" x="457" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+      <br>
+
+
+        <section>
+          <h2>Variables</h2>
+            <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-restart_schema_version"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>RESTART_SCHEMA_VERSION</strong></td>
+<td> =</td>
+                <td>1</td>
+            <td>
+                <p>Bumped on any non-back-compatible on-disk field-set/layout
+change.  Written as a global attribute, validated on read.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-max_restart_entries"></span>
+              integer,
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>MAX_RESTART_ENTRIES</strong></td>
+<td> =</td>
+                <td>256</td>
+            <td>
+                <p>Fixed cap on registered fields; bump if a slot family exceeds it.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+        </section>
+        <br>
+
+
+
+
+        <section>
+          <h2>Derived Types</h2>
+              <div class="card">
+    <div class="card-header codesum">
+      <span class="anchor" id="type-ocean_restart_t"></span>
+      <h3>
+        type, public&nbsp;::&nbsp;
+        <a href='../type/ocean_restart_t.html'>ocean_restart_t</a>
+        
+      </h3>
+    </div>
+    <div class="card-body">
+      <p>Restart-manager lifecycle marker.  The registry is built per-run
+by <code>ocean_state_build_restart_registry</code> (it holds live pointers
+into the freshly allocated slots), not stored here.  Cadence is
+driven by the driver off <code>cfg%restart_interval</code>/<code>cfg%output_dir</code>.</p>
+
+        <h4>Components</h4>
+          <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-is_init~36"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>is_init</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+<p>True between <code>init</code> and <code>destroy</code>.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+
+
+        <h4>Type-Bound Procedures</h4>
+        <table class="table table-striped varlist">
+          <tbody>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/ocean_restart_t.html#boundprocedure-destroy~42'>destroy</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_restart_destroy.html'>ocean_restart_destroy</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/ocean_restart_t.html#boundprocedure-init~38'>init</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_restart_init.html'>ocean_restart_init</a></td>
+                  <td></td>
+              </tr>
+          </tbody>
+        </table>
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum">
+      <span class="anchor" id="type-restart_entry_t"></span>
+      <h3>
+        type, public&nbsp;::&nbsp;
+        <a href='../type/restart_entry_t.html'>restart_entry_t</a>
+        
+      </h3>
+    </div>
+    <div class="card-body">
+      <p>One registered checkpoint field.  Holds a pointer to the slot&rsquo;s
+host array (or host scalar) plus the interior extents needed to
+slice owned cells.  Exactly one of <code>p0 / p2 / p3</code> is associated
+(per <code>rank</code>: 0 = host scalar, 2/3 = array).</p>
+
+        <h4>Components</h4>
+          <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-device_mapped~3"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>device_mapped</strong></td>
+<td> =</td>
+                <td>.true.</td>
+            <td>
+<p>.true. =&gt; write path pulls host-ward via <code>!$acc update self</code>
+first.  Host-only state sets .false. so <code>update self</code> is never
+issued on an unmapped array (crashes on GPU).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-found~6"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>found</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+<p>PR-2 (bt-rem-from-av-rem review): set by <code>ocean_restart_read_local</code>
+when THIS entry&rsquo;s variable was actually present in the file
+being read (always <code>.false.</code> before a read, and on a WRITE
+path registry this field is simply never consulted). Lets a
+caller distinguish &ldquo;optional field restored from the
+checkpoint&rdquo; from &ldquo;optional field missing, left at its seeded
+value&rdquo; for an entry whose downstream setup behaviour must
+differ between the two (see <code>registry_entry_found</code>,
+<code>ocean_vmix_t%kv_from_restart</code>) — <code>optional</code> alone only says
+whether a MISSING entry is fatal, not whether THIS read found
+it.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ng~79"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ng</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+<p>Ghost width (interior starts at ng+1 in x and y).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nk~31"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nk</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+<p>Third-dim extent for rank-3 fields (no vertical ghosts —
+layers/interfaces are all owned).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_phys~40"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_phys</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+<p>Owned-cell extents in x, y.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_phys~40"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_phys</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+<p>Owned-cell extents in x, y.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-optional"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>optional</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+<p>.true. =&gt; read path warns-and-seeds if absent.  Default
+.false. =&gt; a missing field is FATAL.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-p0~4"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              pointer
+            </td>
+            <td>::</td>
+            <td><strong>p0</strong></td>
+<td>=&gt; </td>
+                <td>null()</td>
+            <td>
+<p>Host scalar (rank-0 persistent state, e.g. Chapman eta_old).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-p2~6"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              pointer
+            </td>
+            <td>::</td>
+            <td><strong>p2</strong>(:,:)</td>
+<td>=&gt; </td>
+                <td>null()</td>
+            <td>
+<p>Host array for rank-2 fields (incl. ghosts).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-p3~2"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              pointer
+            </td>
+            <td>::</td>
+            <td><strong>p3</strong>(:,:,:)</td>
+<td>=&gt; </td>
+                <td>null()</td>
+            <td>
+<p>Host array for rank-3 fields (incl. ghosts).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rank~9"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rank</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+<p>0 (host scalar), 2, or 3.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tag~19"></span>
+              character(len=64),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tag</strong></td>
+<td> =</td>
+                <td>&#34;&#34;</td>
+            <td>
+<p>NetCDF variable name (unique within the file).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum">
+      <span class="anchor" id="type-restart_registry_t"></span>
+      <h3>
+        type, public&nbsp;::&nbsp;
+        <a href='../type/restart_registry_t.html'>restart_registry_t</a>
+        
+      </h3>
+    </div>
+    <div class="card-body">
+      <p>Append-only registry of checkpoint fields.  Slots call
+<code>register_2d</code> / <code>register_3d</code> from their (or the state&rsquo;s) init.</p>
+
+        <h4>Components</h4>
+          <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-entries"></span>
+              type(<a href='../type/restart_entry_t.html'>restart_entry_t</a>),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>entries</strong>(MAX_RESTART_ENTRIES)</td>
+                <td></td>
+                <td></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n~47"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+
+
+        <h4>Type-Bound Procedures</h4>
+        <table class="table table-striped varlist">
+          <tbody>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/restart_registry_t.html#boundprocedure-clear'>clear</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/registry_clear.html'>registry_clear</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/restart_registry_t.html#boundprocedure-entry_found'>entry_found</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/registry_entry_found.html'>registry_entry_found</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/restart_registry_t.html#boundprocedure-register_2d'>register_2d</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/registry_register_2d.html'>registry_register_2d</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/restart_registry_t.html#boundprocedure-register_3d'>register_3d</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/registry_register_3d.html'>registry_register_3d</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/restart_registry_t.html#boundprocedure-register_scalar'>register_scalar</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/registry_register_scalar.html'>registry_register_scalar</a></td>
+                  <td></td>
+              </tr>
+          </tbody>
+        </table>
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+        <section>
+          <h2>Functions</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-registry_entry_found"></span> <h3>private pure function <a href='../proc/registry_entry_found.html'>registry_entry_found</a>(this, tag) result(found)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Was <code>tag</code> actually present in the file the last time this
+registry was passed to <code>ocean_restart_read_local</code>? <code>.false.</code>
+before any read, and <code>.false.</code> for an unknown tag (a caller
+typo is a silent cold-seed, not a crash — callers that care
+should assert the tag exists via a successful <code>register_*</code>
+first). See <code>restart_entry_t%found</code>&rsquo;s docstring for why this is
+not the same question as <code>optional</code>.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~445"></span>
+              class(<a href='../type/restart_registry_t.html'>restart_registry_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tag~20"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tag</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>logical</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+        <section>
+          <h2>Subroutines</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_restart_destroy"></span> <h3>private  subroutine <a href='../proc/ocean_restart_destroy.html'>ocean_restart_destroy</a>(this)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~443"></span>
+              class(<a href='../type/ocean_restart_t.html'>ocean_restart_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_restart_init"></span> <h3>private  subroutine <a href='../proc/ocean_restart_init.html'>ocean_restart_init</a>(this)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~442"></span>
+              class(<a href='../type/ocean_restart_t.html'>ocean_restart_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-registry_clear"></span> <h3>private  subroutine <a href='../proc/registry_clear.html'>registry_clear</a>(this)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~444"></span>
+              class(<a href='../type/restart_registry_t.html'>restart_registry_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-registry_register_2d"></span> <h3>private  subroutine <a href='../proc/registry_register_2d.html'>registry_register_2d</a>(this, tag, arr, ng, nx_phys, ny_phys, optional, device_mapped)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Register a rank-2 owned field.  <code>arr</code> is the full (ghosted)
+host array; the owned slice is <code>(ng+1:ng+nx_phys, ng+1:ng+ny_phys)</code>.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~447"></span>
+              class(<a href='../type/restart_registry_t.html'>restart_registry_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tag~22"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tag</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-arr~25"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td></td>            <td>
+              target
+            </td>
+            <td>::</td>
+            <td><strong>arr</strong>(:,:)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ng~80"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ng</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_phys~41"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_phys</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_phys~41"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_phys</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-optional~3"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>optional</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-device_mapped~4"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>device_mapped</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-registry_register_3d"></span> <h3>private  subroutine <a href='../proc/registry_register_3d.html'>registry_register_3d</a>(this, tag, arr, ng, nx_phys, ny_phys, optional, device_mapped)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Register a rank-3 owned field.  The vertical extent is taken
+from <code>size(arr,3)</code> (layers or interfaces — both fully owned).</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~448"></span>
+              class(<a href='../type/restart_registry_t.html'>restart_registry_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tag~23"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tag</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-arr~26"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td></td>            <td>
+              target
+            </td>
+            <td>::</td>
+            <td><strong>arr</strong>(:,:,:)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ng~81"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ng</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_phys~42"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_phys</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_phys~42"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_phys</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-optional~4"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>optional</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-device_mapped~5"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>device_mapped</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-registry_register_scalar"></span> <h3>private  subroutine <a href='../proc/registry_register_scalar.html'>registry_register_scalar</a>(this, tag, scal, optional)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Register a host scalar (rank-0 persistent state, e.g. the Chapman
+<code>eta_old_chapman_*</code> corner values).  Host-only — never device-
+mapped, so the write path skips <code>update self</code> for it.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~446"></span>
+              class(<a href='../type/restart_registry_t.html'>restart_registry_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tag~21"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tag</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-scal"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td></td>            <td>
+              target
+            </td>
+            <td>::</td>
+            <td><strong>scal</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-optional~2"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>optional</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+
+
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-20 10:28 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

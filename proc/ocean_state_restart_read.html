@@ -1,0 +1,1448 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>ocean_state_restart_read &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>ocean_state_restart_read
+      <small>Module Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">28 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_state_restart.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_state_restart.f90.html'>rdb_ocean_state_restart.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_state_restart.html'>rdb_ocean_state_restart</a></li>
+            <li class="breadcrumb-item active" aria-current="page">ocean_state_restart_read</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/ocean_state_restart_read.html#variable-local_ierr~22">local_ierr</a>
+            <a class="list-group-item" href="../proc/ocean_state_restart_read.html#variable-meta~8">meta</a>
+            <a class="list-group-item" href="../proc/ocean_state_restart_read.html#variable-osc">osc</a>
+            <a class="list-group-item" href="../proc/ocean_state_restart_read.html#variable-reg~9">reg</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/ocean_state_restart_read.html#src">ocean_state_restart_read</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>module subroutine ocean_state_restart_read(state, grid, decomp, filename, t, step, ierr)  
+    <a href="../interface/ocean_state_restart_read.html"><button type="button" class="btn btn-info depwarn">Interface &rarr;</button></a>
+</h2>
+    
+
+    <p>Read a per-rank ocean restart into the (host) prognostic arrays.
+MUST run BEFORE <code>ocean_state_enter_data</code> — the subsequent H-&gt;D
+copy carries the restored values to the device.  Restores
+<code>dyn%outer_step_count</code> (dt_therm alignment).</p>
+<p>Error policy (review #4): when the caller PASSES <code>ierr</code>, a
+decomp/schema/grid mismatch returns it non-zero (the test path).
+When the caller OMITS <code>ierr</code> (the production driver path), a
+mismatch is FATAL — <code>error stop</code> naming the kind + the file —
+so a mismatched resume dies loudly instead of silently
+cold-starting and then clobbering the good checkpoint at the next
+cadence.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-state~25"></span>
+              type(<a href='../type/ocean_state_t.html'>ocean_state_t</a>),
+            </td>
+<td>intent(inout),</td>
+              <td></td>            <td>
+              target
+            </td>
+            <td>::</td>
+            <td><strong>state</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~340"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-decomp~19"></span>
+              type(<a href='../type/decomp_t.html'>decomp_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>decomp</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-filename~20"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>filename</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t~55"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-step~18"></span>
+              integer,
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>step</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ierr~173"></span>
+              integer,
+            </td>
+<td>intent(out),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ierr</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ocean_state_restart_read~~CallsGraph Pages: 1 -->
+<svg id="prococean_state_restart_readCallsGraph" width="641pt" height="480pt"
+ viewBox="0.00 0.00 641.00 480.40" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_state_restart_read~~CallsGraph" class="graph" transform="scale(0.47 0.47) rotate(0) translate(4 1028)">
+<title>proc~~ocean_state_restart_read~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-1028 1373,-1028 1373,4 -4,4"/>
+<!-- proc~ocean_state_restart_read -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node1" class="node">
+<title>proc~ocean_state_restart_read</title>
+<polygon fill="none" stroke="black" points="146,-148 0,-148 0,-124 146,-124 146,-148"/>
+<text text-anchor="middle" x="73" y="-133.6" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_state_restart_read</text>
+</g>
+<!-- interface~ocean_state_build_restart_registry -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node2" class="node">
+<title>interface~ocean_state_build_restart_registry</title>
+<g id="a_proc~~ocean_state_restart_read~~CallsGraph_node2"><a xlink:href="../interface/ocean_state_build_restart_registry.html" xlink:title="ocean_state_build_restart_registry">
+<polygon fill="#a7506f" stroke="#a7506f" points="388.5,-745 195.5,-745 195.5,-721 388.5,-721 388.5,-745"/>
+<text text-anchor="middle" x="292" y="-730.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_state_build_restart_registry</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_restart_read&#45;&gt;interface~ocean_state_build_restart_registry -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge1" class="edge">
+<title>proc~ocean_state_restart_read&#45;&gt;interface~ocean_state_build_restart_registry</title>
+<path fill="none" stroke="#ff0000" d="M74.86,-148.05C79.17,-202.65 101.43,-431.43 182,-597 204.7,-643.65 245.88,-688.81 270.61,-713.56"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="268.44,-716.33 278.02,-720.85 273.35,-711.34 268.44,-716.33"/>
+</g>
+<!-- interface~ocean_state_fill_restart_metadata -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node3" class="node">
+<title>interface~ocean_state_fill_restart_metadata</title>
+<g id="a_proc~~ocean_state_restart_read~~CallsGraph_node3"><a xlink:href="../interface/ocean_state_fill_restart_metadata.html" xlink:title="ocean_state_fill_restart_metadata">
+<polygon fill="#a7506f" stroke="#a7506f" points="388,-588 196,-588 196,-564 388,-564 388,-588"/>
+<text text-anchor="middle" x="292" y="-573.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_state_fill_restart_metadata</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_restart_read&#45;&gt;interface~ocean_state_fill_restart_metadata -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge2" class="edge">
+<title>proc~ocean_state_restart_read&#45;&gt;interface~ocean_state_fill_restart_metadata</title>
+<path fill="none" stroke="#ff0000" d="M78.17,-148.1C91.42,-186.02 134.42,-305.52 182,-399 211.95,-457.84 254.76,-522.97 276.75,-555.36"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="274.09,-557.67 282.62,-563.95 279.87,-553.72 274.09,-557.67"/>
+</g>
+<!-- proc~fail -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node4" class="node">
+<title>proc~fail</title>
+<g id="a_proc~~ocean_state_restart_read~~CallsGraph_node4"><a xlink:href="../proc/fail.html" xlink:title="fail">
+<polygon fill="#d9534f" stroke="#d9534f" points="1223.5,-409 1169.5,-409 1169.5,-385 1223.5,-385 1223.5,-409"/>
+<text text-anchor="middle" x="1196.5" y="-394.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fail</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_restart_read&#45;&gt;proc~fail -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge3" class="edge">
+<title>proc~ocean_state_restart_read&#45;&gt;proc~fail</title>
+<path fill="none" stroke="#ff0000" d="M146.03,-136C236.49,-136 396.49,-136 533.5,-136 533.5,-136 533.5,-136 759.5,-136 946.97,-136 1123.64,-315.85 1178.25,-376.96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1175.9,-379.58 1185.14,-384.76 1181.15,-374.95 1175.9,-379.58"/>
+</g>
+<!-- proc~ocean_restart_read_local -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node5" class="node">
+<title>proc~ocean_restart_read_local</title>
+<g id="a_proc~~ocean_state_restart_read~~CallsGraph_node5"><a xlink:href="../proc/ocean_restart_read_local.html" xlink:title="ocean_restart_read_local">
+<polygon fill="#d9534f" stroke="#d9534f" points="364.5,-390 219.5,-390 219.5,-366 364.5,-366 364.5,-390"/>
+<text text-anchor="middle" x="292" y="-375.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_restart_read_local</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_restart_read&#45;&gt;proc~ocean_restart_read_local -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge4" class="edge">
+<title>proc~ocean_state_restart_read&#45;&gt;proc~ocean_restart_read_local</title>
+<path fill="none" stroke="#ff0000" d="M84.76,-148C119.69,-186.95 230.1,-310.09 273.37,-358.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="270.89,-360.82 280.17,-365.93 276.1,-356.14 270.89,-360.82"/>
+</g>
+<!-- proc~registry_entry_found -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node6" class="node">
+<title>proc~registry_entry_found</title>
+<g id="a_proc~~ocean_state_restart_read~~CallsGraph_node6"><a xlink:href="../proc/registry_entry_found.html" xlink:title="restart_registry_t%registry_entry_found">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="402,-108 182,-108 182,-84 402,-84 402,-108"/>
+<text text-anchor="middle" x="292" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">restart_registry_t%registry_entry_found</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_restart_read&#45;&gt;proc~registry_entry_found -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge5" class="edge">
+<title>proc~ocean_state_restart_read&#45;&gt;proc~registry_entry_found</title>
+<path fill="none" stroke="#ff0000" d="M139.11,-124C163.14,-119.57 190.57,-114.51 215.44,-109.93"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="216.36,-113.32 225.56,-108.06 215.1,-106.43 216.36,-113.32"/>
+</g>
+<!-- proc~restart_mismatch_kind -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node7" class="node">
+<title>proc~restart_mismatch_kind</title>
+<g id="a_proc~~ocean_state_restart_read~~CallsGraph_node7"><a xlink:href="../proc/restart_mismatch_kind.html" xlink:title="restart_mismatch_kind">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="358.5,-66 225.5,-66 225.5,-42 358.5,-42 358.5,-66"/>
+<text text-anchor="middle" x="292" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">restart_mismatch_kind</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_restart_read&#45;&gt;proc~restart_mismatch_kind -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge6" class="edge">
+<title>proc~ocean_state_restart_read&#45;&gt;proc~restart_mismatch_kind</title>
+<path fill="none" stroke="#ff0000" d="M91.47,-123.76C112.14,-109.85 148.04,-87.48 182,-75 192.56,-71.12 203.98,-67.91 215.31,-65.28"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="216.2,-68.67 225.22,-63.11 214.7,-61.83 216.2,-68.67"/>
+</g>
+<!-- proc~restart_mismatch_status_code -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node8" class="node">
+<title>proc~restart_mismatch_status_code</title>
+<g id="a_proc~~ocean_state_restart_read~~CallsGraph_node8"><a xlink:href="../proc/restart_mismatch_status_code.html" xlink:title="restart_mismatch_status_code">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="378.5,-24 205.5,-24 205.5,0 378.5,0 378.5,-24"/>
+<text text-anchor="middle" x="292" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">restart_mismatch_status_code</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_restart_read&#45;&gt;proc~restart_mismatch_status_code -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge7" class="edge">
+<title>proc~ocean_state_restart_read&#45;&gt;proc~restart_mismatch_status_code</title>
+<path fill="none" stroke="#ff0000" d="M82.84,-123.84C99.54,-101.85 138.01,-55.68 182,-33 186.37,-30.75 190.96,-28.73 195.67,-26.93"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="197.18,-30.11 205.49,-23.54 194.89,-23.5 197.18,-30.11"/>
+</g>
+<!-- proc~ocean_state_build_restart_registry -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node19" class="node">
+<title>proc~ocean_state_build_restart_registry</title>
+<g id="a_proc~~ocean_state_restart_read~~CallsGraph_node19"><a xlink:href="../proc/ocean_state_build_restart_registry.html" xlink:title="ocean_state_build_restart_registry">
+<polygon fill="#d9534f" stroke="#d9534f" points="631,-882 438,-882 438,-858 631,-858 631,-882"/>
+<text text-anchor="middle" x="534.5" y="-867.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_state_build_restart_registry</text>
+</a>
+</g>
+</g>
+<!-- interface~ocean_state_build_restart_registry&#45;&gt;proc~ocean_state_build_restart_registry -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge8" class="edge">
+<title>interface~ocean_state_build_restart_registry&#45;&gt;proc~ocean_state_build_restart_registry</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M314.34,-745.16C357.22,-769.58 453.92,-824.67 503.28,-852.78"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="501.78,-855.96 512.21,-857.87 505.25,-849.88 501.78,-855.96"/>
+</g>
+<!-- proc~ocean_state_fill_restart_metadata -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node20" class="node">
+<title>proc~ocean_state_fill_restart_metadata</title>
+<g id="a_proc~~ocean_state_restart_read~~CallsGraph_node20"><a xlink:href="../proc/ocean_state_fill_restart_metadata.html" xlink:title="ocean_state_fill_restart_metadata">
+<polygon fill="#d9534f" stroke="#d9534f" points="630.5,-746 438.5,-746 438.5,-722 630.5,-722 630.5,-746"/>
+<text text-anchor="middle" x="534.5" y="-731.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_state_fill_restart_metadata</text>
+</a>
+</g>
+</g>
+<!-- interface~ocean_state_fill_restart_metadata&#45;&gt;proc~ocean_state_fill_restart_metadata -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge9" class="edge">
+<title>interface~ocean_state_fill_restart_metadata&#45;&gt;proc~ocean_state_fill_restart_metadata</title>
+<path fill="none" stroke="#ffda00" stroke-dasharray="5,2" d="M302.86,-588.26C324.49,-614.34 378.92,-675.56 438,-708 445.66,-712.21 454.05,-715.77 462.57,-718.77"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="461.62,-722.15 472.21,-721.94 463.8,-715.5 461.62,-722.15"/>
+</g>
+<!-- error -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node9" class="node">
+<title>error</title>
+<polygon fill="#777777" stroke="#777777" points="1348,-747 1294,-747 1294,-723 1348,-723 1348,-747"/>
+<text text-anchor="middle" x="1321" y="-732.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error</text>
+</g>
+<!-- proc~fail&#45;&gt;error -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge10" class="edge">
+<title>proc~fail&#45;&gt;error</title>
+<path fill="none" stroke="#48ff00" d="M1223.6,-406.91C1228.63,-409.84 1233.44,-413.49 1237,-418 1309.14,-509.22 1318.99,-656.88 1320.03,-712.69"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="1316.54,-712.9 1320.14,-722.86 1323.54,-712.83 1316.54,-712.9"/>
+</g>
+<!-- proc~error_ring_push -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node13" class="node">
+<title>proc~error_ring_push</title>
+<g id="a_proc~~ocean_state_restart_read~~CallsGraph_node13"><a xlink:href="../proc/error_ring_push.html" xlink:title="error_ring_push">
+<polygon fill="#d9534f" stroke="#d9534f" points="1369,-409 1273,-409 1273,-385 1369,-385 1369,-409"/>
+<text text-anchor="middle" x="1321" y="-394.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error_ring_push</text>
+</a>
+</g>
+</g>
+<!-- proc~fail&#45;&gt;proc~error_ring_push -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge11" class="edge">
+<title>proc~fail&#45;&gt;proc~error_ring_push</title>
+<path fill="none" stroke="#48ff00" d="M1223.78,-397C1235.1,-397 1248.81,-397 1262.29,-397"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="1262.51,-400.5 1272.51,-397 1262.51,-393.5 1262.51,-400.5"/>
+</g>
+<!-- proc~ocean_restart_read_local&#45;&gt;error -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge12" class="edge">
+<title>proc~ocean_restart_read_local&#45;&gt;error</title>
+<path fill="none" stroke="#00ff91" d="M298.58,-390.1C314.87,-424.11 365.88,-521.29 438,-571 558.98,-654.4 610.56,-656 757.5,-656 757.5,-656 757.5,-656 1004,-656 1108.51,-656 1226.81,-697.17 1284.52,-720.07"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="1283.34,-723.36 1293.92,-723.85 1285.95,-716.87 1283.34,-723.36"/>
+</g>
+<!-- info -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node10" class="node">
+<title>info</title>
+<polygon fill="#777777" stroke="#777777" points="561.5,-230 507.5,-230 507.5,-206 561.5,-206 561.5,-230"/>
+<text text-anchor="middle" x="534.5" y="-215.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">info</text>
+</g>
+<!-- proc~ocean_restart_read_local&#45;&gt;info -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge13" class="edge">
+<title>proc~ocean_restart_read_local&#45;&gt;info</title>
+<path fill="none" stroke="#00ff91" d="M302.49,-365.94C323.81,-339.69 378.33,-277.05 438,-244 456.39,-233.81 479.01,-227.42 497.62,-223.53"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="498.35,-226.96 507.5,-221.62 497.02,-220.08 498.35,-226.96"/>
+</g>
+<!-- nf90_get_var -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node11" class="node">
+<title>nf90_get_var</title>
+<polygon fill="#777777" stroke="#777777" points="575.5,-188 493.5,-188 493.5,-164 575.5,-164 575.5,-188"/>
+<text text-anchor="middle" x="534.5" y="-173.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nf90_get_var</text>
+</g>
+<!-- proc~ocean_restart_read_local&#45;&gt;nf90_get_var -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge14" class="edge">
+<title>proc~ocean_restart_read_local&#45;&gt;nf90_get_var</title>
+<path fill="none" stroke="#00ff91" d="M298.88,-365.96C315.6,-333.06 366.86,-241.2 438,-197 451.48,-188.62 467.86,-183.56 483.22,-180.52"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="483.87,-183.95 493.12,-178.79 482.67,-177.06 483.87,-183.95"/>
+</g>
+<!-- nf90_inq_varid -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node12" class="node">
+<title>nf90_inq_varid</title>
+<polygon fill="#777777" stroke="#777777" points="804,-388 713,-388 713,-364 804,-364 804,-388"/>
+<text text-anchor="middle" x="758.5" y="-373.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nf90_inq_varid</text>
+</g>
+<!-- proc~ocean_restart_read_local&#45;&gt;nf90_inq_varid -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge15" class="edge">
+<title>proc~ocean_restart_read_local&#45;&gt;nf90_inq_varid</title>
+<path fill="none" stroke="#00ff91" d="M361.74,-390.02C385.78,-393.68 413.01,-397.2 438,-399 523.56,-405.16 545.57,-406.7 631,-399 654.81,-396.85 680.84,-392.48 703.06,-388.11"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="703.87,-391.52 712.98,-386.12 702.49,-384.66 703.87,-391.52"/>
+</g>
+<!-- proc~ocean_restart_read_local&#45;&gt;proc~error_ring_push -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge16" class="edge">
+<title>proc~ocean_restart_read_local&#45;&gt;proc~error_ring_push</title>
+<path fill="none" stroke="#00ff91" d="M305.22,-365.84C328.61,-343.46 382.35,-296.3 438,-277 572.39,-230.38 615.25,-258 757.5,-258 757.5,-258 757.5,-258 1004,-258 1122.45,-258 1246.35,-340.84 1296.68,-378.62"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="1294.86,-381.63 1304.94,-384.91 1299.1,-376.06 1294.86,-381.63"/>
+</g>
+<!-- proc~nc_check -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node14" class="node">
+<title>proc~nc_check</title>
+<g id="a_proc~~ocean_state_restart_read~~CallsGraph_node14"><a xlink:href="../proc/nc_check.html" xlink:title="nc_check">
+<polygon fill="#d9534f" stroke="#d9534f" points="1034,-430 972,-430 972,-406 1034,-406 1034,-430"/>
+<text text-anchor="middle" x="1003" y="-415.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nc_check</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_restart_read_local&#45;&gt;proc~nc_check -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge17" class="edge">
+<title>proc~ocean_restart_read_local&#45;&gt;proc~nc_check</title>
+<path fill="none" stroke="#00ff91" d="M348.31,-365.97C471.8,-340.34 765.74,-286.49 850,-335 877.61,-350.9 859.92,-378.7 886,-397 907.96,-412.41 937.85,-417.55 961.79,-418.89"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="961.86,-422.39 971.98,-419.25 962.11,-415.4 961.86,-422.39"/>
+</g>
+<!-- proc~nc_close -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node15" class="node">
+<title>proc~nc_close</title>
+<g id="a_proc~~ocean_state_restart_read~~CallsGraph_node15"><a xlink:href="../proc/nc_close.html" xlink:title="nc_close">
+<polygon fill="#d9534f" stroke="#d9534f" points="787.5,-628 729.5,-628 729.5,-604 787.5,-604 787.5,-628"/>
+<text text-anchor="middle" x="758.5" y="-613.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nc_close</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_restart_read_local&#45;&gt;proc~nc_close -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge18" class="edge">
+<title>proc~ocean_restart_read_local&#45;&gt;proc~nc_close</title>
+<path fill="none" stroke="#00ff91" d="M302.05,-390.35C322.89,-417.93 377.19,-484.91 438,-521 530.21,-575.72 656.3,-600.99 718.94,-610.78"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="718.74,-614.29 729.15,-612.33 719.79,-607.37 718.74,-614.29"/>
+</g>
+<!-- proc~nc_get_varid~2 -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node16" class="node">
+<title>proc~nc_get_varid~2</title>
+<g id="a_proc~~ocean_state_restart_read~~CallsGraph_node16"><a xlink:href="../proc/nc_get_varid~2.html" xlink:title="nc_get_varid">
+<polygon fill="#d9534f" stroke="#d9534f" points="574.5,-390 494.5,-390 494.5,-366 574.5,-366 574.5,-390"/>
+<text text-anchor="middle" x="534.5" y="-375.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nc_get_varid</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_restart_read_local&#45;&gt;proc~nc_get_varid~2 -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge19" class="edge">
+<title>proc~ocean_restart_read_local&#45;&gt;proc~nc_get_varid~2</title>
+<path fill="none" stroke="#00ff91" d="M364.51,-378C403.03,-378 449.59,-378 484.07,-378"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="484.36,-381.5 494.36,-378 484.36,-374.5 484.36,-381.5"/>
+</g>
+<!-- proc~nc_open_read -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node17" class="node">
+<title>proc~nc_open_read</title>
+<g id="a_proc~~ocean_state_restart_read~~CallsGraph_node17"><a xlink:href="../proc/nc_open_read.html" xlink:title="nc_open_read">
+<polygon fill="#d9534f" stroke="#d9534f" points="802,-430 715,-430 715,-406 802,-406 802,-430"/>
+<text text-anchor="middle" x="758.5" y="-415.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nc_open_read</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_restart_read_local&#45;&gt;proc~nc_open_read -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge20" class="edge">
+<title>proc~ocean_restart_read_local&#45;&gt;proc~nc_open_read</title>
+<path fill="none" stroke="#00ff91" d="M330.07,-390.09C359.09,-398.91 400.64,-410.13 438,-415 531.27,-427.16 641.15,-424.53 704.72,-421.36"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="705.09,-424.85 714.9,-420.83 704.73,-417.86 705.09,-424.85"/>
+</g>
+<!-- proc~ocean_restart_check_decomp -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node18" class="node">
+<title>proc~ocean_restart_check_decomp</title>
+<g id="a_proc~~ocean_state_restart_read~~CallsGraph_node18"><a xlink:href="../proc/ocean_restart_check_decomp.html" xlink:title="ocean_restart_check_decomp">
+<polygon fill="#d9534f" stroke="#d9534f" points="620,-512 449,-512 449,-488 620,-488 620,-512"/>
+<text text-anchor="middle" x="534.5" y="-497.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_restart_check_decomp</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_restart_read_local&#45;&gt;proc~ocean_restart_check_decomp -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge21" class="edge">
+<title>proc~ocean_restart_read_local&#45;&gt;proc~ocean_restart_check_decomp</title>
+<path fill="none" stroke="#00ff91" d="M309.15,-390.25C335.11,-409.47 388.25,-446.89 438,-470 450.18,-475.66 463.72,-480.64 476.67,-484.83"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="475.85,-488.24 486.44,-487.88 477.93,-481.55 475.85,-488.24"/>
+</g>
+<!-- to_string -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node21" class="node">
+<title>to_string</title>
+<polygon fill="#777777" stroke="#777777" points="1225.5,-786 1167.5,-786 1167.5,-762 1225.5,-762 1225.5,-786"/>
+<text text-anchor="middle" x="1196.5" y="-771.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">to_string</text>
+</g>
+<!-- proc~ocean_restart_read_local&#45;&gt;to_string -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge22" class="edge">
+<title>proc~ocean_restart_read_local&#45;&gt;to_string</title>
+<path fill="none" stroke="#00ff91" d="M302.07,-390.28C322.37,-418.23 372.06,-489.32 402,-555 424.21,-603.73 395.86,-636.94 438,-670 557.48,-763.73 978.49,-657.91 1120,-713 1142.66,-721.82 1163.76,-740.08 1177.86,-754.33"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="1175.5,-756.93 1184.94,-761.75 1180.57,-752.1 1175.5,-756.93"/>
+</g>
+<!-- warning -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node22" class="node">
+<title>warning</title>
+<polygon fill="#777777" stroke="#777777" points="562,-310 507,-310 507,-286 562,-286 562,-310"/>
+<text text-anchor="middle" x="534.5" y="-295.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">warning</text>
+</g>
+<!-- proc~ocean_restart_read_local&#45;&gt;warning -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge23" class="edge">
+<title>proc~ocean_restart_read_local&#45;&gt;warning</title>
+<path fill="none" stroke="#00ff91" d="M322.99,-365.92C352.12,-354.41 397.72,-336.95 438,-324 457.37,-317.77 479.26,-311.74 497.18,-307.06"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="498.15,-310.42 506.96,-304.54 496.41,-303.65 498.15,-310.42"/>
+</g>
+<!-- proc~nc_check&#45;&gt;proc~fail -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge25" class="edge">
+<title>proc~nc_check&#45;&gt;proc~fail</title>
+<path fill="none" stroke="#00ff24" d="M1034.34,-414.67C1068.23,-410.96 1123.05,-404.95 1159.18,-400.98"/>
+<polygon fill="#00ff24" stroke="#00ff24" points="1159.74,-404.44 1169.3,-399.87 1158.98,-397.48 1159.74,-404.44"/>
+</g>
+<!-- nf90_strerror -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node25" class="node">
+<title>nf90_strerror</title>
+<polygon fill="#777777" stroke="#777777" points="1237,-451 1156,-451 1156,-427 1237,-427 1237,-451"/>
+<text text-anchor="middle" x="1196.5" y="-436.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nf90_strerror</text>
+</g>
+<!-- proc~nc_check&#45;&gt;nf90_strerror -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge24" class="edge">
+<title>proc~nc_check&#45;&gt;nf90_strerror</title>
+<path fill="none" stroke="#00ff24" d="M1034.34,-421.33C1064.2,-424.6 1110.3,-429.66 1145.56,-433.52"/>
+<polygon fill="#00ff24" stroke="#00ff24" points="1145.33,-437.02 1155.65,-434.63 1146.1,-430.06 1145.33,-437.02"/>
+</g>
+<!-- proc~nc_close&#45;&gt;proc~nc_check -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge27" class="edge">
+<title>proc~nc_close&#45;&gt;proc~nc_check</title>
+<path fill="none" stroke="#00ff91" d="M767.39,-603.88C792.36,-565.69 868.97,-449.79 886,-439 908.44,-424.78 937.94,-419.59 961.58,-417.91"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="961.84,-421.41 971.65,-417.39 961.48,-414.41 961.84,-421.41"/>
+</g>
+<!-- nf90_close -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node23" class="node">
+<title>nf90_close</title>
+<polygon fill="#777777" stroke="#777777" points="1038,-628 968,-628 968,-604 1038,-604 1038,-628"/>
+<text text-anchor="middle" x="1003" y="-613.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nf90_close</text>
+</g>
+<!-- proc~nc_close&#45;&gt;nf90_close -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge26" class="edge">
+<title>proc~nc_close&#45;&gt;nf90_close</title>
+<path fill="none" stroke="#00ff91" d="M787.79,-616C829.55,-616 908.07,-616 957.56,-616"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="957.66,-619.5 967.66,-616 957.66,-612.5 957.66,-619.5"/>
+</g>
+<!-- proc~nc_get_varid~2&#45;&gt;nf90_inq_varid -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge28" class="edge">
+<title>proc~nc_get_varid~2&#45;&gt;nf90_inq_varid</title>
+<path fill="none" stroke="#00ffff" d="M574.68,-377.65C610.29,-377.33 663.19,-376.85 702.93,-376.49"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="703.03,-379.99 712.99,-376.4 702.96,-372.99 703.03,-379.99"/>
+</g>
+<!-- proc~nc_get_varid~2&#45;&gt;proc~nc_check -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge29" class="edge">
+<title>proc~nc_get_varid~2&#45;&gt;proc~nc_check</title>
+<path fill="none" stroke="#00ffff" d="M574.68,-369.31C600.71,-364 635.71,-357.72 667,-355 748.03,-347.97 776.11,-321.01 850,-355 872.34,-365.27 864.67,-384.77 886,-397 908.79,-410.07 937.88,-415.31 961.23,-417.29"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="961.3,-420.8 971.51,-417.99 961.77,-413.82 961.3,-420.8"/>
+</g>
+<!-- proc~nc_open_read&#45;&gt;proc~nc_check -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge31" class="edge">
+<title>proc~nc_open_read&#45;&gt;proc~nc_check</title>
+<path fill="none" stroke="#0091ff" d="M802.02,-418C847.04,-418 917.57,-418 961.72,-418"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="961.81,-421.5 971.81,-418 961.81,-414.5 961.81,-421.5"/>
+</g>
+<!-- nf90_open -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node24" class="node">
+<title>nf90_open</title>
+<polygon fill="#777777" stroke="#777777" points="1037.5,-388 968.5,-388 968.5,-364 1037.5,-364 1037.5,-388"/>
+<text text-anchor="middle" x="1003" y="-373.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nf90_open</text>
+</g>
+<!-- proc~nc_open_read&#45;&gt;nf90_open -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge30" class="edge">
+<title>proc~nc_open_read&#45;&gt;nf90_open</title>
+<path fill="none" stroke="#0091ff" d="M802.02,-410.64C845.87,-403.04 913.94,-391.25 958.24,-383.58"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="958.88,-387.02 968.14,-381.86 957.69,-380.12 958.88,-387.02"/>
+</g>
+<!-- proc~ocean_restart_check_decomp&#45;&gt;error -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge32" class="edge">
+<title>proc~ocean_restart_check_decomp&#45;&gt;error</title>
+<path fill="none" stroke="#0024ff" d="M620.01,-508.43C779.13,-524.37 1108.4,-557.73 1120,-562 1203.36,-592.69 1274.96,-675.81 1304.96,-714.58"/>
+<polygon fill="#0024ff" stroke="#0024ff" points="1302.52,-717.15 1311.36,-723 1308.09,-712.92 1302.52,-717.15"/>
+</g>
+<!-- proc~ocean_restart_check_decomp&#45;&gt;proc~error_ring_push -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge33" class="edge">
+<title>proc~ocean_restart_check_decomp&#45;&gt;proc~error_ring_push</title>
+<path fill="none" stroke="#0024ff" d="M620.46,-501.09C734.45,-501.67 943.05,-499.66 1120,-481 1172.54,-475.46 1188.62,-481.22 1237,-460 1261.12,-449.42 1284.66,-430.49 1300.47,-416.13"/>
+<polygon fill="#0024ff" stroke="#0024ff" points="1303.07,-418.49 1307.99,-409.11 1298.3,-413.38 1303.07,-418.49"/>
+</g>
+<!-- proc~ocean_restart_check_decomp&#45;&gt;proc~nc_close -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge34" class="edge">
+<title>proc~ocean_restart_check_decomp&#45;&gt;proc~nc_close</title>
+<path fill="none" stroke="#0024ff" d="M553.94,-512.08C573.27,-524.81 604.46,-545.53 631,-564 647.2,-575.27 649.25,-581.37 667,-590 683.44,-597.99 702.78,-603.96 719.35,-608.15"/>
+<polygon fill="#0024ff" stroke="#0024ff" points="718.72,-611.6 729.26,-610.53 720.35,-604.79 718.72,-611.6"/>
+</g>
+<!-- proc~ocean_restart_check_decomp&#45;&gt;proc~nc_open_read -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge36" class="edge">
+<title>proc~ocean_restart_check_decomp&#45;&gt;proc~nc_open_read</title>
+<path fill="none" stroke="#0024ff" d="M587.14,-487.96C601.82,-483.44 617.48,-477.52 631,-470 649.45,-459.74 648.17,-448.55 667,-439 678.58,-433.13 691.82,-428.87 704.54,-425.8"/>
+<polygon fill="#0024ff" stroke="#0024ff" points="705.57,-429.15 714.58,-423.57 704.06,-422.32 705.57,-429.15"/>
+</g>
+<!-- proc~ocean_restart_check_decomp&#45;&gt;to_string -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge37" class="edge">
+<title>proc~ocean_restart_check_decomp&#45;&gt;to_string</title>
+<path fill="none" stroke="#0024ff" d="M619.78,-512.04C623.64,-513.51 627.4,-515.16 631,-517 650.86,-527.18 646.74,-542.64 667,-552 758.79,-594.43 1038.48,-535.17 1120,-595 1171.47,-632.78 1188.11,-712.57 1193.28,-751.58"/>
+<polygon fill="#0024ff" stroke="#0024ff" points="1189.84,-752.34 1194.5,-761.86 1196.8,-751.52 1189.84,-752.34"/>
+</g>
+<!-- proc~nc_get_att_int -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node26" class="node">
+<title>proc~nc_get_att_int</title>
+<g id="a_proc~~ocean_state_restart_read~~CallsGraph_node26"><a xlink:href="../proc/nc_get_att_int.html" xlink:title="nc_get_att_int">
+<polygon fill="#d9534f" stroke="#d9534f" points="801.5,-472 715.5,-472 715.5,-448 801.5,-448 801.5,-472"/>
+<text text-anchor="middle" x="758.5" y="-457.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nc_get_att_int</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_restart_check_decomp&#45;&gt;proc~nc_get_att_int -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge35" class="edge">
+<title>proc~ocean_restart_check_decomp&#45;&gt;proc~nc_get_att_int</title>
+<path fill="none" stroke="#0024ff" d="M602.11,-488C635.15,-482.04 674.49,-474.96 705.31,-469.4"/>
+<polygon fill="#0024ff" stroke="#0024ff" points="706.2,-472.8 715.42,-467.58 704.95,-465.91 706.2,-472.8"/>
+</g>
+<!-- proc~ocean_state_build_restart_registry&#45;&gt;to_string -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge44" class="edge">
+<title>proc~ocean_state_build_restart_registry&#45;&gt;to_string</title>
+<path fill="none" stroke="#4800ff" d="M569.47,-857.97C595.81,-849 633.37,-836.96 667,-829 847.07,-786.35 1069.44,-776.77 1157.25,-774.62"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="1157.37,-778.12 1167.28,-774.39 1157.21,-771.12 1157.37,-778.12"/>
+</g>
+<!-- proc~register_full_3d -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node27" class="node">
+<title>proc~register_full_3d</title>
+<g id="a_proc~~ocean_state_restart_read~~CallsGraph_node27"><a xlink:href="../proc/register_full_3d.html" xlink:title="register_full_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="805.5,-1024 711.5,-1024 711.5,-1000 805.5,-1000 805.5,-1024"/>
+<text text-anchor="middle" x="758.5" y="-1009.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">register_full_3d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_build_restart_registry&#45;&gt;proc~register_full_3d -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge38" class="edge">
+<title>proc~ocean_state_build_restart_registry&#45;&gt;proc~register_full_3d</title>
+<path fill="none" stroke="#4800ff" d="M544.92,-882.14C564.71,-906.76 613.23,-962.6 667,-991 677.59,-996.59 689.64,-1000.7 701.42,-1003.73"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="700.68,-1007.15 711.22,-1006.02 702.28,-1000.33 700.68,-1007.15"/>
+</g>
+<!-- proc~register_full_3d_opt -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node28" class="node">
+<title>proc~register_full_3d_opt</title>
+<g id="a_proc~~ocean_state_restart_read~~CallsGraph_node28"><a xlink:href="../proc/register_full_3d_opt.html" xlink:title="register_full_3d_opt">
+<polygon fill="#d9534f" stroke="#d9534f" points="816.5,-982 700.5,-982 700.5,-958 816.5,-958 816.5,-982"/>
+<text text-anchor="middle" x="758.5" y="-967.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">register_full_3d_opt</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_build_restart_registry&#45;&gt;proc~register_full_3d_opt -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge39" class="edge">
+<title>proc~ocean_state_build_restart_registry&#45;&gt;proc~register_full_3d_opt</title>
+<path fill="none" stroke="#4800ff" d="M553.96,-882.22C578.79,-898.23 624.71,-926.31 667,-944 676.71,-948.06 687.27,-951.73 697.63,-954.94"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="696.88,-958.37 707.46,-957.87 698.88,-951.66 696.88,-958.37"/>
+</g>
+<!-- proc~registry_clear -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node29" class="node">
+<title>proc~registry_clear</title>
+<g id="a_proc~~ocean_state_restart_read~~CallsGraph_node29"><a xlink:href="../proc/registry_clear.html" xlink:title="restart_registry_t%registry_clear">
+<polygon fill="#d9534f" stroke="#d9534f" points="850,-902 667,-902 667,-878 850,-878 850,-902"/>
+<text text-anchor="middle" x="758.5" y="-887.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">restart_registry_t%registry_clear</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_build_restart_registry&#45;&gt;proc~registry_clear -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge40" class="edge">
+<title>proc~ocean_state_build_restart_registry&#45;&gt;proc~registry_clear</title>
+<path fill="none" stroke="#4800ff" d="M631.26,-878.63C639.78,-879.39 648.42,-880.17 656.98,-880.94"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="656.7,-884.43 666.97,-881.84 657.33,-877.46 656.7,-884.43"/>
+</g>
+<!-- proc~registry_register_2d -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node30" class="node">
+<title>proc~registry_register_2d</title>
+<g id="a_proc~~ocean_state_restart_read~~CallsGraph_node30"><a xlink:href="../proc/registry_register_2d.html" xlink:title="restart_registry_t%registry_register_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1110.5,-868 895.5,-868 895.5,-844 1110.5,-844 1110.5,-868"/>
+<text text-anchor="middle" x="1003" y="-853.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">restart_registry_t%registry_register_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_build_restart_registry&#45;&gt;proc~registry_register_2d -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge41" class="edge">
+<title>proc~ocean_state_build_restart_registry&#45;&gt;proc~registry_register_2d</title>
+<path fill="none" stroke="#4800ff" d="M631.03,-867.13C704.5,-864.93 806.38,-861.87 884.78,-859.52"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="885.3,-863 895.19,-859.21 885.09,-856.01 885.3,-863"/>
+</g>
+<!-- proc~registry_register_3d -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node31" class="node">
+<title>proc~registry_register_3d</title>
+<g id="a_proc~~ocean_state_restart_read~~CallsGraph_node31"><a xlink:href="../proc/registry_register_3d.html" xlink:title="restart_registry_t%registry_register_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1110.5,-942 895.5,-942 895.5,-918 1110.5,-918 1110.5,-942"/>
+<text text-anchor="middle" x="1003" y="-927.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">restart_registry_t%registry_register_3d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_build_restart_registry&#45;&gt;proc~registry_register_3d -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge42" class="edge">
+<title>proc~ocean_state_build_restart_registry&#45;&gt;proc~registry_register_3d</title>
+<path fill="none" stroke="#4800ff" d="M566.58,-882.07C592.89,-891.71 631.82,-904.62 667,-911 738.68,-924 820.27,-928.84 884.99,-930.38"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="885.15,-933.88 895.23,-930.6 885.3,-926.88 885.15,-933.88"/>
+</g>
+<!-- proc~registry_register_scalar -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node32" class="node">
+<title>proc~registry_register_scalar</title>
+<g id="a_proc~~ocean_state_restart_read~~CallsGraph_node32"><a xlink:href="../proc/registry_register_scalar.html" xlink:title="restart_registry_t%registry_register_scalar">
+<polygon fill="#d9534f" stroke="#d9534f" points="1120,-826 886,-826 886,-802 1120,-802 1120,-826"/>
+<text text-anchor="middle" x="1003" y="-811.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">restart_registry_t%registry_register_scalar</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_build_restart_registry&#45;&gt;proc~registry_register_scalar -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge43" class="edge">
+<title>proc~ocean_state_build_restart_registry&#45;&gt;proc~registry_register_scalar</title>
+<path fill="none" stroke="#4800ff" d="M631.03,-858.53C706.7,-849.45 812.49,-836.75 891.74,-827.24"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="892.25,-830.7 901.76,-826.03 891.42,-823.75 892.25,-830.7"/>
+</g>
+<!-- proc~vcoord_type_name -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node33" class="node">
+<title>proc~vcoord_type_name</title>
+<g id="a_proc~~ocean_state_restart_read~~CallsGraph_node33"><a xlink:href="../proc/vcoord_type_name.html" xlink:title="vcoord_type_name">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1060,-746 946,-746 946,-722 1060,-722 1060,-746"/>
+<text text-anchor="middle" x="1003" y="-731.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vcoord_type_name</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_fill_restart_metadata&#45;&gt;proc~vcoord_type_name -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge45" class="edge">
+<title>proc~ocean_state_fill_restart_metadata&#45;&gt;proc~vcoord_type_name</title>
+<path fill="none" stroke="#b600ff" d="M630.75,-734C721.41,-734 855.51,-734 935.29,-734"/>
+<polygon fill="#b600ff" stroke="#b600ff" points="935.7,-737.5 945.7,-734 935.7,-730.5 935.7,-737.5"/>
+</g>
+<!-- proc~nc_get_att_int&#45;&gt;proc~nc_check -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge47" class="edge">
+<title>proc~nc_get_att_int&#45;&gt;proc~nc_check</title>
+<path fill="none" stroke="#5cff00" d="M801.74,-452.68C846.71,-444.89 917.38,-432.66 961.63,-424.99"/>
+<polygon fill="#5cff00" stroke="#5cff00" points="962.48,-428.4 971.73,-423.24 961.28,-421.5 962.48,-428.4"/>
+</g>
+<!-- nf90_get_att -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_node34" class="node">
+<title>nf90_get_att</title>
+<polygon fill="#777777" stroke="#777777" points="1042.5,-472 963.5,-472 963.5,-448 1042.5,-448 1042.5,-472"/>
+<text text-anchor="middle" x="1003" y="-457.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nf90_get_att</text>
+</g>
+<!-- proc~nc_get_att_int&#45;&gt;nf90_get_att -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge46" class="edge">
+<title>proc~nc_get_att_int&#45;&gt;nf90_get_att</title>
+<path fill="none" stroke="#5cff00" d="M801.74,-460C843.95,-460 908.79,-460 953.18,-460"/>
+<polygon fill="#5cff00" stroke="#5cff00" points="953.44,-463.5 963.44,-460 953.44,-456.5 953.44,-463.5"/>
+</g>
+<!-- proc~register_full_3d&#45;&gt;proc~registry_register_3d -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge48" class="edge">
+<title>proc~register_full_3d&#45;&gt;proc~registry_register_3d</title>
+<path fill="none" stroke="#00ff2e" d="M805.91,-1002.67C820.18,-999.42 835.85,-995.45 850,-991 890.63,-978.22 935.75,-959.51 966.2,-946.19"/>
+<polygon fill="#00ff2e" stroke="#00ff2e" points="967.81,-949.3 975.54,-942.06 964.98,-942.9 967.81,-949.3"/>
+</g>
+<!-- proc~register_full_3d_opt&#45;&gt;proc~registry_register_3d -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge49" class="edge">
+<title>proc~register_full_3d_opt&#45;&gt;proc~registry_register_3d</title>
+<path fill="none" stroke="#00ffb9" d="M816.66,-960.57C847.12,-955.55 885.14,-949.28 918.81,-943.72"/>
+<polygon fill="#00ffb9" stroke="#00ffb9" points="919.81,-947.1 929.11,-942.02 918.67,-940.2 919.81,-947.1"/>
+</g>
+<!-- proc~registry_register_2d&#45;&gt;error -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge50" class="edge">
+<title>proc~registry_register_2d&#45;&gt;error</title>
+<path fill="none" stroke="#002eff" d="M1110.71,-852.52C1151.96,-847.69 1198.43,-837.77 1237,-818 1265.78,-803.25 1290.77,-774.89 1305.62,-755.47"/>
+<polygon fill="#002eff" stroke="#002eff" points="1308.56,-757.37 1311.7,-747.25 1302.94,-753.2 1308.56,-757.37"/>
+</g>
+<!-- proc~registry_register_2d&#45;&gt;to_string -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge51" class="edge">
+<title>proc~registry_register_2d&#45;&gt;to_string</title>
+<path fill="none" stroke="#002eff" d="M1095.58,-843.92C1104.01,-841.48 1112.28,-838.54 1120,-835 1141.72,-825.06 1162.53,-807.42 1176.79,-793.66"/>
+<polygon fill="#002eff" stroke="#002eff" points="1179.37,-796.03 1183.99,-786.49 1174.44,-791.06 1179.37,-796.03"/>
+</g>
+<!-- proc~registry_register_3d&#45;&gt;error -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge52" class="edge">
+<title>proc~registry_register_3d&#45;&gt;error</title>
+<path fill="none" stroke="#5c00ff" d="M1064.56,-917.99C1114.48,-905.85 1185.26,-883.29 1237,-845 1269.6,-820.88 1295.41,-780.48 1309.14,-755.93"/>
+<polygon fill="#5c00ff" stroke="#5c00ff" points="1312.26,-757.52 1313.95,-747.06 1306.11,-754.18 1312.26,-757.52"/>
+</g>
+<!-- proc~registry_register_3d&#45;&gt;to_string -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge53" class="edge">
+<title>proc~registry_register_3d&#45;&gt;to_string</title>
+<path fill="none" stroke="#5c00ff" d="M1042.79,-917.93C1066.75,-909.17 1097.17,-895.59 1120,-877 1148.43,-853.85 1171.64,-817.62 1184.5,-794.88"/>
+<polygon fill="#5c00ff" stroke="#5c00ff" points="1187.62,-796.48 1189.37,-786.04 1181.48,-793.11 1187.62,-796.48"/>
+</g>
+<!-- proc~registry_register_scalar&#45;&gt;error -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge54" class="edge">
+<title>proc~registry_register_scalar&#45;&gt;error</title>
+<path fill="none" stroke="#e700ff" d="M1120.15,-816.84C1158.33,-814.57 1200.35,-808.53 1237,-795 1261.15,-786.09 1284.53,-768.07 1300.28,-754.09"/>
+<polygon fill="#e700ff" stroke="#e700ff" points="1302.78,-756.55 1307.79,-747.22 1298.05,-751.39 1302.78,-756.55"/>
+</g>
+<!-- proc~registry_register_scalar&#45;&gt;to_string -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge55" class="edge">
+<title>proc~registry_register_scalar&#45;&gt;to_string</title>
+<path fill="none" stroke="#e700ff" d="M1061.46,-802C1092.52,-795.51 1130.03,-787.68 1157.46,-781.95"/>
+<polygon fill="#e700ff" stroke="#e700ff" points="1158.37,-785.33 1167.44,-779.86 1156.94,-778.48 1158.37,-785.33"/>
+</g>
+<!-- proc~vcoord_type_name&#45;&gt;to_string -->
+<g id="proc~~ocean_state_restart_read~~CallsGraph_edge56" class="edge">
+<title>proc~vcoord_type_name&#45;&gt;to_string</title>
+<path fill="none" stroke="#ff008b" d="M1060.16,-745.73C1091.38,-752.25 1129.41,-760.2 1157.2,-766"/>
+<polygon fill="#ff008b" stroke="#ff008b" points="1156.81,-769.49 1167.31,-768.11 1158.24,-762.64 1156.81,-769.49"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprococean_state_restart_readCallsGraph = svgPanZoom('#prococean_state_restart_readCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~ocean_state_restart_read~~CalledByGraph Pages: 1 -->
+<svg id="prococean_state_restart_readCalledByGraph" width="641pt" height="120pt"
+ viewBox="0.00 0.00 641.00 120.43" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_state_restart_read~~CalledByGraph" class="graph" transform="scale(0.76 0.76) rotate(0) translate(4 154)">
+<title>proc~~ocean_state_restart_read~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-154 837,-154 837,4 -4,4"/>
+<!-- proc~ocean_state_restart_read -->
+<g id="proc~~ocean_state_restart_read~~CalledByGraph_node1" class="node">
+<title>proc~ocean_state_restart_read</title>
+<polygon fill="none" stroke="black" points="833,-66 687,-66 687,-42 833,-42 833,-66"/>
+<text text-anchor="middle" x="760" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_state_restart_read</text>
+</g>
+<!-- interface~ocean_state_restart_read -->
+<g id="proc~~ocean_state_restart_read~~CalledByGraph_node2" class="node">
+<title>interface~ocean_state_restart_read</title>
+<g id="a_proc~~ocean_state_restart_read~~CalledByGraph_node2"><a xlink:href="../interface/ocean_state_restart_read.html" xlink:title="ocean_state_restart_read">
+<polygon fill="#a7506f" stroke="#a7506f" points="651,-66 505,-66 505,-42 651,-42 651,-66"/>
+<text text-anchor="middle" x="578" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_state_restart_read</text>
+</a>
+</g>
+</g>
+<!-- interface~ocean_state_restart_read&#45;&gt;proc~ocean_state_restart_read -->
+<g id="proc~~ocean_state_restart_read~~CalledByGraph_edge1" class="edge">
+<title>interface~ocean_state_restart_read&#45;&gt;proc~ocean_state_restart_read</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M651.18,-54C659.52,-54 668.08,-54 676.54,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="676.81,-57.5 686.81,-54 676.81,-50.5 676.81,-57.5"/>
+</g>
+<!-- proc~engine_setup -->
+<g id="proc~~ocean_state_restart_read~~CalledByGraph_node3" class="node">
+<title>proc~engine_setup</title>
+<g id="a_proc~~ocean_state_restart_read~~CalledByGraph_node3"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="469,-66 385,-66 385,-42 469,-42 469,-66"/>
+<text text-anchor="middle" x="427" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;interface~ocean_state_restart_read -->
+<g id="proc~~ocean_state_restart_read~~CalledByGraph_edge2" class="edge">
+<title>proc~engine_setup&#45;&gt;interface~ocean_state_restart_read</title>
+<path fill="none" stroke="#ff0000" d="M469.11,-54C477.18,-54 485.92,-54 494.8,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="494.86,-57.5 504.86,-54 494.86,-50.5 494.86,-57.5"/>
+</g>
+<!-- proc~complete_ocean_create -->
+<g id="proc~~ocean_state_restart_read~~CalledByGraph_node4" class="node">
+<title>proc~complete_ocean_create</title>
+<g id="a_proc~~ocean_state_restart_read~~CalledByGraph_node4"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="349,-108 209,-108 209,-84 349,-84 349,-108"/>
+<text text-anchor="middle" x="279" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_setup -->
+<g id="proc~~ocean_state_restart_read~~CalledByGraph_edge3" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M321.84,-83.96C338.39,-79.2 357.58,-73.68 374.94,-68.69"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="376.27,-71.95 384.91,-65.82 374.33,-65.22 376.27,-71.95"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~ocean_state_restart_read~~CalledByGraph_node5" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~ocean_state_restart_read~~CalledByGraph_node5"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="332,-66 226,-66 226,-42 332,-42 332,-66"/>
+<text text-anchor="middle" x="279" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_setup -->
+<g id="proc~~ocean_state_restart_read~~CalledByGraph_edge4" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M332.3,-54C345.99,-54 360.74,-54 374.4,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="374.59,-57.5 384.59,-54 374.59,-50.5 374.59,-57.5"/>
+</g>
+<!-- proc~driver_validate -->
+<g id="proc~~ocean_state_restart_read~~CalledByGraph_node6" class="node">
+<title>proc~driver_validate</title>
+<g id="a_proc~~ocean_state_restart_read~~CalledByGraph_node6"><a xlink:href="../proc/driver_validate.html" xlink:title="driver_validate">
+<polygon fill="#d9534f" stroke="#d9534f" points="325,-24 233,-24 233,0 325,0 325,-24"/>
+<text text-anchor="middle" x="279" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_validate</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_validate&#45;&gt;proc~engine_setup -->
+<g id="proc~~ocean_state_restart_read~~CalledByGraph_edge5" class="edge">
+<title>proc~driver_validate&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M321.84,-24.04C338.39,-28.8 357.58,-34.32 374.94,-39.31"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="374.33,-42.78 384.91,-42.18 376.27,-36.05 374.33,-42.78"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~ocean_state_restart_read~~CalledByGraph_node7" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~ocean_state_restart_read~~CalledByGraph_node7"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="120,-66 53,-66 53,-42 120,-42 120,-66"/>
+<text text-anchor="middle" x="86.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~ocean_state_restart_read~~CalledByGraph_edge8" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#00ff00" d="M120.25,-54C146.45,-54 183.96,-54 215.83,-54"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="215.95,-57.5 225.95,-54 215.95,-50.5 215.95,-57.5"/>
+</g>
+<!-- proc~rdb_ocean_create_finalize -->
+<g id="proc~~ocean_state_restart_read~~CalledByGraph_node8" class="node">
+<title>proc~rdb_ocean_create_finalize</title>
+<g id="a_proc~~ocean_state_restart_read~~CalledByGraph_node8"><a xlink:href="../proc/rdb_ocean_create_finalize.html" xlink:title="rdb_ocean_create_finalize">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="162,-150 11,-150 11,-126 162,-126 162,-150"/>
+<text text-anchor="middle" x="86.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~ocean_state_restart_read~~CalledByGraph_edge6" class="edge">
+<title>proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M142.09,-125.96C164.41,-121.04 190.39,-115.31 213.63,-110.19"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="214.39,-113.61 223.4,-108.04 212.88,-106.77 214.39,-113.61"/>
+</g>
+<!-- proc~rdb_ocean_create_from_string -->
+<g id="proc~~ocean_state_restart_read~~CalledByGraph_node9" class="node">
+<title>proc~rdb_ocean_create_from_string</title>
+<g id="a_proc~~ocean_state_restart_read~~CalledByGraph_node9"><a xlink:href="../proc/rdb_ocean_create_from_string.html" xlink:title="rdb_ocean_create_from_string">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="173,-108 0,-108 0,-84 173,-84 173,-108"/>
+<text text-anchor="middle" x="86.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_from_string</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~ocean_state_restart_read~~CalledByGraph_edge7" class="edge">
+<title>proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M173.28,-96C181.77,-96 190.37,-96 198.79,-96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="198.97,-99.5 208.97,-96 198.97,-92.5 198.97,-99.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprococean_state_restart_readCalledByGraph = svgPanZoom('#prococean_state_restart_readCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-local_ierr~22"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>local_ierr</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-meta~8"></span>
+              type(<a href='../type/ocean_restart_metadata_t.html'>ocean_restart_metadata_t</a>),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>meta</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-osc"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>osc</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-reg~9"></span>
+              type(<a href='../type/restart_registry_t.html'>restart_registry_t</a>),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>reg</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">module subroutine </span><span class="n">ocean_state_restart_read</span><span class="p">(</span><span class="n">state</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">decomp</span><span class="p">,</span><span class="w"> </span><span class="n">filename</span><span class="p">,</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="n">step</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Read a per-rank ocean restart into the (host) prognostic arrays.</span>
+<span class="w">      </span><span class="c">!! MUST run BEFORE `ocean_state_enter_data` — the subsequent H-&gt;D</span>
+<span class="w">      </span><span class="c">!! copy carries the restored values to the device.  Restores</span>
+<span class="w">      </span><span class="c">!! `dyn%outer_step_count` (dt_therm alignment).</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Error policy (review #4): when the caller PASSES `ierr`, a</span>
+<span class="w">      </span><span class="c">!! decomp/schema/grid mismatch returns it non-zero (the test path).</span>
+<span class="w">      </span><span class="c">!! When the caller OMITS `ierr` (the production driver path), a</span>
+<span class="w">      </span><span class="c">!! mismatch is FATAL — `error stop` naming the kind + the file —</span>
+<span class="w">      </span><span class="c">!! so a mismatched resume dies loudly instead of silently</span>
+<span class="w">      </span><span class="c">!! cold-starting and then clobbering the good checkpoint at the next</span>
+<span class="w">      </span><span class="c">!! cadence.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">),</span><span class="w"> </span><span class="k">target</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">state</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">decomp_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">decomp</span>
+<span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">filename</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">t</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">step</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ierr</span>
+<span class="cp">#ifndef RDB_NO_NETCDF</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">restart_registry_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">reg</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_restart_metadata_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">meta</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">osc</span><span class="p">,</span><span class="w"> </span><span class="n">local_ierr</span>
+
+<span class="w">      </span><span class="k">call </span><span class="n">ocean_state_build_restart_registry</span><span class="p">(</span><span class="n">state</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">reg</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">ocean_state_fill_restart_metadata</span><span class="p">(</span><span class="n">state</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">meta</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">ocean_restart_read_local</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span><span class="w"> </span><span class="n">reg</span><span class="p">,</span><span class="w"> </span><span class="n">decomp</span><span class="p">,</span><span class="w"> </span><span class="n">meta</span><span class="p">,</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="n">step</span><span class="p">,</span><span class="w"> </span><span class="n">osc</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">ierr</span><span class="o">=</span><span class="n">local_ierr</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">ierr</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="w">         </span><span class="c">! Translate the INTERNAL 1/2/3 restart_mismatch_kind convention</span>
+<span class="w">         </span><span class="c">! (private to `ocean_restart_check_decomp`/`ocean_restart_read_local`)</span>
+<span class="w">         </span><span class="c">! into a named `OCEAN_STATUS_ERR_RESTART_*` code before it reaches</span>
+<span class="w">         </span><span class="c">! the caller — the raw integers collide with</span>
+<span class="w">         </span><span class="c">! `OCEAN_STATUS_ERR_CONFIG_PARSE`/`_CONFIG_VALIDATE`/`_SETUP`</span>
+<span class="w">         </span><span class="c">! (P0.1 review F4).</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">local_ierr</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">ierr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">restart_mismatch_status_code</span><span class="p">(</span><span class="n">local_ierr</span><span class="p">)</span>
+<span class="w">         </span><span class="k">else</span>
+<span class="k">            </span><span class="n">ierr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">OCEAN_STATUS_OK</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      else if</span><span class="w"> </span><span class="p">(</span><span class="n">local_ierr</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"Ocean restart resume aborted: "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="n">restart_mismatch_kind</span><span class="p">(</span><span class="n">local_ierr</span><span class="p">)</span><span class="o">//</span><span class="s2">" mismatch reading "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="nb">trim</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span><span class="o">//</span><span class="s2">".  A mismatched resume would cold-start "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"and then overwrite the good checkpoint; refusing."</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="n">code</span><span class="o">=</span><span class="n">restart_mismatch_status_code</span><span class="p">(</span><span class="n">local_ierr</span><span class="p">))</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">local_ierr</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">outer_step_count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">osc</span>
+<span class="w">         </span><span class="c">! PR-2 (bt-rem-from-av-rem review): record whether THIS read</span>
+<span class="w">         </span><span class="c">! actually found vmix_kv (vs. an older checkpoint without it, or</span>
+<span class="w">         </span><span class="c">! this call never running at all on a mismatch) -- read by</span>
+<span class="w">         </span><span class="c">! `configure_ocean_lateral`'s config-copy to decide whether to</span>
+<span class="w">         </span><span class="c">! skip reseeding `kv` (see `ocean_vmix_t%kv_from_restart`).</span>
+<span class="w">         </span><span class="n">state</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">kv_from_restart</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">reg</span><span class="p">%</span><span class="n">entry_found</span><span class="p">(</span><span class="s2">"vmix_kv"</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="cp">#else</span>
+<span class="w">      </span><span class="n">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">      </span><span class="n">step</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">      </span><span class="k">call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"ocean restart requires RDB_ENABLE_NETCDF=ON"</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">OCEAN_STATUS_ERR_IO</span><span class="p">)</span>
+<span class="w">      </span><span class="k">return</span>
+<span class="cp">#endif</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">ocean_state_restart_read</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-20 10:28 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

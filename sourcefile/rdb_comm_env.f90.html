@@ -1,0 +1,1663 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>rdb_comm_env.F90 &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>rdb_comm_env.F90
+      <small>Source File</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.3% of total for source files.">188 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_comm_env.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+            <li class="breadcrumb-item active" aria-current="page">rdb_comm_env.F90</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#mods-0"
+         aria-expanded="false" aria-controls="mods-0">
+         <h4 class="card-header bg-primary text-white">Modules</h4>
+      </a>
+      <div id="mods-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_comm_env.html">rdb_comm_env</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../sourcefile/rdb_comm_env.f90.html#src">rdb_comm_env.F90</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    <div class="col-md-9" id='text'>
+      <p>Communication environment — the ONLY backend.</p>
+<p>Roundabout no longer carries a hand-written single-process stub beside an
+MPI implementation.  This module always compiles and always talks to
+<code>pic_mpi_lib</code>; whether that resolves to a real MPI library or to
+pic-mpi&rsquo;s serial backend is pic-mpi&rsquo;s build-time choice
+(<code>PIC_ENABLE_MPI</code>), invisible here.  The single-rank contract every
+collective call site must honour (never reach point-to-point or a
+collective at one rank: take the local path) is spelled out in the
+<code>rdb_ocean_halo</code> module header and at each <code>halo_allreduce_*</code>.</p>
+      <br>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">This file depends on</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~rdb_comm_env.f90~~EfferentGraph Pages: 1 -->
+<svg id="sourcefilerdb_comm_envf90EfferentGraph" width="269pt" height="32pt"
+ viewBox="0.00 0.00 269.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~rdb_comm_env.f90~~EfferentGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>sourcefile~~rdb_comm_env.f90~~EfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 265,-28 265,4 -4,4"/>
+<!-- sourcefile~rdb_comm_env.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~EfferentGraph_node1" class="node">
+<title>sourcefile~rdb_comm_env.f90</title>
+<polygon fill="none" stroke="black" points="261,-24 145,-24 145,0 261,0 261,-24"/>
+<text text-anchor="middle" x="203" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_comm_env.F90</text>
+</g>
+<!-- sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~EfferentGraph_node2" class="node">
+<title>sourcefile~rdb_constants.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~EfferentGraph_node2"><a xlink:href="../sourcefile/rdb_constants.f90.html" xlink:title="rdb_constants.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="109,-24 0,-24 0,0 109,0 109,-24"/>
+<text text-anchor="middle" x="54.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_constants.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_comm_env.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~EfferentGraph_edge1" class="edge">
+<title>sourcefile~rdb_comm_env.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M144.94,-12C136.6,-12 127.97,-12 119.5,-12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="119.29,-8.5 109.29,-12 119.29,-15.5 119.29,-8.5"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#EfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="EfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Files dependent on this one</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~rdb_comm_env.f90~~AfferentGraph Pages: 1 -->
+<svg id="sourcefilerdb_comm_envf90AfferentGraph" width="641pt" height="298pt"
+ viewBox="0.00 0.00 641.00 298.27" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph" class="graph" transform="scale(0.32 0.32) rotate(0) translate(4 915)">
+<title>sourcefile~~rdb_comm_env.f90~~AfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-915 1971,-915 1971,4 -4,4"/>
+<!-- sourcefile~rdb_comm_env.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node1" class="node">
+<title>sourcefile~rdb_comm_env.f90</title>
+<polygon fill="none" stroke="black" points="116,-438.77 0,-438.77 0,-414.77 116,-414.77 116,-438.77"/>
+<text text-anchor="middle" x="58" y="-424.37" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_comm_env.F90</text>
+</g>
+<!-- sourcefile~rdb_driver.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node2" class="node">
+<title>sourcefile~rdb_driver.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node2"><a xlink:href="../sourcefile/rdb_driver.f90.html" xlink:title="rdb_driver.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1814.5,-817.77 1726.5,-817.77 1726.5,-793.77 1814.5,-793.77 1814.5,-817.77"/>
+<text text-anchor="middle" x="1770.5" y="-803.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_comm_env.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge1" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_comm_env.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1754.72,-817.9C1729.36,-837.62 1675.1,-875.09 1621.5,-881.77"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1619.5,-881.77C1450.14,-902.89 1406.17,-881.77 1235.5,-881.77 1235.5,-881.77 1235.5,-881.77 640,-881.77 462.22,-881.77 405.44,-946.84 240,-881.77"/>
+</g>
+<!-- sourcefile~rdb_halo.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node3" class="node">
+<title>sourcefile~rdb_halo.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node3"><a xlink:href="../sourcefile/rdb_halo.f90.html" xlink:title="rdb_halo.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="482,-701.77 401,-701.77 401,-677.77 482,-677.77 482,-701.77"/>
+<text text-anchor="middle" x="441.5" y="-687.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_halo.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_halo.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge7" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_halo.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M841.5,-805.77C707.8,-783.42 555.4,-731.38 483.79,-705.28"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="484.82,-701.93 474.23,-701.78 482.41,-708.5 484.82,-701.93"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node7" class="node">
+<title>sourcefile~rdb_ocean_state.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node7"><a xlink:href="../sourcefile/rdb_ocean_state.f90.html" xlink:title="rdb_ocean_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1100,-214.77 977,-214.77 977,-190.77 1100,-190.77 1100,-214.77"/>
+<text text-anchor="middle" x="1038.5" y="-200.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge29" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M1726.42,-809.64C1696.71,-811.37 1656.43,-811.84 1621.5,-805.77"/>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M1619.5,-805.77C1565.26,-796.34 1567.68,-758.48 1518,-734.77 1365.66,-662.07 1260.46,-759.95 1153,-629.77 1096.04,-560.77 1172.44,-298.99 1117,-228.77 1114.5,-225.6 1111.6,-222.82 1108.42,-220.37"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="1110.3,-217.42 1099.99,-214.95 1106.51,-223.31 1110.3,-217.42"/>
+</g>
+<!-- sourcefile~rdb_ocean_console_stats.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node17" class="node">
+<title>sourcefile~rdb_ocean_console_stats.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node17"><a xlink:href="../sourcefile/rdb_ocean_console_stats.f90.html" xlink:title="rdb_ocean_console_stats.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="725,-701.77 557,-701.77 557,-677.77 725,-677.77 725,-701.77"/>
+<text text-anchor="middle" x="641" y="-687.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_console_stats.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_console_stats.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge53" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_console_stats.f90</title>
+<path fill="none" stroke="#00ffb2" stroke-dasharray="5,2" d="M1434,-805.77C1172.28,-786.3 1103.37,-842.43 843.5,-805.77"/>
+<path fill="none" stroke="#00ffb2" stroke-dasharray="5,2" d="M841.5,-805.77C803.99,-799.5 712.4,-738.74 667.57,-707.75"/>
+<polygon fill="#00ffb2" stroke="#00ffb2" points="669.46,-704.81 659.26,-701.98 665.47,-710.56 669.46,-704.81"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node20" class="node">
+<title>sourcefile~rdb_ocean_dyn.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node20"><a xlink:href="../sourcefile/rdb_ocean_dyn.f90.html" xlink:title="rdb_ocean_dyn.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="900.5,-477.77 784.5,-477.77 784.5,-453.77 900.5,-453.77 900.5,-477.77"/>
+<text text-anchor="middle" x="842.5" y="-463.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_dyn.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge60" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M1619.5,-805.77C1538.48,-796.4 1517.2,-813.4 1436,-805.77"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M1434,-805.77C1178.27,-781.75 931.54,-553.88 862.52,-485.24"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="864.88,-482.65 855.34,-478.04 859.92,-487.59 864.88,-482.65"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node21" class="node">
+<title>sourcefile~rdb_ocean_engine.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node21"><a xlink:href="../sourcefile/rdb_ocean_engine.f90.html" xlink:title="rdb_ocean_engine.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1687,-222.77 1554,-222.77 1554,-198.77 1687,-198.77 1687,-222.77"/>
+<text text-anchor="middle" x="1620.5" y="-208.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge65" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#0019ff" stroke-dasharray="5,2" d="M1766.48,-793.62C1748.1,-719.74 1651.4,-330.98 1627.06,-233.14"/>
+<polygon fill="#0019ff" stroke="#0019ff" points="1630.39,-232.01 1624.58,-223.16 1623.6,-233.7 1630.39,-232.01"/>
+</g>
+<!-- sourcefile~rdb_halo.f90&#45;&gt;sourcefile~rdb_comm_env.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge2" class="edge">
+<title>sourcefile~rdb_halo.f90&#45;&gt;sourcefile~rdb_comm_env.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M435.71,-702.07C416.18,-750.12 338.9,-920.67 240,-881.77"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M238,-881.77C65.6,-813.96 57.05,-531.1 58.28,-449.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="61.79,-449.01 58.5,-438.94 54.79,-448.86 61.79,-449.01"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node4" class="node">
+<title>sourcefile~rdb_ocean_api.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node4"><a xlink:href="../sourcefile/rdb_ocean_api.f90.html" xlink:title="rdb_ocean_api.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1967,-386.77 1854,-386.77 1854,-362.77 1967,-362.77 1967,-386.77"/>
+<text text-anchor="middle" x="1910.5" y="-372.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_comm_env.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge3" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_comm_env.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1769.5,-881.77C1715.61,-919.49 1686.63,-872.58 1621.5,-881.77"/>
+</g>
+<!-- sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node10" class="node">
+<title>sourcefile~rdb_handle.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node10"><a xlink:href="../sourcefile/rdb_handle.f90.html" xlink:title="rdb_handle.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1818,-222.77 1723,-222.77 1723,-198.77 1818,-198.77 1818,-222.77"/>
+<text text-anchor="middle" x="1770.5" y="-208.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge43" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90</title>
+<path fill="none" stroke="#ff9900" stroke-dasharray="5,2" d="M1899.35,-362.71C1875.83,-334.75 1817.36,-265.27 1788.36,-230.81"/>
+<polygon fill="#ff9900" stroke="#ff9900" points="1790.78,-228.25 1781.66,-222.85 1785.42,-232.75 1790.78,-228.25"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node18" class="node">
+<title>sourcefile~rdb_ocean_diag_derived.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node18"><a xlink:href="../sourcefile/rdb_ocean_diag_derived.f90.html" xlink:title="rdb_ocean_diag_derived.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1518,-180.77 1352,-180.77 1352,-156.77 1518,-156.77 1518,-180.77"/>
+<text text-anchor="middle" x="1435" y="-166.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_derived.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge55" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1619.5,-131.77C1574.1,-133.85 1523.54,-144.7 1487.01,-154.11"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1485.87,-150.79 1477.09,-156.72 1487.65,-157.56 1485.87,-150.79"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node19" class="node">
+<title>sourcefile~rdb_ocean_diag_fills.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node19"><a xlink:href="../sourcefile/rdb_ocean_diag_fills.f90.html" xlink:title="rdb_ocean_diag_fills.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1306,-136.77 1163,-136.77 1163,-112.77 1306,-112.77 1306,-136.77"/>
+<text text-anchor="middle" x="1234.5" y="-122.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_fills.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge57" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#00b2ff" stroke-dasharray="5,2" d="M1906.87,-362.39C1899.21,-329.4 1873.87,-238.55 1818,-189.77 1749.41,-129.88 1712.46,-127.61 1621.5,-131.77"/>
+<path fill="none" stroke="#00b2ff" stroke-dasharray="5,2" d="M1619.5,-131.77C1538.06,-127.19 1516.95,-138.74 1436,-128.77"/>
+<path fill="none" stroke="#00b2ff" stroke-dasharray="5,2" d="M1434,-128.77C1395.38,-124.01 1352.22,-122.67 1316.04,-122.66"/>
+<polygon fill="#00b2ff" stroke="#00b2ff" points="1316.02,-119.16 1306.03,-122.69 1316.04,-126.16 1316.02,-119.16"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge61" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M1769.5,-539.77C1621.3,-542.42 1584.22,-539.77 1436,-539.77 1436,-539.77 1436,-539.77 1233.5,-539.77 1111.12,-539.77 1079.13,-535.82 960,-507.77 932.84,-501.37 903.27,-490.67 880.72,-481.67"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="881.78,-478.32 871.2,-477.8 879.15,-484.81 881.78,-478.32"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge67" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#0019ff" stroke-dasharray="5,2" d="M1905.94,-386.79C1893.95,-424.54 1851.22,-538.35 1771.5,-539.77"/>
+<path fill="none" stroke="#0019ff" stroke-dasharray="5,2" d="M1769.5,-539.77C1634.59,-542.18 1621.93,-307.53 1621.31,-233.11"/>
+<polygon fill="#0019ff" stroke="#0019ff" points="1624.81,-232.97 1621.29,-222.97 1617.81,-232.98 1624.81,-232.97"/>
+</g>
+<!-- sourcefile~rdb_ocean_fold_apply.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node22" class="node">
+<title>sourcefile~rdb_ocean_fold_apply.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node22"><a xlink:href="../sourcefile/rdb_ocean_fold_apply.f90.html" xlink:title="rdb_ocean_fold_apply.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="516.5,-419.77 366.5,-419.77 366.5,-395.77 516.5,-395.77 516.5,-419.77"/>
+<text text-anchor="middle" x="441.5" y="-405.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_fold_apply.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge70" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90</title>
+<path fill="none" stroke="#3200ff" stroke-dasharray="5,2" d="M1909.22,-386.99C1907.54,-441.36 1895.96,-665.7 1818,-826.77 1804.05,-855.58 1798.14,-864.02 1771.5,-881.77"/>
+<path fill="none" stroke="#3200ff" stroke-dasharray="5,2" d="M1769.5,-881.77C1738.55,-902.39 1723.87,-872.65 1687,-867.77 1575.91,-853.05 1548.06,-843.77 1436,-843.77 1436,-843.77 1436,-843.77 1037.5,-843.77 815.91,-843.77 682.97,-893.07 557,-710.77 486.43,-608.64 600.03,-529.51 521,-433.77 518.35,-430.56 515.3,-427.75 511.96,-425.28"/>
+<polygon fill="#3200ff" stroke="#3200ff" points="513.5,-422.12 503.16,-419.82 509.82,-428.06 513.5,-422.12"/>
+</g>
+<!-- sourcefile~rdb_ocean_fold_exchange.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node5" class="node">
+<title>sourcefile~rdb_ocean_fold_exchange.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node5"><a xlink:href="../sourcefile/rdb_ocean_fold_exchange.f90.html" xlink:title="rdb_ocean_fold_exchange.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="326,-459.77 152,-459.77 152,-435.77 326,-435.77 326,-459.77"/>
+<text text-anchor="middle" x="239" y="-445.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_fold_exchange.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_fold_exchange.f90&#45;&gt;sourcefile~rdb_comm_env.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge4" class="edge">
+<title>sourcefile~rdb_ocean_fold_exchange.f90&#45;&gt;sourcefile~rdb_comm_env.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M151.91,-437.67C143.25,-436.65 134.55,-435.63 126.13,-434.65"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="126.36,-431.15 116.02,-433.46 125.54,-438.1 126.36,-431.15"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node6" class="node">
+<title>sourcefile~rdb_ocean_halo.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node6"><a xlink:href="../sourcefile/rdb_ocean_halo.f90.html" xlink:title="rdb_ocean_halo.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="298.5,-417.77 179.5,-417.77 179.5,-393.77 298.5,-393.77 298.5,-417.77"/>
+<text text-anchor="middle" x="239" y="-403.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_halo.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_halo.f90&#45;&gt;sourcefile~rdb_comm_env.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge5" class="edge">
+<title>sourcefile~rdb_ocean_halo.f90&#45;&gt;sourcefile~rdb_comm_env.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M179.39,-412.65C162.43,-414.64 143.78,-416.82 126.33,-418.87"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="125.74,-415.42 116.22,-420.06 126.56,-422.37 125.74,-415.42"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_comm_env.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge6" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_comm_env.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M987.37,-190.74C977.43,-186.6 967.71,-181.09 960,-173.77 930.85,-146.07 956.86,-113.95 924,-90.77 821.36,-18.35 767.62,-71.77 642,-71.77 642,-71.77 642,-71.77 440.5,-71.77 243.52,-71.77 105.65,-328.55 68.82,-405.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="65.58,-404.01 64.48,-414.55 71.91,-407 65.58,-404.01"/>
+</g>
+<!-- sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node9" class="node">
+<title>sourcefile~rdb_continuity.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node9"><a xlink:href="../sourcefile/rdb_continuity.f90.html" xlink:title="rdb_continuity.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="695.5,-301.77 586.5,-301.77 586.5,-277.77 695.5,-277.77 695.5,-301.77"/>
+<text text-anchor="middle" x="641" y="-287.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_continuity.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge42" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_continuity.f90</title>
+<path fill="none" stroke="#ff4c00" stroke-dasharray="5,2" d="M982.92,-214.78C910.42,-230.72 782.58,-258.85 705.73,-275.75"/>
+<polygon fill="#ff4c00" stroke="#ff4c00" points="704.72,-272.39 695.7,-277.96 706.22,-279.23 704.72,-272.39"/>
+</g>
+<!-- sourcefile~rdb_ocean_bulk_forcing.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node14" class="node">
+<title>sourcefile~rdb_ocean_bulk_forcing.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node14"><a xlink:href="../sourcefile/rdb_ocean_bulk_forcing.f90.html" xlink:title="rdb_ocean_bulk_forcing.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="923,-123.77 762,-123.77 762,-99.77 923,-99.77 923,-123.77"/>
+<text text-anchor="middle" x="842.5" y="-109.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_bulk_forcing.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_bulk_forcing.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge48" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_bulk_forcing.f90</title>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M1002.38,-190.73C988.96,-185.85 973.62,-179.91 960,-173.77 929.71,-160.11 896.35,-142.03 873.12,-128.92"/>
+<polygon fill="#33ff00" stroke="#33ff00" points="874.56,-125.71 864.13,-123.81 871.1,-131.8 874.56,-125.71"/>
+</g>
+<!-- sourcefile~rdb_ocean_cavity_flux.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node15" class="node">
+<title>sourcefile~rdb_ocean_cavity_flux.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node15"><a xlink:href="../sourcefile/rdb_ocean_cavity_flux.f90.html" xlink:title="rdb_ocean_cavity_flux.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="717.5,-659.77 564.5,-659.77 564.5,-635.77 717.5,-635.77 717.5,-659.77"/>
+<text text-anchor="middle" x="641" y="-645.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_cavity_flux.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_cavity_flux.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge51" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_cavity_flux.f90</title>
+<path fill="none" stroke="#00ff19" stroke-dasharray="5,2" d="M978.03,-214.77C971.17,-218.31 964.9,-222.87 960,-228.77 886.05,-317.85 984.34,-387.96 924,-486.77 867.65,-579.06 823.27,-581.65 725,-626.77 720.39,-628.89 715.53,-630.81 710.58,-632.56"/>
+<polygon fill="#00ff19" stroke="#00ff19" points="709.39,-629.27 700.97,-635.71 711.56,-635.92 709.39,-629.27"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge64" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M979.42,-214.93C972.17,-218.44 965.41,-222.95 960,-228.77 916.24,-275.81 953.22,-311.55 924,-368.77 908.58,-398.95 882.36,-428.12 864.04,-446.45"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="861.43,-444.12 856.73,-453.61 866.33,-449.11 861.43,-444.12"/>
+</g>
+<!-- sourcefile~rdb_ocean_data_forcing.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node29" class="node">
+<title>sourcefile~rdb_ocean_data_forcing.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node29"><a xlink:href="../sourcefile/rdb_ocean_data_forcing.f90.html" xlink:title="rdb_ocean_data_forcing.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="924,-203.77 761,-203.77 761,-179.77 924,-179.77 924,-203.77"/>
+<text text-anchor="middle" x="842.5" y="-189.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_data_forcing.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge91" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M976.92,-199.34C963.5,-198.57 948.99,-197.75 934.65,-196.94"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="934.44,-193.42 924.26,-196.35 934.05,-200.41 934.44,-193.42"/>
+</g>
+<!-- sourcefile~rdb_barotropic_substep.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node8" class="node">
+<title>sourcefile~rdb_barotropic_substep.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node8"><a xlink:href="../sourcefile/rdb_barotropic_substep.f90.html" xlink:title="rdb_barotropic_substep.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="521,-499.77 362,-499.77 362,-475.77 521,-475.77 521,-499.77"/>
+<text text-anchor="middle" x="441.5" y="-485.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_barotropic_substep.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_barotropic_substep.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge14" class="edge">
+<title>sourcefile~rdb_barotropic_substep.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M380.34,-475.77C358.34,-471.38 333.25,-466.37 310.43,-461.82"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="310.95,-458.36 300.46,-459.83 309.58,-465.22 310.95,-458.36"/>
+</g>
+<!-- sourcefile~rdb_barotropic_substep.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge19" class="edge">
+<title>sourcefile~rdb_barotropic_substep.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M392.48,-475.68C382.03,-472.02 371.33,-467.43 362,-461.77 342.92,-450.19 345.53,-437.57 326,-426.77 320.53,-423.74 314.62,-421.15 308.56,-418.92"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="309.54,-415.56 298.95,-415.72 307.33,-422.2 309.54,-415.56"/>
+</g>
+<!-- sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge15" class="edge">
+<title>sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M586.35,-301.55C576.47,-304.22 566.34,-307.31 557,-310.77 503.7,-330.52 497.14,-352.07 442.5,-367.77"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M440.5,-367.77C406,-377.68 392.83,-368.38 362,-386.77 341.46,-399.02 346.53,-414.5 326,-426.77 322.94,-428.6 319.73,-430.27 316.41,-431.8"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="314.78,-428.68 306.86,-435.72 317.44,-435.16 314.78,-428.68"/>
+</g>
+<!-- sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge20" class="edge">
+<title>sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M601.62,-277.65C552.96,-263.05 471.86,-241.43 442.5,-249.77"/>
+</g>
+<!-- sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge68" class="edge">
+<title>sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90</title>
+<path fill="none" stroke="#3200ff" stroke-dasharray="5,2" d="M586.39,-296.23C575.86,-299.37 565.47,-303.99 557,-310.77 529.37,-332.87 547.82,-358.69 521,-381.77 516.78,-385.4 512.05,-388.53 507.04,-391.22"/>
+<polygon fill="#3200ff" stroke="#3200ff" points="505.32,-388.16 497.79,-395.61 508.33,-394.48 505.32,-388.16"/>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge30" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M1722.74,-199.1C1668.6,-185.17 1583.12,-161.75 1554,-145.77 1535.49,-135.61 1537.59,-122.65 1518,-114.77 1367.44,-54.17 1291.54,-19.23 1153,-103.77 1123.14,-121.99 1143.14,-150.52 1117,-173.77 1111.39,-178.76 1104.84,-182.92 1097.97,-186.38"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="1096.13,-183.37 1088.46,-190.68 1099.02,-189.75 1096.13,-183.37"/>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge66" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#0019ff" stroke-dasharray="5,2" d="M1722.67,-210.77C1714.58,-210.77 1705.98,-210.77 1697.34,-210.77"/>
+<polygon fill="#0019ff" stroke="#0019ff" points="1697.22,-207.27 1687.22,-210.77 1697.22,-214.27 1697.22,-207.27"/>
+</g>
+<!-- sourcefile~rdb_ice_evp.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node11" class="node">
+<title>sourcefile~rdb_ice_evp.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node11"><a xlink:href="../sourcefile/rdb_ice_evp.f90.html" xlink:title="rdb_ice_evp.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="690.5,-343.77 591.5,-343.77 591.5,-319.77 690.5,-319.77 690.5,-343.77"/>
+<text text-anchor="middle" x="641" y="-329.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_evp.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_evp.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge21" class="edge">
+<title>sourcefile~rdb_ice_evp.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M591.11,-321.49C579.74,-318.53 567.81,-314.95 557,-310.77 503.21,-289.99 497.97,-234.02 442.5,-249.77"/>
+</g>
+<!-- sourcefile~rdb_ice_evp.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge69" class="edge">
+<title>sourcefile~rdb_ice_evp.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90</title>
+<path fill="none" stroke="#3200ff" stroke-dasharray="5,2" d="M593.44,-343.8C581.31,-347.62 568.44,-352.3 557,-357.77 539.65,-366.06 538.28,-373.34 521,-381.77 512.85,-385.75 503.95,-389.34 495.15,-392.51"/>
+<polygon fill="#3200ff" stroke="#3200ff" points="494.01,-389.2 485.7,-395.76 496.29,-395.81 494.01,-389.2"/>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node12" class="node">
+<title>sourcefile~rdb_ice_transport.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node12"><a xlink:href="../sourcefile/rdb_ice_transport.f90.html" xlink:title="rdb_ice_transport.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="906.5,-359.77 778.5,-359.77 778.5,-335.77 906.5,-335.77 906.5,-359.77"/>
+<text text-anchor="middle" x="842.5" y="-345.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_transport.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_halo.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge8" class="edge">
+<title>sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_halo.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M830.06,-360.06C813.71,-377.93 783.2,-412.5 761,-444.77 742.5,-471.66 749.06,-486.73 725,-508.77 664.57,-564.13 625.39,-539.62 557,-584.77 518.95,-609.89 481.22,-647.63 459.98,-670.36"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="457.39,-668.01 453.18,-677.73 462.53,-672.75 457.39,-668.01"/>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge22" class="edge">
+<title>sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M787.11,-335.67C777.86,-332.13 768.76,-327.58 761,-321.77 738.22,-304.69 749.7,-282.94 725,-268.77 670.42,-237.47 503.03,-232.59 442.5,-249.77"/>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge40" class="edge">
+<title>sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_continuity.f90</title>
+<path fill="none" stroke="#ff4c00" stroke-dasharray="5,2" d="M804.28,-335.68C776.19,-326.61 740,-315.05 725,-310.77 717.46,-308.62 709.51,-306.47 701.63,-304.4"/>
+<polygon fill="#ff4c00" stroke="#ff4c00" points="702.28,-300.95 691.72,-301.84 700.53,-307.73 702.28,-300.95"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node23" class="node">
+<title>sourcefile~rdb_ocean_halo_state.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node23"><a xlink:href="../sourcefile/rdb_ocean_halo_state.f90.html" xlink:title="rdb_ocean_halo_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="716.5,-221.77 565.5,-221.77 565.5,-197.77 716.5,-197.77 716.5,-221.77"/>
+<text text-anchor="middle" x="641" y="-207.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_halo_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge76" class="edge">
+<title>sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M783.19,-335.7C775.09,-332.18 767.38,-327.63 761,-321.77 730.5,-293.73 755.63,-263.68 725,-235.77 720.95,-232.08 716.39,-228.92 711.53,-226.2"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="713.05,-223.05 702.53,-221.79 709.97,-229.33 713.05,-223.05"/>
+</g>
+<!-- sourcefile~rdb_ocean_bt_wide.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node13" class="node">
+<title>sourcefile~rdb_ocean_bt_wide.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node13"><a xlink:href="../sourcefile/rdb_ocean_bt_wide.f90.html" xlink:title="rdb_ocean_bt_wide.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="709.5,-499.77 572.5,-499.77 572.5,-475.77 709.5,-475.77 709.5,-499.77"/>
+<text text-anchor="middle" x="641" y="-485.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_bt_wide.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge23" class="edge">
+<title>sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M587.43,-475.7C547.78,-466.95 491.95,-455.36 442.5,-447.77"/>
+</g>
+<!-- sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge38" class="edge">
+<title>sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M572.31,-487.77C559.23,-487.77 545.34,-487.77 531.69,-487.77"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="531.32,-484.27 521.32,-487.77 531.32,-491.27 531.32,-484.27"/>
+</g>
+<!-- sourcefile~rdb_ocean_bulk_forcing.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge24" class="edge">
+<title>sourcefile~rdb_ocean_bulk_forcing.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M781.95,-123.78C723.5,-136.52 632.41,-158.92 557,-188.77 503.39,-209.99 497.99,-234.12 442.5,-249.77"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M440.5,-249.77C359.22,-272.95 287.28,-348.85 256.24,-385.54"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="253.27,-383.63 249.58,-393.56 258.66,-388.11 253.27,-383.63"/>
+</g>
+<!-- sourcefile~rdb_ocean_bulk_forcing.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge77" class="edge">
+<title>sourcefile~rdb_ocean_bulk_forcing.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M788.69,-123.83C778.99,-127.41 769.31,-131.97 761,-137.77 739.71,-152.63 746.35,-169 725,-183.77 719.33,-187.7 713.03,-191.05 706.52,-193.91"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="704.87,-190.8 696.88,-197.75 707.47,-197.3 704.87,-190.8"/>
+</g>
+<!-- sourcefile~rdb_ocean_cavity_flux.f90&#45;&gt;sourcefile~rdb_halo.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge9" class="edge">
+<title>sourcefile~rdb_ocean_cavity_flux.f90&#45;&gt;sourcefile~rdb_halo.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M583.4,-659.81C554.57,-665.94 519.84,-673.32 492.07,-679.23"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="491.23,-675.83 482.18,-681.33 492.69,-682.68 491.23,-675.83"/>
+</g>
+<!-- sourcefile~rdb_ocean_chksum.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node16" class="node">
+<title>sourcefile~rdb_ocean_chksum.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node16"><a xlink:href="../sourcefile/rdb_ocean_chksum.f90.html" xlink:title="rdb_ocean_chksum.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="710,-617.77 572,-617.77 572,-593.77 710,-593.77 710,-617.77"/>
+<text text-anchor="middle" x="641" y="-603.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_chksum.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_chksum.f90&#45;&gt;sourcefile~rdb_halo.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge10" class="edge">
+<title>sourcefile~rdb_ocean_chksum.f90&#45;&gt;sourcefile~rdb_halo.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M584.02,-617.85C574.86,-620.42 565.57,-623.39 557,-626.77 525.65,-639.13 492.13,-658.35 469.52,-672.32"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="467.44,-669.49 460.82,-677.76 471.16,-675.42 467.44,-669.49"/>
+</g>
+<!-- sourcefile~rdb_ocean_console_stats.f90&#45;&gt;sourcefile~rdb_halo.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge11" class="edge">
+<title>sourcefile~rdb_ocean_console_stats.f90&#45;&gt;sourcefile~rdb_halo.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M556.81,-689.77C534.83,-689.77 511.79,-689.77 492.21,-689.77"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="492.01,-686.27 482.01,-689.77 492.01,-693.27 492.01,-686.27"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge31" class="edge">
+<title>sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M1351.78,-175.86C1280.36,-182.01 1178.02,-190.83 1110.21,-196.68"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="1109.71,-193.21 1100.05,-197.55 1110.31,-200.18 1109.71,-193.21"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge58" class="edge">
+<title>sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#00b2ff" stroke-dasharray="5,2" d="M1379.76,-156.75C1355.03,-151.27 1325.58,-144.74 1299.75,-139.01"/>
+<polygon fill="#00b2ff" stroke="#00b2ff" points="1300.2,-135.53 1289.68,-136.78 1298.68,-142.36 1300.2,-135.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge32" class="edge">
+<title>sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M1205.38,-136.97C1181.86,-147.08 1147.38,-161.7 1117,-173.77 1105.85,-178.2 1093.72,-182.83 1082.45,-187.05"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="1080.95,-183.87 1072.8,-190.64 1083.39,-190.43 1080.95,-183.87"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge25" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M784.13,-464.69C689.95,-462.67 506.58,-457.6 442.5,-447.77"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M440.5,-447.77C393.62,-439.87 341.03,-428.76 301.48,-419.96"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="302.24,-416.54 291.72,-417.78 300.71,-423.38 302.24,-416.54"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge39" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M800.6,-477.86C787.8,-481.94 773.7,-486.74 761,-491.77 744.55,-498.28 742.27,-504.9 725,-508.77 648.72,-525.88 558.25,-513.64 500.62,-501.91"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="501.11,-498.44 490.61,-499.81 499.68,-505.29 501.11,-498.44"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge41" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_continuity.f90</title>
+<path fill="none" stroke="#ff4c00" stroke-dasharray="5,2" d="M830.51,-453.65C814.47,-435.71 784.02,-400.74 761,-368.77 743.27,-344.15 749.49,-328.68 725,-310.77 719.06,-306.43 712.32,-302.98 705.3,-300.24"/>
+<polygon fill="#ff4c00" stroke="#ff4c00" points="706.2,-296.85 695.61,-296.93 703.94,-303.47 706.2,-296.85"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_bt_wide.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge46" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_bt_wide.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M784.33,-472.07C764.25,-474.29 741.34,-476.82 719.85,-479.18"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="719.33,-475.72 709.77,-480.3 720.09,-482.68 719.33,-475.72"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_cavity_flux.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge49" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_cavity_flux.f90</title>
+<path fill="none" stroke="#00ff19" stroke-dasharray="5,2" d="M784.5,-476.21C775.74,-479.92 767.47,-484.95 761,-491.77 718.24,-536.8 769.19,-583.14 725,-626.77 723.91,-627.85 722.77,-628.87 721.59,-629.85"/>
+<polygon fill="#00ff19" stroke="#00ff19" points="719.53,-627.02 713.27,-635.57 723.49,-632.79 719.53,-627.02"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_chksum.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge52" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_chksum.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M784.38,-477.27C775.84,-480.86 767.68,-485.58 761,-491.77 730.01,-520.5 756.12,-551.18 725,-579.77 721.14,-583.32 716.8,-586.38 712.17,-589.03"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="710.38,-586.01 703,-593.62 713.51,-592.28 710.38,-586.01"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_console_stats.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge54" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_console_stats.f90</title>
+<path fill="none" stroke="#00ffb2" stroke-dasharray="5,2" d="M838.23,-477.83C828,-513.15 793.16,-617.09 725,-668.77 723.12,-670.19 721.16,-671.52 719.13,-672.76"/>
+<polygon fill="#00ffb2" stroke="#00ffb2" points="717.08,-669.88 709.85,-677.63 720.33,-676.08 717.08,-669.88"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge71" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90</title>
+<path fill="none" stroke="#3200ff" stroke-dasharray="5,2" d="M802.79,-453.7C762.81,-441.52 698.45,-422.71 642,-409.77"/>
+<path fill="none" stroke="#3200ff" stroke-dasharray="5,2" d="M640,-409.77C603.5,-401.4 562.19,-399.81 526.83,-400.74"/>
+<polygon fill="#3200ff" stroke="#3200ff" points="526.41,-397.25 516.54,-401.08 526.65,-404.25 526.41,-397.25"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge79" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M829.02,-453.66C811.7,-436.28 780.33,-402.59 761,-368.77 737.56,-327.76 753.56,-306.4 725,-268.77 711.92,-251.54 692.39,-237.3 675.56,-227.14"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="676.95,-223.9 666.54,-221.91 673.44,-229.95 676.95,-223.9"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_halo.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge12" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_halo.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M1617.42,-222.91C1604.44,-296.98 1532.04,-686.92 1436,-748.77"/>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M1434,-748.77C1378.58,-784.46 908.19,-679.09 843.5,-691.77"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge16" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1434,-748.77C1337.91,-819.29 459.57,-779.22 362,-710.77 278.7,-652.33 250.88,-522.18 242.86,-470.02"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="246.29,-469.26 241.41,-459.86 239.36,-470.25 246.29,-469.26"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge26" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1603.85,-198.58C1589.26,-186.52 1567.73,-166.84 1554,-145.77 1529.58,-108.29 1552.84,-79.83 1518,-51.77 1419.09,27.89 1362.5,-8.77 1235.5,-8.77 1235.5,-8.77 1235.5,-8.77 640,-8.77 424.91,-8.77 284.27,-301.51 248.82,-384.24"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="245.59,-382.88 244.93,-393.45 252.04,-385.6 245.59,-382.88"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge33" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M1434,-210.77C1397.62,-219.49 1379.34,-204.24 1352,-229.77 1311.93,-267.19 1356,-310.27 1316,-347.77 1289.18,-372.91 1272.01,-362.46 1235.5,-366.77"/>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M1233.5,-366.77C1196.99,-371.08 1179.79,-372.95 1153,-347.77 1112.74,-309.93 1155.48,-268.42 1117,-228.77 1113.6,-225.26 1109.71,-222.23 1105.52,-219.6"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="1107.04,-216.45 1096.58,-214.77 1103.71,-222.61 1107.04,-216.45"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_evp.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge44" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_evp.f90</title>
+<path fill="none" stroke="#ffe500" stroke-dasharray="5,2" d="M1037.5,-387.77C914.32,-388.08 882.08,-391.43 761,-368.77 759.1,-368.42 722.33,-356.95 690.16,-346.88"/>
+<polygon fill="#ffe500" stroke="#ffe500" points="690.95,-343.46 680.37,-343.81 688.86,-350.14 690.95,-343.46"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_transport.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge45" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_transport.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M1233.5,-366.77C1147.37,-376.94 1126.23,-387.55 1039.5,-387.77"/>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M1037.5,-387.77C986.04,-387.9 928.46,-374.21 889.5,-362.82"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="890.1,-359.34 879.51,-359.83 888.09,-366.05 890.1,-359.34"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_bulk_forcing.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge47" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_bulk_forcing.f90</title>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M1582.3,-198.67C1572.31,-194.17 1562.05,-188.28 1554,-180.77 1529.56,-157.98 1546.26,-132.6 1518,-114.77 1315.2,13.2 1005.25,-61.64 889.34,-96.71"/>
+<polygon fill="#33ff00" stroke="#33ff00" points="888.24,-93.39 879.71,-99.67 890.3,-100.08 888.24,-93.39"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_cavity_flux.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge50" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_cavity_flux.f90</title>
+<path fill="none" stroke="#00ff19" stroke-dasharray="5,2" d="M1233.5,-615.77C1053.31,-615.77 842.69,-630.76 727.71,-640.22"/>
+<polygon fill="#00ff19" stroke="#00ff19" points="727.24,-636.75 717.56,-641.06 727.82,-643.72 727.24,-636.75"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge56" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1566.92,-198.73C1545.61,-193.86 1520.83,-188.19 1498.6,-183.1"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1499.12,-179.63 1488.59,-180.81 1497.56,-186.45 1499.12,-179.63"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge59" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#00b2ff" stroke-dasharray="5,2" d="M1583.19,-198.77C1573.32,-194.73 1562.9,-189.71 1554,-183.77 1535.18,-171.22 1537.79,-158.75 1518,-147.77 1485.29,-129.62 1473.13,-133.34 1436,-128.77"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge62" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M1619.4,-222.79C1618.32,-266.73 1608.01,-419.37 1518,-481.77 1421.37,-548.76 1061.47,-500.84 910.66,-477.04"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="911.03,-473.56 900.6,-475.44 909.93,-480.47 911.03,-473.56"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge72" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90</title>
+<path fill="none" stroke="#3200ff" stroke-dasharray="5,2" d="M1619,-223C1616.49,-267.92 1601.83,-425.6 1518,-511.77 1424.7,-607.67 1369.18,-621.39 1235.5,-615.77"/>
+<path fill="none" stroke="#3200ff" stroke-dasharray="5,2" d="M1233.5,-615.77C1125.12,-625.76 860.36,-531.19 761,-486.77 703.49,-461.06 703.4,-423.84 642,-409.77"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge80" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1037.5,-242.77C1009.28,-232.13 834.63,-220.61 727.07,-214.39"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="727.06,-210.88 716.88,-213.8 726.66,-217.87 727.06,-210.88"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node24" class="node">
+<title>sourcefile~rdb_ocean_setup.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node24"><a xlink:href="../sourcefile/rdb_ocean_setup.f90.html" xlink:title="rdb_ocean_setup.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1297.5,-418.77 1171.5,-418.77 1171.5,-394.77 1297.5,-394.77 1297.5,-418.77"/>
+<text text-anchor="middle" x="1234.5" y="-404.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge82" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M1434,-210.77C1397.62,-219.49 1378.54,-203.4 1352,-229.77 1303.06,-278.4 1362.84,-330.11 1316,-380.77 1312.89,-384.14 1309.34,-387.07 1305.5,-389.62"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="1303.67,-386.64 1296.71,-394.63 1307.13,-392.72 1303.67,-386.64"/>
+</g>
+<!-- sourcefile~rdb_ice_ocean_coupler.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node28" class="node">
+<title>sourcefile~rdb_ice_ocean_coupler.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node28"><a xlink:href="../sourcefile/rdb_ice_ocean_coupler.f90.html" xlink:title="rdb_ice_ocean_coupler.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1117,-164.77 960,-164.77 960,-140.77 1117,-140.77 1117,-164.77"/>
+<text text-anchor="middle" x="1038.5" y="-150.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_ocean_coupler.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_ocean_coupler.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge89" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_ocean_coupler.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1553.66,-203.4C1518.31,-201.28 1474.26,-201.6 1436,-210.77"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1434,-210.77C1306.05,-241.44 1150.64,-194.6 1079.07,-168.44"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1080.13,-165.1 1069.54,-164.89 1077.69,-171.66 1080.13,-165.1"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge90" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M1233.5,-366.77C1196.99,-371.08 1185.23,-365.44 1153,-347.77 1133.43,-337.04 1133.28,-328.03 1117,-312.77 1083.13,-281.03 1082.93,-259.14 1039.5,-242.77"/>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M1037.5,-242.77C1004.31,-230.26 994.32,-232.69 960,-223.77 939.07,-218.33 916.11,-212.09 896.14,-206.56"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="896.88,-203.13 886.3,-203.83 895,-209.88 896.88,-203.13"/>
+</g>
+<!-- sourcefile~rdb_ocean_fold_apply.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge17" class="edge">
+<title>sourcefile~rdb_ocean_fold_apply.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M380.34,-419.77C358.34,-424.16 333.25,-429.17 310.43,-433.72"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="309.58,-430.32 300.46,-435.71 310.95,-437.18 309.58,-430.32"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo_state.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge27" class="edge">
+<title>sourcefile~rdb_ocean_halo_state.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M566.66,-221.85C529.19,-228.72 483.05,-238.26 442.5,-249.77"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo_state.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge73" class="edge">
+<title>sourcefile~rdb_ocean_halo_state.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90</title>
+<path fill="none" stroke="#3200ff" stroke-dasharray="5,2" d="M614.86,-221.96C596.4,-232.11 572.01,-248.21 557,-268.77 525.92,-311.34 558.06,-344.29 521,-381.77 517.58,-385.23 513.7,-388.22 509.53,-390.82"/>
+<polygon fill="#3200ff" stroke="#3200ff" points="507.77,-387.79 500.63,-395.61 511.09,-393.95 507.77,-387.79"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_halo.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge13" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_halo.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M1222.64,-418.98C1180.06,-465.79 1018.3,-634.07 843.5,-691.77"/>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M841.5,-691.77C718.18,-720.95 683.21,-722.25 557,-710.77 535.56,-708.82 512.15,-704.86 492.1,-700.9"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="492.76,-697.46 482.26,-698.9 491.37,-704.32 492.76,-697.46"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge18" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_fold_exchange.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M640,-371.77C553.62,-356.07 526.88,-343.52 442.5,-367.77"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge28" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1171.46,-412.8C1133.38,-416.51 1083.61,-421.38 1039.5,-425.77"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1037.5,-425.77C914.76,-437.98 882.64,-422.25 761,-401.77 707.21,-392.72 695.4,-382.9 642,-371.77"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M640,-371.77C602.77,-365 590.59,-370.21 557,-352.77 496.25,-321.23 508.32,-231 442.5,-249.77"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge34" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M1172.28,-394.64C1165.07,-391.12 1158.38,-386.6 1153,-380.77 1105.91,-329.76 1163.8,-280.05 1117,-228.77 1113.9,-225.38 1110.35,-222.43 1106.5,-219.86"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="1108.11,-216.74 1097.69,-214.83 1104.64,-222.83 1108.11,-216.74"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge63" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M1037.5,-425.77C990.07,-430.49 937.12,-441.83 898.54,-451.23"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="897.43,-447.9 888.56,-453.7 899.11,-454.69 897.43,-447.9"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge74" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_fold_apply.f90</title>
+<path fill="none" stroke="#3200ff" stroke-dasharray="5,2" d="M640,-371.77C613.27,-366.2 545.26,-380.94 496.52,-393.21"/>
+<polygon fill="#3200ff" stroke="#3200ff" points="495.57,-389.84 486.75,-395.7 497.3,-396.62 495.57,-389.84"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge81" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1195.79,-394.71C1182.28,-390.36 1166.94,-385.38 1153,-380.77 962.32,-317.68 915.95,-298.02 725,-235.77 714.01,-232.19 702.16,-228.42 690.96,-224.9"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="691.91,-221.53 681.32,-221.89 689.82,-228.21 691.91,-221.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_state_restart.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node25" class="node">
+<title>sourcefile~rdb_ocean_state_restart.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node25"><a xlink:href="../sourcefile/rdb_ocean_state_restart.f90.html" xlink:title="rdb_ocean_state_restart.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1316,-338.77 1153,-338.77 1153,-314.77 1316,-314.77 1316,-338.77"/>
+<text text-anchor="middle" x="1234.5" y="-324.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_restart.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state_restart.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge35" class="edge">
+<title>sourcefile~rdb_ocean_state_restart.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M1166.97,-314.66C1161.96,-312.21 1157.22,-309.28 1153,-305.77 1123.97,-281.6 1145.19,-253.92 1117,-228.77 1112.9,-225.11 1108.26,-221.96 1103.35,-219.25"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="1104.78,-216.06 1094.25,-214.84 1101.72,-222.36 1104.78,-216.06"/>
+</g>
+<!-- sourcefile~rdb_ocean_state_seed.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node26" class="node">
+<title>sourcefile~rdb_ocean_state_seed.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node26"><a xlink:href="../sourcefile/rdb_ocean_state_seed.f90.html" xlink:title="rdb_ocean_state_seed.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1311.5,-296.77 1157.5,-296.77 1157.5,-272.77 1311.5,-272.77 1311.5,-296.77"/>
+<text text-anchor="middle" x="1234.5" y="-282.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_seed.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state_seed.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge36" class="edge">
+<title>sourcefile~rdb_ocean_state_seed.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M1173.23,-272.75C1166.2,-270.28 1159.29,-267.32 1153,-263.77 1133.56,-252.81 1136.05,-240.39 1117,-228.77 1110.59,-224.86 1103.51,-221.45 1096.32,-218.51"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="1097.09,-215.06 1086.5,-214.79 1094.61,-221.61 1097.09,-215.06"/>
+</g>
+<!-- sourcefile~rdb_ocean_state_topo.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node27" class="node">
+<title>sourcefile~rdb_ocean_state_topo.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node27"><a xlink:href="../sourcefile/rdb_ocean_state_topo.f90.html" xlink:title="rdb_ocean_state_topo.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1310,-254.77 1159,-254.77 1159,-230.77 1310,-230.77 1310,-254.77"/>
+<text text-anchor="middle" x="1234.5" y="-240.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_topo.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state_topo.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge37" class="edge">
+<title>sourcefile~rdb_ocean_state_topo.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M1175.29,-230.77C1154.1,-226.4 1129.94,-221.42 1107.94,-216.88"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="1108.5,-213.42 1098,-214.83 1107.09,-220.28 1108.5,-213.42"/>
+</g>
+<!-- sourcefile~rdb_ice_ocean_coupler.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge75" class="edge">
+<title>sourcefile~rdb_ice_ocean_coupler.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M959.84,-152.02C903.99,-152.89 827.16,-156.96 761,-170.77 744.35,-174.25 741.12,-178.34 725,-183.77 714.15,-187.43 702.45,-191.2 691.36,-194.69"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="690.3,-191.36 681.8,-197.68 692.39,-198.04 690.3,-191.36"/>
+</g>
+<!-- sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge78" class="edge">
+<title>sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M760.93,-199.04C749.75,-200.05 738.24,-201.09 726.99,-202.1"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="726.38,-198.64 716.74,-203.03 727.01,-205.61 726.38,-198.64"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_bc.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node30" class="node">
+<title>sourcefile~rdb_ocean_setup_bc.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node30"><a xlink:href="../sourcefile/rdb_ocean_setup_bc.f90.html" xlink:title="rdb_ocean_setup_bc.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1507,-304.77 1363,-304.77 1363,-280.77 1507,-280.77 1507,-304.77"/>
+<text text-anchor="middle" x="1435" y="-290.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_bc.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_bc.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge83" class="edge">
+<title>sourcefile~rdb_ocean_setup_bc.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M1366.86,-304.84C1361.55,-307.29 1356.51,-310.24 1352,-313.77 1325.38,-334.61 1341.96,-359.12 1316,-380.77 1311.52,-384.51 1306.49,-387.71 1301.19,-390.45"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="1299.69,-387.29 1292.07,-394.65 1302.62,-393.65 1299.69,-387.29"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_bt.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node31" class="node">
+<title>sourcefile~rdb_ocean_setup_bt.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node31"><a xlink:href="../sourcefile/rdb_ocean_setup_bt.f90.html" xlink:title="rdb_ocean_setup_bt.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1506,-262.77 1364,-262.77 1364,-238.77 1506,-238.77 1506,-262.77"/>
+<text text-anchor="middle" x="1435" y="-248.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_bt.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_bt.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge84" class="edge">
+<title>sourcefile~rdb_ocean_setup_bt.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M1364.58,-262.85C1360.02,-265.32 1355.76,-268.26 1352,-271.77 1314.71,-306.59 1352.19,-344.81 1316,-380.77 1312.47,-384.27 1308.47,-387.3 1304.18,-389.93"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="1302.25,-386.99 1295.04,-394.76 1305.52,-393.18 1302.25,-386.99"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_cavity.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node32" class="node">
+<title>sourcefile~rdb_ocean_setup_cavity.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node32"><a xlink:href="../sourcefile/rdb_ocean_setup_cavity.f90.html" xlink:title="rdb_ocean_setup_cavity.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1515.5,-472.77 1354.5,-472.77 1354.5,-448.77 1515.5,-448.77 1515.5,-472.77"/>
+<text text-anchor="middle" x="1435" y="-458.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_cavity.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_cavity.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge85" class="edge">
+<title>sourcefile~rdb_ocean_setup_cavity.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M1386.25,-448.76C1375,-445.87 1363.07,-442.75 1352,-439.77 1330.55,-433.99 1306.95,-427.35 1286.63,-421.56"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="1287.52,-418.17 1276.95,-418.79 1285.6,-424.9 1287.52,-418.17"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_grid.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node33" class="node">
+<title>sourcefile~rdb_ocean_setup_grid.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node33"><a xlink:href="../sourcefile/rdb_ocean_setup_grid.f90.html" xlink:title="rdb_ocean_setup_grid.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1511,-430.77 1359,-430.77 1359,-406.77 1511,-406.77 1511,-430.77"/>
+<text text-anchor="middle" x="1435" y="-416.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_grid.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_grid.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge86" class="edge">
+<title>sourcefile~rdb_ocean_setup_grid.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M1358.96,-414.23C1342.23,-413.22 1324.52,-412.15 1307.9,-411.15"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="1307.9,-407.64 1297.71,-410.53 1307.48,-414.63 1307.9,-407.64"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_lateral.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node34" class="node">
+<title>sourcefile~rdb_ocean_setup_lateral.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node34"><a xlink:href="../sourcefile/rdb_ocean_setup_lateral.f90.html" xlink:title="rdb_ocean_setup_lateral.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1518,-388.77 1352,-388.77 1352,-364.77 1518,-364.77 1518,-388.77"/>
+<text text-anchor="middle" x="1435" y="-374.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_lateral.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_lateral.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge87" class="edge">
+<title>sourcefile~rdb_ocean_setup_lateral.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M1354.41,-388.8C1339.07,-391.12 1323.08,-393.53 1307.99,-395.82"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="1307.06,-392.42 1297.7,-397.37 1308.11,-399.34 1307.06,-392.42"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_vmix.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_node35" class="node">
+<title>sourcefile~rdb_ocean_setup_vmix.f90</title>
+<g id="a_sourcefile~~rdb_comm_env.f90~~AfferentGraph_node35"><a xlink:href="../sourcefile/rdb_ocean_setup_vmix.f90.html" xlink:title="rdb_ocean_setup_vmix.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1513.5,-346.77 1356.5,-346.77 1356.5,-322.77 1513.5,-322.77 1513.5,-346.77"/>
+<text text-anchor="middle" x="1435" y="-332.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_vmix.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_vmix.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_comm_env.f90~~AfferentGraph_edge88" class="edge">
+<title>sourcefile~rdb_ocean_setup_vmix.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M1376.2,-346.8C1367.91,-349.31 1359.62,-352.29 1352,-355.77 1334.28,-363.87 1333.46,-372.13 1316,-380.77 1307.88,-384.79 1299,-388.38 1290.2,-391.52"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="1289.05,-388.21 1280.71,-394.74 1291.31,-394.84 1289.05,-388.21"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefilerdb_comm_envf90AfferentGraph = svgPanZoom('#sourcefilerdb_comm_envf90AfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#AfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="AfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+<br>
+      <section>
+        <h2><span class="anchor" id="src"></span>Source Code</h2>
+        <div class="hl codehilite"><pre><span></span><a id="ln-1" name="ln-1" href="#ln-1"></a><span class="c">!! Communication environment — the ONLY backend.</span>
+<a id="ln-2" name="ln-2" href="#ln-2"></a><span class="c">!!</span>
+<a id="ln-3" name="ln-3" href="#ln-3"></a><span class="c">!! Roundabout no longer carries a hand-written single-process stub beside an</span>
+<a id="ln-4" name="ln-4" href="#ln-4"></a><span class="c">!! MPI implementation.  This module always compiles and always talks to</span>
+<a id="ln-5" name="ln-5" href="#ln-5"></a><span class="c">!! `pic_mpi_lib`; whether that resolves to a real MPI library or to</span>
+<a id="ln-6" name="ln-6" href="#ln-6"></a><span class="c">!! pic-mpi's serial backend is pic-mpi's build-time choice</span>
+<a id="ln-7" name="ln-7" href="#ln-7"></a><span class="c">!! (`PIC_ENABLE_MPI`), invisible here.  The single-rank contract every</span>
+<a id="ln-8" name="ln-8" href="#ln-8"></a><span class="c">!! collective call site must honour (never reach point-to-point or a</span>
+<a id="ln-9" name="ln-9" href="#ln-9"></a><span class="c">!! collective at one rank: take the local path) is spelled out in the</span>
+<a id="ln-10" name="ln-10" href="#ln-10"></a><span class="c">!! `rdb_ocean_halo` module header and at each `halo_allreduce_*`.</span>
+<a id="ln-11" name="ln-11" href="#ln-11"></a><span class="k">module </span><span class="n">rdb_comm_env</span>
+<a id="ln-12" name="ln-12" href="#ln-12"></a><span class="w">   </span><span class="c">!! Wraps pic_mpi_lib for MPI init/finalize, rank/size queries,</span>
+<a id="ln-13" name="ln-13" href="#ln-13"></a><span class="w">   </span><span class="c">!! broadcast, abort, and per-node GPU binding.</span>
+<a id="ln-14" name="ln-14" href="#ln-14"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-15" name="ln-15" href="#ln-15"></a><span class="w">   </span><span class="c">!! Two-phase initialisation:</span>
+<a id="ln-16" name="ln-16" href="#ln-16"></a><span class="w">   </span><span class="c">!!   1. comm_env_init()   — basic MPI, cache world rank/size</span>
+<a id="ln-17" name="ln-17" href="#ln-17"></a><span class="w">   </span><span class="c">!!   2. comm_env_setup_roles(use_io_server) — split comms, assign roles, bind GPU</span>
+<a id="ln-18" name="ln-18" href="#ln-18"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-19" name="ln-19" href="#ln-19"></a><span class="w">   </span><span class="c">!! When use_io_server is enabled, the last rank on each node becomes</span>
+<a id="ln-20" name="ln-20" href="#ln-20"></a><span class="w">   </span><span class="c">!! a dedicated I/O server (no GPU, no solver). All solver/decomp/halo</span>
+<a id="ln-21" name="ln-21" href="#ln-21"></a><span class="w">   </span><span class="c">!! operations use compute_comm (excludes I/O ranks). When disabled,</span>
+<a id="ln-22" name="ln-22" href="#ln-22"></a><span class="w">   </span><span class="c">!! compute_comm = comm_world (current behavior, no overhead).</span>
+<a id="ln-23" name="ln-23" href="#ln-23"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-24" name="ln-24" href="#ln-24"></a><span class="w">   </span><span class="c">!! `comm_env_push_compute_comm` / `comm_env_pop_compute_comm` are a</span>
+<a id="ln-25" name="ln-25" href="#ln-25"></a><span class="w">   </span><span class="c">!! TEST/TOOLING-ONLY seam: a one-level override of what</span>
+<a id="ln-26" name="ln-26" href="#ln-26"></a><span class="w">   </span><span class="c">!! `comm_env_compute_comm()` returns, for tests that need a collective</span>
+<a id="ln-27" name="ln-27" href="#ln-27"></a><span class="w">   </span><span class="c">!! to run over something other than the real job communicator (see</span>
+<a id="ln-28" name="ln-28" href="#ln-28"></a><span class="w">   </span><span class="c">!! their docstrings below). Production code never calls them.</span>
+<a id="ln-29" name="ln-29" href="#ln-29"></a>
+<a id="ln-30" name="ln-30" href="#ln-30"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_constants</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">wp</span>
+<a id="ln-31" name="ln-31" href="#ln-31"></a><span class="w">   </span><span class="k">use </span><span class="n">pic_mpi_lib</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">comm_t</span><span class="p">,</span><span class="w"> </span><span class="n">comm_world</span><span class="p">,</span><span class="w"> </span><span class="n">pic_mpi_init</span><span class="p">,</span><span class="w"> </span><span class="n">pic_mpi_finalize</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-32" name="ln-32" href="#ln-32"></a><span class="w">                          </span><span class="n">bcast</span><span class="p">,</span><span class="w"> </span><span class="n">abort_comm</span>
+<a id="ln-33" name="ln-33" href="#ln-33"></a><span class="cp">#ifdef RDB_HAS_OPENACC_RUNTIME</span>
+<a id="ln-34" name="ln-34" href="#ln-34"></a><span class="w">   </span><span class="c">! On NVHPC and Cray, stdpar (do concurrent) dispatches through the</span>
+<a id="ln-35" name="ln-35" href="#ln-35"></a><span class="w">   </span><span class="c">! OpenACC runtime regardless of whether -acc= is on, so the openacc</span>
+<a id="ln-36" name="ln-36" href="#ln-36"></a><span class="w">   </span><span class="c">! module is always available and is needed to bind the stdpar device</span>
+<a id="ln-37" name="ln-37" href="#ln-37"></a><span class="w">   </span><span class="c">! under multi-GPU MPI — even on the OpenMP backend (e.g. -mp=gpu on</span>
+<a id="ln-38" name="ln-38" href="#ln-38"></a><span class="w">   </span><span class="c">! NVHPC or -h omp on Cray with -acc= off). Sentinel set by</span>
+<a id="ln-39" name="ln-39" href="#ln-39"></a><span class="w">   </span><span class="c">! cmake/compiler_flags.cmake.</span>
+<a id="ln-40" name="ln-40" href="#ln-40"></a><span class="w">   </span><span class="k">use </span><span class="n">openacc</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">acc_get_device_num</span><span class="p">,</span><span class="w"> </span><span class="n">acc_get_device_type</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-41" name="ln-41" href="#ln-41"></a><span class="w">                      </span><span class="n">acc_set_device_num</span><span class="p">,</span><span class="w"> </span><span class="n">acc_device_default</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-42" name="ln-42" href="#ln-42"></a><span class="w">                      </span><span class="n">acc_get_num_devices</span>
+<a id="ln-43" name="ln-43" href="#ln-43"></a><span class="cp">#endif</span>
+<a id="ln-44" name="ln-44" href="#ln-44"></a><span class="cp">#ifdef _OPENMP</span>
+<a id="ln-45" name="ln-45" href="#ln-45"></a><span class="w">   </span><span class="k">use </span><span class="n">omp_lib</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">omp_set_default_device</span>
+<a id="ln-46" name="ln-46" href="#ln-46"></a><span class="cp">#endif</span>
+<a id="ln-47" name="ln-47" href="#ln-47"></a><span class="w">   </span><span class="k">use</span><span class="p">,</span><span class="w"> </span><span class="k">intrinsic</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">iso_fortran_env</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">output_unit</span>
+<a id="ln-48" name="ln-48" href="#ln-48"></a><span class="w">   </span><span class="k">implicit none</span>
+<a id="ln-49" name="ln-49" href="#ln-49"></a><span class="k">   private</span>
+<a id="ln-50" name="ln-50" href="#ln-50"></a>
+<a id="ln-51" name="ln-51" href="#ln-51"></a><span class="k">   public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm_env_init</span>
+<a id="ln-52" name="ln-52" href="#ln-52"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm_env_setup_roles</span>
+<a id="ln-53" name="ln-53" href="#ln-53"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm_env_finalize</span>
+<a id="ln-54" name="ln-54" href="#ln-54"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm_env_rank</span>
+<a id="ln-55" name="ln-55" href="#ln-55"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm_env_size</span>
+<a id="ln-56" name="ln-56" href="#ln-56"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm_env_bcast_real</span>
+<a id="ln-57" name="ln-57" href="#ln-57"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm_env_abort</span>
+<a id="ln-58" name="ln-58" href="#ln-58"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm_env_is_io_server</span>
+<a id="ln-59" name="ln-59" href="#ln-59"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm_env_io_server_rank</span>
+<a id="ln-60" name="ln-60" href="#ln-60"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm_env_compute_comm</span>
+<a id="ln-61" name="ln-61" href="#ln-61"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm_env_global_comm</span>
+<a id="ln-62" name="ln-62" href="#ln-62"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm_env_compute_rank</span>
+<a id="ln-63" name="ln-63" href="#ln-63"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm_env_compute_size</span>
+<a id="ln-64" name="ln-64" href="#ln-64"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm_env_node_compute_ranks</span>
+<a id="ln-65" name="ln-65" href="#ln-65"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm_env_node_n_compute</span>
+<a id="ln-66" name="ln-66" href="#ln-66"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm_env_push_compute_comm</span>
+<a id="ln-67" name="ln-67" href="#ln-67"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm_env_pop_compute_comm</span>
+<a id="ln-68" name="ln-68" href="#ln-68"></a>
+<a id="ln-69" name="ln-69" href="#ln-69"></a><span class="w">   </span><span class="k">type</span><span class="p">(</span><span class="n">comm_t</span><span class="p">),</span><span class="w"> </span><span class="k">save</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm_global</span>
+<a id="ln-70" name="ln-70" href="#ln-70"></a><span class="w">      </span><span class="c">!! Global MPI communicator (cached after init)</span>
+<a id="ln-71" name="ln-71" href="#ln-71"></a><span class="w">   </span><span class="k">type</span><span class="p">(</span><span class="n">comm_t</span><span class="p">),</span><span class="w"> </span><span class="k">save</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm_compute</span>
+<a id="ln-72" name="ln-72" href="#ln-72"></a><span class="w">      </span><span class="c">!! Compute-only communicator (excludes I/O ranks)</span>
+<a id="ln-73" name="ln-73" href="#ln-73"></a><span class="w">   </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">save</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">env_initialised</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<a id="ln-74" name="ln-74" href="#ln-74"></a><span class="w">      </span><span class="c">!! True between comm_env_init and comm_env_finalize.  Makes init</span>
+<a id="ln-75" name="ln-75" href="#ln-75"></a><span class="w">      </span><span class="c">!! idempotent and finalize a no-op when MPI was never initialised</span>
+<a id="ln-76" name="ln-76" href="#ln-76"></a><span class="w">      </span><span class="c">!! (e.g. a test binary that never inits the comm-env), so the shared</span>
+<a id="ln-77" name="ln-77" href="#ln-77"></a><span class="w">      </span><span class="c">!! per-test main can call finalize unconditionally at exit.</span>
+<a id="ln-78" name="ln-78" href="#ln-78"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">save</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cached_rank</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span>
+<a id="ln-79" name="ln-79" href="#ln-79"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">save</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cached_size</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span>
+<a id="ln-80" name="ln-80" href="#ln-80"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">save</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cached_compute_rank</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span>
+<a id="ln-81" name="ln-81" href="#ln-81"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">save</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cached_compute_size</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span>
+<a id="ln-82" name="ln-82" href="#ln-82"></a><span class="w">   </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">save</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cached_is_io_server</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<a id="ln-83" name="ln-83" href="#ln-83"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">save</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cached_io_server_rank</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span>
+<a id="ln-84" name="ln-84" href="#ln-84"></a><span class="w">      </span><span class="c">!! World rank of this node's I/O server (-1 if none)</span>
+<a id="ln-85" name="ln-85" href="#ln-85"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">save</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cached_node_n_compute</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-86" name="ln-86" href="#ln-86"></a><span class="w">      </span><span class="c">!! Number of compute ranks on this node</span>
+<a id="ln-87" name="ln-87" href="#ln-87"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">save</span><span class="p">,</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cached_node_compute_ranks</span><span class="p">(:)</span>
+<a id="ln-88" name="ln-88" href="#ln-88"></a><span class="w">      </span><span class="c">!! World ranks of compute processes on this node</span>
+<a id="ln-89" name="ln-89" href="#ln-89"></a>
+<a id="ln-90" name="ln-90" href="#ln-90"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">COMPUTE_COMM_OVERRIDE_MAX_DEPTH</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-91" name="ln-91" href="#ln-91"></a><span class="w">      </span><span class="c">!! TEST/TOOLING-ONLY.  One-level stack depth for</span>
+<a id="ln-92" name="ln-92" href="#ln-92"></a><span class="w">      </span><span class="c">!! `comm_env_push_compute_comm` / `comm_env_pop_compute_comm` — see</span>
+<a id="ln-93" name="ln-93" href="#ln-93"></a><span class="w">      </span><span class="c">!! their docstrings.  Kept at 1 deliberately: nothing in production</span>
+<a id="ln-94" name="ln-94" href="#ln-94"></a><span class="w">      </span><span class="c">!! code nests the override, and a deeper stack would hide a</span>
+<a id="ln-95" name="ln-95" href="#ln-95"></a><span class="w">      </span><span class="c">!! forgotten pop instead of failing loud on the very next push.</span>
+<a id="ln-96" name="ln-96" href="#ln-96"></a><span class="w">   </span><span class="k">type</span><span class="p">(</span><span class="n">comm_t</span><span class="p">),</span><span class="w"> </span><span class="k">save</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">compute_comm_override</span>
+<a id="ln-97" name="ln-97" href="#ln-97"></a><span class="w">      </span><span class="c">!! TEST/TOOLING-ONLY override payload (valid only while</span>
+<a id="ln-98" name="ln-98" href="#ln-98"></a><span class="w">      </span><span class="c">!! `compute_comm_override_depth == 1`).</span>
+<a id="ln-99" name="ln-99" href="#ln-99"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">save</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">compute_comm_override_depth</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-100" name="ln-100" href="#ln-100"></a><span class="w">      </span><span class="c">!! TEST/TOOLING-ONLY override stack depth, 0 or 1.</span>
+<a id="ln-101" name="ln-101" href="#ln-101"></a>
+<a id="ln-102" name="ln-102" href="#ln-102"></a><span class="k">contains</span>
+<a id="ln-103" name="ln-103" href="#ln-103"></a>
+<a id="ln-104" name="ln-104" href="#ln-104"></a><span class="k">   subroutine </span><span class="n">comm_env_init</span><span class="p">()</span>
+<a id="ln-105" name="ln-105" href="#ln-105"></a><span class="w">      </span><span class="c">!! Phase 1: Initialise MPI, cache world rank/size</span>
+<a id="ln-106" name="ln-106" href="#ln-106"></a><span class="w">      </span><span class="c">!! Call this before reading config.  Idempotent: a second call is a</span>
+<a id="ln-107" name="ln-107" href="#ln-107"></a><span class="w">      </span><span class="c">!! no-op, so multiple entry points / testdrive cases can call it.</span>
+<a id="ln-108" name="ln-108" href="#ln-108"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">env_initialised</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-109" name="ln-109" href="#ln-109"></a><span class="k">      call </span><span class="n">pic_mpi_init</span><span class="p">()</span>
+<a id="ln-110" name="ln-110" href="#ln-110"></a><span class="w">      </span><span class="n">comm_global</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">comm_world</span><span class="p">()</span>
+<a id="ln-111" name="ln-111" href="#ln-111"></a><span class="w">      </span><span class="n">cached_rank</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">comm_global</span><span class="p">%</span><span class="n">rank</span><span class="p">()</span>
+<a id="ln-112" name="ln-112" href="#ln-112"></a><span class="w">      </span><span class="n">cached_size</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">comm_global</span><span class="p">%</span><span class="n">size</span><span class="p">()</span>
+<a id="ln-113" name="ln-113" href="#ln-113"></a>
+<a id="ln-114" name="ln-114" href="#ln-114"></a><span class="w">      </span><span class="c">! Default: all ranks are compute, compute_comm = comm_world</span>
+<a id="ln-115" name="ln-115" href="#ln-115"></a><span class="w">      </span><span class="n">comm_compute</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">comm_global</span>
+<a id="ln-116" name="ln-116" href="#ln-116"></a><span class="w">      </span><span class="n">cached_compute_rank</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cached_rank</span>
+<a id="ln-117" name="ln-117" href="#ln-117"></a><span class="w">      </span><span class="n">cached_compute_size</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cached_size</span>
+<a id="ln-118" name="ln-118" href="#ln-118"></a><span class="w">      </span><span class="n">env_initialised</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<a id="ln-119" name="ln-119" href="#ln-119"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">comm_env_init</span>
+<a id="ln-120" name="ln-120" href="#ln-120"></a>
+<a id="ln-121" name="ln-121" href="#ln-121"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">comm_env_setup_roles</span><span class="p">(</span><span class="n">use_io_server</span><span class="p">)</span>
+<a id="ln-122" name="ln-122" href="#ln-122"></a><span class="w">      </span><span class="c">!! Phase 2: Assign roles (I/O server vs compute), bind GPU</span>
+<a id="ln-123" name="ln-123" href="#ln-123"></a><span class="w">      </span><span class="c">!! Call this after reading config, before decomp/solver init.</span>
+<a id="ln-124" name="ln-124" href="#ln-124"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">use_io_server</span>
+<a id="ln-125" name="ln-125" href="#ln-125"></a><span class="w">         </span><span class="c">!! Dedicate one rank per node as I/O server</span>
+<a id="ln-126" name="ln-126" href="#ln-126"></a>
+<a id="ln-127" name="ln-127" href="#ln-127"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">comm_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">node_comm</span>
+<a id="ln-128" name="ln-128" href="#ln-128"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">node_rank</span><span class="p">,</span><span class="w"> </span><span class="n">node_size</span><span class="p">,</span><span class="w"> </span><span class="n">gpu_rank</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">n_dev</span>
+<a id="ln-129" name="ln-129" href="#ln-129"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">world_ranks</span><span class="p">(:)</span>
+<a id="ln-130" name="ln-130" href="#ln-130"></a>
+<a id="ln-131" name="ln-131" href="#ln-131"></a><span class="w">      </span><span class="c">! Compute node-local rank for GPU binding and I/O server assignment</span>
+<a id="ln-132" name="ln-132" href="#ln-132"></a><span class="w">      </span><span class="n">node_comm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">comm_global</span><span class="p">%</span><span class="n">split</span><span class="p">()</span>
+<a id="ln-133" name="ln-133" href="#ln-133"></a><span class="w">      </span><span class="n">node_rank</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">node_comm</span><span class="p">%</span><span class="n">rank</span><span class="p">()</span>
+<a id="ln-134" name="ln-134" href="#ln-134"></a><span class="w">      </span><span class="n">node_size</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">node_comm</span><span class="p">%</span><span class="n">size</span><span class="p">()</span>
+<a id="ln-135" name="ln-135" href="#ln-135"></a>
+<a id="ln-136" name="ln-136" href="#ln-136"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">use_io_server</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">cached_size</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">node_size</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-137" name="ln-137" href="#ln-137"></a><span class="w">         </span><span class="c">! Last rank on each node becomes the I/O server</span>
+<a id="ln-138" name="ln-138" href="#ln-138"></a><span class="w">         </span><span class="n">cached_is_io_server</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">node_rank</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">node_size</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<a id="ln-139" name="ln-139" href="#ln-139"></a>
+<a id="ln-140" name="ln-140" href="#ln-140"></a><span class="w">         </span><span class="c">! Broadcast I/O server's world rank to all ranks on this node</span>
+<a id="ln-141" name="ln-141" href="#ln-141"></a><span class="w">         </span><span class="n">cached_io_server_rank</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cached_rank</span>
+<a id="ln-142" name="ln-142" href="#ln-142"></a><span class="w">         </span><span class="k">call </span><span class="n">bcast</span><span class="p">(</span><span class="n">node_comm</span><span class="p">,</span><span class="w"> </span><span class="n">cached_io_server_rank</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">node_size</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<a id="ln-143" name="ln-143" href="#ln-143"></a>
+<a id="ln-144" name="ln-144" href="#ln-144"></a><span class="w">         </span><span class="c">! Gather world ranks of all node-local processes to build</span>
+<a id="ln-145" name="ln-145" href="#ln-145"></a><span class="w">         </span><span class="c">! the compute rank list (exclude the I/O server)</span>
+<a id="ln-146" name="ln-146" href="#ln-146"></a><span class="w">         </span><span class="c">! Use bcast from each rank as a simple allgather substitute</span>
+<a id="ln-147" name="ln-147" href="#ln-147"></a><span class="w">         </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">world_ranks</span><span class="p">(</span><span class="mi">0</span><span class="p">:</span><span class="n">node_size</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span>
+<a id="ln-148" name="ln-148" href="#ln-148"></a><span class="w">         </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">node_size</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-149" name="ln-149" href="#ln-149"></a><span class="w">            </span><span class="n">world_ranks</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cached_rank</span>
+<a id="ln-150" name="ln-150" href="#ln-150"></a><span class="w">            </span><span class="k">call </span><span class="n">bcast</span><span class="p">(</span><span class="n">node_comm</span><span class="p">,</span><span class="w"> </span><span class="n">world_ranks</span><span class="p">(</span><span class="n">i</span><span class="p">),</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">)</span>
+<a id="ln-151" name="ln-151" href="#ln-151"></a><span class="w">         </span><span class="k">end do</span>
+<a id="ln-152" name="ln-152" href="#ln-152"></a>
+<a id="ln-153" name="ln-153" href="#ln-153"></a><span class="k">         </span><span class="n">cached_node_n_compute</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">node_size</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-154" name="ln-154" href="#ln-154"></a><span class="w">         </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">cached_node_compute_ranks</span><span class="p">(</span><span class="n">cached_node_n_compute</span><span class="p">))</span>
+<a id="ln-155" name="ln-155" href="#ln-155"></a><span class="w">         </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">node_size</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">2</span>
+<a id="ln-156" name="ln-156" href="#ln-156"></a><span class="w">            </span><span class="n">cached_node_compute_ranks</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">world_ranks</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+<a id="ln-157" name="ln-157" href="#ln-157"></a><span class="w">         </span><span class="k">end do</span>
+<a id="ln-158" name="ln-158" href="#ln-158"></a><span class="k">         deallocate</span><span class="w"> </span><span class="p">(</span><span class="n">world_ranks</span><span class="p">)</span>
+<a id="ln-159" name="ln-159" href="#ln-159"></a>
+<a id="ln-160" name="ln-160" href="#ln-160"></a><span class="w">         </span><span class="c">! Create compute communicator (excludes I/O ranks)</span>
+<a id="ln-161" name="ln-161" href="#ln-161"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">cached_is_io_server</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-162" name="ln-162" href="#ln-162"></a><span class="k">            </span><span class="n">comm_compute</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">comm_global</span><span class="p">%</span><span class="n">split_by</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w">  </span><span class="c">! color 1 = I/O</span>
+<a id="ln-163" name="ln-163" href="#ln-163"></a><span class="w">         </span><span class="k">else</span>
+<a id="ln-164" name="ln-164" href="#ln-164"></a><span class="k">            </span><span class="n">comm_compute</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">comm_global</span><span class="p">%</span><span class="n">split_by</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="w">  </span><span class="c">! color 0 = compute</span>
+<a id="ln-165" name="ln-165" href="#ln-165"></a><span class="w">         </span><span class="k">end if</span>
+<a id="ln-166" name="ln-166" href="#ln-166"></a>
+<a id="ln-167" name="ln-167" href="#ln-167"></a><span class="k">         </span><span class="n">cached_compute_rank</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">comm_compute</span><span class="p">%</span><span class="n">rank</span><span class="p">()</span>
+<a id="ln-168" name="ln-168" href="#ln-168"></a><span class="w">         </span><span class="n">cached_compute_size</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">comm_compute</span><span class="p">%</span><span class="n">size</span><span class="p">()</span>
+<a id="ln-169" name="ln-169" href="#ln-169"></a>
+<a id="ln-170" name="ln-170" href="#ln-170"></a><span class="w">         </span><span class="c">! GPU binding: compute ranks bind to their node-local rank</span>
+<a id="ln-171" name="ln-171" href="#ln-171"></a><span class="w">         </span><span class="n">gpu_rank</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">node_rank</span>
+<a id="ln-172" name="ln-172" href="#ln-172"></a><span class="w">      </span><span class="k">else</span>
+<a id="ln-173" name="ln-173" href="#ln-173"></a><span class="w">         </span><span class="c">! No I/O server: all ranks are compute</span>
+<a id="ln-174" name="ln-174" href="#ln-174"></a><span class="w">         </span><span class="n">cached_is_io_server</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<a id="ln-175" name="ln-175" href="#ln-175"></a><span class="w">         </span><span class="n">cached_io_server_rank</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span>
+<a id="ln-176" name="ln-176" href="#ln-176"></a><span class="w">         </span><span class="n">comm_compute</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">comm_global</span>
+<a id="ln-177" name="ln-177" href="#ln-177"></a><span class="w">         </span><span class="n">cached_compute_rank</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cached_rank</span>
+<a id="ln-178" name="ln-178" href="#ln-178"></a><span class="w">         </span><span class="n">cached_compute_size</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cached_size</span>
+<a id="ln-179" name="ln-179" href="#ln-179"></a><span class="w">         </span><span class="n">cached_node_n_compute</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">node_size</span>
+<a id="ln-180" name="ln-180" href="#ln-180"></a><span class="w">         </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">cached_node_compute_ranks</span><span class="p">(</span><span class="n">node_size</span><span class="p">))</span>
+<a id="ln-181" name="ln-181" href="#ln-181"></a><span class="w">         </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">node_size</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-182" name="ln-182" href="#ln-182"></a><span class="w">            </span><span class="n">cached_node_compute_ranks</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cached_rank</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">node_rank</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">i</span>
+<a id="ln-183" name="ln-183" href="#ln-183"></a><span class="w">         </span><span class="k">end do</span>
+<a id="ln-184" name="ln-184" href="#ln-184"></a><span class="k">         </span><span class="n">gpu_rank</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">node_rank</span>
+<a id="ln-185" name="ln-185" href="#ln-185"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-186" name="ln-186" href="#ln-186"></a>
+<a id="ln-187" name="ln-187" href="#ln-187"></a><span class="k">      call </span><span class="n">node_comm</span><span class="p">%</span><span class="n">finalize</span><span class="p">()</span>
+<a id="ln-188" name="ln-188" href="#ln-188"></a>
+<a id="ln-189" name="ln-189" href="#ln-189"></a><span class="w">      </span><span class="c">! Bind GPU (compute ranks only). Two API calls are needed when both</span>
+<a id="ln-190" name="ln-190" href="#ln-190"></a><span class="w">      </span><span class="c">! `do concurrent` (stdpar) and `!$omp target` regions co-exist:</span>
+<a id="ln-191" name="ln-191" href="#ln-191"></a><span class="w">      </span><span class="c">!</span>
+<a id="ln-192" name="ln-192" href="#ln-192"></a><span class="w">      </span><span class="c">!   * acc_set_device_num — selects the OpenACC runtime device, which</span>
+<a id="ln-193" name="ln-193" href="#ln-193"></a><span class="w">      </span><span class="c">!     is what stdpar (NVHPC, Cray) uses to dispatch `do concurrent`</span>
+<a id="ln-194" name="ln-194" href="#ln-194"></a><span class="w">      </span><span class="c">!     loops. Active whenever the compiler exposes the OpenACC</span>
+<a id="ln-195" name="ln-195" href="#ln-195"></a><span class="w">      </span><span class="c">!     runtime — see RDB_HAS_OPENACC_RUNTIME in compiler_flags.</span>
+<a id="ln-196" name="ln-196" href="#ln-196"></a><span class="w">      </span><span class="c">!   * omp_set_default_device — selects the OpenMP target device,</span>
+<a id="ln-197" name="ln-197" href="#ln-197"></a><span class="w">      </span><span class="c">!     used by `!$omp target` regions on the dc-openmp backend.</span>
+<a id="ln-198" name="ln-198" href="#ln-198"></a><span class="w">      </span><span class="c">!     Active when -mp= / -fopenmp is on.</span>
+<a id="ln-199" name="ln-199" href="#ln-199"></a><span class="w">      </span><span class="c">!</span>
+<a id="ln-200" name="ln-200" href="#ln-200"></a><span class="w">      </span><span class="c">! On the OpenACC backend (-acc=gpu) only the first fires; on the</span>
+<a id="ln-201" name="ln-201" href="#ln-201"></a><span class="w">      </span><span class="c">! OpenMP backend both fire. Either way, every rank lands on the</span>
+<a id="ln-202" name="ln-202" href="#ln-202"></a><span class="w">      </span><span class="c">! right GPU under mpirun. acc_device_default lets the runtime</span>
+<a id="ln-203" name="ln-203" href="#ln-203"></a><span class="w">      </span><span class="c">! pick the appropriate device kind (NVIDIA, AMD, etc.).</span>
+<a id="ln-204" name="ln-204" href="#ln-204"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">cached_is_io_server</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-205" name="ln-205" href="#ln-205"></a><span class="cp">#ifdef RDB_HAS_OPENACC_RUNTIME</span>
+<a id="ln-206" name="ln-206" href="#ln-206"></a><span class="w">         </span><span class="c">! Clamp the node-local GPU index to the number of devices this</span>
+<a id="ln-207" name="ln-207" href="#ln-207"></a><span class="w">         </span><span class="c">! process can actually see. With all GPUs visible this is a no-op</span>
+<a id="ln-208" name="ln-208" href="#ln-208"></a><span class="w">         </span><span class="c">! (mod(node_rank, ndev) == node_rank for node_rank &lt; ndev). When the</span>
+<a id="ln-209" name="ln-209" href="#ln-209"></a><span class="w">         </span><span class="c">! launcher pins one GPU per rank via CUDA_VISIBLE_DEVICES, only one</span>
+<a id="ln-210" name="ln-210" href="#ln-210"></a><span class="w">         </span><span class="c">! device is visible, so this binds device 0 (the rank's own GPU) and</span>
+<a id="ln-211" name="ln-211" href="#ln-211"></a><span class="w">         </span><span class="c">! the CUDA-aware-MPI primary context also lands there -- no leftover</span>
+<a id="ln-212" name="ln-212" href="#ln-212"></a><span class="w">         </span><span class="c">! context on the global device 0. Also makes ranks &gt; GPUs (over-</span>
+<a id="ln-213" name="ln-213" href="#ln-213"></a><span class="w">         </span><span class="c">! subscription) bind round-robin instead of failing.</span>
+<a id="ln-214" name="ln-214" href="#ln-214"></a><span class="w">         </span><span class="c">!</span>
+<a id="ln-215" name="ln-215" href="#ln-215"></a><span class="w">         </span><span class="c">! REVISIT: this clamp may be unnecessary -- NVHPC's acc_set_device_num</span>
+<a id="ln-216" name="ln-216" href="#ln-216"></a><span class="w">         </span><span class="c">! might already tolerate an out-of-range device num under one-GPU</span>
+<a id="ln-217" name="ln-217" href="#ln-217"></a><span class="w">         </span><span class="c">! CUDA_VISIBLE_DEVICES pinning (clamping internally). It's untested</span>
+<a id="ln-218" name="ln-218" href="#ln-218"></a><span class="w">         </span><span class="c">! (the runs that confirmed the fix used this clamp). If a no-clamp</span>
+<a id="ln-219" name="ln-219" href="#ln-219"></a><span class="w">         </span><span class="c">! build + pin reports a clean bind, drop this. Kept for now because</span>
+<a id="ln-220" name="ln-220" href="#ln-220"></a><span class="w">         </span><span class="c">! it's a no-op when all GPUs are visible and the spec calls</span>
+<a id="ln-221" name="ln-221" href="#ln-221"></a><span class="w">         </span><span class="c">! out-of-range device nums undefined, so it's the portable choice.</span>
+<a id="ln-222" name="ln-222" href="#ln-222"></a><span class="w">         </span><span class="n">n_dev</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">acc_get_num_devices</span><span class="p">(</span><span class="n">acc_device_default</span><span class="p">)</span>
+<a id="ln-223" name="ln-223" href="#ln-223"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">n_dev</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="n">gpu_rank</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">mod</span><span class="p">(</span><span class="n">gpu_rank</span><span class="p">,</span><span class="w"> </span><span class="n">n_dev</span><span class="p">)</span>
+<a id="ln-224" name="ln-224" href="#ln-224"></a><span class="w">         </span><span class="k">call </span><span class="n">acc_set_device_num</span><span class="p">(</span><span class="n">gpu_rank</span><span class="p">,</span><span class="w"> </span><span class="n">acc_device_default</span><span class="p">)</span>
+<a id="ln-225" name="ln-225" href="#ln-225"></a><span class="cp">#endif</span>
+<a id="ln-226" name="ln-226" href="#ln-226"></a><span class="cp">#ifdef _OPENMP</span>
+<a id="ln-227" name="ln-227" href="#ln-227"></a><span class="w">         </span><span class="k">call </span><span class="n">omp_set_default_device</span><span class="p">(</span><span class="n">gpu_rank</span><span class="p">)</span>
+<a id="ln-228" name="ln-228" href="#ln-228"></a><span class="cp">#endif</span>
+<a id="ln-229" name="ln-229" href="#ln-229"></a><span class="w">         </span><span class="k">call </span><span class="n">print_gpu_binding</span><span class="p">(</span><span class="n">gpu_rank</span><span class="p">)</span>
+<a id="ln-230" name="ln-230" href="#ln-230"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-231" name="ln-231" href="#ln-231"></a>
+<a id="ln-232" name="ln-232" href="#ln-232"></a><span class="k">   end subroutine </span><span class="n">comm_env_setup_roles</span>
+<a id="ln-233" name="ln-233" href="#ln-233"></a>
+<a id="ln-234" name="ln-234" href="#ln-234"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">print_gpu_binding</span><span class="p">(</span><span class="n">requested_gpu</span><span class="p">)</span>
+<a id="ln-235" name="ln-235" href="#ln-235"></a><span class="w">      </span><span class="c">!! Per-rank one-shot diagnostic: world rank -&gt; requested device num /</span>
+<a id="ln-236" name="ln-236" href="#ln-236"></a><span class="w">      </span><span class="c">!! actual device num reported by the OpenACC runtime.  Lets us</span>
+<a id="ln-237" name="ln-237" href="#ln-237"></a><span class="w">      </span><span class="c">!! confirm that mpirun is binding each rank to its own GPU rather</span>
+<a id="ln-238" name="ln-238" href="#ln-238"></a><span class="w">      </span><span class="c">!! than serialising N ranks on device 0.</span>
+<a id="ln-239" name="ln-239" href="#ln-239"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">requested_gpu</span>
+<a id="ln-240" name="ln-240" href="#ln-240"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">actual_dev</span>
+<a id="ln-241" name="ln-241" href="#ln-241"></a>
+<a id="ln-242" name="ln-242" href="#ln-242"></a><span class="cp">#ifdef RDB_HAS_OPENACC_RUNTIME</span>
+<a id="ln-243" name="ln-243" href="#ln-243"></a><span class="w">      </span><span class="c">! Works on either backend: stdpar+OpenACC and -mp=gpu / -h omp</span>
+<a id="ln-244" name="ln-244" href="#ln-244"></a><span class="w">      </span><span class="c">! both keep the OpenACC runtime live, and acc_get_device_num</span>
+<a id="ln-245" name="ln-245" href="#ln-245"></a><span class="w">      </span><span class="c">! reports the same device that stdpar/-acc dispatches against.</span>
+<a id="ln-246" name="ln-246" href="#ln-246"></a><span class="w">      </span><span class="n">actual_dev</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">acc_get_device_num</span><span class="p">(</span><span class="n">acc_get_device_type</span><span class="p">())</span>
+<a id="ln-247" name="ln-247" href="#ln-247"></a><span class="cp">#else</span>
+<a id="ln-248" name="ln-248" href="#ln-248"></a><span class="w">      </span><span class="n">actual_dev</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span>
+<a id="ln-249" name="ln-249" href="#ln-249"></a><span class="cp">#endif</span>
+<a id="ln-250" name="ln-250" href="#ln-250"></a><span class="w">      </span><span class="k">write</span><span class="w"> </span><span class="p">(</span><span class="n">output_unit</span><span class="p">,</span><span class="w"> </span><span class="s2">"(A,I0,A,I0,A,I0,A,I0,A,I0)"</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-251" name="ln-251" href="#ln-251"></a><span class="w">         </span><span class="s2">"[gpu-bind] world_rank="</span><span class="p">,</span><span class="w"> </span><span class="n">cached_rank</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-252" name="ln-252" href="#ln-252"></a><span class="w">         </span><span class="s2">"/"</span><span class="p">,</span><span class="w"> </span><span class="n">cached_size</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-253" name="ln-253" href="#ln-253"></a><span class="w">         </span><span class="s2">" compute_rank="</span><span class="p">,</span><span class="w"> </span><span class="n">cached_compute_rank</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-254" name="ln-254" href="#ln-254"></a><span class="w">         </span><span class="s2">" requested_dev="</span><span class="p">,</span><span class="w"> </span><span class="n">requested_gpu</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-255" name="ln-255" href="#ln-255"></a><span class="w">         </span><span class="s2">" actual_dev="</span><span class="p">,</span><span class="w"> </span><span class="n">actual_dev</span>
+<a id="ln-256" name="ln-256" href="#ln-256"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">cached_rank</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-257" name="ln-257" href="#ln-257"></a><span class="cp">#ifdef RDB_CUDA_AWARE_MPI</span>
+<a id="ln-258" name="ln-258" href="#ln-258"></a><span class="w">         </span><span class="k">write</span><span class="w"> </span><span class="p">(</span><span class="n">output_unit</span><span class="p">,</span><span class="w"> </span><span class="s2">"(A)"</span><span class="p">)</span><span class="w"> </span><span class="s2">"[gpu-bind] halo path: GPU-direct (CUDA-aware MPI)"</span>
+<a id="ln-259" name="ln-259" href="#ln-259"></a><span class="cp">#else</span>
+<a id="ln-260" name="ln-260" href="#ln-260"></a><span class="w">         </span><span class="k">write</span><span class="w"> </span><span class="p">(</span><span class="n">output_unit</span><span class="p">,</span><span class="w"> </span><span class="s2">"(A)"</span><span class="p">)</span><span class="w"> </span><span class="s2">"[gpu-bind] halo path: HOST-STAGED (rebuild with -DRDB_CUDA_AWARE_MPI=ON for GPU-direct)"</span>
+<a id="ln-261" name="ln-261" href="#ln-261"></a><span class="cp">#endif</span>
+<a id="ln-262" name="ln-262" href="#ln-262"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-263" name="ln-263" href="#ln-263"></a><span class="k">      </span><span class="nb">flush</span><span class="w"> </span><span class="p">(</span><span class="n">output_unit</span><span class="p">)</span>
+<a id="ln-264" name="ln-264" href="#ln-264"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">print_gpu_binding</span>
+<a id="ln-265" name="ln-265" href="#ln-265"></a>
+<a id="ln-266" name="ln-266" href="#ln-266"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">comm_env_finalize</span><span class="p">()</span>
+<a id="ln-267" name="ln-267" href="#ln-267"></a><span class="w">      </span><span class="c">!! Finalise MPI.  No-op if the comm-env was never initialised, so it</span>
+<a id="ln-268" name="ln-268" href="#ln-268"></a><span class="w">      </span><span class="c">!! is safe to call unconditionally at program exit -- the shared</span>
+<a id="ln-269" name="ln-269" href="#ln-269"></a><span class="w">      </span><span class="c">!! per-test main does this for the few tests that init MPI, and it</span>
+<a id="ln-270" name="ln-270" href="#ln-270"></a><span class="w">      </span><span class="c">!! costs nothing for the rest (and on serial builds via the stub).</span>
+<a id="ln-271" name="ln-271" href="#ln-271"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">env_initialised</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-272" name="ln-272" href="#ln-272"></a><span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">cached_node_compute_ranks</span><span class="p">))</span><span class="w"> </span><span class="k">deallocate</span><span class="w"> </span><span class="p">(</span><span class="n">cached_node_compute_ranks</span><span class="p">)</span>
+<a id="ln-273" name="ln-273" href="#ln-273"></a><span class="w">      </span><span class="k">call </span><span class="n">comm_global</span><span class="p">%</span><span class="n">finalize</span><span class="p">()</span>
+<a id="ln-274" name="ln-274" href="#ln-274"></a><span class="w">      </span><span class="k">call </span><span class="n">pic_mpi_finalize</span><span class="p">()</span>
+<a id="ln-275" name="ln-275" href="#ln-275"></a><span class="w">      </span><span class="n">env_initialised</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<a id="ln-276" name="ln-276" href="#ln-276"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">comm_env_finalize</span>
+<a id="ln-277" name="ln-277" href="#ln-277"></a>
+<a id="ln-278" name="ln-278" href="#ln-278"></a><span class="w">   </span><span class="k">function </span><span class="n">comm_env_rank</span><span class="p">()</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">rank</span><span class="p">)</span>
+<a id="ln-279" name="ln-279" href="#ln-279"></a><span class="w">      </span><span class="c">!! Return this process's world MPI rank</span>
+<a id="ln-280" name="ln-280" href="#ln-280"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rank</span>
+<a id="ln-281" name="ln-281" href="#ln-281"></a><span class="w">      </span><span class="n">rank</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cached_rank</span>
+<a id="ln-282" name="ln-282" href="#ln-282"></a><span class="w">   </span><span class="k">end function </span><span class="n">comm_env_rank</span>
+<a id="ln-283" name="ln-283" href="#ln-283"></a>
+<a id="ln-284" name="ln-284" href="#ln-284"></a><span class="w">   </span><span class="k">function </span><span class="n">comm_env_size</span><span class="p">()</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">nprocs</span><span class="p">)</span>
+<a id="ln-285" name="ln-285" href="#ln-285"></a><span class="w">      </span><span class="c">!! Return total number of MPI processes (including I/O ranks)</span>
+<a id="ln-286" name="ln-286" href="#ln-286"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nprocs</span>
+<a id="ln-287" name="ln-287" href="#ln-287"></a><span class="w">      </span><span class="n">nprocs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cached_size</span>
+<a id="ln-288" name="ln-288" href="#ln-288"></a><span class="w">   </span><span class="k">end function </span><span class="n">comm_env_size</span>
+<a id="ln-289" name="ln-289" href="#ln-289"></a>
+<a id="ln-290" name="ln-290" href="#ln-290"></a><span class="w">   </span><span class="k">function </span><span class="n">comm_env_compute_rank</span><span class="p">()</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">rank</span><span class="p">)</span>
+<a id="ln-291" name="ln-291" href="#ln-291"></a><span class="w">      </span><span class="c">!! Return this process's rank in the compute communicator</span>
+<a id="ln-292" name="ln-292" href="#ln-292"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rank</span>
+<a id="ln-293" name="ln-293" href="#ln-293"></a><span class="w">      </span><span class="n">rank</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cached_compute_rank</span>
+<a id="ln-294" name="ln-294" href="#ln-294"></a><span class="w">   </span><span class="k">end function </span><span class="n">comm_env_compute_rank</span>
+<a id="ln-295" name="ln-295" href="#ln-295"></a>
+<a id="ln-296" name="ln-296" href="#ln-296"></a><span class="w">   </span><span class="k">function </span><span class="n">comm_env_compute_size</span><span class="p">()</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">nprocs</span><span class="p">)</span>
+<a id="ln-297" name="ln-297" href="#ln-297"></a><span class="w">      </span><span class="c">!! Return number of compute ranks (excludes I/O ranks)</span>
+<a id="ln-298" name="ln-298" href="#ln-298"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nprocs</span>
+<a id="ln-299" name="ln-299" href="#ln-299"></a><span class="w">      </span><span class="n">nprocs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cached_compute_size</span>
+<a id="ln-300" name="ln-300" href="#ln-300"></a><span class="w">   </span><span class="k">end function </span><span class="n">comm_env_compute_size</span>
+<a id="ln-301" name="ln-301" href="#ln-301"></a>
+<a id="ln-302" name="ln-302" href="#ln-302"></a><span class="w">   </span><span class="k">function </span><span class="n">comm_env_compute_comm</span><span class="p">()</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">comm</span><span class="p">)</span>
+<a id="ln-303" name="ln-303" href="#ln-303"></a><span class="w">      </span><span class="c">!! Return the compute-only communicator</span>
+<a id="ln-304" name="ln-304" href="#ln-304"></a><span class="w">      </span><span class="c">!! Falls back to comm_world() if comm_env_init has not been called</span>
+<a id="ln-305" name="ln-305" href="#ln-305"></a><span class="w">      </span><span class="c">!! (e.g. tests that use raw MPI_Init).</span>
+<a id="ln-306" name="ln-306" href="#ln-306"></a><span class="w">      </span><span class="c">!!</span>
+<a id="ln-307" name="ln-307" href="#ln-307"></a><span class="w">      </span><span class="c">!! TEST/TOOLING-ONLY: when `comm_env_push_compute_comm` has an</span>
+<a id="ln-308" name="ln-308" href="#ln-308"></a><span class="w">      </span><span class="c">!! override active, that override is returned instead — every</span>
+<a id="ln-309" name="ln-309" href="#ln-309"></a><span class="w">      </span><span class="c">!! caller reads this function fresh at call time (none of</span>
+<a id="ln-310" name="ln-310" href="#ln-310"></a><span class="w">      </span><span class="c">!! `rdb_halo`/`rdb_ocean_halo` cache the result across calls), so</span>
+<a id="ln-311" name="ln-311" href="#ln-311"></a><span class="w">      </span><span class="c">!! the override is visible to every collective issued while it is</span>
+<a id="ln-312" name="ln-312" href="#ln-312"></a><span class="w">      </span><span class="c">!! pushed, with no other code change required.</span>
+<a id="ln-313" name="ln-313" href="#ln-313"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">comm_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm</span>
+<a id="ln-314" name="ln-314" href="#ln-314"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">compute_comm_override_depth</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-315" name="ln-315" href="#ln-315"></a><span class="k">         </span><span class="n">comm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">compute_comm_override</span>
+<a id="ln-316" name="ln-316" href="#ln-316"></a><span class="w">      </span><span class="k">else if</span><span class="w"> </span><span class="p">(</span><span class="n">cached_rank</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-317" name="ln-317" href="#ln-317"></a><span class="k">         </span><span class="n">comm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">comm_compute</span>
+<a id="ln-318" name="ln-318" href="#ln-318"></a><span class="w">      </span><span class="k">else</span>
+<a id="ln-319" name="ln-319" href="#ln-319"></a><span class="k">         </span><span class="n">comm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">comm_world</span><span class="p">()</span>
+<a id="ln-320" name="ln-320" href="#ln-320"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-321" name="ln-321" href="#ln-321"></a><span class="k">   end function </span><span class="n">comm_env_compute_comm</span>
+<a id="ln-322" name="ln-322" href="#ln-322"></a>
+<a id="ln-323" name="ln-323" href="#ln-323"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">comm_env_push_compute_comm</span><span class="p">(</span><span class="n">comm</span><span class="p">)</span>
+<a id="ln-324" name="ln-324" href="#ln-324"></a><span class="w">      </span><span class="c">!! TEST/TOOLING-ONLY.  Temporarily overrides what</span>
+<a id="ln-325" name="ln-325" href="#ln-325"></a><span class="w">      </span><span class="c">!! `comm_env_compute_comm()` returns to `comm`, until the matching</span>
+<a id="ln-326" name="ln-326" href="#ln-326"></a><span class="w">      </span><span class="c">!! `comm_env_pop_compute_comm()`.</span>
+<a id="ln-327" name="ln-327" href="#ln-327"></a><span class="w">      </span><span class="c">!!</span>
+<a id="ln-328" name="ln-328" href="#ln-328"></a><span class="w">      </span><span class="c">!! Exists so a test can run a genuinely serial "reference" engine</span>
+<a id="ln-329" name="ln-329" href="#ln-329"></a><span class="w">      </span><span class="c">!! (`compute_size=1`) on EVERY physical rank while still calling a</span>
+<a id="ln-330" name="ln-330" href="#ln-330"></a><span class="w">      </span><span class="c">!! COLLECTIVE report (`ocean_console_stats_report`, which always</span>
+<a id="ln-331" name="ln-331" href="#ln-331"></a><span class="w">      </span><span class="c">!! reduces over `comm_env_compute_comm()`, the real job</span>
+<a id="ln-332" name="ln-332" href="#ln-332"></a><span class="w">      </span><span class="c">!! communicator): pushing a per-rank self-communicator around that</span>
+<a id="ln-333" name="ln-333" href="#ln-333"></a><span class="w">      </span><span class="c">!! one call makes the collective an identity op on each rank's own</span>
+<a id="ln-334" name="ln-334" href="#ln-334"></a><span class="w">      </span><span class="c">!! copy instead of allreducing `nprocs` independent serial replicas</span>
+<a id="ln-335" name="ln-335" href="#ln-335"></a><span class="w">      </span><span class="c">!! into one bogus sum.  See</span>
+<a id="ln-336" name="ln-336" href="#ln-336"></a><span class="w">      </span><span class="c">!! `tests/mpi/test_ocean_decomp_bitid_mpi.F90`'s</span>
+<a id="ln-337" name="ln-337" href="#ln-337"></a><span class="w">      </span><span class="c">!! `check_periodic_sponge_serial_out` for the call site and</span>
+<a id="ln-338" name="ln-338" href="#ln-338"></a><span class="w">      </span><span class="c">!! `run_one`'s HAZARD comment for the full story.</span>
+<a id="ln-339" name="ln-339" href="#ln-339"></a><span class="w">      </span><span class="c">!!</span>
+<a id="ln-340" name="ln-340" href="#ln-340"></a><span class="w">      </span><span class="c">!! NOT for production code paths — it exists purely to let a test</span>
+<a id="ln-341" name="ln-341" href="#ln-341"></a><span class="w">      </span><span class="c">!! stand up an alternate communicator around a fixed call without</span>
+<a id="ln-342" name="ln-342" href="#ln-342"></a><span class="w">      </span><span class="c">!! threading a `comm` argument through every intermediate routine.</span>
+<a id="ln-343" name="ln-343" href="#ln-343"></a><span class="w">      </span><span class="c">!! One-level only: a push while an override is already active is a</span>
+<a id="ln-344" name="ln-344" href="#ln-344"></a><span class="w">      </span><span class="c">!! bug in the caller (a missing pop, or an attempt to nest) and</span>
+<a id="ln-345" name="ln-345" href="#ln-345"></a><span class="w">      </span><span class="c">!! fails loud rather than silently discarding or stacking past</span>
+<a id="ln-346" name="ln-346" href="#ln-346"></a><span class="w">      </span><span class="c">!! `COMPUTE_COMM_OVERRIDE_MAX_DEPTH`.</span>
+<a id="ln-347" name="ln-347" href="#ln-347"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">comm_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm</span>
+<a id="ln-348" name="ln-348" href="#ln-348"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">compute_comm_override_depth</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">COMPUTE_COMM_OVERRIDE_MAX_DEPTH</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-349" name="ln-349" href="#ln-349"></a><span class="k">         error stop</span><span class="w"> </span><span class="s2">"comm_env_push_compute_comm: override already active "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-350" name="ln-350" href="#ln-350"></a><span class="w">            </span><span class="s2">"(one-level stack) -- call comm_env_pop_compute_comm first"</span>
+<a id="ln-351" name="ln-351" href="#ln-351"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-352" name="ln-352" href="#ln-352"></a><span class="k">      </span><span class="n">compute_comm_override</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">comm</span>
+<a id="ln-353" name="ln-353" href="#ln-353"></a><span class="w">      </span><span class="n">compute_comm_override_depth</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">compute_comm_override_depth</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-354" name="ln-354" href="#ln-354"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">comm_env_push_compute_comm</span>
+<a id="ln-355" name="ln-355" href="#ln-355"></a>
+<a id="ln-356" name="ln-356" href="#ln-356"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">comm_env_pop_compute_comm</span><span class="p">()</span>
+<a id="ln-357" name="ln-357" href="#ln-357"></a><span class="w">      </span><span class="c">!! TEST/TOOLING-ONLY.  Pops the override pushed by</span>
+<a id="ln-358" name="ln-358" href="#ln-358"></a><span class="w">      </span><span class="c">!! `comm_env_push_compute_comm`, restoring `comm_env_compute_comm()`</span>
+<a id="ln-359" name="ln-359" href="#ln-359"></a><span class="w">      </span><span class="c">!! to the real compute communicator.  Fails loud on pop-without-push</span>
+<a id="ln-360" name="ln-360" href="#ln-360"></a><span class="w">      </span><span class="c">!! (a bug in the caller, not a state this seam should absorb</span>
+<a id="ln-361" name="ln-361" href="#ln-361"></a><span class="w">      </span><span class="c">!! silently).  Does NOT finalize the popped communicator -- the</span>
+<a id="ln-362" name="ln-362" href="#ln-362"></a><span class="w">      </span><span class="c">!! pusher owns that (e.g. freeing a self-comm built for the push).</span>
+<a id="ln-363" name="ln-363" href="#ln-363"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">compute_comm_override_depth</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-364" name="ln-364" href="#ln-364"></a><span class="k">         error stop</span><span class="w"> </span><span class="s2">"comm_env_pop_compute_comm: no override active (pop without push)"</span>
+<a id="ln-365" name="ln-365" href="#ln-365"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-366" name="ln-366" href="#ln-366"></a><span class="k">      </span><span class="n">compute_comm_override_depth</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">compute_comm_override_depth</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-367" name="ln-367" href="#ln-367"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">comm_env_pop_compute_comm</span>
+<a id="ln-368" name="ln-368" href="#ln-368"></a>
+<a id="ln-369" name="ln-369" href="#ln-369"></a><span class="w">   </span><span class="k">function </span><span class="n">comm_env_global_comm</span><span class="p">()</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">comm</span><span class="p">)</span>
+<a id="ln-370" name="ln-370" href="#ln-370"></a><span class="w">      </span><span class="c">!! Return the cached global (world) communicator.</span>
+<a id="ln-371" name="ln-371" href="#ln-371"></a><span class="w">      </span><span class="c">!!</span>
+<a id="ln-372" name="ln-372" href="#ln-372"></a><span class="w">      </span><span class="c">!! Use this instead of `pic_mpi_lib::comm_world()` from inside</span>
+<a id="ln-373" name="ln-373" href="#ln-373"></a><span class="w">      </span><span class="c">!! per-step code: `comm_world()` does an `MPI_Comm_dup` on every</span>
+<a id="ln-374" name="ln-374" href="#ln-374"></a><span class="w">      </span><span class="c">!! call, and that dup is collective on `MPI_COMM_WORLD`.  Calling</span>
+<a id="ln-375" name="ln-375" href="#ln-375"></a><span class="w">      </span><span class="c">!! it from a routine that runs on only some ranks (e.g. the I/O</span>
+<a id="ln-376" name="ln-376" href="#ln-376"></a><span class="w">      </span><span class="c">!! client send path, which compute ranks hit but the I/O server</span>
+<a id="ln-377" name="ln-377" href="#ln-377"></a><span class="w">      </span><span class="c">!! does not) deadlocks.  `comm_global` is duplicated exactly once</span>
+<a id="ln-378" name="ln-378" href="#ln-378"></a><span class="w">      </span><span class="c">!! by `comm_env_init` on every rank, so handing it out is free.</span>
+<a id="ln-379" name="ln-379" href="#ln-379"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">comm_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm</span>
+<a id="ln-380" name="ln-380" href="#ln-380"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">cached_rank</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-381" name="ln-381" href="#ln-381"></a><span class="k">         </span><span class="n">comm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">comm_global</span>
+<a id="ln-382" name="ln-382" href="#ln-382"></a><span class="w">      </span><span class="k">else</span>
+<a id="ln-383" name="ln-383" href="#ln-383"></a><span class="k">         </span><span class="n">comm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">comm_world</span><span class="p">()</span>
+<a id="ln-384" name="ln-384" href="#ln-384"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-385" name="ln-385" href="#ln-385"></a><span class="k">   end function </span><span class="n">comm_env_global_comm</span>
+<a id="ln-386" name="ln-386" href="#ln-386"></a>
+<a id="ln-387" name="ln-387" href="#ln-387"></a><span class="w">   </span><span class="k">function </span><span class="n">comm_env_is_io_server</span><span class="p">()</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">is_io</span><span class="p">)</span>
+<a id="ln-388" name="ln-388" href="#ln-388"></a><span class="w">      </span><span class="c">!! Return .true. if this rank is a dedicated I/O server</span>
+<a id="ln-389" name="ln-389" href="#ln-389"></a><span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">is_io</span>
+<a id="ln-390" name="ln-390" href="#ln-390"></a><span class="w">      </span><span class="n">is_io</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cached_is_io_server</span>
+<a id="ln-391" name="ln-391" href="#ln-391"></a><span class="w">   </span><span class="k">end function </span><span class="n">comm_env_is_io_server</span>
+<a id="ln-392" name="ln-392" href="#ln-392"></a>
+<a id="ln-393" name="ln-393" href="#ln-393"></a><span class="w">   </span><span class="k">function </span><span class="n">comm_env_io_server_rank</span><span class="p">()</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">rank</span><span class="p">)</span>
+<a id="ln-394" name="ln-394" href="#ln-394"></a><span class="w">      </span><span class="c">!! Return world rank of this node's I/O server (-1 if none)</span>
+<a id="ln-395" name="ln-395" href="#ln-395"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rank</span>
+<a id="ln-396" name="ln-396" href="#ln-396"></a><span class="w">      </span><span class="n">rank</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cached_io_server_rank</span>
+<a id="ln-397" name="ln-397" href="#ln-397"></a><span class="w">   </span><span class="k">end function </span><span class="n">comm_env_io_server_rank</span>
+<a id="ln-398" name="ln-398" href="#ln-398"></a>
+<a id="ln-399" name="ln-399" href="#ln-399"></a><span class="w">   </span><span class="k">function </span><span class="n">comm_env_node_n_compute</span><span class="p">()</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+<a id="ln-400" name="ln-400" href="#ln-400"></a><span class="w">      </span><span class="c">!! Return number of compute ranks on this node</span>
+<a id="ln-401" name="ln-401" href="#ln-401"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n</span>
+<a id="ln-402" name="ln-402" href="#ln-402"></a><span class="w">      </span><span class="n">n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cached_node_n_compute</span>
+<a id="ln-403" name="ln-403" href="#ln-403"></a><span class="w">   </span><span class="k">end function </span><span class="n">comm_env_node_n_compute</span>
+<a id="ln-404" name="ln-404" href="#ln-404"></a>
+<a id="ln-405" name="ln-405" href="#ln-405"></a><span class="w">   </span><span class="k">function </span><span class="n">comm_env_node_compute_ranks</span><span class="p">()</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">ranks</span><span class="p">)</span>
+<a id="ln-406" name="ln-406" href="#ln-406"></a><span class="w">      </span><span class="c">!! Return world ranks of compute processes on this node</span>
+<a id="ln-407" name="ln-407" href="#ln-407"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ranks</span><span class="p">(:)</span>
+<a id="ln-408" name="ln-408" href="#ln-408"></a><span class="w">      </span><span class="n">ranks</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cached_node_compute_ranks</span>
+<a id="ln-409" name="ln-409" href="#ln-409"></a><span class="w">   </span><span class="k">end function </span><span class="n">comm_env_node_compute_ranks</span>
+<a id="ln-410" name="ln-410" href="#ln-410"></a>
+<a id="ln-411" name="ln-411" href="#ln-411"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">comm_env_bcast_real</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
+<a id="ln-412" name="ln-412" href="#ln-412"></a><span class="w">      </span><span class="c">!! Broadcast a single real(wp) scalar from compute rank 0</span>
+<a id="ln-413" name="ln-413" href="#ln-413"></a><span class="w">      </span><span class="c">!! Uses compute communicator so I/O server ranks don't participate.</span>
+<a id="ln-414" name="ln-414" href="#ln-414"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">val</span>
+<a id="ln-415" name="ln-415" href="#ln-415"></a><span class="w">      </span><span class="k">call </span><span class="n">bcast</span><span class="p">(</span><span class="n">comm_compute</span><span class="p">,</span><span class="w"> </span><span class="n">val</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span>
+<a id="ln-416" name="ln-416" href="#ln-416"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">comm_env_bcast_real</span>
+<a id="ln-417" name="ln-417" href="#ln-417"></a>
+<a id="ln-418" name="ln-418" href="#ln-418"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">comm_env_abort</span><span class="p">(</span><span class="n">code</span><span class="p">)</span>
+<a id="ln-419" name="ln-419" href="#ln-419"></a><span class="w">      </span><span class="c">!! Abort all MPI processes with given error code</span>
+<a id="ln-420" name="ln-420" href="#ln-420"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">code</span>
+<a id="ln-421" name="ln-421" href="#ln-421"></a><span class="w">      </span><span class="k">call </span><span class="n">abort_comm</span><span class="p">(</span><span class="n">comm_global</span><span class="p">,</span><span class="w"> </span><span class="n">code</span><span class="p">)</span>
+<a id="ln-422" name="ln-422" href="#ln-422"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">comm_env_abort</span>
+<a id="ln-423" name="ln-423" href="#ln-423"></a>
+<a id="ln-424" name="ln-424" href="#ln-424"></a><span class="k">end module </span><span class="n">rdb_comm_env</span>
+</pre></div>
+
+      </section>
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-20 10:28 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

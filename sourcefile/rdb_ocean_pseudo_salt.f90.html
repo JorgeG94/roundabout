@@ -1,0 +1,1022 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>rdb_ocean_pseudo_salt.F90 &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>rdb_ocean_pseudo_salt.F90
+      <small>Source File</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for source files.">69 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_pseudo_salt.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+            <li class="breadcrumb-item active" aria-current="page">rdb_ocean_pseudo_salt.F90</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#mods-0"
+         aria-expanded="false" aria-controls="mods-0">
+         <h4 class="card-header bg-primary text-white">Modules</h4>
+      </a>
+      <div id="mods-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_pseudo_salt.html">rdb_ocean_pseudo_salt</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../sourcefile/rdb_ocean_pseudo_salt.f90.html#src">rdb_ocean_pseudo_salt.F90</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    <div class="col-md-9" id='text'>
+      <p>Pseudo-salt verification tracer for the ocean path.</p>
+      <br>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">This file depends on</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph Pages: 1 -->
+<svg id="sourcefilerdb_ocean_pseudo_saltf90EfferentGraph" width="641pt" height="180pt"
+ viewBox="0.00 0.00 641.00 179.60" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph" class="graph" transform="scale(0.8 0.8) rotate(0) translate(4 220.15)">
+<title>sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-220.15 796,-220.15 796,4 -4,4"/>
+<!-- sourcefile~rdb_ocean_pseudo_salt.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_node1" class="node">
+<title>sourcefile~rdb_ocean_pseudo_salt.f90</title>
+<polygon fill="none" stroke="black" points="792,-104 632,-104 632,-80 792,-80 792,-104"/>
+<text text-anchor="middle" x="712" y="-89.6" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ocean_pseudo_salt.F90</text>
+</g>
+<!-- sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_node2" class="node">
+<title>sourcefile~rdb_constants.f90</title>
+<g id="a_sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_node2"><a xlink:href="../sourcefile/rdb_constants.f90.html" xlink:title="rdb_constants.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="109,-144 0,-144 0,-120 109,-120 109,-144"/>
+<text text-anchor="middle" x="54.5" y="-129.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_constants.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_pseudo_salt.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_edge1" class="edge">
+<title>sourcefile~rdb_ocean_pseudo_salt.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M359.5,-212C263.83,-214.77 235.12,-225.21 145,-193 118.98,-183.7 93.34,-164.98 76.22,-150.71"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="78.41,-147.98 68.53,-144.13 73.85,-153.29 78.41,-147.98"/>
+</g>
+<!-- sourcefile~rdb_error_ring.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_node3" class="node">
+<title>sourcefile~rdb_error_ring.f90</title>
+<g id="a_sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_node3"><a xlink:href="../sourcefile/rdb_error_ring.f90.html" xlink:title="rdb_error_ring.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="416,-24 305,-24 305,0 416,0 416,-24"/>
+<text text-anchor="middle" x="360.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_error_ring.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_pseudo_salt.f90&#45;&gt;sourcefile~rdb_error_ring.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_edge2" class="edge">
+<title>sourcefile~rdb_ocean_pseudo_salt.f90&#45;&gt;sourcefile~rdb_error_ring.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M658.3,-79.94C595.54,-65.57 490.83,-41.6 424.04,-26.31"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="424.59,-22.85 414.06,-24.03 423.03,-29.67 424.59,-22.85"/>
+</g>
+<!-- sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_node4" class="node">
+<title>sourcefile~rdb_grid.f90</title>
+<g id="a_sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_node4"><a xlink:href="../sourcefile/rdb_grid.f90.html" xlink:title="rdb_grid.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="246.5,-184 167.5,-184 167.5,-160 246.5,-160 246.5,-184"/>
+<text text-anchor="middle" x="207" y="-169.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_grid.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_pseudo_salt.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_edge3" class="edge">
+<title>sourcefile~rdb_ocean_pseudo_salt.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M692.42,-104.22C641.45,-136.43 494.34,-220.62 361.5,-212"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M359.5,-212C319.01,-213.17 274.38,-199.45 244.11,-187.76"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="245.4,-184.51 234.81,-184.06 242.81,-191.01 245.4,-184.51"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_node5" class="node">
+<title>sourcefile~rdb_multilayer_state.f90</title>
+<g id="a_sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_node5"><a xlink:href="../sourcefile/rdb_multilayer_state.f90.html" xlink:title="rdb_multilayer_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="596,-104 452,-104 452,-80 596,-80 596,-104"/>
+<text text-anchor="middle" x="524" y="-89.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_multilayer_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_pseudo_salt.f90&#45;&gt;sourcefile~rdb_multilayer_state.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_edge4" class="edge">
+<title>sourcefile~rdb_ocean_pseudo_salt.f90&#45;&gt;sourcefile~rdb_multilayer_state.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M631.85,-92C623.41,-92 614.82,-92 606.36,-92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="606.13,-88.5 596.13,-92 606.13,-95.5 606.13,-88.5"/>
+</g>
+<!-- sourcefile~rdb_grid.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_edge5" class="edge">
+<title>sourcefile~rdb_grid.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M167.24,-161.7C150.04,-157.13 129.48,-151.66 110.72,-146.68"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="111.37,-143.23 100.8,-144.04 109.57,-149.99 111.37,-143.23"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_edge6" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M489.85,-79.91C457.59,-69.07 406.93,-54.51 361.5,-52"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M359.5,-52C263.94,-46.72 235.12,-38.79 145,-71 118.98,-80.3 93.34,-99.02 76.22,-113.29"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="73.85,-110.71 68.53,-119.87 78.41,-116.02 73.85,-110.71"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_error_ring.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_edge8" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_error_ring.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M499.28,-79.84C477.64,-68.79 444.77,-52.12 416,-38 409.68,-34.9 402.92,-31.63 396.39,-28.5"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="397.6,-25.2 387.06,-24.05 394.58,-31.52 397.6,-25.2"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_edge9" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M507.76,-104.02C487.92,-118.92 451.55,-143.74 416,-155 363.35,-171.68 299.66,-174.52 256.73,-174.1"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="256.62,-170.59 246.56,-173.93 256.5,-177.59 256.62,-170.59"/>
+</g>
+<!-- sourcefile~rdb_efp.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_node6" class="node">
+<title>sourcefile~rdb_efp.f90</title>
+<g id="a_sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_node6"><a xlink:href="../sourcefile/rdb_efp.f90.html" xlink:title="rdb_efp.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="398.5,-104 322.5,-104 322.5,-80 398.5,-80 398.5,-104"/>
+<text text-anchor="middle" x="360.5" y="-89.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_efp.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_efp.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_edge7" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_efp.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M451.69,-92C437.29,-92 422.48,-92 409.14,-92"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="408.78,-88.5 398.78,-92 408.78,-95.5 408.78,-88.5"/>
+</g>
+<!-- sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_node7" class="node">
+<title>sourcefile~rdb_mem_report.f90</title>
+<g id="a_sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_node7"><a xlink:href="../sourcefile/rdb_mem_report.f90.html" xlink:title="rdb_mem_report.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="269,-104 145,-104 145,-80 269,-80 269,-104"/>
+<text text-anchor="middle" x="207" y="-89.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_mem_report.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_edge10" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_mem_report.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M359.5,-52C318.57,-49.74 273.33,-64 243.04,-76.11"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="241.66,-72.9 233.75,-79.95 244.33,-79.37 241.66,-72.9"/>
+</g>
+<!-- sourcefile~rdb_tracer.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_node8" class="node">
+<title>sourcefile~rdb_tracer.f90</title>
+<g id="a_sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_node8"><a xlink:href="../sourcefile/rdb_tracer.f90.html" xlink:title="rdb_tracer.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="405,-146 316,-146 316,-122 405,-122 405,-146"/>
+<text text-anchor="middle" x="360.5" y="-131.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_tracer.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_tracer.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_edge11" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_tracer.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M476.72,-104.04C457.42,-109.05 434.89,-114.91 414.9,-120.11"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="413.81,-116.78 405.01,-122.68 415.57,-123.55 413.81,-116.78"/>
+</g>
+<!-- sourcefile~rdb_mem_report.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_edge12" class="edge">
+<title>sourcefile~rdb_mem_report.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M160.85,-104C145.14,-108.17 127.35,-112.9 110.91,-117.27"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="109.65,-113.99 100.88,-119.94 111.45,-120.75 109.65,-113.99"/>
+</g>
+<!-- sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_edge13" class="edge">
+<title>sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M315.94,-133.71C264.52,-133.38 178.56,-132.81 119.55,-132.42"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="119.25,-128.92 109.23,-132.35 119.2,-135.92 119.25,-128.92"/>
+</g>
+<!-- sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_edge14" class="edge">
+<title>sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M315.68,-144.99C297.16,-149.64 275.53,-155.06 256.53,-159.83"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="255.42,-156.5 246.57,-162.33 257.12,-163.29 255.42,-156.5"/>
+</g>
+<!-- sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~EfferentGraph_edge15" class="edge">
+<title>sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_mem_report.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M316.09,-121.96C298.97,-117.22 279.14,-111.72 261.18,-106.74"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="261.99,-103.34 251.42,-104.04 260.12,-110.08 261.99,-103.34"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefilerdb_ocean_pseudo_saltf90EfferentGraph = svgPanZoom('#sourcefilerdb_ocean_pseudo_saltf90EfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#EfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="EfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Files dependent on this one</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph Pages: 1 -->
+<svg id="sourcefilerdb_ocean_pseudo_saltf90AfferentGraph" width="641pt" height="279pt"
+ viewBox="0.00 0.00 641.00 278.67" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph" class="graph" transform="scale(0.52 0.52) rotate(0) translate(4 529)">
+<title>sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-529 1222,-529 1222,4 -4,4"/>
+<!-- sourcefile~rdb_ocean_pseudo_salt.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node1" class="node">
+<title>sourcefile~rdb_ocean_pseudo_salt.f90</title>
+<polygon fill="none" stroke="black" points="160,-485 0,-485 0,-461 160,-461 160,-485"/>
+<text text-anchor="middle" x="80" y="-470.6" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ocean_pseudo_salt.F90</text>
+</g>
+<!-- sourcefile~rdb_config_validate.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node2" class="node">
+<title>sourcefile~rdb_config_validate.f90</title>
+<g id="a_sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node2"><a xlink:href="../sourcefile/rdb_config_validate.f90.html" xlink:title="rdb_config_validate.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="335,-525 196,-525 196,-501 335,-501 335,-525"/>
+<text text-anchor="middle" x="265.5" y="-510.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_config_validate.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_config_validate.f90&#45;&gt;sourcefile~rdb_ocean_pseudo_salt.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_edge1" class="edge">
+<title>sourcefile~rdb_config_validate.f90&#45;&gt;sourcefile~rdb_ocean_pseudo_salt.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M209.44,-501C189.58,-496.67 166.96,-491.74 146.3,-487.23"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="146.85,-483.77 136.33,-485.06 145.36,-490.61 146.85,-483.77"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node3" class="node">
+<title>sourcefile~rdb_ocean_diag_fills.f90</title>
+<g id="a_sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node3"><a xlink:href="../sourcefile/rdb_ocean_diag_fills.f90.html" xlink:title="rdb_ocean_diag_fills.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="524,-516 381,-516 381,-492 524,-492 524,-516"/>
+<text text-anchor="middle" x="452.5" y="-501.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_fills.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_pseudo_salt.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_edge2" class="edge">
+<title>sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_pseudo_salt.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M380.99,-496.42C365.83,-494.88 349.89,-493.32 335,-492 280.41,-487.15 219.15,-482.54 170.46,-479.08"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="170.5,-475.57 160.27,-478.36 170,-482.55 170.5,-475.57"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node4" class="node">
+<title>sourcefile~rdb_ocean_state.f90</title>
+<g id="a_sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node4"><a xlink:href="../sourcefile/rdb_ocean_state.f90.html" xlink:title="rdb_ocean_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="327,-415 204,-415 204,-391 327,-391 327,-415"/>
+<text text-anchor="middle" x="265.5" y="-400.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_edge10" class="edge">
+<title>sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M405.81,-491.95C394.17,-488.16 381.88,-483.49 371,-478 340.16,-462.43 308.44,-438.3 288.16,-421.63"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="290.38,-418.92 280.46,-415.21 285.9,-424.3 290.38,-418.92"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_pseudo_salt.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_edge3" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_pseudo_salt.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M232.96,-415.03C202.36,-426.7 155.79,-444.47 122.26,-457.26"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="120.84,-454.05 112.75,-460.89 123.34,-460.6 120.84,-454.05"/>
+</g>
+<!-- sourcefile~rdb_driver.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node5" class="node">
+<title>sourcefile~rdb_driver.f90</title>
+<g id="a_sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node5"><a xlink:href="../sourcefile/rdb_driver.f90.html" xlink:title="rdb_driver.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1065.5,-313 977.5,-313 977.5,-289 1065.5,-289 1065.5,-313"/>
+<text text-anchor="middle" x="1021.5" y="-298.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_edge7" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M977.09,-292.55C860.96,-270.79 545.73,-217.59 453.5,-262"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node9" class="node">
+<title>sourcefile~rdb_ocean_engine.f90</title>
+<g id="a_sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node9"><a xlink:href="../sourcefile/rdb_ocean_engine.f90.html" xlink:title="rdb_ocean_engine.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="921.5,-394 788.5,-394 788.5,-370 921.5,-370 921.5,-394"/>
+<text text-anchor="middle" x="855" y="-379.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_edge19" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M995.87,-313.13C967.69,-327.01 921.36,-349.82 889.81,-365.35"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="887.95,-362.37 880.53,-369.92 891.04,-368.65 887.95,-362.37"/>
+</g>
+<!-- sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node6" class="node">
+<title>sourcefile~rdb_handle.f90</title>
+<g id="a_sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node6"><a xlink:href="../sourcefile/rdb_handle.f90.html" xlink:title="rdb_handle.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1069,-394 974,-394 974,-370 1069,-370 1069,-394"/>
+<text text-anchor="middle" x="1021.5" y="-379.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_edge8" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M980.14,-369.92C966.84,-366.43 951.89,-363.02 938,-361 724.74,-330.03 667.69,-318.25 453.5,-342"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M451.5,-342C397.27,-348.69 337.81,-371.23 301.31,-386.95"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="299.86,-383.77 292.1,-390.99 302.67,-390.18 299.86,-383.77"/>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_edge20" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M973.8,-382C960.73,-382 946.18,-382 931.88,-382"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="931.54,-378.5 921.54,-382 931.54,-385.5 931.54,-378.5"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node7" class="node">
+<title>sourcefile~rdb_ocean_api.f90</title>
+<g id="a_sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node7"><a xlink:href="../sourcefile/rdb_ocean_api.f90.html" xlink:title="rdb_ocean_api.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1218,-444 1105,-444 1105,-420 1218,-420 1218,-444"/>
+<text text-anchor="middle" x="1161.5" y="-429.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_edge4" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M854,-482C743.11,-476.52 615.01,-486.4 534.14,-494.63"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="533.61,-491.17 524.03,-495.68 534.33,-498.13 533.61,-491.17"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_edge16" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90</title>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M1127.09,-419.9C1108.59,-413.19 1085.37,-404.78 1065.52,-397.59"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="1066.67,-394.28 1056.08,-394.17 1064.29,-400.86 1066.67,-394.28"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node8" class="node">
+<title>sourcefile~rdb_ocean_diag_derived.f90</title>
+<g id="a_sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node8"><a xlink:href="../sourcefile/rdb_ocean_diag_derived.f90.html" xlink:title="rdb_ocean_diag_derived.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="736,-454 570,-454 570,-430 736,-430 736,-454"/>
+<text text-anchor="middle" x="653" y="-439.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_derived.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_edge17" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1020.5,-482C947.41,-483.87 929.02,-485.61 856,-482"/>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M854,-482C802.81,-479.47 745.58,-467.02 705.49,-456.67"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="706.25,-453.25 695.69,-454.09 704.47,-460.02 706.25,-453.25"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_edge21" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M1140.29,-444C1114.1,-458.43 1066.57,-480.87 1022.5,-482"/>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M1020.5,-482C959.12,-483.57 901.11,-431.38 873.25,-401.79"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="875.55,-399.11 866.22,-394.1 870.39,-403.84 875.55,-399.11"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_edge5" class="edge">
+<title>sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M613.26,-454.1C581.42,-464.04 536.16,-478.18 501.94,-488.87"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="500.65,-485.61 492.15,-491.93 502.74,-492.29 500.65,-485.61"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_edge9" class="edge">
+<title>sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M569.76,-451.5C513.32,-455.92 436.98,-457.76 371,-445 345.64,-440.1 318.63,-429.07 298.43,-419.55"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="299.9,-416.37 289.37,-415.17 296.85,-422.67 299.9,-416.37"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_edge6" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M652,-380C611.46,-384.1 604.92,-400 570,-421 551.97,-431.84 506.76,-464.7 478.25,-485.68"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="475.96,-483.02 469.99,-491.77 480.12,-488.65 475.96,-483.02"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_edge11" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M788.08,-377.69C749,-376.04 698.57,-375.5 654,-380"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M652,-380C562.63,-389.03 542.78,-332.1 453.5,-342"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_edge18" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M813.53,-394.14C781.84,-403.65 737.62,-416.91 703.77,-427.07"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="702.64,-423.75 694.07,-429.98 704.66,-430.46 702.64,-423.75"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node10" class="node">
+<title>sourcefile~rdb_ocean_setup.f90</title>
+<g id="a_sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node10"><a xlink:href="../sourcefile/rdb_ocean_setup.f90.html" xlink:title="rdb_ocean_setup.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="716,-171 590,-171 590,-147 716,-147 716,-171"/>
+<text text-anchor="middle" x="653" y="-156.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_edge22" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M842.96,-369.69C810.04,-332.99 712.34,-224.05 671.87,-178.92"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="674.29,-176.38 665,-171.27 669.07,-181.05 674.29,-176.38"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_edge12" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M629.89,-171.02C593.46,-190.71 518.39,-230.76 453.5,-262"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M451.5,-262C418.38,-277.95 402.39,-261.88 371,-281 329.24,-306.44 295.67,-354.26 278.65,-381.87"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="275.48,-380.35 273.34,-390.72 281.48,-383.95 275.48,-380.35"/>
+</g>
+<!-- sourcefile~rdb_ocean_state_restart.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node11" class="node">
+<title>sourcefile~rdb_ocean_state_restart.f90</title>
+<g id="a_sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node11"><a xlink:href="../sourcefile/rdb_ocean_state_restart.f90.html" xlink:title="rdb_ocean_state_restart.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="534,-436 371,-436 371,-412 534,-412 534,-436"/>
+<text text-anchor="middle" x="452.5" y="-421.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_restart.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state_restart.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_edge13" class="edge">
+<title>sourcefile~rdb_ocean_state_restart.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M370.89,-414.85C359.64,-413.57 348.14,-412.27 337.09,-411.01"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="337.41,-407.53 327.08,-409.88 336.62,-414.48 337.41,-407.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_state_seed.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node12" class="node">
+<title>sourcefile~rdb_ocean_state_seed.f90</title>
+<g id="a_sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node12"><a xlink:href="../sourcefile/rdb_ocean_state_seed.f90.html" xlink:title="rdb_ocean_state_seed.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="529.5,-394 375.5,-394 375.5,-370 529.5,-370 529.5,-394"/>
+<text text-anchor="middle" x="452.5" y="-379.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_seed.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state_seed.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_edge14" class="edge">
+<title>sourcefile~rdb_ocean_state_seed.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M375.45,-390.63C362.92,-392.06 349.97,-393.53 337.56,-394.93"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="336.83,-391.49 327.29,-396.1 337.62,-398.45 336.83,-391.49"/>
+</g>
+<!-- sourcefile~rdb_ocean_state_topo.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node13" class="node">
+<title>sourcefile~rdb_ocean_state_topo.f90</title>
+<g id="a_sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node13"><a xlink:href="../sourcefile/rdb_ocean_state_topo.f90.html" xlink:title="rdb_ocean_state_topo.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="528,-314 377,-314 377,-290 528,-290 528,-314"/>
+<text text-anchor="middle" x="452.5" y="-299.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_topo.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state_topo.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_edge15" class="edge">
+<title>sourcefile~rdb_ocean_state_topo.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M405.81,-314.05C394.17,-317.84 381.88,-322.51 371,-328 340.16,-343.57 308.44,-367.7 288.16,-384.37"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="285.9,-381.7 280.46,-390.79 290.38,-387.08 285.9,-381.7"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_bc.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node14" class="node">
+<title>sourcefile~rdb_ocean_setup_bc.f90</title>
+<g id="a_sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node14"><a xlink:href="../sourcefile/rdb_ocean_setup_bc.f90.html" xlink:title="rdb_ocean_setup_bc.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="927,-108 783,-108 783,-84 927,-84 927,-108"/>
+<text text-anchor="middle" x="855" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_bc.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_bc.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_edge23" class="edge">
+<title>sourcefile~rdb_ocean_setup_bc.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M803.93,-108.05C793.34,-110.81 782.26,-113.87 772,-117 746.09,-124.91 717.46,-135.07 694.89,-143.41"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="693.44,-140.21 685.29,-146.98 695.89,-146.77 693.44,-140.21"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_bt.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node15" class="node">
+<title>sourcefile~rdb_ocean_setup_bt.f90</title>
+<g id="a_sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node15"><a xlink:href="../sourcefile/rdb_ocean_setup_bt.f90.html" xlink:title="rdb_ocean_setup_bt.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="926,-66 784,-66 784,-42 926,-42 926,-66"/>
+<text text-anchor="middle" x="855" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_bt.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_bt.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_edge24" class="edge">
+<title>sourcefile~rdb_ocean_setup_bt.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M795.72,-66.08C787.59,-68.58 779.46,-71.53 772,-75 735.03,-92.17 697.57,-121.27 675.06,-140.31"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="672.78,-137.66 667.47,-146.83 677.34,-142.97 672.78,-137.66"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_cavity.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node16" class="node">
+<title>sourcefile~rdb_ocean_setup_cavity.f90</title>
+<g id="a_sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node16"><a xlink:href="../sourcefile/rdb_ocean_setup_cavity.f90.html" xlink:title="rdb_ocean_setup_cavity.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="935.5,-24 774.5,-24 774.5,0 935.5,0 935.5,-24"/>
+<text text-anchor="middle" x="855" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_cavity.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_cavity.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_edge25" class="edge">
+<title>sourcefile~rdb_ocean_setup_cavity.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M791.16,-24.1C784.47,-26.55 777.94,-29.48 772,-33 726.15,-60.14 687.08,-110.34 667.48,-138.49"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="664.56,-136.56 661.82,-146.8 670.34,-140.51 664.56,-136.56"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node17" class="node">
+<title>sourcefile~rdb_ocean_setup_grid.f90</title>
+<g id="a_sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node17"><a xlink:href="../sourcefile/rdb_ocean_setup_grid.f90.html" xlink:title="rdb_ocean_setup_grid.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="931,-234 779,-234 779,-210 931,-210 931,-234"/>
+<text text-anchor="middle" x="855" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_grid.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_grid.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_edge26" class="edge">
+<title>sourcefile~rdb_ocean_setup_grid.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M803.93,-209.95C793.34,-207.19 782.26,-204.13 772,-201 746.09,-193.09 717.46,-182.93 694.89,-174.59"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="695.89,-171.23 685.29,-171.02 693.44,-177.79 695.89,-171.23"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_lateral.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node18" class="node">
+<title>sourcefile~rdb_ocean_setup_lateral.f90</title>
+<g id="a_sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node18"><a xlink:href="../sourcefile/rdb_ocean_setup_lateral.f90.html" xlink:title="rdb_ocean_setup_lateral.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="938,-192 772,-192 772,-168 938,-168 938,-192"/>
+<text text-anchor="middle" x="855" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_lateral.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_lateral.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_edge27" class="edge">
+<title>sourcefile~rdb_ocean_setup_lateral.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M771.79,-171.37C756.64,-169.78 740.94,-168.13 726.12,-166.57"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="726.33,-163.08 716.02,-165.51 725.6,-170.04 726.33,-163.08"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_vmix.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node19" class="node">
+<title>sourcefile~rdb_ocean_setup_vmix.f90</title>
+<g id="a_sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_node19"><a xlink:href="../sourcefile/rdb_ocean_setup_vmix.f90.html" xlink:title="rdb_ocean_setup_vmix.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="933.5,-150 776.5,-150 776.5,-126 933.5,-126 933.5,-150"/>
+<text text-anchor="middle" x="855" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_vmix.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_vmix.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_pseudo_salt.f90~~AfferentGraph_edge28" class="edge">
+<title>sourcefile~rdb_ocean_setup_vmix.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M776.39,-146.15C759.84,-147.89 742.43,-149.72 726.1,-151.43"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="725.66,-147.96 716.08,-152.48 726.39,-154.92 725.66,-147.96"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefilerdb_ocean_pseudo_saltf90AfferentGraph = svgPanZoom('#sourcefilerdb_ocean_pseudo_saltf90AfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#AfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="AfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+<br>
+      <section>
+        <h2><span class="anchor" id="src"></span>Source Code</h2>
+        <div class="hl codehilite"><pre><span></span><a id="ln-1" name="ln-1" href="#ln-1"></a><span class="c">!! Pseudo-salt verification tracer for the ocean path.</span>
+<a id="ln-2" name="ln-2" href="#ln-2"></a><span class="k">module </span><span class="n">rdb_ocean_pseudo_salt</span>
+<a id="ln-3" name="ln-3" href="#ln-3"></a><span class="w">   </span><span class="c">!! Pseudo-salt (Shao 2016): a passive tracer seeded to salinity's</span>
+<a id="ln-4" name="ln-4" href="#ln-4"></a><span class="w">   </span><span class="c">!! initial condition and given exactly the operators salinity</span>
+<a id="ln-5" name="ln-5" href="#ln-5"></a><span class="w">   </span><span class="c">!! receives that the registry does NOT deliver automatically — the</span>
+<a id="ln-6" name="ln-6" href="#ln-6"></a><span class="w">   </span><span class="c">!! surface salt flux and the KPP/EPBL non-local counter-gradient</span>
+<a id="ln-7" name="ln-7" href="#ln-7"></a><span class="w">   </span><span class="c">!! `gamma_s` (both mirrored in-place in the kernels that own them,</span>
+<a id="ln-8" name="ln-8" href="#ln-8"></a><span class="w">   </span><span class="c">!! `rdb_ocean_surface_flux` / `rdb_ocean_vmix` — this module adds no</span>
+<a id="ln-9" name="ln-9" href="#ln-9"></a><span class="w">   </span><span class="c">!! new dyn-step call site).  Every other operator (advection, ALE</span>
+<a id="ln-10" name="ln-10" href="#ln-10"></a><span class="w">   </span><span class="c">!! remap, vertical/horizontal diffusion, vertical exchange, halo,</span>
+<a id="ln-11" name="ln-11" href="#ln-11"></a><span class="w">   </span><span class="c">!! sponge, OBC) already rides the generic tracer registry, so</span>
+<a id="ln-12" name="ln-12" href="#ln-12"></a><span class="w">   </span><span class="c">!! pseudo-salt receives it "for free" the moment it is registered.</span>
+<a id="ln-13" name="ln-13" href="#ln-13"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-14" name="ln-14" href="#ln-14"></a><span class="w">   </span><span class="c">!! The deviation `D = pseudo_salt - S` is a direct, measured proxy</span>
+<a id="ln-15" name="ln-15" href="#ln-15"></a><span class="w">   </span><span class="c">!! for how far the passive-tracer transport path has drifted from</span>
+<a id="ln-16" name="ln-16" href="#ln-16"></a><span class="w">   </span><span class="c">!! the active-tracer (salinity) path — an architectural claim turned</span>
+<a id="ln-17" name="ln-17" href="#ln-17"></a><span class="w">   </span><span class="c">!! into a number.  Reference: Shao, A. (2016), MOM6</span>
+<a id="ln-18" name="ln-18" href="#ln-18"></a><span class="w">   </span><span class="c">!! `pseudo_salt_tracer.F90`; the idea is standard practice in</span>
+<a id="ln-19" name="ln-19" href="#ln-19"></a><span class="w">   </span><span class="c">!! offline/online transport verification and carries no separate</span>
+<a id="ln-20" name="ln-20" href="#ln-20"></a><span class="w">   </span><span class="c">!! citation in MOM6 either.</span>
+<a id="ln-21" name="ln-21" href="#ln-21"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-22" name="ln-22" href="#ln-22"></a><span class="w">   </span><span class="c">!! Excluded by design (fail-loud at configure, `rdb_config`</span>
+<a id="ln-23" name="ln-23" href="#ln-23"></a><span class="w">   </span><span class="c">!! `validate_config`) because Roundabout has no mirror for them and an</span>
+<a id="ln-24" name="ln-24" href="#ln-24"></a><span class="w">   </span><span class="c">!! un-mirrored salinity source would make `D` measure that source</span>
+<a id="ln-25" name="ln-25" href="#ln-25"></a><span class="w">   </span><span class="c">!! instead of the passive-path error: SSS piston restoring</span>
+<a id="ln-26" name="ln-26" href="#ln-26"></a><span class="w">   </span><span class="c">!! (`&amp;ocean_restore_nml enable_restore_salt`) and sea-ice frazil /</span>
+<a id="ln-27" name="ln-27" href="#ln-27"></a><span class="w">   </span><span class="c">!! basal salt exchange (`&amp;ocean_ice_nml enable`).</span>
+<a id="ln-28" name="ln-28" href="#ln-28"></a><span class="cp">#ifdef LFORTRAN_PASSING</span>
+<a id="ln-29" name="ln-29" href="#ln-29"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_constants</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">wp</span><span class="p">,</span><span class="w"> </span><span class="n">H_VANISHED</span>
+<a id="ln-30" name="ln-30" href="#ln-30"></a><span class="cp">#else</span>
+<a id="ln-31" name="ln-31" href="#ln-31"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_constants</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">wp</span><span class="p">,</span><span class="w"> </span><span class="n">H_VANISHED</span><span class="p">,</span><span class="w"> </span><span class="n">NZ_STACK_MAX</span>
+<a id="ln-32" name="ln-32" href="#ln-32"></a><span class="cp">#endif</span>
+<a id="ln-33" name="ln-33" href="#ln-33"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_grid</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">hgrid_t</span>
+<a id="ln-34" name="ln-34" href="#ln-34"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_multilayer_state</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">multilayer_state_t</span>
+<a id="ln-35" name="ln-35" href="#ln-35"></a><span class="w">   </span><span class="k">use </span><span class="n">pic_logger</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">global_logger</span>
+<a id="ln-36" name="ln-36" href="#ln-36"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_error_ring</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">error_ring_push</span>
+<a id="ln-37" name="ln-37" href="#ln-37"></a><span class="w">   </span><span class="k">implicit none</span>
+<a id="ln-38" name="ln-38" href="#ln-38"></a><span class="k">   private</span>
+<a id="ln-39" name="ln-39" href="#ln-39"></a>
+<a id="ln-40" name="ln-40" href="#ln-40"></a><span class="cp">#ifdef LFORTRAN_PASSING</span>
+<a id="ln-41" name="ln-41" href="#ln-41"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">NZ_STACK_MAX</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">64</span>
+<a id="ln-42" name="ln-42" href="#ln-42"></a><span class="w">      </span><span class="c">!! LFortran 0.64 workaround: module-local copy of the rdb_constants value</span>
+<a id="ln-43" name="ln-43" href="#ln-43"></a><span class="w">      </span><span class="c">!! (an imported parameter used as an explicit-shape dummy bound inside a</span>
+<a id="ln-44" name="ln-44" href="#ln-44"></a><span class="w">      </span><span class="c">!! PURE call becomes an impure getter under LFortran). Keep in sync (=64).</span>
+<a id="ln-45" name="ln-45" href="#ln-45"></a><span class="cp">#endif</span>
+<a id="ln-46" name="ln-46" href="#ln-46"></a>
+<a id="ln-47" name="ln-47" href="#ln-47"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ocean_pseudo_salt_register</span>
+<a id="ln-48" name="ln-48" href="#ln-48"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ocean_pseudo_salt_seed</span>
+<a id="ln-49" name="ln-49" href="#ln-49"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ocean_pseudo_salt_deviation</span>
+<a id="ln-50" name="ln-50" href="#ln-50"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">pseudo_salt_conflicts_restore</span>
+<a id="ln-51" name="ln-51" href="#ln-51"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">pseudo_salt_conflicts_ice</span>
+<a id="ln-52" name="ln-52" href="#ln-52"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">pseudo_salt_needs_thermo_warning</span>
+<a id="ln-53" name="ln-53" href="#ln-53"></a>
+<a id="ln-54" name="ln-54" href="#ln-54"></a><span class="k">contains</span>
+<a id="ln-55" name="ln-55" href="#ln-55"></a>
+<a id="ln-56" name="ln-56" href="#ln-56"></a><span class="k">   subroutine </span><span class="n">ocean_pseudo_salt_register</span><span class="p">(</span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">)</span>
+<a id="ln-57" name="ln-57" href="#ln-57"></a><span class="w">      </span><span class="c">!! Setup-time entry point: registers the "pseudo_salt" passive</span>
+<a id="ln-58" name="ln-58" href="#ln-58"></a><span class="w">      </span><span class="c">!! tracer (name/units/long_name copied verbatim from Shao 2016)</span>
+<a id="ln-59" name="ln-59" href="#ln-59"></a><span class="w">      </span><span class="c">!! and records its slot on `ms%idx_pseudo_salt`.  MUST be called</span>
+<a id="ln-60" name="ln-60" href="#ln-60"></a><span class="w">      </span><span class="c">!! after `ms%init` and before `enter_data` — and, on the ocean</span>
+<a id="ln-61" name="ln-61" href="#ln-61"></a><span class="w">      </span><span class="c">!! path, before `ocean_bc_state_init` sizes `bc%n_tracers` (the</span>
+<a id="ln-62" name="ln-62" href="#ln-62"></a><span class="w">      </span><span class="c">!! `register_passive_tracer` contract).  `error stop`s on</span>
+<a id="ln-63" name="ln-63" href="#ln-63"></a><span class="w">      </span><span class="c">!! refusal (mirrors `rdb_state.F90`'s treatment of a fatal setup</span>
+<a id="ln-64" name="ln-64" href="#ln-64"></a><span class="w">      </span><span class="c">!! misconfiguration — a caller that reaches here has already</span>
+<a id="ln-65" name="ln-65" href="#ln-65"></a><span class="w">      </span><span class="c">!! decided to register, so a silent no-op would be worse than a</span>
+<a id="ln-66" name="ln-66" href="#ln-66"></a><span class="w">      </span><span class="c">!! loud abort).</span>
+<a id="ln-67" name="ln-67" href="#ln-67"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
+<a id="ln-68" name="ln-68" href="#ln-68"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<a id="ln-69" name="ln-69" href="#ln-69"></a>
+<a id="ln-70" name="ln-70" href="#ln-70"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">idx</span>
+<a id="ln-71" name="ln-71" href="#ln-71"></a>
+<a id="ln-72" name="ln-72" href="#ln-72"></a><span class="w">      </span><span class="k">call </span><span class="n">ms</span><span class="p">%</span><span class="n">register_passive_tracer</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="s2">"pseudo_salt"</span><span class="p">,</span><span class="w"> </span><span class="s2">"psu"</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-73" name="ln-73" href="#ln-73"></a><span class="w">                                      </span><span class="s2">"Pseudo salt passive tracer"</span><span class="p">,</span><span class="w"> </span><span class="n">idx</span><span class="p">)</span>
+<a id="ln-74" name="ln-74" href="#ln-74"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">idx</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-75" name="ln-75" href="#ln-75"></a><span class="k">         call </span><span class="n">error_ring_push</span><span class="p">(</span><span class="s2">"ocean_pseudo_salt_register: "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-76" name="ln-76" href="#ln-76"></a><span class="w">                              </span><span class="s2">"register_passive_tracer refused (registry "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-77" name="ln-77" href="#ln-77"></a><span class="w">                              </span><span class="s2">"not initialised, or already locked by enter_data)"</span><span class="p">)</span>
+<a id="ln-78" name="ln-78" href="#ln-78"></a><span class="w">         </span><span class="k">call </span><span class="n">global_logger</span><span class="p">%</span><span class="n">error</span><span class="p">(</span><span class="s2">"ocean_pseudo_salt_register: "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-79" name="ln-79" href="#ln-79"></a><span class="w">                                  </span><span class="s2">"register_passive_tracer refused (registry "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-80" name="ln-80" href="#ln-80"></a><span class="w">                                  </span><span class="s2">"not initialised, or already locked by enter_data)"</span><span class="p">)</span>
+<a id="ln-81" name="ln-81" href="#ln-81"></a><span class="w">         </span><span class="k">error stop</span><span class="w"> </span><span class="s2">"ocean_pseudo_salt_register: registration refused"</span>
+<a id="ln-82" name="ln-82" href="#ln-82"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-83" name="ln-83" href="#ln-83"></a><span class="k">      </span><span class="n">ms</span><span class="p">%</span><span class="n">idx_pseudo_salt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">idx</span>
+<a id="ln-84" name="ln-84" href="#ln-84"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">ocean_pseudo_salt_register</span>
+<a id="ln-85" name="ln-85" href="#ln-85"></a>
+<a id="ln-86" name="ln-86" href="#ln-86"></a><span class="w">   </span><span class="k">pure subroutine </span><span class="n">ocean_pseudo_salt_seed</span><span class="p">(</span><span class="n">ms</span><span class="p">)</span>
+<a id="ln-87" name="ln-87" href="#ln-87"></a><span class="w">      </span><span class="c">!! Seed `hTr(idx_pseudo_salt) = hTr(idx_salinity)` over the FULL</span>
+<a id="ln-88" name="ln-88" href="#ln-88"></a><span class="w">      </span><span class="c">!! array shape (nx_total, ny_total, nz_ml) — ghosts included,</span>
+<a id="ln-89" name="ln-89" href="#ln-89"></a><span class="w">      </span><span class="c">!! matching MOM6's `isd:ied, jsd:jed` seed (§4 of the plan). A</span>
+<a id="ln-90" name="ln-90" href="#ln-90"></a><span class="w">      </span><span class="c">!! halved ghost band would make the deviation diagnostic non-zero</span>
+<a id="ln-91" name="ln-91" href="#ln-91"></a><span class="w">      </span><span class="c">!! at the very first halo exchange, before any real transport has</span>
+<a id="ln-92" name="ln-92" href="#ln-92"></a><span class="w">      </span><span class="c">!! run. Self-gates on either index being unregistered. Must run</span>
+<a id="ln-93" name="ln-93" href="#ln-93"></a><span class="w">      </span><span class="c">!! AFTER every write to salinity's initial condition (analytical</span>
+<a id="ln-94" name="ln-94" href="#ln-94"></a><span class="w">      </span><span class="c">!! IC, then any z-file overlay) and BEFORE `ocean_state_enter_data`.</span>
+<a id="ln-95" name="ln-95" href="#ln-95"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
+<a id="ln-96" name="ln-96" href="#ln-96"></a>
+<a id="ln-97" name="ln-97" href="#ln-97"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">idx_pseudo_salt</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">idx_salinity</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-98" name="ln-98" href="#ln-98"></a><span class="k">      </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">idx_pseudo_salt</span><span class="p">)%</span><span class="n">hTr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">idx_salinity</span><span class="p">)%</span><span class="n">hTr</span>
+<a id="ln-99" name="ln-99" href="#ln-99"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">ocean_pseudo_salt_seed</span>
+<a id="ln-100" name="ln-100" href="#ln-100"></a>
+<a id="ln-101" name="ln-101" href="#ln-101"></a><span class="w">   </span><span class="k">pure subroutine </span><span class="n">ocean_pseudo_salt_deviation</span><span class="p">(</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">hTr_ps</span><span class="p">,</span><span class="w"> </span><span class="n">hTr_s</span><span class="p">,</span><span class="w"> </span><span class="n">buf</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-102" name="ln-102" href="#ln-102"></a><span class="w">                                               </span><span class="n">missing</span><span class="p">)</span>
+<a id="ln-103" name="ln-103" href="#ln-103"></a><span class="w">      </span><span class="c">!! Diagnostic helper: `D(i,j,k) = hTr_ps/h - hTr_s/h`, i.e. the</span>
+<a id="ln-104" name="ln-104" href="#ln-104"></a><span class="w">      </span><span class="c">!! pseudo-salt concentration minus the salinity concentration.</span>
+<a id="ln-105" name="ln-105" href="#ln-105"></a><span class="w">      </span><span class="c">!!</span>
+<a id="ln-106" name="ln-106" href="#ln-106"></a><span class="w">      </span><span class="c">!! A vanished layer (`rdb_vl_is_live` false — the ONE predicate, see</span>
+<a id="ln-107" name="ln-107" href="#ln-107"></a><span class="w">      </span><span class="c">!! `src/core/ocean/README.md`, "The vanished-layer content rule")</span>
+<a id="ln-108" name="ln-108" href="#ln-108"></a><span class="w">      </span><span class="c">!! writes `missing`, which the caller passes as the IEEE NaN sentinel</span>
+<a id="ln-109" name="ln-109" href="#ln-109"></a><span class="w">      </span><span class="c">!! `fill_tracer_impl` uses for the two concentrations this is the</span>
+<a id="ln-110" name="ln-110" href="#ln-110"></a><span class="w">      </span><span class="c">!! difference of.  It used to write `0` below a private `1e-6 m`</span>
+<a id="ln-111" name="ln-111" href="#ln-111"></a><span class="w">      </span><span class="c">!! floor: a deviation of zero is the one value this diagnostic</span>
+<a id="ln-112" name="ln-112" href="#ln-112"></a><span class="w">      </span><span class="c">!! exists to report as "the two transport paths agree", so a filler</span>
+<a id="ln-113" name="ln-113" href="#ln-113"></a><span class="w">      </span><span class="c">!! read as a perfect score, and layers between `1e-6 m` and</span>
+<a id="ln-114" name="ln-114" href="#ln-114"></a><span class="w">      </span><span class="c">!! `H_VANISHED` were divided through at all.</span>
+<a id="ln-115" name="ln-115" href="#ln-115"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">     </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<a id="ln-116" name="ln-116" href="#ln-116"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<a id="ln-117" name="ln-117" href="#ln-117"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">hTr_ps</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<a id="ln-118" name="ln-118" href="#ln-118"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">hTr_s</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<a id="ln-119" name="ln-119" href="#ln-119"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">buf</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<a id="ln-120" name="ln-120" href="#ln-120"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">missing</span>
+<a id="ln-121" name="ln-121" href="#ln-121"></a><span class="w">         </span><span class="c">!! Value written on a vanished layer (the diagnostics' NaN).</span>
+<a id="ln-122" name="ln-122" href="#ln-122"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span>
+<a id="ln-123" name="ln-123" href="#ln-123"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h</span>
+<a id="ln-124" name="ln-124" href="#ln-124"></a>
+<a id="ln-125" name="ln-125" href="#ln-125"></a><span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span>
+<a id="ln-126" name="ln-126" href="#ln-126"></a><span class="w">         </span><span class="n">h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<a id="ln-127" name="ln-127" href="#ln-127"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">rdb_vl_is_live</span><span class="p">(</span><span class="n">h</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-128" name="ln-128" href="#ln-128"></a><span class="k">            </span><span class="n">buf</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rdb_vl_conc</span><span class="p">(</span><span class="n">hTr_ps</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">),</span><span class="w"> </span><span class="n">h</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">rdb_vl_conc</span><span class="p">(</span><span class="n">hTr_s</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">),</span><span class="w"> </span><span class="n">h</span><span class="p">)</span>
+<a id="ln-129" name="ln-129" href="#ln-129"></a><span class="w">         </span><span class="k">else</span>
+<a id="ln-130" name="ln-130" href="#ln-130"></a><span class="k">            </span><span class="n">buf</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">missing</span>
+<a id="ln-131" name="ln-131" href="#ln-131"></a><span class="w">         </span><span class="k">end if</span>
+<a id="ln-132" name="ln-132" href="#ln-132"></a><span class="k">      end do</span>
+<a id="ln-133" name="ln-133" href="#ln-133"></a><span class="k">   end subroutine </span><span class="n">ocean_pseudo_salt_deviation</span>
+<a id="ln-134" name="ln-134" href="#ln-134"></a>
+<a id="ln-135" name="ln-135" href="#ln-135"></a><span class="w">   </span><span class="k">pure function </span><span class="n">pseudo_salt_conflicts_restore</span><span class="p">(</span><span class="n">enable_ps</span><span class="p">,</span><span class="w"> </span><span class="n">enable_restore_salt</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">conflict</span><span class="p">)</span>
+<a id="ln-136" name="ln-136" href="#ln-136"></a><span class="w">      </span><span class="c">!! `.true.` iff pseudo-salt is enabled alongside SSS piston</span>
+<a id="ln-137" name="ln-137" href="#ln-137"></a><span class="w">      </span><span class="c">!! restoring — an un-mirrored salinity source</span>
+<a id="ln-138" name="ln-138" href="#ln-138"></a><span class="w">      </span><span class="c">!! (`rdb_ocean_surface_flux.F90` restore branch) that would make</span>
+<a id="ln-139" name="ln-139" href="#ln-139"></a><span class="w">      </span><span class="c">!! the deviation diagnostic measure the restoring term instead of</span>
+<a id="ln-140" name="ln-140" href="#ln-140"></a><span class="w">      </span><span class="c">!! the passive-transport-path error. Drives a configure-time</span>
+<a id="ln-141" name="ln-141" href="#ln-141"></a><span class="w">      </span><span class="c">!! fail-loud abort.</span>
+<a id="ln-142" name="ln-142" href="#ln-142"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">enable_ps</span>
+<a id="ln-143" name="ln-143" href="#ln-143"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">enable_restore_salt</span>
+<a id="ln-144" name="ln-144" href="#ln-144"></a><span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">conflict</span>
+<a id="ln-145" name="ln-145" href="#ln-145"></a><span class="w">      </span><span class="n">conflict</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">enable_ps</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">enable_restore_salt</span>
+<a id="ln-146" name="ln-146" href="#ln-146"></a><span class="w">   </span><span class="k">end function </span><span class="n">pseudo_salt_conflicts_restore</span>
+<a id="ln-147" name="ln-147" href="#ln-147"></a>
+<a id="ln-148" name="ln-148" href="#ln-148"></a><span class="w">   </span><span class="k">pure function </span><span class="n">pseudo_salt_conflicts_ice</span><span class="p">(</span><span class="n">enable_ps</span><span class="p">,</span><span class="w"> </span><span class="n">enable_ice</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">conflict</span><span class="p">)</span>
+<a id="ln-149" name="ln-149" href="#ln-149"></a><span class="w">      </span><span class="c">!! `.true.` iff pseudo-salt is enabled alongside the sea-ice</span>
+<a id="ln-150" name="ln-150" href="#ln-150"></a><span class="w">      </span><span class="c">!! model — frazil / basal salt exchange are un-mirrored salinity</span>
+<a id="ln-151" name="ln-151" href="#ln-151"></a><span class="w">      </span><span class="c">!! sources (`rdb_ice_frazil.F90`, `rdb_ice_frazil_uptake.F90`,</span>
+<a id="ln-152" name="ln-152" href="#ln-152"></a><span class="w">      </span><span class="c">!! `rdb_ice_basal_flux.F90`). Drives a configure-time fail-loud</span>
+<a id="ln-153" name="ln-153" href="#ln-153"></a><span class="w">      </span><span class="c">!! abort.</span>
+<a id="ln-154" name="ln-154" href="#ln-154"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">enable_ps</span>
+<a id="ln-155" name="ln-155" href="#ln-155"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">enable_ice</span>
+<a id="ln-156" name="ln-156" href="#ln-156"></a><span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">conflict</span>
+<a id="ln-157" name="ln-157" href="#ln-157"></a><span class="w">      </span><span class="n">conflict</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">enable_ps</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">enable_ice</span>
+<a id="ln-158" name="ln-158" href="#ln-158"></a><span class="w">   </span><span class="k">end function </span><span class="n">pseudo_salt_conflicts_ice</span>
+<a id="ln-159" name="ln-159" href="#ln-159"></a>
+<a id="ln-160" name="ln-160" href="#ln-160"></a><span class="w">   </span><span class="k">pure function </span><span class="n">pseudo_salt_needs_thermo_warning</span><span class="p">(</span><span class="n">enable_ps</span><span class="p">,</span><span class="w"> </span><span class="n">enable_thermodynamics</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-161" name="ln-161" href="#ln-161"></a><span class="w">      </span><span class="k">result</span><span class="p">(</span><span class="n">warn</span><span class="p">)</span>
+<a id="ln-162" name="ln-162" href="#ln-162"></a><span class="w">      </span><span class="c">!! `.true.` iff pseudo-salt is enabled with thermodynamics off.</span>
+<a id="ln-163" name="ln-163" href="#ln-163"></a><span class="w">      </span><span class="c">!! NOT a hard error — pseudo-salt still measures pure transport,</span>
+<a id="ln-164" name="ln-164" href="#ln-164"></a><span class="w">      </span><span class="c">!! a legitimate use — but the caller should warn: without</span>
+<a id="ln-165" name="ln-165" href="#ln-165"></a><span class="w">      </span><span class="c">!! thermodynamics, the tracer never receives the surface salt</span>
+<a id="ln-166" name="ln-166" href="#ln-166"></a><span class="w">      </span><span class="c">!! flux / KPP nonlocal mirrors, so `D` degenerates to a pure</span>
+<a id="ln-167" name="ln-167" href="#ln-167"></a><span class="w">      </span><span class="c">!! advection/diffusion probe.</span>
+<a id="ln-168" name="ln-168" href="#ln-168"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">enable_ps</span>
+<a id="ln-169" name="ln-169" href="#ln-169"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">enable_thermodynamics</span>
+<a id="ln-170" name="ln-170" href="#ln-170"></a><span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">warn</span>
+<a id="ln-171" name="ln-171" href="#ln-171"></a><span class="w">      </span><span class="n">warn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">enable_ps</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">enable_thermodynamics</span>
+<a id="ln-172" name="ln-172" href="#ln-172"></a><span class="w">   </span><span class="k">end function </span><span class="n">pseudo_salt_needs_thermo_warning</span>
+<a id="ln-173" name="ln-173" href="#ln-173"></a>
+<a id="ln-174" name="ln-174" href="#ln-174"></a><span class="cp">#include "rdb_vanished_layer.inc"</span>
+<a id="ln-175" name="ln-175" href="#ln-175"></a>
+<a id="ln-176" name="ln-176" href="#ln-176"></a><span class="k">end module </span><span class="n">rdb_ocean_pseudo_salt</span>
+</pre></div>
+
+      </section>
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-20 10:28 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

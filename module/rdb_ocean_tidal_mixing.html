@@ -1,0 +1,2456 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>rdb_ocean_tidal_mixing &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>rdb_ocean_tidal_mixing
+      <small>Module</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.3% of total for modules and submodules.">234 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_tidal_mixing.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_tidal_mixing.f90.html'>rdb_ocean_tidal_mixing.F90</a></li>
+            <li class="breadcrumb-item active" aria-current="page">rdb_ocean_tidal_mixing</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+
+  <div class="row">
+    <div class="col-md-3">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_tidal_mixing.html#variable-nzl">NZL</a>
+            <a class="list-group-item" href="../module/rdb_ocean_tidal_mixing.html#variable-nzli">NZLI</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#types-0"
+         aria-expanded="false" aria-controls="types-0">
+         <h4 class="card-header bg-primary text-white">Derived Types</h4>
+      </a>
+      <div id="types-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_tidal_mixing.html#type-ocean_tidal_mixing_t">ocean_tidal_mixing_t</a>
+        </div>
+      </div>
+    </div>
+
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#funcs-0"
+         aria-expanded="false" aria-controls="funcs-0">
+         <h4 class="card-header bg-primary text-white">Functions</h4>
+      </a>
+      <div id="funcs-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_tidal_mixing.html#proc-tidal_mixing_is_inert">tidal_mixing_is_inert</a>
+            <a class="list-group-item" href="../module/rdb_ocean_tidal_mixing.html#proc-ocean_tidal_mixing_bytes">ocean_tidal_mixing_bytes</a>
+        </div>
+      </div>
+    </div>
+
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#subs-0"
+         aria-expanded="false" aria-controls="subs-0">
+         <h4 class="card-header bg-primary text-white">Subroutines</h4>
+      </a>
+      <div id="subs-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_tidal_mixing.html#proc-tidal_mixing_compute">tidal_mixing_compute</a>
+            <a class="list-group-item" href="../module/rdb_ocean_tidal_mixing.html#proc-tidal_mixing_merge_into_kt">tidal_mixing_merge_into_kt</a>
+            <a class="list-group-item" href="../module/rdb_ocean_tidal_mixing.html#proc-ocean_tidal_mixing_destroy">ocean_tidal_mixing_destroy</a>
+            <a class="list-group-item" href="../module/rdb_ocean_tidal_mixing.html#proc-ocean_tidal_mixing_enter_data">ocean_tidal_mixing_enter_data</a>
+            <a class="list-group-item" href="../module/rdb_ocean_tidal_mixing.html#proc-ocean_tidal_mixing_enter_data_impl">ocean_tidal_mixing_enter_data_impl</a>
+            <a class="list-group-item" href="../module/rdb_ocean_tidal_mixing.html#proc-ocean_tidal_mixing_exit_data">ocean_tidal_mixing_exit_data</a>
+            <a class="list-group-item" href="../module/rdb_ocean_tidal_mixing.html#proc-ocean_tidal_mixing_exit_data_impl">ocean_tidal_mixing_exit_data_impl</a>
+            <a class="list-group-item" href="../module/rdb_ocean_tidal_mixing.html#proc-ocean_tidal_mixing_init">ocean_tidal_mixing_init</a>
+            <a class="list-group-item" href="../module/rdb_ocean_tidal_mixing.html#proc-ocean_tidal_mixing_set_e_uniform">ocean_tidal_mixing_set_e_uniform</a>
+            <a class="list-group-item" href="../module/rdb_ocean_tidal_mixing.html#proc-tidal_mixing_column_kernel">tidal_mixing_column_kernel</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+
+
+  </div>
+
+    </div>
+
+    <div class="col-md-9" id='text'>
+      <p>Bottom-intensified internal-tide diapycnal diffusivity.  A fixed
+fraction of the barotropic-to-baroclinic tidal energy conversion
+<code>E(x,y)</code> [W m-2] dissipates locally above rough topography; the
+resulting turbulent diffusivity decays exponentially upward from
+the bed with scale <code>zeta</code>, converted to a per-layer <code>Kd</code> through
+the stratification (<code>1/(dz*(N^2+Omega^2))</code>).  An INTERIOR closure:
+it is ADDED to the other interior diffusivities (KPP/EPBL/PP81/
+kappa-shear) and goes through the single <code>vmix_assemble</code> gate.</p>
+<p>References:
+  * Jayne &amp; St Laurent (2001), GRL 28, &ldquo;Parameterizing tidal
+    dissipation over rough topography&rdquo; — the parameterized
+    conversion <code>E = 0.5*rho*kappa*&lt;h^2&gt;*U_tide^2</code>.
+  * St Laurent, Simmons &amp; Garrett (2002), GRL 29, &ldquo;Buoyancy forcing
+    by turbulence above rough topography&rdquo; — the local-dissipation
+    fraction <code>q</code> and the bottom-anchored exponential vertical
+    structure F(z) with decay scale <code>zeta</code>.
+  * Simmons, Jayne, St Laurent &amp; Weaver (2004), Ocean Modelling 6 —
+    the global implementation that combines the two.
+Knob table: <code>docs/generated_nml_knobs.md</code>.</p>
+<p>Discretization (conservative flux bookkeeping; St Laurent 2002):
+a downward TKE flux is tracked and the power dissipated IN each
+layer is converted to <code>Kd = TKE_lay / (rho*dz*(N^2+Omega^2))</code>.
+With the Adcroft-reciprocal normalization <code>Inv_int =
+1/(1-exp(-H/zeta))</code> the column-integrated deposited power is
+exactly <code>q*mu*E</code> (energy conservation, to round-off).  The
+continuum equivalent is
+  Kd(z) = [q<em>mu</em>E/(rho<em>(N^2+Omega^2))] *
+          exp(-z/zeta) / (zeta</em>(1-exp(-H/zeta))),
+z measured UPWARD from the bed.</p>
+<p>Interface convention (same as <code>rdb_ocean_vmix</code> / EPBL /
+kappa-shear): <code>kd_int(:,:,K)</code> lives at the bottom interface of
+layer K; global <code>kd_int(:,:,1)</code> is the bed and <code>kd_int(:,:,nz+1)</code>
+the free surface, both forced to exactly 0.  Layers are bottom-up:
+k=1 bed, k=nz surface.  The exp-decay anchors at the BED (k=1) and
+the sweep runs k=1 -&gt; nz.  The per-layer <code>Kd_add(k)</code> is split 50/50
+across the layer&rsquo;s two bounding interfaces (St Laurent 2002
+interface deposition; see divergence note D2).</p>
+<br>          <div class="card mb-4">
+      <h3 class="card-header card-title bg-light">Uses</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <ul class="list-inline">
+                  <li class="list-inline-item"><a href='http://fortranwiki.org/fortran/show/iso_fortran_env'>iso_fortran_env</a></li>
+                  <li class="list-inline-item"><a href='rdb_eos.html'>rdb_eos</a></li>
+                  <li class="list-inline-item"><a href='rdb_grid.html'>rdb_grid</a></li>
+                  <li class="list-inline-item"><a href='rdb_mem_report.html'>rdb_mem_report</a></li>
+                  <li class="list-inline-item"><a href='rdb_multilayer_state.html'>rdb_multilayer_state</a></li>
+                  <li class="list-inline-item"><a href='rdb_constants.html'>rdb_constants</a></li>
+              </ul>
+            </li>
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: module~~rdb_ocean_tidal_mixing~~UsesGraph Pages: 1 -->
+<svg id="modulerdb_ocean_tidal_mixingUsesGraph" width="641pt" height="338pt"
+ viewBox="0.00 0.00 641.00 338.04" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph" class="graph" transform="scale(0.79 0.79) rotate(0) translate(4 423.16)">
+<title>module~~rdb_ocean_tidal_mixing~~UsesGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-423.16 806,-423.16 806,4 -4,4"/>
+<!-- module~rdb_ocean_tidal_mixing -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_node1" class="node">
+<title>module~rdb_ocean_tidal_mixing</title>
+<polygon fill="none" stroke="black" points="802,-300.87 663,-300.87 663,-276.87 802,-276.87 802,-300.87"/>
+<text text-anchor="middle" x="732.5" y="-286.47" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ocean_tidal_mixing</text>
+</g>
+<!-- iso_fortran_env -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_node2" class="node">
+<title>iso_fortran_env</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsesGraph_node2"><a xlink:href="http://fortranwiki.org/fortran/show/iso_fortran_env" xlink:title="iso_fortran_env">
+<polygon fill="#337ab7" stroke="#337ab7" points="192,-342.87 98,-342.87 98,-318.87 192,-318.87 192,-342.87"/>
+<text text-anchor="middle" x="145" y="-328.47" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">iso_fortran_env</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_tidal_mixing&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge1" class="edge">
+<title>module~rdb_ocean_tidal_mixing&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M565.5,-408.87C504.88,-419.55 487.52,-397.62 427,-408.87"/>
+</g>
+<!-- module~rdb_constants -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_node3" class="node">
+<title>module~rdb_constants</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsesGraph_node3"><a xlink:href="../module/rdb_constants.html" xlink:title="rdb_constants">
+<polygon fill="#337ab7" stroke="#337ab7" points="188.5,-126.87 101.5,-126.87 101.5,-102.87 188.5,-102.87 188.5,-126.87"/>
+<text text-anchor="middle" x="145" y="-112.47" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_constants</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_tidal_mixing&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge2" class="edge">
+<title>module~rdb_ocean_tidal_mixing&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M726.33,-276.76C709.62,-239.25 653.2,-124.52 567.5,-72.87"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M565.5,-72.87C457.43,-7.74 410.57,17.12 288,-12.87"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M286,-12.87C259.69,-19.46 251.07,-17.6 228,-31.87 200.96,-48.6 176.25,-76.02 161.18,-94.73"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="158.39,-92.62 154.96,-102.64 163.89,-96.94 158.39,-92.62"/>
+</g>
+<!-- module~rdb_eos -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_node4" class="node">
+<title>module~rdb_eos</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsesGraph_node4"><a xlink:href="../module/rdb_eos.html" xlink:title="rdb_eos">
+<polygon fill="#337ab7" stroke="#337ab7" points="453.5,-64.87 398.5,-64.87 398.5,-40.87 453.5,-40.87 453.5,-64.87"/>
+<text text-anchor="middle" x="426" y="-50.47" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_eos</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_tidal_mixing&#45;&gt;module~rdb_eos -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge3" class="edge">
+<title>module~rdb_ocean_tidal_mixing&#45;&gt;module~rdb_eos</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M565.5,-72.87C534.58,-54.82 493.35,-50.92 463.93,-50.87"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="463.62,-47.37 453.67,-51 463.72,-54.37 463.62,-47.37"/>
+</g>
+<!-- module~rdb_grid -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_node5" class="node">
+<title>module~rdb_grid</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsesGraph_node5"><a xlink:href="../module/rdb_grid.html" xlink:title="rdb_grid">
+<polygon fill="#337ab7" stroke="#337ab7" points="315.5,-106.87 258.5,-106.87 258.5,-82.87 315.5,-82.87 315.5,-106.87"/>
+<text text-anchor="middle" x="287" y="-92.47" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_grid</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_tidal_mixing&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge4" class="edge">
+<title>module~rdb_ocean_tidal_mixing&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M565.5,-72.87C555.33,-66.94 399.78,-82.79 326.12,-90.7"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="325.44,-87.25 315.88,-91.8 326.2,-94.21 325.44,-87.25"/>
+</g>
+<!-- module~rdb_mem_report -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_node6" class="node">
+<title>module~rdb_mem_report</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsesGraph_node6"><a xlink:href="../module/rdb_mem_report.html" xlink:title="rdb_mem_report">
+<polygon fill="#337ab7" stroke="#337ab7" points="337.5,-300.87 236.5,-300.87 236.5,-276.87 337.5,-276.87 337.5,-300.87"/>
+<text text-anchor="middle" x="287" y="-286.47" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_mem_report</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_tidal_mixing&#45;&gt;module~rdb_mem_report -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge5" class="edge">
+<title>module~rdb_ocean_tidal_mixing&#45;&gt;module~rdb_mem_report</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M722.06,-300.99C699.22,-328.94 637.69,-396.52 567.5,-408.87"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M565.5,-408.87C515.9,-417.61 514.38,-371.67 470,-347.87 451.59,-338 447.43,-333.24 427,-328.87"/>
+</g>
+<!-- module~rdb_multilayer_state -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_node7" class="node">
+<title>module~rdb_multilayer_state</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsesGraph_node7"><a xlink:href="../module/rdb_multilayer_state.html" xlink:title="rdb_multilayer_state">
+<polygon fill="#337ab7" stroke="#337ab7" points="627,-300.87 506,-300.87 506,-276.87 627,-276.87 627,-300.87"/>
+<text text-anchor="middle" x="566.5" y="-286.47" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_multilayer_state</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_tidal_mixing&#45;&gt;module~rdb_multilayer_state -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge6" class="edge">
+<title>module~rdb_ocean_tidal_mixing&#45;&gt;module~rdb_multilayer_state</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M662.9,-288.87C654.48,-288.87 645.86,-288.87 637.41,-288.87"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="637.23,-285.37 627.23,-288.87 637.23,-292.37 637.23,-285.37"/>
+</g>
+<!-- pic_types -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_node14" class="node">
+<title>pic_types</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="62,-126.87 0,-126.87 0,-102.87 62,-102.87 62,-126.87"/>
+<text text-anchor="middle" x="31" y="-112.47" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_types</text>
+</g>
+<!-- module~rdb_constants&#45;&gt;pic_types -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge7" class="edge">
+<title>module~rdb_constants&#45;&gt;pic_types</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M101.34,-114.87C91.82,-114.87 81.75,-114.87 72.32,-114.87"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="72.02,-111.37 62.02,-114.87 72.02,-118.37 72.02,-111.37"/>
+</g>
+<!-- module~rdb_eos&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge8" class="edge">
+<title>module~rdb_eos&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M406.08,-40.82C379.78,-25.56 330.6,-2.45 288,-12.87"/>
+</g>
+<!-- module~rdb_eos&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge9" class="edge">
+<title>module~rdb_eos&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M398.26,-61.07C377.5,-67.43 348.47,-76.33 325.41,-83.4"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="324.15,-80.13 315.61,-86.41 326.2,-86.82 324.15,-80.13"/>
+</g>
+<!-- module~rdb_teos10_convert -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_node10" class="node">
+<title>module~rdb_teos10_convert</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsesGraph_node10"><a xlink:href="../module/rdb_teos10_convert.html" xlink:title="rdb_teos10_convert">
+<polygon fill="#337ab7" stroke="#337ab7" points="346,-64.87 228,-64.87 228,-40.87 346,-40.87 346,-64.87"/>
+<text text-anchor="middle" x="287" y="-50.47" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_teos10_convert</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_eos&#45;&gt;module~rdb_teos10_convert -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge10" class="edge">
+<title>module~rdb_eos&#45;&gt;module~rdb_teos10_convert</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M398.26,-52.87C386.18,-52.87 371.29,-52.87 356.4,-52.87"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="356.14,-49.37 346.14,-52.87 356.14,-56.37 356.14,-49.37"/>
+</g>
+<!-- module~rdb_grid&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge11" class="edge">
+<title>module~rdb_grid&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M258.34,-98.82C241.37,-101.25 219.07,-104.43 198.82,-107.33"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="198.17,-103.88 188.77,-108.76 199.16,-110.81 198.17,-103.88"/>
+</g>
+<!-- module~rdb_mem_report&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge12" class="edge">
+<title>module~rdb_mem_report&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M245.88,-300.91C230.36,-305.57 212.42,-310.95 196.07,-315.85"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="194.7,-312.61 186.12,-318.84 196.71,-319.31 194.7,-312.61"/>
+</g>
+<!-- module~rdb_mem_report&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge13" class="edge">
+<title>module~rdb_mem_report&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M274.08,-276.44C262.09,-263.77 243.24,-243.4 228,-224.87 203.13,-194.64 176.39,-157.89 160.44,-135.45"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="163.13,-133.18 154.49,-127.04 157.41,-137.23 163.13,-133.18"/>
+</g>
+<!-- pic_logger -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_node12" class="node">
+<title>pic_logger</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="179,-258.87 111,-258.87 111,-234.87 179,-234.87 179,-258.87"/>
+<text text-anchor="middle" x="145" y="-244.47" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_logger</text>
+</g>
+<!-- module~rdb_mem_report&#45;&gt;pic_logger -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge14" class="edge">
+<title>module~rdb_mem_report&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M245.88,-276.84C228.02,-271.48 206.96,-265.16 188.8,-259.71"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="189.63,-256.31 179.04,-256.79 187.62,-263.01 189.63,-256.31"/>
+</g>
+<!-- pic_strings -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_node13" class="node">
+<title>pic_strings</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="179.5,-300.87 110.5,-300.87 110.5,-276.87 179.5,-276.87 179.5,-300.87"/>
+<text text-anchor="middle" x="145" y="-286.47" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_strings</text>
+</g>
+<!-- module~rdb_mem_report&#45;&gt;pic_strings -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge15" class="edge">
+<title>module~rdb_mem_report&#45;&gt;pic_strings</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M236.25,-288.87C221.2,-288.87 204.78,-288.87 190.12,-288.87"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="189.8,-285.37 179.8,-288.87 189.8,-292.37 189.8,-285.37"/>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge16" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M558.02,-300.92C539.8,-328.72 489.96,-395.99 427,-408.87"/>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M425,-408.87C338.82,-426.5 310.33,-420.85 228,-389.87 204.38,-380.98 181.4,-363.44 165.81,-349.79"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="168.13,-347.17 158.36,-343.07 163.44,-352.37 168.13,-347.17"/>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge17" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M425,-134.87C405.58,-124.59 274.17,-118.85 198.82,-116.37"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="198.69,-112.86 188.58,-116.04 198.47,-119.86 198.69,-112.86"/>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge20" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M558.7,-276.64C541.28,-246.61 491.82,-169.2 427,-134.87"/>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M425,-134.87C393.41,-118.14 353.91,-107.56 325.45,-101.52"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="326,-98.06 315.5,-99.49 324.6,-104.92 326,-98.06"/>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_mem_report -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge21" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_mem_report</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M545.54,-301.1C518.82,-315.98 469.83,-338.04 427,-328.87"/>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M425,-328.87C394.17,-322.28 360.14,-312.35 333.71,-304.04"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="334.57,-300.64 323.97,-300.95 332.44,-307.31 334.57,-300.64"/>
+</g>
+<!-- module~rdb_efp -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_node8" class="node">
+<title>module~rdb_efp</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsesGraph_node8"><a xlink:href="../module/rdb_efp.html" xlink:title="rdb_efp">
+<polygon fill="#337ab7" stroke="#337ab7" points="453,-380.87 399,-380.87 399,-356.87 453,-356.87 453,-380.87"/>
+<text text-anchor="middle" x="426" y="-366.47" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_efp</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_efp -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge18" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_efp</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M544.46,-301.02C521.04,-314.55 483.01,-336.52 456.6,-351.78"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="454.69,-348.84 447.78,-356.87 458.19,-354.9 454.69,-348.84"/>
+</g>
+<!-- module~rdb_error_ring -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_node9" class="node">
+<title>module~rdb_error_ring</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsesGraph_node9"><a xlink:href="../module/rdb_error_ring.html" xlink:title="rdb_error_ring">
+<polygon fill="#337ab7" stroke="#337ab7" points="470,-203.87 382,-203.87 382,-179.87 470,-179.87 470,-203.87"/>
+<text text-anchor="middle" x="426" y="-189.47" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_error_ring</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_error_ring -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge19" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_error_ring</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M548.24,-276.78C524.29,-260.01 480.79,-229.55 452.93,-210.03"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="454.68,-206.98 444.48,-204.11 450.66,-212.72 454.68,-206.98"/>
+</g>
+<!-- module~rdb_tracer -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_node11" class="node">
+<title>module~rdb_tracer</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsesGraph_node11"><a xlink:href="../module/rdb_tracer.html" xlink:title="rdb_tracer">
+<polygon fill="#337ab7" stroke="#337ab7" points="460,-300.87 392,-300.87 392,-276.87 460,-276.87 460,-300.87"/>
+<text text-anchor="middle" x="426" y="-286.47" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_tracer</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_tracer -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge22" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_tracer</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M505.96,-288.87C493.95,-288.87 481.54,-288.87 470.21,-288.87"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="470.16,-285.37 460.16,-288.87 470.16,-292.37 470.16,-285.37"/>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;pic_logger -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge23" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M517.67,-276.86C502.51,-273.46 485.63,-270.08 470,-267.87 370.28,-253.76 251.94,-249.12 189.54,-247.6"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="189.36,-244.1 179.29,-247.37 189.2,-251.09 189.36,-244.1"/>
+</g>
+<!-- module~rdb_efp&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge25" class="edge">
+<title>module~rdb_efp&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M399.89,-356.76C372.88,-344.88 328.39,-328.59 288,-328.87"/>
+</g>
+<!-- ieee_arithmetic -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_node15" class="node">
+<title>ieee_arithmetic</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsesGraph_node15"><a xlink:href="http://fortranwiki.org/fortran/show/ieee_arithmetic" xlink:title="ieee_arithmetic">
+<polygon fill="#337ab7" stroke="#337ab7" points="335,-380.87 239,-380.87 239,-356.87 335,-356.87 335,-380.87"/>
+<text text-anchor="middle" x="287" y="-366.47" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ieee_arithmetic</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_efp&#45;&gt;ieee_arithmetic -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge24" class="edge">
+<title>module~rdb_efp&#45;&gt;ieee_arithmetic</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M398.91,-368.87C383.71,-368.87 363.92,-368.87 345.28,-368.87"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="345.07,-365.37 335.07,-368.87 345.07,-372.37 345.07,-365.37"/>
+</g>
+<!-- module~rdb_error_ring&#45;&gt;pic_logger -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge26" class="edge">
+<title>module~rdb_error_ring&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#ffda00" stroke-dasharray="5,2" d="M381.71,-200.41C329.34,-210.73 241.68,-228.01 189.3,-238.34"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="188.45,-234.94 179.32,-240.3 189.81,-241.8 188.45,-234.94"/>
+</g>
+<!-- module~rdb_teos10_convert&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge27" class="edge">
+<title>module~rdb_teos10_convert&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M250.78,-64.88C243.2,-67.67 235.28,-70.75 228,-73.87 210.92,-81.2 192.36,-90.38 177.23,-98.19"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="175.54,-95.12 168.29,-102.84 178.78,-101.33 175.54,-95.12"/>
+</g>
+<!-- module~rdb_tracer&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge28" class="edge">
+<title>module~rdb_tracer&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M399.39,-300.98C372.34,-312.65 328.14,-328.59 288,-328.87"/>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M286,-328.87C258.44,-329.07 227.83,-329.48 202.28,-329.88"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="201.97,-326.39 192.03,-330.05 202.08,-333.39 201.97,-326.39"/>
+</g>
+<!-- module~rdb_tracer&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge29" class="edge">
+<title>module~rdb_tracer&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M405.38,-276.64C356.86,-246.37 231.05,-167.91 174.39,-132.58"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="175.93,-129.42 165.6,-127.09 172.23,-135.36 175.93,-129.42"/>
+</g>
+<!-- module~rdb_tracer&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge30" class="edge">
+<title>module~rdb_tracer&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M416.43,-276.74C393.56,-244.35 330.87,-155.59 302.41,-115.27"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="305.19,-113.15 296.57,-107 299.48,-117.19 305.19,-113.15"/>
+</g>
+<!-- module~rdb_tracer&#45;&gt;module~rdb_mem_report -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsesGraph_edge31" class="edge">
+<title>module~rdb_tracer&#45;&gt;module~rdb_mem_report</title>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M391.84,-288.87C378.65,-288.87 363.05,-288.87 348.01,-288.87"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="347.72,-285.37 337.72,-288.87 347.72,-292.37 347.72,-285.37"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panmodulerdb_ocean_tidal_mixingUsesGraph = svgPanZoom('#modulerdb_ocean_tidal_mixingUsesGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsesGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsesGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="518pt" height="32pt"
+ viewBox="0.00 0.00 517.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 513.5,-28 513.5,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24 0,-24 0,0 54,0 54,-24"/>
+<text text-anchor="middle" x="27" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="145.5,-24 72.5,-24 72.5,0 145.5,0 145.5,-24"/>
+<text text-anchor="middle" x="109" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="234,-24 164,-24 164,0 234,0 234,-24"/>
+<text text-anchor="middle" x="199" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="310,-24 252,-24 252,0 310,0 310,-24"/>
+<text text-anchor="middle" x="281" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="386,-24 328,-24 328,0 386,0 386,-24"/>
+<text text-anchor="middle" x="357" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="509.5,-24 404.5,-24 404.5,0 509.5,0 509.5,-24"/>
+<text text-anchor="middle" x="457" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+          <div class="card">
+      <h3 class="card-header card-title bg-light">Used by</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: module~~rdb_ocean_tidal_mixing~~UsedByGraph Pages: 1 -->
+<svg id="modulerdb_ocean_tidal_mixingUsedByGraph" width="641pt" height="288pt"
+ viewBox="0.00 0.00 641.00 287.81" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph" class="graph" transform="scale(0.56 0.56) rotate(0) translate(4 512.8)">
+<title>module~~rdb_ocean_tidal_mixing~~UsedByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-512.8 1147,-512.8 1147,4 -4,4"/>
+<!-- module~rdb_ocean_tidal_mixing -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_node1" class="node">
+<title>module~rdb_ocean_tidal_mixing</title>
+<polygon fill="none" stroke="black" points="139,-191.12 0,-191.12 0,-167.12 139,-167.12 139,-191.12"/>
+<text text-anchor="middle" x="69.5" y="-176.72" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ocean_tidal_mixing</text>
+</g>
+<!-- module~rdb_ocean_dyn -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_node2" class="node">
+<title>module~rdb_ocean_dyn</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsedByGraph_node2"><a xlink:href="../module/rdb_ocean_dyn.html" xlink:title="rdb_ocean_dyn">
+<polygon fill="#337ab7" stroke="#337ab7" points="269,-231.12 175,-231.12 175,-207.12 269,-207.12 269,-231.12"/>
+<text text-anchor="middle" x="222" y="-216.72" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_dyn</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_tidal_mixing -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge1" class="edge">
+<title>module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_tidal_mixing</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M175.85,-207.12C160.14,-202.94 142.35,-198.21 125.91,-193.84"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="126.45,-190.37 115.88,-191.18 124.65,-197.13 126.45,-190.37"/>
+</g>
+<!-- module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_node3" class="node">
+<title>module~rdb_ocean_state</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsedByGraph_node3"><a xlink:href="../module/rdb_ocean_state.html" xlink:title="rdb_ocean_state">
+<polygon fill="#337ab7" stroke="#337ab7" points="405,-191.12 305,-191.12 305,-167.12 405,-167.12 405,-191.12"/>
+<text text-anchor="middle" x="355" y="-176.72" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_state&#45;&gt;module~rdb_ocean_tidal_mixing -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge2" class="edge">
+<title>module~rdb_ocean_state&#45;&gt;module~rdb_ocean_tidal_mixing</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M304.94,-179.12C262.09,-179.12 199.12,-179.12 149.23,-179.12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="149.12,-175.62 139.12,-179.12 149.12,-182.62 149.12,-175.62"/>
+</g>
+<!-- module~rdb_ocean_state&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge8" class="edge">
+<title>module~rdb_ocean_state&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M314.7,-191.12C301.48,-195.16 286.55,-199.71 272.64,-203.96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="271.27,-200.72 262.73,-206.99 273.32,-207.41 271.27,-200.72"/>
+</g>
+<!-- proc~validate_config -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_node4" class="node">
+<title>proc~validate_config</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsedByGraph_node4"><a xlink:href="../proc/validate_config.html" xlink:title="validate_config">
+<polygon fill="#d9534f" stroke="#d9534f" points="269,-151.12 175,-151.12 175,-127.12 269,-127.12 269,-151.12"/>
+<text text-anchor="middle" x="222" y="-136.72" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">validate_config</text>
+</a>
+</g>
+</g>
+<!-- proc~validate_config&#45;&gt;module~rdb_ocean_tidal_mixing -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge3" class="edge">
+<title>proc~validate_config&#45;&gt;module~rdb_ocean_tidal_mixing</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M175.85,-151.12C160.14,-155.29 142.35,-160.02 125.91,-164.39"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="124.65,-161.1 115.88,-167.06 126.45,-167.87 124.65,-161.1"/>
+</g>
+<!-- module~rdb_driver -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_node5" class="node">
+<title>module~rdb_driver</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsedByGraph_node5"><a xlink:href="../module/rdb_driver.html" xlink:title="rdb_driver">
+<polygon fill="#337ab7" stroke="#337ab7" points="1013,-335.12 946,-335.12 946,-311.12 1013,-311.12 1013,-335.12"/>
+<text text-anchor="middle" x="979.5" y="-320.72" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge4" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M850.5,-396.12C794,-405.97 809.53,-459.2 760,-488.12 731.98,-504.48 721.58,-512.03 689.5,-507.12"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M687.5,-507.12C523.83,-482.05 512.25,-391.9 356,-337.12"/>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge9" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M965.46,-335.17C943.93,-353.96 898.7,-388.84 852.5,-396.12"/>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M850.5,-396.12C769.8,-408.84 830.57,-277.28 760,-236.12 705.1,-204.1 680.46,-232.6 617,-236.12 600.93,-237.01 597.07,-239.23 581,-240.12 518.87,-243.56 500.23,-259.17 441,-240.12 415.53,-231.92 391.22,-212.96 375.18,-198.33"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="377.25,-195.48 367.58,-191.16 372.45,-200.57 377.25,-195.48"/>
+</g>
+<!-- module~rdb_ocean_engine -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_node10" class="node">
+<title>module~rdb_ocean_engine</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsedByGraph_node10"><a xlink:href="../module/rdb_ocean_engine.html" xlink:title="rdb_ocean_engine">
+<polygon fill="#337ab7" stroke="#337ab7" points="907,-191.12 796,-191.12 796,-167.12 907,-167.12 907,-191.12"/>
+<text text-anchor="middle" x="851.5" y="-176.72" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge24" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M967.76,-310.84C946,-285.97 896.54,-229.45 870.04,-199.16"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="872.43,-196.58 863.22,-191.36 867.17,-201.19 872.43,-196.58"/>
+</g>
+<!-- module~rdb_handle -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_node6" class="node">
+<title>module~rdb_handle</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsedByGraph_node6"><a xlink:href="../module/rdb_handle.html" xlink:title="rdb_handle">
+<polygon fill="#337ab7" stroke="#337ab7" points="1016,-111.12 943,-111.12 943,-87.12 1016,-87.12 1016,-111.12"/>
+<text text-anchor="middle" x="979.5" y="-96.72" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_handle&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge10" class="edge">
+<title>module~rdb_handle&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M954.52,-87.07C884.95,-53.73 677.45,34.08 512,-15.12"/>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M510,-15.12C479.59,-24.43 466.23,-14.75 441,-34.12 399.2,-66.2 374.08,-125.17 362.9,-157.13"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="359.5,-156.27 359.64,-166.86 366.14,-158.49 359.5,-156.27"/>
+</g>
+<!-- module~rdb_handle&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge25" class="edge">
+<title>module~rdb_handle&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M961.81,-111.19C955.85,-115.54 949.1,-120.52 943,-125.12 926.82,-137.33 924.25,-142.47 907,-153.12 901.61,-156.44 895.74,-159.65 889.9,-162.6"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="888.29,-159.49 880.84,-167.02 891.36,-165.78 888.29,-159.49"/>
+</g>
+<!-- module~rdb_ocean_api -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_node7" class="node">
+<title>module~rdb_ocean_api</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsedByGraph_node7"><a xlink:href="../module/rdb_ocean_api.html" xlink:title="rdb_ocean_api">
+<polygon fill="#337ab7" stroke="#337ab7" points="1143,-151.12 1052,-151.12 1052,-127.12 1143,-127.12 1143,-151.12"/>
+<text text-anchor="middle" x="1097.5" y="-136.72" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge5" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1094.56,-151.13C1088.56,-185.04 1067.5,-283.01 1016,-344.12 911.48,-468.14 851.47,-515.6 689.5,-507.12"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_handle -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge18" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_handle</title>
+<path fill="none" stroke="#ff9900" stroke-dasharray="5,2" d="M1061.7,-127.12C1050.22,-123.16 1037.29,-118.7 1025.17,-114.52"/>
+<polygon fill="#ff9900" stroke="#ff9900" points="1026.27,-111.2 1015.68,-111.25 1023.99,-117.82 1026.27,-111.2"/>
+</g>
+<!-- module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_node8" class="node">
+<title>module~rdb_ocean_diag_derived</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsedByGraph_node8"><a xlink:href="../module/rdb_ocean_diag_derived.html" xlink:title="rdb_ocean_diag_derived">
+<polygon fill="#337ab7" stroke="#337ab7" points="760,-111.12 617,-111.12 617,-87.12 760,-87.12 760,-111.12"/>
+<text text-anchor="middle" x="688.5" y="-96.72" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_derived</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge19" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_derived</title>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M1051.82,-137.5C1030.24,-137.14 1003.99,-137.29 980.5,-139.12"/>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M978.5,-139.12C922.67,-143.45 908.4,-142.53 852.5,-139.12"/>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M850.5,-139.12C809.6,-136.62 764.43,-124.54 732.37,-114.3"/>
+<polygon fill="#33ff00" stroke="#33ff00" points="733.45,-110.98 722.86,-111.2 731.28,-117.63 733.45,-110.98"/>
+</g>
+<!-- module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_node9" class="node">
+<title>module~rdb_ocean_diag_fills</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsedByGraph_node9"><a xlink:href="../module/rdb_ocean_diag_fills.html" xlink:title="rdb_ocean_diag_fills">
+<polygon fill="#337ab7" stroke="#337ab7" points="571.5,-151.12 450.5,-151.12 450.5,-127.12 571.5,-127.12 571.5,-151.12"/>
+<text text-anchor="middle" x="511" y="-136.72" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_fills</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge21" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M850.5,-139.12C757.74,-133.45 650.42,-134.78 581.92,-136.63"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="581.58,-133.14 571.68,-136.92 581.78,-140.14 581.58,-133.14"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge26" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M978.5,-139.12C946.79,-141.58 912.48,-153.1 887.68,-163.15"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="886.22,-159.97 878.34,-167.05 888.92,-166.43 886.22,-159.97"/>
+</g>
+<!-- module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge11" class="edge">
+<title>module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M676.1,-86.89C648.86,-59.21 577.4,4.33 512,-15.12"/>
+</g>
+<!-- module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge22" class="edge">
+<title>module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M634.84,-111.12C615.93,-115.43 594.41,-120.34 574.72,-124.82"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="573.89,-121.42 564.92,-127.06 575.45,-128.25 573.89,-121.42"/>
+</g>
+<!-- module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge12" class="edge">
+<title>module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M463.79,-151.12C447.58,-155.33 429.17,-160.11 412.22,-164.51"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="411.24,-161.15 402.44,-167.06 413,-167.93 411.24,-161.15"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge6" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M687.5,-179.12C633.49,-186.76 629.79,-215.73 581,-240.12 556.65,-252.29 381.82,-345.74 356,-337.12"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M354,-337.12C302.17,-318.94 258.64,-268.27 237.24,-239.59"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="240.03,-237.48 231.32,-231.46 234.37,-241.6 240.03,-237.48"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge13" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M687.5,-179.12C593.05,-192.04 482.04,-188.24 415.45,-183.95"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="415.36,-180.43 405.15,-183.26 414.89,-187.42 415.36,-180.43"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge20" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived</title>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M824.93,-167.08C815.78,-162.72 805.41,-157.75 796,-153.12 771.16,-140.9 743.25,-126.73 722.24,-115.98"/>
+<polygon fill="#33ff00" stroke="#33ff00" points="723.6,-112.74 713.11,-111.29 720.41,-118.97 723.6,-112.74"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge23" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M795.85,-175.45C764.57,-174.27 724.67,-174.31 689.5,-179.12"/>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M687.5,-179.12C663.3,-182.43 603.21,-166.78 560.09,-154.09"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="560.93,-150.69 550.35,-151.19 558.94,-157.4 560.93,-150.69"/>
+</g>
+<!-- module~rdb_ocean_setup -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_node11" class="node">
+<title>module~rdb_ocean_setup</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsedByGraph_node11"><a xlink:href="../module/rdb_ocean_setup.html" xlink:title="rdb_ocean_setup">
+<polygon fill="#337ab7" stroke="#337ab7" points="562.5,-349.12 459.5,-349.12 459.5,-325.12 562.5,-325.12 562.5,-349.12"/>
+<text text-anchor="middle" x="511" y="-334.72" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge27" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M687.5,-179.12C624.95,-187.68 626.17,-229.01 581,-273.12 565.17,-288.58 546.78,-305.59 532.97,-318.19"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="530.46,-315.73 525.42,-325.05 535.17,-320.91 530.46,-315.73"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge7" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M459.47,-345.05C428.77,-347.95 389.22,-348.21 356,-337.12"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge14" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M465.42,-325.11C456.76,-321.5 448.17,-316.91 441,-311.12 403.61,-280.91 377.4,-229.69 364.71,-200.73"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="367.77,-198.99 360.65,-191.15 361.33,-201.72 367.77,-198.99"/>
+</g>
+<!-- module~rdb_ocean_state_restart -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_node12" class="node">
+<title>module~rdb_ocean_state_restart</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsedByGraph_node12"><a xlink:href="../module/rdb_ocean_state_restart.html" xlink:title="rdb_ocean_state_restart">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="581,-231.12 441,-231.12 441,-207.12 581,-207.12 581,-231.12"/>
+<text text-anchor="middle" x="511" y="-216.72" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_restart</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_state_restart&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge15" class="edge">
+<title>module~rdb_ocean_state_restart&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ff00" d="M463.79,-207.12C447.58,-202.9 429.17,-198.12 412.22,-193.72"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="413,-190.31 402.44,-191.18 411.24,-197.08 413,-190.31"/>
+</g>
+<!-- module~rdb_ocean_state_seed -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_node13" class="node">
+<title>module~rdb_ocean_state_seed</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsedByGraph_node13"><a xlink:href="../module/rdb_ocean_state_seed.html" xlink:title="rdb_ocean_state_seed">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="576.5,-109.12 445.5,-109.12 445.5,-85.12 576.5,-85.12 576.5,-109.12"/>
+<text text-anchor="middle" x="511" y="-94.72" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_seed</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_state_seed&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge16" class="edge">
+<title>module~rdb_ocean_state_seed&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ff00" d="M462.81,-109.22C455.35,-111.77 447.85,-114.73 441,-118.12 417.84,-129.56 394.18,-147.11 377.73,-160.46"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="375.29,-157.93 369.82,-167 379.75,-163.32 375.29,-157.93"/>
+</g>
+<!-- module~rdb_ocean_state_topo -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_node14" class="node">
+<title>module~rdb_ocean_state_topo</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsedByGraph_node14"><a xlink:href="../module/rdb_ocean_state_topo.html" xlink:title="rdb_ocean_state_topo">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="576,-67.12 446,-67.12 446,-43.12 576,-43.12 576,-67.12"/>
+<text text-anchor="middle" x="511" y="-52.72" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_topo</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_state_topo&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge17" class="edge">
+<title>module~rdb_ocean_state_topo&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ff00" d="M458.35,-67.13C452.25,-69.61 446.31,-72.57 441,-76.12 408.79,-97.6 382.43,-134.88 368,-158.21"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="364.88,-156.61 362.73,-166.98 370.88,-160.21 364.88,-156.61"/>
+</g>
+<!-- module~rdb_ocean_setup_bc -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_node15" class="node">
+<title>module~rdb_ocean_setup_bc</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsedByGraph_node15"><a xlink:href="../module/rdb_ocean_setup_bc.html" xlink:title="rdb_ocean_setup_bc">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="749,-395.12 628,-395.12 628,-371.12 749,-371.12 749,-395.12"/>
+<text text-anchor="middle" x="688.5" y="-380.72" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_bc</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_bc&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge28" class="edge">
+<title>module~rdb_ocean_setup_bc&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#0066ff" d="M641.39,-371.03C618.82,-365.12 591.46,-357.95 567.73,-351.72"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="568.36,-348.27 557.8,-349.12 566.59,-355.04 568.36,-348.27"/>
+</g>
+<!-- module~rdb_ocean_setup_bt -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_node16" class="node">
+<title>module~rdb_ocean_setup_bt</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsedByGraph_node16"><a xlink:href="../module/rdb_ocean_setup_bt.html" xlink:title="rdb_ocean_setup_bt">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="748,-353.12 629,-353.12 629,-329.12 748,-329.12 748,-353.12"/>
+<text text-anchor="middle" x="688.5" y="-338.72" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_bt</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_bt&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge29" class="edge">
+<title>module~rdb_ocean_setup_bt&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#0066ff" d="M628.57,-339.77C610.59,-339.36 590.8,-338.91 572.7,-338.5"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="572.63,-335 562.56,-338.27 572.47,-342 572.63,-335"/>
+</g>
+<!-- module~rdb_ocean_setup_cavity -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_node17" class="node">
+<title>module~rdb_ocean_setup_cavity</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsedByGraph_node17"><a xlink:href="../module/rdb_ocean_setup_cavity.html" xlink:title="rdb_ocean_setup_cavity">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="758.5,-311.12 618.5,-311.12 618.5,-287.12 758.5,-287.12 758.5,-311.12"/>
+<text text-anchor="middle" x="688.5" y="-296.72" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_cavity</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_cavity&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge30" class="edge">
+<title>module~rdb_ocean_setup_cavity&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#0066ff" d="M631.97,-311.14C613.07,-315.23 591.86,-319.83 572.58,-324"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="571.74,-320.6 562.7,-326.14 573.22,-327.44 571.74,-320.6"/>
+</g>
+<!-- module~rdb_ocean_setup_grid -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_node18" class="node">
+<title>module~rdb_ocean_setup_grid</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsedByGraph_node18"><a xlink:href="../module/rdb_ocean_setup_grid.html" xlink:title="rdb_ocean_setup_grid">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="753.5,-269.12 623.5,-269.12 623.5,-245.12 753.5,-245.12 753.5,-269.12"/>
+<text text-anchor="middle" x="688.5" y="-254.72" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_grid</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_grid&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge31" class="edge">
+<title>module~rdb_ocean_setup_grid&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#0066ff" d="M636.66,-269.22C629.85,-271.71 623.11,-274.65 617,-278.12 598.12,-288.82 599.49,-299.75 581,-311.12 574.85,-314.9 568.07,-318.27 561.22,-321.24"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="559.85,-318.02 551.9,-325.03 562.48,-324.5 559.85,-318.02"/>
+</g>
+<!-- module~rdb_ocean_setup_lateral -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_node19" class="node">
+<title>module~rdb_ocean_setup_lateral</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsedByGraph_node19"><a xlink:href="../module/rdb_ocean_setup_lateral.html" xlink:title="rdb_ocean_setup_lateral">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="760,-479.12 617,-479.12 617,-455.12 760,-455.12 760,-479.12"/>
+<text text-anchor="middle" x="688.5" y="-464.72" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_lateral</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_lateral&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge32" class="edge">
+<title>module~rdb_ocean_setup_lateral&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#0066ff" d="M630.48,-455.09C625.61,-452.63 621.01,-449.68 617,-446.12 586.92,-419.44 610.12,-390.85 581,-363.12 577.27,-359.57 573.01,-356.49 568.48,-353.83"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="569.99,-350.67 559.5,-349.2 566.78,-356.89 569.99,-350.67"/>
+</g>
+<!-- module~rdb_ocean_setup_vmix -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_node20" class="node">
+<title>module~rdb_ocean_setup_vmix</title>
+<g id="a_module~~rdb_ocean_tidal_mixing~~UsedByGraph_node20"><a xlink:href="../module/rdb_ocean_setup_vmix.html" xlink:title="rdb_ocean_setup_vmix">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="755.5,-437.12 621.5,-437.12 621.5,-413.12 755.5,-413.12 755.5,-437.12"/>
+<text text-anchor="middle" x="688.5" y="-422.72" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_vmix</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_vmix&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_ocean_tidal_mixing~~UsedByGraph_edge33" class="edge">
+<title>module~rdb_ocean_setup_vmix&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#0066ff" d="M634.83,-413.05C628.58,-410.58 622.48,-407.63 617,-404.12 596.58,-391.03 600.94,-376.92 581,-363.12 575.68,-359.44 569.77,-356.2 563.72,-353.37"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="564.71,-349.98 554.14,-349.25 561.94,-356.41 564.71,-349.98"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panmodulerdb_ocean_tidal_mixingUsedByGraph = svgPanZoom('#modulerdb_ocean_tidal_mixingUsedByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsedByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsedByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="518pt" height="32pt"
+ viewBox="0.00 0.00 517.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 513.5,-28 513.5,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24 0,-24 0,0 54,0 54,-24"/>
+<text text-anchor="middle" x="27" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="145.5,-24 72.5,-24 72.5,0 145.5,0 145.5,-24"/>
+<text text-anchor="middle" x="109" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="234,-24 164,-24 164,0 234,0 234,-24"/>
+<text text-anchor="middle" x="199" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="310,-24 252,-24 252,0 310,0 310,-24"/>
+<text text-anchor="middle" x="281" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="386,-24 328,-24 328,0 386,0 386,-24"/>
+<text text-anchor="middle" x="357" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="509.5,-24 404.5,-24 404.5,0 509.5,0 509.5,-24"/>
+<text text-anchor="middle" x="457" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+      <br>
+
+
+        <section>
+          <h2>Variables</h2>
+            <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nzl"></span>
+              integer,
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>NZL</strong></td>
+<td> =</td>
+                <td>NZ_STACK_MAX</td>
+            <td>
+                <p>Maximum number of layers a single column kernel can solve.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nzli"></span>
+              integer,
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>NZLI</strong></td>
+<td> =</td>
+                <td>NZ_STACK_MAX+1</td>
+            <td>
+                <p>Interface array dimension (= NZL + 1).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+        </section>
+        <br>
+
+
+
+
+        <section>
+          <h2>Derived Types</h2>
+              <div class="card">
+    <div class="card-header codesum">
+      <span class="anchor" id="type-ocean_tidal_mixing_t"></span>
+      <h3>
+        type, public&nbsp;::&nbsp;
+        <a href='../type/ocean_tidal_mixing_t.html'>ocean_tidal_mixing_t</a>
+        
+      </h3>
+    </div>
+    <div class="card-body">
+      
+
+        <h4>Components</h4>
+          <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-e_compute~2"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>e_compute</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+<p>v1.1 state-dependent E: when on, <code>e_in = min(TKE_coef*N_bot,
+e_max)</code>.  Default off (uses the prescribed <code>e_uniform</code>).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-e_in"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>e_in</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Bottom internal-tide energy input E (W m-2), (nx,ny).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-e_max~2"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>e_max</strong></td>
+<td> =</td>
+                <td>1.0e3_wp</td>
+            <td>
+<p>TKE_itide_max cap on E (W m-2).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-e_uniform~2"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>e_uniform</strong></td>
+<td> =</td>
+                <td>0.0_wp</td>
+            <td>
+<p>Uniform bottom energy input E (W m-2); default 0 =&gt; inert
+even when enabled (structural path live, physics zero).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-enable~37"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>enable</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+<p>Master switch.  Default off — existing namelists and tests
+stay bit-identical.  Requires <code>vmix%use_closure</code> +
+thermodynamics (validated at configure).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eos~34"></span>
+              type(<a href='../type/eos_t.html'>eos_t</a>),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eos</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Value copy of <code>ocean_state%eos</code>, set at configure — the
+buoyancy derivatives use the SAME EOS the dyn-core runs.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-frac_rough~2"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>frac_rough</strong></td>
+<td> =</td>
+                <td>0.1_wp</td>
+            <td>
+<p>Roughness clamp: <h^2> &lt;= (frac_rough*H)^2.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-gamma~3"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>gamma</strong></td>
+<td> =</td>
+                <td>0.3333_wp</td>
+            <td>
+<p>Local-dissipation fraction <code>q</code> (GAMMA_ITIDES).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h2_rough~2"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h2_rough</strong></td>
+<td> =</td>
+                <td>0.0_wp</td>
+            <td>
+<p>Sub-grid topographic roughness variance <h^2> (m^2) for v1.1 E.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-is_init~24"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>is_init</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+<p>True between <code>init</code> and <code>destroy</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kappa_h2~2"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kappa_h2</strong></td>
+<td> =</td>
+                <td>1.0_wp</td>
+            <td>
+<p>KAPPA_H2_FACTOR for the v1.1 E recompute.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kappa_itides~2"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kappa_itides</strong></td>
+<td> =</td>
+                <td>6.2832e-4_wp</td>
+            <td>
+<p>Topographic wavenumber kappa (m^-1) for the v1.1 E recompute.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kd_int~2"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>kd_int</strong>(:,:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Tidal diffusivity at interfaces (m^2/s), (nx,ny,nz+1),
+global bottom-up: zero at bed (K=1) and surface (K=nz+1).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kd_max~7"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kd_max</strong></td>
+<td> =</td>
+                <td>1.0e-2_wp</td>
+            <td>
+<p>Per-layer physical Kd cap (m^2/s); &lt; 0 =&gt; no cap.  Distinct
+from the <code>vmix_assemble</code> ceiling (the final clip).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-min_zbot~2"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>min_zbot</strong></td>
+<td> =</td>
+                <td>0.0_wp</td>
+            <td>
+<p>Mask off where column depth H &lt; min_zbot (m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mu~3"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mu</strong></td>
+<td> =</td>
+                <td>0.2_wp</td>
+            <td>
+<p>Mixing efficiency Gamma_mix (MU_ITIDES).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-omega2~4"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>omega2</strong></td>
+<td> =</td>
+                <td>OMEGA_EARTH**2</td>
+            <td>
+<p>Rotation floor Omega^2 (s^-2) on N^2; physics, not merely a
+1/0 guard.  The floor is plain Omega^2 (Melet et al. 2013
+efficiency rescaling N^2/(N^2+Omega^2)), not (2*Omega)^2.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-prandtl_tidal~2"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>prandtl_tidal</strong></td>
+<td> =</td>
+                <td>1.0_wp</td>
+            <td>
+<p>Kv = prandtl_tidal * Kd into the momentum solve.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rho0~21"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rho0</strong></td>
+<td> =</td>
+                <td>1035.0_wp</td>
+            <td>
+<p>Boussinesq reference density (kg/m^3).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-utide~2"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>utide</strong></td>
+<td> =</td>
+                <td>0.0_wp</td>
+            <td>
+<p>RMS barotropic tidal velocity amplitude (m/s) for v1.1 E.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zeta~7"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zeta</strong></td>
+<td> =</td>
+                <td>500.0_wp</td>
+            <td>
+<p>Bottom decay scale (m) (INT_TIDE_DECAY_SCALE).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+
+
+        <h4>Type-Bound Procedures</h4>
+        <table class="table table-striped varlist">
+          <tbody>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/ocean_tidal_mixing_t.html#boundprocedure-bytes~31'>bytes</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_tidal_mixing_bytes.html'>ocean_tidal_mixing_bytes</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/ocean_tidal_mixing_t.html#boundprocedure-destroy~29'>destroy</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_tidal_mixing_destroy.html'>ocean_tidal_mixing_destroy</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/ocean_tidal_mixing_t.html#boundprocedure-enter_data~21'>enter_data</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_tidal_mixing_enter_data.html'>ocean_tidal_mixing_enter_data</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/ocean_tidal_mixing_t.html#boundprocedure-exit_data~21'>exit_data</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_tidal_mixing_exit_data.html'>ocean_tidal_mixing_exit_data</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/ocean_tidal_mixing_t.html#boundprocedure-init~27'>init</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_tidal_mixing_init.html'>ocean_tidal_mixing_init</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/ocean_tidal_mixing_t.html#boundprocedure-set_e_uniform'>set_e_uniform</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_tidal_mixing_set_e_uniform.html'>ocean_tidal_mixing_set_e_uniform</a></td>
+                  <td></td>
+              </tr>
+          </tbody>
+        </table>
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+        <section>
+          <h2>Functions</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-tidal_mixing_is_inert"></span> <h3>public pure function <a href='../proc/tidal_mixing_is_inert.html'>tidal_mixing_is_inert</a>(enable, e_uniform, e_compute) result(inert)  
+</h3></div>
+    <div class="card-body">
+          
+  <p><code>.true.</code> iff tidal mixing is enabled but has no energy source
+(PR-6 fail-loud): <code>enable .and. e_uniform &lt;= 0 .and. .not.
+e_compute</code>.  The bottom-intensified diffusivity <code>Kd ∝ E</code>, so a
+zero prescribed <code>e_uniform</code> with the <code>e_compute</code> estimator off
+makes <code>Kd ≡ 0</code> exactly — the closure runs its whole flux sweep
+for nothing.  <code>e_compute=.true.</code> supplies E internally, so that
+is NOT inert; a disabled closure is not &ldquo;inert&rdquo; either (it is
+simply off).  Drives a configure abort.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-enable~38"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>enable</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-e_uniform~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>e_uniform</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-e_compute~3"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>e_compute</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>logical</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_tidal_mixing_bytes"></span> <h3>private pure function <a href='../proc/ocean_tidal_mixing_bytes.html'>ocean_tidal_mixing_bytes</a>(this) result(nbytes)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Counted allocatable footprint of the tidal mixing slot
+(0 when unallocated). One arr_bytes term per array — add a
+term here when a new allocatable joins the type.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~304"></span>
+              class(<a href='../type/ocean_tidal_mixing_t.html'>ocean_tidal_mixing_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>integer(kind=int64)</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+        <section>
+          <h2>Subroutines</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-tidal_mixing_compute"></span> <h3>public pure subroutine <a href='../proc/tidal_mixing_compute.html'>tidal_mixing_compute</a>(grid, this, ms, dt)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Run tidal mixing over the domain: fill <code>this%kd_int</code> (interface
+diffusivity).  Call at thermo cadence with the thermo dt.
+Outer shim: dereferences the tracer-registry hTr arrays on the
+host (the array-of-DT indirection blocks NVHPC device codegen),
+then forwards to the column kernel.  <code>dt</code> is unused (the steady
+diagnostic Kd does not integrate in time) but carried for
+signature parity with the other interior closures.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~205"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~302"></span>
+              type(<a href='../type/ocean_tidal_mixing_t.html'>ocean_tidal_mixing_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ms~96"></span>
+              type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ms</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~60"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-tidal_mixing_merge_into_kt"></span> <h3>public pure subroutine <a href='../proc/tidal_mixing_merge_into_kt.html'>tidal_mixing_merge_into_kt</a>(this, nx, ny, nzp1, kv, kt)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Fold the tidal diffusivity into the vmix interface fields,
+ADDITIVELY (interior-diffusivity semantics; St Laurent tidal
+mixing is an interior source like kappa-shear).  Called EVERY
+stage (PP81 rewrites kv/kt each stage; <code>kd_int</code> itself refreshes
+at thermo cadence).  Interior interfaces only — K=1 (bed) and
+K=nzp1 (surface) stay zero in both source and target.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~301"></span>
+              type(<a href='../type/ocean_tidal_mixing_t.html'>ocean_tidal_mixing_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~305"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+<p>Interface-field extents (explicit shape: assumed-shape
+dummies in a <code>do concurrent</code> kernel make NVHPC walk the
+descriptor with per-launch memcpys — this runs every stage).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~305"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+<p>Interface-field extents (explicit shape: assumed-shape
+dummies in a <code>do concurrent</code> kernel make NVHPC walk the
+descriptor with per-launch memcpys — this runs every stage).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nzp1~12"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nzp1</strong></td>
+            <td>
+<p>Interface-field extents (explicit shape: assumed-shape
+dummies in a <code>do concurrent</code> kernel make NVHPC walk the
+descriptor with per-launch memcpys — this runs every stage).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kv~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kv</strong>(nx,ny,nzp1)</td>
+            <td>
+<p>Momentum viscosity at interfaces; gets prandtl_tidal*kd.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kt~25"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kt</strong>(nx,ny,nzp1)</td>
+            <td>
+<p>Tracer diffusivity at interfaces; gets kd.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_tidal_mixing_destroy"></span> <h3>private  subroutine <a href='../proc/ocean_tidal_mixing_destroy.html'>ocean_tidal_mixing_destroy</a>(this)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~295"></span>
+              class(<a href='../type/ocean_tidal_mixing_t.html'>ocean_tidal_mixing_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_tidal_mixing_enter_data"></span> <h3>private  subroutine <a href='../proc/ocean_tidal_mixing_enter_data.html'>ocean_tidal_mixing_enter_data</a>(this)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~296"></span>
+              class(<a href='../type/ocean_tidal_mixing_t.html'>ocean_tidal_mixing_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_tidal_mixing_enter_data_impl"></span> <h3>private  subroutine <a href='../proc/ocean_tidal_mixing_enter_data_impl.html'>ocean_tidal_mixing_enter_data_impl</a>(this)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~297"></span>
+              type(<a href='../type/ocean_tidal_mixing_t.html'>ocean_tidal_mixing_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_tidal_mixing_exit_data"></span> <h3>private  subroutine <a href='../proc/ocean_tidal_mixing_exit_data.html'>ocean_tidal_mixing_exit_data</a>(this)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~298"></span>
+              class(<a href='../type/ocean_tidal_mixing_t.html'>ocean_tidal_mixing_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_tidal_mixing_exit_data_impl"></span> <h3>private  subroutine <a href='../proc/ocean_tidal_mixing_exit_data_impl.html'>ocean_tidal_mixing_exit_data_impl</a>(this)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~299"></span>
+              type(<a href='../type/ocean_tidal_mixing_t.html'>ocean_tidal_mixing_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_tidal_mixing_init"></span> <h3>private  subroutine <a href='../proc/ocean_tidal_mixing_init.html'>ocean_tidal_mixing_init</a>(this, grid, nz_ml)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Allocate the persistent fields.  Always allocates (configure
+runs after init, so <code>enable</code> is not known yet); the off-cost is
+one 2D field + one interface field.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~294"></span>
+              class(<a href='../type/ocean_tidal_mixing_t.html'>ocean_tidal_mixing_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~204"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz_ml~29"></span>
+              integer,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz_ml</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_tidal_mixing_set_e_uniform"></span> <h3>private  subroutine <a href='../proc/ocean_tidal_mixing_set_e_uniform.html'>ocean_tidal_mixing_set_e_uniform</a>(this, e_value)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Fill the bottom energy field <code>e_in</code> with a uniform value.
+Host loop (setup phase); call after <code>init</code>, before <code>enter_data</code>.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~300"></span>
+              class(<a href='../type/ocean_tidal_mixing_t.html'>ocean_tidal_mixing_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-e_value"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>e_value</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-tidal_mixing_column_kernel"></span> <h3>private pure subroutine <a href='../proc/tidal_mixing_column_kernel.html'>tidal_mixing_column_kernel</a>(grid, this, ms, hT, hS)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Per-column St-Laurent flux-bookkeeping sweep.  One
+<code>do concurrent (j, i)</code> over owned cells; each column is a serial
+upward sweep k=1(bed) -&gt; nz(surface) over fixed-size <code>local()</code>
+arrays (register-resident).  Bottom-up global indexing
+throughout — no surface-down flip (the decay anchors at the bed).</p><a href="../proc/tidal_mixing_column_kernel.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~206"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~303"></span>
+              type(<a href='../type/ocean_tidal_mixing_t.html'>ocean_tidal_mixing_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ms~97"></span>
+              type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ms</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ht~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hT</strong>(:,:,:)</td>
+            <td>
+<p>Temperature tracer hTr (degC*m), host-dereferenced.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hs~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hS</strong>(:,:,:)</td>
+            <td>
+<p>Salinity tracer hTr (PSU*m), host-dereferenced.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+
+
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-20 10:28 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

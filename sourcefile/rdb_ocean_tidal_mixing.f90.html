@@ -1,0 +1,1485 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>rdb_ocean_tidal_mixing.F90 &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>rdb_ocean_tidal_mixing.F90
+      <small>Source File</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.3% of total for source files.">234 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_tidal_mixing.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+            <li class="breadcrumb-item active" aria-current="page">rdb_ocean_tidal_mixing.F90</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#mods-0"
+         aria-expanded="false" aria-controls="mods-0">
+         <h4 class="card-header bg-primary text-white">Modules</h4>
+      </a>
+      <div id="mods-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_tidal_mixing.html">rdb_ocean_tidal_mixing</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../sourcefile/rdb_ocean_tidal_mixing.f90.html#src">rdb_ocean_tidal_mixing.F90</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    <div class="col-md-9" id='text'>
+      <p>Internal-tide-driven interior diapycnal mixing (St-Laurent/Simmons) for the ocean core.</p>
+      <br>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">This file depends on</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph Pages: 1 -->
+<svg id="sourcefilerdb_ocean_tidal_mixingf90EfferentGraph" width="641pt" height="284pt"
+ viewBox="0.00 0.00 641.00 283.81" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph" class="graph" transform="scale(0.81 0.81) rotate(0) translate(4 348)">
+<title>sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-348 791,-348 791,4 -4,4"/>
+<!-- sourcefile~rdb_ocean_tidal_mixing.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_node1" class="node">
+<title>sourcefile~rdb_ocean_tidal_mixing.f90</title>
+<polygon fill="none" stroke="black" points="787,-53.65 626,-53.65 626,-29.65 787,-29.65 787,-53.65"/>
+<text text-anchor="middle" x="706.5" y="-39.25" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ocean_tidal_mixing.F90</text>
+</g>
+<!-- sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_node2" class="node">
+<title>sourcefile~rdb_constants.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_node2"><a xlink:href="../sourcefile/rdb_constants.f90.html" xlink:title="rdb_constants.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="109,-177.65 0,-177.65 0,-153.65 109,-153.65 109,-177.65"/>
+<text text-anchor="middle" x="54.5" y="-163.25" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_constants.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_tidal_mixing.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_edge1" class="edge">
+<title>sourcefile~rdb_ocean_tidal_mixing.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M517,-247.65C362.37,-312.16 291.56,-389.83 145,-308.65 98.07,-282.66 72.48,-220.65 61.71,-187.48"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="65.02,-186.33 58.73,-177.8 58.33,-188.39 65.02,-186.33"/>
+</g>
+<!-- sourcefile~rdb_eos.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_node3" class="node">
+<title>sourcefile~rdb_eos.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_node3"><a xlink:href="../sourcefile/rdb_eos.f90.html" xlink:title="rdb_eos.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="404,-259.65 327,-259.65 327,-235.65 404,-235.65 404,-259.65"/>
+<text text-anchor="middle" x="365.5" y="-245.25" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_eos.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_tidal_mixing.f90&#45;&gt;sourcefile~rdb_eos.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_edge2" class="edge">
+<title>sourcefile~rdb_ocean_tidal_mixing.f90&#45;&gt;sourcefile~rdb_eos.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M517,-247.65C484.77,-261.85 444.77,-261.1 414.11,-257.2"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="414.49,-253.72 404.09,-255.78 413.5,-260.65 414.49,-253.72"/>
+</g>
+<!-- sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_node4" class="node">
+<title>sourcefile~rdb_grid.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_node4"><a xlink:href="../sourcefile/rdb_grid.f90.html" xlink:title="rdb_grid.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="254.5,-135.65 175.5,-135.65 175.5,-111.65 254.5,-111.65 254.5,-135.65"/>
+<text text-anchor="middle" x="215" y="-121.25" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_grid.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_tidal_mixing.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_edge3" class="edge">
+<title>sourcefile~rdb_ocean_tidal_mixing.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M699.3,-53.9C679.39,-91.67 612.82,-206.33 519,-247.65"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M517,-247.65C465.38,-270.39 337.86,-164.35 285,-144.65 278.46,-142.22 271.49,-139.84 264.59,-137.62"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="265.19,-134.14 254.6,-134.49 263.1,-140.82 265.19,-134.14"/>
+</g>
+<!-- sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_node5" class="node">
+<title>sourcefile~rdb_mem_report.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_node5"><a xlink:href="../sourcefile/rdb_mem_report.f90.html" xlink:title="rdb_mem_report.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="277,-53.65 153,-53.65 153,-29.65 277,-29.65 277,-53.65"/>
+<text text-anchor="middle" x="215" y="-39.25" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_mem_report.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_tidal_mixing.f90&#45;&gt;sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_edge4" class="edge">
+<title>sourcefile~rdb_ocean_tidal_mixing.f90&#45;&gt;sourcefile~rdb_mem_report.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M653.68,-29.62C587.31,-15.56 468.66,4.96 366.5,-1.65"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M364.5,-1.65C326.53,-3.62 284.85,-15.78 255.34,-26.18"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="254.04,-22.93 245.82,-29.62 256.42,-29.51 254.04,-22.93"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_node6" class="node">
+<title>sourcefile~rdb_multilayer_state.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_node6"><a xlink:href="../sourcefile/rdb_multilayer_state.f90.html" xlink:title="rdb_multilayer_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="590,-53.65 446,-53.65 446,-29.65 590,-29.65 590,-53.65"/>
+<text text-anchor="middle" x="518" y="-39.25" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_multilayer_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_tidal_mixing.f90&#45;&gt;sourcefile~rdb_multilayer_state.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_edge5" class="edge">
+<title>sourcefile~rdb_ocean_tidal_mixing.f90&#45;&gt;sourcefile~rdb_multilayer_state.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M625.87,-41.65C617.42,-41.65 608.82,-41.65 600.36,-41.65"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="600.11,-38.15 590.11,-41.65 600.11,-45.15 600.11,-38.15"/>
+</g>
+<!-- sourcefile~rdb_eos.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_edge6" class="edge">
+<title>sourcefile~rdb_eos.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M326.72,-250.24C281.93,-251.99 205.73,-250.81 145,-228.65 118.46,-218.97 92.56,-199.29 75.51,-184.48"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="77.67,-181.73 67.88,-177.67 73.01,-186.95 77.67,-181.73"/>
+</g>
+<!-- sourcefile~rdb_eos.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_edge8" class="edge">
+<title>sourcefile~rdb_eos.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M338.69,-235.64C332.34,-231.82 325.95,-227.14 321,-221.65 295.68,-193.62 313.54,-169.41 285,-144.65 279.01,-139.46 271.77,-135.55 264.26,-132.61"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="265.27,-129.26 254.67,-129.38 263.03,-135.89 265.27,-129.26"/>
+</g>
+<!-- sourcefile~rdb_error_ring.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_node8" class="node">
+<title>sourcefile~rdb_error_ring.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_node8"><a xlink:href="../sourcefile/rdb_error_ring.f90.html" xlink:title="rdb_error_ring.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="270.5,-177.65 159.5,-177.65 159.5,-153.65 270.5,-153.65 270.5,-177.65"/>
+<text text-anchor="middle" x="215" y="-163.25" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_error_ring.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_eos.f90&#45;&gt;sourcefile~rdb_error_ring.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_edge7" class="edge">
+<title>sourcefile~rdb_eos.f90&#45;&gt;sourcefile~rdb_error_ring.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M342.17,-235.65C335.17,-231.54 327.56,-226.69 321,-221.65 303.3,-208.06 304.22,-198 285,-186.65 281.85,-184.79 278.52,-183.09 275.09,-181.52"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="276.42,-178.28 265.85,-177.69 273.75,-184.75 276.42,-178.28"/>
+</g>
+<!-- sourcefile~rdb_ocean_status.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_node9" class="node">
+<title>sourcefile~rdb_ocean_status.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_node9"><a xlink:href="../sourcefile/rdb_ocean_status.f90.html" xlink:title="rdb_ocean_status.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="279,-299.65 151,-299.65 151,-275.65 279,-275.65 279,-299.65"/>
+<text text-anchor="middle" x="215" y="-285.25" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_status.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_eos.f90&#45;&gt;sourcefile~rdb_ocean_status.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_edge9" class="edge">
+<title>sourcefile~rdb_eos.f90&#45;&gt;sourcefile~rdb_ocean_status.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M326.64,-257.85C309.6,-262.44 289.15,-267.95 270.5,-272.97"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="269.4,-269.65 260.65,-275.63 271.22,-276.41 269.4,-269.65"/>
+</g>
+<!-- sourcefile~rdb_teos10_convert.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_node10" class="node">
+<title>sourcefile~rdb_teos10_convert.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_node10"><a xlink:href="../sourcefile/rdb_teos10_convert.f90.html" xlink:title="rdb_teos10_convert.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="285,-219.65 145,-219.65 145,-195.65 285,-195.65 285,-219.65"/>
+<text text-anchor="middle" x="215" y="-205.25" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_teos10_convert.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_eos.f90&#45;&gt;sourcefile~rdb_teos10_convert.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_edge10" class="edge">
+<title>sourcefile~rdb_eos.f90&#45;&gt;sourcefile~rdb_teos10_convert.f90</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M326.64,-237.46C309.6,-232.87 289.15,-227.36 270.5,-222.34"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="271.22,-218.9 260.65,-219.68 269.4,-225.66 271.22,-218.9"/>
+</g>
+<!-- sourcefile~rdb_grid.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_edge11" class="edge">
+<title>sourcefile~rdb_grid.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M175.23,-133.93C155.84,-139.07 132.04,-145.37 110.78,-151.01"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="109.67,-147.68 100.9,-153.62 111.46,-154.45 109.67,-147.68"/>
+</g>
+<!-- sourcefile~rdb_mem_report.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_edge12" class="edge">
+<title>sourcefile~rdb_mem_report.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M175.96,-53.67C165.45,-57.88 154.37,-63.2 145,-69.65 114.32,-90.78 86.33,-124.07 70.1,-145.38"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="67.26,-143.33 64.09,-153.44 72.87,-147.51 67.26,-143.33"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_edge13" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M501,-53.95C474.69,-73.31 419.85,-110.09 366.5,-123.65"/>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M364.5,-123.65C298.25,-140.49 282.4,-67.44 216,-83.65"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_edge16" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M364.5,-123.65C331.98,-131.92 294.14,-131.78 264.8,-129.65"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="265.05,-126.16 254.8,-128.82 264.47,-133.13 265.05,-126.16"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_edge17" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_mem_report.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M482.24,-29.65C445.18,-17.35 388.83,-0.21 366.5,-1.65"/>
+</g>
+<!-- sourcefile~rdb_efp.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_node7" class="node">
+<title>sourcefile~rdb_efp.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_node7"><a xlink:href="../sourcefile/rdb_efp.f90.html" xlink:title="rdb_efp.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="403.5,-95.65 327.5,-95.65 327.5,-71.65 403.5,-71.65 403.5,-95.65"/>
+<text text-anchor="middle" x="365.5" y="-81.25" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_efp.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_efp.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_edge14" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_efp.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M473.87,-53.69C454.94,-58.97 432.66,-65.19 413.32,-70.59"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="412.2,-67.27 403.51,-73.33 414.08,-74.01 412.2,-67.27"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_error_ring.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_edge15" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_error_ring.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M364.5,-123.65C331.63,-132.01 294.96,-142.37 266.29,-150.71"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="265.11,-147.41 256.5,-153.57 267.08,-154.13 265.11,-147.41"/>
+</g>
+<!-- sourcefile~rdb_tracer.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_node11" class="node">
+<title>sourcefile~rdb_tracer.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_node11"><a xlink:href="../sourcefile/rdb_tracer.f90.html" xlink:title="rdb_tracer.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="410,-53.65 321,-53.65 321,-29.65 410,-29.65 410,-53.65"/>
+<text text-anchor="middle" x="365.5" y="-39.25" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_tracer.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_tracer.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_edge18" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_tracer.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M445.72,-41.65C437.17,-41.65 428.55,-41.65 420.31,-41.65"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="420.11,-38.15 410.11,-41.65 420.11,-45.15 420.11,-38.15"/>
+</g>
+<!-- sourcefile~rdb_teos10_convert.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_edge19" class="edge">
+<title>sourcefile~rdb_teos10_convert.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M168.58,-195.62C150.51,-190.83 129.55,-185.28 110.61,-180.26"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="111.49,-176.87 100.93,-177.69 109.7,-183.64 111.49,-176.87"/>
+</g>
+<!-- sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_edge20" class="edge">
+<title>sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M325,-53.67C295.19,-62.53 253.22,-74.57 216,-83.65"/>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M214,-83.65C183.1,-91.2 173.76,-89.08 145,-102.65 120.04,-114.43 94.6,-133.13 77.25,-147.09"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="74.93,-144.47 69.42,-153.52 79.37,-149.88 74.93,-144.47"/>
+</g>
+<!-- sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_edge21" class="edge">
+<title>sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M336.14,-53.71C330.93,-56.37 325.67,-59.39 321,-62.65 302.72,-75.45 303.84,-85.69 285,-97.65 278.61,-101.71 271.49,-105.28 264.32,-108.37"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="262.55,-105.32 254.58,-112.29 265.16,-111.81 262.55,-105.32"/>
+</g>
+<!-- sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~EfferentGraph_edge22" class="edge">
+<title>sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_mem_report.f90</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M320.75,-41.65C310.16,-41.65 298.57,-41.65 287.08,-41.65"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="287.04,-38.15 277.04,-41.65 287.04,-45.15 287.04,-38.15"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefilerdb_ocean_tidal_mixingf90EfferentGraph = svgPanZoom('#sourcefilerdb_ocean_tidal_mixingf90EfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#EfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="EfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Files dependent on this one</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph Pages: 1 -->
+<svg id="sourcefilerdb_ocean_tidal_mixingf90AfferentGraph" width="641pt" height="246pt"
+ viewBox="0.00 0.00 641.00 245.53" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph" class="graph" transform="scale(0.47 0.47) rotate(0) translate(4 514.25)">
+<title>sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-514.25 1349,-514.25 1349,4 -4,4"/>
+<!-- sourcefile~rdb_ocean_tidal_mixing.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node1" class="node">
+<title>sourcefile~rdb_ocean_tidal_mixing.f90</title>
+<polygon fill="none" stroke="black" points="161,-232.37 0,-232.37 0,-208.37 161,-208.37 161,-232.37"/>
+<text text-anchor="middle" x="80.5" y="-217.97" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ocean_tidal_mixing.F90</text>
+</g>
+<!-- sourcefile~rdb_config_validate.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node2" class="node">
+<title>sourcefile~rdb_config_validate.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node2"><a xlink:href="../sourcefile/rdb_config_validate.f90.html" xlink:title="rdb_config_validate.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="336,-274.37 197,-274.37 197,-250.37 336,-250.37 336,-274.37"/>
+<text text-anchor="middle" x="266.5" y="-259.97" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_config_validate.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_config_validate.f90&#45;&gt;sourcefile~rdb_ocean_tidal_mixing.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge1" class="edge">
+<title>sourcefile~rdb_config_validate.f90&#45;&gt;sourcefile~rdb_ocean_tidal_mixing.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M212.77,-250.33C191.41,-245.45 166.56,-239.78 144.27,-234.69"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="144.76,-231.22 134.23,-232.4 143.21,-238.04 144.76,-231.22"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node3" class="node">
+<title>sourcefile~rdb_ocean_dyn.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node3"><a xlink:href="../sourcefile/rdb_ocean_dyn.f90.html" xlink:title="rdb_ocean_dyn.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="324.5,-232.37 208.5,-232.37 208.5,-208.37 324.5,-208.37 324.5,-232.37"/>
+<text text-anchor="middle" x="266.5" y="-217.97" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_dyn.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_tidal_mixing.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge2" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_tidal_mixing.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M208.29,-220.37C196.55,-220.37 183.93,-220.37 171.36,-220.37"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="171.31,-216.87 161.31,-220.37 171.31,-223.87 171.31,-216.87"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node4" class="node">
+<title>sourcefile~rdb_ocean_state.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node4"><a xlink:href="../sourcefile/rdb_ocean_state.f90.html" xlink:title="rdb_ocean_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="495,-192.37 372,-192.37 372,-168.37 495,-168.37 495,-192.37"/>
+<text text-anchor="middle" x="433.5" y="-177.97" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_tidal_mixing.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge3" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_tidal_mixing.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M371.82,-183.6C324.16,-186.54 256.18,-191.62 197,-199.37 182.22,-201.3 166.46,-203.84 151.49,-206.49"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="150.49,-203.11 141.27,-208.33 151.73,-210 150.49,-203.11"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge8" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M382.99,-192.37C365.37,-196.64 345.35,-201.49 326.98,-205.95"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="326.15,-202.55 317.26,-208.3 327.8,-209.35 326.15,-202.55"/>
+</g>
+<!-- sourcefile~rdb_driver.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node5" class="node">
+<title>sourcefile~rdb_driver.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node5"><a xlink:href="../sourcefile/rdb_driver.f90.html" xlink:title="rdb_driver.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1192.5,-336.37 1104.5,-336.37 1104.5,-312.37 1192.5,-312.37 1192.5,-336.37"/>
+<text text-anchor="middle" x="1148.5" y="-321.97" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge4" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M997.5,-397.37C937.29,-406.4 949.95,-461.14 896,-489.37 862.85,-506.71 851.03,-513.67 814,-508.37"/>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M812,-508.37C774.97,-503.06 765.14,-502.2 730,-489.37 591.46,-438.79 576.03,-379.87 434.5,-338.37"/>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge9" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1131.78,-336.44C1105.92,-355.26 1052.01,-390.19 999.5,-397.37"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M997.5,-397.37C914.06,-408.77 969.79,-277.94 896,-237.37 831.35,-201.82 803.66,-233.29 730,-237.37 713.93,-238.26 710.07,-240.48 694,-241.37 621.67,-245.37 600.59,-261.52 531,-241.37 502.44,-233.1 474.21,-213.57 455.74,-198.82"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="457.92,-196.08 447.97,-192.44 453.47,-201.49 457.92,-196.08"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node10" class="node">
+<title>sourcefile~rdb_ocean_engine.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node10"><a xlink:href="../sourcefile/rdb_ocean_engine.f90.html" xlink:title="rdb_ocean_engine.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1065,-192.37 932,-192.37 932,-168.37 1065,-168.37 1065,-192.37"/>
+<text text-anchor="middle" x="998.5" y="-177.97" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge24" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1135.14,-312.34C1109.52,-287.41 1050.45,-229.93 1019.4,-199.72"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1021.75,-197.13 1012.14,-192.67 1016.87,-202.15 1021.75,-197.13"/>
+</g>
+<!-- sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node6" class="node">
+<title>sourcefile~rdb_handle.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node6"><a xlink:href="../sourcefile/rdb_handle.f90.html" xlink:title="rdb_handle.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1196,-112.37 1101,-112.37 1101,-88.37 1196,-88.37 1196,-112.37"/>
+<text text-anchor="middle" x="1148.5" y="-97.97" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge10" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1120.66,-88.28C1041.71,-54.38 803.79,35.81 613.5,-16.37"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M611.5,-16.37C576.13,-26.38 561.18,-14.38 531,-35.37 485.97,-66.68 456.31,-126.41 442.84,-158.57"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="439.54,-157.39 439.04,-167.97 446.03,-160.01 439.54,-157.39"/>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge25" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1124.39,-112.39C1116.79,-116.58 1108.4,-121.46 1101,-126.37 1084.11,-137.57 1082.6,-144.3 1065,-154.37 1058.65,-158 1051.69,-161.35 1044.75,-164.36"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1043.27,-161.19 1035.37,-168.24 1045.95,-167.65 1043.27,-161.19"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node7" class="node">
+<title>sourcefile~rdb_ocean_api.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node7"><a xlink:href="../sourcefile/rdb_ocean_api.f90.html" xlink:title="rdb_ocean_api.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1345,-152.37 1232,-152.37 1232,-128.37 1345,-128.37 1345,-152.37"/>
+<text text-anchor="middle" x="1288.5" y="-137.97" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge5" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1285.07,-152.6C1277.63,-187.09 1252.23,-286.43 1196,-345.37 1068.57,-478.91 998.37,-517.36 814,-508.37"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge18" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90</title>
+<path fill="none" stroke="#ff9900" stroke-dasharray="5,2" d="M1246.1,-128.36C1232.03,-124.29 1216.14,-119.68 1201.37,-115.4"/>
+<polygon fill="#ff9900" stroke="#ff9900" points="1201.93,-111.92 1191.35,-112.5 1199.98,-118.64 1201.93,-111.92"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node8" class="node">
+<title>sourcefile~rdb_ocean_diag_derived.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node8"><a xlink:href="../sourcefile/rdb_ocean_diag_derived.f90.html" xlink:title="rdb_ocean_diag_derived.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="896,-112.37 730,-112.37 730,-88.37 896,-88.37 896,-112.37"/>
+<text text-anchor="middle" x="813" y="-97.97" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_derived.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge19" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90</title>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M1231.71,-138.69C1206.57,-138.36 1176.51,-138.57 1149.5,-140.37"/>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M1147.5,-140.37C1081.87,-144.72 1065.18,-143.9 999.5,-140.37"/>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M997.5,-140.37C950.78,-137.85 898.77,-125.59 862.09,-115.29"/>
+<polygon fill="#33ff00" stroke="#33ff00" points="862.75,-111.84 852.17,-112.45 860.82,-118.57 862.75,-111.84"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node9" class="node">
+<title>sourcefile~rdb_ocean_diag_fills.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node9"><a xlink:href="../sourcefile/rdb_ocean_diag_fills.f90.html" xlink:title="rdb_ocean_diag_fills.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="684,-152.37 541,-152.37 541,-128.37 684,-128.37 684,-152.37"/>
+<text text-anchor="middle" x="612.5" y="-137.97" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_fills.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge21" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M997.5,-140.37C893.02,-134.75 772.31,-136.02 694.54,-137.84"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="694.25,-134.35 684.34,-138.09 694.42,-141.35 694.25,-134.35"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge26" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1147.5,-140.37C1110.04,-142.85 1068.93,-154.74 1039.56,-164.92"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1038.33,-161.64 1030.07,-168.29 1040.67,-168.24 1038.33,-161.64"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge11" class="edge">
+<title>sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M798.96,-88.06C767.84,-60.23 686.4,3.62 613.5,-16.37"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge22" class="edge">
+<title>sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M752.44,-112.37C730.66,-116.76 705.82,-121.76 683.22,-126.32"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="682.47,-122.9 673.36,-128.3 683.85,-129.76 682.47,-122.9"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge12" class="edge">
+<title>sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M558.39,-152.37C539.32,-156.68 517.61,-161.58 497.76,-166.07"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="496.86,-162.69 487.87,-168.3 498.4,-169.51 496.86,-162.69"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge6" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M812,-180.37C753.42,-187.73 747.97,-217.43 694,-241.37 665.86,-253.84 464.15,-346.64 434.5,-338.37"/>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M432.5,-338.37C374.15,-321.25 388.07,-272.77 336,-241.37 333.03,-239.58 329.9,-237.93 326.68,-236.41"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="327.97,-233.16 317.4,-232.48 325.24,-239.6 327.97,-233.16"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge13" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M812,-180.37C705.9,-193.27 581.79,-189.73 505.67,-185.47"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="505.44,-181.95 495.25,-184.86 505.03,-188.93 505.44,-181.95"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge20" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90</title>
+<path fill="none" stroke="#33ff00" stroke-dasharray="5,2" d="M966.05,-168.26C955.21,-163.99 943.03,-159.07 932,-154.37 903.77,-142.31 872.17,-127.8 848.78,-116.85"/>
+<polygon fill="#33ff00" stroke="#33ff00" points="850.15,-113.63 839.61,-112.55 847.18,-119.96 850.15,-113.63"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge23" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M931.87,-176.54C896.78,-175.45 852.9,-175.64 814,-180.37"/>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M812,-180.37C784.49,-183.71 715.6,-167.77 666.71,-155.02"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="667.47,-151.61 656.91,-152.44 665.69,-158.38 667.47,-151.61"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node11" class="node">
+<title>sourcefile~rdb_ocean_setup.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node11"><a xlink:href="../sourcefile/rdb_ocean_setup.f90.html" xlink:title="rdb_ocean_setup.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="675.5,-350.37 549.5,-350.37 549.5,-326.37 675.5,-326.37 675.5,-350.37"/>
+<text text-anchor="middle" x="612.5" y="-335.97" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge27" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M812,-180.37C745.44,-188.46 743.72,-229.38 694,-274.37 675.96,-290.69 654.32,-307.76 638.02,-320.17"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="635.9,-317.38 630.03,-326.2 640.12,-322.97 635.9,-317.38"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge7" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M549.36,-346.45C514.91,-348.94 471.64,-348.74 434.5,-338.37"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge14" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M558.12,-326.36C548.57,-322.79 539.09,-318.22 531,-312.37 490.25,-282.91 459.7,-231.03 444.73,-201.85"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="447.69,-199.94 440.1,-192.55 441.43,-203.06 447.69,-199.94"/>
+</g>
+<!-- sourcefile~rdb_ocean_state_restart.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node12" class="node">
+<title>sourcefile~rdb_ocean_state_restart.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node12"><a xlink:href="../sourcefile/rdb_ocean_state_restart.f90.html" xlink:title="rdb_ocean_state_restart.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="694,-232.37 531,-232.37 531,-208.37 694,-208.37 694,-232.37"/>
+<text text-anchor="middle" x="612.5" y="-217.97" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_restart.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state_restart.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge15" class="edge">
+<title>sourcefile~rdb_ocean_state_restart.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M558.39,-208.36C539.32,-204.05 517.61,-199.15 497.76,-194.66"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="498.4,-191.22 487.87,-192.43 496.86,-198.05 498.4,-191.22"/>
+</g>
+<!-- sourcefile~rdb_ocean_state_seed.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node13" class="node">
+<title>sourcefile~rdb_ocean_state_seed.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node13"><a xlink:href="../sourcefile/rdb_ocean_state_seed.f90.html" xlink:title="rdb_ocean_state_seed.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="689.5,-110.37 535.5,-110.37 535.5,-86.37 689.5,-86.37 689.5,-110.37"/>
+<text text-anchor="middle" x="612.5" y="-95.97" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_seed.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state_seed.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge16" class="edge">
+<title>sourcefile~rdb_ocean_state_seed.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M556.17,-110.38C547.6,-112.93 538.95,-115.92 531,-119.37 504.79,-130.74 477.49,-148.65 458.65,-162.13"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="456.4,-159.44 450.37,-168.15 460.52,-165.1 456.4,-159.44"/>
+</g>
+<!-- sourcefile~rdb_ocean_state_topo.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node14" class="node">
+<title>sourcefile~rdb_ocean_state_topo.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node14"><a xlink:href="../sourcefile/rdb_ocean_state_topo.f90.html" xlink:title="rdb_ocean_state_topo.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="688,-68.37 537,-68.37 537,-44.37 688,-44.37 688,-68.37"/>
+<text text-anchor="middle" x="612.5" y="-53.97" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_topo.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state_topo.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge17" class="edge">
+<title>sourcefile~rdb_ocean_state_topo.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M550.23,-68.41C543.51,-70.87 536.96,-73.82 531,-77.37 495.52,-98.47 464.94,-136.41 448.18,-159.88"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="445.3,-157.9 442.46,-168.1 451.04,-161.9 445.3,-157.9"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_bc.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node15" class="node">
+<title>sourcefile~rdb_ocean_setup_bc.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node15"><a xlink:href="../sourcefile/rdb_ocean_setup_bc.f90.html" xlink:title="rdb_ocean_setup_bc.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="885,-396.37 741,-396.37 741,-372.37 885,-372.37 885,-396.37"/>
+<text text-anchor="middle" x="813" y="-381.97" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_bc.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_bc.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge28" class="edge">
+<title>sourcefile~rdb_ocean_setup_bc.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M760.11,-372.34C734.12,-366.32 702.48,-358.99 675.25,-352.68"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="675.97,-349.25 665.44,-350.4 674.39,-356.07 675.97,-349.25"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_bt.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node16" class="node">
+<title>sourcefile~rdb_ocean_setup_bt.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node16"><a xlink:href="../sourcefile/rdb_ocean_setup_bt.f90.html" xlink:title="rdb_ocean_setup_bt.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="884,-354.37 742,-354.37 742,-330.37 884,-330.37 884,-354.37"/>
+<text text-anchor="middle" x="813" y="-339.97" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_bt.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_bt.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge29" class="edge">
+<title>sourcefile~rdb_ocean_setup_bt.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M741.74,-340.95C723.66,-340.59 704.18,-340.19 685.99,-339.83"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="685.81,-336.32 675.74,-339.62 685.67,-343.32 685.81,-336.32"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_cavity.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node17" class="node">
+<title>sourcefile~rdb_ocean_setup_cavity.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node17"><a xlink:href="../sourcefile/rdb_ocean_setup_cavity.f90.html" xlink:title="rdb_ocean_setup_cavity.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="893.5,-312.37 732.5,-312.37 732.5,-288.37 893.5,-288.37 893.5,-312.37"/>
+<text text-anchor="middle" x="813" y="-297.97" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_cavity.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_cavity.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge30" class="edge">
+<title>sourcefile~rdb_ocean_setup_cavity.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M749.19,-312.39C728.99,-316.26 706.44,-320.57 685.62,-324.56"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="684.72,-321.17 675.56,-326.49 686.04,-328.04 684.72,-321.17"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node18" class="node">
+<title>sourcefile~rdb_ocean_setup_grid.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node18"><a xlink:href="../sourcefile/rdb_ocean_setup_grid.f90.html" xlink:title="rdb_ocean_setup_grid.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="889,-270.37 737,-270.37 737,-246.37 889,-246.37 889,-270.37"/>
+<text text-anchor="middle" x="813" y="-255.97" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_grid.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_grid.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge31" class="edge">
+<title>sourcefile~rdb_ocean_setup_grid.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M750.71,-270.48C743.53,-272.93 736.46,-275.87 730,-279.37 710.91,-289.7 712.76,-301.45 694,-312.37 687.05,-316.41 679.39,-319.91 671.65,-322.92"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="670.4,-319.65 662.2,-326.35 672.79,-326.23 670.4,-319.65"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_lateral.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node19" class="node">
+<title>sourcefile~rdb_ocean_setup_lateral.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node19"><a xlink:href="../sourcefile/rdb_ocean_setup_lateral.f90.html" xlink:title="rdb_ocean_setup_lateral.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="896,-480.37 730,-480.37 730,-456.37 896,-456.37 896,-480.37"/>
+<text text-anchor="middle" x="813" y="-465.97" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_lateral.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_lateral.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge32" class="edge">
+<title>sourcefile~rdb_ocean_setup_lateral.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M743.73,-456.3C738.79,-453.84 734.14,-450.89 730,-447.37 699.41,-421.27 723.78,-391.39 694,-364.37 690.09,-360.82 685.69,-357.75 681.02,-355.11"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="682.26,-351.82 671.74,-350.51 679.15,-358.09 682.26,-351.82"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_vmix.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node20" class="node">
+<title>sourcefile~rdb_ocean_setup_vmix.f90</title>
+<g id="a_sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_node20"><a xlink:href="../sourcefile/rdb_ocean_setup_vmix.f90.html" xlink:title="rdb_ocean_setup_vmix.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="891.5,-438.37 734.5,-438.37 734.5,-414.37 891.5,-414.37 891.5,-438.37"/>
+<text text-anchor="middle" x="813" y="-423.97" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_vmix.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_vmix.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_tidal_mixing.f90~~AfferentGraph_edge33" class="edge">
+<title>sourcefile~rdb_ocean_setup_vmix.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M748.62,-414.29C742.1,-411.85 735.76,-408.9 730,-405.37 709.33,-392.68 714.27,-377.68 694,-364.37 688.01,-360.43 681.38,-357.05 674.56,-354.15"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="675.79,-350.88 665.21,-350.5 673.25,-357.4 675.79,-350.88"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefilerdb_ocean_tidal_mixingf90AfferentGraph = svgPanZoom('#sourcefilerdb_ocean_tidal_mixingf90AfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#AfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="AfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+<br>
+      <section>
+        <h2><span class="anchor" id="src"></span>Source Code</h2>
+        <div class="hl codehilite"><pre><span></span><a id="ln-1" name="ln-1" href="#ln-1"></a><span class="c">!! Internal-tide-driven interior diapycnal mixing (St-Laurent/Simmons) for the ocean core.</span>
+<a id="ln-2" name="ln-2" href="#ln-2"></a><span class="k">module </span><span class="n">rdb_ocean_tidal_mixing</span>
+<a id="ln-3" name="ln-3" href="#ln-3"></a><span class="w">   </span><span class="c">!! Bottom-intensified internal-tide diapycnal diffusivity.  A fixed</span>
+<a id="ln-4" name="ln-4" href="#ln-4"></a><span class="w">   </span><span class="c">!! fraction of the barotropic-to-baroclinic tidal energy conversion</span>
+<a id="ln-5" name="ln-5" href="#ln-5"></a><span class="w">   </span><span class="c">!! `E(x,y)` [W m-2] dissipates locally above rough topography; the</span>
+<a id="ln-6" name="ln-6" href="#ln-6"></a><span class="w">   </span><span class="c">!! resulting turbulent diffusivity decays exponentially upward from</span>
+<a id="ln-7" name="ln-7" href="#ln-7"></a><span class="w">   </span><span class="c">!! the bed with scale `zeta`, converted to a per-layer `Kd` through</span>
+<a id="ln-8" name="ln-8" href="#ln-8"></a><span class="w">   </span><span class="c">!! the stratification (`1/(dz*(N^2+Omega^2))`).  An INTERIOR closure:</span>
+<a id="ln-9" name="ln-9" href="#ln-9"></a><span class="w">   </span><span class="c">!! it is ADDED to the other interior diffusivities (KPP/EPBL/PP81/</span>
+<a id="ln-10" name="ln-10" href="#ln-10"></a><span class="w">   </span><span class="c">!! kappa-shear) and goes through the single `vmix_assemble` gate.</span>
+<a id="ln-11" name="ln-11" href="#ln-11"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-12" name="ln-12" href="#ln-12"></a><span class="w">   </span><span class="c">!! References:</span>
+<a id="ln-13" name="ln-13" href="#ln-13"></a><span class="w">   </span><span class="c">!!   * Jayne &amp; St Laurent (2001), GRL 28, "Parameterizing tidal</span>
+<a id="ln-14" name="ln-14" href="#ln-14"></a><span class="w">   </span><span class="c">!!     dissipation over rough topography" — the parameterized</span>
+<a id="ln-15" name="ln-15" href="#ln-15"></a><span class="w">   </span><span class="c">!!     conversion `E = 0.5*rho*kappa*&lt;h^2&gt;*U_tide^2`.</span>
+<a id="ln-16" name="ln-16" href="#ln-16"></a><span class="w">   </span><span class="c">!!   * St Laurent, Simmons &amp; Garrett (2002), GRL 29, "Buoyancy forcing</span>
+<a id="ln-17" name="ln-17" href="#ln-17"></a><span class="w">   </span><span class="c">!!     by turbulence above rough topography" — the local-dissipation</span>
+<a id="ln-18" name="ln-18" href="#ln-18"></a><span class="w">   </span><span class="c">!!     fraction `q` and the bottom-anchored exponential vertical</span>
+<a id="ln-19" name="ln-19" href="#ln-19"></a><span class="w">   </span><span class="c">!!     structure F(z) with decay scale `zeta`.</span>
+<a id="ln-20" name="ln-20" href="#ln-20"></a><span class="w">   </span><span class="c">!!   * Simmons, Jayne, St Laurent &amp; Weaver (2004), Ocean Modelling 6 —</span>
+<a id="ln-21" name="ln-21" href="#ln-21"></a><span class="w">   </span><span class="c">!!     the global implementation that combines the two.</span>
+<a id="ln-22" name="ln-22" href="#ln-22"></a><span class="w">   </span><span class="c">!! Knob table: `docs/generated_nml_knobs.md`.</span>
+<a id="ln-23" name="ln-23" href="#ln-23"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-24" name="ln-24" href="#ln-24"></a><span class="w">   </span><span class="c">!! Discretization (conservative flux bookkeeping; St Laurent 2002):</span>
+<a id="ln-25" name="ln-25" href="#ln-25"></a><span class="w">   </span><span class="c">!! a downward TKE flux is tracked and the power dissipated IN each</span>
+<a id="ln-26" name="ln-26" href="#ln-26"></a><span class="w">   </span><span class="c">!! layer is converted to `Kd = TKE_lay / (rho*dz*(N^2+Omega^2))`.</span>
+<a id="ln-27" name="ln-27" href="#ln-27"></a><span class="w">   </span><span class="c">!! With the Adcroft-reciprocal normalization `Inv_int =</span>
+<a id="ln-28" name="ln-28" href="#ln-28"></a><span class="w">   </span><span class="c">!! 1/(1-exp(-H/zeta))` the column-integrated deposited power is</span>
+<a id="ln-29" name="ln-29" href="#ln-29"></a><span class="w">   </span><span class="c">!! exactly `q*mu*E` (energy conservation, to round-off).  The</span>
+<a id="ln-30" name="ln-30" href="#ln-30"></a><span class="w">   </span><span class="c">!! continuum equivalent is</span>
+<a id="ln-31" name="ln-31" href="#ln-31"></a><span class="w">   </span><span class="c">!!   Kd(z) = [q*mu*E/(rho*(N^2+Omega^2))] *</span>
+<a id="ln-32" name="ln-32" href="#ln-32"></a><span class="w">   </span><span class="c">!!           exp(-z/zeta) / (zeta*(1-exp(-H/zeta))),</span>
+<a id="ln-33" name="ln-33" href="#ln-33"></a><span class="w">   </span><span class="c">!! z measured UPWARD from the bed.</span>
+<a id="ln-34" name="ln-34" href="#ln-34"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-35" name="ln-35" href="#ln-35"></a><span class="w">   </span><span class="c">!! Interface convention (same as `rdb_ocean_vmix` / EPBL /</span>
+<a id="ln-36" name="ln-36" href="#ln-36"></a><span class="w">   </span><span class="c">!! kappa-shear): `kd_int(:,:,K)` lives at the bottom interface of</span>
+<a id="ln-37" name="ln-37" href="#ln-37"></a><span class="w">   </span><span class="c">!! layer K; global `kd_int(:,:,1)` is the bed and `kd_int(:,:,nz+1)`</span>
+<a id="ln-38" name="ln-38" href="#ln-38"></a><span class="w">   </span><span class="c">!! the free surface, both forced to exactly 0.  Layers are bottom-up:</span>
+<a id="ln-39" name="ln-39" href="#ln-39"></a><span class="w">   </span><span class="c">!! k=1 bed, k=nz surface.  The exp-decay anchors at the BED (k=1) and</span>
+<a id="ln-40" name="ln-40" href="#ln-40"></a><span class="w">   </span><span class="c">!! the sweep runs k=1 -&gt; nz.  The per-layer `Kd_add(k)` is split 50/50</span>
+<a id="ln-41" name="ln-41" href="#ln-41"></a><span class="w">   </span><span class="c">!! across the layer's two bounding interfaces (St Laurent 2002</span>
+<a id="ln-42" name="ln-42" href="#ln-42"></a><span class="w">   </span><span class="c">!! interface deposition; see divergence note D2).</span>
+<a id="ln-43" name="ln-43" href="#ln-43"></a><span class="cp">#ifdef LFORTRAN_PASSING</span>
+<a id="ln-44" name="ln-44" href="#ln-44"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_constants</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">wp</span><span class="p">,</span><span class="w"> </span><span class="n">GRAVITY</span><span class="p">,</span><span class="w"> </span><span class="n">OMEGA_EARTH</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-45" name="ln-45" href="#ln-45"></a><span class="w">                            </span><span class="n">H_VANISHED</span><span class="p">,</span><span class="w"> </span><span class="n">H_DIV_EPS</span>
+<a id="ln-46" name="ln-46" href="#ln-46"></a><span class="cp">#else</span>
+<a id="ln-47" name="ln-47" href="#ln-47"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_constants</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">NZ_STACK_MAX</span><span class="p">,</span><span class="w"> </span><span class="n">wp</span><span class="p">,</span><span class="w"> </span><span class="n">GRAVITY</span><span class="p">,</span><span class="w"> </span><span class="n">OMEGA_EARTH</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-48" name="ln-48" href="#ln-48"></a><span class="w">                            </span><span class="n">H_VANISHED</span><span class="p">,</span><span class="w"> </span><span class="n">H_DIV_EPS</span>
+<a id="ln-49" name="ln-49" href="#ln-49"></a><span class="cp">#endif</span>
+<a id="ln-50" name="ln-50" href="#ln-50"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_grid</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">hgrid_t</span>
+<a id="ln-51" name="ln-51" href="#ln-51"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_multilayer_state</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">multilayer_state_t</span>
+<a id="ln-52" name="ln-52" href="#ln-52"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_eos</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">eos_t</span><span class="p">,</span><span class="w"> </span><span class="n">eos_specvol_derivs</span>
+<a id="ln-53" name="ln-53" href="#ln-53"></a><span class="w">   </span><span class="k">use</span><span class="p">,</span><span class="w"> </span><span class="k">intrinsic</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">iso_fortran_env</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">int64</span>
+<a id="ln-54" name="ln-54" href="#ln-54"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_mem_report</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">arr_bytes</span>
+<a id="ln-55" name="ln-55" href="#ln-55"></a><span class="w">   </span><span class="k">implicit none</span>
+<a id="ln-56" name="ln-56" href="#ln-56"></a><span class="k">   private</span>
+<a id="ln-57" name="ln-57" href="#ln-57"></a>
+<a id="ln-58" name="ln-58" href="#ln-58"></a><span class="cp">#ifdef LFORTRAN_PASSING</span>
+<a id="ln-59" name="ln-59" href="#ln-59"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">NZ_STACK_MAX</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">64</span>
+<a id="ln-60" name="ln-60" href="#ln-60"></a><span class="w">      </span><span class="c">!! LFortran 0.64 workaround: module-local copy of the rdb_constants value</span>
+<a id="ln-61" name="ln-61" href="#ln-61"></a><span class="w">      </span><span class="c">!! (an imported parameter used as an explicit-shape dummy bound inside a</span>
+<a id="ln-62" name="ln-62" href="#ln-62"></a><span class="w">      </span><span class="c">!! PURE call becomes an impure getter under LFortran). Keep in sync (=64).</span>
+<a id="ln-63" name="ln-63" href="#ln-63"></a><span class="cp">#endif</span>
+<a id="ln-64" name="ln-64" href="#ln-64"></a>
+<a id="ln-65" name="ln-65" href="#ln-65"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ocean_tidal_mixing_t</span>
+<a id="ln-66" name="ln-66" href="#ln-66"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">tidal_mixing_compute</span>
+<a id="ln-67" name="ln-67" href="#ln-67"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">tidal_mixing_merge_into_kt</span>
+<a id="ln-68" name="ln-68" href="#ln-68"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">tidal_mixing_is_inert</span>
+<a id="ln-69" name="ln-69" href="#ln-69"></a>
+<a id="ln-70" name="ln-70" href="#ln-70"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">NZL</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">NZ_STACK_MAX</span>
+<a id="ln-71" name="ln-71" href="#ln-71"></a><span class="w">      </span><span class="c">!! Maximum number of layers a single column kernel can solve.</span>
+<a id="ln-72" name="ln-72" href="#ln-72"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">NZLI</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">NZ_STACK_MAX</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-73" name="ln-73" href="#ln-73"></a><span class="w">      </span><span class="c">!! Interface array dimension (= NZL + 1).</span>
+<a id="ln-74" name="ln-74" href="#ln-74"></a>
+<a id="ln-75" name="ln-75" href="#ln-75"></a><span class="w">   </span><span class="k">type</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ocean_tidal_mixing_t</span>
+<a id="ln-76" name="ln-76" href="#ln-76"></a><span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">is_init</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<a id="ln-77" name="ln-77" href="#ln-77"></a><span class="w">         </span><span class="c">!! True between `init` and `destroy`.</span>
+<a id="ln-78" name="ln-78" href="#ln-78"></a>
+<a id="ln-79" name="ln-79" href="#ln-79"></a><span class="w">      </span><span class="c">! ---- Master switch ----</span>
+<a id="ln-80" name="ln-80" href="#ln-80"></a><span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">enable</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<a id="ln-81" name="ln-81" href="#ln-81"></a><span class="w">         </span><span class="c">!! Master switch.  Default off — existing namelists and tests</span>
+<a id="ln-82" name="ln-82" href="#ln-82"></a><span class="w">         </span><span class="c">!! stay bit-identical.  Requires `vmix%use_closure` +</span>
+<a id="ln-83" name="ln-83" href="#ln-83"></a><span class="w">         </span><span class="c">!! thermodynamics (validated at configure).</span>
+<a id="ln-84" name="ln-84" href="#ln-84"></a>
+<a id="ln-85" name="ln-85" href="#ln-85"></a><span class="w">      </span><span class="c">! ---- St-Laurent / Simmons knobs (defaults = paper / MOM6) ----</span>
+<a id="ln-86" name="ln-86" href="#ln-86"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="nb">gamma</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.3333_wp</span>
+<a id="ln-87" name="ln-87" href="#ln-87"></a><span class="w">         </span><span class="c">!! Local-dissipation fraction `q` (GAMMA_ITIDES).</span>
+<a id="ln-88" name="ln-88" href="#ln-88"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">mu</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.2_wp</span>
+<a id="ln-89" name="ln-89" href="#ln-89"></a><span class="w">         </span><span class="c">!! Mixing efficiency Gamma_mix (MU_ITIDES).</span>
+<a id="ln-90" name="ln-90" href="#ln-90"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">zeta</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">50</span><span class="mf">0.0_wp</span>
+<a id="ln-91" name="ln-91" href="#ln-91"></a><span class="w">         </span><span class="c">!! Bottom decay scale (m) (INT_TIDE_DECAY_SCALE).</span>
+<a id="ln-92" name="ln-92" href="#ln-92"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kd_max</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0e-2_wp</span>
+<a id="ln-93" name="ln-93" href="#ln-93"></a><span class="w">         </span><span class="c">!! Per-layer physical Kd cap (m^2/s); &lt; 0 =&gt; no cap.  Distinct</span>
+<a id="ln-94" name="ln-94" href="#ln-94"></a><span class="w">         </span><span class="c">!! from the `vmix_assemble` ceiling (the final clip).</span>
+<a id="ln-95" name="ln-95" href="#ln-95"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">prandtl_tidal</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span>
+<a id="ln-96" name="ln-96" href="#ln-96"></a><span class="w">         </span><span class="c">!! Kv = prandtl_tidal * Kd into the momentum solve.</span>
+<a id="ln-97" name="ln-97" href="#ln-97"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">min_zbot</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-98" name="ln-98" href="#ln-98"></a><span class="w">         </span><span class="c">!! Mask off where column depth H &lt; min_zbot (m).</span>
+<a id="ln-99" name="ln-99" href="#ln-99"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">omega2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">OMEGA_EARTH</span><span class="o">**</span><span class="mi">2</span>
+<a id="ln-100" name="ln-100" href="#ln-100"></a><span class="w">         </span><span class="c">!! Rotation floor Omega^2 (s^-2) on N^2; physics, not merely a</span>
+<a id="ln-101" name="ln-101" href="#ln-101"></a><span class="w">         </span><span class="c">!! 1/0 guard.  The floor is plain Omega^2 (Melet et al. 2013</span>
+<a id="ln-102" name="ln-102" href="#ln-102"></a><span class="w">         </span><span class="c">!! efficiency rescaling N^2/(N^2+Omega^2)), not (2*Omega)^2.</span>
+<a id="ln-103" name="ln-103" href="#ln-103"></a>
+<a id="ln-104" name="ln-104" href="#ln-104"></a><span class="w">      </span><span class="c">! ---- Energy source (v1: prescribed scalar/uniform field) ----</span>
+<a id="ln-105" name="ln-105" href="#ln-105"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">e_uniform</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-106" name="ln-106" href="#ln-106"></a><span class="w">         </span><span class="c">!! Uniform bottom energy input E (W m-2); default 0 =&gt; inert</span>
+<a id="ln-107" name="ln-107" href="#ln-107"></a><span class="w">         </span><span class="c">!! even when enabled (structural path live, physics zero).</span>
+<a id="ln-108" name="ln-108" href="#ln-108"></a><span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">e_compute</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<a id="ln-109" name="ln-109" href="#ln-109"></a><span class="w">         </span><span class="c">!! v1.1 state-dependent E: when on, `e_in = min(TKE_coef*N_bot,</span>
+<a id="ln-110" name="ln-110" href="#ln-110"></a><span class="w">         </span><span class="c">!! e_max)`.  Default off (uses the prescribed `e_uniform`).</span>
+<a id="ln-111" name="ln-111" href="#ln-111"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kappa_itides</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">6.2832e-4_wp</span>
+<a id="ln-112" name="ln-112" href="#ln-112"></a><span class="w">         </span><span class="c">!! Topographic wavenumber kappa (m^-1) for the v1.1 E recompute.</span>
+<a id="ln-113" name="ln-113" href="#ln-113"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kappa_h2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span>
+<a id="ln-114" name="ln-114" href="#ln-114"></a><span class="w">         </span><span class="c">!! KAPPA_H2_FACTOR for the v1.1 E recompute.</span>
+<a id="ln-115" name="ln-115" href="#ln-115"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">utide</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-116" name="ln-116" href="#ln-116"></a><span class="w">         </span><span class="c">!! RMS barotropic tidal velocity amplitude (m/s) for v1.1 E.</span>
+<a id="ln-117" name="ln-117" href="#ln-117"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h2_rough</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-118" name="ln-118" href="#ln-118"></a><span class="w">         </span><span class="c">!! Sub-grid topographic roughness variance &lt;h^2&gt; (m^2) for v1.1 E.</span>
+<a id="ln-119" name="ln-119" href="#ln-119"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">frac_rough</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.1_wp</span>
+<a id="ln-120" name="ln-120" href="#ln-120"></a><span class="w">         </span><span class="c">!! Roughness clamp: &lt;h^2&gt; &lt;= (frac_rough*H)^2.</span>
+<a id="ln-121" name="ln-121" href="#ln-121"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">e_max</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0e3_wp</span>
+<a id="ln-122" name="ln-122" href="#ln-122"></a><span class="w">         </span><span class="c">!! TKE_itide_max cap on E (W m-2).</span>
+<a id="ln-123" name="ln-123" href="#ln-123"></a>
+<a id="ln-124" name="ln-124" href="#ln-124"></a><span class="w">      </span><span class="c">! ---- EOS hookup (shared flat-POD handle from the eos slot) ----</span>
+<a id="ln-125" name="ln-125" href="#ln-125"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">eos_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">eos</span>
+<a id="ln-126" name="ln-126" href="#ln-126"></a><span class="w">         </span><span class="c">!! Value copy of `ocean_state%eos`, set at configure — the</span>
+<a id="ln-127" name="ln-127" href="#ln-127"></a><span class="w">         </span><span class="c">!! buoyancy derivatives use the SAME EOS the dyn-core runs.</span>
+<a id="ln-128" name="ln-128" href="#ln-128"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rho0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">103</span><span class="mf">5.0_wp</span>
+<a id="ln-129" name="ln-129" href="#ln-129"></a><span class="w">         </span><span class="c">!! Boussinesq reference density (kg/m^3).</span>
+<a id="ln-130" name="ln-130" href="#ln-130"></a>
+<a id="ln-131" name="ln-131" href="#ln-131"></a><span class="w">      </span><span class="c">! ---- Persistent fields ----</span>
+<a id="ln-132" name="ln-132" href="#ln-132"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">e_in</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<a id="ln-133" name="ln-133" href="#ln-133"></a><span class="w">         </span><span class="c">!! Bottom internal-tide energy input E (W m-2), (nx,ny).</span>
+<a id="ln-134" name="ln-134" href="#ln-134"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kd_int</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span>
+<a id="ln-135" name="ln-135" href="#ln-135"></a><span class="w">         </span><span class="c">!! Tidal diffusivity at interfaces (m^2/s), (nx,ny,nz+1),</span>
+<a id="ln-136" name="ln-136" href="#ln-136"></a><span class="w">         </span><span class="c">!! global bottom-up: zero at bed (K=1) and surface (K=nz+1).</span>
+<a id="ln-137" name="ln-137" href="#ln-137"></a><span class="w">   </span><span class="k">contains</span>
+<a id="ln-138" name="ln-138" href="#ln-138"></a><span class="k">      procedure</span><span class="p">,</span><span class="w"> </span><span class="k">non_overridable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">init</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">ocean_tidal_mixing_init</span>
+<a id="ln-139" name="ln-139" href="#ln-139"></a><span class="w">      </span><span class="k">procedure</span><span class="p">,</span><span class="w"> </span><span class="k">non_overridable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">destroy</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">ocean_tidal_mixing_destroy</span>
+<a id="ln-140" name="ln-140" href="#ln-140"></a><span class="w">      </span><span class="k">procedure</span><span class="p">,</span><span class="w"> </span><span class="k">non_overridable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">enter_data</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">ocean_tidal_mixing_enter_data</span>
+<a id="ln-141" name="ln-141" href="#ln-141"></a><span class="w">      </span><span class="k">procedure</span><span class="p">,</span><span class="w"> </span><span class="k">non_overridable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">exit_data</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">ocean_tidal_mixing_exit_data</span>
+<a id="ln-142" name="ln-142" href="#ln-142"></a><span class="w">      </span><span class="k">procedure</span><span class="p">,</span><span class="w"> </span><span class="k">non_overridable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">set_e_uniform</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">ocean_tidal_mixing_set_e_uniform</span>
+<a id="ln-143" name="ln-143" href="#ln-143"></a><span class="w">      </span><span class="k">procedure</span><span class="p">,</span><span class="w"> </span><span class="k">non_overridable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">bytes</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">ocean_tidal_mixing_bytes</span>
+<a id="ln-144" name="ln-144" href="#ln-144"></a><span class="w">   </span><span class="k">end type </span><span class="n">ocean_tidal_mixing_t</span>
+<a id="ln-145" name="ln-145" href="#ln-145"></a>
+<a id="ln-146" name="ln-146" href="#ln-146"></a><span class="k">contains</span>
+<a id="ln-147" name="ln-147" href="#ln-147"></a>
+<a id="ln-148" name="ln-148" href="#ln-148"></a><span class="k">   pure function </span><span class="n">tidal_mixing_is_inert</span><span class="p">(</span><span class="n">enable</span><span class="p">,</span><span class="w"> </span><span class="n">e_uniform</span><span class="p">,</span><span class="w"> </span><span class="n">e_compute</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">inert</span><span class="p">)</span>
+<a id="ln-149" name="ln-149" href="#ln-149"></a><span class="w">      </span><span class="c">!! `.true.` iff tidal mixing is enabled but has no energy source</span>
+<a id="ln-150" name="ln-150" href="#ln-150"></a><span class="w">      </span><span class="c">!! (PR-6 fail-loud): `enable .and. e_uniform &lt;= 0 .and. .not.</span>
+<a id="ln-151" name="ln-151" href="#ln-151"></a><span class="w">      </span><span class="c">!! e_compute`.  The bottom-intensified diffusivity `Kd ∝ E`, so a</span>
+<a id="ln-152" name="ln-152" href="#ln-152"></a><span class="w">      </span><span class="c">!! zero prescribed `e_uniform` with the `e_compute` estimator off</span>
+<a id="ln-153" name="ln-153" href="#ln-153"></a><span class="w">      </span><span class="c">!! makes `Kd ≡ 0` exactly — the closure runs its whole flux sweep</span>
+<a id="ln-154" name="ln-154" href="#ln-154"></a><span class="w">      </span><span class="c">!! for nothing.  `e_compute=.true.` supplies E internally, so that</span>
+<a id="ln-155" name="ln-155" href="#ln-155"></a><span class="w">      </span><span class="c">!! is NOT inert; a disabled closure is not "inert" either (it is</span>
+<a id="ln-156" name="ln-156" href="#ln-156"></a><span class="w">      </span><span class="c">!! simply off).  Drives a configure abort.</span>
+<a id="ln-157" name="ln-157" href="#ln-157"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">enable</span><span class="p">,</span><span class="w"> </span><span class="n">e_compute</span>
+<a id="ln-158" name="ln-158" href="#ln-158"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">e_uniform</span>
+<a id="ln-159" name="ln-159" href="#ln-159"></a><span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">inert</span>
+<a id="ln-160" name="ln-160" href="#ln-160"></a><span class="w">      </span><span class="n">inert</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">enable</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">(</span><span class="n">e_uniform</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">e_compute</span><span class="p">)</span>
+<a id="ln-161" name="ln-161" href="#ln-161"></a><span class="w">   </span><span class="k">end function </span><span class="n">tidal_mixing_is_inert</span>
+<a id="ln-162" name="ln-162" href="#ln-162"></a>
+<a id="ln-163" name="ln-163" href="#ln-163"></a><span class="w">   </span><span class="c">! =================================================================</span>
+<a id="ln-164" name="ln-164" href="#ln-164"></a><span class="w">   </span><span class="c">! Lifecycle</span>
+<a id="ln-165" name="ln-165" href="#ln-165"></a><span class="w">   </span><span class="c">! =================================================================</span>
+<a id="ln-166" name="ln-166" href="#ln-166"></a>
+<a id="ln-167" name="ln-167" href="#ln-167"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">ocean_tidal_mixing_init</span><span class="p">(</span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">nz_ml</span><span class="p">)</span>
+<a id="ln-168" name="ln-168" href="#ln-168"></a><span class="w">      </span><span class="c">!! Allocate the persistent fields.  Always allocates (configure</span>
+<a id="ln-169" name="ln-169" href="#ln-169"></a><span class="w">      </span><span class="c">!! runs after init, so `enable` is not known yet); the off-cost is</span>
+<a id="ln-170" name="ln-170" href="#ln-170"></a><span class="w">      </span><span class="c">!! one 2D field + one interface field.</span>
+<a id="ln-171" name="ln-171" href="#ln-171"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">ocean_tidal_mixing_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<a id="ln-172" name="ln-172" href="#ln-172"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<a id="ln-173" name="ln-173" href="#ln-173"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nz_ml</span>
+<a id="ln-174" name="ln-174" href="#ln-174"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<a id="ln-175" name="ln-175" href="#ln-175"></a>
+<a id="ln-176" name="ln-176" href="#ln-176"></a><span class="w">      </span><span class="n">nx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span>
+<a id="ln-177" name="ln-177" href="#ln-177"></a><span class="w">      </span><span class="n">ny</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span>
+<a id="ln-178" name="ln-178" href="#ln-178"></a><span class="w">      </span><span class="n">nz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-179" name="ln-179" href="#ln-179"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">nz_ml</span><span class="p">))</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nz_ml</span>
+<a id="ln-180" name="ln-180" href="#ln-180"></a>
+<a id="ln-181" name="ln-181" href="#ln-181"></a><span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">e_in</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">),</span><span class="w"> </span><span class="n">source</span><span class="o">=</span><span class="mf">0.0_wp</span><span class="p">)</span>
+<a id="ln-182" name="ln-182" href="#ln-182"></a><span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">kd_int</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">source</span><span class="o">=</span><span class="mf">0.0_wp</span><span class="p">)</span>
+<a id="ln-183" name="ln-183" href="#ln-183"></a>
+<a id="ln-184" name="ln-184" href="#ln-184"></a><span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">is_init</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<a id="ln-185" name="ln-185" href="#ln-185"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">ocean_tidal_mixing_init</span>
+<a id="ln-186" name="ln-186" href="#ln-186"></a>
+<a id="ln-187" name="ln-187" href="#ln-187"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">ocean_tidal_mixing_destroy</span><span class="p">(</span><span class="n">this</span><span class="p">)</span>
+<a id="ln-188" name="ln-188" href="#ln-188"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">ocean_tidal_mixing_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<a id="ln-189" name="ln-189" href="#ln-189"></a><span class="w">      </span><span class="n">this</span><span class="p">%</span><span class="n">is_init</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<a id="ln-190" name="ln-190" href="#ln-190"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">e_in</span><span class="p">))</span><span class="w"> </span><span class="k">deallocate</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">e_in</span><span class="p">)</span>
+<a id="ln-191" name="ln-191" href="#ln-191"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">kd_int</span><span class="p">))</span><span class="w"> </span><span class="k">deallocate</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">kd_int</span><span class="p">)</span>
+<a id="ln-192" name="ln-192" href="#ln-192"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">ocean_tidal_mixing_destroy</span>
+<a id="ln-193" name="ln-193" href="#ln-193"></a>
+<a id="ln-194" name="ln-194" href="#ln-194"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">ocean_tidal_mixing_enter_data</span><span class="p">(</span><span class="n">this</span><span class="p">)</span>
+<a id="ln-195" name="ln-195" href="#ln-195"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">ocean_tidal_mixing_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<a id="ln-196" name="ln-196" href="#ln-196"></a><span class="w">      </span><span class="k">select type</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">)</span>
+<a id="ln-197" name="ln-197" href="#ln-197"></a><span class="w">      </span><span class="k">type is</span><span class="w"> </span><span class="p">(</span><span class="n">ocean_tidal_mixing_t</span><span class="p">)</span>
+<a id="ln-198" name="ln-198" href="#ln-198"></a><span class="w">         </span><span class="k">call </span><span class="n">ocean_tidal_mixing_enter_data_impl</span><span class="p">(</span><span class="n">this</span><span class="p">)</span>
+<a id="ln-199" name="ln-199" href="#ln-199"></a><span class="w">      </span><span class="k">end select</span>
+<a id="ln-200" name="ln-200" href="#ln-200"></a><span class="k">   end subroutine </span><span class="n">ocean_tidal_mixing_enter_data</span>
+<a id="ln-201" name="ln-201" href="#ln-201"></a>
+<a id="ln-202" name="ln-202" href="#ln-202"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">ocean_tidal_mixing_enter_data_impl</span><span class="p">(</span><span class="n">this</span><span class="p">)</span>
+<a id="ln-203" name="ln-203" href="#ln-203"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_tidal_mixing_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<a id="ln-204" name="ln-204" href="#ln-204"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">e_in</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-205" name="ln-205" href="#ln-205"></a><span class="w">         </span><span class="c">!$acc enter data copyin(this%e_in)</span>
+<a id="ln-206" name="ln-206" href="#ln-206"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-207" name="ln-207" href="#ln-207"></a><span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">kd_int</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-208" name="ln-208" href="#ln-208"></a><span class="w">         </span><span class="c">!$acc enter data copyin(this%kd_int)</span>
+<a id="ln-209" name="ln-209" href="#ln-209"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-210" name="ln-210" href="#ln-210"></a><span class="k">   end subroutine </span><span class="n">ocean_tidal_mixing_enter_data_impl</span>
+<a id="ln-211" name="ln-211" href="#ln-211"></a>
+<a id="ln-212" name="ln-212" href="#ln-212"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">ocean_tidal_mixing_exit_data</span><span class="p">(</span><span class="n">this</span><span class="p">)</span>
+<a id="ln-213" name="ln-213" href="#ln-213"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">ocean_tidal_mixing_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<a id="ln-214" name="ln-214" href="#ln-214"></a><span class="w">      </span><span class="k">select type</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">)</span>
+<a id="ln-215" name="ln-215" href="#ln-215"></a><span class="w">      </span><span class="k">type is</span><span class="w"> </span><span class="p">(</span><span class="n">ocean_tidal_mixing_t</span><span class="p">)</span>
+<a id="ln-216" name="ln-216" href="#ln-216"></a><span class="w">         </span><span class="k">call </span><span class="n">ocean_tidal_mixing_exit_data_impl</span><span class="p">(</span><span class="n">this</span><span class="p">)</span>
+<a id="ln-217" name="ln-217" href="#ln-217"></a><span class="w">      </span><span class="k">end select</span>
+<a id="ln-218" name="ln-218" href="#ln-218"></a><span class="k">   end subroutine </span><span class="n">ocean_tidal_mixing_exit_data</span>
+<a id="ln-219" name="ln-219" href="#ln-219"></a>
+<a id="ln-220" name="ln-220" href="#ln-220"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">ocean_tidal_mixing_exit_data_impl</span><span class="p">(</span><span class="n">this</span><span class="p">)</span>
+<a id="ln-221" name="ln-221" href="#ln-221"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_tidal_mixing_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<a id="ln-222" name="ln-222" href="#ln-222"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">kd_int</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-223" name="ln-223" href="#ln-223"></a><span class="w">         </span><span class="c">!$acc exit data delete(this%kd_int)</span>
+<a id="ln-224" name="ln-224" href="#ln-224"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-225" name="ln-225" href="#ln-225"></a><span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">e_in</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-226" name="ln-226" href="#ln-226"></a><span class="w">         </span><span class="c">!$acc exit data delete(this%e_in)</span>
+<a id="ln-227" name="ln-227" href="#ln-227"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-228" name="ln-228" href="#ln-228"></a><span class="k">   end subroutine </span><span class="n">ocean_tidal_mixing_exit_data_impl</span>
+<a id="ln-229" name="ln-229" href="#ln-229"></a>
+<a id="ln-230" name="ln-230" href="#ln-230"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">ocean_tidal_mixing_set_e_uniform</span><span class="p">(</span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">e_value</span><span class="p">)</span>
+<a id="ln-231" name="ln-231" href="#ln-231"></a><span class="w">      </span><span class="c">!! Fill the bottom energy field `e_in` with a uniform value.</span>
+<a id="ln-232" name="ln-232" href="#ln-232"></a><span class="w">      </span><span class="c">!! Host loop (setup phase); call after `init`, before `enter_data`.</span>
+<a id="ln-233" name="ln-233" href="#ln-233"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">ocean_tidal_mixing_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<a id="ln-234" name="ln-234" href="#ln-234"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">e_value</span>
+<a id="ln-235" name="ln-235" href="#ln-235"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span>
+<a id="ln-236" name="ln-236" href="#ln-236"></a>
+<a id="ln-237" name="ln-237" href="#ln-237"></a><span class="w">      </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">e_in</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span>
+<a id="ln-238" name="ln-238" href="#ln-238"></a><span class="w">         </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">e_in</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<a id="ln-239" name="ln-239" href="#ln-239"></a><span class="w">            </span><span class="n">this</span><span class="p">%</span><span class="n">e_in</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">e_value</span>
+<a id="ln-240" name="ln-240" href="#ln-240"></a><span class="w">         </span><span class="k">end do</span>
+<a id="ln-241" name="ln-241" href="#ln-241"></a><span class="k">      end do</span>
+<a id="ln-242" name="ln-242" href="#ln-242"></a><span class="k">   end subroutine </span><span class="n">ocean_tidal_mixing_set_e_uniform</span>
+<a id="ln-243" name="ln-243" href="#ln-243"></a>
+<a id="ln-244" name="ln-244" href="#ln-244"></a><span class="w">   </span><span class="c">! =================================================================</span>
+<a id="ln-245" name="ln-245" href="#ln-245"></a><span class="w">   </span><span class="c">! Merge into the vmix interface fields</span>
+<a id="ln-246" name="ln-246" href="#ln-246"></a><span class="w">   </span><span class="c">! =================================================================</span>
+<a id="ln-247" name="ln-247" href="#ln-247"></a>
+<a id="ln-248" name="ln-248" href="#ln-248"></a><span class="w">   </span><span class="k">pure subroutine </span><span class="n">tidal_mixing_merge_into_kt</span><span class="p">(</span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nzp1</span><span class="p">,</span><span class="w"> </span><span class="n">kv</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span><span class="p">)</span>
+<a id="ln-249" name="ln-249" href="#ln-249"></a><span class="w">      </span><span class="c">!! Fold the tidal diffusivity into the vmix interface fields,</span>
+<a id="ln-250" name="ln-250" href="#ln-250"></a><span class="w">      </span><span class="c">!! ADDITIVELY (interior-diffusivity semantics; St Laurent tidal</span>
+<a id="ln-251" name="ln-251" href="#ln-251"></a><span class="w">      </span><span class="c">!! mixing is an interior source like kappa-shear).  Called EVERY</span>
+<a id="ln-252" name="ln-252" href="#ln-252"></a><span class="w">      </span><span class="c">!! stage (PP81 rewrites kv/kt each stage; `kd_int` itself refreshes</span>
+<a id="ln-253" name="ln-253" href="#ln-253"></a><span class="w">      </span><span class="c">!! at thermo cadence).  Interior interfaces only — K=1 (bed) and</span>
+<a id="ln-254" name="ln-254" href="#ln-254"></a><span class="w">      </span><span class="c">!! K=nzp1 (surface) stay zero in both source and target.</span>
+<a id="ln-255" name="ln-255" href="#ln-255"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_tidal_mixing_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<a id="ln-256" name="ln-256" href="#ln-256"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nzp1</span>
+<a id="ln-257" name="ln-257" href="#ln-257"></a><span class="w">         </span><span class="c">!! Interface-field extents (explicit shape: assumed-shape</span>
+<a id="ln-258" name="ln-258" href="#ln-258"></a><span class="w">         </span><span class="c">!! dummies in a `do concurrent` kernel make NVHPC walk the</span>
+<a id="ln-259" name="ln-259" href="#ln-259"></a><span class="w">         </span><span class="c">!! descriptor with per-launch memcpys — this runs every stage).</span>
+<a id="ln-260" name="ln-260" href="#ln-260"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kv</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nzp1</span><span class="p">)</span>
+<a id="ln-261" name="ln-261" href="#ln-261"></a><span class="w">         </span><span class="c">!! Momentum viscosity at interfaces; gets prandtl_tidal*kd.</span>
+<a id="ln-262" name="ln-262" href="#ln-262"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kt</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nzp1</span><span class="p">)</span>
+<a id="ln-263" name="ln-263" href="#ln-263"></a><span class="w">         </span><span class="c">!! Tracer diffusivity at interfaces; gets kd.</span>
+<a id="ln-264" name="ln-264" href="#ln-264"></a>
+<a id="ln-265" name="ln-265" href="#ln-265"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span>
+<a id="ln-266" name="ln-266" href="#ln-266"></a>
+<a id="ln-267" name="ln-267" href="#ln-267"></a><span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">2</span><span class="p">:</span><span class="n">nzp1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span>
+<a id="ln-268" name="ln-268" href="#ln-268"></a><span class="w">         </span><span class="n">kt</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kt</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">kd_int</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<a id="ln-269" name="ln-269" href="#ln-269"></a><span class="w">         </span><span class="n">kv</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kv</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">prandtl_tidal</span><span class="o">*</span><span class="n">this</span><span class="p">%</span><span class="n">kd_int</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<a id="ln-270" name="ln-270" href="#ln-270"></a><span class="w">      </span><span class="k">end do</span>
+<a id="ln-271" name="ln-271" href="#ln-271"></a><span class="k">   end subroutine </span><span class="n">tidal_mixing_merge_into_kt</span>
+<a id="ln-272" name="ln-272" href="#ln-272"></a>
+<a id="ln-273" name="ln-273" href="#ln-273"></a><span class="w">   </span><span class="c">! =================================================================</span>
+<a id="ln-274" name="ln-274" href="#ln-274"></a><span class="w">   </span><span class="c">! Main compute (outer shim)</span>
+<a id="ln-275" name="ln-275" href="#ln-275"></a><span class="w">   </span><span class="c">! =================================================================</span>
+<a id="ln-276" name="ln-276" href="#ln-276"></a>
+<a id="ln-277" name="ln-277" href="#ln-277"></a><span class="w">   </span><span class="k">pure subroutine </span><span class="n">tidal_mixing_compute</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">)</span>
+<a id="ln-278" name="ln-278" href="#ln-278"></a><span class="w">      </span><span class="c">!! Run tidal mixing over the domain: fill `this%kd_int` (interface</span>
+<a id="ln-279" name="ln-279" href="#ln-279"></a><span class="w">      </span><span class="c">!! diffusivity).  Call at thermo cadence with the thermo dt.</span>
+<a id="ln-280" name="ln-280" href="#ln-280"></a><span class="w">      </span><span class="c">!! Outer shim: dereferences the tracer-registry hTr arrays on the</span>
+<a id="ln-281" name="ln-281" href="#ln-281"></a><span class="w">      </span><span class="c">!! host (the array-of-DT indirection blocks NVHPC device codegen),</span>
+<a id="ln-282" name="ln-282" href="#ln-282"></a><span class="w">      </span><span class="c">!! then forwards to the column kernel.  `dt` is unused (the steady</span>
+<a id="ln-283" name="ln-283" href="#ln-283"></a><span class="w">      </span><span class="c">!! diagnostic Kd does not integrate in time) but carried for</span>
+<a id="ln-284" name="ln-284" href="#ln-284"></a><span class="w">      </span><span class="c">!! signature parity with the other interior closures.</span>
+<a id="ln-285" name="ln-285" href="#ln-285"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<a id="ln-286" name="ln-286" href="#ln-286"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_tidal_mixing_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<a id="ln-287" name="ln-287" href="#ln-287"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
+<a id="ln-288" name="ln-288" href="#ln-288"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt</span>
+<a id="ln-289" name="ln-289" href="#ln-289"></a>
+<a id="ln-290" name="ln-290" href="#ln-290"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">dt</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-291" name="ln-291" href="#ln-291"></a><span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">idx_temperature</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">idx_salinity</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-292" name="ln-292" href="#ln-292"></a>
+<a id="ln-293" name="ln-293" href="#ln-293"></a><span class="k">      call </span><span class="n">tidal_mixing_column_kernel</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-294" name="ln-294" href="#ln-294"></a><span class="w">                                      </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">idx_temperature</span><span class="p">)%</span><span class="n">hTr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-295" name="ln-295" href="#ln-295"></a><span class="w">                                      </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">idx_salinity</span><span class="p">)%</span><span class="n">hTr</span><span class="p">)</span>
+<a id="ln-296" name="ln-296" href="#ln-296"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">tidal_mixing_compute</span>
+<a id="ln-297" name="ln-297" href="#ln-297"></a>
+<a id="ln-298" name="ln-298" href="#ln-298"></a><span class="w">   </span><span class="k">pure subroutine </span><span class="n">tidal_mixing_column_kernel</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">hT</span><span class="p">,</span><span class="w"> </span><span class="n">hS</span><span class="p">)</span>
+<a id="ln-299" name="ln-299" href="#ln-299"></a><span class="w">      </span><span class="c">!! Per-column St-Laurent flux-bookkeeping sweep.  One</span>
+<a id="ln-300" name="ln-300" href="#ln-300"></a><span class="w">      </span><span class="c">!! `do concurrent (j, i)` over owned cells; each column is a serial</span>
+<a id="ln-301" name="ln-301" href="#ln-301"></a><span class="w">      </span><span class="c">!! upward sweep k=1(bed) -&gt; nz(surface) over fixed-size `local()`</span>
+<a id="ln-302" name="ln-302" href="#ln-302"></a><span class="w">      </span><span class="c">!! arrays (register-resident).  Bottom-up global indexing</span>
+<a id="ln-303" name="ln-303" href="#ln-303"></a><span class="w">      </span><span class="c">!! throughout — no surface-down flip (the decay anchors at the bed).</span>
+<a id="ln-304" name="ln-304" href="#ln-304"></a><span class="w">      </span><span class="c">!!</span>
+<a id="ln-305" name="ln-305" href="#ln-305"></a><span class="w">      </span><span class="c">!! "The bed" is `kbed = ms%k_bot(i,j)`, the first LIVE layer counting</span>
+<a id="ln-306" name="ln-306" href="#ln-306"></a><span class="w">      </span><span class="c">!! up (`1` off `z_fixed`, ⇒ bit-identical there).  Under `z_fixed`</span>
+<a id="ln-307" name="ln-307" href="#ln-307"></a><span class="w">      </span><span class="c">!! the layers below it are inert fillers carrying the donor's T/S, so</span>
+<a id="ln-308" name="ln-308" href="#ln-308"></a><span class="w">      </span><span class="c">!! anchoring at `k = 1` read `N_bot = 0` across two fillers (killing</span>
+<a id="ln-309" name="ln-309" href="#ln-309"></a><span class="w">      </span><span class="c">!! the `e_compute` energy input on every column shallower than the</span>
+<a id="ln-310" name="ln-310" href="#ln-310"></a><span class="w">      </span><span class="c">!! nominal stack), exempted a FILLER from deposition instead of the</span>
+<a id="ln-311" name="ln-311" href="#ln-311"></a><span class="w">      </span><span class="c">!! bed layer, and handed the fillers a TKE share.  The sweep, the</span>
+<a id="ln-312" name="ln-312" href="#ln-312"></a><span class="w">      </span><span class="c">!! `N_bot` sample, the bed-layer exclusion and the bed end-cap all</span>
+<a id="ln-313" name="ln-313" href="#ln-313"></a><span class="w">      </span><span class="c">!! start at `kbed`; layers below it get no `Kd`.</span>
+<a id="ln-314" name="ln-314" href="#ln-314"></a><span class="w">      </span><span class="c">!!</span>
+<a id="ln-315" name="ln-315" href="#ln-315"></a><span class="w">      </span><span class="c">!! Pipeline per column:</span>
+<a id="ln-316" name="ln-316" href="#ln-316"></a><span class="w">      </span><span class="c">!!   gather: h (floored), per-layer T,S = hTr/h.</span>
+<a id="ln-317" name="ln-317" href="#ln-317"></a><span class="w">      </span><span class="c">!!   N^2(k): layer-centred buoyancy gradient (St-Laurent #4 —</span>
+<a id="ln-318" name="ln-318" href="#ln-318"></a><span class="w">      </span><span class="c">!!           N2_lay, not interface N^2), clamped &gt;= 0.</span>
+<a id="ln-319" name="ln-319" href="#ln-319"></a><span class="w">      </span><span class="c">!!   E:      prescribed `e_in(i,j)` (v1) or state-dependent</span>
+<a id="ln-320" name="ln-320" href="#ln-320"></a><span class="w">      </span><span class="c">!!           TKE_coef*N_bot (v1.1, `e_compute`), masked where</span>
+<a id="ln-321" name="ln-321" href="#ln-321"></a><span class="w">      </span><span class="c">!!           H &lt; min_zbot.</span>
+<a id="ln-322" name="ln-322" href="#ln-322"></a><span class="w">      </span><span class="c">!!   sweep:  Inv_int normalization, TKE flux bookkeeping, per-layer</span>
+<a id="ln-323" name="ln-323" href="#ln-323"></a><span class="w">      </span><span class="c">!!           Kd_add capped at kd_max, deposited 50/50 at the two</span>
+<a id="ln-324" name="ln-324" href="#ln-324"></a><span class="w">      </span><span class="c">!!           bounding interfaces.</span>
+<a id="ln-325" name="ln-325" href="#ln-325"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<a id="ln-326" name="ln-326" href="#ln-326"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_tidal_mixing_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<a id="ln-327" name="ln-327" href="#ln-327"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
+<a id="ln-328" name="ln-328" href="#ln-328"></a><span class="w">      </span><span class="c">! assumed-shape-ok: tracer registry outer-shim — caller host-dereferences</span>
+<a id="ln-329" name="ln-329" href="#ln-329"></a><span class="w">      </span><span class="c">! ms%tracers(idx)%hTr before passing; size varies per tracer slot</span>
+<a id="ln-330" name="ln-330" href="#ln-330"></a><span class="w">      </span><span class="c">! (see CLAUDE.md "outer-shim + flat-impl" pattern); thermo cadence.</span>
+<a id="ln-331" name="ln-331" href="#ln-331"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hT</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span>
+<a id="ln-332" name="ln-332" href="#ln-332"></a><span class="w">         </span><span class="c">!! Temperature tracer hTr (degC*m), host-dereferenced.</span>
+<a id="ln-333" name="ln-333" href="#ln-333"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hS</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span><span class="w">  </span><span class="c">! assumed-shape-ok: tracer registry outer-shim; thermo cadence</span>
+<a id="ln-334" name="ln-334" href="#ln-334"></a><span class="w">         </span><span class="c">!! Salinity tracer hTr (PSU*m), host-dereferenced.</span>
+<a id="ln-335" name="ln-335" href="#ln-335"></a>
+<a id="ln-336" name="ln-336" href="#ln-336"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">kbed</span>
+<a id="ln-337" name="ln-337" href="#ln-337"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">e_col</span><span class="p">,</span><span class="w"> </span><span class="n">h_tot</span><span class="p">,</span><span class="w"> </span><span class="n">n_bot</span><span class="p">,</span><span class="w"> </span><span class="n">tke_coef</span><span class="p">,</span><span class="w"> </span><span class="n">h2c</span><span class="p">,</span><span class="w"> </span><span class="n">e_cap</span>
+<a id="ln-338" name="ln-338" href="#ln-338"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">inv_int</span><span class="p">,</span><span class="w"> </span><span class="n">hz</span><span class="p">,</span><span class="w"> </span><span class="n">tke_bot</span><span class="p">,</span><span class="w"> </span><span class="n">tke_rem</span><span class="p">,</span><span class="w"> </span><span class="n">z_top</span><span class="p">,</span><span class="w"> </span><span class="n">frac_top</span><span class="p">,</span><span class="w"> </span><span class="n">tke_lay</span>
+<a id="ln-339" name="ln-339" href="#ln-339"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dz_eff</span><span class="p">,</span><span class="w"> </span><span class="n">denom</span><span class="p">,</span><span class="w"> </span><span class="n">kd_lay</span>
+<a id="ln-340" name="ln-340" href="#ln-340"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_col</span><span class="p">(</span><span class="n">NZL</span><span class="p">),</span><span class="w"> </span><span class="n">t_col</span><span class="p">(</span><span class="n">NZL</span><span class="p">),</span><span class="w"> </span><span class="n">s_col</span><span class="p">(</span><span class="n">NZL</span><span class="p">)</span>
+<a id="ln-341" name="ln-341" href="#ln-341"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n2_col</span><span class="p">(</span><span class="n">NZL</span><span class="p">),</span><span class="w"> </span><span class="n">kd_lay_arr</span><span class="p">(</span><span class="n">NZL</span><span class="p">)</span>
+<a id="ln-342" name="ln-342" href="#ln-342"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dbuoy_t</span><span class="p">,</span><span class="w"> </span><span class="n">dbuoy_s</span><span class="p">,</span><span class="w"> </span><span class="n">p_int</span>
+<a id="ln-343" name="ln-343" href="#ln-343"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dsv_dt_k</span><span class="p">,</span><span class="w"> </span><span class="n">dsv_ds_k</span><span class="p">,</span><span class="w"> </span><span class="n">t_int</span><span class="p">,</span><span class="w"> </span><span class="n">s_int</span>
+<a id="ln-344" name="ln-344" href="#ln-344"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">gamma_l</span><span class="p">,</span><span class="w"> </span><span class="n">mu_l</span><span class="p">,</span><span class="w"> </span><span class="n">zeta_l</span><span class="p">,</span><span class="w"> </span><span class="n">kd_max_l</span><span class="p">,</span><span class="w"> </span><span class="n">omega2_l</span><span class="p">,</span><span class="w"> </span><span class="n">rho0_l</span><span class="p">,</span><span class="w"> </span><span class="n">izeta</span>
+<a id="ln-345" name="ln-345" href="#ln-345"></a>
+<a id="ln-346" name="ln-346" href="#ln-346"></a><span class="w">      </span><span class="n">nx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span>
+<a id="ln-347" name="ln-347" href="#ln-347"></a><span class="w">      </span><span class="n">ny</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span>
+<a id="ln-348" name="ln-348" href="#ln-348"></a><span class="w">      </span><span class="n">nz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span>
+<a id="ln-349" name="ln-349" href="#ln-349"></a>
+<a id="ln-350" name="ln-350" href="#ln-350"></a><span class="w">      </span><span class="n">gamma_l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="nb">gamma</span>
+<a id="ln-351" name="ln-351" href="#ln-351"></a><span class="nb">      </span><span class="n">mu_l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">mu</span>
+<a id="ln-352" name="ln-352" href="#ln-352"></a><span class="w">      </span><span class="n">zeta_l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">zeta</span>
+<a id="ln-353" name="ln-353" href="#ln-353"></a><span class="w">      </span><span class="n">kd_max_l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">kd_max</span>
+<a id="ln-354" name="ln-354" href="#ln-354"></a><span class="w">      </span><span class="n">omega2_l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">omega2</span>
+<a id="ln-355" name="ln-355" href="#ln-355"></a><span class="w">      </span><span class="n">rho0_l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">rho0</span>
+<a id="ln-356" name="ln-356" href="#ln-356"></a><span class="w">      </span><span class="n">izeta</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="n">zeta_l</span>
+<a id="ln-357" name="ln-357" href="#ln-357"></a>
+<a id="ln-358" name="ln-358" href="#ln-358"></a><span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-359" name="ln-359" href="#ln-359"></a><span class="w">         </span><span class="n">local</span><span class="p">(</span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">kbed</span><span class="p">,</span><span class="w"> </span><span class="n">e_col</span><span class="p">,</span><span class="w"> </span><span class="n">h_tot</span><span class="p">,</span><span class="w"> </span><span class="n">n_bot</span><span class="p">,</span><span class="w"> </span><span class="n">tke_coef</span><span class="p">,</span><span class="w"> </span><span class="n">h2c</span><span class="p">,</span><span class="w"> </span><span class="n">e_cap</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-360" name="ln-360" href="#ln-360"></a><span class="w">               </span><span class="n">inv_int</span><span class="p">,</span><span class="w"> </span><span class="n">hz</span><span class="p">,</span><span class="w"> </span><span class="n">tke_bot</span><span class="p">,</span><span class="w"> </span><span class="n">tke_rem</span><span class="p">,</span><span class="w"> </span><span class="n">z_top</span><span class="p">,</span><span class="w"> </span><span class="n">frac_top</span><span class="p">,</span><span class="w"> </span><span class="n">tke_lay</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-361" name="ln-361" href="#ln-361"></a><span class="w">               </span><span class="n">dz_eff</span><span class="p">,</span><span class="w"> </span><span class="n">denom</span><span class="p">,</span><span class="w"> </span><span class="n">kd_lay</span><span class="p">,</span><span class="w"> </span><span class="n">h_col</span><span class="p">,</span><span class="w"> </span><span class="n">t_col</span><span class="p">,</span><span class="w"> </span><span class="n">s_col</span><span class="p">,</span><span class="w"> </span><span class="n">n2_col</span><span class="p">,</span><span class="w"> </span><span class="n">kd_lay_arr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-362" name="ln-362" href="#ln-362"></a><span class="w">               </span><span class="n">dbuoy_t</span><span class="p">,</span><span class="w"> </span><span class="n">dbuoy_s</span><span class="p">,</span><span class="w"> </span><span class="n">p_int</span><span class="p">,</span><span class="w"> </span><span class="n">dsv_dt_k</span><span class="p">,</span><span class="w"> </span><span class="n">dsv_ds_k</span><span class="p">,</span><span class="w"> </span><span class="n">t_int</span><span class="p">,</span><span class="w"> </span><span class="n">s_int</span><span class="p">)</span>
+<a id="ln-363" name="ln-363" href="#ln-363"></a>
+<a id="ln-364" name="ln-364" href="#ln-364"></a><span class="w">         </span><span class="c">! ---- Default output: zero contribution (overwritten if wet) ----</span>
+<a id="ln-365" name="ln-365" href="#ln-365"></a><span class="w">         </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-366" name="ln-366" href="#ln-366"></a><span class="w">            </span><span class="n">this</span><span class="p">%</span><span class="n">kd_int</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-367" name="ln-367" href="#ln-367"></a><span class="w">         </span><span class="k">end do</span>
+<a id="ln-368" name="ln-368" href="#ln-368"></a>
+<a id="ln-369" name="ln-369" href="#ln-369"></a><span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">wet_mask</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-370" name="ln-370" href="#ln-370"></a><span class="k">            </span><span class="n">kbed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">k_bot</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<a id="ln-371" name="ln-371" href="#ln-371"></a><span class="w">            </span><span class="c">! ---- Gather (bottom-up; floor thickness, back out T,S) ----</span>
+<a id="ln-372" name="ln-372" href="#ln-372"></a><span class="w">            </span><span class="c">! `h_tot` is the LIVE column (the fillers below `kbed` are not</span>
+<a id="ln-373" name="ln-373" href="#ln-373"></a><span class="w">            </span><span class="c">! water the internal tide can mix).</span>
+<a id="ln-374" name="ln-374" href="#ln-374"></a><span class="w">            </span><span class="n">h_tot</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-375" name="ln-375" href="#ln-375"></a><span class="w">            </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<a id="ln-376" name="ln-376" href="#ln-376"></a><span class="w">               </span><span class="n">dz_eff</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">),</span><span class="w"> </span><span class="n">H_VANISHED</span><span class="p">)</span>
+<a id="ln-377" name="ln-377" href="#ln-377"></a><span class="w">               </span><span class="n">h_col</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dz_eff</span>
+<a id="ln-378" name="ln-378" href="#ln-378"></a><span class="w">               </span><span class="n">denom</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="nb">max</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">),</span><span class="w"> </span><span class="n">H_DIV_EPS</span><span class="p">)</span>
+<a id="ln-379" name="ln-379" href="#ln-379"></a><span class="w">               </span><span class="n">t_col</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hT</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="o">*</span><span class="n">denom</span>
+<a id="ln-380" name="ln-380" href="#ln-380"></a><span class="w">               </span><span class="n">s_col</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hS</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="o">*</span><span class="n">denom</span>
+<a id="ln-381" name="ln-381" href="#ln-381"></a><span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">kbed</span><span class="p">)</span><span class="w"> </span><span class="n">h_tot</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_tot</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<a id="ln-382" name="ln-382" href="#ln-382"></a><span class="w">            </span><span class="k">end do</span>
+<a id="ln-383" name="ln-383" href="#ln-383"></a>
+<a id="ln-384" name="ln-384" href="#ln-384"></a><span class="w">            </span><span class="c">! ---- Layer-centred N^2 (St-Laurent #4: N2_lay) ----</span>
+<a id="ln-385" name="ln-385" href="#ln-385"></a><span class="w">            </span><span class="c">! Buoyancy gradient between the centres of layer k and the</span>
+<a id="ln-386" name="ln-386" href="#ln-386"></a><span class="w">            </span><span class="c">! layer above (k+1, bottom-up), over their centre spacing</span>
+<a id="ln-387" name="ln-387" href="#ln-387"></a><span class="w">            </span><span class="c">! 0.5*(h(k)+h(k+1)).  Pressure accumulates downward from the</span>
+<a id="ln-388" name="ln-388" href="#ln-388"></a><span class="w">            </span><span class="c">! surface for the EOS in-situ derivatives.  Surface layer</span>
+<a id="ln-389" name="ln-389" href="#ln-389"></a><span class="w">            </span><span class="c">! (k=nz) has no overlying layer -&gt; N2=0 there.</span>
+<a id="ln-390" name="ln-390" href="#ln-390"></a><span class="w">            </span><span class="n">p_int</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-391" name="ln-391" href="#ln-391"></a><span class="w">            </span><span class="n">n2_col</span><span class="p">(</span><span class="n">nz</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-392" name="ln-392" href="#ln-392"></a><span class="w">            </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span>
+<a id="ln-393" name="ln-393" href="#ln-393"></a><span class="w">               </span><span class="c">! Walk pressure down from the surface to the k/k+1 interface.</span>
+<a id="ln-394" name="ln-394" href="#ln-394"></a><span class="w">               </span><span class="n">p_int</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">p_int</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">GRAVITY</span><span class="o">*</span><span class="n">rho0_l</span><span class="o">*</span><span class="n">h_col</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<a id="ln-395" name="ln-395" href="#ln-395"></a><span class="w">               </span><span class="n">t_int</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">t_col</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">t_col</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span>
+<a id="ln-396" name="ln-396" href="#ln-396"></a><span class="w">               </span><span class="n">s_int</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">s_col</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">s_col</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span>
+<a id="ln-397" name="ln-397" href="#ln-397"></a><span class="w">               </span><span class="k">call </span><span class="n">eos_specvol_derivs</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">t_int</span><span class="p">,</span><span class="w"> </span><span class="n">s_int</span><span class="p">,</span><span class="w"> </span><span class="n">p_int</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-398" name="ln-398" href="#ln-398"></a><span class="w">                                       </span><span class="n">dsv_dt_k</span><span class="p">,</span><span class="w"> </span><span class="n">dsv_ds_k</span><span class="p">)</span>
+<a id="ln-399" name="ln-399" href="#ln-399"></a><span class="w">               </span><span class="n">dbuoy_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">GRAVITY</span><span class="o">*</span><span class="n">rho0_l</span><span class="o">*</span><span class="n">dsv_dt_k</span>
+<a id="ln-400" name="ln-400" href="#ln-400"></a><span class="w">               </span><span class="n">dbuoy_s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">GRAVITY</span><span class="o">*</span><span class="n">rho0_l</span><span class="o">*</span><span class="n">dsv_ds_k</span>
+<a id="ln-401" name="ln-401" href="#ln-401"></a><span class="w">               </span><span class="n">dz_eff</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">h_col</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h_col</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span>
+<a id="ln-402" name="ln-402" href="#ln-402"></a><span class="w">               </span><span class="n">n2_col</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">dbuoy_t</span><span class="o">*</span><span class="p">(</span><span class="n">t_col</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">t_col</span><span class="p">(</span><span class="n">k</span><span class="p">))</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-403" name="ln-403" href="#ln-403"></a><span class="w">                            </span><span class="n">dbuoy_s</span><span class="o">*</span><span class="p">(</span><span class="n">s_col</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">s_col</span><span class="p">(</span><span class="n">k</span><span class="p">)))</span><span class="o">/</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-404" name="ln-404" href="#ln-404"></a><span class="w">                           </span><span class="nb">max</span><span class="p">(</span><span class="n">dz_eff</span><span class="p">,</span><span class="w"> </span><span class="n">H_VANISHED</span><span class="p">)</span>
+<a id="ln-405" name="ln-405" href="#ln-405"></a><span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">n2_col</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="n">n2_col</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-406" name="ln-406" href="#ln-406"></a><span class="w">            </span><span class="k">end do</span>
+<a id="ln-407" name="ln-407" href="#ln-407"></a>
+<a id="ln-408" name="ln-408" href="#ln-408"></a><span class="w">            </span><span class="c">! ---- Energy input E(x,y) ----</span>
+<a id="ln-409" name="ln-409" href="#ln-409"></a><span class="w">            </span><span class="c">! v1: prescribed field.  v1.1 (`e_compute`): state-dependent</span>
+<a id="ln-410" name="ln-410" href="#ln-410"></a><span class="w">            </span><span class="c">! internal-tide generation, Jayne &amp; St Laurent (2001):</span>
+<a id="ln-411" name="ln-411" href="#ln-411"></a><span class="w">            </span><span class="c">!   E = min( 0.5*rho0*kappa_h2*kappa_itides*&lt;h^2&gt;*U_tide^2 * N_bot,</span>
+<a id="ln-412" name="ln-412" href="#ln-412"></a><span class="w">            </span><span class="c">!            e_max )</span>
+<a id="ln-413" name="ln-413" href="#ln-413"></a><span class="w">            </span><span class="c">! with the roughness clamp &lt;h^2&gt; &lt;= (frac_rough*H)^2.  The rho0</span>
+<a id="ln-414" name="ln-414" href="#ln-414"></a><span class="w">            </span><span class="c">! factor sets E in W/m^2 (the same units as the prescribed e_in),</span>
+<a id="ln-415" name="ln-415" href="#ln-415"></a><span class="w">            </span><span class="c">! so it lands correctly in the rho0*dz*(N^2+Omega^2) Kd divisor.</span>
+<a id="ln-416" name="ln-416" href="#ln-416"></a><span class="w">            </span><span class="c">! N_bot = sqrt(N^2) at the bed-most interior interface</span>
+<a id="ln-417" name="ln-417" href="#ln-417"></a><span class="w">            </span><span class="c">! (n2_col(kbed), the gradient across the two deepest LIVE layers).</span>
+<a id="ln-418" name="ln-418" href="#ln-418"></a><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">e_compute</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-419" name="ln-419" href="#ln-419"></a><span class="k">               </span><span class="n">h2c</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">h2_rough</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">frac_rough</span><span class="o">*</span><span class="n">h_tot</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+<a id="ln-420" name="ln-420" href="#ln-420"></a><span class="w">               </span><span class="n">tke_coef</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">rho0_l</span><span class="o">*</span><span class="n">this</span><span class="p">%</span><span class="n">kappa_h2</span><span class="o">*</span><span class="n">this</span><span class="p">%</span><span class="n">kappa_itides</span><span class="o">*</span><span class="n">h2c</span><span class="o">*</span><span class="n">this</span><span class="p">%</span><span class="n">utide</span><span class="o">**</span><span class="mi">2</span>
+<a id="ln-421" name="ln-421" href="#ln-421"></a><span class="w">               </span><span class="n">n_bot</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">sqrt</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">n2_col</span><span class="p">(</span><span class="n">kbed</span><span class="p">),</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">))</span>
+<a id="ln-422" name="ln-422" href="#ln-422"></a><span class="w">               </span><span class="n">e_col</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tke_coef</span><span class="o">*</span><span class="n">n_bot</span>
+<a id="ln-423" name="ln-423" href="#ln-423"></a><span class="w">               </span><span class="n">e_cap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">e_max</span>
+<a id="ln-424" name="ln-424" href="#ln-424"></a><span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">e_col</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">e_cap</span><span class="p">)</span><span class="w"> </span><span class="n">e_col</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">e_cap</span>
+<a id="ln-425" name="ln-425" href="#ln-425"></a><span class="w">            </span><span class="k">else</span>
+<a id="ln-426" name="ln-426" href="#ln-426"></a><span class="k">               </span><span class="n">e_col</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">e_in</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<a id="ln-427" name="ln-427" href="#ln-427"></a><span class="w">            </span><span class="k">end if</span>
+<a id="ln-428" name="ln-428" href="#ln-428"></a><span class="w">            </span><span class="c">! Mask off shallow columns (H &lt; min_zbot).</span>
+<a id="ln-429" name="ln-429" href="#ln-429"></a><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">h_tot</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">min_zbot</span><span class="p">)</span><span class="w"> </span><span class="n">e_col</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-430" name="ln-430" href="#ln-430"></a>
+<a id="ln-431" name="ln-431" href="#ln-431"></a><span class="w">            </span><span class="c">! ---- Inv_int normalization (Adcroft reciprocal) ----</span>
+<a id="ln-432" name="ln-432" href="#ln-432"></a><span class="w">            </span><span class="c">! L'Hospital degenerate-thin-column guard: H/zeta -&gt; 0 =&gt; 1.</span>
+<a id="ln-433" name="ln-433" href="#ln-433"></a><span class="w">            </span><span class="n">hz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_tot</span><span class="o">*</span><span class="n">izeta</span>
+<a id="ln-434" name="ln-434" href="#ln-434"></a><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">hz</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mf">1.0e-14_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-435" name="ln-435" href="#ln-435"></a><span class="k">               </span><span class="n">inv_int</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span>
+<a id="ln-436" name="ln-436" href="#ln-436"></a><span class="w">            </span><span class="k">else</span>
+<a id="ln-437" name="ln-437" href="#ln-437"></a><span class="k">               </span><span class="n">inv_int</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nb">exp</span><span class="p">(</span><span class="o">-</span><span class="n">hz</span><span class="p">))</span>
+<a id="ln-438" name="ln-438" href="#ln-438"></a><span class="w">            </span><span class="k">end if</span>
+<a id="ln-439" name="ln-439" href="#ln-439"></a>
+<a id="ln-440" name="ln-440" href="#ln-440"></a><span class="w">            </span><span class="c">! ---- Flux bookkeeping sweep (St-Laurent 2002), bed -&gt; surf ----</span>
+<a id="ln-441" name="ln-441" href="#ln-441"></a><span class="w">            </span><span class="c">! TKE_bot = q*mu*E is the total locally-dissipated power; the</span>
+<a id="ln-442" name="ln-442" href="#ln-442"></a><span class="w">            </span><span class="c">! 1/rho0 Boussinesq factor lives in the TKE-&gt;Kd divisor</span>
+<a id="ln-443" name="ln-443" href="#ln-443"></a><span class="w">            </span><span class="c">! (rho0*dz*(N^2+Omega^2)), so Sum(TKE_lay) == q*mu*E exactly</span>
+<a id="ln-444" name="ln-444" href="#ln-444"></a><span class="w">            </span><span class="c">! (energy conservation is independent of the rho placement).</span>
+<a id="ln-445" name="ln-445" href="#ln-445"></a><span class="w">            </span><span class="n">tke_bot</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">gamma_l</span><span class="o">*</span><span class="n">mu_l</span><span class="o">*</span><span class="n">e_col</span>
+<a id="ln-446" name="ln-446" href="#ln-446"></a><span class="w">            </span><span class="n">tke_rem</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">inv_int</span><span class="o">*</span><span class="n">tke_bot</span>
+<a id="ln-447" name="ln-447" href="#ln-447"></a><span class="w">            </span><span class="n">z_top</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-448" name="ln-448" href="#ln-448"></a><span class="w">            </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">kbed</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-449" name="ln-449" href="#ln-449"></a><span class="w">               </span><span class="n">kd_lay_arr</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="w">   </span><span class="c">! inert bed filler: no share of the TKE</span>
+<a id="ln-450" name="ln-450" href="#ln-450"></a><span class="w">            </span><span class="k">end do</span>
+<a id="ln-451" name="ln-451" href="#ln-451"></a><span class="k">            do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kbed</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<a id="ln-452" name="ln-452" href="#ln-452"></a><span class="w">               </span><span class="n">z_top</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">z_top</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h_col</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<a id="ln-453" name="ln-453" href="#ln-453"></a><span class="w">               </span><span class="n">frac_top</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">inv_int</span><span class="o">*</span><span class="nb">exp</span><span class="p">(</span><span class="o">-</span><span class="n">z_top</span><span class="o">*</span><span class="n">izeta</span><span class="p">)</span>
+<a id="ln-454" name="ln-454" href="#ln-454"></a><span class="w">               </span><span class="n">tke_lay</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tke_rem</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">tke_bot</span><span class="o">*</span><span class="n">frac_top</span>
+<a id="ln-455" name="ln-455" href="#ln-455"></a><span class="w">               </span><span class="n">tke_rem</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tke_rem</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">tke_lay</span>
+<a id="ln-456" name="ln-456" href="#ln-456"></a>
+<a id="ln-457" name="ln-457" href="#ln-457"></a><span class="w">               </span><span class="c">! TKE_to_Kd = 1/(rho0*dz*(N^2+Omega^2)).  dz floored at</span>
+<a id="ln-458" name="ln-458" href="#ln-458"></a><span class="w">               </span><span class="c">! H_VANISHED (the vdiff vanishing-layer mass-drop</span>
+<a id="ln-459" name="ln-459" href="#ln-459"></a><span class="w">               </span><span class="c">! precedent) and the divisor armoured with H_DIV_EPS.</span>
+<a id="ln-460" name="ln-460" href="#ln-460"></a><span class="w">               </span><span class="n">dz_eff</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">h_col</span><span class="p">(</span><span class="n">k</span><span class="p">),</span><span class="w"> </span><span class="n">H_VANISHED</span><span class="p">)</span>
+<a id="ln-461" name="ln-461" href="#ln-461"></a><span class="w">               </span><span class="n">denom</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rho0_l</span><span class="o">*</span><span class="n">dz_eff</span><span class="o">*</span><span class="p">(</span><span class="n">n2_col</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">omega2_l</span><span class="p">)</span>
+<a id="ln-462" name="ln-462" href="#ln-462"></a><span class="w">               </span><span class="n">denom</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">denom</span><span class="p">,</span><span class="w"> </span><span class="n">H_DIV_EPS</span><span class="p">)</span>
+<a id="ln-463" name="ln-463" href="#ln-463"></a><span class="w">               </span><span class="n">kd_lay</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tke_lay</span><span class="o">/</span><span class="n">denom</span>
+<a id="ln-464" name="ln-464" href="#ln-464"></a><span class="w">               </span><span class="c">! Per-layer physical cap (St-Laurent).  DIVERGENCE D3:</span>
+<a id="ln-465" name="ln-465" href="#ln-465"></a><span class="w">               </span><span class="c">! MOM6's max_TKE limiter re-injects the un-used power into</span>
+<a id="ln-466" name="ln-466" href="#ln-466"></a><span class="w">               </span><span class="c">! the layer above (energy-conserving under clipping); this</span>
+<a id="ln-467" name="ln-467" href="#ln-467"></a><span class="w">               </span><span class="c">! bare Kd_max clamp DISCARDS the clipped power.  v1 accepts</span>
+<a id="ln-468" name="ln-468" href="#ln-468"></a><span class="w">               </span><span class="c">! the discard — it is a rarely-active safety cap, not the</span>
+<a id="ln-469" name="ln-469" href="#ln-469"></a><span class="w">               </span><span class="c">! deposition mechanism.  The energy-conservation invariant</span>
+<a id="ln-470" name="ln-470" href="#ln-470"></a><span class="w">               </span><span class="c">! is asserted on the PRE-clip TKE_lay accordingly.</span>
+<a id="ln-471" name="ln-471" href="#ln-471"></a><span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">kd_max_l</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">kd_lay</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">kd_max_l</span><span class="p">)</span><span class="w"> </span><span class="n">kd_lay</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kd_max_l</span>
+<a id="ln-472" name="ln-472" href="#ln-472"></a><span class="w">               </span><span class="n">kd_lay_arr</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kd_lay</span>
+<a id="ln-473" name="ln-473" href="#ln-473"></a><span class="w">            </span><span class="k">end do</span>
+<a id="ln-474" name="ln-474" href="#ln-474"></a>
+<a id="ln-475" name="ln-475" href="#ln-475"></a><span class="w">            </span><span class="c">! ---- D1: exclude the BED and SURFACE LAYERS from deposition ----</span>
+<a id="ln-476" name="ln-476" href="#ln-476"></a><span class="w">            </span><span class="c">! MOM6 (St Laurent/Simmons; MOM_set_diffusivity find_TKE_to_Kd,</span>
+<a id="ln-477" name="ln-477" href="#ln-477"></a><span class="w">            </span><span class="c">! MOM-inspired) sets TKE_to_Kd(i,1)=TKE_to_Kd(i,nz)=0 — BOTH</span>
+<a id="ln-478" name="ln-478" href="#ln-478"></a><span class="w">            </span><span class="c">! endpoint layers get zero Kd_add, and the deposit loop runs the</span>
+<a id="ln-479" name="ln-479" href="#ln-479"></a><span class="w">            </span><span class="c">! interior only (top-down do k=nz-1,2,-1).  In MOM6 top-down</span>
+<a id="ln-480" name="ln-480" href="#ln-480"></a><span class="w">            </span><span class="c">! indexing layer 1 is the surface and layer nz the bottom; in</span>
+<a id="ln-481" name="ln-481" href="#ln-481"></a><span class="w">            </span><span class="c">! Roundabout bottom-up k=nz is the surface and k=1 the bed, so we</span>
+<a id="ln-482" name="ln-482" href="#ln-482"></a><span class="w">            </span><span class="c">! zero kd_lay_arr at BOTH ends.  The bed layer (`kbed`: k=1, or</span>
+<a id="ln-483" name="ln-483" href="#ln-483"></a><span class="w">            </span><span class="c">! the first LIVE layer `k_bot` under z_fixed) is owned by the BBL</span>
+<a id="ln-484" name="ln-484" href="#ln-484"></a><span class="w">            </span><span class="c">! drag; the surface layer (k=nz) is the mixed layer,</span>
+<a id="ln-485" name="ln-485" href="#ln-485"></a><span class="w">            </span><span class="c">! owned downstream by EPBL/KPP, and additionally has no overlying</span>
+<a id="ln-486" name="ln-486" href="#ln-486"></a><span class="w">            </span><span class="c">! layer so its kernel N^2 is 0 (its Omega^2-only inflated Kd would</span>
+<a id="ln-487" name="ln-487" href="#ln-487"></a><span class="w">            </span><span class="c">! over-mix interface K=nz on shallow energetic columns).  Zeroing</span>
+<a id="ln-488" name="ln-488" href="#ln-488"></a><span class="w">            </span><span class="c">! the deposited Kd here does NOT touch the TKE energy bookkeeping</span>
+<a id="ln-489" name="ln-489" href="#ln-489"></a><span class="w">            </span><span class="c">! above (tke_lay/tke_rem are unchanged) — the energy invariant is</span>
+<a id="ln-490" name="ln-490" href="#ln-490"></a><span class="w">            </span><span class="c">! asserted on the pre-deposit TKE_lay, mirroring the original</span>
+<a id="ln-491" name="ln-491" href="#ln-491"></a><span class="w">            </span><span class="c">! surface-only exclusion.  Zero both before the 50/50 split.</span>
+<a id="ln-492" name="ln-492" href="#ln-492"></a><span class="w">            </span><span class="n">kd_lay_arr</span><span class="p">(</span><span class="n">kbed</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-493" name="ln-493" href="#ln-493"></a><span class="w">            </span><span class="n">kd_lay_arr</span><span class="p">(</span><span class="n">nz</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-494" name="ln-494" href="#ln-494"></a>
+<a id="ln-495" name="ln-495" href="#ln-495"></a><span class="w">            </span><span class="c">! ---- Deposit per-layer Kd_add 50/50 at the two bounding</span>
+<a id="ln-496" name="ln-496" href="#ln-496"></a><span class="w">            </span><span class="c">! interfaces (St-Laurent 2002).  DIVERGENCE D2: MOM6 splits</span>
+<a id="ln-497" name="ln-497" href="#ln-497"></a><span class="w">            </span><span class="c">! the layer power 0.5/0.5 across its bounding interfaces; we</span>
+<a id="ln-498" name="ln-498" href="#ln-498"></a><span class="w">            </span><span class="c">! mirror that interface deposition.  Global interface K is the</span>
+<a id="ln-499" name="ln-499" href="#ln-499"></a><span class="w">            </span><span class="c">! BOTTOM interface of layer K, so layer k contributes to</span>
+<a id="ln-500" name="ln-500" href="#ln-500"></a><span class="w">            </span><span class="c">! interfaces k (its bed) and k+1 (its top).</span>
+<a id="ln-501" name="ln-501" href="#ln-501"></a><span class="w">            </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<a id="ln-502" name="ln-502" href="#ln-502"></a><span class="w">               </span><span class="n">this</span><span class="p">%</span><span class="n">kd_int</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">kd_int</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">kd_lay_arr</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<a id="ln-503" name="ln-503" href="#ln-503"></a><span class="w">               </span><span class="n">this</span><span class="p">%</span><span class="n">kd_int</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">kd_int</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">kd_lay_arr</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<a id="ln-504" name="ln-504" href="#ln-504"></a><span class="w">            </span><span class="k">end do</span>
+<a id="ln-505" name="ln-505" href="#ln-505"></a><span class="w">            </span><span class="c">! D1 (cont.): zero the bed (K=kbed) and surface (K=nz+1) interface</span>
+<a id="ln-506" name="ln-506" href="#ln-506"></a><span class="w">            </span><span class="c">! end-caps — `vmix_assemble` / EPBL / BBL own them.  With BOTH</span>
+<a id="ln-507" name="ln-507" href="#ln-507"></a><span class="w">            </span><span class="c">! the bed LAYER (k=kbed) and surface LAYER (k=nz) now excluded</span>
+<a id="ln-508" name="ln-508" href="#ln-508"></a><span class="w">            </span><span class="c">! above, interface K=kbed+1 receives nothing from k=kbed (only</span>
+<a id="ln-509" name="ln-509" href="#ln-509"></a><span class="w">            </span><span class="c">! k=kbed+1's bed half)</span>
+<a id="ln-510" name="ln-510" href="#ln-510"></a><span class="w">            </span><span class="c">! and interface K=nz nothing from k=nz (only k=nz-1's top half) —</span>
+<a id="ln-511" name="ln-511" href="#ln-511"></a><span class="w">            </span><span class="c">! the full MOM6 endpoint exclusion.  DIVERGENCE D4</span>
+<a id="ln-512" name="ln-512" href="#ln-512"></a><span class="w">            </span><span class="c">! (BBL N^2 override): MOM6 replaces the near-bed N^2 with a</span>
+<a id="ln-513" name="ln-513" href="#ln-513"></a><span class="w">            </span><span class="c">! roughness-height BBL average; v1 uses the raw per-layer N^2</span>
+<a id="ln-514" name="ln-514" href="#ln-514"></a><span class="w">            </span><span class="c">! (a v1.1 refinement).</span>
+<a id="ln-515" name="ln-515" href="#ln-515"></a><span class="w">            </span><span class="n">this</span><span class="p">%</span><span class="n">kd_int</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kbed</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-516" name="ln-516" href="#ln-516"></a><span class="w">            </span><span class="n">this</span><span class="p">%</span><span class="n">kd_int</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-517" name="ln-517" href="#ln-517"></a><span class="w">         </span><span class="k">end if</span>
+<a id="ln-518" name="ln-518" href="#ln-518"></a><span class="k">      end do</span>
+<a id="ln-519" name="ln-519" href="#ln-519"></a><span class="k">   end subroutine </span><span class="n">tidal_mixing_column_kernel</span>
+<a id="ln-520" name="ln-520" href="#ln-520"></a>
+<a id="ln-521" name="ln-521" href="#ln-521"></a><span class="w">   </span><span class="k">pure function </span><span class="n">ocean_tidal_mixing_bytes</span><span class="p">(</span><span class="n">this</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">nbytes</span><span class="p">)</span>
+<a id="ln-522" name="ln-522" href="#ln-522"></a><span class="w">      </span><span class="c">!! Counted allocatable footprint of the tidal mixing slot</span>
+<a id="ln-523" name="ln-523" href="#ln-523"></a><span class="w">      </span><span class="c">!! (0 when unallocated). One arr_bytes term per array — add a</span>
+<a id="ln-524" name="ln-524" href="#ln-524"></a><span class="w">      </span><span class="c">!! term here when a new allocatable joins the type.</span>
+<a id="ln-525" name="ln-525" href="#ln-525"></a><span class="w">      </span><span class="k">class</span><span class="p">(</span><span class="n">ocean_tidal_mixing_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<a id="ln-526" name="ln-526" href="#ln-526"></a><span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nbytes</span>
+<a id="ln-527" name="ln-527" href="#ln-527"></a><span class="w">      </span><span class="n">nbytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">arr_bytes</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">e_in</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-528" name="ln-528" href="#ln-528"></a><span class="w">               </span><span class="o">+</span><span class="w"> </span><span class="n">arr_bytes</span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">kd_int</span><span class="p">)</span>
+<a id="ln-529" name="ln-529" href="#ln-529"></a><span class="w">   </span><span class="k">end function </span><span class="n">ocean_tidal_mixing_bytes</span>
+<a id="ln-530" name="ln-530" href="#ln-530"></a>
+<a id="ln-531" name="ln-531" href="#ln-531"></a><span class="k">end module </span><span class="n">rdb_ocean_tidal_mixing</span>
+</pre></div>
+
+      </section>
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-20 10:28 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

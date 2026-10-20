@@ -1,0 +1,792 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>clip_halfplane &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>clip_halfplane
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">40 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_regrid_latlon.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_regrid_latlon.f90.html'>rdb_regrid_latlon.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_regrid_latlon.html'>rdb_regrid_latlon</a></li>
+            <li class="breadcrumb-item active" aria-current="page">clip_halfplane</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/clip_halfplane.html#variable-d_cur">d_cur</a>
+            <a class="list-group-item" href="../proc/clip_halfplane.html#variable-d_prev~2">d_prev</a>
+            <a class="list-group-item" href="../proc/clip_halfplane.html#variable-k~216">k</a>
+            <a class="list-group-item" href="../proc/clip_halfplane.html#variable-t~43">t</a>
+            <a class="list-group-item" href="../proc/clip_halfplane.html#variable-xcur">xcur</a>
+            <a class="list-group-item" href="../proc/clip_halfplane.html#variable-xprev">xprev</a>
+            <a class="list-group-item" href="../proc/clip_halfplane.html#variable-ycur">ycur</a>
+            <a class="list-group-item" href="../proc/clip_halfplane.html#variable-yprev">yprev</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/clip_halfplane.html#src">clip_halfplane</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private pure subroutine clip_halfplane(n_in, px, py, a, b, c, n_out, qx, qy)  
+</h2>
+    
+
+    <p>Clips polygon <code>(px,py)</code> (length <code>n_in</code>) to the half-plane
+<code>a*x + b*y &lt;= c</code>, writing the result into <code>(qx,qy)</code> / <code>n_out</code>.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_in~2"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_in</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-px~11"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>px</strong>(REGRID_POLY_MAXV)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-py~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>py</strong>(REGRID_POLY_MAXV)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-a~39"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>a</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-b~49"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>b</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-c~45"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>c</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_out~2"></span>
+              integer,
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_out</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qx"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qx</strong>(REGRID_POLY_MAXV)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qy"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qy</strong>(REGRID_POLY_MAXV)</td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~clip_halfplane~~CalledByGraph Pages: 1 -->
+<svg id="procclip_halfplaneCalledByGraph" width="641pt" height="89pt"
+ viewBox="0.00 0.00 641.00 88.73" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~clip_halfplane~~CalledByGraph" class="graph" transform="scale(0.76 0.76) rotate(0) translate(4 112)">
+<title>proc~~clip_halfplane~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-112 834,-112 834,4 -4,4"/>
+<!-- proc~clip_halfplane -->
+<g id="proc~~clip_halfplane~~CalledByGraph_node1" class="node">
+<title>proc~clip_halfplane</title>
+<polygon fill="none" stroke="black" points="830,-66 743,-66 743,-42 830,-42 830,-66"/>
+<text text-anchor="middle" x="786.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50">clip_halfplane</text>
+</g>
+<!-- proc~clip_box -->
+<g id="proc~~clip_halfplane~~CalledByGraph_node2" class="node">
+<title>proc~clip_box</title>
+<g id="a_proc~~clip_halfplane~~CalledByGraph_node2"><a xlink:href="../proc/clip_box.html" xlink:title="clip_box">
+<polygon fill="#d9534f" stroke="#d9534f" points="707,-66 652,-66 652,-42 707,-42 707,-66"/>
+<text text-anchor="middle" x="679.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">clip_box</text>
+</a>
+</g>
+</g>
+<!-- proc~clip_box&#45;&gt;proc~clip_halfplane -->
+<g id="proc~~clip_halfplane~~CalledByGraph_edge1" class="edge">
+<title>proc~clip_box&#45;&gt;proc~clip_halfplane</title>
+<path fill="none" stroke="#ff0000" d="M707.27,-54C715.04,-54 723.81,-54 732.6,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="732.87,-57.5 742.87,-54 732.87,-50.5 732.87,-57.5"/>
+</g>
+<!-- proc~regrid_weights_conservative -->
+<g id="proc~~clip_halfplane~~CalledByGraph_node3" class="node">
+<title>proc~regrid_weights_conservative</title>
+<g id="a_proc~~clip_halfplane~~CalledByGraph_node3"><a xlink:href="../proc/regrid_weights_conservative.html" xlink:title="regrid_weights_conservative">
+<polygon fill="#d9534f" stroke="#d9534f" points="616,-66 453,-66 453,-42 616,-42 616,-66"/>
+<text text-anchor="middle" x="534.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">regrid_weights_conservative</text>
+</a>
+</g>
+</g>
+<!-- proc~regrid_weights_conservative&#45;&gt;proc~clip_box -->
+<g id="proc~~clip_halfplane~~CalledByGraph_edge2" class="edge">
+<title>proc~regrid_weights_conservative&#45;&gt;proc~clip_box</title>
+<path fill="none" stroke="#ff0000" d="M616.19,-54C624.99,-54 633.6,-54 641.48,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="641.71,-57.5 651.71,-54 641.71,-50.5 641.71,-57.5"/>
+</g>
+<!-- proc~atm_state_configure -->
+<g id="proc~~clip_halfplane~~CalledByGraph_node4" class="node">
+<title>proc~atm_state_configure</title>
+<g id="a_proc~~clip_halfplane~~CalledByGraph_node4"><a xlink:href="../proc/atm_state_configure.html" xlink:title="atm_state_configure">
+<polygon fill="#d9534f" stroke="#d9534f" points="417,-66 296,-66 296,-42 417,-42 417,-66"/>
+<text text-anchor="middle" x="356.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">atm_state_configure</text>
+</a>
+</g>
+</g>
+<!-- proc~atm_state_configure&#45;&gt;proc~regrid_weights_conservative -->
+<g id="proc~~clip_halfplane~~CalledByGraph_edge3" class="edge">
+<title>proc~atm_state_configure&#45;&gt;proc~regrid_weights_conservative</title>
+<path fill="none" stroke="#ff0000" d="M417.09,-54C425.33,-54 433.94,-54 442.6,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="442.75,-57.5 452.75,-54 442.75,-50.5 442.75,-57.5"/>
+</g>
+<!-- proc~engine_setup -->
+<g id="proc~~clip_halfplane~~CalledByGraph_node5" class="node">
+<title>proc~engine_setup</title>
+<g id="a_proc~~clip_halfplane~~CalledByGraph_node5"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="260,-66 176,-66 176,-42 260,-42 260,-66"/>
+<text text-anchor="middle" x="218" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~atm_state_configure -->
+<g id="proc~~clip_halfplane~~CalledByGraph_edge4" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~atm_state_configure</title>
+<path fill="none" stroke="#ff0000" d="M260.32,-54C268.39,-54 277.05,-54 285.75,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="285.94,-57.5 295.94,-54 285.94,-50.5 285.94,-57.5"/>
+</g>
+<!-- proc~complete_ocean_create -->
+<g id="proc~~clip_halfplane~~CalledByGraph_node6" class="node">
+<title>proc~complete_ocean_create</title>
+<g id="a_proc~~clip_halfplane~~CalledByGraph_node6"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="140,-108 0,-108 0,-84 140,-84 140,-108"/>
+<text text-anchor="middle" x="70" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_setup -->
+<g id="proc~~clip_halfplane~~CalledByGraph_edge5" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M112.84,-83.96C129.39,-79.2 148.58,-73.68 165.94,-68.69"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="167.27,-71.95 175.91,-65.82 165.33,-65.22 167.27,-71.95"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~clip_halfplane~~CalledByGraph_node7" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~clip_halfplane~~CalledByGraph_node7"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="123,-66 17,-66 17,-42 123,-42 123,-66"/>
+<text text-anchor="middle" x="70" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_setup -->
+<g id="proc~~clip_halfplane~~CalledByGraph_edge6" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M123.3,-54C136.99,-54 151.74,-54 165.4,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="165.59,-57.5 175.59,-54 165.59,-50.5 165.59,-57.5"/>
+</g>
+<!-- proc~driver_validate -->
+<g id="proc~~clip_halfplane~~CalledByGraph_node8" class="node">
+<title>proc~driver_validate</title>
+<g id="a_proc~~clip_halfplane~~CalledByGraph_node8"><a xlink:href="../proc/driver_validate.html" xlink:title="driver_validate">
+<polygon fill="#d9534f" stroke="#d9534f" points="116,-24 24,-24 24,0 116,0 116,-24"/>
+<text text-anchor="middle" x="70" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_validate</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_validate&#45;&gt;proc~engine_setup -->
+<g id="proc~~clip_halfplane~~CalledByGraph_edge7" class="edge">
+<title>proc~driver_validate&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M112.84,-24.04C129.39,-28.8 148.58,-34.32 165.94,-39.31"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="165.33,-42.78 175.91,-42.18 167.27,-36.05 165.33,-42.78"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocclip_halfplaneCalledByGraph = svgPanZoom('#procclip_halfplaneCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-d_cur"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>d_cur</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-d_prev~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>d_prev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~216"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t~43"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-xcur"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>xcur</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-xprev"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>xprev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ycur"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ycur</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-yprev"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>yprev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">clip_halfplane</span><span class="p">(</span><span class="n">n_in</span><span class="p">,</span><span class="w"> </span><span class="n">px</span><span class="p">,</span><span class="w"> </span><span class="n">py</span><span class="p">,</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="n">c</span><span class="p">,</span><span class="w"> </span><span class="n">n_out</span><span class="p">,</span><span class="w"> </span><span class="n">qx</span><span class="p">,</span><span class="w"> </span><span class="n">qy</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Clips polygon `(px,py)` (length `n_in`) to the half-plane</span>
+<span class="w">      </span><span class="c">!! `a*x + b*y &lt;= c`, writing the result into `(qx,qy)` / `n_out`.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n_in</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">px</span><span class="p">(</span><span class="n">REGRID_POLY_MAXV</span><span class="p">),</span><span class="w"> </span><span class="n">py</span><span class="p">(</span><span class="n">REGRID_POLY_MAXV</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="n">c</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n_out</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">qx</span><span class="p">(</span><span class="n">REGRID_POLY_MAXV</span><span class="p">),</span><span class="w"> </span><span class="n">qy</span><span class="p">(</span><span class="n">REGRID_POLY_MAXV</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">k</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">d_cur</span><span class="p">,</span><span class="w"> </span><span class="n">d_prev</span><span class="p">,</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="n">xcur</span><span class="p">,</span><span class="w"> </span><span class="n">ycur</span><span class="p">,</span><span class="w"> </span><span class="n">xprev</span><span class="p">,</span><span class="w"> </span><span class="n">yprev</span>
+
+<span class="w">      </span><span class="n">n_out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">n_in</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      </span><span class="n">xprev</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">px</span><span class="p">(</span><span class="n">n_in</span><span class="p">)</span>
+<span class="w">      </span><span class="n">yprev</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">py</span><span class="p">(</span><span class="n">n_in</span><span class="p">)</span>
+<span class="w">      </span><span class="n">d_prev</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">a</span><span class="o">*</span><span class="n">xprev</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">b</span><span class="o">*</span><span class="n">yprev</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">c</span>
+<span class="w">      </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">n_in</span>
+<span class="w">         </span><span class="n">xcur</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">px</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">         </span><span class="n">ycur</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">py</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">         </span><span class="n">d_cur</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">a</span><span class="o">*</span><span class="n">xcur</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">b</span><span class="o">*</span><span class="n">ycur</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">c</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">d_cur</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">d_prev</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">n_out</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">REGRID_POLY_MAXV</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">d_prev</span><span class="o">/</span><span class="p">(</span><span class="n">d_prev</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">d_cur</span><span class="p">)</span>
+<span class="w">               </span><span class="n">n_out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">n_out</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">               </span><span class="n">qx</span><span class="p">(</span><span class="n">n_out</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">xprev</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">t</span><span class="o">*</span><span class="p">(</span><span class="n">xcur</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">xprev</span><span class="p">)</span>
+<span class="w">               </span><span class="n">qy</span><span class="p">(</span><span class="n">n_out</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">yprev</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">t</span><span class="o">*</span><span class="p">(</span><span class="n">ycur</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">yprev</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">n_out</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">REGRID_POLY_MAXV</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">n_out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">n_out</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">               </span><span class="n">qx</span><span class="p">(</span><span class="n">n_out</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">xcur</span>
+<span class="w">               </span><span class="n">qy</span><span class="p">(</span><span class="n">n_out</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ycur</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         else if</span><span class="w"> </span><span class="p">(</span><span class="n">d_prev</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">n_out</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">REGRID_POLY_MAXV</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">d_prev</span><span class="o">/</span><span class="p">(</span><span class="n">d_prev</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">d_cur</span><span class="p">)</span>
+<span class="w">            </span><span class="n">n_out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">n_out</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">            </span><span class="n">qx</span><span class="p">(</span><span class="n">n_out</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">xprev</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">t</span><span class="o">*</span><span class="p">(</span><span class="n">xcur</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">xprev</span><span class="p">)</span>
+<span class="w">            </span><span class="n">qy</span><span class="p">(</span><span class="n">n_out</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">yprev</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">t</span><span class="o">*</span><span class="p">(</span><span class="n">ycur</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">yprev</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         </span><span class="n">xprev</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">xcur</span>
+<span class="w">         </span><span class="n">yprev</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ycur</span>
+<span class="w">         </span><span class="n">d_prev</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">d_cur</span>
+<span class="w">      </span><span class="k">end do</span>
+<span class="k">   end subroutine </span><span class="n">clip_halfplane</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-20 10:28 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

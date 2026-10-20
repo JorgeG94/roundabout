@@ -1,0 +1,1526 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>remap_layer_to_density_impl &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>remap_layer_to_density_impl
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">87 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_diag_fills.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_diag_fills.f90.html'>rdb_ocean_diag_fills.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_diag_fills.html'>rdb_ocean_diag_fills</a></li>
+            <li class="breadcrumb-item active" aria-current="page">remap_layer_to_density_impl</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/remap_layer_to_density_impl.html#variable-dz_new~2">dz_new</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_density_impl.html#variable-dz_old~2">dz_old</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_density_impl.html#variable-hh~3">hh</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_density_impl.html#variable-i~551">i</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_density_impl.html#variable-j~476">j</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_density_impl.html#variable-k~324">k</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_density_impl.html#variable-m~39">m</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_density_impl.html#variable-n~56">n</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_density_impl.html#variable-n_bin">n_bin</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_density_impl.html#variable-nx~502">nx</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_density_impl.html#variable-ny~502">ny</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_density_impl.html#variable-nz~381">nz</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_density_impl.html#variable-q_new~3">q_new</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_density_impl.html#variable-q_old~2">q_old</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_density_impl.html#variable-rho_live">rho_live</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_density_impl.html#variable-rho_tgt_c">rho_tgt_c</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_density_impl.html#variable-rhoc">rhoc</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_density_impl.html#variable-seen_live">seen_live</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_density_impl.html#variable-ss~21">ss</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_density_impl.html#variable-tt">tt</a>
+            <a class="list-group-item" href="../proc/remap_layer_to_density_impl.html#variable-z_iface">z_iface</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/remap_layer_to_density_impl.html#src">remap_layer_to_density_impl</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private pure subroutine remap_layer_to_density_impl(h_layer, hT, hS, eos, rho_ref_p, rho_tgt, layer_buf, output_buf, is_extensive, method)  
+</h2>
+    
+
+    <p>Per-column density-space remap, <code>do concurrent</code> over (j, i).
+Source column TOP-DOWN + layer potential density (EOS at
+<code>rho_ref_p</code>), invert profile to interface depths
+(<code>invert_density_targets</code>), then donor-cell remap.  Cells outside
+the column density range read 0.  Intensive/extensive as the z-remap.</p>
+<p><strong>Vanished source layers</strong> carry zero weight exactly as in
+<code>remap_layer_to_vcoord_impl</code> (<code>dz = 0</code>, <code>q = 0</code>, value never read),
+and take the density of the nearest LIVE layer (the one above,
+else the first one below) rather than an EOS evaluation of the
+filler: the EOS substitutes reference T/S on a vanished layer, and
+the PPM edge between a live layer and a zero-thickness neighbour IS
+that neighbour&rsquo;s density (<code>invert_density_targets</code>), so a <code>rho_0</code>
+filler would kink the profile the targets are inverted against.
+A column with no vanished layer is bit-identical; a column with no
+live layer keeps the legacy <code>eos(0, 0)</code> fill.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_layer~93"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_layer</strong>(:,:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ht~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hT</strong>(:,:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hs~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hS</strong>(:,:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eos~64"></span>
+              type(<a href='../type/eos_t.html'>eos_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eos</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rho_ref_p"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rho_ref_p</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rho_tgt"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rho_tgt</strong>(:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-layer_buf~7"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>layer_buf</strong>(:,:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-output_buf~7"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>output_buf</strong>(:,:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-is_extensive~10"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>is_extensive</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-method~12"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>method</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~remap_layer_to_density_impl~~CallsGraph Pages: 1 -->
+<svg id="procremap_layer_to_density_implCallsGraph" width="641pt" height="325pt"
+ viewBox="0.00 0.00 641.00 324.86" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph" class="graph" transform="scale(0.62 0.62) rotate(0) translate(4 518)">
+<title>proc~~remap_layer_to_density_impl~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-518 1026,-518 1026,4 -4,4"/>
+<!-- proc~remap_layer_to_density_impl -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_node1" class="node">
+<title>proc~remap_layer_to_density_impl</title>
+<polygon fill="none" stroke="black" points="167,-367 0,-367 0,-343 167,-343 167,-367"/>
+<text text-anchor="middle" x="83.5" y="-352.6" font-family="Helvetica,sans-Serif" font-size="10.50">remap_layer_to_density_impl</text>
+</g>
+<!-- local -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_node2" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="295,-472 241,-472 241,-448 295,-448 295,-472"/>
+<text text-anchor="middle" x="268" y="-457.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~remap_layer_to_density_impl&#45;&gt;local -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge1" class="edge">
+<title>proc~remap_layer_to_density_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M98.56,-367.12C119.88,-384.97 162.24,-418.46 203,-439 211.74,-443.41 221.61,-447.18 230.94,-450.26"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="230.17,-453.68 240.76,-453.32 232.26,-447 230.17,-453.68"/>
+</g>
+<!-- proc~eos_density_point -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_node3" class="node">
+<title>proc~eos_density_point</title>
+<g id="a_proc~~remap_layer_to_density_impl~~CallsGraph_node3"><a xlink:href="../proc/eos_density_point.html" xlink:title="eos_density_point">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="321.5,-430 214.5,-430 214.5,-406 321.5,-406 321.5,-430"/>
+<text text-anchor="middle" x="268" y="-415.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">eos_density_point</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_density_impl&#45;&gt;proc~eos_density_point -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge2" class="edge">
+<title>proc~remap_layer_to_density_impl&#45;&gt;proc~eos_density_point</title>
+<path fill="none" stroke="#ff0000" d="M117.88,-367.07C141.58,-375.58 174.18,-387.17 203,-397 208.53,-398.89 214.34,-400.84 220.11,-402.75"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="219.13,-406.12 229.72,-405.93 221.33,-399.47 219.13,-406.12"/>
+</g>
+<!-- proc~invert_density_targets -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_node4" class="node">
+<title>proc~invert_density_targets</title>
+<g id="a_proc~~remap_layer_to_density_impl~~CallsGraph_node4"><a xlink:href="../proc/invert_density_targets.html" xlink:title="invert_density_targets">
+<polygon fill="#d9534f" stroke="#d9534f" points="333,-388 203,-388 203,-364 333,-364 333,-388"/>
+<text text-anchor="middle" x="268" y="-373.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">invert_density_targets</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_density_impl&#45;&gt;proc~invert_density_targets -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge3" class="edge">
+<title>proc~remap_layer_to_density_impl&#45;&gt;proc~invert_density_targets</title>
+<path fill="none" stroke="#ff0000" d="M167.21,-364.52C175.72,-365.5 184.34,-366.49 192.75,-367.46"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="192.56,-370.96 202.9,-368.62 193.36,-364 192.56,-370.96"/>
+</g>
+<!-- proc~remap_column -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_node5" class="node">
+<title>proc~remap_column</title>
+<g id="a_proc~~remap_layer_to_density_impl~~CallsGraph_node5"><a xlink:href="../proc/remap_column.html" xlink:title="remap_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="314,-346 222,-346 222,-322 314,-322 314,-346"/>
+<text text-anchor="middle" x="268" y="-331.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_density_impl&#45;&gt;proc~remap_column -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge4" class="edge">
+<title>proc~remap_layer_to_density_impl&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#ff0000" d="M167.21,-345.48C182.23,-343.75 197.57,-341.99 211.57,-340.38"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="211.97,-343.86 221.51,-339.23 211.17,-336.9 211.97,-343.86"/>
+</g>
+<!-- rdb_vl_conc -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_node6" class="node">
+<title>rdb_vl_conc</title>
+<polygon fill="#777777" stroke="#777777" points="306,-304 230,-304 230,-280 306,-280 306,-304"/>
+<text text-anchor="middle" x="268" y="-289.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_vl_conc</text>
+</g>
+<!-- proc~remap_layer_to_density_impl&#45;&gt;rdb_vl_conc -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge5" class="edge">
+<title>proc~remap_layer_to_density_impl&#45;&gt;rdb_vl_conc</title>
+<path fill="none" stroke="#ff0000" d="M117.88,-342.93C141.58,-334.42 174.18,-322.83 203,-313 208.53,-311.11 214.34,-309.16 220.11,-307.25"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="221.33,-310.53 229.72,-304.07 219.13,-303.88 221.33,-310.53"/>
+</g>
+<!-- rdb_vl_is_live -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_node7" class="node">
+<title>rdb_vl_is_live</title>
+<polygon fill="#777777" stroke="#777777" points="309,-262 227,-262 227,-238 309,-238 309,-262"/>
+<text text-anchor="middle" x="268" y="-247.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_vl_is_live</text>
+</g>
+<!-- proc~remap_layer_to_density_impl&#45;&gt;rdb_vl_is_live -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge6" class="edge">
+<title>proc~remap_layer_to_density_impl&#45;&gt;rdb_vl_is_live</title>
+<path fill="none" stroke="#ff0000" d="M98.56,-342.88C119.88,-325.03 162.24,-291.54 203,-271 207.58,-268.69 212.47,-266.56 217.43,-264.6"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="218.82,-267.82 226.99,-261.08 216.4,-261.26 218.82,-267.82"/>
+</g>
+<!-- proc~roquet_rho_value -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_node13" class="node">
+<title>proc~roquet_rho_value</title>
+<g id="a_proc~~remap_layer_to_density_impl~~CallsGraph_node13"><a xlink:href="../proc/roquet_rho_value.html" xlink:title="roquet_rho_value">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="482,-472 377,-472 377,-448 482,-448 482,-472"/>
+<text text-anchor="middle" x="429.5" y="-457.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">roquet_rho_value</text>
+</a>
+</g>
+</g>
+<!-- proc~eos_density_point&#45;&gt;proc~roquet_rho_value -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge7" class="edge">
+<title>proc~eos_density_point&#45;&gt;proc~roquet_rho_value</title>
+<path fill="none" stroke="#ffff00" d="M314.71,-430.04C332.89,-434.82 353.99,-440.38 373.04,-445.4"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="372.23,-448.8 382.79,-447.96 374.01,-442.03 372.23,-448.8"/>
+</g>
+<!-- proc~roquet_spv_value -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_node14" class="node">
+<title>proc~roquet_spv_value</title>
+<g id="a_proc~~remap_layer_to_density_impl~~CallsGraph_node14"><a xlink:href="../proc/roquet_spv_value.html" xlink:title="roquet_spv_value">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="482,-430 377,-430 377,-406 482,-406 482,-430"/>
+<text text-anchor="middle" x="429.5" y="-415.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">roquet_spv_value</text>
+</a>
+</g>
+</g>
+<!-- proc~eos_density_point&#45;&gt;proc~roquet_spv_value -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge8" class="edge">
+<title>proc~eos_density_point&#45;&gt;proc~roquet_spv_value</title>
+<path fill="none" stroke="#ffff00" d="M321.67,-418C336.12,-418 351.92,-418 366.82,-418"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="366.97,-421.5 376.97,-418 366.97,-414.5 366.97,-421.5"/>
+</g>
+<!-- proc~remap_column_pcm -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_node8" class="node">
+<title>proc~remap_column_pcm</title>
+<g id="a_proc~~remap_layer_to_density_impl~~CallsGraph_node8"><a xlink:href="../proc/remap_column_pcm.html" xlink:title="remap_column_pcm">
+<polygon fill="#d9534f" stroke="#d9534f" points="490,-388 369,-388 369,-364 490,-364 490,-388"/>
+<text text-anchor="middle" x="429.5" y="-373.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_pcm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_pcm -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge9" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_pcm</title>
+<path fill="none" stroke="#00ffff" d="M314.28,-345.92C332.55,-350.74 353.82,-356.33 373.01,-361.39"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="372.27,-364.81 382.83,-363.97 374.05,-358.04 372.27,-364.81"/>
+</g>
+<!-- proc~remap_column_plm -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_node9" class="node">
+<title>proc~remap_column_plm</title>
+<g id="a_proc~~remap_layer_to_density_impl~~CallsGraph_node9"><a xlink:href="../proc/remap_column_plm.html" xlink:title="remap_column_plm">
+<polygon fill="#d9534f" stroke="#d9534f" points="843,-348 725,-348 725,-324 843,-324 843,-348"/>
+<text text-anchor="middle" x="784" y="-333.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_plm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge10" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#00ffff" d="M314.16,-334.18C404.58,-334.53 608.28,-335.32 714.95,-335.74"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="714.95,-339.24 724.96,-335.77 714.97,-332.24 714.95,-339.24"/>
+</g>
+<!-- proc~remap_column_ppm -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_node10" class="node">
+<title>proc~remap_column_ppm</title>
+<g id="a_proc~~remap_layer_to_density_impl~~CallsGraph_node10"><a xlink:href="../proc/remap_column_ppm.html" xlink:title="remap_column_ppm">
+<polygon fill="#d9534f" stroke="#d9534f" points="663.5,-230 542.5,-230 542.5,-206 663.5,-206 663.5,-230"/>
+<text text-anchor="middle" x="603" y="-215.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_ppm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_ppm -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge11" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_ppm</title>
+<path fill="none" stroke="#00ffff" d="M306.27,-321.93C315.05,-319.04 324.37,-315.94 333,-313 413.11,-285.72 506.11,-252.53 559.12,-233.48"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="560.31,-236.77 568.53,-230.09 557.94,-230.18 560.31,-236.77"/>
+</g>
+<!-- proc~remap_column_ppm_h4 -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_node11" class="node">
+<title>proc~remap_column_ppm_h4</title>
+<g id="a_proc~~remap_layer_to_density_impl~~CallsGraph_node11"><a xlink:href="../proc/remap_column_ppm_h4.html" xlink:title="remap_column_ppm_h4">
+<polygon fill="#d9534f" stroke="#d9534f" points="673,-308 533,-308 533,-284 673,-284 673,-308"/>
+<text text-anchor="middle" x="603" y="-293.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_ppm_h4</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_ppm_h4 -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge12" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_ppm_h4</title>
+<path fill="none" stroke="#00ffff" d="M314.29,-328.48C331.43,-326.42 351.11,-324.07 369,-322 420.22,-316.07 477.79,-309.64 522.9,-304.66"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="523.35,-308.13 532.91,-303.56 522.59,-301.18 523.35,-308.13"/>
+</g>
+<!-- proc~remap_column_pqm -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_node12" class="node">
+<title>proc~remap_column_pqm</title>
+<g id="a_proc~~remap_layer_to_density_impl~~CallsGraph_node12"><a xlink:href="../proc/remap_column_pqm.html" xlink:title="remap_column_pqm">
+<polygon fill="#d9534f" stroke="#d9534f" points="490,-106 369,-106 369,-82 490,-82 490,-106"/>
+<text text-anchor="middle" x="429.5" y="-91.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_pqm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_pqm -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge13" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_pqm</title>
+<path fill="none" stroke="#00ffff" d="M314.09,-324.75C320.99,-321.84 327.61,-318.02 333,-313 363.93,-284.2 352.26,-263.8 369,-225 385.77,-186.12 406.42,-141.3 418.46,-115.45"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="421.71,-116.75 422.77,-106.21 415.37,-113.79 421.71,-116.75"/>
+</g>
+<!-- proc~boundary_half_jump -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_node15" class="node">
+<title>proc~boundary_half_jump</title>
+<g id="a_proc~~remap_layer_to_density_impl~~CallsGraph_node15"><a xlink:href="../proc/boundary_half_jump.html" xlink:title="boundary_half_jump">
+<polygon fill="#d9534f" stroke="#d9534f" points="1015.5,-288 894.5,-288 894.5,-264 1015.5,-264 1015.5,-288"/>
+<text text-anchor="middle" x="955" y="-273.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">boundary_half_jump</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_plm&#45;&gt;proc~boundary_half_jump -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge14" class="edge">
+<title>proc~remap_column_plm&#45;&gt;proc~boundary_half_jump</title>
+<path fill="none" stroke="#ffda00" d="M819.2,-323.86C845.51,-314.52 882.06,-301.54 910.46,-291.46"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="911.89,-294.67 920.14,-288.02 909.55,-288.07 911.89,-294.67"/>
+</g>
+<!-- proc~plm_slope_nonuniform -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_node16" class="node">
+<title>proc~plm_slope_nonuniform</title>
+<g id="a_proc~~remap_layer_to_density_impl~~CallsGraph_node16"><a xlink:href="../proc/plm_slope_nonuniform.html" xlink:title="plm_slope_nonuniform">
+<polygon fill="#d9534f" stroke="#d9534f" points="1022,-348 888,-348 888,-324 1022,-324 1022,-348"/>
+<text text-anchor="middle" x="955" y="-333.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">plm_slope_nonuniform</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_plm&#45;&gt;proc~plm_slope_nonuniform -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge15" class="edge">
+<title>proc~remap_column_plm&#45;&gt;proc~plm_slope_nonuniform</title>
+<path fill="none" stroke="#ffda00" d="M843.16,-336C854.31,-336 866.14,-336 877.76,-336"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="877.9,-339.5 887.9,-336 877.9,-332.5 877.9,-339.5"/>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge20" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#48ff00" d="M622.48,-230.18C654.19,-251.08 719.07,-293.86 755.9,-318.13"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="754.34,-321.3 764.62,-323.88 758.2,-315.46 754.34,-321.3"/>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~boundary_half_jump -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge16" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~boundary_half_jump</title>
+<path fill="none" stroke="#48ff00" d="M663.52,-229.52C680.46,-232.7 698.94,-236.08 716,-239 772.44,-248.68 836.61,-258.59 884.08,-265.72"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="883.84,-269.22 894.25,-267.24 884.88,-262.3 883.84,-269.22"/>
+</g>
+<!-- proc~ppm_edge_nonuniform -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_node17" class="node">
+<title>proc~ppm_edge_nonuniform</title>
+<g id="a_proc~~remap_layer_to_density_impl~~CallsGraph_node17"><a xlink:href="../proc/ppm_edge_nonuniform.html" xlink:title="ppm_edge_nonuniform">
+<polygon fill="#d9534f" stroke="#d9534f" points="852,-230 716,-230 716,-206 852,-206 852,-230"/>
+<text text-anchor="middle" x="784" y="-215.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_edge_nonuniform</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~ppm_edge_nonuniform -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge17" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~ppm_edge_nonuniform</title>
+<path fill="none" stroke="#48ff00" d="M663.6,-218C677.11,-218 691.64,-218 705.75,-218"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="705.94,-221.5 715.94,-218 705.94,-214.5 705.94,-221.5"/>
+</g>
+<!-- proc~ppm_edge_two_cell -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_node18" class="node">
+<title>proc~ppm_edge_two_cell</title>
+<g id="a_proc~~remap_layer_to_density_impl~~CallsGraph_node18"><a xlink:href="../proc/ppm_edge_two_cell.html" xlink:title="ppm_edge_two_cell">
+<polygon fill="#d9534f" stroke="#d9534f" points="842.5,-188 725.5,-188 725.5,-164 842.5,-164 842.5,-188"/>
+<text text-anchor="middle" x="784" y="-173.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_edge_two_cell</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~ppm_edge_two_cell -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge18" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~ppm_edge_two_cell</title>
+<path fill="none" stroke="#48ff00" d="M655.29,-205.96C676.08,-201.09 700.25,-195.42 721.93,-190.33"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="722.76,-193.73 731.7,-188.04 721.16,-186.91 722.76,-193.73"/>
+</g>
+<!-- proc~ppm_jump_nonuniform -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_node19" class="node">
+<title>proc~ppm_jump_nonuniform</title>
+<g id="a_proc~~remap_layer_to_density_impl~~CallsGraph_node19"><a xlink:href="../proc/ppm_jump_nonuniform.html" xlink:title="ppm_jump_nonuniform">
+<polygon fill="#d9534f" stroke="#d9534f" points="852,-146 716,-146 716,-122 852,-122 852,-146"/>
+<text text-anchor="middle" x="784" y="-131.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_jump_nonuniform</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~ppm_jump_nonuniform -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge19" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~ppm_jump_nonuniform</title>
+<path fill="none" stroke="#48ff00" d="M622.8,-205.81C644.56,-192.09 681.8,-169.78 716,-155 720.64,-153 725.53,-151.09 730.47,-149.3"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="731.67,-152.59 739.98,-146.02 729.39,-145.97 731.67,-152.59"/>
+</g>
+<!-- proc~remap_column_ppm_h4&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge22" class="edge">
+<title>proc~remap_column_ppm_h4&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#00ff91" d="M657.71,-308C677,-312.31 698.95,-317.22 719.03,-321.7"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="718.5,-325.17 729.02,-323.94 720.03,-318.34 718.5,-325.17"/>
+</g>
+<!-- proc~remap_column_ppm_h4&#45;&gt;proc~boundary_half_jump -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge21" class="edge">
+<title>proc~remap_column_ppm_h4&#45;&gt;proc~boundary_half_jump</title>
+<path fill="none" stroke="#00ff91" d="M673.15,-292.05C734.17,-288.56 822.68,-283.5 883.97,-280"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="884.53,-283.48 894.32,-279.41 884.13,-276.49 884.53,-283.48"/>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~remap_column_ppm -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge26" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~remap_column_ppm</title>
+<path fill="none" stroke="#0091ff" d="M447.26,-106.12C477.48,-127.97 541.28,-174.1 576.79,-199.78"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="575.02,-202.81 585.18,-205.84 579.12,-197.14 575.02,-202.81"/>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~boundary_half_jump -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge23" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~boundary_half_jump</title>
+<path fill="none" stroke="#0091ff" d="M490.12,-90.03C591.5,-84.36 792.3,-78.15 852,-113 906.06,-144.55 935.64,-217.32 947.61,-254.01"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="944.33,-255.24 950.64,-263.74 951.01,-253.15 944.33,-255.24"/>
+</g>
+<!-- proc~pqm_end_value_h4 -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_node20" class="node">
+<title>proc~pqm_end_value_h4</title>
+<g id="a_proc~~remap_layer_to_density_impl~~CallsGraph_node20"><a xlink:href="../proc/pqm_end_value_h4.html" xlink:title="pqm_end_value_h4">
+<polygon fill="#d9534f" stroke="#d9534f" points="660.5,-66 545.5,-66 545.5,-42 660.5,-42 660.5,-66"/>
+<text text-anchor="middle" x="603" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pqm_end_value_h4</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~pqm_end_value_h4 -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge24" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~pqm_end_value_h4</title>
+<path fill="none" stroke="#0091ff" d="M481.96,-82C500.36,-77.71 521.28,-72.83 540.44,-68.36"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="541.34,-71.74 550.28,-66.06 539.75,-64.92 541.34,-71.74"/>
+</g>
+<!-- proc~pqm_solve_diag_dominant -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_node21" class="node">
+<title>proc~pqm_solve_diag_dominant</title>
+<g id="a_proc~~remap_layer_to_density_impl~~CallsGraph_node21"><a xlink:href="../proc/pqm_solve_diag_dominant.html" xlink:title="pqm_solve_diag_dominant">
+<polygon fill="#d9534f" stroke="#d9534f" points="680,-24 526,-24 526,0 680,0 680,-24"/>
+<text text-anchor="middle" x="603" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pqm_solve_diag_dominant</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~pqm_solve_diag_dominant -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge25" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~pqm_solve_diag_dominant</title>
+<path fill="none" stroke="#0091ff" d="M446.22,-81.85C464.49,-68.25 495.99,-46.37 526,-33 530.65,-30.93 535.55,-29.02 540.53,-27.26"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="541.77,-30.54 550.17,-24.08 539.57,-23.89 541.77,-30.54"/>
+</g>
+<!-- rdb_roq_rho_p -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_node22" class="node">
+<title>rdb_roq_rho_p</title>
+<polygon fill="#777777" stroke="#777777" points="647,-514 559,-514 559,-490 647,-490 647,-514"/>
+<text text-anchor="middle" x="603" y="-499.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_roq_rho_p</text>
+</g>
+<!-- proc~roquet_rho_value&#45;&gt;rdb_roq_rho_p -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge27" class="edge">
+<title>proc~roquet_rho_value&#45;&gt;rdb_roq_rho_p</title>
+<path fill="none" stroke="#4800ff" d="M479.65,-472.04C501.36,-477.35 526.93,-483.62 549.07,-489.04"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="548.43,-492.48 558.97,-491.46 550.09,-485.68 548.43,-492.48"/>
+</g>
+<!-- rdb_roq_rho_ts_coeffs -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_node23" class="node">
+<title>rdb_roq_rho_ts_coeffs</title>
+<polygon fill="#777777" stroke="#777777" points="667,-472 539,-472 539,-448 667,-448 667,-472"/>
+<text text-anchor="middle" x="603" y="-457.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_roq_rho_ts_coeffs</text>
+</g>
+<!-- proc~roquet_rho_value&#45;&gt;rdb_roq_rho_ts_coeffs -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge28" class="edge">
+<title>proc~roquet_rho_value&#45;&gt;rdb_roq_rho_ts_coeffs</title>
+<path fill="none" stroke="#4800ff" d="M482.42,-460C496.98,-460 513.08,-460 528.64,-460"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="528.75,-463.5 538.75,-460 528.75,-456.5 528.75,-463.5"/>
+</g>
+<!-- rdb_roq_spv_p -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_node24" class="node">
+<title>rdb_roq_spv_p</title>
+<polygon fill="#777777" stroke="#777777" points="647,-430 559,-430 559,-406 647,-406 647,-430"/>
+<text text-anchor="middle" x="603" y="-415.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_roq_spv_p</text>
+</g>
+<!-- proc~roquet_spv_value&#45;&gt;rdb_roq_spv_p -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge29" class="edge">
+<title>proc~roquet_spv_value&#45;&gt;rdb_roq_spv_p</title>
+<path fill="none" stroke="#ff00da" d="M482.42,-418C503.43,-418 527.67,-418 548.81,-418"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="548.91,-421.5 558.91,-418 548.91,-414.5 548.91,-421.5"/>
+</g>
+<!-- rdb_roq_ts_coeffs -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_node25" class="node">
+<title>rdb_roq_ts_coeffs</title>
+<polygon fill="#777777" stroke="#777777" points="655.5,-388 550.5,-388 550.5,-364 655.5,-364 655.5,-388"/>
+<text text-anchor="middle" x="603" y="-373.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_roq_ts_coeffs</text>
+</g>
+<!-- proc~roquet_spv_value&#45;&gt;rdb_roq_ts_coeffs -->
+<g id="proc~~remap_layer_to_density_impl~~CallsGraph_edge30" class="edge">
+<title>proc~roquet_spv_value&#45;&gt;rdb_roq_ts_coeffs</title>
+<path fill="none" stroke="#ff00da" d="M479.65,-405.96C499.38,-401.13 522.3,-395.52 542.93,-390.47"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="543.97,-393.82 552.85,-388.04 542.3,-387.02 543.97,-393.82"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocremap_layer_to_density_implCallsGraph = svgPanZoom('#procremap_layer_to_density_implCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~remap_layer_to_density_impl~~CalledByGraph Pages: 1 -->
+<svg id="procremap_layer_to_density_implCalledByGraph" width="350pt" height="32pt"
+ viewBox="0.00 0.00 350.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~remap_layer_to_density_impl~~CalledByGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>proc~~remap_layer_to_density_impl~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 346,-28 346,4 -4,4"/>
+<!-- proc~remap_layer_to_density_impl -->
+<g id="proc~~remap_layer_to_density_impl~~CalledByGraph_node1" class="node">
+<title>proc~remap_layer_to_density_impl</title>
+<polygon fill="none" stroke="black" points="342,-24 175,-24 175,0 342,0 342,-24"/>
+<text text-anchor="middle" x="258.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">remap_layer_to_density_impl</text>
+</g>
+<!-- proc~remap_layer_to_density -->
+<g id="proc~~remap_layer_to_density_impl~~CalledByGraph_node2" class="node">
+<title>proc~remap_layer_to_density</title>
+<g id="a_proc~~remap_layer_to_density_impl~~CalledByGraph_node2"><a xlink:href="../proc/remap_layer_to_density.html" xlink:title="remap_layer_to_density">
+<polygon fill="#d9534f" stroke="#d9534f" points="139,-24 0,-24 0,0 139,0 139,-24"/>
+<text text-anchor="middle" x="69.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_layer_to_density</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_density&#45;&gt;proc~remap_layer_to_density_impl -->
+<g id="proc~~remap_layer_to_density_impl~~CalledByGraph_edge1" class="edge">
+<title>proc~remap_layer_to_density&#45;&gt;proc~remap_layer_to_density_impl</title>
+<path fill="none" stroke="#ff0000" d="M139.07,-12C147.46,-12 156.14,-12 164.81,-12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="164.97,-15.5 174.97,-12 164.97,-8.5 164.97,-15.5"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_new~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_new</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_old~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_old</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hh~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hh</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~551"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~476"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~324"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-m~39"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>m</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n~56"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_bin"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_bin</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~502"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~502"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~381"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_new~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_new</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_old~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_old</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rho_live"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rho_live</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rho_tgt_c"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rho_tgt_c</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rhoc"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rhoc</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-seen_live"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>seen_live</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ss~21"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ss</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tt"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_iface"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z_iface</strong>(NZ_STACK_MAX+2)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">remap_layer_to_density_impl</span><span class="p">(</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">hT</span><span class="p">,</span><span class="w"> </span><span class="n">hS</span><span class="p">,</span><span class="w"> </span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">rho_ref_p</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                               </span><span class="n">rho_tgt</span><span class="p">,</span><span class="w"> </span><span class="n">layer_buf</span><span class="p">,</span><span class="w"> </span><span class="n">output_buf</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                               </span><span class="n">is_extensive</span><span class="p">,</span><span class="w"> </span><span class="n">method</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Per-column density-space remap, `do concurrent` over (j, i).</span>
+<span class="w">      </span><span class="c">!! Source column TOP-DOWN + layer potential density (EOS at</span>
+<span class="w">      </span><span class="c">!! `rho_ref_p`), invert profile to interface depths</span>
+<span class="w">      </span><span class="c">!! (`invert_density_targets`), then donor-cell remap.  Cells outside</span>
+<span class="w">      </span><span class="c">!! the column density range read 0.  Intensive/extensive as the z-remap.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! **Vanished source layers** carry zero weight exactly as in</span>
+<span class="w">      </span><span class="c">!! `remap_layer_to_vcoord_impl` (`dz = 0`, `q = 0`, value never read),</span>
+<span class="w">      </span><span class="c">!! and take the density of the nearest LIVE layer (the one above,</span>
+<span class="w">      </span><span class="c">!! else the first one below) rather than an EOS evaluation of the</span>
+<span class="w">      </span><span class="c">!! filler: the EOS substitutes reference T/S on a vanished layer, and</span>
+<span class="w">      </span><span class="c">!! the PPM edge between a live layer and a zero-thickness neighbour IS</span>
+<span class="w">      </span><span class="c">!! that neighbour's density (`invert_density_targets`), so a `rho_0`</span>
+<span class="w">      </span><span class="c">!! filler would kink the profile the targets are inverted against.</span>
+<span class="w">      </span><span class="c">!! A column with no vanished layer is bit-identical; a column with no</span>
+<span class="w">      </span><span class="c">!! live layer keeps the legacy `eos(0, 0)` fill.</span>
+<span class="w">      </span><span class="c">! assumed-shape-ok: diag fill — fires once per output frame (cadence-bounded);</span>
+<span class="w">      </span><span class="c">! size() used to derive loop bounds from the actual buffer dimensions.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">hT</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span><span class="w">  </span><span class="c">! assumed-shape-ok: diag fill — cadence-bounded</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">hS</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span><span class="w">  </span><span class="c">! assumed-shape-ok: diag fill — cadence-bounded</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">eos_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">eos</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">rho_ref_p</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">rho_tgt</span><span class="p">(:)</span><span class="w">  </span><span class="c">! assumed-shape-ok: diag fill — cadence-bounded</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">layer_buf</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span><span class="w">  </span><span class="c">! assumed-shape-ok: diag fill — cadence-bounded</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">output_buf</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">is_extensive</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">    </span><span class="kd">::</span><span class="w"> </span><span class="n">method</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">n_bin</span><span class="p">,</span><span class="w"> </span><span class="n">n</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dz_old</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">),</span><span class="w"> </span><span class="n">dz_new</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">q_old</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">),</span><span class="w"> </span><span class="n">q_new</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">)</span>
+<span class="w">      </span><span class="c">! z_iface holds n_bin+2 entries (`invert_density_targets` writes</span>
+<span class="w">      </span><span class="c">! z_new(1:n_int+2) with n_int = n_bin, and :798 reads z_iface(n_bin+2)),</span>
+<span class="w">      </span><span class="c">! so it needs NZ_STACK_MAX+2 — at NZ_STACK_MAX+1 a density diagnostic</span>
+<span class="w">      </span><span class="c">! with n_rho_out == NZ_STACK_MAX (which the output-level guard permits)</span>
+<span class="w">      </span><span class="c">! wrote and read one element past the end.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rhoc</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">),</span><span class="w"> </span><span class="n">z_iface</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rho_tgt_c</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hh</span><span class="p">,</span><span class="w"> </span><span class="n">tt</span><span class="p">,</span><span class="w"> </span><span class="n">ss</span><span class="p">,</span><span class="w"> </span><span class="n">rho_live</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">seen_live</span>
+<span class="w">      </span><span class="n">nx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">layer_buf</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="n">ny</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">layer_buf</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span>
+<span class="w">      </span><span class="n">nz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">layer_buf</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">)</span>
+<span class="w">      </span><span class="n">n_bin</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">rho_tgt</span><span class="p">)</span><span class="w">      </span><span class="c">! number of density bins (output cells)</span>
+<span class="w">      </span><span class="n">n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">n_bin</span><span class="p">)</span>
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">         </span><span class="n">local</span><span class="p">(</span><span class="n">dz_old</span><span class="p">,</span><span class="w"> </span><span class="n">dz_new</span><span class="p">,</span><span class="w"> </span><span class="n">q_old</span><span class="p">,</span><span class="w"> </span><span class="n">q_new</span><span class="p">,</span><span class="w"> </span><span class="n">rhoc</span><span class="p">,</span><span class="w"> </span><span class="n">z_iface</span><span class="p">,</span><span class="w"> </span><span class="n">rho_tgt_c</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">,</span><span class="w"> </span><span class="n">hh</span><span class="p">,</span><span class="w"> </span><span class="n">tt</span><span class="p">,</span><span class="w"> </span><span class="n">ss</span><span class="p">,</span><span class="w"> </span><span class="n">rho_live</span><span class="p">,</span><span class="w"> </span><span class="n">seen_live</span><span class="p">)</span>
+<span class="w">         </span><span class="c">! --- source column TOP-DOWN + layer potential density ---</span>
+<span class="w">         </span><span class="c">! Vanished layers: zero weight, density of the nearest live layer</span>
+<span class="w">         </span><span class="c">! (see the docstring).</span>
+<span class="w">         </span><span class="n">seen_live</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">         </span><span class="n">rho_live</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">            </span><span class="n">hh</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">rdb_vl_is_live</span><span class="p">(</span><span class="n">hh</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">dz_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hh</span>
+<span class="w">               </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">layer_buf</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">               </span><span class="n">tt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rdb_vl_conc</span><span class="p">(</span><span class="n">hT</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">hh</span><span class="p">)</span>
+<span class="w">               </span><span class="n">ss</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rdb_vl_conc</span><span class="p">(</span><span class="n">hS</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">hh</span><span class="p">)</span>
+<span class="w">               </span><span class="n">rhoc</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">eos_density_point</span><span class="p">(</span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">tt</span><span class="p">,</span><span class="w"> </span><span class="n">ss</span><span class="p">,</span><span class="w"> </span><span class="n">rho_ref_p</span><span class="p">)</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">seen_live</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">                  </span><span class="c">! Back-fill the vanished run above the first live layer.</span>
+<span class="w">                  </span><span class="k">do </span><span class="n">m</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">                     </span><span class="n">rhoc</span><span class="p">(</span><span class="n">m</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rhoc</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">end do</span>
+<span class="k">               end if</span>
+<span class="k">               </span><span class="n">seen_live</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">               </span><span class="n">rho_live</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rhoc</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="k">else</span>
+<span class="k">               </span><span class="n">dz_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">               </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">seen_live</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">rhoc</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rho_live</span>
+<span class="w">               </span><span class="k">else</span>
+<span class="k">                  </span><span class="n">rhoc</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">eos_density_point</span><span class="p">(</span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">,</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">,</span><span class="w"> </span><span class="n">rho_ref_p</span><span class="p">)</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">            end if</span>
+<span class="k">         end do</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">is_extensive</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">dz_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">1.0e-12_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="o">/</span><span class="n">dz_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="k">else</span>
+<span class="k">                  </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">            end do</span>
+<span class="k">         end if</span>
+<span class="k">         do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">n</span>
+<span class="w">            </span><span class="n">dz_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="w">         </span><span class="c">! --- invert instantaneous density to target-interface depths ---</span>
+<span class="w">         </span><span class="c">! n_bin output cells; the LAST cell absorbs to the bed so</span>
+<span class="w">         </span><span class="c">! Σ dz_new == H exactly (extensive conservation, densest mass kept).</span>
+<span class="w">         </span><span class="c">! Copy assumed-shape rho_tgt(:) into a contiguous fixed-size local</span>
+<span class="w">         </span><span class="c">! first: passing the assumed-shape actual to the explicit-shape</span>
+<span class="w">         </span><span class="c">! dummy makes flang emit host copy helpers absent in the AMD device</span>
+<span class="w">         </span><span class="c">! runtime → offload link fails.  Element reads off the descriptor OK.</span>
+<span class="w">         </span><span class="k">do </span><span class="n">m</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">n_bin</span>
+<span class="w">            </span><span class="n">rho_tgt_c</span><span class="p">(</span><span class="n">m</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rho_tgt</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">         call </span><span class="n">invert_density_targets</span><span class="p">(</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">dz_old</span><span class="p">,</span><span class="w"> </span><span class="n">rhoc</span><span class="p">,</span><span class="w"> </span><span class="n">n_bin</span><span class="p">,</span><span class="w"> </span><span class="n">rho_tgt_c</span><span class="p">,</span><span class="w"> </span><span class="n">z_iface</span><span class="p">)</span>
+<span class="w">         </span><span class="k">do </span><span class="n">m</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">n_bin</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">            </span><span class="n">dz_new</span><span class="p">(</span><span class="n">m</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">z_iface</span><span class="p">(</span><span class="n">m</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">z_iface</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">dz_new</span><span class="p">(</span><span class="n">m</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="n">dz_new</span><span class="p">(</span><span class="n">m</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">         </span><span class="n">dz_new</span><span class="p">(</span><span class="n">n_bin</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">z_iface</span><span class="p">(</span><span class="n">n_bin</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">z_iface</span><span class="p">(</span><span class="n">n_bin</span><span class="p">)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">dz_new</span><span class="p">(</span><span class="n">n_bin</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="n">dz_new</span><span class="p">(</span><span class="n">n_bin</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">do </span><span class="n">m</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">n_bin</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">n</span>
+<span class="w">            </span><span class="n">dz_new</span><span class="p">(</span><span class="n">m</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">         call </span><span class="n">remap_column</span><span class="p">(</span><span class="n">method</span><span class="p">,</span><span class="w"> </span><span class="n">n</span><span class="p">,</span><span class="w"> </span><span class="n">dz_old</span><span class="p">,</span><span class="w"> </span><span class="n">dz_new</span><span class="p">,</span><span class="w"> </span><span class="n">q_old</span><span class="p">,</span><span class="w"> </span><span class="n">q_new</span><span class="p">)</span>
+<span class="w">         </span><span class="k">do </span><span class="n">m</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">n_bin</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">is_extensive</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">output_buf</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">q_new</span><span class="p">(</span><span class="n">m</span><span class="p">)</span><span class="o">*</span><span class="n">dz_new</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
+<span class="w">            </span><span class="k">else</span>
+<span class="k">               </span><span class="n">output_buf</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">q_new</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         end do</span>
+<span class="k">      end do</span>
+<span class="k">   end subroutine </span><span class="n">remap_layer_to_density_impl</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-20 10:28 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

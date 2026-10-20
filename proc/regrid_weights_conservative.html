@@ -1,0 +1,2367 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>regrid_weights_conservative &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>regrid_weights_conservative
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.2% of total for procedures.">229 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_regrid_latlon.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_regrid_latlon.f90.html'>rdb_regrid_latlon.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_regrid_latlon.html'>rdb_regrid_latlon</a></li>
+            <li class="breadcrumb-item active" aria-current="page">regrid_weights_conservative</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-local_maxcand">LOCAL_MAXCAND</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-at_pole">at_pole</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-box_hi">box_hi</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-box_lo">box_lo</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-c_lat0">c_lat0</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-c_lon0">c_lon0</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-cand_area">cand_area</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-cand_i">cand_i</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-cand_j">cand_j</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-cap~11">cap</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-degenerate">degenerate</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-i~393">i</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-i_cur">i_cur</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-idx_i_tmp">idx_i_tmp</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-idx_j_tmp">idx_j_tmp</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-ii4">ii4</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-ip~2">ip</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-is_cap">is_cap</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-j~334">j</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-j_orig">j_orig</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-jf">jf</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-jf_hi">jf_hi</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-jf_lo">jf_lo</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-jj4">jj4</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-jmax_g">jmax_g</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-jmin_g">jmin_g</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-jp~2">jp</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-k~218">k</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-kc~7">kc</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-kref">kref</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-lam~5">lam</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-lam1">lam1</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-lam_max">lam_max</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-lam_min">lam_min</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-lat_e_rad">lat_e_rad</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-lat_flip~3">lat_flip</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-lat_t~4">lat_t</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-lon_e_rad">lon_e_rad</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-lon_t~4">lon_t</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-mu~4">mu</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-mu1">mu1</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-mu_e_inc">mu_e_inc</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-mu_hi">mu_hi</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-mu_lo">mu_lo</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-mu_max">mu_max</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-mu_min">mu_min</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-n_cand">n_cand</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-ncell">ncell</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-ncur">ncur</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-nmax_used">nmax_used</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-npoly">npoly</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-px~14">px</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-py~8">py</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-qx~3">qx</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-qy~3">qy</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-sorted_lon">sorted_lon</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-sorted_mu">sorted_mu</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-span">span</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-total_area~2">total_area</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-w_tmp">w_tmp</a>
+            <a class="list-group-item" href="../proc/regrid_weights_conservative.html#variable-ww4">ww4</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/regrid_weights_conservative.html#src">regrid_weights_conservative</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public pure subroutine regrid_weights_conservative(wts, nlon, nlat, lon_e, lat_e, nx_phys, ny_phys, nghost, n1, n2, geolonBu, geolatBu, geolonT, geolatT, ierr, nmax_cap_override)  
+</h2>
+    
+
+    <p>Per-target-cell area-weighted overlap in the (lon [rad],
+mu = sin(lat)) plane, where a lat-lon source box&rsquo;s spherical
+area is exactly <code>R^2 . d(lon) . d(mu)</code> &ndash; so clipping is planar
+there. Bilinear-at-centre fallback for degenerate quads.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wts~2"></span>
+              type(<a href='../type/regrid_weights_t.html'>regrid_weights_t</a>),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wts</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nlon~8"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nlon</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nlat~5"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nlat</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lon_e~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lon_e</strong>(nlon+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lat_e~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lat_e</strong>(nlat+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_phys~33"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_phys</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_phys~33"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_phys</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nghost~44"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nghost</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n1~20"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n1</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n2~21"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n2</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-geolonbu~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>geolonBu</strong>(n1+1,n2+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-geolatbu~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>geolatBu</strong>(n1+1,n2+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-geolont~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>geolonT</strong>(n1,n2)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-geolatt~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>geolatT</strong>(n1,n2)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ierr~150"></span>
+              integer,
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ierr</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nmax_cap_override"></span>
+              integer,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nmax_cap_override</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~regrid_weights_conservative~~CallsGraph Pages: 1 -->
+<svg id="procregrid_weights_conservativeCallsGraph" width="616pt" height="291pt"
+ viewBox="0.00 0.00 616.00 291.45" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~regrid_weights_conservative~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 287.45)">
+<title>proc~~regrid_weights_conservative~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-287.45 612,-287.45 612,4 -4,4"/>
+<!-- proc~regrid_weights_conservative -->
+<g id="proc~~regrid_weights_conservative~~CallsGraph_node1" class="node">
+<title>proc~regrid_weights_conservative</title>
+<polygon fill="none" stroke="black" points="163,-148 0,-148 0,-124 163,-124 163,-148"/>
+<text text-anchor="middle" x="81.5" y="-133.6" font-family="Helvetica,sans-Serif" font-size="10.50">regrid_weights_conservative</text>
+</g>
+<!-- proc~bilinear_point_from_edges -->
+<g id="proc~~regrid_weights_conservative~~CallsGraph_node2" class="node">
+<title>proc~bilinear_point_from_edges</title>
+<g id="a_proc~~regrid_weights_conservative~~CallsGraph_node2"><a xlink:href="../proc/bilinear_point_from_edges.html" xlink:title="bilinear_point_from_edges">
+<polygon fill="#d9534f" stroke="#d9534f" points="352,-268 199,-268 199,-244 352,-244 352,-268"/>
+<text text-anchor="middle" x="275.5" y="-253.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bilinear_point_from_edges</text>
+</a>
+</g>
+</g>
+<!-- proc~regrid_weights_conservative&#45;&gt;proc~bilinear_point_from_edges -->
+<g id="proc~~regrid_weights_conservative~~CallsGraph_edge1" class="edge">
+<title>proc~regrid_weights_conservative&#45;&gt;proc~bilinear_point_from_edges</title>
+<path fill="none" stroke="#ff0000" d="M94.7,-148.31C114.82,-168 156.93,-206.73 199,-230 206.07,-233.91 213.84,-237.39 221.62,-240.43"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="220.47,-243.74 231.06,-243.92 222.89,-237.17 220.47,-243.74"/>
+</g>
+<!-- proc~bisect_bracket -->
+<g id="proc~~regrid_weights_conservative~~CallsGraph_node3" class="node">
+<title>proc~bisect_bracket</title>
+<g id="a_proc~~regrid_weights_conservative~~CallsGraph_node3"><a xlink:href="../proc/bisect_bracket.html" xlink:title="bisect_bracket">
+<polygon fill="#d9534f" stroke="#d9534f" points="608,-248 518,-248 518,-224 608,-224 608,-248"/>
+<text text-anchor="middle" x="563" y="-233.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bisect_bracket</text>
+</a>
+</g>
+</g>
+<!-- proc~regrid_weights_conservative&#45;&gt;proc~bisect_bracket -->
+<g id="proc~~regrid_weights_conservative~~CallsGraph_edge2" class="edge">
+<title>proc~regrid_weights_conservative&#45;&gt;proc~bisect_bracket</title>
+<path fill="none" stroke="#ff0000" d="M100.54,-148.21C122.67,-162.53 161.86,-185.73 199,-197 255.31,-214.09 420.94,-226.91 507.65,-232.66"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="507.62,-236.16 517.83,-233.33 508.08,-229.18 507.62,-236.16"/>
+</g>
+<!-- proc~clip_box -->
+<g id="proc~~regrid_weights_conservative~~CallsGraph_node4" class="node">
+<title>proc~clip_box</title>
+<g id="a_proc~~regrid_weights_conservative~~CallsGraph_node4"><a xlink:href="../proc/clip_box.html" xlink:title="clip_box">
+<polygon fill="#d9534f" stroke="#d9534f" points="303,-188 248,-188 248,-164 303,-164 303,-188"/>
+<text text-anchor="middle" x="275.5" y="-173.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">clip_box</text>
+</a>
+</g>
+</g>
+<!-- proc~regrid_weights_conservative&#45;&gt;proc~clip_box -->
+<g id="proc~~regrid_weights_conservative~~CallsGraph_edge3" class="edge">
+<title>proc~regrid_weights_conservative&#45;&gt;proc~clip_box</title>
+<path fill="none" stroke="#ff0000" d="M140.11,-148C171.84,-154.61 210.28,-162.62 237.9,-168.38"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="237.42,-171.85 247.92,-170.46 238.85,-165 237.42,-171.85"/>
+</g>
+<!-- proc~lon_cell_shifted -->
+<g id="proc~~regrid_weights_conservative~~CallsGraph_node5" class="node">
+<title>proc~lon_cell_shifted</title>
+<g id="a_proc~~regrid_weights_conservative~~CallsGraph_node5"><a xlink:href="../proc/lon_cell_shifted.html" xlink:title="lon_cell_shifted">
+<polygon fill="#d9534f" stroke="#d9534f" points="482,-146 388,-146 388,-122 482,-122 482,-146"/>
+<text text-anchor="middle" x="435" y="-131.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">lon_cell_shifted</text>
+</a>
+</g>
+</g>
+<!-- proc~regrid_weights_conservative&#45;&gt;proc~lon_cell_shifted -->
+<g id="proc~~regrid_weights_conservative~~CallsGraph_edge4" class="edge">
+<title>proc~regrid_weights_conservative&#45;&gt;proc~lon_cell_shifted</title>
+<path fill="none" stroke="#ff0000" d="M163.14,-135.54C228.82,-135.17 319.86,-134.65 377.85,-134.32"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="377.94,-137.82 387.92,-134.26 377.9,-130.82 377.94,-137.82"/>
+</g>
+<!-- proc~poly_area2 -->
+<g id="proc~~regrid_weights_conservative~~CallsGraph_node6" class="node">
+<title>proc~poly_area2</title>
+<g id="a_proc~~regrid_weights_conservative~~CallsGraph_node6"><a xlink:href="../proc/poly_area2.html" xlink:title="poly_area2">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="311,-108 240,-108 240,-84 311,-84 311,-108"/>
+<text text-anchor="middle" x="275.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">poly_area2</text>
+</a>
+</g>
+</g>
+<!-- proc~regrid_weights_conservative&#45;&gt;proc~poly_area2 -->
+<g id="proc~~regrid_weights_conservative~~CallsGraph_edge5" class="edge">
+<title>proc~regrid_weights_conservative&#45;&gt;proc~poly_area2</title>
+<path fill="none" stroke="#ff0000" d="M140.11,-124C168.9,-118 203.22,-110.85 229.96,-105.28"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="230.74,-108.69 239.82,-103.23 229.31,-101.84 230.74,-108.69"/>
+</g>
+<!-- proc~segments_cross -->
+<g id="proc~~regrid_weights_conservative~~CallsGraph_node7" class="node">
+<title>proc~segments_cross</title>
+<g id="a_proc~~regrid_weights_conservative~~CallsGraph_node7"><a xlink:href="../proc/segments_cross.html" xlink:title="segments_cross">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="324,-66 227,-66 227,-42 324,-42 324,-66"/>
+<text text-anchor="middle" x="275.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">segments_cross</text>
+</a>
+</g>
+</g>
+<!-- proc~regrid_weights_conservative&#45;&gt;proc~segments_cross -->
+<g id="proc~~regrid_weights_conservative~~CallsGraph_edge6" class="edge">
+<title>proc~regrid_weights_conservative&#45;&gt;proc~segments_cross</title>
+<path fill="none" stroke="#ff0000" d="M102.51,-123.85C125.24,-110.45 163.76,-88.95 199,-75 204.81,-72.7 210.97,-70.55 217.16,-68.57"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="218.33,-71.87 226.87,-65.6 216.29,-65.18 218.33,-71.87"/>
+</g>
+<!-- proc~sort4 -->
+<g id="proc~~regrid_weights_conservative~~CallsGraph_node8" class="node">
+<title>proc~sort4</title>
+<g id="a_proc~~regrid_weights_conservative~~CallsGraph_node8"><a xlink:href="../proc/sort4.html" xlink:title="sort4">
+<polygon fill="#d9534f" stroke="#d9534f" points="302.5,-24 248.5,-24 248.5,0 302.5,0 302.5,-24"/>
+<text text-anchor="middle" x="275.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">sort4</text>
+</a>
+</g>
+</g>
+<!-- proc~regrid_weights_conservative&#45;&gt;proc~sort4 -->
+<g id="proc~~regrid_weights_conservative~~CallsGraph_edge7" class="edge">
+<title>proc~regrid_weights_conservative&#45;&gt;proc~sort4</title>
+<path fill="none" stroke="#ff0000" d="M92.75,-123.87C111.59,-102.36 153.93,-57.49 199,-33 211.07,-26.44 225.37,-21.79 238.26,-18.56"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="239.27,-21.92 248.23,-16.27 237.7,-15.1 239.27,-21.92"/>
+</g>
+<!-- proc~bilinear_point_from_edges&#45;&gt;proc~bisect_bracket -->
+<g id="proc~~regrid_weights_conservative~~CallsGraph_edge8" class="edge">
+<title>proc~bilinear_point_from_edges&#45;&gt;proc~bisect_bracket</title>
+<path fill="none" stroke="#ff0000" d="M316.82,-268.03C358.65,-278.67 425.7,-290.59 482,-277 501.1,-272.39 520.76,-262.4 535.81,-253.44"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="537.87,-256.28 544.54,-248.05 534.19,-250.32 537.87,-256.28"/>
+</g>
+<!-- proc~lon_bisect -->
+<g id="proc~~regrid_weights_conservative~~CallsGraph_node10" class="node">
+<title>proc~lon_bisect</title>
+<g id="a_proc~~regrid_weights_conservative~~CallsGraph_node10"><a xlink:href="../proc/lon_bisect.html" xlink:title="lon_bisect">
+<polygon fill="#d9534f" stroke="#d9534f" points="468,-268 402,-268 402,-244 468,-244 468,-268"/>
+<text text-anchor="middle" x="435" y="-253.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">lon_bisect</text>
+</a>
+</g>
+</g>
+<!-- proc~bilinear_point_from_edges&#45;&gt;proc~lon_bisect -->
+<g id="proc~~regrid_weights_conservative~~CallsGraph_edge9" class="edge">
+<title>proc~bilinear_point_from_edges&#45;&gt;proc~lon_bisect</title>
+<path fill="none" stroke="#ff0000" d="M352.02,-256C365.58,-256 379.26,-256 391.46,-256"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="391.76,-259.5 401.76,-256 391.76,-252.5 391.76,-259.5"/>
+</g>
+<!-- proc~clip_halfplane -->
+<g id="proc~~regrid_weights_conservative~~CallsGraph_node9" class="node">
+<title>proc~clip_halfplane</title>
+<g id="a_proc~~regrid_weights_conservative~~CallsGraph_node9"><a xlink:href="../proc/clip_halfplane.html" xlink:title="clip_halfplane">
+<polygon fill="#d9534f" stroke="#d9534f" points="478.5,-188 391.5,-188 391.5,-164 478.5,-164 478.5,-188"/>
+<text text-anchor="middle" x="435" y="-173.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">clip_halfplane</text>
+</a>
+</g>
+</g>
+<!-- proc~clip_box&#45;&gt;proc~clip_halfplane -->
+<g id="proc~~regrid_weights_conservative~~CallsGraph_edge10" class="edge">
+<title>proc~clip_box&#45;&gt;proc~clip_halfplane</title>
+<path fill="none" stroke="#48ff00" d="M303.22,-176C324.52,-176 355.03,-176 381.22,-176"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="381.39,-179.5 391.39,-176 381.39,-172.5 381.39,-179.5"/>
+</g>
+<!-- proc~lon_cell_shifted&#45;&gt;proc~bisect_bracket -->
+<g id="proc~~regrid_weights_conservative~~CallsGraph_edge11" class="edge">
+<title>proc~lon_cell_shifted&#45;&gt;proc~bisect_bracket</title>
+<path fill="none" stroke="#00ff91" d="M466.56,-146.05C471.89,-148.68 477.25,-151.68 482,-155 506.92,-172.42 530.78,-198.15 545.85,-215.91"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="543.43,-218.47 552.51,-223.92 548.81,-214 543.43,-218.47"/>
+</g>
+<!-- proc~lon_bisect&#45;&gt;proc~bisect_bracket -->
+<g id="proc~~regrid_weights_conservative~~CallsGraph_edge12" class="edge">
+<title>proc~lon_bisect&#45;&gt;proc~bisect_bracket</title>
+<path fill="none" stroke="#00ffff" d="M468.12,-250.9C480.09,-249 494.03,-246.79 507.46,-244.66"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="508.25,-248.08 517.58,-243.05 507.15,-241.16 508.25,-248.08"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~regrid_weights_conservative~~CalledByGraph Pages: 1 -->
+<svg id="procregrid_weights_conservativeCalledByGraph" width="641pt" height="122pt"
+ viewBox="0.00 0.00 641.00 121.58" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~regrid_weights_conservative~~CalledByGraph" class="graph" transform="scale(0.77 0.77) rotate(0) translate(4 154)">
+<title>proc~~regrid_weights_conservative~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-154 829,-154 829,4 -4,4"/>
+<!-- proc~regrid_weights_conservative -->
+<g id="proc~~regrid_weights_conservative~~CalledByGraph_node1" class="node">
+<title>proc~regrid_weights_conservative</title>
+<polygon fill="none" stroke="black" points="825,-66 662,-66 662,-42 825,-42 825,-66"/>
+<text text-anchor="middle" x="743.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50">regrid_weights_conservative</text>
+</g>
+<!-- proc~atm_state_configure -->
+<g id="proc~~regrid_weights_conservative~~CalledByGraph_node2" class="node">
+<title>proc~atm_state_configure</title>
+<g id="a_proc~~regrid_weights_conservative~~CalledByGraph_node2"><a xlink:href="../proc/atm_state_configure.html" xlink:title="atm_state_configure">
+<polygon fill="#d9534f" stroke="#d9534f" points="626,-66 505,-66 505,-42 626,-42 626,-66"/>
+<text text-anchor="middle" x="565.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">atm_state_configure</text>
+</a>
+</g>
+</g>
+<!-- proc~atm_state_configure&#45;&gt;proc~regrid_weights_conservative -->
+<g id="proc~~regrid_weights_conservative~~CalledByGraph_edge1" class="edge">
+<title>proc~atm_state_configure&#45;&gt;proc~regrid_weights_conservative</title>
+<path fill="none" stroke="#ff0000" d="M626.09,-54C634.33,-54 642.94,-54 651.6,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="651.75,-57.5 661.75,-54 651.75,-50.5 651.75,-57.5"/>
+</g>
+<!-- proc~engine_setup -->
+<g id="proc~~regrid_weights_conservative~~CalledByGraph_node3" class="node">
+<title>proc~engine_setup</title>
+<g id="a_proc~~regrid_weights_conservative~~CalledByGraph_node3"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="469,-66 385,-66 385,-42 469,-42 469,-66"/>
+<text text-anchor="middle" x="427" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~atm_state_configure -->
+<g id="proc~~regrid_weights_conservative~~CalledByGraph_edge2" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~atm_state_configure</title>
+<path fill="none" stroke="#ff0000" d="M469.32,-54C477.39,-54 486.05,-54 494.75,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="494.94,-57.5 504.94,-54 494.94,-50.5 494.94,-57.5"/>
+</g>
+<!-- proc~complete_ocean_create -->
+<g id="proc~~regrid_weights_conservative~~CalledByGraph_node4" class="node">
+<title>proc~complete_ocean_create</title>
+<g id="a_proc~~regrid_weights_conservative~~CalledByGraph_node4"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="349,-108 209,-108 209,-84 349,-84 349,-108"/>
+<text text-anchor="middle" x="279" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_setup -->
+<g id="proc~~regrid_weights_conservative~~CalledByGraph_edge3" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M321.84,-83.96C338.39,-79.2 357.58,-73.68 374.94,-68.69"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="376.27,-71.95 384.91,-65.82 374.33,-65.22 376.27,-71.95"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~regrid_weights_conservative~~CalledByGraph_node5" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~regrid_weights_conservative~~CalledByGraph_node5"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="332,-66 226,-66 226,-42 332,-42 332,-66"/>
+<text text-anchor="middle" x="279" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_setup -->
+<g id="proc~~regrid_weights_conservative~~CalledByGraph_edge4" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M332.3,-54C345.99,-54 360.74,-54 374.4,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="374.59,-57.5 384.59,-54 374.59,-50.5 374.59,-57.5"/>
+</g>
+<!-- proc~driver_validate -->
+<g id="proc~~regrid_weights_conservative~~CalledByGraph_node6" class="node">
+<title>proc~driver_validate</title>
+<g id="a_proc~~regrid_weights_conservative~~CalledByGraph_node6"><a xlink:href="../proc/driver_validate.html" xlink:title="driver_validate">
+<polygon fill="#d9534f" stroke="#d9534f" points="325,-24 233,-24 233,0 325,0 325,-24"/>
+<text text-anchor="middle" x="279" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_validate</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_validate&#45;&gt;proc~engine_setup -->
+<g id="proc~~regrid_weights_conservative~~CalledByGraph_edge5" class="edge">
+<title>proc~driver_validate&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M321.84,-24.04C338.39,-28.8 357.58,-34.32 374.94,-39.31"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="374.33,-42.78 384.91,-42.18 376.27,-36.05 374.33,-42.78"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~regrid_weights_conservative~~CalledByGraph_node7" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~regrid_weights_conservative~~CalledByGraph_node7"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="120,-66 53,-66 53,-42 120,-42 120,-66"/>
+<text text-anchor="middle" x="86.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~regrid_weights_conservative~~CalledByGraph_edge8" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#00ff00" d="M120.25,-54C146.45,-54 183.96,-54 215.83,-54"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="215.95,-57.5 225.95,-54 215.95,-50.5 215.95,-57.5"/>
+</g>
+<!-- proc~rdb_ocean_create_finalize -->
+<g id="proc~~regrid_weights_conservative~~CalledByGraph_node8" class="node">
+<title>proc~rdb_ocean_create_finalize</title>
+<g id="a_proc~~regrid_weights_conservative~~CalledByGraph_node8"><a xlink:href="../proc/rdb_ocean_create_finalize.html" xlink:title="rdb_ocean_create_finalize">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="162,-150 11,-150 11,-126 162,-126 162,-150"/>
+<text text-anchor="middle" x="86.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~regrid_weights_conservative~~CalledByGraph_edge6" class="edge">
+<title>proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M142.09,-125.96C164.41,-121.04 190.39,-115.31 213.63,-110.19"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="214.39,-113.61 223.4,-108.04 212.88,-106.77 214.39,-113.61"/>
+</g>
+<!-- proc~rdb_ocean_create_from_string -->
+<g id="proc~~regrid_weights_conservative~~CalledByGraph_node9" class="node">
+<title>proc~rdb_ocean_create_from_string</title>
+<g id="a_proc~~regrid_weights_conservative~~CalledByGraph_node9"><a xlink:href="../proc/rdb_ocean_create_from_string.html" xlink:title="rdb_ocean_create_from_string">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="173,-108 0,-108 0,-84 173,-84 173,-108"/>
+<text text-anchor="middle" x="86.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_from_string</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~regrid_weights_conservative~~CalledByGraph_edge7" class="edge">
+<title>proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M173.28,-96C181.77,-96 190.37,-96 198.79,-96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="198.97,-99.5 208.97,-96 198.97,-92.5 198.97,-99.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocregrid_weights_conservativeCalledByGraph = svgPanZoom('#procregrid_weights_conservativeCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-local_maxcand"></span>
+              integer,
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>LOCAL_MAXCAND</strong></td>
+<td> =</td>
+                <td>512</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-at_pole"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>at_pole</strong>(4)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-box_hi"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>box_hi</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-box_lo"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>box_lo</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-c_lat0"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>c_lat0</strong>(4)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-c_lon0"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>c_lon0</strong>(4)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cand_area"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cand_area</strong>(LOCAL_MAXCAND)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cand_i"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cand_i</strong>(LOCAL_MAXCAND)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cand_j"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cand_j</strong>(LOCAL_MAXCAND)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cap~11"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cap</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-degenerate"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>degenerate</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~393"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i_cur"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i_cur</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idx_i_tmp"></span>
+              integer,
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>idx_i_tmp</strong>(:,:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idx_j_tmp"></span>
+              integer,
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>idx_j_tmp</strong>(:,:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ii4"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ii4</strong>(4)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ip~2"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ip</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-is_cap"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>is_cap</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~334"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j_orig"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j_orig</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-jf"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>jf</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-jf_hi"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>jf_hi</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-jf_lo"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>jf_lo</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-jj4"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>jj4</strong>(4)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-jmax_g"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>jmax_g</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-jmin_g"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>jmin_g</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-jp~2"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>jp</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~218"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kc~7"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kc</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kref"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kref</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lam~5"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lam</strong>(4)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lam1"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lam1</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lam_max"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lam_max</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lam_min"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lam_min</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lat_e_rad"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lat_e_rad</strong>(nlat+1)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lat_flip~3"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lat_flip</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lat_t~4"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lat_t</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lon_e_rad"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lon_e_rad</strong>(nlon+1)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lon_t~4"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lon_t</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mu~4"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mu</strong>(4)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mu1"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mu1</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mu_e_inc"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mu_e_inc</strong>(nlat+1)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mu_hi"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mu_hi</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mu_lo"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mu_lo</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mu_max"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mu_max</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mu_min"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mu_min</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_cand"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_cand</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ncell"></span>
+              integer,
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>ncell</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ncur"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ncur</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nmax_used"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nmax_used</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-npoly"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>npoly</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-px~14"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>px</strong>(REGRID_POLY_MAXV)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-py~8"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>py</strong>(REGRID_POLY_MAXV)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qx~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qx</strong>(REGRID_POLY_MAXV)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qy~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qy</strong>(REGRID_POLY_MAXV)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sorted_lon"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sorted_lon</strong>(4)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sorted_mu"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sorted_mu</strong>(4)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-span"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>span</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-total_area~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>total_area</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-w_tmp"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>w_tmp</strong>(:,:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ww4"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ww4</strong>(4)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">regrid_weights_conservative</span><span class="p">(</span><span class="n">wts</span><span class="p">,</span><span class="w"> </span><span class="n">nlon</span><span class="p">,</span><span class="w"> </span><span class="n">nlat</span><span class="p">,</span><span class="w"> </span><span class="n">lon_e</span><span class="p">,</span><span class="w"> </span><span class="n">lat_e</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                               </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">n1</span><span class="p">,</span><span class="w"> </span><span class="n">n2</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                               </span><span class="n">geolonBu</span><span class="p">,</span><span class="w"> </span><span class="n">geolatBu</span><span class="p">,</span><span class="w"> </span><span class="n">geolonT</span><span class="p">,</span><span class="w"> </span><span class="n">geolatT</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                               </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">nmax_cap_override</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Per-target-cell area-weighted overlap in the (lon [rad],</span>
+<span class="w">      </span><span class="c">!! mu = sin(lat)) plane, where a lat-lon source box's spherical</span>
+<span class="w">      </span><span class="c">!! area is exactly `R^2 . d(lon) . d(mu)` -- so clipping is planar</span>
+<span class="w">      </span><span class="c">!! there. Bilinear-at-centre fallback for degenerate quads.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nlon</span><span class="p">,</span><span class="w"> </span><span class="n">nlat</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">n1</span><span class="p">,</span><span class="w"> </span><span class="n">n2</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">lon_e</span><span class="p">(</span><span class="n">nlon</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">lat_e</span><span class="p">(</span><span class="n">nlat</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">geolonBu</span><span class="p">(</span><span class="n">n1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">n2</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">geolatBu</span><span class="p">(</span><span class="n">n1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">n2</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">geolonT</span><span class="p">(</span><span class="n">n1</span><span class="p">,</span><span class="w"> </span><span class="n">n2</span><span class="p">),</span><span class="w"> </span><span class="n">geolatT</span><span class="p">(</span><span class="n">n1</span><span class="p">,</span><span class="w"> </span><span class="n">n2</span><span class="p">)</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">regrid_weights_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wts</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ierr</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nmax_cap_override</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">LOCAL_MAXCAND</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">512</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cap</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">ip</span><span class="p">,</span><span class="w"> </span><span class="n">jp</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">kc</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ncur</span><span class="p">,</span><span class="w"> </span><span class="n">nmax_used</span><span class="p">,</span><span class="w"> </span><span class="n">jmin_g</span><span class="p">,</span><span class="w"> </span><span class="n">jmax_g</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">lat_flip</span><span class="p">,</span><span class="w"> </span><span class="n">is_cap</span><span class="p">,</span><span class="w"> </span><span class="n">degenerate</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">at_pole</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kref</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">lat_e_rad</span><span class="p">(</span><span class="n">nlat</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">mu_e_inc</span><span class="p">(</span><span class="n">nlat</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">lon_e_rad</span><span class="p">(</span><span class="n">nlon</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">c_lon0</span><span class="p">(</span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">c_lat0</span><span class="p">(</span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">lam</span><span class="p">(</span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">mu</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sorted_lon</span><span class="p">(</span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">sorted_mu</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">px</span><span class="p">(</span><span class="n">REGRID_POLY_MAXV</span><span class="p">),</span><span class="w"> </span><span class="n">py</span><span class="p">(</span><span class="n">REGRID_POLY_MAXV</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">qx</span><span class="p">(</span><span class="n">REGRID_POLY_MAXV</span><span class="p">),</span><span class="w"> </span><span class="n">qy</span><span class="p">(</span><span class="n">REGRID_POLY_MAXV</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">npoly</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">span</span><span class="p">,</span><span class="w"> </span><span class="n">lam1</span><span class="p">,</span><span class="w"> </span><span class="n">mu1</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">lam_min</span><span class="p">,</span><span class="w"> </span><span class="n">lam_max</span><span class="p">,</span><span class="w"> </span><span class="n">mu_min</span><span class="p">,</span><span class="w"> </span><span class="n">mu_max</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cand_area</span><span class="p">(</span><span class="n">LOCAL_MAXCAND</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cand_i</span><span class="p">(</span><span class="n">LOCAL_MAXCAND</span><span class="p">),</span><span class="w"> </span><span class="n">cand_j</span><span class="p">(</span><span class="n">LOCAL_MAXCAND</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n_cand</span><span class="p">,</span><span class="w"> </span><span class="n">i_cur</span><span class="p">,</span><span class="w"> </span><span class="n">jf</span><span class="p">,</span><span class="w"> </span><span class="n">jf_lo</span><span class="p">,</span><span class="w"> </span><span class="n">jf_hi</span><span class="p">,</span><span class="w"> </span><span class="n">j_orig</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">box_lo</span><span class="p">,</span><span class="w"> </span><span class="n">box_hi</span><span class="p">,</span><span class="w"> </span><span class="n">mu_lo</span><span class="p">,</span><span class="w"> </span><span class="n">mu_hi</span><span class="p">,</span><span class="w"> </span><span class="n">total_area</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">lon_t</span><span class="p">,</span><span class="w"> </span><span class="n">lat_t</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ii4</span><span class="p">(</span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">jj4</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ww4</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">idx_i_tmp</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:),</span><span class="w"> </span><span class="n">idx_j_tmp</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">w_tmp</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ncell</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+
+<span class="w">      </span><span class="n">ierr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">nmax_cap_override</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">cap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nmax_cap_override</span>
+<span class="w">      </span><span class="k">else</span>
+<span class="k">         </span><span class="n">cap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">REGRID_NMAX_CAP</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="k">      do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nlon</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">         </span><span class="n">lon_e_rad</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">lon_e</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="o">*</span><span class="n">DEG2RAD</span>
+<span class="w">      </span><span class="k">end do</span>
+<span class="k">      do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nlat</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">         </span><span class="n">lat_e_rad</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">lat_e</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="o">*</span><span class="n">DEG2RAD</span>
+<span class="w">      </span><span class="k">end do</span>
+
+<span class="k">      </span><span class="n">lat_flip</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">lat_e_rad</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">lat_e_rad</span><span class="p">(</span><span class="n">nlat</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">lat_flip</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">mu_e_inc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">sin</span><span class="p">(</span><span class="n">lat_e_rad</span><span class="p">(</span><span class="n">nlat</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">:</span><span class="mi">1</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+<span class="w">      </span><span class="k">else</span>
+<span class="k">         </span><span class="n">mu_e_inc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">sin</span><span class="p">(</span><span class="n">lat_e_rad</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="k">      </span><span class="n">wts</span><span class="p">%</span><span class="n">nx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nx_phys</span>
+<span class="w">      </span><span class="n">wts</span><span class="p">%</span><span class="n">ny</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ny_phys</span>
+<span class="w">      </span><span class="n">wts</span><span class="p">%</span><span class="n">nsx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nlon</span>
+<span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">idx_i_tmp</span><span class="p">(</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">LOCAL_MAXCAND</span><span class="p">),</span><span class="w"> </span><span class="n">source</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">idx_j_tmp</span><span class="p">(</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">LOCAL_MAXCAND</span><span class="p">),</span><span class="w"> </span><span class="n">source</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">w_tmp</span><span class="p">(</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">LOCAL_MAXCAND</span><span class="p">),</span><span class="w"> </span><span class="n">source</span><span class="o">=</span><span class="mf">0.0_wp</span><span class="p">)</span>
+<span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">ncell</span><span class="p">(</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">),</span><span class="w"> </span><span class="n">source</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">wts</span><span class="p">%</span><span class="n">area_t</span><span class="p">(</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">),</span><span class="w"> </span><span class="n">source</span><span class="o">=</span><span class="mf">0.0_wp</span><span class="p">)</span>
+<span class="w">      </span><span class="n">wts</span><span class="p">%</span><span class="n">n_fallback</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">      </span><span class="n">nmax_used</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">      </span><span class="n">jmin_g</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nlat</span>
+<span class="w">      </span><span class="n">jmax_g</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+
+<span class="w">      </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span>
+<span class="w">         </span><span class="n">jp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nghost</span>
+<span class="w">         </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span>
+<span class="w">            </span><span class="n">ip</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nghost</span>
+
+<span class="w">            </span><span class="c">! ---- build the (lam, mu) target polygon ----</span>
+<span class="w">            </span><span class="n">c_lon0</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">geolonBu</span><span class="p">(</span><span class="n">ip</span><span class="p">,</span><span class="w"> </span><span class="n">jp</span><span class="p">)</span>
+<span class="w">            </span><span class="n">c_lat0</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">geolatBu</span><span class="p">(</span><span class="n">ip</span><span class="p">,</span><span class="w"> </span><span class="n">jp</span><span class="p">)</span>
+<span class="w">            </span><span class="n">c_lon0</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">geolonBu</span><span class="p">(</span><span class="n">ip</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">jp</span><span class="p">)</span>
+<span class="w">            </span><span class="n">c_lat0</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">geolatBu</span><span class="p">(</span><span class="n">ip</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">jp</span><span class="p">)</span>
+<span class="w">            </span><span class="n">c_lon0</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">geolonBu</span><span class="p">(</span><span class="n">ip</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">jp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">            </span><span class="n">c_lat0</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">geolatBu</span><span class="p">(</span><span class="n">ip</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">jp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">            </span><span class="n">c_lon0</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">geolonBu</span><span class="p">(</span><span class="n">ip</span><span class="p">,</span><span class="w"> </span><span class="n">jp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">            </span><span class="n">c_lat0</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">geolatBu</span><span class="p">(</span><span class="n">ip</span><span class="p">,</span><span class="w"> </span><span class="n">jp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">            </span><span class="c">! A corner AT a geographic pole has no meaningful longitude:</span>
+<span class="w">            </span><span class="c">! unwrap around the first non-pole corner and leave pole</span>
+<span class="w">            </span><span class="c">! corners out of the span (they are expanded below).</span>
+<span class="w">            </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span>
+<span class="w">               </span><span class="n">at_pole</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">abs</span><span class="p">(</span><span class="n">c_lat0</span><span class="p">(</span><span class="n">k</span><span class="p">))</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">9</span><span class="mf">0.0_wp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">POLE_TOL_DEG</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">            </span><span class="n">kref</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">            </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">at_pole</span><span class="p">(</span><span class="n">k</span><span class="p">))</span><span class="w"> </span><span class="n">kref</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">k</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">            do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span>
+<span class="w">               </span><span class="n">c_lon0</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c_lon0</span><span class="p">(</span><span class="n">kref</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="nb">modulo</span><span class="p">(</span><span class="n">c_lon0</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">c_lon0</span><span class="p">(</span><span class="n">kref</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">18</span><span class="mf">0.0_wp</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                  </span><span class="mi">36</span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">18</span><span class="mf">0.0_wp</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">            do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span>
+<span class="w">               </span><span class="n">lam</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c_lon0</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="o">*</span><span class="n">DEG2RAD</span>
+<span class="w">               </span><span class="n">mu</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">sin</span><span class="p">(</span><span class="n">c_lat0</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="o">*</span><span class="n">DEG2RAD</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">            </span><span class="n">span</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">maxval</span><span class="p">(</span><span class="n">c_lon0</span><span class="p">,</span><span class="w"> </span><span class="n">mask</span><span class="o">=</span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">at_pole</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nb">minval</span><span class="p">(</span><span class="n">c_lon0</span><span class="p">,</span><span class="w"> </span><span class="n">mask</span><span class="o">=</span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">at_pole</span><span class="p">)</span>
+<span class="w">            </span><span class="n">is_cap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">span</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">18</span><span class="mf">0.0_wp</span>
+
+<span class="w">            </span><span class="n">degenerate</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">is_cap</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">               </span><span class="c">! In (lam, mu) a pole is the whole line mu = +-1, so a pole</span>
+<span class="w">               </span><span class="c">! corner becomes two points on it at its neighbours'</span>
+<span class="w">               </span><span class="c">! longitudes (meridian edges stay vertical, so the cells</span>
+<span class="w">               </span><span class="c">! sharing the pole still tile the plane exactly).</span>
+<span class="w">               </span><span class="n">npoly</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">               </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span>
+<span class="w">                  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">at_pole</span><span class="p">(</span><span class="n">k</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                     </span><span class="n">npoly</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">npoly</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">                     </span><span class="n">px</span><span class="p">(</span><span class="n">npoly</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">lam</span><span class="p">(</span><span class="nb">mod</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">                     </span><span class="n">py</span><span class="p">(</span><span class="n">npoly</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">sign</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="p">,</span><span class="w"> </span><span class="n">c_lat0</span><span class="p">(</span><span class="n">k</span><span class="p">))</span>
+<span class="w">                     </span><span class="n">npoly</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">npoly</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">                     </span><span class="n">px</span><span class="p">(</span><span class="n">npoly</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">lam</span><span class="p">(</span><span class="nb">mod</span><span class="p">(</span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">                     </span><span class="n">py</span><span class="p">(</span><span class="n">npoly</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">sign</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="p">,</span><span class="w"> </span><span class="n">c_lat0</span><span class="p">(</span><span class="n">k</span><span class="p">))</span>
+<span class="w">                  </span><span class="k">else</span>
+<span class="k">                     </span><span class="n">npoly</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">npoly</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">                     </span><span class="n">px</span><span class="p">(</span><span class="n">npoly</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">lam</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">                     </span><span class="n">py</span><span class="p">(</span><span class="n">npoly</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mu</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">end if</span>
+<span class="k">               end do</span>
+<span class="w">               </span><span class="c">! Only a SELF-INTERSECTING (bow-tie) quad is degenerate:</span>
+<span class="w">               </span><span class="c">! Sutherland-Hodgman against a convex box is exact for any</span>
+<span class="w">               </span><span class="c">! simple polygon, concave ones included (cells touching the</span>
+<span class="w">               </span><span class="c">! pole), and a collapsed edge (bipole cells) is harmless.</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">npoly</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">4</span><span class="p">)</span><span class="w"> </span><span class="n">degenerate</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">segments_cross</span><span class="p">(</span><span class="n">px</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">py</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">px</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="n">py</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                           </span><span class="n">px</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="n">py</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="n">px</span><span class="p">(</span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">py</span><span class="p">(</span><span class="mi">4</span><span class="p">))</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                            </span><span class="n">segments_cross</span><span class="p">(</span><span class="n">px</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="n">py</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="n">px</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="n">py</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                           </span><span class="n">px</span><span class="p">(</span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">py</span><span class="p">(</span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">px</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">py</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+<span class="w">            </span><span class="k">else</span>
+<span class="k">               </span><span class="n">sorted_lon</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c_lon0</span>
+<span class="w">               </span><span class="n">sorted_mu</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mu</span>
+<span class="w">               </span><span class="k">call </span><span class="n">sort4</span><span class="p">(</span><span class="n">sorted_lon</span><span class="p">,</span><span class="w"> </span><span class="n">sorted_mu</span><span class="p">)</span>
+<span class="w">               </span><span class="n">lam1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sorted_lon</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="n">DEG2RAD</span>
+<span class="w">               </span><span class="n">mu1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sorted_mu</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="w">               </span><span class="n">npoly</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">7</span>
+<span class="w">               </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span>
+<span class="w">                  </span><span class="n">px</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sorted_lon</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="o">*</span><span class="n">DEG2RAD</span>
+<span class="w">                  </span><span class="n">py</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sorted_mu</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="k">end do</span>
+<span class="k">               </span><span class="n">px</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">lam1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">TWO_PI</span>
+<span class="w">               </span><span class="n">py</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mu1</span>
+<span class="w">               </span><span class="n">px</span><span class="p">(</span><span class="mi">6</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">lam1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">TWO_PI</span>
+<span class="w">               </span><span class="n">py</span><span class="p">(</span><span class="mi">6</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span>
+<span class="w">               </span><span class="n">px</span><span class="p">(</span><span class="mi">7</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">lam1</span>
+<span class="w">               </span><span class="n">py</span><span class="p">(</span><span class="mi">7</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span>
+<span class="w">            </span><span class="k">end if</span>
+
+<span class="k">            </span><span class="n">lon_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">geolonT</span><span class="p">(</span><span class="n">ip</span><span class="p">,</span><span class="w"> </span><span class="n">jp</span><span class="p">)</span>
+<span class="w">            </span><span class="n">lat_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">geolatT</span><span class="p">(</span><span class="n">ip</span><span class="p">,</span><span class="w"> </span><span class="n">jp</span><span class="p">)</span>
+
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">degenerate</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               call </span><span class="n">bilinear_point_from_edges</span><span class="p">(</span><span class="n">nlon</span><span class="p">,</span><span class="w"> </span><span class="n">nlat</span><span class="p">,</span><span class="w"> </span><span class="n">lon_e</span><span class="p">,</span><span class="w"> </span><span class="n">lat_e</span><span class="p">,</span><span class="w"> </span><span class="n">lon_t</span><span class="p">,</span><span class="w"> </span><span class="n">lat_t</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                              </span><span class="n">ii4</span><span class="p">,</span><span class="w"> </span><span class="n">jj4</span><span class="p">,</span><span class="w"> </span><span class="n">ww4</span><span class="p">)</span>
+<span class="w">               </span><span class="n">wts</span><span class="p">%</span><span class="n">n_fallback</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">wts</span><span class="p">%</span><span class="n">n_fallback</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">               </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span>
+<span class="w">                  </span><span class="n">idx_i_tmp</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ii4</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">                  </span><span class="n">idx_j_tmp</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">jj4</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">                  </span><span class="n">w_tmp</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ww4</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="k">end do</span>
+<span class="k">               </span><span class="n">ncell</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">4</span>
+<span class="w">               </span><span class="n">wts</span><span class="p">%</span><span class="n">area_t</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">               </span><span class="n">jmin_g</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">jmin_g</span><span class="p">,</span><span class="w"> </span><span class="nb">minval</span><span class="p">(</span><span class="n">jj4</span><span class="p">))</span>
+<span class="w">               </span><span class="n">jmax_g</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">jmax_g</span><span class="p">,</span><span class="w"> </span><span class="nb">maxval</span><span class="p">(</span><span class="n">jj4</span><span class="p">))</span>
+<span class="w">               </span><span class="n">nmax_used</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">nmax_used</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">)</span>
+<span class="w">               </span><span class="k">cycle</span>
+<span class="k">            end if</span>
+
+<span class="k">            </span><span class="n">lam_min</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">minval</span><span class="p">(</span><span class="n">px</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="n">npoly</span><span class="p">))</span>
+<span class="w">            </span><span class="n">lam_max</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">maxval</span><span class="p">(</span><span class="n">px</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="n">npoly</span><span class="p">))</span>
+<span class="w">            </span><span class="n">mu_min</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">minval</span><span class="p">(</span><span class="n">py</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="n">npoly</span><span class="p">))</span>
+<span class="w">            </span><span class="n">mu_max</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">maxval</span><span class="p">(</span><span class="n">py</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="n">npoly</span><span class="p">))</span>
+
+<span class="w">            </span><span class="c">! ---- j (latitude) candidate range: contiguous in the</span>
+<span class="w">            </span><span class="c">! increasing-mu space, mapped back to the original row index.</span>
+<span class="w">            </span><span class="k">call </span><span class="n">bisect_bracket</span><span class="p">(</span><span class="n">nlat</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">mu_e_inc</span><span class="p">,</span><span class="w"> </span><span class="n">mu_min</span><span class="p">,</span><span class="w"> </span><span class="n">jf_lo</span><span class="p">)</span>
+<span class="w">            </span><span class="k">call </span><span class="n">bisect_bracket</span><span class="p">(</span><span class="n">nlat</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">mu_e_inc</span><span class="p">,</span><span class="w"> </span><span class="n">mu_max</span><span class="p">,</span><span class="w"> </span><span class="n">jf_hi</span><span class="p">)</span>
+<span class="w">            </span><span class="n">jf_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">jf_lo</span><span class="p">)</span>
+<span class="w">            </span><span class="n">jf_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">nlat</span><span class="p">,</span><span class="w"> </span><span class="n">jf_hi</span><span class="p">)</span>
+
+<span class="w">            </span><span class="c">! ---- i (longitude) candidate walk: start at the cell</span>
+<span class="w">            </span><span class="c">! bracketing lam_min in the SAME absolute (unwrapped) frame</span>
+<span class="w">            </span><span class="c">! as the target polygon, then walk east until lam_max is</span>
+<span class="w">            </span><span class="c">! covered (periodic wrap in i, incrementing a 2*pi shift).</span>
+<span class="w">            </span><span class="n">n_cand</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">            </span><span class="k">call </span><span class="n">lon_cell_shifted</span><span class="p">(</span><span class="n">nlon</span><span class="p">,</span><span class="w"> </span><span class="n">lon_e_rad</span><span class="p">,</span><span class="w"> </span><span class="n">lam_min</span><span class="p">,</span><span class="w"> </span><span class="n">i_cur</span><span class="p">,</span><span class="w"> </span><span class="n">box_lo</span><span class="p">,</span><span class="w"> </span><span class="n">box_hi</span><span class="p">)</span>
+<span class="w">            </span><span class="k">do </span><span class="n">kc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nlon</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span>
+<span class="w">               </span><span class="k">do </span><span class="n">jf</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">jf_lo</span><span class="p">,</span><span class="w"> </span><span class="n">jf_hi</span>
+<span class="w">                  </span><span class="n">j_orig</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">merge</span><span class="p">(</span><span class="n">nlat</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">jf</span><span class="p">,</span><span class="w"> </span><span class="n">jf</span><span class="p">,</span><span class="w"> </span><span class="n">lat_flip</span><span class="p">)</span>
+<span class="w">                  </span><span class="n">mu_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mu_e_inc</span><span class="p">(</span><span class="n">jf</span><span class="p">)</span>
+<span class="w">                  </span><span class="n">mu_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mu_e_inc</span><span class="p">(</span><span class="n">jf</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">call </span><span class="n">clip_box</span><span class="p">(</span><span class="n">npoly</span><span class="p">,</span><span class="w"> </span><span class="n">px</span><span class="p">,</span><span class="w"> </span><span class="n">py</span><span class="p">,</span><span class="w"> </span><span class="n">box_lo</span><span class="p">,</span><span class="w"> </span><span class="n">box_hi</span><span class="p">,</span><span class="w"> </span><span class="n">mu_lo</span><span class="p">,</span><span class="w"> </span><span class="n">mu_hi</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                </span><span class="n">ncur</span><span class="p">,</span><span class="w"> </span><span class="n">qx</span><span class="p">,</span><span class="w"> </span><span class="n">qy</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ncur</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                     if</span><span class="w"> </span><span class="p">(</span><span class="n">n_cand</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">LOCAL_MAXCAND</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                        </span><span class="n">n_cand</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">n_cand</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">                        </span><span class="n">cand_i</span><span class="p">(</span><span class="n">n_cand</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i_cur</span>
+<span class="w">                        </span><span class="n">cand_j</span><span class="p">(</span><span class="n">n_cand</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">j_orig</span>
+<span class="w">                        </span><span class="n">cand_area</span><span class="p">(</span><span class="n">n_cand</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="nb">abs</span><span class="p">(</span><span class="n">poly_area2</span><span class="p">(</span><span class="n">ncur</span><span class="p">,</span><span class="w"> </span><span class="n">qx</span><span class="p">,</span><span class="w"> </span><span class="n">qy</span><span class="p">))</span>
+<span class="w">                     </span><span class="k">end if</span>
+<span class="k">                  end if</span>
+<span class="k">               end do</span>
+<span class="k">               if</span><span class="w"> </span><span class="p">(</span><span class="n">box_hi</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">lam_max</span><span class="p">)</span><span class="w"> </span><span class="k">exit</span>
+<span class="k">               </span><span class="n">i_cur</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i_cur</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">i_cur</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">nlon</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">i_cur</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">                  </span><span class="n">box_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">box_hi</span>
+<span class="w">                  </span><span class="n">box_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">box_lo</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">lon_e_rad</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">lon_e_rad</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+<span class="w">               </span><span class="k">else</span>
+<span class="k">                  </span><span class="n">box_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">box_hi</span>
+<span class="w">                  </span><span class="n">box_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">box_lo</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">lon_e_rad</span><span class="p">(</span><span class="n">i_cur</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">lon_e_rad</span><span class="p">(</span><span class="n">i_cur</span><span class="p">))</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">            end do</span>
+
+<span class="k">            </span><span class="n">total_area</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">n_cand</span>
+<span class="w">               </span><span class="n">total_area</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">total_area</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">cand_area</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end do</span>
+
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">n_cand</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">total_area</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mf">1.0e-14_wp</span><span class="o">*</span><span class="nb">max</span><span class="p">(</span><span class="mf">1.0e-30_wp</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                             </span><span class="p">(</span><span class="n">lam_max</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">lam_min</span><span class="p">)</span><span class="o">*</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                             </span><span class="nb">max</span><span class="p">(</span><span class="mf">1.0e-30_wp</span><span class="p">,</span><span class="w"> </span><span class="n">mu_max</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">mu_min</span><span class="p">)))</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="k">then</span>
+<span class="k">               call </span><span class="n">bilinear_point_from_edges</span><span class="p">(</span><span class="n">nlon</span><span class="p">,</span><span class="w"> </span><span class="n">nlat</span><span class="p">,</span><span class="w"> </span><span class="n">lon_e</span><span class="p">,</span><span class="w"> </span><span class="n">lat_e</span><span class="p">,</span><span class="w"> </span><span class="n">lon_t</span><span class="p">,</span><span class="w"> </span><span class="n">lat_t</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                              </span><span class="n">ii4</span><span class="p">,</span><span class="w"> </span><span class="n">jj4</span><span class="p">,</span><span class="w"> </span><span class="n">ww4</span><span class="p">)</span>
+<span class="w">               </span><span class="n">wts</span><span class="p">%</span><span class="n">n_fallback</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">wts</span><span class="p">%</span><span class="n">n_fallback</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">               </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span>
+<span class="w">                  </span><span class="n">idx_i_tmp</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ii4</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">                  </span><span class="n">idx_j_tmp</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">jj4</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">                  </span><span class="n">w_tmp</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ww4</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="k">end do</span>
+<span class="k">               </span><span class="n">ncell</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">4</span>
+<span class="w">               </span><span class="n">wts</span><span class="p">%</span><span class="n">area_t</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">               </span><span class="n">jmin_g</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">jmin_g</span><span class="p">,</span><span class="w"> </span><span class="nb">minval</span><span class="p">(</span><span class="n">jj4</span><span class="p">))</span>
+<span class="w">               </span><span class="n">jmax_g</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">jmax_g</span><span class="p">,</span><span class="w"> </span><span class="nb">maxval</span><span class="p">(</span><span class="n">jj4</span><span class="p">))</span>
+<span class="w">               </span><span class="n">nmax_used</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">nmax_used</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">)</span>
+<span class="w">               </span><span class="k">cycle</span>
+<span class="k">            end if</span>
+
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">n_cand</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">cap</span><span class="p">)</span><span class="w"> </span><span class="n">ierr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">            </span><span class="n">ncell</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">n_cand</span><span class="p">,</span><span class="w"> </span><span class="n">LOCAL_MAXCAND</span><span class="p">)</span>
+<span class="w">            </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ncell</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">               </span><span class="n">idx_i_tmp</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cand_i</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="n">idx_j_tmp</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cand_j</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="n">w_tmp</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cand_area</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="o">/</span><span class="n">total_area</span>
+<span class="w">               </span><span class="n">jmin_g</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">jmin_g</span><span class="p">,</span><span class="w"> </span><span class="n">cand_j</span><span class="p">(</span><span class="n">k</span><span class="p">))</span>
+<span class="w">               </span><span class="n">jmax_g</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">jmax_g</span><span class="p">,</span><span class="w"> </span><span class="n">cand_j</span><span class="p">(</span><span class="n">k</span><span class="p">))</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">            </span><span class="n">wts</span><span class="p">%</span><span class="n">area_t</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">total_area</span>
+<span class="w">            </span><span class="n">nmax_used</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">nmax_used</span><span class="p">,</span><span class="w"> </span><span class="n">ncell</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">))</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">      end do</span>
+
+<span class="k">      </span><span class="n">wts</span><span class="p">%</span><span class="n">nmax</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nmax_used</span>
+<span class="w">      </span><span class="n">wts</span><span class="p">%</span><span class="n">j_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">jmin_g</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="n">wts</span><span class="p">%</span><span class="n">nsy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">nlat</span><span class="p">,</span><span class="w"> </span><span class="n">jmax_g</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">wts</span><span class="p">%</span><span class="n">j_lo</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+
+<span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">wts</span><span class="p">%</span><span class="n">idx_i</span><span class="p">(</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">wts</span><span class="p">%</span><span class="n">nmax</span><span class="p">),</span><span class="w"> </span><span class="n">source</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">wts</span><span class="p">%</span><span class="n">idx_j</span><span class="p">(</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">wts</span><span class="p">%</span><span class="n">nmax</span><span class="p">),</span><span class="w"> </span><span class="n">source</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="k">allocate</span><span class="w"> </span><span class="p">(</span><span class="n">wts</span><span class="p">%</span><span class="n">w</span><span class="p">(</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">wts</span><span class="p">%</span><span class="n">nmax</span><span class="p">),</span><span class="w"> </span><span class="n">source</span><span class="o">=</span><span class="mf">0.0_wp</span><span class="p">)</span>
+<span class="w">      </span><span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span>
+<span class="w">         </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span>
+<span class="w">            </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ncell</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">               </span><span class="n">wts</span><span class="p">%</span><span class="n">idx_i</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">idx_i_tmp</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="n">wts</span><span class="p">%</span><span class="n">idx_j</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">idx_j_tmp</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">wts</span><span class="p">%</span><span class="n">j_lo</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">               </span><span class="n">wts</span><span class="p">%</span><span class="n">w</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">w_tmp</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">         end do</span>
+<span class="k">      end do</span>
+
+<span class="k">      </span><span class="n">wts</span><span class="p">%</span><span class="n">is_init</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">regrid_weights_conservative</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-20 10:28 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

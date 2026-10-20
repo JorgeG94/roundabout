@@ -1,0 +1,2467 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>rdb_ocean_tides &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>rdb_ocean_tides
+      <small>Module</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.3% of total for modules and submodules.">213 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_tides.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_tides.f90.html'>rdb_ocean_tides.F90</a></li>
+            <li class="breadcrumb-item active" aria-current="page">rdb_ocean_tides</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+
+  <div class="row">
+    <div class="col-md-3">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_tides.html#variable-tides_nconst_default">TIDES_NCONST_DEFAULT</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#types-0"
+         aria-expanded="false" aria-controls="types-0">
+         <h4 class="card-header bg-primary text-white">Derived Types</h4>
+      </a>
+      <div id="types-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_tides.html#type-ocean_tides_t">ocean_tides_t</a>
+        </div>
+      </div>
+    </div>
+
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#funcs-0"
+         aria-expanded="false" aria-controls="funcs-0">
+         <h4 class="card-header bg-primary text-white">Functions</h4>
+      </a>
+      <div id="funcs-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_tides.html#proc-ocean_tides_bytes">ocean_tides_bytes</a>
+        </div>
+      </div>
+    </div>
+
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#subs-0"
+         aria-expanded="false" aria-controls="subs-0">
+         <h4 class="card-header bg-primary text-white">Subroutines</h4>
+      </a>
+      <div id="subs-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_tides.html#proc-tides_build_struct">tides_build_struct</a>
+            <a class="list-group-item" href="../module/rdb_ocean_tides.html#proc-tides_configure_astronomy">tides_configure_astronomy</a>
+            <a class="list-group-item" href="../module/rdb_ocean_tides.html#proc-tides_update_eta_eq">tides_update_eta_eq</a>
+            <a class="list-group-item" href="../module/rdb_ocean_tides.html#proc-tides_update_eta_sal">tides_update_eta_sal</a>
+            <a class="list-group-item" href="../module/rdb_ocean_tides.html#proc-ocean_tides_destroy">ocean_tides_destroy</a>
+            <a class="list-group-item" href="../module/rdb_ocean_tides.html#proc-ocean_tides_enter_data">ocean_tides_enter_data</a>
+            <a class="list-group-item" href="../module/rdb_ocean_tides.html#proc-ocean_tides_enter_data_impl">ocean_tides_enter_data_impl</a>
+            <a class="list-group-item" href="../module/rdb_ocean_tides.html#proc-ocean_tides_exit_data">ocean_tides_exit_data</a>
+            <a class="list-group-item" href="../module/rdb_ocean_tides.html#proc-ocean_tides_exit_data_impl">ocean_tides_exit_data_impl</a>
+            <a class="list-group-item" href="../module/rdb_ocean_tides.html#proc-ocean_tides_init">ocean_tides_init</a>
+            <a class="list-group-item" href="../module/rdb_ocean_tides.html#proc-tides_update_eta_eq_impl">tides_update_eta_eq_impl</a>
+            <a class="list-group-item" href="../module/rdb_ocean_tides.html#proc-tides_update_eta_sal_impl">tides_update_eta_sal_impl</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+
+
+  </div>
+
+    </div>
+
+    <div class="col-md-9" id='text'>
+      <p>Equilibrium (astronomical) body-force tidal forcing state for the
+ocean dyn-core (capability C1).  Fills a GPU-resident equilibrium
+tide elevation <code>eta_eq(x,y)</code> from a small set of harmonic
+constituents; the barotropic momentum solve then drives
+<code>-g grad(eta - eta_forcing)</code> (pure surface body force), where
+<code>eta_forcing = eta_eq + eta_sal</code> folds in the scalar self-attraction
+&amp; loading (C2) surface elevation <code>eta_sal = beta_sal*eta</code> (Ray 1998;
+Accad &amp; Pekeris 1978).  With <code>eta_sal = beta*eta</code> the surface term
+becomes the effective-gravity <code>-g(1-beta) grad(eta)</code>; <code>beta</code> is lagged
+one outer step (uses the stage-start barotropic <code>eta</code>).  SAL is
+opt-in (<code>use_sal</code>, default off) — off ⇒ <code>eta_forcing == eta_eq</code>,
+bit-identical to C1.
+MOM6 divergence (intentional): MOM6 scalar SAL scales the whole
+<code>(eta - eta_eq)</code> by <code>(1-beta)</code> (its <code>dgeo_de</code>), damping the body tide by
+<code>beta</code> too; we apply the Accad-Pekeris load <code>eta_sal = beta*eta</code> to the
+ocean surface only (body tide at full strength).  Both are valid scalar
+approximations; they differ by <code>g*beta*grad(eta_eq)</code> (~9% of the tidal
+forcing at <code>beta=0.09</code>).  Internal-tide drag (C4) and OBC-tide
+reconciliation (C3) remain out of scope; the dead <code>use_itd</code>/
+<code>itd_coeff</code>/<code>itd_global_scale</code> scaffolding for C4 was removed (PR-8)
+— PR-29 (barotropic linear wave drag) lands its own
+<code>lwd_drag_u/v</code> map on a different type instead.</p>
+<p>Per-outer-step update decomposes the sum-over-constituents into a
+host-side scalar update (<code>amp_cos</code>, <code>amp_sin</code>; <code>nconst</code> cos/sin
+calls) times a precomputed device-resident spatial structure
+(<code>cos_struct</code>, <code>sin_struct</code>, built once at init from lat/lon), so
+the device kernel does NO per-cell trigonometry and NO reduction —
+2 mul + 1 add per constituent per cell.</p>
+<br>          <div class="card mb-4">
+      <h3 class="card-header card-title bg-light">Uses</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <ul class="list-inline">
+                  <li class="list-inline-item"><a href='http://fortranwiki.org/fortran/show/iso_fortran_env'>iso_fortran_env</a></li>
+                  <li class="list-inline-item"><a href='rdb_ocean_tide_astro.html'>rdb_ocean_tide_astro</a></li>
+                  <li class="list-inline-item"><a href='rdb_grid.html'>rdb_grid</a></li>
+                  <li class="list-inline-item"><a href='rdb_mem_report.html'>rdb_mem_report</a></li>
+                  <li class="list-inline-item"><a href='rdb_constants.html'>rdb_constants</a></li>
+              </ul>
+            </li>
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: module~~rdb_ocean_tides~~UsesGraph Pages: 1 -->
+<svg id="modulerdb_ocean_tidesUsesGraph" width="635pt" height="238pt"
+ viewBox="0.00 0.00 635.00 238.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~rdb_ocean_tides~~UsesGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 234)">
+<title>module~~rdb_ocean_tides~~UsesGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-234 631,-234 631,4 -4,4"/>
+<!-- module~rdb_ocean_tides -->
+<g id="module~~rdb_ocean_tides~~UsesGraph_node1" class="node">
+<title>module~rdb_ocean_tides</title>
+<polygon fill="none" stroke="black" points="627,-84 527,-84 527,-60 627,-60 627,-84"/>
+<text text-anchor="middle" x="577" y="-69.6" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ocean_tides</text>
+</g>
+<!-- iso_fortran_env -->
+<g id="module~~rdb_ocean_tides~~UsesGraph_node2" class="node">
+<title>iso_fortran_env</title>
+<g id="a_module~~rdb_ocean_tides~~UsesGraph_node2"><a xlink:href="http://fortranwiki.org/fortran/show/iso_fortran_env" xlink:title="iso_fortran_env">
+<polygon fill="#337ab7" stroke="#337ab7" points="192,-146 98,-146 98,-122 192,-122 192,-146"/>
+<text text-anchor="middle" x="145" y="-131.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">iso_fortran_env</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_tides&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_ocean_tides~~UsesGraph_edge1" class="edge">
+<title>module~rdb_ocean_tides&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M553.29,-84.01C536.39,-92.69 512.6,-104.35 491,-113 464.12,-123.76 456.97,-125.53 429,-133"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M427,-133C351.19,-153.23 259.71,-148.44 202.19,-142.07"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="202.54,-138.59 192.2,-140.92 201.73,-145.55 202.54,-138.59"/>
+</g>
+<!-- module~rdb_constants -->
+<g id="module~~rdb_ocean_tides~~UsesGraph_node3" class="node">
+<title>module~rdb_constants</title>
+<g id="a_module~~rdb_ocean_tides~~UsesGraph_node3"><a xlink:href="../module/rdb_constants.html" xlink:title="rdb_constants">
+<polygon fill="#337ab7" stroke="#337ab7" points="188.5,-62 101.5,-62 101.5,-38 188.5,-38 188.5,-62"/>
+<text text-anchor="middle" x="145" y="-47.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_constants</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_tides&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ocean_tides~~UsesGraph_edge2" class="edge">
+<title>module~rdb_ocean_tides&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M526.75,-66.87C467.98,-61.16 366.69,-52.65 279.5,-52"/>
+</g>
+<!-- module~rdb_grid -->
+<g id="module~~rdb_ocean_tides~~UsesGraph_node4" class="node">
+<title>module~rdb_grid</title>
+<g id="a_module~~rdb_ocean_tides~~UsesGraph_node4"><a xlink:href="../module/rdb_grid.html" xlink:title="rdb_grid">
+<polygon fill="#337ab7" stroke="#337ab7" points="456.5,-24 399.5,-24 399.5,0 456.5,0 456.5,-24"/>
+<text text-anchor="middle" x="428" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_grid</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_tides&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_ocean_tides~~UsesGraph_edge3" class="edge">
+<title>module~rdb_ocean_tides&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M546.25,-59.86C523.14,-50.43 490.97,-37.29 466.16,-27.17"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="467.3,-23.85 456.71,-23.31 464.65,-30.33 467.3,-23.85"/>
+</g>
+<!-- module~rdb_mem_report -->
+<g id="module~~rdb_ocean_tides~~UsesGraph_node5" class="node">
+<title>module~rdb_mem_report</title>
+<g id="a_module~~rdb_ocean_tides~~UsesGraph_node5"><a xlink:href="../module/rdb_mem_report.html" xlink:title="rdb_mem_report">
+<polygon fill="#337ab7" stroke="#337ab7" points="329,-185 228,-185 228,-161 329,-161 329,-185"/>
+<text text-anchor="middle" x="278.5" y="-170.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_mem_report</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_tides&#45;&gt;module~rdb_mem_report -->
+<g id="module~~rdb_ocean_tides~~UsesGraph_edge4" class="edge">
+<title>module~rdb_ocean_tides&#45;&gt;module~rdb_mem_report</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M427,-133C396.06,-141.26 361.52,-150.62 333.64,-158.21"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="332.42,-154.91 323.69,-160.92 334.26,-161.67 332.42,-154.91"/>
+</g>
+<!-- module~rdb_ocean_tide_astro -->
+<g id="module~~rdb_ocean_tides~~UsesGraph_node6" class="node">
+<title>module~rdb_ocean_tide_astro</title>
+<g id="a_module~~rdb_ocean_tides~~UsesGraph_node6"><a xlink:href="../module/rdb_ocean_tide_astro.html" xlink:title="rdb_ocean_tide_astro">
+<polygon fill="#337ab7" stroke="#337ab7" points="491,-104 365,-104 365,-80 491,-80 491,-104"/>
+<text text-anchor="middle" x="428" y="-89.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_tide_astro</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_tides&#45;&gt;module~rdb_ocean_tide_astro -->
+<g id="module~~rdb_ocean_tides~~UsesGraph_edge5" class="edge">
+<title>module~rdb_ocean_tides&#45;&gt;module~rdb_ocean_tide_astro</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M526.64,-78.72C518.43,-79.83 509.76,-81.01 501.12,-82.19"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="500.46,-78.75 491.02,-83.56 501.4,-85.68 500.46,-78.75"/>
+</g>
+<!-- pic_types -->
+<g id="module~~rdb_ocean_tides~~UsesGraph_node10" class="node">
+<title>pic_types</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="62,-62 0,-62 0,-38 62,-38 62,-62"/>
+<text text-anchor="middle" x="31" y="-47.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_types</text>
+</g>
+<!-- module~rdb_constants&#45;&gt;pic_types -->
+<g id="module~~rdb_ocean_tides~~UsesGraph_edge6" class="edge">
+<title>module~rdb_constants&#45;&gt;pic_types</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M101.34,-50C91.82,-50 81.75,-50 72.32,-50"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="72.02,-46.5 62.02,-50 72.02,-53.5 72.02,-46.5"/>
+</g>
+<!-- module~rdb_grid&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ocean_tides~~UsesGraph_edge7" class="edge">
+<title>module~rdb_grid&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M400.14,-24.02C371.01,-35.92 322.88,-52.32 279.5,-52"/>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M277.5,-52C251.64,-51.81 222.93,-51.39 198.95,-50.99"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="198.7,-47.49 188.64,-50.81 198.58,-54.49 198.7,-47.49"/>
+</g>
+<!-- module~rdb_mem_report&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_ocean_tides~~UsesGraph_edge8" class="edge">
+<title>module~rdb_mem_report&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M236.97,-160.98C224.1,-157.16 209.7,-152.89 196.23,-148.9"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="197.2,-145.53 186.62,-146.05 195.21,-152.25 197.2,-145.53"/>
+</g>
+<!-- module~rdb_mem_report&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ocean_tides~~UsesGraph_edge9" class="edge">
+<title>module~rdb_mem_report&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M267.35,-160.74C245.19,-134.02 194.3,-72.75 192,-71 190.24,-69.66 188.38,-68.38 186.46,-67.16"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="188.18,-64.11 177.75,-62.22 184.72,-70.2 188.18,-64.11"/>
+</g>
+<!-- pic_logger -->
+<g id="module~~rdb_ocean_tides~~UsesGraph_node8" class="node">
+<title>pic_logger</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="179,-188 111,-188 111,-164 179,-164 179,-188"/>
+<text text-anchor="middle" x="145" y="-173.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_logger</text>
+</g>
+<!-- module~rdb_mem_report&#45;&gt;pic_logger -->
+<g id="module~~rdb_ocean_tides~~UsesGraph_edge10" class="edge">
+<title>module~rdb_mem_report&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M227.79,-174.13C215.06,-174.42 201.48,-174.73 189.11,-175.02"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="188.97,-171.52 179.06,-175.25 189.13,-178.52 188.97,-171.52"/>
+</g>
+<!-- pic_strings -->
+<g id="module~~rdb_ocean_tides~~UsesGraph_node9" class="node">
+<title>pic_strings</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="179.5,-230 110.5,-230 110.5,-206 179.5,-206 179.5,-230"/>
+<text text-anchor="middle" x="145" y="-215.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_strings</text>
+</g>
+<!-- module~rdb_mem_report&#45;&gt;pic_strings -->
+<g id="module~~rdb_ocean_tides~~UsesGraph_edge11" class="edge">
+<title>module~rdb_mem_report&#45;&gt;pic_strings</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M242.26,-185.06C225.98,-190.63 206.49,-197.3 189.32,-203.17"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="187.85,-199.98 179.52,-206.53 190.12,-206.6 187.85,-199.98"/>
+</g>
+<!-- module~rdb_ocean_tide_astro&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ocean_tides~~UsesGraph_edge13" class="edge">
+<title>module~rdb_ocean_tide_astro&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M399.33,-79.91C370.13,-68.25 322.48,-52.32 279.5,-52"/>
+</g>
+<!-- module~rdb_calendar -->
+<g id="module~~rdb_ocean_tides~~UsesGraph_node7" class="node">
+<title>module~rdb_calendar</title>
+<g id="a_module~~rdb_ocean_tides~~UsesGraph_node7"><a xlink:href="../module/rdb_calendar.html" xlink:title="rdb_calendar">
+<polygon fill="#337ab7" stroke="#337ab7" points="320,-104 237,-104 237,-80 320,-80 320,-104"/>
+<text text-anchor="middle" x="278.5" y="-89.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_calendar</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_tide_astro&#45;&gt;module~rdb_calendar -->
+<g id="module~~rdb_ocean_tides~~UsesGraph_edge12" class="edge">
+<title>module~rdb_ocean_tide_astro&#45;&gt;module~rdb_calendar</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M364.87,-92C353.3,-92 341.34,-92 330.16,-92"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="330.15,-88.5 320.15,-92 330.15,-95.5 330.15,-88.5"/>
+</g>
+<!-- module~rdb_calendar&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_ocean_tides~~UsesGraph_edge14" class="edge">
+<title>module~rdb_calendar&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M239.82,-104.04C225.37,-108.65 208.71,-113.97 193.46,-118.84"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="192.15,-115.59 183.69,-121.96 194.28,-122.25 192.15,-115.59"/>
+</g>
+<!-- module~rdb_calendar&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_ocean_tides~~UsesGraph_edge15" class="edge">
+<title>module~rdb_calendar&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M239.82,-79.96C225.37,-75.35 208.71,-70.03 193.46,-65.16"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="194.28,-61.75 183.69,-62.04 192.15,-68.41 194.28,-61.75"/>
+</g>
+<!-- pic_ascii -->
+<g id="module~~rdb_ocean_tides~~UsesGraph_node11" class="node">
+<title>pic_ascii</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="174,-104 116,-104 116,-80 174,-80 174,-104"/>
+<text text-anchor="middle" x="145" y="-89.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_ascii</text>
+</g>
+<!-- module~rdb_calendar&#45;&gt;pic_ascii -->
+<g id="module~~rdb_ocean_tides~~UsesGraph_edge16" class="edge">
+<title>module~rdb_calendar&#45;&gt;pic_ascii</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M236.97,-92C220.26,-92 200.98,-92 184.49,-92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="184.1,-88.5 174.1,-92 184.1,-95.5 184.1,-88.5"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsesGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsesGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="518pt" height="32pt"
+ viewBox="0.00 0.00 517.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 513.5,-28 513.5,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24 0,-24 0,0 54,0 54,-24"/>
+<text text-anchor="middle" x="27" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="145.5,-24 72.5,-24 72.5,0 145.5,0 145.5,-24"/>
+<text text-anchor="middle" x="109" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="234,-24 164,-24 164,0 234,0 234,-24"/>
+<text text-anchor="middle" x="199" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="310,-24 252,-24 252,0 310,0 310,-24"/>
+<text text-anchor="middle" x="281" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="386,-24 328,-24 328,0 386,0 386,-24"/>
+<text text-anchor="middle" x="357" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="509.5,-24 404.5,-24 404.5,0 509.5,0 509.5,-24"/>
+<text text-anchor="middle" x="457" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+          <div class="card">
+      <h3 class="card-header card-title bg-light">Used by</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: module~~rdb_ocean_tides~~UsedByGraph Pages: 1 -->
+<svg id="modulerdb_ocean_tidesUsedByGraph" width="641pt" height="270pt"
+ viewBox="0.00 0.00 641.00 270.16" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~rdb_ocean_tides~~UsedByGraph" class="graph" transform="scale(0.58 0.58) rotate(0) translate(4 464.67)">
+<title>module~~rdb_ocean_tides~~UsedByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-464.67 1108,-464.67 1108,4 -4,4"/>
+<!-- module~rdb_ocean_tides -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_node1" class="node">
+<title>module~rdb_ocean_tides</title>
+<polygon fill="none" stroke="black" points="100,-274.72 0,-274.72 0,-250.72 100,-250.72 100,-274.72"/>
+<text text-anchor="middle" x="50" y="-260.32" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ocean_tides</text>
+</g>
+<!-- module~rdb_ocean_dyn -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_node2" class="node">
+<title>module~rdb_ocean_dyn</title>
+<g id="a_module~~rdb_ocean_tides~~UsedByGraph_node2"><a xlink:href="../module/rdb_ocean_dyn.html" xlink:title="rdb_ocean_dyn">
+<polygon fill="#337ab7" stroke="#337ab7" points="230,-294.72 136,-294.72 136,-270.72 230,-270.72 230,-294.72"/>
+<text text-anchor="middle" x="183" y="-280.32" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_dyn</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_tides -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge1" class="edge">
+<title>module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_tides</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M135.81,-275.67C127.55,-274.41 118.85,-273.08 110.28,-271.77"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="110.74,-268.3 100.32,-270.25 109.68,-275.22 110.74,-268.3"/>
+</g>
+<!-- module~rdb_ocean_setup -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_node3" class="node">
+<title>module~rdb_ocean_setup</title>
+<g id="a_module~~rdb_ocean_tides~~UsedByGraph_node3"><a xlink:href="../module/rdb_ocean_setup.html" xlink:title="rdb_ocean_setup">
+<polygon fill="#337ab7" stroke="#337ab7" points="523.5,-294.72 420.5,-294.72 420.5,-270.72 523.5,-270.72 523.5,-294.72"/>
+<text text-anchor="middle" x="472" y="-280.32" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_tides -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge2" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_tides</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M440.03,-270.7C409.34,-259.75 360.73,-244.94 317,-242.72"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M315,-242.72C256.85,-239.76 241.22,-231.98 184,-242.72"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge7" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M315,-242.72C280.04,-240.94 241.98,-254.43 215.93,-266.22"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="214.13,-263.2 206.57,-270.62 217.11,-269.53 214.13,-263.2"/>
+</g>
+<!-- module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_node4" class="node">
+<title>module~rdb_ocean_state</title>
+<g id="a_module~~rdb_ocean_tides~~UsedByGraph_node4"><a xlink:href="../module/rdb_ocean_state.html" xlink:title="rdb_ocean_state">
+<polygon fill="#337ab7" stroke="#337ab7" points="366,-194.72 266,-194.72 266,-170.72 366,-170.72 366,-194.72"/>
+<text text-anchor="middle" x="316" y="-180.32" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge21" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M431.55,-270.61C421.58,-266.81 411.12,-262.17 402,-256.72 388.3,-248.53 357.53,-220.72 337.02,-201.63"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="339.41,-199.07 329.72,-194.8 334.63,-204.18 339.41,-199.07"/>
+</g>
+<!-- module~rdb_ocean_state&#45;&gt;module~rdb_ocean_tides -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge3" class="edge">
+<title>module~rdb_ocean_state&#45;&gt;module~rdb_ocean_tides</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M296.46,-194.77C271.92,-209.86 226.78,-234.69 184,-242.72"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M182,-242.72C158.67,-247.1 132.86,-251.2 110.36,-254.53"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="109.67,-251.09 100.28,-256.01 110.68,-258.02 109.67,-251.09"/>
+</g>
+<!-- module~rdb_ocean_state&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge8" class="edge">
+<title>module~rdb_ocean_state&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M302.7,-194.85C286.74,-210.25 257.64,-237.18 230,-256.72 225.71,-259.75 221.04,-262.73 216.37,-265.52"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="214.41,-262.61 207.49,-270.64 217.9,-268.68 214.41,-262.61"/>
+</g>
+<!-- module~rdb_driver -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_node5" class="node">
+<title>module~rdb_driver</title>
+<g id="a_module~~rdb_ocean_tides~~UsedByGraph_node5"><a xlink:href="../module/rdb_driver.html" xlink:title="rdb_driver">
+<polygon fill="#337ab7" stroke="#337ab7" points="974,-295.72 907,-295.72 907,-271.72 974,-271.72 974,-295.72"/>
+<text text-anchor="middle" x="940.5" y="-281.32" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge4" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M811.5,-409.72C793.15,-410.82 668.05,-442.26 650.5,-447.72"/>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge16" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M934.24,-295.83C919.94,-326.64 877.11,-405.91 813.5,-409.72"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M811.5,-409.72C700.61,-416.35 786.51,-266.44 721,-176.72 697.24,-144.18 690.66,-123.02 650.5,-119.72"/>
+</g>
+<!-- module~rdb_ocean_engine -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_node10" class="node">
+<title>module~rdb_ocean_engine</title>
+<g id="a_module~~rdb_ocean_tides~~UsedByGraph_node10"><a xlink:href="../module/rdb_ocean_engine.html" xlink:title="rdb_ocean_engine">
+<polygon fill="#337ab7" stroke="#337ab7" points="868,-131.72 757,-131.72 757,-107.72 868,-107.72 868,-131.72"/>
+<text text-anchor="middle" x="812.5" y="-117.32" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge31" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M930.23,-271.66C908.75,-243.7 855.37,-174.22 828.89,-139.76"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="831.65,-137.59 822.78,-131.8 826.1,-141.86 831.65,-137.59"/>
+</g>
+<!-- module~rdb_handle -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_node6" class="node">
+<title>module~rdb_handle</title>
+<g id="a_module~~rdb_ocean_tides~~UsedByGraph_node6"><a xlink:href="../module/rdb_handle.html" xlink:title="rdb_handle">
+<polygon fill="#337ab7" stroke="#337ab7" points="977,-91.72 904,-91.72 904,-67.72 977,-67.72 977,-91.72"/>
+<text text-anchor="middle" x="940.5" y="-77.32" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_handle&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge17" class="edge">
+<title>module~rdb_handle&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M903.74,-69.96C797.63,-41.88 486.71,33.93 402,-17.72 350.17,-49.32 328.59,-123.78 320.81,-160.89"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="317.37,-160.23 318.89,-170.71 324.24,-161.57 317.37,-160.23"/>
+</g>
+<!-- module~rdb_handle&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge32" class="edge">
+<title>module~rdb_handle&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M903.73,-91.07C890.49,-95.28 875.26,-100.11 861.13,-104.6"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="860.03,-101.27 851.56,-107.64 862.15,-107.95 860.03,-101.27"/>
+</g>
+<!-- module~rdb_ocean_api -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_node7" class="node">
+<title>module~rdb_ocean_api</title>
+<g id="a_module~~rdb_ocean_tides~~UsedByGraph_node7"><a xlink:href="../module/rdb_ocean_api.html" xlink:title="rdb_ocean_api">
+<polygon fill="#337ab7" stroke="#337ab7" points="1104,-111.72 1013,-111.72 1013,-87.72 1104,-87.72 1104,-111.72"/>
+<text text-anchor="middle" x="1058.5" y="-97.32" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge5" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1055.19,-111.88C1044.77,-162.68 997.01,-358.26 868,-423.72 781.27,-467.73 743.37,-418.83 650.5,-447.72"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_handle -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge25" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_handle</title>
+<path fill="none" stroke="#ff6600" stroke-dasharray="5,2" d="M1012.98,-92.04C1004.53,-90.59 995.68,-89.06 987.2,-87.6"/>
+<polygon fill="#ff6600" stroke="#ff6600" points="987.53,-84.1 977.08,-85.85 986.34,-91 987.53,-84.1"/>
+</g>
+<!-- module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_node8" class="node">
+<title>module~rdb_ocean_diag_derived</title>
+<g id="a_module~~rdb_ocean_tides~~UsedByGraph_node8"><a xlink:href="../module/rdb_ocean_diag_derived.html" xlink:title="rdb_ocean_diag_derived">
+<polygon fill="#337ab7" stroke="#337ab7" points="721,-90.72 578,-90.72 578,-66.72 721,-66.72 721,-90.72"/>
+<text text-anchor="middle" x="649.5" y="-76.32" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_derived</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge26" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_derived</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M811.5,-1.72C758.01,-4.83 703.32,-38.87 673.46,-60.64"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="671.28,-57.9 665.37,-66.68 675.47,-63.5 671.28,-57.9"/>
+</g>
+<!-- module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_node9" class="node">
+<title>module~rdb_ocean_diag_fills</title>
+<g id="a_module~~rdb_ocean_tides~~UsedByGraph_node9"><a xlink:href="../module/rdb_ocean_diag_fills.html" xlink:title="rdb_ocean_diag_fills">
+<polygon fill="#337ab7" stroke="#337ab7" points="532.5,-50.72 411.5,-50.72 411.5,-26.72 532.5,-26.72 532.5,-50.72"/>
+<text text-anchor="middle" x="472" y="-36.32" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_fills</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge28" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#65ff00" stroke-dasharray="5,2" d="M1041.52,-87.56C1003.77,-60.16 905.33,3.62 813.5,-1.72"/>
+<path fill="none" stroke="#65ff00" stroke-dasharray="5,2" d="M811.5,-1.72C717.57,2.95 609.66,-12.47 541.42,-24.82"/>
+<polygon fill="#65ff00" stroke="#65ff00" points="540.44,-21.44 531.24,-26.69 541.7,-28.32 540.44,-21.44"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge33" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1012.75,-103.39C975.13,-106.47 920.85,-110.92 878.45,-114.39"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="877.9,-110.93 868.22,-115.23 878.47,-117.9 877.9,-110.93"/>
+</g>
+<!-- module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge18" class="edge">
+<title>module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M607.82,-90.76C597.64,-94.71 587.04,-99.67 578,-105.72 558.66,-118.64 562.5,-132.73 542,-143.72 490.57,-171.29 423.89,-180.05 376.51,-182.51"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="376.24,-179.02 366.4,-182.96 376.55,-186.01 376.24,-179.02"/>
+</g>
+<!-- module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge29" class="edge">
+<title>module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#65ff00" stroke-dasharray="5,2" d="M595.84,-66.72C576.93,-62.41 555.41,-57.5 535.72,-53.01"/>
+<polygon fill="#65ff00" stroke="#65ff00" points="536.45,-49.59 525.92,-50.78 534.89,-56.42 536.45,-49.59"/>
+</g>
+<!-- module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge19" class="edge">
+<title>module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M417.98,-50.76C412.31,-53.22 406.85,-56.17 402,-59.72 365.41,-86.44 339.2,-133.91 326.22,-161.41"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="323.01,-160.01 322.05,-170.56 329.38,-162.92 323.01,-160.01"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge6" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M811.86,-131.85C812.52,-177.83 808.5,-343.1 721,-428.72 697.81,-451.42 681.29,-437.47 650.5,-447.72"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M648.5,-447.72C477.15,-504.74 272.66,-355.64 206.11,-301.49"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="207.93,-298.46 197.99,-294.79 203.48,-303.86 207.93,-298.46"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge9" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M756.75,-130.45C692.17,-143.52 591.78,-165.26 578,-176.72 548.02,-201.65 570.42,-230.02 542,-256.72 538.25,-260.24 533.97,-263.3 529.43,-265.96"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="527.73,-262.89 520.43,-270.57 530.92,-269.12 527.73,-262.89"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge20" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M756.68,-121.36C725.52,-121.88 685.79,-121.86 650.5,-119.72"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M648.5,-119.72C616.52,-117.78 602.54,-114.13 578,-134.72 545.31,-162.14 577.38,-199.87 542,-223.72 481.02,-264.84 390.48,-224.98 345.09,-199.81"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="346.8,-196.75 336.38,-194.85 343.33,-202.84 346.8,-196.75"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge27" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M764.07,-107.64C746.37,-103.13 726.11,-97.97 707.63,-93.27"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="708.43,-89.86 697.87,-90.78 706.7,-96.64 708.43,-89.86"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge30" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#65ff00" stroke-dasharray="5,2" d="M798.64,-107.59C782.13,-92.85 751.9,-68.6 721,-57.72 663.37,-37.42 593.68,-33.76 542.87,-34.54"/>
+<polygon fill="#65ff00" stroke="#65ff00" points="542.57,-31.05 532.64,-34.76 542.72,-38.05 542.57,-31.05"/>
+</g>
+<!-- module~rdb_ocean_setup_bc -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_node11" class="node">
+<title>module~rdb_ocean_setup_bc</title>
+<g id="a_module~~rdb_ocean_tides~~UsedByGraph_node11"><a xlink:href="../module/rdb_ocean_setup_bc.html" xlink:title="rdb_ocean_setup_bc">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="710,-419.72 589,-419.72 589,-395.72 710,-395.72 710,-419.72"/>
+<text text-anchor="middle" x="649.5" y="-405.32" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_bc</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_bc&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge10" class="edge">
+<title>module~rdb_ocean_setup_bc&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#00ff00" d="M597.17,-395.7C590.5,-393.2 583.93,-390.23 578,-386.72 540.65,-364.58 506.8,-326.27 488.14,-302.84"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="490.89,-300.67 481.98,-294.94 485.37,-304.97 490.89,-300.67"/>
+</g>
+<!-- module~rdb_ocean_setup_bt -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_node12" class="node">
+<title>module~rdb_ocean_setup_bt</title>
+<g id="a_module~~rdb_ocean_tides~~UsedByGraph_node12"><a xlink:href="../module/rdb_ocean_setup_bt.html" xlink:title="rdb_ocean_setup_bt">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="709,-377.72 590,-377.72 590,-353.72 709,-353.72 709,-377.72"/>
+<text text-anchor="middle" x="649.5" y="-363.32" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_bt</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_bt&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge11" class="edge">
+<title>module~rdb_ocean_setup_bt&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#00ff00" d="M602.03,-353.64C593.9,-351.03 585.61,-348.04 578,-344.72 549.77,-332.4 519.72,-314.06 499.03,-300.52"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="500.77,-297.47 490.5,-294.86 496.9,-303.31 500.77,-297.47"/>
+</g>
+<!-- module~rdb_ocean_setup_cavity -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_node13" class="node">
+<title>module~rdb_ocean_setup_cavity</title>
+<g id="a_module~~rdb_ocean_tides~~UsedByGraph_node13"><a xlink:href="../module/rdb_ocean_setup_cavity.html" xlink:title="rdb_ocean_setup_cavity">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="719.5,-335.72 579.5,-335.72 579.5,-311.72 719.5,-311.72 719.5,-335.72"/>
+<text text-anchor="middle" x="649.5" y="-321.32" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_cavity</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_cavity&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge12" class="edge">
+<title>module~rdb_ocean_setup_cavity&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#00ff00" d="M596.79,-311.64C576.98,-307.01 554.2,-301.69 533.63,-296.88"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="534.27,-293.44 523.73,-294.57 532.67,-300.25 534.27,-293.44"/>
+</g>
+<!-- module~rdb_ocean_setup_grid -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_node14" class="node">
+<title>module~rdb_ocean_setup_grid</title>
+<g id="a_module~~rdb_ocean_tides~~UsedByGraph_node14"><a xlink:href="../module/rdb_ocean_setup_grid.html" xlink:title="rdb_ocean_setup_grid">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="714.5,-293.72 584.5,-293.72 584.5,-269.72 714.5,-269.72 714.5,-293.72"/>
+<text text-anchor="middle" x="649.5" y="-279.32" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_grid</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_grid&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge13" class="edge">
+<title>module~rdb_ocean_setup_grid&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#00ff00" d="M584.15,-282.09C567.78,-282.18 550.23,-282.28 534.03,-282.37"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="533.59,-278.87 523.61,-282.43 533.63,-285.87 533.59,-278.87"/>
+</g>
+<!-- module~rdb_ocean_setup_lateral -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_node15" class="node">
+<title>module~rdb_ocean_setup_lateral</title>
+<g id="a_module~~rdb_ocean_tides~~UsedByGraph_node15"><a xlink:href="../module/rdb_ocean_setup_lateral.html" xlink:title="rdb_ocean_setup_lateral">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="721,-251.72 578,-251.72 578,-227.72 721,-227.72 721,-251.72"/>
+<text text-anchor="middle" x="649.5" y="-237.32" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_lateral</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_lateral&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge14" class="edge">
+<title>module~rdb_ocean_setup_lateral&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#00ff00" d="M599.15,-251.81C578.22,-256.94 553.67,-262.95 531.81,-268.31"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="530.86,-264.94 521.98,-270.72 532.53,-271.74 530.86,-264.94"/>
+</g>
+<!-- module~rdb_ocean_setup_vmix -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_node16" class="node">
+<title>module~rdb_ocean_setup_vmix</title>
+<g id="a_module~~rdb_ocean_tides~~UsedByGraph_node16"><a xlink:href="../module/rdb_ocean_setup_vmix.html" xlink:title="rdb_ocean_setup_vmix">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="716.5,-209.72 582.5,-209.72 582.5,-185.72 716.5,-185.72 716.5,-209.72"/>
+<text text-anchor="middle" x="649.5" y="-195.32" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_vmix</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_vmix&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge15" class="edge">
+<title>module~rdb_ocean_setup_vmix&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#00ff00" d="M596.32,-209.85C589.93,-212.31 583.66,-215.24 578,-218.72 558.18,-230.9 561.38,-243.84 542,-256.72 536.34,-260.48 530.06,-263.8 523.66,-266.7"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="522.13,-263.54 514.26,-270.64 524.84,-270 522.13,-263.54"/>
+</g>
+<!-- module~rdb_ocean_state_restart -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_node17" class="node">
+<title>module~rdb_ocean_state_restart</title>
+<g id="a_module~~rdb_ocean_tides~~UsedByGraph_node17"><a xlink:href="../module/rdb_ocean_state_restart.html" xlink:title="rdb_ocean_state_restart">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="542,-214.72 402,-214.72 402,-190.72 542,-190.72 542,-214.72"/>
+<text text-anchor="middle" x="472" y="-200.32" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_restart</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_state_restart&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge22" class="edge">
+<title>module~rdb_ocean_state_restart&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#0000ff" d="M401.66,-193.71C393.14,-192.61 384.51,-191.49 376.16,-190.4"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="376.53,-186.92 366.16,-189.1 375.62,-193.86 376.53,-186.92"/>
+</g>
+<!-- module~rdb_ocean_state_seed -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_node18" class="node">
+<title>module~rdb_ocean_state_seed</title>
+<g id="a_module~~rdb_ocean_tides~~UsedByGraph_node18"><a xlink:href="../module/rdb_ocean_state_seed.html" xlink:title="rdb_ocean_state_seed">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="537.5,-134.72 406.5,-134.72 406.5,-110.72 537.5,-110.72 537.5,-134.72"/>
+<text text-anchor="middle" x="472" y="-120.32" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_seed</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_state_seed&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge23" class="edge">
+<title>module~rdb_ocean_state_seed&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#0000ff" d="M438.65,-134.75C427.07,-139.1 413.93,-144.08 402,-148.72 387.07,-154.52 370.73,-161.02 356.4,-166.77"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="354.81,-163.63 346.84,-170.61 357.42,-170.13 354.81,-163.63"/>
+</g>
+<!-- module~rdb_ocean_state_topo -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_node19" class="node">
+<title>module~rdb_ocean_state_topo</title>
+<g id="a_module~~rdb_ocean_tides~~UsedByGraph_node19"><a xlink:href="../module/rdb_ocean_state_topo.html" xlink:title="rdb_ocean_state_topo">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="537,-92.72 407,-92.72 407,-68.72 537,-68.72 537,-92.72"/>
+<text text-anchor="middle" x="472" y="-78.32" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_topo</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_state_topo&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_ocean_tides~~UsedByGraph_edge24" class="edge">
+<title>module~rdb_ocean_state_topo&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#0000ff" d="M421.19,-92.81C414.52,-95.3 407.95,-98.25 402,-101.72 374.52,-117.76 348.95,-144.35 333.18,-162.67"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="330.41,-160.53 326.65,-170.43 335.76,-165.03 330.41,-160.53"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panmodulerdb_ocean_tidesUsedByGraph = svgPanZoom('#modulerdb_ocean_tidesUsedByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsedByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsedByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="518pt" height="32pt"
+ viewBox="0.00 0.00 517.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 513.5,-28 513.5,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24 0,-24 0,0 54,0 54,-24"/>
+<text text-anchor="middle" x="27" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="145.5,-24 72.5,-24 72.5,0 145.5,0 145.5,-24"/>
+<text text-anchor="middle" x="109" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="234,-24 164,-24 164,0 234,0 234,-24"/>
+<text text-anchor="middle" x="199" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="310,-24 252,-24 252,0 310,0 310,-24"/>
+<text text-anchor="middle" x="281" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="386,-24 328,-24 328,0 386,0 386,-24"/>
+<text text-anchor="middle" x="357" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="509.5,-24 404.5,-24 404.5,0 509.5,0 509.5,-24"/>
+<text text-anchor="middle" x="457" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+      <br>
+
+
+        <section>
+          <h2>Variables</h2>
+            <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tides_nconst_default"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>TIDES_NCONST_DEFAULT</strong></td>
+<td> =</td>
+                <td>8</td>
+            <td>
+                <p>Standard constituents: M2 S2 N2 K2 K1 O1 P1 Q1.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+        </section>
+        <br>
+
+
+
+
+        <section>
+          <h2>Derived Types</h2>
+              <div class="card">
+    <div class="card-header codesum">
+      <span class="anchor" id="type-ocean_tides_t"></span>
+      <h3>
+        type, public&nbsp;::&nbsp;
+        <a href='../type/ocean_tides_t.html'>ocean_tides_t</a>
+        
+      </h3>
+    </div>
+    <div class="card-body">
+      
+
+        <h4>Components</h4>
+          <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-amp_c"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>amp_c</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>(nconst) equilibrium amplitudes A (m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-amp_cos"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>amp_cos</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>(nconst) per-step scratch A<em>love</em>f<em>cos(omega</em>now+V+u).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-amp_sin"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>amp_sin</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>(nconst) per-step scratch A<em>love</em>f*sin(&hellip;).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-beta_sal"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>beta_sal</strong></td>
+<td> =</td>
+                <td>0.0_wp</td>
+            <td>
+<p>Scalar SAL factor beta (~0.085-0.12; C2).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cos_struct"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>cos_struct</strong>(:,:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>(nx,ny,3) cos-part spatial structure per species slice.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-enable"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>enable</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+<p>Master switch (default off =&gt; bit-identical).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eta_eq"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>eta_eq</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>(nx,ny) equilibrium tide elevation (m) at cell centres.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eta_forcing~2"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>eta_forcing</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>(nx,ny) combined seam field <code>eta_eq + eta_sal</code> — the surface
+elevation the barotropic PGF drives <code>-g grad(eta - .)</code> against.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eta_sal"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>eta_sal</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>(nx,ny) scalar-SAL elevation (m); <code>beta_sal*eta</code> (C2).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f_nodal"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>f_nodal</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>(nconst) nodal amplitude factor (fixed at nodal_ref_date).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-is_init~7"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>is_init</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+<p>True between <code>init</code> and <code>destroy</code> (tracks GPU attachment too).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-love_c"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>love_c</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>(nconst) Love-number factors.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nconst"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nconst</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+<p>Number of active harmonic constituents.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-omega_c"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>omega_c</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>(nconst) angular frequencies (rad/s).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-phase0"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>phase0</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>(nconst) equilibrium argument V_c at ref_date (rad).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sin_struct"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>sin_struct</strong>(:,:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>(nx,ny,3) sin-part spatial structure per species slice.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-species_c"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>species_c</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>(nconst) structure-slice index 1/2/3 (diurnal/semidi/long-per).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_epoch"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t_epoch</strong></td>
+<td> =</td>
+                <td>0.0_wp</td>
+            <td>
+<p>Seconds from ref_date to the model&rsquo;s t=0 (v1: 0).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-u_nodal"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>u_nodal</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>(nconst) nodal phase (rad).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-use_sal"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>use_sal</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+<p>Apply scalar self-attraction &amp; loading (C2).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+
+
+        <h4>Type-Bound Procedures</h4>
+        <table class="table table-striped varlist">
+          <tbody>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/ocean_tides_t.html#boundprocedure-bytes~13'>bytes</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_tides_bytes.html'>ocean_tides_bytes</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/ocean_tides_t.html#boundprocedure-destroy~9'>destroy</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_tides_destroy.html'>ocean_tides_destroy</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/ocean_tides_t.html#boundprocedure-enter_data~4'>enter_data</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_tides_enter_data.html'>ocean_tides_enter_data</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/ocean_tides_t.html#boundprocedure-exit_data~4'>exit_data</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_tides_exit_data.html'>ocean_tides_exit_data</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/ocean_tides_t.html#boundprocedure-init~7'>init</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/ocean_tides_init.html'>ocean_tides_init</a></td>
+                  <td></td>
+              </tr>
+          </tbody>
+        </table>
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+        <section>
+          <h2>Functions</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_tides_bytes"></span> <h3>private pure function <a href='../proc/ocean_tides_bytes.html'>ocean_tides_bytes</a>(this) result(nbytes)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Counted allocatable footprint of the tides slot
+(0 when unallocated). One arr_bytes term per array — add a
+term here when a new allocatable joins the type.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~120"></span>
+              class(<a href='../type/ocean_tides_t.html'>ocean_tides_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>integer(kind=int64)</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+        <section>
+          <h2>Subroutines</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-tides_build_struct"></span> <h3>public  subroutine <a href='../proc/tides_build_struct.html'>tides_build_struct</a>(this, geolat, geolon, nx, ny)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Build the (nx,ny,3) cos/sin spatial-structure arrays from cell-
+centre latitude/longitude (degrees), via the angle-sum fold
+cos(theta + n<em>lambda) = cos(theta)cos(n</em>lambda) - sin(theta)sin(n*lambda).
+Plain host loop over all cells incl. ghosts (before enter_data).
+  slice 1 diurnal    (n=1): G1 = sin(2 phi)
+  slice 2 semidiurnal(n=2): G2 = cos^2 phi
+  slice 3 long-period(n=0): G0 = 1/2 - 3/2 sin^2 phi</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~113"></span>
+              class(<a href='../type/ocean_tides_t.html'>ocean_tides_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-geolat"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>geolat</strong>(nx,ny)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-geolon"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>geolon</strong>(nx,ny)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~75"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~75"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-tides_configure_astronomy"></span> <h3>public  subroutine <a href='../proc/tides_configure_astronomy.html'>tides_configure_astronomy</a>(this, cat_idx, nconst, dref, dnodal, add_nodal, nx, ny)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Allocate the active-constituent arrays + 2D fields and fill the
+catalog copies + astronomy (phase0, nodal f/u) at the reference
+and nodal reference day numbers.  Host-side setup (before
+enter_data).  <code>cat_idx(1:nconst)</code> are catalog indices
+(1..TIDES_CATALOG_SIZE).</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~112"></span>
+              class(<a href='../type/ocean_tides_t.html'>ocean_tides_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cat_idx"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cat_idx</strong>(nconst)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nconst~2"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nconst</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dref"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dref</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dnodal"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dnodal</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-add_nodal"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>add_nodal</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~74"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~74"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-tides_update_eta_eq"></span> <h3>public  subroutine <a href='../proc/tides_update_eta_eq.html'>tides_update_eta_eq</a>(this, t)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Refresh <code>eta_eq(x,y)</code> for the current outer-step time <code>t</code> (s).
+Host recomputes the <code>nconst</code> amplitude scalars, pushes them to
+the device, then a <code>do concurrent</code> fills <code>eta_eq</code> with no
+per-cell trig and no reduction.  Held static across the inner
+barotropic substep loop.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~114"></span>
+              type(<a href='../type/ocean_tides_t.html'>ocean_tides_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t~17"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-tides_update_eta_sal"></span> <h3>public  subroutine <a href='../proc/tides_update_eta_sal.html'>tides_update_eta_sal</a>(this, eta_current)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Refresh the combined seam field <code>eta_forcing</code> for the current
+outer step.  Scalar self-attraction &amp; loading (C2): when
+<code>use_sal</code>, <code>eta_sal = beta_sal*eta_current</code> and
+<code>eta_forcing = eta_eq + eta_sal</code>; otherwise <code>eta_forcing = eta_eq</code>
+(bit-identical to C1).  <code>eta_current</code> is the lagged (stage-start,
+previous outer step) barotropic surface elevation.  Host does no
+work; the fill is a single explicit-shape <code>do concurrent</code>.  Must
+be called AFTER <code>tides_update_eta_eq</code> (reads the fresh <code>eta_eq</code>).</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~115"></span>
+              type(<a href='../type/ocean_tides_t.html'>ocean_tides_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eta_current"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eta_current</strong>(:,:)</td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_tides_destroy"></span> <h3>private  subroutine <a href='../proc/ocean_tides_destroy.html'>ocean_tides_destroy</a>(this)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~111"></span>
+              class(<a href='../type/ocean_tides_t.html'>ocean_tides_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_tides_enter_data"></span> <h3>private  subroutine <a href='../proc/ocean_tides_enter_data.html'>ocean_tides_enter_data</a>(this)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Attach the device-resident tide arrays.  Only when enabled.
+select-type -&gt; non-poly <code>_impl</code> (AMD libomptarget class-box rule).</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~116"></span>
+              class(<a href='../type/ocean_tides_t.html'>ocean_tides_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_tides_enter_data_impl"></span> <h3>private  subroutine <a href='../proc/ocean_tides_enter_data_impl.html'>ocean_tides_enter_data_impl</a>(this)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~117"></span>
+              type(<a href='../type/ocean_tides_t.html'>ocean_tides_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_tides_exit_data"></span> <h3>private  subroutine <a href='../proc/ocean_tides_exit_data.html'>ocean_tides_exit_data</a>(this)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~118"></span>
+              class(<a href='../type/ocean_tides_t.html'>ocean_tides_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_tides_exit_data_impl"></span> <h3>private  subroutine <a href='../proc/ocean_tides_exit_data_impl.html'>ocean_tides_exit_data_impl</a>(this)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~119"></span>
+              type(<a href='../type/ocean_tides_t.html'>ocean_tides_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-ocean_tides_init"></span> <h3>private  subroutine <a href='../proc/ocean_tides_init.html'>ocean_tides_init</a>(this, grid)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Minimal init — the real allocation + astronomy fill happens in
+<code>tides_configure_astronomy</code> / <code>tides_build_struct</code> once the
+namelist + metrics are available (host, before enter_data).</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~110"></span>
+              class(<a href='../type/ocean_tides_t.html'>ocean_tides_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~61"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-tides_update_eta_eq_impl"></span> <h3>private  subroutine <a href='../proc/tides_update_eta_eq_impl.html'>tides_update_eta_eq_impl</a>(nx, ny, nconst, species_c, amp_cos, amp_sin, cos_struct, sin_struct, eta_eq)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Flat-impl device fill (explicit-shape dummies — no descriptor
+walk).  eta_eq(i,j) = sum_c amp_cos(c)<em>cos_struct(i,j,m)
+                           + amp_sin(c)</em>sin_struct(i,j,m),
+m = species_c(c).  Contiguous index (i) innermost.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~77"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~77"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nconst~3"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nconst</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-species_c~2"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>species_c</strong>(nconst)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-amp_cos~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>amp_cos</strong>(nconst)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-amp_sin~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>amp_sin</strong>(nconst)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cos_struct~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cos_struct</strong>(nx,ny,3)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sin_struct~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sin_struct</strong>(nx,ny,3)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eta_eq~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eta_eq</strong>(nx,ny)</td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-tides_update_eta_sal_impl"></span> <h3>private  subroutine <a href='../proc/tides_update_eta_sal_impl.html'>tides_update_eta_sal_impl</a>(nx, ny, use_sal, beta_sal, eta_current, eta_eq, eta_sal, eta_forcing)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Flat-impl device fill (explicit-shape dummies).  Loop-invariant
+<code>use_sal</code> branch kept INSIDE the single <code>do concurrent</code> (one
+launch, uniform branch is ~free).  Off ⇒ pure copy of <code>eta_eq</code>
+into <code>eta_forcing</code> ⇒ bit-identical.  Contiguous index (i) innermost.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~79"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~79"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-use_sal~2"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>use_sal</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-beta_sal~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>beta_sal</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eta_current~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eta_current</strong>(nx,ny)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eta_eq~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eta_eq</strong>(nx,ny)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eta_sal~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eta_sal</strong>(nx,ny)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eta_forcing~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eta_forcing</strong>(nx,ny)</td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+
+
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-20 10:28 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

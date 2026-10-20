@@ -1,0 +1,4503 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>rdb_atm_state &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>rdb_atm_state
+      <small>Module</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.7% of total for modules and submodules.">473 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_atm_state.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_atm_state.f90.html'>rdb_atm_state.F90</a></li>
+            <li class="breadcrumb-item active" aria-current="page">rdb_atm_state</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+
+  <div class="row">
+    <div class="col-md-3">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_atm_state.html#variable-atm_cosz_nquad">ATM_COSZ_NQUAD</a>
+            <a class="list-group-item" href="../module/rdb_atm_state.html#variable-atm_sw_bucket_s">ATM_SW_BUCKET_S</a>
+            <a class="list-group-item" href="../module/rdb_atm_state.html#variable-idx_huss">IDX_HUSS</a>
+            <a class="list-group-item" href="../module/rdb_atm_state.html#variable-idx_prra">IDX_PRRA</a>
+            <a class="list-group-item" href="../module/rdb_atm_state.html#variable-idx_prsn">IDX_PRSN</a>
+            <a class="list-group-item" href="../module/rdb_atm_state.html#variable-idx_psl">IDX_PSL</a>
+            <a class="list-group-item" href="../module/rdb_atm_state.html#variable-idx_rlds">IDX_RLDS</a>
+            <a class="list-group-item" href="../module/rdb_atm_state.html#variable-idx_rsds">IDX_RSDS</a>
+            <a class="list-group-item" href="../module/rdb_atm_state.html#variable-idx_tas">IDX_TAS</a>
+            <a class="list-group-item" href="../module/rdb_atm_state.html#variable-idx_uas">IDX_UAS</a>
+            <a class="list-group-item" href="../module/rdb_atm_state.html#variable-idx_vas">IDX_VAS</a>
+            <a class="list-group-item" href="../module/rdb_atm_state.html#variable-n_atm_fields">N_ATM_FIELDS</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#types-0"
+         aria-expanded="false" aria-controls="types-0">
+         <h4 class="card-header bg-primary text-white">Derived Types</h4>
+      </a>
+      <div id="types-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_atm_state.html#type-atm_state_t">atm_state_t</a>
+        </div>
+      </div>
+    </div>
+
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#funcs-0"
+         aria-expanded="false" aria-controls="funcs-0">
+         <h4 class="card-header bg-primary text-white">Functions</h4>
+      </a>
+      <div id="funcs-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_atm_state.html#proc-arr2_bytes">arr2_bytes</a>
+            <a class="list-group-item" href="../module/rdb_atm_state.html#proc-atm_state_bytes">atm_state_bytes</a>
+            <a class="list-group-item" href="../module/rdb_atm_state.html#proc-setup_failed~2">setup_failed</a>
+        </div>
+      </div>
+    </div>
+
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#subs-0"
+         aria-expanded="false" aria-controls="subs-0">
+         <h4 class="card-header bg-primary text-white">Subroutines</h4>
+      </a>
+      <div id="subs-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_atm_state.html#proc-atm_state_configure">atm_state_configure</a>
+            <a class="list-group-item" href="../module/rdb_atm_state.html#proc-atm_state_update">atm_state_update</a>
+            <a class="list-group-item" href="../module/rdb_atm_state.html#proc-atm_apply_field">atm_apply_field</a>
+            <a class="list-group-item" href="../module/rdb_atm_state.html#proc-atm_coszen_apply_impl">atm_coszen_apply_impl</a>
+            <a class="list-group-item" href="../module/rdb_atm_state.html#proc-atm_spencer_sun">atm_spencer_sun</a>
+            <a class="list-group-item" href="../module/rdb_atm_state.html#proc-atm_state_copy_impl">atm_state_copy_impl</a>
+            <a class="list-group-item" href="../module/rdb_atm_state.html#proc-atm_state_destroy">atm_state_destroy</a>
+            <a class="list-group-item" href="../module/rdb_atm_state.html#proc-atm_state_enter_data">atm_state_enter_data</a>
+            <a class="list-group-item" href="../module/rdb_atm_state.html#proc-atm_state_exit_data">atm_state_exit_data</a>
+            <a class="list-group-item" href="../module/rdb_atm_state.html#proc-atm_state_scatter_impl">atm_state_scatter_impl</a>
+            <a class="list-group-item" href="../module/rdb_atm_state.html#proc-atm_sw_coszen_refresh">atm_sw_coszen_refresh</a>
+            <a class="list-group-item" href="../module/rdb_atm_state.html#proc-read_filelist">read_filelist</a>
+            <a class="list-group-item" href="../module/rdb_atm_state.html#proc-register_field">register_field</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+
+
+  </div>
+
+    </div>
+
+    <div class="col-md-9" id='text'>
+      <p>Builds the nine-field atmospheric state <code>tas, huss, uas, vas, psl,
+rlds, rsds, prra, prsn</code> (Tsujino et al. 2018, JRA55-do) on the model
+T-grid: time-blend each field&rsquo;s current bracket on the shared PR-14
+reader into a reusable longitude-circle x latitude-band WINDOW
+buffer, then regrid that window onto the physical interior with the
+in-model lat-lon weights (<code>rdb_regrid_latlon</code>, Jones 1999).  No MPI
+communication in the provider itself — every rank reads its own
+hyperslab (the reader&rsquo;s <code>win_i0/win_j0/win_nx/win_ny</code> override, C2c-1)
+and regrids independently.</p>
+<p><strong><code>rsds</code> &ndash; held interval + diurnal cosine-zenith factor
+(<code>sw_interp = "coszen"</code>, the namelist default, C2c-2b).</strong>  The JRA55-
+do <code>rsds</code> file carries 3-hour interval MEANS; registering it with
+<code>hold = .true.</code> and <code>t_offset = sw_offset_s</code> (default -5400 s, half
+the 3-hour bucket) makes the shared reader return that bucket&rsquo;s
+value PIECEWISE-CONSTANT (<code>rsds_rec</code>, weight forced to 0 &ndash; no
+blend toward the next record) rather than linearly interpolated.
+The diurnal shape within the bucket is restored by
+<code>rsds = rsds_rec * cosz / cosz_mean</code> (0 where <code>cosz_mean &lt; 1e-6</code>,
+i.e. the whole bucket is night): <code>cosz</code> is the INSTANTANEOUS cosine
+of the solar zenith angle at the query time <code>t</code>; <code>cosz_mean</code> is a
+12-point midpoint quadrature of <code>max(0, cos Z)</code> over the bucket
+<code>[t_rec, t_rec + 3h)</code> that <code>rsds_rec</code> itself represents (<code>t_rec =
+floor(t / 3h) * 3h</code>, the JRA55-do bucket boundary) &ndash; so
+<code>cosz_mean * 3h</code> is (to the quadrature&rsquo;s own accuracy) the bucket&rsquo;s
+true clear-sky-insolation-weighted mean, matching the file&rsquo;s
+interval-mean convention and preserving the daily energy total
+exactly in the limit where the model&rsquo;s own step cadence samples the
+same 12 nodes (<code>test_ocean_atm_state</code>&rsquo;s energy-identity gate).  The
+solar position (declination + equation of time) comes from the
+Spencer (1971) Fourier fit &ndash; a <code>day-of-year</code> + <code>hour-of-day</code>
+function only, computed HOST-SIDE via <code>rdb_calendar</code> (calendar
+arithmetic is not device-safe) and handed to the per-cell device
+kernel as a handful of scalars/short arrays; the kernel itself does
+only elementwise trigonometry on <code>geolonT</code>/<code>geolatT</code>, never touches
+the calendar.  <code>orb_year</code> is the reserved Berger (1978) orbital-
+parameter follow-up &ndash; <code>validate_config</code> refuses any value other
+than its default, since this chunk&rsquo;s declination uses the FIXED
+Spencer coefficients.  <code>sw_interp = "linear"</code> disables all of the
+above (<code>hold = .false.</code>, <code>t_offset = 0</code>, plain blend, same answer as
+every other flux) &ndash; <code>rsds</code> is then <code>rsds_rec</code> copied straight
+through.</p>
+<p>There is NO bulk-flux/ice-seam CONSUMER here (that is C2c-3) &ndash; the
+engine only configures this slot and refreshes it every step;
+nothing reads <code>tas</code>/<code>huss</code>/&hellip; yet.</p>
+<p><strong>Two reusable window buffers, not one per field.</strong>  <code>win_bl</code>/<code>win_cv</code>
+are each sized to ONE weight set&rsquo;s source footprint
+(<code>regrid_window</code>) and reused by every field that uses that weight
+set: <code>tas, huss, uas, vas, psl</code> always use the bilinear set (<code>wb</code>,
+<code>&amp;ocean_atm_forcing_nml states_regrid</code> has no other legal value);
+<code>rlds, rsds, prra, prsn</code> use <code>wb</code> or the conservative set (<code>wc</code>)
+together, selected once at configure by <code>fluxes_regrid</code>.  Both
+weight sets are always built (bit-identical either way the knob is
+set) &ndash; only the per-field BINDING differs.  Each field&rsquo;s call
+sequence is blend-into-window, regrid-into-a-physical-size scratch
+(<code>tgt_bl</code>/<code>tgt_cv</code>, a persistent workspace &ndash; never a per-step
+local-allocate, CLAUDE.md &ldquo;Persistent kernel workspaces&rdquo;), then
+scatter that scratch into the field&rsquo;s own ghosted array at the
+<code>nghost</code> offset &ndash; so the window/scratch buffers are safely reused
+read-after-write within one field&rsquo;s update, before the next field
+overwrites them.</p>
+<p><strong>Ghosts are untouched.</strong>  Every field array is <code>(nx_total,
+ny_total)</code> but only the physical interior is written here &ndash; no
+consumer in this chunk reads a ghost cell, and extrapolating into
+one is the data-forcing anti-pattern <code>rdb_ocean_data_forcing</code>&rsquo;s
+docstring already warns against.</p>
+<br>          <div class="card mb-4">
+      <h3 class="card-header card-title bg-light">Uses</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <ul class="list-inline">
+                  <li class="list-inline-item"><a href='http://fortranwiki.org/fortran/show/iso_fortran_env'>iso_fortran_env</a></li>
+                  <li class="list-inline-item">pic_strings</li>
+                  <li class="list-inline-item"><a href='rdb_ocean_data_input.html'>rdb_ocean_data_input</a></li>
+                  <li class="list-inline-item"><a href='rdb_grid.html'>rdb_grid</a></li>
+                  <li class="list-inline-item"><a href='rdb_ocean_metrics.html'>rdb_ocean_metrics</a></li>
+                  <li class="list-inline-item"><a href='rdb_io_netcdf.html'>rdb_io_netcdf</a></li>
+                  <li class="list-inline-item"><a href='rdb_calendar.html'>rdb_calendar</a></li>
+                  <li class="list-inline-item"><a href='rdb_regrid_latlon.html'>rdb_regrid_latlon</a></li>
+                  <li class="list-inline-item"><a href='rdb_constants.html'>rdb_constants</a></li>
+                  <li class="list-inline-item"><a href='rdb_config.html'>rdb_config</a></li>
+                  <li class="list-inline-item"><a href='rdb_error_ring.html'>rdb_error_ring</a></li>
+                  <li class="list-inline-item"><a href='rdb_ocean_status.html'>rdb_ocean_status</a></li>
+              </ul>
+            </li>
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: module~~rdb_atm_state~~UsesGraph Pages: 1 -->
+<svg id="modulerdb_atm_stateUsesGraph" width="641pt" height="581pt"
+ viewBox="0.00 0.00 641.00 580.61" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~rdb_atm_state~~UsesGraph" class="graph" transform="scale(0.49 0.49) rotate(0) translate(4 1187.11)">
+<title>module~~rdb_atm_state~~UsesGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-1187.11 1311,-1187.11 1311,4 -4,4"/>
+<!-- module~rdb_atm_state -->
+<g id="module~~rdb_atm_state~~UsesGraph_node1" class="node">
+<title>module~rdb_atm_state</title>
+<polygon fill="none" stroke="black" points="1307,-803.17 1219,-803.17 1219,-779.17 1307,-779.17 1307,-803.17"/>
+<text text-anchor="middle" x="1263" y="-788.77" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_atm_state</text>
+</g>
+<!-- iso_fortran_env -->
+<g id="module~~rdb_atm_state~~UsesGraph_node2" class="node">
+<title>iso_fortran_env</title>
+<g id="a_module~~rdb_atm_state~~UsesGraph_node2"><a xlink:href="http://fortranwiki.org/fortran/show/iso_fortran_env" xlink:title="iso_fortran_env">
+<polygon fill="#337ab7" stroke="#337ab7" points="324,-655.17 230,-655.17 230,-631.17 324,-631.17 324,-655.17"/>
+<text text-anchor="middle" x="277" y="-640.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">iso_fortran_env</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_atm_state&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge1" class="edge">
+<title>module~rdb_atm_state&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1117,-910.17C1002.67,-946.18 699.04,-873.26 580,-859.17"/>
+</g>
+<!-- module~rdb_calendar -->
+<g id="module~~rdb_atm_state~~UsesGraph_node3" class="node">
+<title>module~rdb_calendar</title>
+<g id="a_module~~rdb_atm_state~~UsesGraph_node3"><a xlink:href="../module/rdb_calendar.html" xlink:title="rdb_calendar">
+<polygon fill="#337ab7" stroke="#337ab7" points="1017,-962.17 934,-962.17 934,-938.17 1017,-938.17 1017,-962.17"/>
+<text text-anchor="middle" x="975.5" y="-947.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_calendar</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_atm_state&#45;&gt;module~rdb_calendar -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge2" class="edge">
+<title>module~rdb_atm_state&#45;&gt;module~rdb_calendar</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1117,-910.17C1087.27,-919.06 1053.86,-928.59 1027.08,-936.12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1025.84,-932.83 1017.16,-938.9 1027.73,-939.57 1025.84,-932.83"/>
+</g>
+<!-- module~rdb_config -->
+<g id="module~~rdb_atm_state~~UsesGraph_node4" class="node">
+<title>module~rdb_config</title>
+<g id="a_module~~rdb_atm_state~~UsesGraph_node4"><a xlink:href="../module/rdb_config.html" xlink:title="rdb_config">
+<polygon fill="#337ab7" stroke="#337ab7" points="1010,-803.17 941,-803.17 941,-779.17 1010,-779.17 1010,-803.17"/>
+<text text-anchor="middle" x="975.5" y="-788.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_config</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_atm_state&#45;&gt;module~rdb_config -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge3" class="edge">
+<title>module~rdb_atm_state&#45;&gt;module~rdb_config</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1253.05,-803.51C1232.83,-830.07 1180.58,-891.76 1119,-910.17"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1117,-910.17C1059.43,-927.38 1064.04,-856.57 1017,-819.17 1012.76,-815.8 1008.14,-812.38 1003.58,-809.15"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1005.23,-806.04 995.02,-803.21 1001.24,-811.79 1005.23,-806.04"/>
+</g>
+<!-- module~rdb_constants -->
+<g id="module~~rdb_atm_state~~UsesGraph_node5" class="node">
+<title>module~rdb_constants</title>
+<g id="a_module~~rdb_atm_state~~UsesGraph_node5"><a xlink:href="../module/rdb_constants.html" xlink:title="rdb_constants">
+<polygon fill="#337ab7" stroke="#337ab7" points="185,-442.17 98,-442.17 98,-418.17 185,-418.17 185,-442.17"/>
+<text text-anchor="middle" x="141.5" y="-427.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_constants</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_atm_state&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge4" class="edge">
+<title>module~rdb_atm_state&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M578,-1179.17C484.78,-1182.21 456.91,-1191.33 369,-1160.17 323.11,-1143.91 316.49,-1129 278,-1099.17"/>
+</g>
+<!-- module~rdb_error_ring -->
+<g id="module~~rdb_atm_state~~UsesGraph_node6" class="node">
+<title>module~rdb_error_ring</title>
+<g id="a_module~~rdb_atm_state~~UsesGraph_node6"><a xlink:href="../module/rdb_error_ring.html" xlink:title="rdb_error_ring">
+<polygon fill="#337ab7" stroke="#337ab7" points="473.5,-325.17 385.5,-325.17 385.5,-301.17 473.5,-301.17 473.5,-325.17"/>
+<text text-anchor="middle" x="429.5" y="-310.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_error_ring</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_atm_state&#45;&gt;module~rdb_error_ring -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge5" class="edge">
+<title>module~rdb_atm_state&#45;&gt;module~rdb_error_ring</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1117,-277.17C975.35,-82.44 807.6,-427.82 580,-349.17"/>
+</g>
+<!-- module~rdb_grid -->
+<g id="module~~rdb_atm_state~~UsesGraph_node7" class="node">
+<title>module~rdb_grid</title>
+<g id="a_module~~rdb_atm_state~~UsesGraph_node7"><a xlink:href="../module/rdb_grid.html" xlink:title="rdb_grid">
+<polygon fill="#337ab7" stroke="#337ab7" points="458,-713.17 401,-713.17 401,-689.17 458,-689.17 458,-713.17"/>
+<text text-anchor="middle" x="429.5" y="-698.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_grid</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_atm_state&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge6" class="edge">
+<title>module~rdb_atm_state&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1117,-910.17C1028.6,-936.6 1005.92,-869.97 934,-812.17 914.84,-796.77 920.34,-780.45 898,-770.17 829.44,-738.64 804.6,-798.61 729.5,-791.17"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M727.5,-791.17C658.23,-782.5 648.54,-750.44 580,-737.17"/>
+</g>
+<!-- module~rdb_io_netcdf -->
+<g id="module~~rdb_atm_state~~UsesGraph_node8" class="node">
+<title>module~rdb_io_netcdf</title>
+<g id="a_module~~rdb_atm_state~~UsesGraph_node8"><a xlink:href="../module/rdb_io_netcdf.html" xlink:title="rdb_io_netcdf">
+<polygon fill="#337ab7" stroke="#337ab7" points="621.5,-97.17 536.5,-97.17 536.5,-73.17 621.5,-73.17 621.5,-97.17"/>
+<text text-anchor="middle" x="579" y="-82.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_io_netcdf</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_atm_state&#45;&gt;module~rdb_io_netcdf -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge7" class="edge">
+<title>module~rdb_atm_state&#45;&gt;module~rdb_io_netcdf</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M860.5,-11.17C814.76,-0.08 686.29,-44.63 620.27,-69.49"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="618.73,-66.33 610.62,-73.15 621.21,-72.88 618.73,-66.33"/>
+</g>
+<!-- module~rdb_ocean_data_input -->
+<g id="module~~rdb_atm_state~~UsesGraph_node9" class="node">
+<title>module~rdb_ocean_data_input</title>
+<g id="a_module~~rdb_atm_state~~UsesGraph_node9"><a xlink:href="../module/rdb_ocean_data_input.html" xlink:title="rdb_ocean_data_input">
+<polygon fill="#337ab7" stroke="#337ab7" points="1183,-803.17 1053,-803.17 1053,-779.17 1183,-779.17 1183,-803.17"/>
+<text text-anchor="middle" x="1118" y="-788.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_data_input</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_atm_state&#45;&gt;module~rdb_ocean_data_input -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge8" class="edge">
+<title>module~rdb_atm_state&#45;&gt;module~rdb_ocean_data_input</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1218.71,-791.17C1210.67,-791.17 1202.07,-791.17 1193.41,-791.17"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1193.25,-787.67 1183.25,-791.17 1193.25,-794.67 1193.25,-787.67"/>
+</g>
+<!-- module~rdb_ocean_metrics -->
+<g id="module~~rdb_atm_state~~UsesGraph_node10" class="node">
+<title>module~rdb_ocean_metrics</title>
+<g id="a_module~~rdb_atm_state~~UsesGraph_node10"><a xlink:href="../module/rdb_ocean_metrics.html" xlink:title="rdb_ocean_metrics">
+<polygon fill="#337ab7" stroke="#337ab7" points="785.5,-287.17 671.5,-287.17 671.5,-263.17 785.5,-263.17 785.5,-287.17"/>
+<text text-anchor="middle" x="728.5" y="-272.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_metrics</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_atm_state&#45;&gt;module~rdb_ocean_metrics -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge9" class="edge">
+<title>module~rdb_atm_state&#45;&gt;module~rdb_ocean_metrics</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M974.5,-87.17C954.53,-80.93 950.68,-98.55 934,-111.17 863.06,-164.86 863.11,-199.95 789,-249.17 783.7,-252.69 777.85,-255.93 771.94,-258.82"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="770.29,-255.73 762.68,-263.1 773.23,-262.08 770.29,-255.73"/>
+</g>
+<!-- module~rdb_ocean_status -->
+<g id="module~~rdb_atm_state~~UsesGraph_node11" class="node">
+<title>module~rdb_ocean_status</title>
+<g id="a_module~~rdb_atm_state~~UsesGraph_node11"><a xlink:href="../module/rdb_ocean_status.html" xlink:title="rdb_ocean_status">
+<polygon fill="#337ab7" stroke="#337ab7" points="632,-211.17 526,-211.17 526,-187.17 632,-187.17 632,-211.17"/>
+<text text-anchor="middle" x="579" y="-196.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_status</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_atm_state&#45;&gt;module~rdb_ocean_status -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge10" class="edge">
+<title>module~rdb_atm_state&#45;&gt;module~rdb_ocean_status</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M974.5,-87.17C911.62,-58 732.66,-120.19 668,-145.17 644.79,-154.14 620.88,-169.26 603.85,-181.22"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="601.69,-178.46 595.61,-187.14 605.78,-184.15 601.69,-178.46"/>
+</g>
+<!-- module~rdb_regrid_latlon -->
+<g id="module~~rdb_atm_state~~UsesGraph_node12" class="node">
+<title>module~rdb_regrid_latlon</title>
+<g id="a_module~~rdb_atm_state~~UsesGraph_node12"><a xlink:href="../module/rdb_regrid_latlon.html" xlink:title="rdb_regrid_latlon">
+<polygon fill="#337ab7" stroke="#337ab7" points="481,-1151.17 378,-1151.17 378,-1127.17 481,-1127.17 481,-1151.17"/>
+<text text-anchor="middle" x="429.5" y="-1136.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_regrid_latlon</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_atm_state&#45;&gt;module~rdb_regrid_latlon -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge11" class="edge">
+<title>module~rdb_atm_state&#45;&gt;module~rdb_regrid_latlon</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1117,-910.17C1067.3,-925.67 1062.79,-946.4 1017,-971.17 827.82,-1073.54 795.09,-1181.3 580,-1179.17"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M578,-1179.17C538.69,-1180.45 495.45,-1166.84 466.01,-1155.15"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="467.16,-1151.84 456.58,-1151.28 464.5,-1158.31 467.16,-1151.84"/>
+</g>
+<!-- pic_strings -->
+<g id="module~~rdb_atm_state~~UsesGraph_node13" class="node">
+<title>pic_strings</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="311.5,-163.17 242.5,-163.17 242.5,-139.17 311.5,-139.17 311.5,-163.17"/>
+<text text-anchor="middle" x="277" y="-148.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_strings</text>
+</g>
+<!-- module~rdb_atm_state&#45;&gt;pic_strings -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge12" class="edge">
+<title>module~rdb_atm_state&#45;&gt;pic_strings</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1261.25,-778.89C1257.09,-718.96 1232.66,-452.96 1119,-277.17"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1117,-277.17C1059.98,-188.98 1071.83,-131.24 976.5,-87.17"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M974.5,-87.17C919.9,-61.93 919.42,-30.65 862.5,-11.17"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M860.5,-11.17C741.68,29.48 704.87,-58.52 580,-45.17"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M578,-45.17C485.9,-30.46 453.74,-25.21 369,-64.17 348.73,-73.5 349.11,-83.73 333,-99.17 321.66,-110.04 308.92,-122.1 298.56,-131.86"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="296.04,-129.42 291.16,-138.83 300.84,-134.52 296.04,-129.42"/>
+</g>
+<!-- module~rdb_calendar&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge13" class="edge">
+<title>module~rdb_calendar&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#ff7f00" stroke-dasharray="5,2" d="M955.58,-962.18C915.03,-986.5 816.38,-1038.24 729.5,-1025.17"/>
+<path fill="none" stroke="#ff7f00" stroke-dasharray="5,2" d="M727.5,-1025.17C651.66,-1019.5 689.9,-932.49 632,-883.17 612.62,-866.67 605.28,-862.16 580,-859.17"/>
+</g>
+<!-- module~rdb_calendar&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge14" class="edge">
+<title>module~rdb_calendar&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ff7f00" stroke-dasharray="5,2" d="M727.5,-1025.17C679.93,-1021.62 677.59,-1060.13 632,-1074.17 545.76,-1100.73 519.37,-1083.52 430.5,-1099.17"/>
+</g>
+<!-- pic_ascii -->
+<g id="module~~rdb_atm_state~~UsesGraph_node23" class="node">
+<title>pic_ascii</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="890.5,-883.17 832.5,-883.17 832.5,-859.17 890.5,-859.17 890.5,-883.17"/>
+<text text-anchor="middle" x="861.5" y="-868.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_ascii</text>
+</g>
+<!-- module~rdb_calendar&#45;&gt;pic_ascii -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge15" class="edge">
+<title>module~rdb_calendar&#45;&gt;pic_ascii</title>
+<path fill="none" stroke="#ff7f00" stroke-dasharray="5,2" d="M957,-937.83C938.51,-924.79 909.16,-904.08 888.07,-889.21"/>
+<polygon fill="#ff7f00" stroke="#ff7f00" points="890.07,-886.33 879.88,-883.43 886.03,-892.05 890.07,-886.33"/>
+</g>
+<!-- module~rdb_config&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge16" class="edge">
+<title>module~rdb_config&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M578,-1060.17C512.54,-1077.87 497.28,-1087.41 430.5,-1099.17"/>
+</g>
+<!-- module~rdb_config&#45;&gt;module~rdb_error_ring -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge17" class="edge">
+<title>module~rdb_config&#45;&gt;module~rdb_error_ring</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M860.5,-429.17C835.35,-394.16 706.6,-424.37 668,-405.17 647.46,-394.96 651.26,-380.65 632,-368.17 611.35,-354.8 603.17,-357.46 580,-349.17"/>
+</g>
+<!-- module~rdb_config&#45;&gt;module~rdb_ocean_status -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge22" class="edge">
+<title>module~rdb_config&#45;&gt;module~rdb_ocean_status</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M973.52,-779.02C969.06,-730.41 947.12,-546.99 862.5,-429.17"/>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M860.5,-429.17C811.49,-360.93 850.7,-311.2 789,-254.17 768.61,-235.33 754.64,-246.95 729.5,-235.17"/>
+</g>
+<!-- module~rdb_config&#45;&gt;pic_strings -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge25" class="edge">
+<title>module~rdb_config&#45;&gt;pic_strings</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M973.42,-779.11C968.87,-731.49 949.12,-552.52 898,-415.17 863.5,-322.49 863.47,-286.26 789,-221.17 745.44,-183.1 707.69,-215.26 668,-173.17 633,-136.06 667.51,-100.81 632,-64.17 614.88,-46.5 604.52,-47.24 580,-45.17"/>
+</g>
+<!-- module~rdb_ice_enthalpy -->
+<g id="module~~rdb_atm_state~~UsesGraph_node15" class="node">
+<title>module~rdb_ice_enthalpy</title>
+<g id="a_module~~rdb_atm_state~~UsesGraph_node15"><a xlink:href="../module/rdb_ice_enthalpy.html" xlink:title="rdb_ice_enthalpy">
+<polygon fill="#337ab7" stroke="#337ab7" points="328.5,-971.17 225.5,-971.17 225.5,-947.17 328.5,-947.17 328.5,-971.17"/>
+<text text-anchor="middle" x="277" y="-956.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_enthalpy</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_config&#45;&gt;module~rdb_ice_enthalpy -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge18" class="edge">
+<title>module~rdb_config&#45;&gt;module~rdb_ice_enthalpy</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M940.99,-801.09C902.38,-813.08 842.05,-833.68 825,-850.17 796.1,-878.13 815.42,-902.86 789,-933.17 780.07,-943.41 593.25,-1057.16 580,-1060.17"/>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M578,-1060.17C566.34,-1063.34 380.34,-1004.33 369,-1000.17 349.69,-993.09 328.72,-983.76 311.78,-975.79"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="312.85,-972.43 302.32,-971.28 309.84,-978.75 312.85,-972.43"/>
+</g>
+<!-- module~rdb_ice_init -->
+<g id="module~~rdb_atm_state~~UsesGraph_node16" class="node">
+<title>module~rdb_ice_init</title>
+<g id="a_module~~rdb_atm_state~~UsesGraph_node16"><a xlink:href="../module/rdb_ice_init.html" xlink:title="rdb_ice_init">
+<polygon fill="#337ab7" stroke="#337ab7" points="898,-803.17 825,-803.17 825,-779.17 898,-779.17 898,-803.17"/>
+<text text-anchor="middle" x="861.5" y="-788.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_init</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_config&#45;&gt;module~rdb_ice_init -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge19" class="edge">
+<title>module~rdb_config&#45;&gt;module~rdb_ice_init</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M940.9,-791.17C930.64,-791.17 919.19,-791.17 908.27,-791.17"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="908.03,-787.67 898.03,-791.17 908.03,-794.67 908.03,-787.67"/>
+</g>
+<!-- module~rdb_nml_schema -->
+<g id="module~~rdb_atm_state~~UsesGraph_node18" class="node">
+<title>module~rdb_nml_schema</title>
+<g id="a_module~~rdb_atm_state~~UsesGraph_node18"><a xlink:href="../module/rdb_nml_schema.html" xlink:title="rdb_nml_schema">
+<polygon fill="#337ab7" stroke="#337ab7" points="630.5,-401.17 527.5,-401.17 527.5,-377.17 630.5,-377.17 630.5,-401.17"/>
+<text text-anchor="middle" x="579" y="-386.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_nml_schema</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_config&#45;&gt;module~rdb_nml_schema -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge20" class="edge">
+<title>module~rdb_config&#45;&gt;module~rdb_nml_schema</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M971.01,-778.84C954.85,-724.68 881.54,-508.72 729.5,-467.17"/>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M727.5,-467.17C701.88,-454.65 692.71,-457.4 668,-443.17 650.43,-433.06 649.15,-425.98 632,-415.17 626.91,-411.97 621.38,-408.85 615.88,-405.94"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="617.24,-402.71 606.74,-401.29 614.06,-408.94 617.24,-402.71"/>
+</g>
+<!-- module~rdb_ocean_bulk_flux -->
+<g id="module~~rdb_atm_state~~UsesGraph_node20" class="node">
+<title>module~rdb_ocean_bulk_flux</title>
+<g id="a_module~~rdb_atm_state~~UsesGraph_node20"><a xlink:href="../module/rdb_ocean_bulk_flux.html" xlink:title="rdb_ocean_bulk_flux">
+<polygon fill="#337ab7" stroke="#337ab7" points="490,-1071.17 369,-1071.17 369,-1047.17 490,-1047.17 490,-1071.17"/>
+<text text-anchor="middle" x="429.5" y="-1056.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_bulk_flux</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_config&#45;&gt;module~rdb_ocean_bulk_flux -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge21" class="edge">
+<title>module~rdb_config&#45;&gt;module~rdb_ocean_bulk_flux</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M578,-1060.17C552.98,-1065.87 524.95,-1066.95 500.1,-1066.16"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="500.17,-1062.66 490.03,-1065.73 499.87,-1069.65 500.17,-1062.66"/>
+</g>
+<!-- module~rdb_config&#45;&gt;pic_ascii -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge23" class="edge">
+<title>module~rdb_config&#45;&gt;pic_ascii</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M957.49,-803.32C938.88,-816.62 908.87,-838.05 887.56,-853.27"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="885.41,-850.51 879.3,-859.17 889.48,-856.21 885.41,-850.51"/>
+</g>
+<!-- pic_logger -->
+<g id="module~~rdb_atm_state~~UsesGraph_node24" class="node">
+<title>pic_logger</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="311,-327.17 243,-327.17 243,-303.17 311,-303.17 311,-327.17"/>
+<text text-anchor="middle" x="277" y="-312.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_logger</text>
+</g>
+<!-- module~rdb_config&#45;&gt;pic_logger -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge24" class="edge">
+<title>module~rdb_config&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M727.5,-467.17C646.48,-427.56 612.62,-468.28 526,-443.17 451.73,-421.65 437.36,-404.33 369,-368.17 347.67,-356.89 324.14,-343.15 306.36,-332.49"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="307.99,-329.39 297.62,-327.23 304.38,-335.39 307.99,-329.39"/>
+</g>
+<!-- pic_types -->
+<g id="module~~rdb_atm_state~~UsesGraph_node25" class="node">
+<title>pic_types</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="62,-442.17 0,-442.17 0,-418.17 62,-418.17 62,-442.17"/>
+<text text-anchor="middle" x="31" y="-427.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_types</text>
+</g>
+<!-- module~rdb_constants&#45;&gt;pic_types -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge26" class="edge">
+<title>module~rdb_constants&#45;&gt;pic_types</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M97.93,-430.17C89.5,-430.17 80.67,-430.17 72.32,-430.17"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="72.05,-426.67 62.05,-430.17 72.05,-433.67 72.05,-426.67"/>
+</g>
+<!-- module~rdb_error_ring&#45;&gt;pic_logger -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge27" class="edge">
+<title>module~rdb_error_ring&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M385.37,-313.75C365.25,-314.01 341.36,-314.33 321.23,-314.6"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="321.04,-311.1 311.09,-314.73 321.13,-318.1 321.04,-311.1"/>
+</g>
+<!-- module~rdb_grid&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge28" class="edge">
+<title>module~rdb_grid&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00ff7f" stroke-dasharray="5,2" d="M416.93,-689.06C393.27,-665.08 336.64,-611.61 278,-585.17"/>
+</g>
+<!-- module~rdb_io_netcdf&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge30" class="edge">
+<title>module~rdb_io_netcdf&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M569.76,-97.26C558.36,-114.49 537.86,-147.45 526,-178.17 500.38,-244.56 517.51,-268.55 490,-334.17 451.3,-426.5 417.64,-436.67 369,-524.17 351.04,-556.49 356.01,-570.23 333,-599.17 325.23,-608.95 314.91,-617.92 305.31,-625.18"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="303.19,-622.4 297.14,-631.1 307.29,-628.07 303.19,-622.4"/>
+</g>
+<!-- module~rdb_io_netcdf&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge31" class="edge">
+<title>module~rdb_io_netcdf&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M563.74,-73.05C538.74,-52.92 484.52,-14.1 430.5,-7.17"/>
+</g>
+<!-- module~rdb_io_netcdf&#45;&gt;module~rdb_error_ring -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge32" class="edge">
+<title>module~rdb_io_netcdf&#45;&gt;module~rdb_error_ring</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M570.94,-97.42C560.79,-115.13 541.57,-148.95 526,-178.17 509.36,-209.4 510.24,-220.16 490,-249.17 478.75,-265.3 463.64,-281.5 451.46,-293.57"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="448.69,-291.38 443.95,-300.86 453.57,-296.41 448.69,-291.38"/>
+</g>
+<!-- module~rdb_io_netcdf&#45;&gt;pic_strings -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge35" class="edge">
+<title>module~rdb_io_netcdf&#45;&gt;pic_strings</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M549.46,-97.26C519.55,-110.09 471.33,-131.22 430.5,-151.17"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M428.5,-151.17C395.39,-167.36 353.07,-165.7 321.75,-160.96"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="322.02,-157.46 311.58,-159.25 320.86,-164.36 322.02,-157.46"/>
+</g>
+<!-- iso_c_binding -->
+<g id="module~~rdb_atm_state~~UsesGraph_node14" class="node">
+<title>iso_c_binding</title>
+<g id="a_module~~rdb_atm_state~~UsesGraph_node14"><a xlink:href="http://fortranwiki.org/fortran/show/iso_c_binding" xlink:title="iso_c_binding">
+<polygon fill="#337ab7" stroke="#337ab7" points="471.5,-97.17 387.5,-97.17 387.5,-73.17 471.5,-73.17 471.5,-97.17"/>
+<text text-anchor="middle" x="429.5" y="-82.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">iso_c_binding</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_io_netcdf&#45;&gt;iso_c_binding -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge29" class="edge">
+<title>module~rdb_io_netcdf&#45;&gt;iso_c_binding</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M536.13,-85.17C519.25,-85.17 499.62,-85.17 481.9,-85.17"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="481.71,-81.67 471.71,-85.17 481.71,-88.67 481.71,-81.67"/>
+</g>
+<!-- netcdf -->
+<g id="module~~rdb_atm_state~~UsesGraph_node22" class="node">
+<title>netcdf</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="456.5,-203.17 402.5,-203.17 402.5,-179.17 456.5,-179.17 456.5,-203.17"/>
+<text text-anchor="middle" x="429.5" y="-188.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">netcdf</text>
+</g>
+<!-- module~rdb_io_netcdf&#45;&gt;netcdf -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge33" class="edge">
+<title>module~rdb_io_netcdf&#45;&gt;netcdf</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M567.06,-97.36C551.34,-114.32 520.84,-145.19 490,-165.17 482.59,-169.98 474.14,-174.27 465.98,-177.93"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="464.46,-174.77 456.62,-181.91 467.2,-181.21 464.46,-174.77"/>
+</g>
+<!-- module~rdb_io_netcdf&#45;&gt;pic_logger -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge34" class="edge">
+<title>module~rdb_io_netcdf&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M428.5,-151.17C403.56,-163.36 389.47,-151.42 369,-170.17 338.45,-198.17 355.48,-221.36 333,-256.17 323.49,-270.89 310.14,-285.32 298.97,-296.22"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="296.5,-293.74 291.66,-303.17 301.32,-298.81 296.5,-293.74"/>
+</g>
+<!-- module~rdb_ocean_data_input&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge36" class="edge">
+<title>module~rdb_ocean_data_input&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#007fff" stroke-dasharray="5,2" d="M727.5,-753.17C658.49,-793.56 441.05,-756.87 369,-722.17 339.41,-707.93 311.9,-681.45 295.04,-663.1"/>
+<polygon fill="#007fff" stroke="#007fff" points="297.35,-660.43 288.07,-655.31 292.13,-665.1 297.35,-660.43"/>
+</g>
+<!-- module~rdb_ocean_data_input&#45;&gt;module~rdb_calendar -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge37" class="edge">
+<title>module~rdb_ocean_data_input&#45;&gt;module~rdb_calendar</title>
+<path fill="none" stroke="#007fff" stroke-dasharray="5,2" d="M1106.21,-803.39C1082.04,-830.74 1023.38,-897.12 993.95,-930.43"/>
+<polygon fill="#007fff" stroke="#007fff" points="991.13,-928.33 987.14,-938.14 996.38,-932.96 991.13,-928.33"/>
+</g>
+<!-- module~rdb_ocean_data_input&#45;&gt;module~rdb_config -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge38" class="edge">
+<title>module~rdb_ocean_data_input&#45;&gt;module~rdb_config</title>
+<path fill="none" stroke="#007fff" stroke-dasharray="5,2" d="M1052.92,-791.17C1041.84,-791.17 1030.56,-791.17 1020.19,-791.17"/>
+<polygon fill="#007fff" stroke="#007fff" points="1020.16,-787.67 1010.16,-791.17 1020.16,-794.67 1020.16,-787.67"/>
+</g>
+<!-- module~rdb_ocean_data_input&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge39" class="edge">
+<title>module~rdb_ocean_data_input&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#007fff" stroke-dasharray="5,2" d="M1115.91,-779.16C1108.34,-698.34 1061.55,-233.8 976.5,-125.17"/>
+<path fill="none" stroke="#007fff" stroke-dasharray="5,2" d="M974.5,-125.17C961.6,-108.7 951.93,-111.96 934,-101.17 917.93,-91.5 915.33,-86.33 898,-79.17 703.67,1.02 639.02,-33.92 430.5,-7.17"/>
+<path fill="none" stroke="#007fff" stroke-dasharray="5,2" d="M428.5,-7.17C367.72,1.78 255.13,-82.22 221,-130.17 157.89,-218.85 145.5,-354.56 143.08,-407.72"/>
+<polygon fill="#007fff" stroke="#007fff" points="139.57,-407.91 142.69,-418.03 146.57,-408.17 139.57,-407.91"/>
+</g>
+<!-- module~rdb_ocean_data_input&#45;&gt;module~rdb_error_ring -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge40" class="edge">
+<title>module~rdb_ocean_data_input&#45;&gt;module~rdb_error_ring</title>
+<path fill="none" stroke="#007fff" stroke-dasharray="5,2" d="M974.5,-315.17C939.45,-293.69 936.34,-352.34 898,-367.17 827.45,-394.47 805,-386.52 729.5,-391.17"/>
+<path fill="none" stroke="#007fff" stroke-dasharray="5,2" d="M727.5,-391.17C710.57,-393.11 596.11,-354.74 580,-349.17"/>
+</g>
+<!-- module~rdb_ocean_data_input&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge41" class="edge">
+<title>module~rdb_ocean_data_input&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#007fff" stroke-dasharray="5,2" d="M974.5,-315.17C955.75,-302.3 801.41,-661.11 789,-680.17 766.17,-715.25 764.56,-730.31 729.5,-753.17"/>
+<path fill="none" stroke="#007fff" stroke-dasharray="5,2" d="M727.5,-753.17C670.59,-786.48 644.74,-749.7 580,-737.17"/>
+</g>
+<!-- module~rdb_ocean_data_input&#45;&gt;module~rdb_io_netcdf -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge42" class="edge">
+<title>module~rdb_ocean_data_input&#45;&gt;module~rdb_io_netcdf</title>
+<path fill="none" stroke="#007fff" stroke-dasharray="5,2" d="M1115.4,-778.75C1106.17,-709.49 1057.43,-371.97 976.5,-315.17"/>
+<path fill="none" stroke="#007fff" stroke-dasharray="5,2" d="M974.5,-315.17C920.25,-277.1 952.76,-224.51 898,-187.17 835.27,-144.41 804.71,-169.49 729.5,-159.17"/>
+<path fill="none" stroke="#007fff" stroke-dasharray="5,2" d="M727.5,-159.17C680.71,-150.6 632.57,-122.02 604.51,-102.99"/>
+<polygon fill="#007fff" stroke="#007fff" points="606.35,-100.01 596.13,-97.19 602.36,-105.76 606.35,-100.01"/>
+</g>
+<!-- module~rdb_ocean_data_input&#45;&gt;module~rdb_ocean_status -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge44" class="edge">
+<title>module~rdb_ocean_data_input&#45;&gt;module~rdb_ocean_status</title>
+<path fill="none" stroke="#007fff" stroke-dasharray="5,2" d="M974.5,-315.17C904.89,-263.35 871.56,-280.93 789,-254.17 762.59,-245.62 754.64,-246.95 729.5,-235.17"/>
+<path fill="none" stroke="#007fff" stroke-dasharray="5,2" d="M727.5,-235.17C701.2,-221.66 669.63,-213.08 642.46,-207.7"/>
+<polygon fill="#007fff" stroke="#007fff" points="642.75,-204.19 632.28,-205.79 641.46,-211.07 642.75,-204.19"/>
+</g>
+<!-- module~rdb_ocean_data_input&#45;&gt;pic_strings -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge48" class="edge">
+<title>module~rdb_ocean_data_input&#45;&gt;pic_strings</title>
+<path fill="none" stroke="#007fff" stroke-dasharray="5,2" d="M974.5,-125.17C944.68,-91.84 624.57,-48.92 580,-45.17"/>
+</g>
+<!-- module~rdb_mem_report -->
+<g id="module~~rdb_atm_state~~UsesGraph_node17" class="node">
+<title>module~rdb_mem_report</title>
+<g id="a_module~~rdb_atm_state~~UsesGraph_node17"><a xlink:href="../module/rdb_mem_report.html" xlink:title="rdb_mem_report">
+<polygon fill="#337ab7" stroke="#337ab7" points="480,-557.17 379,-557.17 379,-533.17 480,-533.17 480,-557.17"/>
+<text text-anchor="middle" x="429.5" y="-542.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_mem_report</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_data_input&#45;&gt;module~rdb_mem_report -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge43" class="edge">
+<title>module~rdb_ocean_data_input&#45;&gt;module~rdb_mem_report</title>
+<path fill="none" stroke="#007fff" stroke-dasharray="5,2" d="M727.5,-391.17C679.92,-399.65 674.79,-420.7 632,-443.17 573.19,-474.06 503.97,-508.74 463.87,-528.66"/>
+<polygon fill="#007fff" stroke="#007fff" points="462.21,-525.58 454.81,-533.16 465.33,-531.85 462.21,-525.58"/>
+</g>
+<!-- module~rdb_ocean_data_input&#45;&gt;netcdf -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge45" class="edge">
+<title>module~rdb_ocean_data_input&#45;&gt;netcdf</title>
+<path fill="none" stroke="#007fff" stroke-dasharray="5,2" d="M727.5,-159.17C634.09,-142.06 522.37,-165.8 466.31,-180.71"/>
+<polygon fill="#007fff" stroke="#007fff" points="465.24,-177.37 456.51,-183.37 467.08,-184.12 465.24,-177.37"/>
+</g>
+<!-- module~rdb_ocean_data_input&#45;&gt;pic_ascii -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge46" class="edge">
+<title>module~rdb_ocean_data_input&#45;&gt;pic_ascii</title>
+<path fill="none" stroke="#007fff" stroke-dasharray="5,2" d="M1078.62,-803.24C1030.4,-818.4 948.16,-844.25 900.23,-859.31"/>
+<polygon fill="#007fff" stroke="#007fff" points="899.04,-856.02 890.55,-862.36 901.14,-862.7 899.04,-856.02"/>
+</g>
+<!-- module~rdb_ocean_data_input&#45;&gt;pic_logger -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge47" class="edge">
+<title>module~rdb_ocean_data_input&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#007fff" stroke-dasharray="5,2" d="M974.5,-315.17C951.69,-300.82 516.94,-292.81 490,-292.17 436.24,-290.9 422.37,-285.53 369,-292.17 353.23,-294.14 336.28,-297.94 321.32,-301.9"/>
+<polygon fill="#007fff" stroke="#007fff" points="320.05,-298.62 311.33,-304.64 321.9,-305.37 320.05,-298.62"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge49" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M718.21,-287.25C704.65,-305.57 679.78,-341.99 668,-377.17 646.47,-441.47 682.7,-635.14 632,-680.17 610.21,-699.52 428.34,-670.27 334.12,-653.53"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="334.65,-650.07 324.19,-651.76 333.41,-656.96 334.65,-650.07"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge50" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M428.5,-235.17C404.53,-234.76 239.9,-279.44 221,-294.17 182.73,-324.01 159.72,-378.11 149.26,-408.31"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="145.9,-407.32 146.08,-417.91 152.55,-409.52 145.9,-407.32"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_error_ring -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge51" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_error_ring</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M716.8,-287.4C693.03,-313.01 633.68,-368.38 580,-349.17"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M578,-349.17C547.5,-338.26 512.28,-329.53 483.92,-323.4"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="484.3,-319.9 473.8,-321.26 482.85,-326.75 484.3,-319.9"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge52" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M578,-429.17C512.3,-505.06 544.56,-552.92 490,-637.17 479.21,-653.84 463.91,-670.18 451.52,-682.19"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="449.11,-679.65 444.25,-689.06 453.92,-684.73 449.11,-679.65"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_io_netcdf -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge53" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_io_netcdf</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M715.11,-262.89C702.68,-250.34 683.25,-230.06 668,-211.17 639.33,-175.68 609.7,-131.38 593.18,-105.88"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="596.07,-103.9 587.72,-97.39 590.18,-107.69 596.07,-103.9"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_ocean_status -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge57" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_ocean_status</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M697.04,-263.09C687.57,-259.01 677.2,-254.2 668,-249.17 651.12,-239.95 648.63,-234.83 632,-225.17 626.5,-221.98 620.56,-218.79 614.72,-215.78"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="616.23,-212.62 605.73,-211.25 613.08,-218.87 616.23,-212.62"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;pic_strings -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge60" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;pic_strings</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M578,-239.17C513.78,-225.87 496.07,-236.31 430.5,-235.17"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M428.5,-235.17C400.15,-234.68 392.34,-228.26 369,-212.17 349.31,-198.6 352.72,-185.71 333,-172.17 329.25,-169.6 325.14,-167.29 320.91,-165.22"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="322.11,-161.92 311.55,-161.09 319.28,-168.33 322.11,-161.92"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_mem_report -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge54" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_mem_report</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M721.97,-287.51C709.59,-313.77 677.16,-375.65 632,-410.17 612.45,-425.12 596.11,-410.57 580,-429.17"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M578,-429.17C542.53,-470.15 490.87,-506.85 459.04,-527.54"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="457.15,-524.59 450.62,-532.94 460.93,-530.49 457.15,-524.59"/>
+</g>
+<!-- module~rdb_ocean_bipolar -->
+<g id="module~~rdb_atm_state~~UsesGraph_node19" class="node">
+<title>module~rdb_ocean_bipolar</title>
+<g id="a_module~~rdb_atm_state~~UsesGraph_node19"><a xlink:href="../module/rdb_ocean_bipolar.html" xlink:title="rdb_ocean_bipolar">
+<polygon fill="#337ab7" stroke="#337ab7" points="333,-205.17 221,-205.17 221,-181.17 333,-181.17 333,-205.17"/>
+<text text-anchor="middle" x="277" y="-190.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_bipolar</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_ocean_bipolar -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge55" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_ocean_bipolar</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M428.5,-235.17C408.05,-234.82 359.46,-220.3 322.98,-208.44"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="323.64,-204.97 313.05,-205.17 321.46,-211.62 323.64,-204.97"/>
+</g>
+<!-- module~rdb_ocean_fold -->
+<g id="module~~rdb_atm_state~~UsesGraph_node21" class="node">
+<title>module~rdb_ocean_fold</title>
+<g id="a_module~~rdb_atm_state~~UsesGraph_node21"><a xlink:href="../module/rdb_ocean_fold.html" xlink:title="rdb_ocean_fold">
+<polygon fill="#337ab7" stroke="#337ab7" points="324,-247.17 230,-247.17 230,-223.17 324,-223.17 324,-247.17"/>
+<text text-anchor="middle" x="277" y="-232.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_fold</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_ocean_fold -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge56" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_ocean_fold</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M428.5,-235.17C397.32,-234.63 362.51,-234.6 334.22,-234.71"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="334.09,-231.21 324.11,-234.76 334.13,-238.21 334.09,-231.21"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;netcdf -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge58" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;netcdf</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M681.84,-263.15C652.8,-255.72 614.33,-246.28 580,-239.17"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M578,-239.17C538.91,-231.08 495.63,-216.26 466.12,-205.22"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="467.26,-201.91 456.67,-201.64 464.78,-208.46 467.26,-201.91"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;pic_logger -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge59" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M428.5,-235.17C399.99,-234.68 393.47,-244.54 369,-259.17 351.13,-269.86 350.56,-277.97 333,-289.17 327.68,-292.57 321.85,-295.79 316.04,-298.74"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="314.46,-295.62 307,-303.14 317.52,-301.92 314.46,-295.62"/>
+</g>
+<!-- module~rdb_regrid_latlon&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge61" class="edge">
+<title>module~rdb_regrid_latlon&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M411.16,-1126.99C397.38,-1116.31 378.83,-1099.49 369,-1080.17 321.07,-986.01 354.91,-948.54 333,-845.17 318.93,-778.83 296.16,-701.89 284.84,-665.04"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="288.14,-663.87 281.84,-655.35 281.45,-665.94 288.14,-663.87"/>
+</g>
+<!-- module~rdb_regrid_latlon&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge62" class="edge">
+<title>module~rdb_regrid_latlon&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M377.69,-1135.65C346.23,-1131.21 306.53,-1121.28 278,-1099.17"/>
+</g>
+<!-- module~rdb_ice_enthalpy&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge63" class="edge">
+<title>module~rdb_ice_enthalpy&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ff7f00" stroke-dasharray="5,2" d="M265.92,-946.92C253.35,-930.97 232.15,-901.73 221,-873.17 161.12,-719.79 146.63,-518.63 143.38,-452.38"/>
+<polygon fill="#ff7f00" stroke="#ff7f00" points="146.87,-452.1 142.92,-442.27 139.88,-452.42 146.87,-452.1"/>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge64" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M836.05,-803.39C832.19,-805.75 828.37,-808.37 825,-811.17 805.83,-827.1 809.98,-840.72 789,-854.17 742.07,-884.25 718.73,-864.08 668,-887.17 627.45,-905.63 624.41,-931.68 580,-935.17"/>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M578,-935.17C552.64,-937.38 547.19,-925.28 526,-911.17 507.93,-899.15 508.78,-889.06 490,-878.17 465.99,-864.25 457.8,-864.2 430.5,-859.17"/>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge65" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M824.82,-793.07C798.43,-794.01 761.64,-794.36 729.5,-791.17"/>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_ocean_metrics -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge70" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_ocean_metrics</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M859.97,-778.91C857.44,-728.02 844.33,-528.96 789,-377.17 777.98,-346.94 758.11,-315.44 744.38,-295.59"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="747.18,-293.49 738.56,-287.33 741.46,-297.52 747.18,-293.49"/>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_ice_enthalpy -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge67" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_ice_enthalpy</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M578,-935.17C512.62,-940.31 495.89,-934.17 430.5,-939.17"/>
+</g>
+<!-- module~rdb_ice_column -->
+<g id="module~~rdb_atm_state~~UsesGraph_node26" class="node">
+<title>module~rdb_ice_column</title>
+<g id="a_module~~rdb_atm_state~~UsesGraph_node26"><a xlink:href="../module/rdb_ice_column.html" xlink:title="rdb_ice_column">
+<polygon fill="#337ab7" stroke="#337ab7" points="627.5,-987.17 530.5,-987.17 530.5,-963.17 627.5,-963.17 627.5,-987.17"/>
+<text text-anchor="middle" x="579" y="-972.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_column</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_ice_column -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge66" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_ice_column</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M840.71,-803.2C835.18,-807.18 829.47,-811.95 825,-817.17 802.28,-843.78 814.67,-863.4 789,-887.17 746.35,-926.68 683.36,-949.89 637.69,-962.46"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="636.7,-959.1 627.93,-965.06 638.5,-965.87 636.7,-959.1"/>
+</g>
+<!-- module~rdb_ice_state -->
+<g id="module~~rdb_atm_state~~UsesGraph_node27" class="node">
+<title>module~rdb_ice_state</title>
+<g id="a_module~~rdb_atm_state~~UsesGraph_node27"><a xlink:href="../module/rdb_ice_state.html" xlink:title="rdb_ice_state">
+<polygon fill="#337ab7" stroke="#337ab7" points="770,-845.17 687,-845.17 687,-821.17 770,-821.17 770,-845.17"/>
+<text text-anchor="middle" x="728.5" y="-830.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_state</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_ice_state -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge68" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_ice_state</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M824.7,-802.65C809.9,-807.4 792.52,-812.97 776.7,-818.04"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="775.54,-814.74 767.08,-821.12 777.67,-821.4 775.54,-814.74"/>
+</g>
+<!-- module~rdb_multilayer_state -->
+<g id="module~~rdb_atm_state~~UsesGraph_node28" class="node">
+<title>module~rdb_multilayer_state</title>
+<g id="a_module~~rdb_atm_state~~UsesGraph_node28"><a xlink:href="../module/rdb_multilayer_state.html" xlink:title="rdb_multilayer_state">
+<polygon fill="#337ab7" stroke="#337ab7" points="789,-671.17 668,-671.17 668,-647.17 789,-647.17 789,-671.17"/>
+<text text-anchor="middle" x="728.5" y="-656.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_multilayer_state</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_multilayer_state -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge69" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_multilayer_state</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M848.41,-778.99C825.6,-756.01 776.05,-706.07 748.66,-678.48"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="751.09,-675.96 741.56,-671.33 746.12,-680.89 751.09,-675.96"/>
+</g>
+<!-- module~rdb_mem_report&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge71" class="edge">
+<title>module~rdb_mem_report&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M410.05,-557.19C383.76,-574.31 335.35,-605.83 305.02,-625.58"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="303.08,-622.67 296.61,-631.06 306.9,-628.53 303.08,-622.67"/>
+</g>
+<!-- module~rdb_mem_report&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge72" class="edge">
+<title>module~rdb_mem_report&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M400.26,-557.19C363.05,-572.25 299.75,-594.98 278,-585.17"/>
+</g>
+<!-- module~rdb_mem_report&#45;&gt;pic_strings -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge74" class="edge">
+<title>module~rdb_mem_report&#45;&gt;pic_strings</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M424.77,-532.87C415.01,-500.5 388.15,-410.2 369,-334.17 350.98,-262.65 381.21,-227.99 333,-172.17 329.58,-168.21 325.33,-165 320.72,-162.39"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="322.06,-159.15 311.52,-158.07 319.09,-165.49 322.06,-159.15"/>
+</g>
+<!-- module~rdb_mem_report&#45;&gt;pic_logger -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge73" class="edge">
+<title>module~rdb_mem_report&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M389.4,-533.05C381.99,-529.45 374.76,-524.89 369,-519.17 316.19,-466.76 291.42,-378.33 282.33,-337.31"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="285.75,-336.56 280.26,-327.5 278.9,-338.01 285.75,-336.56"/>
+</g>
+<!-- module~rdb_nml_schema&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge75" class="edge">
+<title>module~rdb_nml_schema&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M552.24,-401.18C543.75,-405.37 534.35,-410.26 526,-415.17 524.2,-416.23 279.9,-586.03 278,-585.17"/>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M276,-585.17C215.59,-557.26 172.09,-487.17 153.11,-451.6"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="156.13,-449.81 148.41,-442.54 149.91,-453.03 156.13,-449.81"/>
+</g>
+<!-- module~rdb_nml_schema&#45;&gt;module~rdb_error_ring -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge76" class="edge">
+<title>module~rdb_nml_schema&#45;&gt;module~rdb_error_ring</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M552.27,-377.1C543.79,-372.91 534.38,-368.04 526,-363.17 509.37,-353.52 506.88,-348.39 490,-339.17 483.82,-335.8 477.11,-332.52 470.5,-329.49"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="471.52,-326.12 460.96,-325.26 468.68,-332.52 471.52,-326.12"/>
+</g>
+<!-- module~rdb_nml_schema&#45;&gt;pic_logger -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge77" class="edge">
+<title>module~rdb_nml_schema&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M529.13,-377.12C471.3,-362.85 375.93,-339.33 320.86,-325.74"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="321.61,-322.33 311.06,-323.33 319.93,-329.12 321.61,-322.33"/>
+</g>
+<!-- module~rdb_ocean_bipolar&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge78" class="edge">
+<title>module~rdb_ocean_bipolar&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00ff7f" stroke-dasharray="5,2" d="M232.89,-205.31C228.53,-207.75 224.44,-210.68 221,-214.17 166.68,-269.38 149.6,-365.04 144.52,-408.08"/>
+<polygon fill="#00ff7f" stroke="#00ff7f" points="141.04,-407.74 143.45,-418.06 148,-408.49 141.04,-407.74"/>
+</g>
+<!-- module~rdb_ocean_bulk_flux&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge79" class="edge">
+<title>module~rdb_ocean_bulk_flux&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M402.61,-1071.18C364.94,-1087.81 297.39,-1114.2 278,-1099.17"/>
+</g>
+<!-- module~rdb_ocean_bulk_flux&#45;&gt;module~rdb_ice_enthalpy -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge80" class="edge">
+<title>module~rdb_ocean_bulk_flux&#45;&gt;module~rdb_ice_enthalpy</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M396.51,-1047.08C387.37,-1043.13 377.57,-1038.39 369,-1033.17 342.76,-1017.18 315.84,-994.33 298.16,-978.27"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="300.44,-975.61 290.72,-971.41 295.7,-980.76 300.44,-975.61"/>
+</g>
+<!-- module~rdb_ocean_fold&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge81" class="edge">
+<title>module~rdb_ocean_fold&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#007fff" stroke-dasharray="5,2" d="M241.05,-247.21C233.8,-250.87 226.66,-255.48 221,-261.17 178.85,-303.61 156.64,-372.89 147.55,-408.11"/>
+<polygon fill="#007fff" stroke="#007fff" points="144.14,-407.34 145.14,-417.88 150.93,-409.01 144.14,-407.34"/>
+</g>
+<!-- module~rdb_ice_column&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge82" class="edge">
+<title>module~rdb_ice_column&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M569.23,-987.25C551.08,-1011.98 509.45,-1067.12 490,-1080.17 466.95,-1095.65 457.84,-1094.36 430.5,-1099.17"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M428.5,-1099.17C362.62,-1110.77 330.87,-1140.15 278,-1099.17"/>
+</g>
+<!-- module~rdb_ice_column&#45;&gt;module~rdb_ice_enthalpy -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge83" class="edge">
+<title>module~rdb_ice_column&#45;&gt;module~rdb_ice_enthalpy</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M550.71,-963.07C521.42,-951.39 473.34,-935.9 430.5,-939.17"/>
+</g>
+<!-- module~rdb_ice_mass -->
+<g id="module~~rdb_atm_state~~UsesGraph_node30" class="node">
+<title>module~rdb_ice_mass</title>
+<g id="a_module~~rdb_atm_state~~UsesGraph_node30"><a xlink:href="../module/rdb_ice_mass.html" xlink:title="rdb_ice_mass">
+<polygon fill="#337ab7" stroke="#337ab7" points="472,-991.17 387,-991.17 387,-967.17 472,-967.17 472,-991.17"/>
+<text text-anchor="middle" x="429.5" y="-976.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_mass</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_column&#45;&gt;module~rdb_ice_mass -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge84" class="edge">
+<title>module~rdb_ice_column&#45;&gt;module~rdb_ice_mass</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M530.11,-976.47C514.94,-976.88 498.09,-977.34 482.64,-977.76"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="482.1,-974.27 472.2,-978.04 482.29,-981.27 482.1,-974.27"/>
+</g>
+<!-- module~rdb_ice_optics -->
+<g id="module~~rdb_atm_state~~UsesGraph_node31" class="node">
+<title>module~rdb_ice_optics</title>
+<g id="a_module~~rdb_atm_state~~UsesGraph_node31"><a xlink:href="../module/rdb_ice_optics.html" xlink:title="rdb_ice_optics">
+<polygon fill="#337ab7" stroke="#337ab7" points="473.5,-911.17 385.5,-911.17 385.5,-887.17 473.5,-887.17 473.5,-911.17"/>
+<text text-anchor="middle" x="429.5" y="-896.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_optics</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_column&#45;&gt;module~rdb_ice_optics -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge85" class="edge">
+<title>module~rdb_ice_column&#45;&gt;module~rdb_ice_optics</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M552.27,-963.1C543.79,-958.91 534.38,-954.04 526,-949.17 509.37,-939.52 506.88,-934.39 490,-925.17 483.82,-921.8 477.11,-918.52 470.5,-915.49"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="471.52,-912.12 460.96,-911.26 468.68,-918.52 471.52,-912.12"/>
+</g>
+<!-- module~rdb_ice_state&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge86" class="edge">
+<title>module~rdb_ice_state&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M692.5,-845.21C662.72,-854.04 618.73,-863.76 580,-859.17"/>
+</g>
+<!-- module~rdb_ice_state&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge87" class="edge">
+<title>module~rdb_ice_state&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M699.78,-845.28C657.49,-863.74 581.57,-896.84 580,-897.17"/>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M578,-897.17C544.89,-904.19 463.79,-865.3 430.5,-859.17"/>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M428.5,-859.17C362.72,-847.06 329.26,-902.14 278,-859.17"/>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M276,-859.17C148.05,-751.92 140.73,-524.1 141.77,-452.32"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="145.27,-452.25 141.99,-442.18 138.28,-452.1 145.27,-452.25"/>
+</g>
+<!-- module~rdb_ice_state&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge88" class="edge">
+<title>module~rdb_ice_state&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M698.69,-821.15C688.73,-816.59 677.64,-811.07 668,-805.17 625.83,-779.39 628.53,-746.57 580,-737.17"/>
+</g>
+<!-- module~rdb_ice_state&#45;&gt;module~rdb_ice_enthalpy -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge90" class="edge">
+<title>module~rdb_ice_state&#45;&gt;module~rdb_ice_enthalpy</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M578,-897.17C511.32,-911.31 498.46,-933.97 430.5,-939.17"/>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M428.5,-939.17C398.9,-941.44 366.22,-945.58 338.9,-949.51"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="338.09,-946.09 328.71,-951 339.11,-953.02 338.09,-946.09"/>
+</g>
+<!-- module~rdb_ice_state&#45;&gt;module~rdb_mem_report -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge91" class="edge">
+<title>module~rdb_ice_state&#45;&gt;module~rdb_mem_report</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M713.18,-820.95C699.66,-808.67 679.75,-788.53 668,-767.17 639.31,-715.02 671.64,-682.58 632,-638.17 598.14,-600.25 572.13,-616.54 526,-595.17 503.92,-584.94 479.63,-572.21 461.07,-562.15"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="462.65,-559.02 452.2,-557.3 459.3,-565.17 462.65,-559.02"/>
+</g>
+<!-- module~rdb_ice_state&#45;&gt;module~rdb_ice_column -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge89" class="edge">
+<title>module~rdb_ice_state&#45;&gt;module~rdb_ice_column</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M719.92,-845.45C705.3,-868.32 671.17,-917.96 632,-949.17 627.86,-952.47 623.24,-955.51 618.51,-958.25"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="616.51,-955.35 609.36,-963.16 619.82,-961.52 616.51,-955.35"/>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge92" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M716.62,-671.44C703.67,-686.52 682.04,-713.31 668,-739.17 646.06,-779.59 663.51,-802.68 632,-836.17 614.68,-854.58 605.1,-862.14 580,-859.17"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M578,-859.17C544.39,-855.2 460.45,-836.94 430.5,-821.17"/>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge93" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M578,-581.17C450.37,-542.56 399.05,-641.1 278,-585.17"/>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_error_ring -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge95" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_error_ring</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M723.4,-647.11C713.66,-618.4 688.42,-543.74 668,-481.17 651.64,-431.07 668.48,-406.22 632,-368.17 614.97,-350.41 603.17,-357.46 580,-349.17"/>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge96" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M716.54,-671.42C693.17,-695.98 636.03,-748.02 580,-737.17"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M578,-737.17C540.27,-729.87 497.67,-719.21 467.98,-711.38"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="468.62,-707.93 458.05,-708.74 466.82,-714.69 468.62,-707.93"/>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_mem_report -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge97" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_mem_report</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M709.86,-646.92C683.14,-629.06 630.19,-596.35 580,-581.17"/>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M578,-581.17C549.36,-572.51 517.13,-564.45 490.11,-558.17"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="490.56,-554.68 480.03,-555.85 488.99,-561.5 490.56,-554.68"/>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;pic_logger -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge99" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M717.36,-647.14C700.95,-628.23 666.87,-591.22 632,-567.17 525.61,-493.82 468.12,-526.1 369,-443.17 332.49,-412.63 303.46,-364.23 288.69,-336.52"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="291.62,-334.58 283.9,-327.32 285.41,-337.81 291.62,-334.58"/>
+</g>
+<!-- module~rdb_efp -->
+<g id="module~~rdb_atm_state~~UsesGraph_node29" class="node">
+<title>module~rdb_efp</title>
+<g id="a_module~~rdb_atm_state~~UsesGraph_node29"><a xlink:href="../module/rdb_efp.html" xlink:title="rdb_efp">
+<polygon fill="#337ab7" stroke="#337ab7" points="606,-827.17 552,-827.17 552,-803.17 606,-803.17 606,-827.17"/>
+<text text-anchor="middle" x="579" y="-812.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_efp</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_efp -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge94" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_efp</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M715.93,-671.41C690.51,-698.3 629.61,-762.7 598.7,-795.4"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="595.85,-793.32 591.52,-802.99 600.93,-798.13 595.85,-793.32"/>
+</g>
+<!-- module~rdb_tracer -->
+<g id="module~~rdb_atm_state~~UsesGraph_node32" class="node">
+<title>module~rdb_tracer</title>
+<g id="a_module~~rdb_atm_state~~UsesGraph_node32"><a xlink:href="../module/rdb_tracer.html" xlink:title="rdb_tracer">
+<polygon fill="#337ab7" stroke="#337ab7" points="613,-671.17 545,-671.17 545,-647.17 613,-647.17 613,-671.17"/>
+<text text-anchor="middle" x="579" y="-656.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_tracer</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_tracer -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge98" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_tracer</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M667.93,-659.17C653.02,-659.17 637.31,-659.17 623.36,-659.17"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="623.07,-655.67 613.07,-659.17 623.07,-662.67 623.07,-655.67"/>
+</g>
+<!-- module~rdb_efp&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge101" class="edge">
+<title>module~rdb_efp&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M551.75,-823.77C520.83,-832.27 468.83,-841.35 430.5,-821.17"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M428.5,-821.17C403.94,-808.24 390.58,-819.63 369,-802.17 323.5,-765.38 296.4,-699.36 284.75,-665.11"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="288.07,-663.99 281.63,-655.58 281.42,-666.17 288.07,-663.99"/>
+</g>
+<!-- ieee_arithmetic -->
+<g id="module~~rdb_atm_state~~UsesGraph_node33" class="node">
+<title>ieee_arithmetic</title>
+<g id="a_module~~rdb_atm_state~~UsesGraph_node33"><a xlink:href="http://fortranwiki.org/fortran/show/ieee_arithmetic" xlink:title="ieee_arithmetic">
+<polygon fill="#337ab7" stroke="#337ab7" points="477.5,-793.17 381.5,-793.17 381.5,-769.17 477.5,-769.17 477.5,-793.17"/>
+<text text-anchor="middle" x="429.5" y="-778.77" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ieee_arithmetic</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_efp&#45;&gt;ieee_arithmetic -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge100" class="edge">
+<title>module~rdb_efp&#45;&gt;ieee_arithmetic</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M551.97,-809.17C534.18,-805.07 509.91,-799.48 487.73,-794.37"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="488.25,-790.89 477.72,-792.06 486.68,-797.72 488.25,-790.89"/>
+</g>
+<!-- module~rdb_ice_mass&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge102" class="edge">
+<title>module~rdb_ice_mass&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M416.06,-991.37C382.5,-1023.95 291.74,-1109.82 278,-1099.17"/>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M276,-1099.17C170.32,-1017.28 147.21,-559.49 143.22,-452.53"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="146.71,-452.14 142.86,-442.27 139.72,-452.38 146.71,-452.14"/>
+</g>
+<!-- module~rdb_ice_mass&#45;&gt;module~rdb_ice_enthalpy -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge103" class="edge">
+<title>module~rdb_ice_mass&#45;&gt;module~rdb_ice_enthalpy</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M386.98,-973.66C372.06,-971.67 354.92,-969.4 338.71,-967.24"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="339.14,-963.77 328.77,-965.92 338.22,-970.71 339.14,-963.77"/>
+</g>
+<!-- module~rdb_ice_optics&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge104" class="edge">
+<title>module~rdb_ice_optics&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M385.44,-897.37C352.64,-893.91 308.15,-884.44 278,-859.17"/>
+</g>
+<!-- module~rdb_ice_optics&#45;&gt;module~rdb_ice_enthalpy -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge105" class="edge">
+<title>module~rdb_ice_optics&#45;&gt;module~rdb_ice_enthalpy</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M398.04,-911.32C374.92,-920.54 342.91,-933.29 317.77,-943.32"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="316.15,-940.2 308.15,-947.15 318.74,-946.7 316.15,-940.2"/>
+</g>
+<!-- module~rdb_tracer&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge106" class="edge">
+<title>module~rdb_tracer&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M428.5,-623.17C395.97,-618.34 359.39,-622.97 330.44,-628.98"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="329.56,-625.59 320.54,-631.16 331.06,-632.43 329.56,-625.59"/>
+</g>
+<!-- module~rdb_tracer&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge107" class="edge">
+<title>module~rdb_tracer&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M544.95,-649.26C515.29,-640.81 470.39,-629.11 430.5,-623.17"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M428.5,-623.17C360.26,-613.03 340.63,-614.11 278,-585.17"/>
+</g>
+<!-- module~rdb_tracer&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge108" class="edge">
+<title>module~rdb_tracer&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M544.9,-668.6C522.01,-675.12 491.52,-683.8 467.77,-690.56"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="466.71,-687.22 458.05,-693.33 468.63,-693.96 466.71,-687.22"/>
+</g>
+<!-- module~rdb_tracer&#45;&gt;module~rdb_mem_report -->
+<g id="module~~rdb_atm_state~~UsesGraph_edge109" class="edge">
+<title>module~rdb_tracer&#45;&gt;module~rdb_mem_report</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M550.19,-647.06C542.12,-643.08 533.48,-638.33 526,-633.17 496.61,-612.89 467.04,-584.02 448.75,-564.96"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="451.05,-562.3 441.64,-557.44 445.97,-567.11 451.05,-562.3"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panmodulerdb_atm_stateUsesGraph = svgPanZoom('#modulerdb_atm_stateUsesGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsesGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsesGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="518pt" height="32pt"
+ viewBox="0.00 0.00 517.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 513.5,-28 513.5,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24 0,-24 0,0 54,0 54,-24"/>
+<text text-anchor="middle" x="27" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="145.5,-24 72.5,-24 72.5,0 145.5,0 145.5,-24"/>
+<text text-anchor="middle" x="109" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="234,-24 164,-24 164,0 234,0 234,-24"/>
+<text text-anchor="middle" x="199" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="310,-24 252,-24 252,0 310,0 310,-24"/>
+<text text-anchor="middle" x="281" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="386,-24 328,-24 328,0 386,0 386,-24"/>
+<text text-anchor="middle" x="357" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="509.5,-24 404.5,-24 404.5,0 509.5,0 509.5,-24"/>
+<text text-anchor="middle" x="457" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+          <div class="card">
+      <h3 class="card-header card-title bg-light">Used by</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: module~~rdb_atm_state~~UsedByGraph Pages: 1 -->
+<svg id="modulerdb_atm_stateUsedByGraph" width="641pt" height="232pt"
+ viewBox="0.00 0.00 641.00 231.95" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~rdb_atm_state~~UsedByGraph" class="graph" transform="scale(0.54 0.54) rotate(0) translate(4 429.15)">
+<title>module~~rdb_atm_state~~UsedByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-429.15 1193,-429.15 1193,4 -4,4"/>
+<!-- module~rdb_atm_state -->
+<g id="module~~rdb_atm_state~~UsedByGraph_node1" class="node">
+<title>module~rdb_atm_state</title>
+<polygon fill="none" stroke="black" points="88,-305.15 0,-305.15 0,-281.15 88,-281.15 88,-305.15"/>
+<text text-anchor="middle" x="44" y="-290.75" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_atm_state</text>
+</g>
+<!-- module~rdb_ice_atm_forcing -->
+<g id="module~~rdb_atm_state~~UsedByGraph_node2" class="node">
+<title>module~rdb_ice_atm_forcing</title>
+<g id="a_module~~rdb_atm_state~~UsedByGraph_node2"><a xlink:href="../module/rdb_ice_atm_forcing.html" xlink:title="rdb_ice_atm_forcing">
+<polygon fill="#337ab7" stroke="#337ab7" points="419,-345.15 299,-345.15 299,-321.15 419,-321.15 419,-345.15"/>
+<text text-anchor="middle" x="359" y="-330.75" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_atm_forcing</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_atm_forcing&#45;&gt;module~rdb_atm_state -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge1" class="edge">
+<title>module~rdb_ice_atm_forcing&#45;&gt;module~rdb_atm_state</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M323.31,-345.21C283,-358.59 218.91,-377.73 194.5,-373.15"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M192.5,-373.15C144.19,-364.08 95.48,-332.21 67.89,-311.53"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="69.77,-308.56 59.7,-305.26 65.51,-314.12 69.77,-308.56"/>
+</g>
+<!-- module~rdb_ocean_bulk_forcing -->
+<g id="module~~rdb_atm_state~~UsedByGraph_node3" class="node">
+<title>module~rdb_ocean_bulk_forcing</title>
+<g id="a_module~~rdb_atm_state~~UsedByGraph_node3"><a xlink:href="../module/rdb_ocean_bulk_forcing.html" xlink:title="rdb_ocean_bulk_forcing">
+<polygon fill="#337ab7" stroke="#337ab7" points="263,-305.15 124,-305.15 124,-281.15 263,-281.15 263,-305.15"/>
+<text text-anchor="middle" x="193.5" y="-290.75" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_bulk_forcing</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_bulk_forcing&#45;&gt;module~rdb_atm_state -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge2" class="edge">
+<title>module~rdb_ocean_bulk_forcing&#45;&gt;module~rdb_atm_state</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M123.93,-293.15C115.36,-293.15 106.7,-293.15 98.41,-293.15"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="98.14,-289.65 88.14,-293.15 98.14,-296.65 98.14,-289.65"/>
+</g>
+<!-- module~rdb_ocean_engine -->
+<g id="module~~rdb_atm_state~~UsedByGraph_node4" class="node">
+<title>module~rdb_ocean_engine</title>
+<g id="a_module~~rdb_atm_state~~UsedByGraph_node4"><a xlink:href="../module/rdb_ocean_engine.html" xlink:title="rdb_ocean_engine">
+<polygon fill="#337ab7" stroke="#337ab7" points="937,-345.15 826,-345.15 826,-321.15 937,-321.15 937,-345.15"/>
+<text text-anchor="middle" x="881.5" y="-330.75" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_atm_state -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge3" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_atm_state</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M524,-333.15C476.47,-330.72 466.12,-347.46 419,-354.15 319.86,-368.21 292.92,-391.62 194.5,-373.15"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ice_atm_forcing -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge5" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ice_atm_forcing</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M524,-333.15C492.98,-331.29 458.61,-331.01 429.37,-331.31"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="429.22,-327.81 419.26,-331.44 429.3,-334.81 429.22,-327.81"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_bulk_forcing -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge6" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_bulk_forcing</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M524,-333.15C476.49,-330.3 466.12,-318.83 419,-312.15 370.78,-305.31 316.35,-300.63 273.17,-297.62"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="273.22,-294.12 263.01,-296.93 272.75,-301.1 273.22,-294.12"/>
+</g>
+<!-- module~rdb_ocean_state -->
+<g id="module~~rdb_atm_state~~UsedByGraph_node5" class="node">
+<title>module~rdb_ocean_state</title>
+<g id="a_module~~rdb_atm_state~~UsedByGraph_node5"><a xlink:href="../module/rdb_ocean_state.html" xlink:title="rdb_ocean_state">
+<polygon fill="#337ab7" stroke="#337ab7" points="409,-265.15 309,-265.15 309,-241.15 409,-241.15 409,-265.15"/>
+<text text-anchor="middle" x="359" y="-250.75" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge15" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M701.5,-333.15C624,-324.31 603.86,-337.82 526,-333.15"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M524,-333.15C492.25,-331.24 482.6,-329.95 455,-314.15 435.63,-303.06 437.5,-291.62 419,-279.15 413.76,-275.62 407.97,-272.38 402.11,-269.48"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="403.48,-266.25 392.94,-265.2 400.52,-272.6 403.48,-266.25"/>
+</g>
+<!-- module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_atm_state~~UsedByGraph_node9" class="node">
+<title>module~rdb_ocean_diag_derived</title>
+<g id="a_module~~rdb_atm_state~~UsedByGraph_node9"><a xlink:href="../module/rdb_ocean_diag_derived.html" xlink:title="rdb_ocean_diag_derived">
+<polygon fill="#337ab7" stroke="#337ab7" points="774,-263.15 631,-263.15 631,-239.15 774,-239.15 774,-263.15"/>
+<text text-anchor="middle" x="702.5" y="-248.75" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_derived</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge22" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M844.99,-321.08C833.68,-316.96 821.2,-312.13 810,-307.15 783.57,-295.38 754.56,-279.96 733.5,-268.27"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="735.15,-265.18 724.71,-263.36 731.73,-271.29 735.15,-265.18"/>
+</g>
+<!-- module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_atm_state~~UsedByGraph_node10" class="node">
+<title>module~rdb_ocean_diag_fills</title>
+<g id="a_module~~rdb_atm_state~~UsedByGraph_node10"><a xlink:href="../module/rdb_ocean_diag_fills.html" xlink:title="rdb_ocean_diag_fills">
+<polygon fill="#337ab7" stroke="#337ab7" points="585.5,-263.15 464.5,-263.15 464.5,-239.15 585.5,-239.15 585.5,-263.15"/>
+<text text-anchor="middle" x="525" y="-248.75" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_fills</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge25" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M825.7,-336.34C790.64,-337.59 744.26,-337.79 703.5,-333.15"/>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M701.5,-333.15C668.32,-329.36 659.25,-324.95 631,-307.15 612.12,-295.25 614.22,-283.49 595,-272.15 591.85,-270.29 588.52,-268.58 585.09,-267.01"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="586.42,-263.77 575.85,-263.18 583.75,-270.24 586.42,-263.77"/>
+</g>
+<!-- module~rdb_ocean_setup -->
+<g id="module~~rdb_atm_state~~UsedByGraph_node11" class="node">
+<title>module~rdb_ocean_setup</title>
+<g id="a_module~~rdb_atm_state~~UsedByGraph_node11"><a xlink:href="../module/rdb_ocean_setup.html" xlink:title="rdb_ocean_setup">
+<polygon fill="#337ab7" stroke="#337ab7" points="754,-181.15 651,-181.15 651,-157.15 754,-157.15 754,-181.15"/>
+<text text-anchor="middle" x="702.5" y="-166.75" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge26" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M832.12,-321.07C824.09,-317.52 816.34,-312.97 810,-307.15 782.19,-281.58 796.79,-260.28 774,-230.15 761.51,-213.64 743.91,-198.4 729.41,-187.28"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="731.41,-184.4 721.3,-181.23 727.23,-190.02 731.41,-184.4"/>
+</g>
+<!-- module~rdb_ocean_state&#45;&gt;module~rdb_atm_state -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge4" class="edge">
+<title>module~rdb_ocean_state&#45;&gt;module~rdb_atm_state</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M308.83,-254.59C261.26,-256.58 187.27,-261.26 124,-272.15 114.45,-273.79 104.37,-276.05 94.73,-278.48"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="93.67,-275.14 84.88,-281.06 95.44,-281.91 93.67,-275.14"/>
+</g>
+<!-- module~rdb_ocean_state&#45;&gt;module~rdb_ocean_bulk_forcing -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge7" class="edge">
+<title>module~rdb_ocean_state&#45;&gt;module~rdb_ocean_bulk_forcing</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M308.94,-265.15C291.56,-269.4 271.82,-274.23 253.69,-278.67"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="252.68,-275.31 243.8,-281.09 254.35,-282.11 252.68,-275.31"/>
+</g>
+<!-- module~rdb_driver -->
+<g id="module~~rdb_atm_state~~UsedByGraph_node6" class="node">
+<title>module~rdb_driver</title>
+<g id="a_module~~rdb_atm_state~~UsedByGraph_node6"><a xlink:href="../module/rdb_driver.html" xlink:title="rdb_driver">
+<polygon fill="#337ab7" stroke="#337ab7" points="1059,-425.15 992,-425.15 992,-401.15 1059,-401.15 1059,-425.15"/>
+<text text-anchor="middle" x="1025.5" y="-410.75" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge8" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1002.93,-401C978.92,-387.47 939.93,-365.5 912.84,-350.24"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="914.23,-347.01 903.8,-345.15 910.8,-353.11 914.23,-347.01"/>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge11" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M991.95,-416.48C901.57,-424.3 641.85,-436.88 455,-347.15 453.82,-346.58 406.83,-299.83 379.39,-272.48"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="381.77,-269.92 372.22,-265.34 376.83,-274.88 381.77,-269.92"/>
+</g>
+<!-- module~rdb_handle -->
+<g id="module~~rdb_atm_state~~UsedByGraph_node7" class="node">
+<title>module~rdb_handle</title>
+<g id="a_module~~rdb_atm_state~~UsedByGraph_node7"><a xlink:href="../module/rdb_handle.html" xlink:title="rdb_handle">
+<polygon fill="#337ab7" stroke="#337ab7" points="1062,-345.15 989,-345.15 989,-321.15 1062,-321.15 1062,-345.15"/>
+<text text-anchor="middle" x="1025.5" y="-330.75" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_handle&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge9" class="edge">
+<title>module~rdb_handle&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M988.67,-333.15C976.11,-333.15 961.58,-333.15 947.38,-333.15"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="947.13,-329.65 937.13,-333.15 947.13,-336.65 947.13,-329.65"/>
+</g>
+<!-- module~rdb_handle&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge12" class="edge">
+<title>module~rdb_handle&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1023.65,-320.89C1019.71,-268.06 1001.33,-60.62 953,-22.15 903.28,17.44 871.28,-5.29 810,-22.15 702.78,-51.65 697.31,-106.55 595,-150.15 565.74,-162.62 556.79,-161.16 526,-169.15"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M524,-169.15C493.09,-176.65 483.85,-174.76 455,-188.15 428.27,-200.55 400.83,-220.22 382.35,-234.68"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="380.17,-231.94 374.53,-240.91 384.53,-237.42 380.17,-231.94"/>
+</g>
+<!-- module~rdb_ocean_api -->
+<g id="module~~rdb_atm_state~~UsedByGraph_node8" class="node">
+<title>module~rdb_ocean_api</title>
+<g id="a_module~~rdb_atm_state~~UsedByGraph_node8"><a xlink:href="../module/rdb_ocean_api.html" xlink:title="rdb_ocean_api">
+<polygon fill="#337ab7" stroke="#337ab7" points="1189,-345.15 1098,-345.15 1098,-321.15 1189,-321.15 1189,-345.15"/>
+<text text-anchor="middle" x="1143.5" y="-330.75" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge10" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1104.4,-345.21C1091.13,-348.85 1076.04,-352.35 1062,-354.15 1021.64,-359.33 976.1,-353.87 940.99,-347.22"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="941.4,-343.73 930.91,-345.23 940.04,-350.6 941.4,-343.73"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_handle -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge20" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_handle</title>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M1097.98,-333.15C1089.53,-333.15 1080.68,-333.15 1072.2,-333.15"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="1072.08,-329.65 1062.08,-333.15 1072.08,-336.65 1072.08,-329.65"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge21" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_derived</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1100.98,-321.05C1088.53,-317.77 1074.79,-314.48 1062,-312.15 983.08,-297.76 962.59,-297.83 882.5,-293.15"/>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M880.5,-293.15C836.18,-288.55 786.96,-276.26 751.69,-266.16"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="752.26,-262.68 741.68,-263.24 750.3,-269.4 752.26,-262.68"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge23" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M880.5,-293.15C769.81,-281.66 741.18,-287.75 631,-272.15 617.73,-270.27 603.6,-267.78 590.15,-265.18"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="590.51,-261.68 580.03,-263.17 589.15,-268.55 590.51,-261.68"/>
+</g>
+<!-- module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge13" class="edge">
+<title>module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M689.74,-239.07C662.3,-212.4 591.43,-152.17 526,-169.15"/>
+</g>
+<!-- module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge24" class="edge">
+<title>module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M630.88,-251.15C619.31,-251.15 607.33,-251.15 595.79,-251.15"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="595.77,-247.65 585.77,-251.15 595.77,-254.65 595.77,-247.65"/>
+</g>
+<!-- module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge14" class="edge">
+<title>module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M464.33,-251.87C449.74,-252.05 434.12,-252.24 419.54,-252.42"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="419.08,-248.93 409.13,-252.55 419.17,-255.93 419.08,-248.93"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge16" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M650.72,-162.48C615.21,-159.42 566.99,-158.51 526,-169.15"/>
+</g>
+<!-- module~rdb_ocean_state_restart -->
+<g id="module~~rdb_atm_state~~UsedByGraph_node12" class="node">
+<title>module~rdb_ocean_state_restart</title>
+<g id="a_module~~rdb_atm_state~~UsedByGraph_node12"><a xlink:href="../module/rdb_ocean_state_restart.html" xlink:title="rdb_ocean_state_restart">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="595,-141.15 455,-141.15 455,-117.15 595,-117.15 595,-141.15"/>
+<text text-anchor="middle" x="525" y="-126.75" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_restart</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_state_restart&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge17" class="edge">
+<title>module~rdb_ocean_state_restart&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#7f00ff" d="M483.15,-141.15C473.51,-144.88 463.56,-149.53 455,-155.15 422.29,-176.61 392.26,-211.14 375.06,-232.97"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="372.25,-230.87 368.91,-240.92 377.79,-235.15 372.25,-230.87"/>
+</g>
+<!-- module~rdb_ocean_state_seed -->
+<g id="module~~rdb_atm_state~~UsedByGraph_node13" class="node">
+<title>module~rdb_ocean_state_seed</title>
+<g id="a_module~~rdb_atm_state~~UsedByGraph_node13"><a xlink:href="../module/rdb_ocean_state_seed.html" xlink:title="rdb_ocean_state_seed">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="590.5,-305.15 459.5,-305.15 459.5,-281.15 590.5,-281.15 590.5,-305.15"/>
+<text text-anchor="middle" x="525" y="-290.75" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_seed</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_state_seed&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge18" class="edge">
+<title>module~rdb_ocean_state_seed&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#7f00ff" d="M474.79,-281.15C457.28,-276.87 437.38,-272.02 419.12,-267.57"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="419.72,-264.11 409.17,-265.14 418.06,-270.91 419.72,-264.11"/>
+</g>
+<!-- module~rdb_ocean_state_topo -->
+<g id="module~~rdb_atm_state~~UsedByGraph_node14" class="node">
+<title>module~rdb_ocean_state_topo</title>
+<g id="a_module~~rdb_atm_state~~UsedByGraph_node14"><a xlink:href="../module/rdb_ocean_state_topo.html" xlink:title="rdb_ocean_state_topo">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="590,-221.15 460,-221.15 460,-197.15 590,-197.15 590,-221.15"/>
+<text text-anchor="middle" x="525" y="-206.75" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_topo</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_state_topo&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge19" class="edge">
+<title>module~rdb_ocean_state_topo&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#7f00ff" d="M479.19,-221.17C459.21,-226.53 435.5,-232.89 414.5,-238.52"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="413.51,-235.17 404.76,-241.14 415.32,-241.93 413.51,-235.17"/>
+</g>
+<!-- module~rdb_ocean_setup_bc -->
+<g id="module~~rdb_atm_state~~UsedByGraph_node15" class="node">
+<title>module~rdb_ocean_setup_bc</title>
+<g id="a_module~~rdb_atm_state~~UsedByGraph_node15"><a xlink:href="../module/rdb_ocean_setup_bc.html" xlink:title="rdb_ocean_setup_bc">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="942,-55.15 821,-55.15 821,-31.15 942,-31.15 942,-55.15"/>
+<text text-anchor="middle" x="881.5" y="-40.75" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_bc</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_bc&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge27" class="edge">
+<title>module~rdb_ocean_setup_bc&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#00a9ff" d="M829.18,-55.18C822.51,-57.67 815.94,-60.64 810,-64.15 772.18,-86.51 737.82,-125.18 718.88,-148.84"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="716.04,-146.79 712.62,-156.81 721.55,-151.11 716.04,-146.79"/>
+</g>
+<!-- module~rdb_ocean_setup_bt -->
+<g id="module~~rdb_atm_state~~UsedByGraph_node16" class="node">
+<title>module~rdb_ocean_setup_bt</title>
+<g id="a_module~~rdb_atm_state~~UsedByGraph_node16"><a xlink:href="../module/rdb_ocean_setup_bt.html" xlink:title="rdb_ocean_setup_bt">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="941,-265.15 822,-265.15 822,-241.15 941,-241.15 941,-265.15"/>
+<text text-anchor="middle" x="881.5" y="-250.75" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_bt</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_bt&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge28" class="edge">
+<title>module~rdb_ocean_setup_bt&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#00a9ff" d="M834.03,-241.07C825.9,-238.46 817.61,-235.47 810,-232.15 781.06,-219.51 750.24,-200.61 729.24,-186.81"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="731.14,-183.87 720.88,-181.24 727.26,-189.7 731.14,-183.87"/>
+</g>
+<!-- module~rdb_ocean_setup_cavity -->
+<g id="module~~rdb_atm_state~~UsedByGraph_node17" class="node">
+<title>module~rdb_ocean_setup_cavity</title>
+<g id="a_module~~rdb_atm_state~~UsedByGraph_node17"><a xlink:href="../module/rdb_ocean_setup_cavity.html" xlink:title="rdb_ocean_setup_cavity">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="951.5,-223.15 811.5,-223.15 811.5,-199.15 951.5,-199.15 951.5,-223.15"/>
+<text text-anchor="middle" x="881.5" y="-208.75" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_cavity</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_cavity&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge29" class="edge">
+<title>module~rdb_ocean_setup_cavity&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#00a9ff" d="M829.78,-199.11C809.32,-194.26 785.54,-188.62 764.18,-183.54"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="764.77,-180.09 754.23,-181.18 763.15,-186.9 764.77,-180.09"/>
+</g>
+<!-- module~rdb_ocean_setup_grid -->
+<g id="module~~rdb_atm_state~~UsedByGraph_node18" class="node">
+<title>module~rdb_ocean_setup_grid</title>
+<g id="a_module~~rdb_atm_state~~UsedByGraph_node18"><a xlink:href="../module/rdb_ocean_setup_grid.html" xlink:title="rdb_ocean_setup_grid">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="946.5,-181.15 816.5,-181.15 816.5,-157.15 946.5,-157.15 946.5,-181.15"/>
+<text text-anchor="middle" x="881.5" y="-166.75" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_grid</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_grid&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge30" class="edge">
+<title>module~rdb_ocean_setup_grid&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#00a9ff" d="M816.35,-169.15C799.39,-169.15 781.14,-169.15 764.36,-169.15"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="764.12,-165.65 754.12,-169.15 764.12,-172.65 764.12,-165.65"/>
+</g>
+<!-- module~rdb_ocean_setup_lateral -->
+<g id="module~~rdb_atm_state~~UsedByGraph_node19" class="node">
+<title>module~rdb_ocean_setup_lateral</title>
+<g id="a_module~~rdb_atm_state~~UsedByGraph_node19"><a xlink:href="../module/rdb_ocean_setup_lateral.html" xlink:title="rdb_ocean_setup_lateral">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="953,-139.15 810,-139.15 810,-115.15 953,-115.15 953,-139.15"/>
+<text text-anchor="middle" x="881.5" y="-124.75" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_lateral</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_lateral&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge31" class="edge">
+<title>module~rdb_ocean_setup_lateral&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#00a9ff" d="M829.78,-139.18C809.32,-144.04 785.54,-149.68 764.18,-154.75"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="763.15,-151.4 754.23,-157.11 764.77,-158.21 763.15,-151.4"/>
+</g>
+<!-- module~rdb_ocean_setup_vmix -->
+<g id="module~~rdb_atm_state~~UsedByGraph_node20" class="node">
+<title>module~rdb_ocean_setup_vmix</title>
+<g id="a_module~~rdb_atm_state~~UsedByGraph_node20"><a xlink:href="../module/rdb_ocean_setup_vmix.html" xlink:title="rdb_ocean_setup_vmix">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="948.5,-97.15 814.5,-97.15 814.5,-73.15 948.5,-73.15 948.5,-97.15"/>
+<text text-anchor="middle" x="881.5" y="-82.75" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_vmix</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_vmix&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_atm_state~~UsedByGraph_edge32" class="edge">
+<title>module~rdb_ocean_setup_vmix&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#00a9ff" d="M834.03,-97.22C825.9,-99.83 817.61,-102.82 810,-106.15 781.06,-118.79 750.24,-137.68 729.24,-151.48"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="727.26,-148.6 720.88,-157.05 731.14,-154.42 727.26,-148.6"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panmodulerdb_atm_stateUsedByGraph = svgPanZoom('#modulerdb_atm_stateUsedByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsedByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsedByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="518pt" height="32pt"
+ viewBox="0.00 0.00 517.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 513.5,-28 513.5,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24 0,-24 0,0 54,0 54,-24"/>
+<text text-anchor="middle" x="27" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="145.5,-24 72.5,-24 72.5,0 145.5,0 145.5,-24"/>
+<text text-anchor="middle" x="109" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="234,-24 164,-24 164,0 234,0 234,-24"/>
+<text text-anchor="middle" x="199" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="310,-24 252,-24 252,0 310,0 310,-24"/>
+<text text-anchor="middle" x="281" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="386,-24 328,-24 328,0 386,0 386,-24"/>
+<text text-anchor="middle" x="357" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="509.5,-24 404.5,-24 404.5,0 509.5,0 509.5,-24"/>
+<text text-anchor="middle" x="457" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+      <br>
+
+
+        <section>
+          <h2>Variables</h2>
+            <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-atm_cosz_nquad"></span>
+              integer,
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>ATM_COSZ_NQUAD</strong></td>
+<td> =</td>
+                <td>12</td>
+            <td>
+                <p>Midpoint-quadrature node count for <code>cosz_mean</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-atm_sw_bucket_s"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>ATM_SW_BUCKET_S</strong></td>
+<td> =</td>
+                <td>10800.0_wp</td>
+            <td>
+                <p>JRA55-do shortwave accumulation bucket width (3 h; Tsujino et al.
+2018) &ndash; the <code>coszen</code> kernel&rsquo;s quadrature window, fixed by the
+dataset convention rather than derived from the reader&rsquo;s own
+bracket (see the module docstring&rsquo;s <code>rsds</code> paragraph).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idx_huss"></span>
+              integer,
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>IDX_HUSS</strong></td>
+<td> =</td>
+                <td>2</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idx_prra"></span>
+              integer,
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>IDX_PRRA</strong></td>
+<td> =</td>
+                <td>7</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idx_prsn"></span>
+              integer,
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>IDX_PRSN</strong></td>
+<td> =</td>
+                <td>8</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idx_psl"></span>
+              integer,
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>IDX_PSL</strong></td>
+<td> =</td>
+                <td>5</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idx_rlds"></span>
+              integer,
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>IDX_RLDS</strong></td>
+<td> =</td>
+                <td>6</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idx_rsds"></span>
+              integer,
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>IDX_RSDS</strong></td>
+<td> =</td>
+                <td>9</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idx_tas"></span>
+              integer,
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>IDX_TAS</strong></td>
+<td> =</td>
+                <td>1</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idx_uas"></span>
+              integer,
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>IDX_UAS</strong></td>
+<td> =</td>
+                <td>3</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idx_vas"></span>
+              integer,
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>IDX_VAS</strong></td>
+<td> =</td>
+                <td>4</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_atm_fields"></span>
+              integer,
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>N_ATM_FIELDS</strong></td>
+<td> =</td>
+                <td>9</td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+        </section>
+        <br>
+
+
+
+
+        <section>
+          <h2>Derived Types</h2>
+              <div class="card">
+    <div class="card-header codesum">
+      <span class="anchor" id="type-atm_state_t"></span>
+      <h3>
+        type, public&nbsp;::&nbsp;
+        <a href='../type/atm_state_t.html'>atm_state_t</a>
+        
+      </h3>
+    </div>
+    <div class="card-body">
+      <p>Nine-field atmospheric state, device-resident, physical cells
+only.  Owns its own regrid weights + window/scratch buffers &ndash;
+unlike <code>ocean_data_forcing_t</code>, which writes into OTHER slots&rsquo;
+arrays and therefore owns no device-mapped state of its own.</p>
+
+        <h4>Components</h4>
+          <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cosz"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>cosz</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Instantaneous cosine of the solar zenith angle at the
+current query time <code>t</code>, clamped to <code>&gt;= 0</code> (night is not
+negative insolation). <code>coszen</code> only &ndash; stays 0 under
+<code>linear</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cosz_mean"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>cosz_mean</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>12-point midpoint quadrature of <code>max(0, cos Z)</code> over the
+<code>rsds_rec</code> bucket <code>[t_rec, t_rec+3h)</code>. <code>coszen</code> only.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-enable~6"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>enable</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+<p><code>.true.</code> once <code>atm_state_configure</code> has registered every
+field (mirrors <code>&amp;ocean_atm_forcing_nml enable</code>).  <code>.false.</code>
+makes <code>atm_state_update</code> (and every lifecycle method below)
+an immediate no-op &ndash; the default, bit-identical state.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-epoch"></span>
+              type(<a href='../type/date_t.html'>date_t</a>),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>epoch</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p><code>&amp;time_nml start_date</code>, parsed once at configure &ndash; the
+calendar epoch <code>atm_state_update</code>&rsquo;s Spencer (1971) solar
+position needs every step (<code>t</code> is seconds since this).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-fluxes_conservative"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>fluxes_conservative</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+<p><code>.true.</code> =&gt; <code>rlds/rsds/prra/prsn</code> regrid through <code>wc</code>
+(<code>fluxes_regrid = "conservative"</code>, the namelist default);
+<code>.false.</code> =&gt; through <code>wb</code> (<code>"bilinear"</code>).  <code>tas/huss/uas/
+vas/psl</code> always use <code>wb</code> (<code>states_regrid</code> has no other
+legal value).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-huss"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>huss</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Instantaneous states, blended (no hold).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-id~16"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>id</strong>(N_ATM_FIELDS)</td>
+<td> =</td>
+                <td>0</td>
+            <td>
+<p>Reader registration ids, indexed by the <code>IDX_*</code> constants.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nghost~10"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nghost</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+<p>Target-tile geometry, cached from <code>grid</code> at configure time.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nlat"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nlat</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+<p>Source grid size, read from the first <code>filelist_tas</code> file.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nlon"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nlon</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+<p>Source grid size, read from the first <code>filelist_tas</code> file.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_phys~10"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_phys</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+<p>Target-tile geometry, cached from <code>grid</code> at configure time.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_total~2"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_total</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+<p>Target-tile geometry, cached from <code>grid</code> at configure time.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_phys~10"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_phys</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+<p>Target-tile geometry, cached from <code>grid</code> at configure time.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_total~2"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_total</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+<p>Target-tile geometry, cached from <code>grid</code> at configure time.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-on_device~10"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>on_device</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-prra"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>prra</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Interval-mean fluxes, blended. <code>rsds</code> is the FINAL consumer-
+facing shortwave field &ndash; see <code>rsds_rec</code>/<code>cosz</code>/<code>cosz_mean</code>
+and the module docstring&rsquo;s <code>rsds</code> paragraph.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-prsn"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>prsn</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Interval-mean fluxes, blended. <code>rsds</code> is the FINAL consumer-
+facing shortwave field &ndash; see <code>rsds_rec</code>/<code>cosz</code>/<code>cosz_mean</code>
+and the module docstring&rsquo;s <code>rsds</code> paragraph.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-psl"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>psl</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Instantaneous states, blended (no hold).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rlds"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>rlds</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Interval-mean fluxes, blended. <code>rsds</code> is the FINAL consumer-
+facing shortwave field &ndash; see <code>rsds_rec</code>/<code>cosz</code>/<code>cosz_mean</code>
+and the module docstring&rsquo;s <code>rsds</code> paragraph.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rsds"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>rsds</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Interval-mean fluxes, blended. <code>rsds</code> is the FINAL consumer-
+facing shortwave field &ndash; see <code>rsds_rec</code>/<code>cosz</code>/<code>cosz_mean</code>
+and the module docstring&rsquo;s <code>rsds</code> paragraph.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rsds_rec"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>rsds_rec</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>The held (or, under <code>sw_interp = "linear"</code>, blended) bucket
+value straight off the reader &ndash; <code>rsds = rsds_rec *
+cosz / cosz_mean</code> under <code>coszen</code>, <code>rsds = rsds_rec</code> under
+<code>linear</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sw_coszen"></span>
+              logical,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sw_coszen</strong></td>
+<td> =</td>
+                <td>.false.</td>
+            <td>
+<p><code>.true.</code> iff <code>&amp;ocean_atm_forcing_nml sw_interp = "coszen"</code>
+(the default) &ndash; <code>rsds</code> is registered <code>hold = .true.</code> with
+<code>t_offset = sw_offset_s</code> and <code>atm_state_update</code> runs the
+diurnal cosine-zenith kernel every step.  <code>.false.</code>
+(<code>sw_interp = "linear"</code>) reproduces the plain interval-mean
+blend every other field uses.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tas"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>tas</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Instantaneous states, blended (no hold).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tgt_bl"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>tgt_bl</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p><code>(nx_phys, ny_phys)</code> persistent regrid-output scratch, one
+per weight set &ndash; never locally allocated per step.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tgt_cv"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>tgt_cv</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p><code>(nx_phys, ny_phys)</code> persistent regrid-output scratch, one
+per weight set &ndash; never locally allocated per step.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-uas"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>uas</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Instantaneous states, blended (no hold).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vas"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>vas</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Instantaneous states, blended (no hold).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wb"></span>
+              type(<a href='../type/regrid_weights_t.html'>regrid_weights_t</a>),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wb</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Bilinear weights (states; fluxes when <code>fluxes_regrid =
+"bilinear"</code>).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wc"></span>
+              type(<a href='../type/regrid_weights_t.html'>regrid_weights_t</a>),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wc</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+<p>Conservative weights (fluxes when <code>fluxes_regrid =
+"conservative"</code>, the default).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-win_bl"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>win_bl</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p><code>(nlon, wb%nsy)</code> &ndash; the bilinear source window, reused by
+every field bound to <code>wb</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-win_cv"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>win_cv</strong>(:,:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p><code>(nlon, wc%nsy)</code> &ndash; the conservative source window.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+
+
+        <h4>Type-Bound Procedures</h4>
+        <table class="table table-striped varlist">
+          <tbody>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/atm_state_t.html#boundprocedure-bytes~19'>bytes</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/atm_state_bytes.html'>atm_state_bytes</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/atm_state_t.html#boundprocedure-destroy~15'>destroy</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/atm_state_destroy.html'>atm_state_destroy</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/atm_state_t.html#boundprocedure-enter_data~10'>enter_data</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/atm_state_enter_data.html'>atm_state_enter_data</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/atm_state_t.html#boundprocedure-exit_data~10'>exit_data</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/atm_state_exit_data.html'>atm_state_exit_data</a></td>
+                  <td></td>
+              </tr>
+          </tbody>
+        </table>
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+        <section>
+          <h2>Functions</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-arr2_bytes"></span> <h3>private pure function <a href='../proc/arr2_bytes.html'>arr2_bytes</a>(a) result(nbytes)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-a~14"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td></td>            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>a</strong>(:,:)</td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>integer(kind=int64)</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-atm_state_bytes"></span> <h3>private pure function <a href='../proc/atm_state_bytes.html'>atm_state_bytes</a>(this) result(nbytes)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Device-resident footprint: the nine field arrays, both window
+buffers, both regrid-scratch buffers, and both weight sets&rsquo;
+own <code>bytes()</code>.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~172"></span>
+              class(<a href='../type/atm_state_t.html'>atm_state_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>integer(kind=int64)</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-setup_failed~2"></span> <h3>private pure function <a href='../proc/setup_failed~2.html'>setup_failed</a>(ierr) result(bad)  
+</h3></div>
+    <div class="card-body">
+          
+  <p><code>.true.</code> iff <code>ierr</code> is present and non-OK &ndash; the &ldquo;shall I return
+early&rdquo; test after every ierr-threaded call above (copy of
+<code>rdb_ocean_engine</code>&rsquo;s helper of the same name; when <code>ierr</code> is
+absent the callee already <code>error stop</code>ped on failure, so this
+is always <code>.false.</code> here).</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ierr~43"></span>
+              integer,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ierr</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>logical</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+        <section>
+          <h2>Subroutines</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-atm_state_configure"></span> <h3>public  subroutine <a href='../proc/atm_state_configure.html'>atm_state_configure</a>(cfg, reader, grid, metrics, this, ierr)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>A no-op when <code>&amp;ocean_atm_forcing_nml enable = .false.</code> (the
+default) &ndash; nothing registers, <code>this%enable</code> stays <code>.false.</code>,
+<code>atm_state_update</code> is then a no-op too: bit-identical.</p><a href="../proc/atm_state_configure.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cfg~25"></span>
+              type(<a href='../type/config_t.html'>config_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cfg</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-reader~5"></span>
+              type(<a href='../type/ocean_data_input_t.html'>ocean_data_input_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>reader</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~88"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-metrics~25"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>metrics</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~174"></span>
+              type(<a href='../type/atm_state_t.html'>atm_state_t</a>),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ierr~40"></span>
+              integer,
+            </td>
+<td>intent(out),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ierr</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-atm_state_update"></span> <h3>public  subroutine <a href='../proc/atm_state_update.html'>atm_state_update</a>(this, reader, metrics, t)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Blend + regrid every one of the nine fields&rsquo; current bracket,
+then (<code>sw_interp = "coszen"</code>) restore <code>rsds</code>&rsquo;s diurnal shape
+from the held bucket mean &ndash; see the module docstring&rsquo;s <code>rsds</code>
+paragraph. <code>t</code> must be the same model time
+<code>ocean_data_input_update_all</code> was just called with &ndash; the
+reader enforces this and aborts otherwise (see
+<code>ocean_data_input_update_2d</code>&rsquo;s fail-loud freshness check).
+<code>metrics</code> supplies <code>geolonT</code>/<code>geolatT</code> for the coszen kernel
+(unused, and not read, when <code>sw_interp = "linear"</code>).</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~175"></span>
+              class(<a href='../type/atm_state_t.html'>atm_state_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-reader~7"></span>
+              type(<a href='../type/ocean_data_input_t.html'>ocean_data_input_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>reader</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-metrics~26"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>metrics</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t~30"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-atm_apply_field"></span> <h3>private  subroutine <a href='../proc/atm_apply_field.html'>atm_apply_field</a>(reader, id, t, nx_phys, ny_phys, nghost, nx_total, ny_total, nmax, nsx, nsy, idx_i, idx_j, w, win, tgt, dst)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>One field&rsquo;s blend-into-window -&gt; regrid-into-scratch -&gt;
+scatter-into-physical-interior sequence.  Explicit-shape
+throughout (CLAUDE.md <code>do-concurrent</code> dummy rule) &ndash; <code>idx_i</code>/
+<code>idx_j</code>/<code>w</code> are the weight set&rsquo;s own arrays, passed straight
+through with no slicing.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-reader~8"></span>
+              type(<a href='../type/ocean_data_input_t.html'>ocean_data_input_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>reader</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-id~18"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>id</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t~33"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_phys~12"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_phys</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_phys~12"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_phys</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nghost~12"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nghost</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_total~4"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_total</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_total~4"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_total</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nmax"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nmax</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nsx"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nsx</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nsy~2"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nsy</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idx_i"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>idx_i</strong>(nx_phys,ny_phys,nmax)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idx_j"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>idx_j</strong>(nx_phys,ny_phys,nmax)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-w~7"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>w</strong>(nx_phys,ny_phys,nmax)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-win"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>win</strong>(nsx,nsy)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tgt~12"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tgt</strong>(nx_phys,ny_phys)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dst~7"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dst</strong>(nx_total,ny_total)</td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-atm_coszen_apply_impl"></span> <h3>private pure subroutine <a href='../proc/atm_coszen_apply_impl.html'>atm_coszen_apply_impl</a>(nx_total, ny_total, nghost, nx_phys, ny_phys, nq, hour_frac_q, decl_q, eqtime_q, hour_frac_inst, decl_inst, eqtime_inst, geolonT, geolatT, rsds_rec, cosz, cosz_mean, rsds)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>The ONE device kernel: per physical T-cell, the instantaneous
+<code>cos Z</code> (clamped &gt;= 0) at <code>(hour_frac_inst, decl_inst,
+eqtime_inst)</code>, the <code>nq</code>-point midpoint-quadrature mean of
+<code>max(0, cos Z)</code> over the <code>(hour_frac_q, decl_q, eqtime_q)</code>
+nodes, and the coszen-restored <code>rsds</code>. Explicit-shape
+throughout; no cross-module calls &ndash; every quantity but
+<code>geolonT</code>/<code>geolatT</code> is a host-precomputed scalar/short array
+(CLAUDE.md <code>do-concurrent</code> dummy + device-safety rules).</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_total~3"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_total</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_total~3"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_total</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nghost~11"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nghost</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_phys~11"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_phys</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_phys~11"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_phys</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nq"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nq</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hour_frac_q~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hour_frac_q</strong>(nq)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-decl_q~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>decl_q</strong>(nq)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eqtime_q~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eqtime_q</strong>(nq)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hour_frac_inst~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hour_frac_inst</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-decl_inst~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>decl_inst</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eqtime_inst~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eqtime_inst</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-geolont"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>geolonT</strong>(nx_total,ny_total)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-geolatt"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>geolatT</strong>(nx_total,ny_total)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rsds_rec~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rsds_rec</strong>(nx_total,ny_total)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cosz~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cosz</strong>(nx_total,ny_total)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cosz_mean~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cosz_mean</strong>(nx_total,ny_total)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rsds~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rsds</strong>(nx_total,ny_total)</td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-atm_spencer_sun"></span> <h3>private pure subroutine <a href='../proc/atm_spencer_sun.html'>atm_spencer_sun</a>(epoch, t, hour_frac, decl, eqtime_min)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Spencer (1971) Fourier fit: UTC hour-of-day <code>hour_frac</code>, solar
+declination <code>decl</code> (radians) and equation of time <code>eqtime_min</code>
+(minutes) at model time <code>t</code> seconds after <code>epoch</code>. HOST-ONLY &ndash;
+<code>rdb_calendar</code>&rsquo;s date arithmetic is not <code>!$acc routine</code>-safe
+(module docstring); called from <code>atm_sw_coszen_refresh</code>, never
+from inside a <code>do concurrent</code>.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-epoch~2"></span>
+              type(<a href='../type/date_t.html'>date_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>epoch</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t~32"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hour_frac"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hour_frac</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-decl"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>decl</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eqtime_min"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eqtime_min</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-atm_state_copy_impl"></span> <h3>private pure subroutine <a href='../proc/atm_state_copy_impl.html'>atm_state_copy_impl</a>(n1, n2, src, dst)  
+</h3></div>
+    <div class="card-body">
+          
+  <p><code>sw_interp = "linear"</code> path: <code>rsds = rsds_rec</code>, unchanged.
+Explicit-shape <code>do concurrent</code> copy (never a bare whole-array
+assignment &ndash; CLAUDE.md <code>do-concurrent</code> dummy rule).</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n1~16"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n1</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n2~14"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n2</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-src~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>src</strong>(n1,n2)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dst~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dst</strong>(n1,n2)</td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-atm_state_destroy"></span> <h3>private  subroutine <a href='../proc/atm_state_destroy.html'>atm_state_destroy</a>(this)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~173"></span>
+              class(<a href='../type/atm_state_t.html'>atm_state_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-atm_state_enter_data"></span> <h3>private  subroutine <a href='../proc/atm_state_enter_data.html'>atm_state_enter_data</a>(this)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~170"></span>
+              class(<a href='../type/atm_state_t.html'>atm_state_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-atm_state_exit_data"></span> <h3>private  subroutine <a href='../proc/atm_state_exit_data.html'>atm_state_exit_data</a>(this)  
+</h3></div>
+    <div class="card-body">
+          
+  
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~171"></span>
+              class(<a href='../type/atm_state_t.html'>atm_state_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-atm_state_scatter_impl"></span> <h3>private pure subroutine <a href='../proc/atm_state_scatter_impl.html'>atm_state_scatter_impl</a>(n1, n2, nghost, nx, ny, src, dst)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Copy a physical-size regrid result into the ghosted field array
+at the <code>nghost</code> offset &ndash; ghosts untouched, same offset-write
+idiom as <code>data_input_blend_2d_impl</code>.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n1~17"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n1</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n2~15"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n2</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nghost~13"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nghost</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~130"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~130"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-src~7"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>src</strong>(nx,ny)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dst~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dst</strong>(n1,n2)</td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-atm_sw_coszen_refresh"></span> <h3>private  subroutine <a href='../proc/atm_sw_coszen_refresh.html'>atm_sw_coszen_refresh</a>(this, metrics, t)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Host-side Spencer (1971) solar-position scalars (calendar
+arithmetic, not device-safe) for the instantaneous query time
+<code>t</code> and <code>ATM_COSZ_NQUAD</code> midpoint-quadrature nodes spanning the
+<code>rsds_rec</code> bucket <code>[t_rec, t_rec+3h)</code>, then ONE device kernel
+(<code>atm_coszen_apply_impl</code>) doing the per-cell trigonometry.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~176"></span>
+              class(<a href='../type/atm_state_t.html'>atm_state_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-metrics~27"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>metrics</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t~31"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-read_filelist"></span> <h3>private  subroutine <a href='../proc/read_filelist.html'>read_filelist</a>(path, files, ierr)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>line text file into a character array.  Blank lines are
+skipped; an empty or unreadable list fails loud.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-path~14"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>path</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-files~3"></span>
+              character(len=:),
+            </td>
+<td>intent(out),</td>
+              <td></td>            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>files</strong>(:)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ierr~42"></span>
+              integer,
+            </td>
+<td>intent(out),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ierr</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-register_field"></span> <h3>private  subroutine <a href='../proc/register_field.html'>register_field</a>(reader, grid, filelist_path, var, start_date, time_mode, ryf_start_date, ryf_period_days, oor_mode, win_j0, nlon, nsy, id, hold, t_offset, ierr)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Read <code>filelist_path</code> into a path array, then register it on the
+shared reader with the given weight set&rsquo;s window
+<code>(win_i0=1, win_j0, win_nx=nlon, win_ny=nsy)</code> &ndash; destination is
+the FULL window buffer (<code>dest_i0=dest_j0=1</code>). <code>hold</code>/<code>t_offset</code>
+(both optional, forwarded as-is &ndash; absent stays absent) are the
+<code>rsds</code> coszen knobs; every other field leaves them off.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-reader~6"></span>
+              type(<a href='../type/ocean_data_input_t.html'>ocean_data_input_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>reader</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~89"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-filelist_path"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>filelist_path</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-var~9"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>var</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-start_date~2"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>start_date</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-time_mode~8"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>time_mode</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ryf_start_date~2"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ryf_start_date</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ryf_period_days~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ryf_period_days</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-oor_mode~2"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>oor_mode</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-win_j0~2"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>win_j0</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nlon~3"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nlon</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nsy"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nsy</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-id~17"></span>
+              integer,
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>id</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hold~3"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hold</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_offset~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t_offset</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ierr~41"></span>
+              integer,
+            </td>
+<td>intent(out),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ierr</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+
+
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-10-20 10:28 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>
