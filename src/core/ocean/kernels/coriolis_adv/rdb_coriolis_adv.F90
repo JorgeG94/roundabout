@@ -168,7 +168,7 @@ module rdb_coriolis_adv
          !! Set from `&ocean_hvisc_nml no_slip` (shared with the lateral
          !! strain).  All-wet ⇒ `wet_q≡1` ⇒ factor `≡1` ⇒ bit-identical.
       logical :: hk_pair_floor = .false.
-         !! Run the `sadourny_hk` PAIR-FLOORED passes (`hk_pair_coef`) even
+         !! Run the `sadourny_hk` PAIR-FLOORED passes (the inline pair coefficient) even
          !! with `&vcoord_nml zfixed_closed_faces` off.  Latched at setup
          !! for the coordinates that lay STATIC bed fillers (`z_fixed`,
          !! `zstar`, `zstar_full`): over a stepped bed an OPEN face then
@@ -416,6 +416,7 @@ contains
       real(wp) :: h_vf_SW, h_vf_NW, h_vf_SE, h_vf_NE
       real(wp) :: h_uf_SW, h_uf_NW, h_uf_SE, h_uf_NE
       real(wp) :: vh_sum, uh_sum, h_eff_sum
+      real(wp) :: hh, p1, p2, p3
       real(wp) :: ns
 
       nx = grid%nx_total
@@ -629,6 +630,7 @@ contains
       real(wp) :: h_vf_SW, h_vf_NW, h_vf_SE, h_vf_NE
       real(wp) :: h_uf_SW, h_uf_NW, h_uf_SE, h_uf_NE
       real(wp) :: vh_sum, uh_sum, h_eff_sum
+      real(wp) :: hh, p1, p2, p3
       real(wp) :: ns
 
       nx = grid%nx_total
@@ -889,7 +891,7 @@ contains
       !! Under `&vcoord_nml zfixed_closed_faces` (`metrics%use_closed_faces`)
       !! Passes 5/6 run a PAIR-FLOORED twin: every PV in a pair coefficient
       !! is evaluated with a corner thickness of at least half the larger of
-      !! the pair's two face thicknesses (`hk_pair_coef`).  Without it the
+      !! the pair's two face thicknesses (the inline pair coefficient).  Without it the
       !! "cross" pairs — a corner PV times a transport whose far cell lies
       !! outside that corner — carry an unbounded `h_face/h_corner`, which a
       !! z-level staircase (a live partial bottom cell as thin as
@@ -926,6 +928,7 @@ contains
          !! Closed-face branch only: corner thicknesses of the stencil.
       real(wp) :: h_u, h_v, hv_NE, hv_NW, hv_SW, hv_SE, hu_NE, hu_NW, hu_SW, hu_SE
          !! Closed-face branch only: face thicknesses of the stencil.
+      real(wp) :: hh, p1, p2, p3
       real(wp) :: ns
       real(wp), parameter :: C1_12 = 1.0_wp/12.0_wp
       real(wp), parameter :: H_MIN_PV = 1.0e-12_wp
@@ -1075,32 +1078,109 @@ contains
          ! untouched ⇒ bit-identical.  Inline,
          ! not a call: a host-gated call handing the tendency buffers to another
          ! procedure pessimises every loop of this routine on nvfortran.
+         ! The corner-thickness and pair-coefficient helpers are written INLINE
+         ! (any call in a do concurrent body stops nvfortran auto-collapsing the
+         ! nest and one level runs sequentially -- see Pass 5 of the energy form).
          ! Each pair coefficient sums three corner PVs; the "cross" ones meet a
          ! transport whose far cell lies outside the corner, so `h_face/h_corner`
          ! is unbounded there (a thin live partial cell next to a full level).
-         ! `hk_pair_coef` re-evaluates each PV at a corner thickness of at least
+         ! the pair coefficient re-evaluates each PV at a corner thickness of at least
          ! half the pair's larger face thickness — the bound `sadourny_energy`
          ! has by construction — and the floor belongs to the PAIR, so the
          ! u- and v-tendencies share the coefficient (HK energy antisymmetry).
-         ! See the routine docstring and `hk_pair_coef`.
+         ! See the routine docstring.
          ! ---- Pass 5f: u-face ----
          do concurrent(k=1:nz, j=1:ny, i=2:nx) &
             local(q_S, q_N, q_NE, q_NW, q_SE, q_SW, &
                   a_NE, b_NW, c_SW, d_SE, ke_grad_x, &
                   h_S, h_N, h_NE, h_NW, h_SE, h_SW, h_u, &
-                  hv_NE, hv_NW, hv_SW, hv_SE)
+                  hv_NE, hv_NW, hv_SW, hv_SE) &
+            local(iw, ie, js, jn, aSW, aSE, aNW, aNE, hm_num, hm_den, &
+                  hh, p1, p2, p3)
             q_S = this%q_corner%data(i, j, k)
             q_N = this%q_corner%data(i, j + 1, k)
             q_NE = this%q_corner%data(i + 1, j + 1, k)
             q_NW = this%q_corner%data(i - 1, j + 1, k)
             q_SE = this%q_corner%data(i + 1, j, k)
             q_SW = this%q_corner%data(i - 1, j, k)
-            h_S = hk_corner_h(i, j, k, nx, ny, nz, h, metrics%wet_T, metrics%areaT)
-            h_N = hk_corner_h(i, j + 1, k, nx, ny, nz, h, metrics%wet_T, metrics%areaT)
-            h_NE = hk_corner_h(i + 1, j + 1, k, nx, ny, nz, h, metrics%wet_T, metrics%areaT)
-            h_NW = hk_corner_h(i - 1, j + 1, k, nx, ny, nz, h, metrics%wet_T, metrics%areaT)
-            h_SE = hk_corner_h(i + 1, j, k, nx, ny, nz, h, metrics%wet_T, metrics%areaT)
-            h_SW = hk_corner_h(i - 1, j, k, nx, ny, nz, h, metrics%wet_T, metrics%areaT)
+            iw = max(1, (i) - 1)
+            ie = min(nx, i)
+            js = max(1, (j) - 1)
+            jn = min(ny, j)
+            aSW = metrics%wet_T(iw, js)*metrics%areaT(iw, js)
+            aSE = metrics%wet_T(ie, js)*metrics%areaT(ie, js)
+            aNW = metrics%wet_T(iw, jn)*metrics%areaT(iw, jn)
+            aNE = metrics%wet_T(ie, jn)*metrics%areaT(ie, jn)
+            hm_num = aSW*h(iw, js, k) + aSE*h(ie, js, k) + &
+                     aNW*h(iw, jn, k) + aNE*h(ie, jn, k)
+            hm_den = aSW + aSE + aNW + aNE
+            h_S = hm_num/max(hm_den, H_DIV_EPS)
+            h_S = max(h_S, CORIOLIS_H_MIN_PV)
+            iw = max(1, (i) - 1)
+            ie = min(nx, i)
+            js = max(1, (j + 1) - 1)
+            jn = min(ny, j + 1)
+            aSW = metrics%wet_T(iw, js)*metrics%areaT(iw, js)
+            aSE = metrics%wet_T(ie, js)*metrics%areaT(ie, js)
+            aNW = metrics%wet_T(iw, jn)*metrics%areaT(iw, jn)
+            aNE = metrics%wet_T(ie, jn)*metrics%areaT(ie, jn)
+            hm_num = aSW*h(iw, js, k) + aSE*h(ie, js, k) + &
+                     aNW*h(iw, jn, k) + aNE*h(ie, jn, k)
+            hm_den = aSW + aSE + aNW + aNE
+            h_N = hm_num/max(hm_den, H_DIV_EPS)
+            h_N = max(h_N, CORIOLIS_H_MIN_PV)
+            iw = max(1, (i + 1) - 1)
+            ie = min(nx, i + 1)
+            js = max(1, (j + 1) - 1)
+            jn = min(ny, j + 1)
+            aSW = metrics%wet_T(iw, js)*metrics%areaT(iw, js)
+            aSE = metrics%wet_T(ie, js)*metrics%areaT(ie, js)
+            aNW = metrics%wet_T(iw, jn)*metrics%areaT(iw, jn)
+            aNE = metrics%wet_T(ie, jn)*metrics%areaT(ie, jn)
+            hm_num = aSW*h(iw, js, k) + aSE*h(ie, js, k) + &
+                     aNW*h(iw, jn, k) + aNE*h(ie, jn, k)
+            hm_den = aSW + aSE + aNW + aNE
+            h_NE = hm_num/max(hm_den, H_DIV_EPS)
+            h_NE = max(h_NE, CORIOLIS_H_MIN_PV)
+            iw = max(1, (i - 1) - 1)
+            ie = min(nx, i - 1)
+            js = max(1, (j + 1) - 1)
+            jn = min(ny, j + 1)
+            aSW = metrics%wet_T(iw, js)*metrics%areaT(iw, js)
+            aSE = metrics%wet_T(ie, js)*metrics%areaT(ie, js)
+            aNW = metrics%wet_T(iw, jn)*metrics%areaT(iw, jn)
+            aNE = metrics%wet_T(ie, jn)*metrics%areaT(ie, jn)
+            hm_num = aSW*h(iw, js, k) + aSE*h(ie, js, k) + &
+                     aNW*h(iw, jn, k) + aNE*h(ie, jn, k)
+            hm_den = aSW + aSE + aNW + aNE
+            h_NW = hm_num/max(hm_den, H_DIV_EPS)
+            h_NW = max(h_NW, CORIOLIS_H_MIN_PV)
+            iw = max(1, (i + 1) - 1)
+            ie = min(nx, i + 1)
+            js = max(1, (j) - 1)
+            jn = min(ny, j)
+            aSW = metrics%wet_T(iw, js)*metrics%areaT(iw, js)
+            aSE = metrics%wet_T(ie, js)*metrics%areaT(ie, js)
+            aNW = metrics%wet_T(iw, jn)*metrics%areaT(iw, jn)
+            aNE = metrics%wet_T(ie, jn)*metrics%areaT(ie, jn)
+            hm_num = aSW*h(iw, js, k) + aSE*h(ie, js, k) + &
+                     aNW*h(iw, jn, k) + aNE*h(ie, jn, k)
+            hm_den = aSW + aSE + aNW + aNE
+            h_SE = hm_num/max(hm_den, H_DIV_EPS)
+            h_SE = max(h_SE, CORIOLIS_H_MIN_PV)
+            iw = max(1, (i - 1) - 1)
+            ie = min(nx, i - 1)
+            js = max(1, (j) - 1)
+            jn = min(ny, j)
+            aSW = metrics%wet_T(iw, js)*metrics%areaT(iw, js)
+            aSE = metrics%wet_T(ie, js)*metrics%areaT(ie, js)
+            aNW = metrics%wet_T(iw, jn)*metrics%areaT(iw, jn)
+            aNE = metrics%wet_T(ie, jn)*metrics%areaT(ie, jn)
+            hm_num = aSW*h(iw, js, k) + aSE*h(ie, js, k) + &
+                     aNW*h(iw, jn, k) + aNE*h(ie, jn, k)
+            hm_den = aSW + aSE + aNW + aNE
+            h_SW = hm_num/max(hm_den, H_DIV_EPS)
+            h_SW = max(h_SW, CORIOLIS_H_MIN_PV)
             ! Face thicknesses exactly as Pass 3 builds the transports
             ! (one-sided at the array edge: 0.5·(a+a) == a).
             h_u = 0.5_wp*(h(i - 1, j, k) + h(i, j, k))
@@ -1108,10 +1188,38 @@ contains
             hv_NW = 0.5_wp*(h(i - 1, j, k) + h(i - 1, min(ny, j + 1), k))
             hv_SW = 0.5_wp*(h(i - 1, max(1, j - 1), k) + h(i - 1, j, k))
             hv_SE = 0.5_wp*(h(i, max(1, j - 1), k) + h(i, j, k))
-            a_NE = hk_pair_coef(q_N, h_N, q_NE, h_NE, q_S, h_S, max(h_u, hv_NE))
-            b_NW = hk_pair_coef(q_N, h_N, q_NW, h_NW, q_S, h_S, max(h_u, hv_NW))
-            c_SW = hk_pair_coef(q_N, h_N, q_SW, h_SW, q_S, h_S, max(h_u, hv_SW))
-            d_SE = hk_pair_coef(q_N, h_N, q_SE, h_SE, q_S, h_S, max(h_u, hv_SE))
+            hh = 0.5_wp*(max(h_u, hv_NE))
+            p1 = q_N
+            p2 = q_NE
+            p3 = q_S
+            if (h_N < hh) p1 = q_N*(h_N/hh)
+            if (h_NE < hh) p2 = q_NE*(h_NE/hh)
+            if (h_S < hh) p3 = q_S*(h_S/hh)
+            a_NE = (p1 + p2 + p3)*C1_12
+            hh = 0.5_wp*(max(h_u, hv_NW))
+            p1 = q_N
+            p2 = q_NW
+            p3 = q_S
+            if (h_N < hh) p1 = q_N*(h_N/hh)
+            if (h_NW < hh) p2 = q_NW*(h_NW/hh)
+            if (h_S < hh) p3 = q_S*(h_S/hh)
+            b_NW = (p1 + p2 + p3)*C1_12
+            hh = 0.5_wp*(max(h_u, hv_SW))
+            p1 = q_N
+            p2 = q_SW
+            p3 = q_S
+            if (h_N < hh) p1 = q_N*(h_N/hh)
+            if (h_SW < hh) p2 = q_SW*(h_SW/hh)
+            if (h_S < hh) p3 = q_S*(h_S/hh)
+            c_SW = (p1 + p2 + p3)*C1_12
+            hh = 0.5_wp*(max(h_u, hv_SE))
+            p1 = q_N
+            p2 = q_SE
+            p3 = q_S
+            if (h_N < hh) p1 = q_N*(h_N/hh)
+            if (h_SE < hh) p2 = q_SE*(h_SE/hh)
+            if (h_S < hh) p3 = q_S*(h_S/hh)
+            d_SE = (p1 + p2 + p3)*C1_12
             ke_grad_x = (this%ke_centre%data(i, j, k) - &
                          this%ke_centre%data(i - 1, j, k))*metrics%idxCu(i, j)
             this%pv_flux_x%data(i, j, k) = &
@@ -1125,28 +1233,130 @@ contains
             local(q_W, q_E, q_NE, q_NW, q_SE, q_SW, &
                   a_NE, b_NW, c_SW, d_SE, ke_grad_y, &
                   h_W, h_E, h_NE, h_NW, h_SE, h_SW, h_v, &
-                  hu_NE, hu_NW, hu_SW, hu_SE)
+                  hu_NE, hu_NW, hu_SW, hu_SE) &
+            local(iw, ie, js, jn, aSW, aSE, aNW, aNE, hm_num, hm_den, &
+                  hh, p1, p2, p3)
             q_W = this%q_corner%data(i, j, k)
             q_E = this%q_corner%data(i + 1, j, k)
             q_NE = this%q_corner%data(i + 1, j + 1, k)
             q_NW = this%q_corner%data(i, j + 1, k)
             q_SE = this%q_corner%data(i + 1, j - 1, k)
             q_SW = this%q_corner%data(i, j - 1, k)
-            h_W = hk_corner_h(i, j, k, nx, ny, nz, h, metrics%wet_T, metrics%areaT)
-            h_E = hk_corner_h(i + 1, j, k, nx, ny, nz, h, metrics%wet_T, metrics%areaT)
-            h_NE = hk_corner_h(i + 1, j + 1, k, nx, ny, nz, h, metrics%wet_T, metrics%areaT)
-            h_NW = hk_corner_h(i, j + 1, k, nx, ny, nz, h, metrics%wet_T, metrics%areaT)
-            h_SE = hk_corner_h(i + 1, j - 1, k, nx, ny, nz, h, metrics%wet_T, metrics%areaT)
-            h_SW = hk_corner_h(i, j - 1, k, nx, ny, nz, h, metrics%wet_T, metrics%areaT)
+            iw = max(1, (i) - 1)
+            ie = min(nx, i)
+            js = max(1, (j) - 1)
+            jn = min(ny, j)
+            aSW = metrics%wet_T(iw, js)*metrics%areaT(iw, js)
+            aSE = metrics%wet_T(ie, js)*metrics%areaT(ie, js)
+            aNW = metrics%wet_T(iw, jn)*metrics%areaT(iw, jn)
+            aNE = metrics%wet_T(ie, jn)*metrics%areaT(ie, jn)
+            hm_num = aSW*h(iw, js, k) + aSE*h(ie, js, k) + &
+                     aNW*h(iw, jn, k) + aNE*h(ie, jn, k)
+            hm_den = aSW + aSE + aNW + aNE
+            h_W = hm_num/max(hm_den, H_DIV_EPS)
+            h_W = max(h_W, CORIOLIS_H_MIN_PV)
+            iw = max(1, (i + 1) - 1)
+            ie = min(nx, i + 1)
+            js = max(1, (j) - 1)
+            jn = min(ny, j)
+            aSW = metrics%wet_T(iw, js)*metrics%areaT(iw, js)
+            aSE = metrics%wet_T(ie, js)*metrics%areaT(ie, js)
+            aNW = metrics%wet_T(iw, jn)*metrics%areaT(iw, jn)
+            aNE = metrics%wet_T(ie, jn)*metrics%areaT(ie, jn)
+            hm_num = aSW*h(iw, js, k) + aSE*h(ie, js, k) + &
+                     aNW*h(iw, jn, k) + aNE*h(ie, jn, k)
+            hm_den = aSW + aSE + aNW + aNE
+            h_E = hm_num/max(hm_den, H_DIV_EPS)
+            h_E = max(h_E, CORIOLIS_H_MIN_PV)
+            iw = max(1, (i + 1) - 1)
+            ie = min(nx, i + 1)
+            js = max(1, (j + 1) - 1)
+            jn = min(ny, j + 1)
+            aSW = metrics%wet_T(iw, js)*metrics%areaT(iw, js)
+            aSE = metrics%wet_T(ie, js)*metrics%areaT(ie, js)
+            aNW = metrics%wet_T(iw, jn)*metrics%areaT(iw, jn)
+            aNE = metrics%wet_T(ie, jn)*metrics%areaT(ie, jn)
+            hm_num = aSW*h(iw, js, k) + aSE*h(ie, js, k) + &
+                     aNW*h(iw, jn, k) + aNE*h(ie, jn, k)
+            hm_den = aSW + aSE + aNW + aNE
+            h_NE = hm_num/max(hm_den, H_DIV_EPS)
+            h_NE = max(h_NE, CORIOLIS_H_MIN_PV)
+            iw = max(1, (i) - 1)
+            ie = min(nx, i)
+            js = max(1, (j + 1) - 1)
+            jn = min(ny, j + 1)
+            aSW = metrics%wet_T(iw, js)*metrics%areaT(iw, js)
+            aSE = metrics%wet_T(ie, js)*metrics%areaT(ie, js)
+            aNW = metrics%wet_T(iw, jn)*metrics%areaT(iw, jn)
+            aNE = metrics%wet_T(ie, jn)*metrics%areaT(ie, jn)
+            hm_num = aSW*h(iw, js, k) + aSE*h(ie, js, k) + &
+                     aNW*h(iw, jn, k) + aNE*h(ie, jn, k)
+            hm_den = aSW + aSE + aNW + aNE
+            h_NW = hm_num/max(hm_den, H_DIV_EPS)
+            h_NW = max(h_NW, CORIOLIS_H_MIN_PV)
+            iw = max(1, (i + 1) - 1)
+            ie = min(nx, i + 1)
+            js = max(1, (j - 1) - 1)
+            jn = min(ny, j - 1)
+            aSW = metrics%wet_T(iw, js)*metrics%areaT(iw, js)
+            aSE = metrics%wet_T(ie, js)*metrics%areaT(ie, js)
+            aNW = metrics%wet_T(iw, jn)*metrics%areaT(iw, jn)
+            aNE = metrics%wet_T(ie, jn)*metrics%areaT(ie, jn)
+            hm_num = aSW*h(iw, js, k) + aSE*h(ie, js, k) + &
+                     aNW*h(iw, jn, k) + aNE*h(ie, jn, k)
+            hm_den = aSW + aSE + aNW + aNE
+            h_SE = hm_num/max(hm_den, H_DIV_EPS)
+            h_SE = max(h_SE, CORIOLIS_H_MIN_PV)
+            iw = max(1, (i) - 1)
+            ie = min(nx, i)
+            js = max(1, (j - 1) - 1)
+            jn = min(ny, j - 1)
+            aSW = metrics%wet_T(iw, js)*metrics%areaT(iw, js)
+            aSE = metrics%wet_T(ie, js)*metrics%areaT(ie, js)
+            aNW = metrics%wet_T(iw, jn)*metrics%areaT(iw, jn)
+            aNE = metrics%wet_T(ie, jn)*metrics%areaT(ie, jn)
+            hm_num = aSW*h(iw, js, k) + aSE*h(ie, js, k) + &
+                     aNW*h(iw, jn, k) + aNE*h(ie, jn, k)
+            hm_den = aSW + aSE + aNW + aNE
+            h_SW = hm_num/max(hm_den, H_DIV_EPS)
+            h_SW = max(h_SW, CORIOLIS_H_MIN_PV)
             h_v = 0.5_wp*(h(i, j - 1, k) + h(i, j, k))
             hu_NE = 0.5_wp*(h(i, j, k) + h(min(nx, i + 1), j, k))
             hu_NW = 0.5_wp*(h(max(1, i - 1), j, k) + h(i, j, k))
             hu_SW = 0.5_wp*(h(max(1, i - 1), j - 1, k) + h(i, j - 1, k))
             hu_SE = 0.5_wp*(h(i, j - 1, k) + h(min(nx, i + 1), j - 1, k))
-            a_NE = hk_pair_coef(q_W, h_W, q_NE, h_NE, q_E, h_E, max(h_v, hu_NE))
-            b_NW = hk_pair_coef(q_W, h_W, q_NW, h_NW, q_E, h_E, max(h_v, hu_NW))
-            c_SW = hk_pair_coef(q_W, h_W, q_SW, h_SW, q_E, h_E, max(h_v, hu_SW))
-            d_SE = hk_pair_coef(q_W, h_W, q_SE, h_SE, q_E, h_E, max(h_v, hu_SE))
+            hh = 0.5_wp*(max(h_v, hu_NE))
+            p1 = q_W
+            p2 = q_NE
+            p3 = q_E
+            if (h_W < hh) p1 = q_W*(h_W/hh)
+            if (h_NE < hh) p2 = q_NE*(h_NE/hh)
+            if (h_E < hh) p3 = q_E*(h_E/hh)
+            a_NE = (p1 + p2 + p3)*C1_12
+            hh = 0.5_wp*(max(h_v, hu_NW))
+            p1 = q_W
+            p2 = q_NW
+            p3 = q_E
+            if (h_W < hh) p1 = q_W*(h_W/hh)
+            if (h_NW < hh) p2 = q_NW*(h_NW/hh)
+            if (h_E < hh) p3 = q_E*(h_E/hh)
+            b_NW = (p1 + p2 + p3)*C1_12
+            hh = 0.5_wp*(max(h_v, hu_SW))
+            p1 = q_W
+            p2 = q_SW
+            p3 = q_E
+            if (h_W < hh) p1 = q_W*(h_W/hh)
+            if (h_SW < hh) p2 = q_SW*(h_SW/hh)
+            if (h_E < hh) p3 = q_E*(h_E/hh)
+            c_SW = (p1 + p2 + p3)*C1_12
+            hh = 0.5_wp*(max(h_v, hu_SE))
+            p1 = q_W
+            p2 = q_SE
+            p3 = q_E
+            if (h_W < hh) p1 = q_W*(h_W/hh)
+            if (h_SE < hh) p2 = q_SE*(h_SE/hh)
+            if (h_E < hh) p3 = q_E*(h_E/hh)
+            d_SE = (p1 + p2 + p3)*C1_12
             ke_grad_y = (this%ke_centre%data(i, j, k) - &
                          this%ke_centre%data(i, j - 1, k))*metrics%idyCv(i, j)
             this%pv_flux_y%data(i, j, k) = &
@@ -1266,6 +1476,7 @@ contains
       real(wp) :: aSW, aSE, aNW, aNE, hm_num, hm_den
       integer :: iw, ie, js, jn
       real(wp) :: q_S, q_N, q_W, q_E, ke_grad_x, ke_grad_y
+      real(wp) :: hh, p1, p2, p3
       real(wp) :: ns
       logical :: usf
       real(wp) :: pv_part, av_a, av_b, fv1, fv2, fv3, fv4
@@ -1574,67 +1785,6 @@ contains
          this%pv_flux_y%data(i, ny + 1, k) = 0.0_wp
       end do
    end subroutine coriolis_adv_compute_tendencies_sadourny_energy
-
-   pure function hk_corner_h(ic, jc, k, nx, ny, nz, h, wet_T, areaT) result(hc)
-      !$acc routine seq
-      !! Corner thickness of the HK PV, recomputed with EXACTLY the Pass 2
-      !! formula of `coriolis_adv_compute_tendencies_hk` (wet-area-weighted
-      !! 4-cell mean, array-edge clamps, `CORIOLIS_H_MIN_PV` floor), so the
-      !! closed-face branch knows the `h_corner` each stored `q` was divided
-      !! by without a persistent buffer.
-      integer, intent(in) :: ic, jc, k, nx, ny, nz
-      real(wp), intent(in) :: h(nx, ny, nz)
-      real(wp), intent(in) :: wet_T(nx, ny), areaT(nx, ny)
-      real(wp) :: hc
-      integer :: iw, ie, js, jn
-      real(wp) :: aSW, aSE, aNW, aNE, hm_num, hm_den
-      iw = max(1, ic - 1)
-      ie = min(nx, ic)
-      js = max(1, jc - 1)
-      jn = min(ny, jc)
-      aSW = wet_T(iw, js)*areaT(iw, js)
-      aSE = wet_T(ie, js)*areaT(ie, js)
-      aNW = wet_T(iw, jn)*areaT(iw, jn)
-      aNE = wet_T(ie, jn)*areaT(ie, jn)
-      hm_num = aSW*h(iw, js, k) + aSE*h(ie, js, k) + &
-               aNW*h(iw, jn, k) + aNE*h(ie, jn, k)
-      hm_den = aSW + aSE + aNW + aNE
-      hc = hm_num/max(hm_den, H_DIV_EPS)
-      hc = max(hc, CORIOLIS_H_MIN_PV)
-   end function hk_corner_h
-
-   pure function hk_pair_coef(q1, h1, q2, h2, q3, h3, h_ref) result(coef)
-      !$acc routine seq
-      !! One Arakawa-Hsu pair coefficient `(q1 + q2 + q3)/12` with each PV
-      !! re-evaluated at a corner thickness of at least `h_ref/2`:
-      !! `q → q·h_X/(h_ref/2)` where `h_X < h_ref/2`, `q` unchanged
-      !! otherwise (so an inactive floor returns the unfloored sum bit for
-      !! bit).  `h_ref` is the larger thickness of the pair's u- and v-face.
-      !!
-      !! The bound is the one `sadourny_energy` satisfies by construction:
-      !! there each corner PV multiplies only transports through faces whose
-      !! two cells both sit inside that corner's 4-cell mean, so
-      !! `h_corner >= h_face/2` (equal areas) and `q·vh <= 2·|f+ζ|·|v|·dx`.
-      !! The HK stencil also pairs a corner with a transport whose far cell
-      !! lies OUTSIDE it, and there `h_face/h_corner` is unbounded.  Because
-      !! `h_ref` belongs to the PAIR, the u-tendency's coefficient on `vh_V`
-      !! and the v-tendency's on `uh_U` stay equal (energy antisymmetry).
-      real(wp), intent(in) :: q1, h1, q2, h2, q3, h3
-         !! The three corner PVs and the corner thicknesses they carry.
-      real(wp), intent(in) :: h_ref
-         !! `max(h_U, h_V)` of the pair's two faces (m).
-      real(wp) :: coef
-      real(wp), parameter :: C1_12 = 1.0_wp/12.0_wp
-      real(wp) :: hh, p1, p2, p3
-      hh = 0.5_wp*h_ref
-      p1 = q1
-      p2 = q2
-      p3 = q3
-      if (h1 < hh) p1 = q1*(h1/hh)
-      if (h2 < hh) p2 = q2*(h2/hh)
-      if (h3 < hh) p3 = q3*(h3/hh)
-      coef = (p1 + p2 + p3)*C1_12
-   end function hk_pair_coef
 
    subroutine coriolis_adv_apply_tendencies(this, ms, dt, no_wait)
       !! Per-layer forward-Euler velocity update.
