@@ -13,10 +13,25 @@ else()
 endif()
 
 # Full ocean dyn-core throughput bench — reads an ocean namelist (default
-# double_gyre_mom6.nml) and drives `ocean_dyn_step_split` through the SAME setup
-# path as the driver (rdb_ocean_setup), but NetCDF-free, so it builds with
-# -DRDB_ENABLE_NETCDF=OFF for Intel/AMD portability + profiling.
+# double_gyre_mom6.nml) and drives the engine (`engine_setup` / `engine_step`)
+# -- the SAME lifecycle the driver runs (rdb_ocean_engine) -- but NetCDF-free,
+# so it builds with -DRDB_ENABLE_NETCDF=OFF for Intel/AMD portability +
+# profiling.
 add_executable(bench_ocean bench_ocean.F90)
 target_include_directories(bench_ocean PRIVATE "${CMAKE_BINARY_DIR}/modules"
                                                "${RDB_SHARED_INCLUDE_DIR}")
 target_link_libraries(bench_ocean PRIVATE ${bench_core})
+
+# Drift guard: bench_ocean runs the driver's own engine_setup/engine_step
+# lifecycle, so a short run of the canonical double-gyre namelist must stay
+# finite AND below the velocity clamp (the old hand-copied setup skipped steps
+# the driver ran and blew up here, at |u| = maxvel by step ~70). Only exists
+# when benchmarks are built (-DRDB_BUILD_BENCHMARKS=ON).
+add_test(
+  NAME rdb_bench_ocean_smoke
+  COMMAND
+    bench_ocean
+    "${CMAKE_SOURCE_DIR}/validation_examples/ocean/double_gyre/double_gyre_mom6.nml"
+    150)
+set_tests_properties(rdb_bench_ocean_smoke
+                     PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=1" TIMEOUT 300)

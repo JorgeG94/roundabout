@@ -1,13 +1,17 @@
 !! Standalone NetCDF-free ocean throughput benchmark.
 !!
-!! Drives the production ocean dyn-core (`ocean_dyn_step_split`) on a
-!! namelist-configured basin, reusing the EXACT setup path the driver
-!! uses — `ocean_state%init_from_config` + `ocean_state_seed_from_cfg` +
-!! `register_default_tracers` + the shared `configure_ocean_*` helpers
-!! (`rdb_ocean_setup`) — but skipping the diag-manager / NetCDF I/O.  So
-!! it builds + runs with `-DRDB_ENABLE_NETCDF=OFF` (Intel / AMD
-!! portability, profiling) while staying bit-faithful to the stress-tested
-!! driver config (e.g. double_gyre_mom6.nml).
+!! Drives the production ocean dyn-core on a namelist-configured basin
+!! through the SAME lifecycle the driver runs: `engine_setup` (config
+!! validation of the process grid, IC/bathymetry seed, every
+!! `configure_ocean_*` stage in driver order, halo/periodic/fold seeding,
+!! `configure_ocean_bt_split`, land mask, porous, stability audit),
+!! `engine_enter_data`, then `engine_step` + `engine_step_ice` +
+!! `engine_step_finalize` per outer step, `engine_exit_data`,
+!! `engine_teardown`.  Nothing is re-copied here, so the benchmark cannot
+!! drift from `driver_run` again: the only differences are that the diag
+!! manager is forced off (no NetCDF stream) and only the time loop is timed.
+!! It therefore builds + runs with `-DRDB_ENABLE_NETCDF=OFF` (Intel / AMD
+!! portability, profiling).
 !!
 !! Output is console only: a config echo, a periodic progress line with a
 !! NaN/CFL guard, an in-terminal ASCII map of the free surface (so you can
@@ -15,27 +19,21 @@
 !! per-kernel profiler breakdown.
 !!
 !! Usage:
-!!   ./build/benchmarks/bench_ocean [namelist]
-!!   (default: validation_examples/ocean/double_gyre/double_gyre_mom6.nml)
+!!   ./build/benchmarks/bench_ocean [namelist] [max_steps]
+!!   (default: validation_examples/ocean/double_gyre/double_gyre_mom6.nml;
+!!    `max_steps` > 0 truncates the run to that many outer steps — the CTest
+!!    smoke guard uses it.)
 program bench_ocean
    use, intrinsic :: iso_fortran_env, only: output_unit, error_unit
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use pic_timer, only: timer_type
    use rdb_constants, only: wp
-   use rdb_grid, only: hgrid_t
    use rdb_config, only: config_t, read_config, validate_config
-   use rdb_state, only: register_default_tracers
-   use rdb_ocean_state, only: ocean_state_t, ocean_state_enter_data, &
-                              ocean_state_exit_data, ocean_state_seed_from_cfg
-   use rdb_ocean_setup, only: configure_ocean_metrics, configure_ocean_land_mask, &
-                              configure_ocean_forcing, configure_ocean_drag, &
-                              configure_ocean_vmix, configure_ocean_lateral, &
-                              configure_ocean_reference_density, &
-                              configure_ocean_pgf, configure_ocean_bt, &
-                              configure_ocean_bt_split
-   use rdb_ocean_vcoord, only: parse_ocean_vcoord_type
-   use rdb_ocean_surface_flux, only: ocean_surface_flux_t
-   use rdb_ocean_dyn, only: ocean_dyn_step_split
+   use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
+                               engine_step, engine_step_ice, engine_step_finalize, &
+                               engine_exit_data, engine_teardown
+   use rdb_ocean_status, only: OCEAN_STATUS_OK
+   use rdb_ocean_dyn, only: ocean_dyn_flush_tracer_window
    use rdb_profiler, only: profiler_init, profiler_report
    implicit none
 
@@ -43,13 +41,12 @@ program bench_ocean
                                   "validation_examples/ocean/double_gyre/double_gyre_mom6.nml"
 
    type(config_t) :: cfg
-   type(hgrid_t) :: grid
-   type(ocean_state_t) :: os
-   type(ocean_surface_flux_t) :: sf
+   type(ocean_engine_t) :: engine
    type(timer_type) :: wall_timer
 
    character(len=512) :: nml_path
-   integer :: nstep, n_inner, ng
+   character(len=32) :: arg2
+   integer :: nstep, n_inner, ng, max_steps, ios, ierr
    real(wp) :: t_current, dt, wall_sec, mcells_per_sec
    real(wp) :: next_status, status_interval
 
@@ -58,6 +55,12 @@ program bench_ocean
       call get_command_argument(1, nml_path)
    else
       nml_path = DEFAULT_NML
+   end if
+   max_steps = 0
+   if (command_argument_count() >= 2) then
+      call get_command_argument(2, arg2)
+      read (arg2, *, iostat=ios) max_steps
+      if (ios /= 0) max_steps = 0
    end if
 
    call read_config(trim(nml_path), cfg)
@@ -73,43 +76,16 @@ program bench_ocean
       stop 1
    end if
 
-   ! ---- Setup — the SAME sequence as driver_run_ocean, minus diag/IO ----
-   call grid%init(cfg%nx, cfg%ny, cfg%nghost, cfg%dx, cfg%dy)
-   call os%init_from_config(cfg, grid)
-
-   ! vcoord params BEFORE the seed (the seed's build_zref_full reads them).
-   if (os%use_multilayer) then
-      os%vcoord%coord_type = parse_ocean_vcoord_type(cfg%vcoord_type)
-      os%vcoord%zstar_h_surf_target = cfg%zstar_h_surf_target
-      os%vcoord%zstar_h_min = cfg%zstar_h_min
+   ! ---- Setup: the driver's own engine path (may auto-set cfg n_inner) ----
+   ! Diagnostics are the one deliberate difference: no NetCDF stream.
+   cfg%ocean%diag%enabled = .false.
+   call engine_setup(engine, cfg, ierr)
+   if (ierr /= OCEAN_STATUS_OK) then
+      write (error_unit, "(a)") "bench_ocean: engine_setup failed"
+      stop 1
    end if
 
-   call ocean_state_seed_from_cfg(os, grid, cfg)
-   call register_default_tracers( &
-      os%multilayer%tracers(os%multilayer%idx_salinity), &
-      os%multilayer%tracers(os%multilayer%idx_temperature), cfg)
-
-   call sf%init(grid)
-   call sf%set_surface_flux_const(0.0_wp, 0.0_wp)
-
-   call configure_ocean_metrics(cfg, os, grid, 0)
-   call configure_ocean_forcing(cfg, os, grid, 0)
-   call configure_ocean_drag(cfg, os, 0)
-   call configure_ocean_vmix(cfg, os, 0)
-   call configure_ocean_lateral(cfg, os, grid, 0)
-   call configure_ocean_pgf(cfg, os, 0)
-   ! Single configured rho_0 out to the surface-flux / wind-stress / vmix
-   ! slots, exactly as engine_setup does it (the local `sf` above is the
-   ! benchmark's own zero-flux handle, so it takes the same value too).
-   call configure_ocean_reference_density(os)
-   sf%rho0 = os%eos%rho0
-   call configure_ocean_bt(cfg, os, grid, 0)
-   call configure_ocean_bt_split(cfg, os, grid, 0)   ! may auto-set cfg%ocean%bt%n_inner
-   call configure_ocean_land_mask(cfg, os, grid, 0)  ! static land masking (CHUNK A)
-   ! Bed datum of the isopycnal slopes (no-op when the slot is off).
-   call os%slopes%set_bathymetry(os%barotropic%b)
-
-   n_inner = cfg%ocean%bt%n_inner
+   n_inner = engine%n_inner
    if (n_inner < 1) then
       write (error_unit, "(a)") "bench_ocean: needs split-explicit barotropic "// &
          "(ocean_bt n_inner >= 1 or auto_n_inner = .true.)"
@@ -124,10 +100,8 @@ program bench_ocean
    write (output_unit, "(a)") " namelist   : "//trim(nml_path)
    write (output_unit, "(a)") ""
 
-   ! ---- Device placement (same as the driver) ----
-   call ocean_state_enter_data(os)
-   !$acc enter data copyin(sf)
-   call sf%enter_data()
+   ! ---- Device placement (the driver's engine_enter_data) ----
+   call engine_enter_data(engine, cfg)
 
    call profiler_init(.true.)
 
@@ -141,23 +115,28 @@ program bench_ocean
    call wall_timer%start()
    do while (t_current < cfg%t_end)
       dt = min(cfg%dt_fixed, cfg%t_end - t_current)
-      call ocean_dyn_step_split(grid, os%metrics, os%dyn, os%eos, &
-                                os%coriolis_adv, os%continuity, &
-                                os%pressure_force, os%hvisc, &
-                                os%bdrag, os%surface_stress, &
-                                os%vert_advect, os%hdiff_tracer, &
-                                os%vdiff, os%vmix, &
-                                os%multilayer, dt, n_inner, sf=sf, &
-                                vcoord=os%vcoord, t=t_current, &
-                                lateral_mix=os%lateral_mix)
+      call engine_step(engine, dt, t_current, ierr=ierr)
+      if (ierr /= OCEAN_STATUS_OK) stop 1
+      call engine_step_ice(engine, cfg, dt, t_current, ierr=ierr)
+      if (ierr /= OCEAN_STATUS_OK) stop 1
+      call engine_step_finalize(engine, dt, t_current, ierr=ierr)
+      if (ierr /= OCEAN_STATUS_OK) stop 1
       t_current = t_current + dt
       nstep = nstep + 1
+      if (max_steps > 0 .and. nstep >= max_steps) then
+         call check_finite_or_die(nstep, t_current)
+         call report_progress(nstep, t_current)
+         exit
+      end if
       if (t_current >= next_status .or. t_current >= cfg%t_end) then
          call check_finite_or_die(nstep, t_current)
          call report_progress(nstep, t_current)
          next_status = next_status + status_interval
       end if
    end do
+   call ocean_dyn_flush_tracer_window(engine%grid, engine%state%metrics, &
+                                      engine%state%dyn, engine%state%continuity, &
+                                      engine%state%multilayer, bc=engine%state%bc)
    call wall_timer%stop()
 
    wall_sec = wall_timer%get_elapsed_time()
@@ -171,9 +150,8 @@ program bench_ocean
    write (output_unit, "(a)") ""
    call profiler_report()
 
-   call sf%exit_data()
-   !$acc exit data delete(sf)
-   call ocean_state_exit_data(os)
+   call engine_exit_data(engine)
+   call engine_teardown(engine)
 
 contains
 
@@ -196,10 +174,10 @@ contains
       ! host copy stale on Intel/AMD (NVHPC tolerates the chain).  Hoist each
       ! to a one-deep name so the D->H sync lands.  Same rule as
       ! solver_enter_data's enter/exit-data clauses.
-      associate (h => os%multilayer%h_layer, &
-                 u => os%multilayer%u_face_x_layer, &
-                 v => os%multilayer%v_face_y_layer, &
-                 eta => os%dyn%bt_work%bt_eta)
+      associate (h => engine%state%multilayer%h_layer, &
+                 u => engine%state%multilayer%u_face_x_layer, &
+                 v => engine%state%multilayer%v_face_y_layer, &
+                 eta => engine%state%dyn%bt_work%bt_eta)
          !$acc update self(h, u, v, eta)
          bad = ""
          if (.not. all(ieee_is_finite(h))) then
@@ -210,6 +188,11 @@ contains
             bad = "v_face_y_layer"
          else if (.not. all(ieee_is_finite(eta))) then
             bad = "bt_eta"
+         else if (cfg%ocean%pgf%maxvel > 0.0_wp .and. &
+                  max(maxval(abs(u)), maxval(abs(v))) >= 0.9_wp*cfg%ocean%pgf%maxvel) then
+            ! The velocity-truncation clamp keeps a blown run FINITE (phantom
+            ! +-maxvel currents), so finiteness alone cannot catch it.
+            bad = "|u| at the maxvel clamp (blown run)"
          end if
       end associate
       if (len_trim(bad) > 0) then
@@ -226,9 +209,9 @@ contains
       real(wp) :: eta_mx, u_mx, elapsed, eta_est
       ! associate-leaf so the device->host sync lands on ifx/flang (deep DT
       ! chains in `update` are a silent no-op there; see check_finite_or_die).
-      associate (u => os%multilayer%u_face_x_layer, &
-                 v => os%multilayer%v_face_y_layer, &
-                 eta => os%dyn%bt_work%bt_eta)
+      associate (u => engine%state%multilayer%u_face_x_layer, &
+                 v => engine%state%multilayer%v_face_y_layer, &
+                 eta => engine%state%dyn%bt_work%bt_eta)
          !$acc update self(u, v, eta)
          eta_mx = maxval(abs(eta))
          u_mx = max(maxval(abs(u)), maxval(abs(v)))
@@ -250,7 +233,7 @@ contains
       real(wp) :: emin, emax, val, frac
       character(len=MAP_COLS) :: line
       ! associate-leaf so the D->H sync lands on ifx/flang (see report_progress).
-      associate (eta => os%dyn%bt_work%bt_eta)
+      associate (eta => engine%state%dyn%bt_work%bt_eta)
          !$acc update self(eta)
       end associate
       ng = cfg%nghost
@@ -260,8 +243,8 @@ contains
       emax = -huge(1.0_wp)
       do jj = ng + 1, ng + nyp
          do ii = ng + 1, ng + nxp
-            emin = min(emin, os%dyn%bt_work%bt_eta(ii, jj))
-            emax = max(emax, os%dyn%bt_work%bt_eta(ii, jj))
+            emin = min(emin, engine%state%dyn%bt_work%bt_eta(ii, jj))
+            emax = max(emax, engine%state%dyn%bt_work%bt_eta(ii, jj))
          end do
       end do
       write (output_unit, "(a)") ""
@@ -277,7 +260,7 @@ contains
          jj = ng + 1 + int((real(r, wp) - 0.5_wp)/real(rows, wp)*real(nyp, wp))
          do c = 1, cols
             ii = ng + 1 + int((real(c, wp) - 0.5_wp)/real(cols, wp)*real(nxp, wp))
-            val = os%dyn%bt_work%bt_eta(ii, jj)
+            val = engine%state%dyn%bt_work%bt_eta(ii, jj)
             frac = (val - emin)/(emax - emin)
             lev = 1 + int(frac*real(len(RAMP) - 1, wp) + 0.5_wp)
             lev = max(1, min(len(RAMP), lev))
