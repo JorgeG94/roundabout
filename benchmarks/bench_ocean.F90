@@ -184,7 +184,7 @@ contains
                  u => engine%state%multilayer%u_face_x_layer, &
                  v => engine%state%multilayer%v_face_y_layer, &
                  eta => engine%state%dyn%bt_work%bt_eta)
-         !$acc update self(h, u, v, eta)
+         !$omp target update from(h, u, v, eta)
          bad = ""
          if (.not. all(ieee_is_finite(h))) then
             bad = "h_layer"
@@ -219,7 +219,7 @@ contains
       associate (u => engine%state%multilayer%u_face_x_layer, &
                  v => engine%state%multilayer%v_face_y_layer, &
                  eta => engine%state%dyn%bt_work%bt_eta)
-         !$acc update self(u, v, eta)
+         !$omp target update from(u, v, eta)
          eta_mx = maxval(abs(eta))
          u_mx = max(maxval(abs(u)), maxval(abs(v)))
       end associate
@@ -241,7 +241,7 @@ contains
       character(len=MAP_COLS) :: line
       ! associate-leaf so the D->H sync lands on ifx/flang (see report_progress).
       associate (eta => engine%state%dyn%bt_work%bt_eta)
-         !$acc update self(eta)
+         !$omp target update from(eta)
       end associate
       ng = cfg%nghost
       nxp = cfg%nx

@@ -338,13 +338,13 @@ contains
          bt_work%bt_ubt = U0
          allocate (f_corner(grid%nx_total + 1, grid%ny_total + 1), source=0.0_wp)
 
-         !$acc enter data copyin(f_corner)
+         !$omp target enter data map(to: f_corner)
          call bt_work%enter_data()
          call barotropic_substep_nonlinear_interior(grid, metrics, bt_work, f_corner, &
                                                     1, DT_INNER)
-         !$acc update self(bt_work%bt_ubt, bt_work%av_rem_u, bt_work%bt_rem_u)
+         !$omp target update from(bt_work%bt_ubt, bt_work%av_rem_u, bt_work%bt_rem_u)
          call bt_work%exit_data()
-         !$acc exit data delete(f_corner)
+         !$omp target exit data map(delete: f_corner)
 
          jp = NGHOST + 1
          call check(error, bt_work%bt_ubt(NGHOST + 2, jp) == av01*U0, &
@@ -398,20 +398,20 @@ contains
       ! (`bt_work%enter_data()`, never the whole derived type) before the repeated
       ! substep calls, and update the host copy of bt_ubt back only
       ! where it is actually read.
-      !$acc enter data copyin(f_corner)
+      !$omp target enter data map(to: f_corner)
       call bt_work%enter_data()
       do step = 1, n_outer
          call barotropic_substep_nonlinear_interior(grid, metrics, bt_work, f_corner, &
                                                     n_inner, dt_inner)
          if (step <= n_early .or. step > n_outer - n_late) then
-            !$acc update self(bt_work%bt_ubt)
+            !$omp target update from(bt_work%bt_ubt)
             cur = max(abs(bt_work%bt_ubt(NGHOST + 2, jp)), abs(bt_work%bt_ubt(NGHOST + 3, jp)))
             if (step <= n_early) peak_early = max(peak_early, cur)
             if (step > n_outer - n_late) peak_late = max(peak_late, cur)
          end if
       end do
       call bt_work%exit_data()
-      !$acc exit data delete(f_corner)
+      !$omp target exit data map(delete: f_corner)
    end subroutine run_slosh
 
    subroutine test_slosh_bounded_with_chain(error)

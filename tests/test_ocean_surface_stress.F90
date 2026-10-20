@@ -57,9 +57,9 @@ contains
    subroutine map_in(ms, ss)
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_surface_stress_t), intent(inout) :: ss
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(ss)
+      !$omp target enter data map(to: ss)
       call ss%enter_data()
    end subroutine map_in
 
@@ -67,9 +67,9 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_surface_stress_t), intent(inout) :: ss
       call ss%exit_data()
-      !$acc exit data delete(ss)
+      !$omp target exit data map(delete: ss)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out
 
    subroutine test_linear_input(error)
@@ -266,7 +266,7 @@ contains
 
          call map_in(ms, ss)
          call ocean_surface_stress_compute_tendencies(grid, ss, ms)
-         !$acc update self(ss%du_stress%data, ss%dv_stress%data)
+         !$omp target update from(ss%du_stress%data, ss%dv_stress%data)
          call map_out(ms, ss)
 
          du_expected = TAU/(RHO0*H0)
@@ -327,7 +327,7 @@ contains
 
          call map_in(ms, ss)
          call ocean_surface_stress_compute_tendencies(grid, ss, ms)
-         !$acc update self(ss%du_stress%data, ss%dv_stress%data)
+         !$omp target update from(ss%du_stress%data, ss%dv_stress%data)
          call map_out(ms, ss)
 
          ! Each interior u-face (i = 2..nx, j) at k = nz must equal

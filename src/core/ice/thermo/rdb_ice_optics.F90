@@ -51,7 +51,7 @@ contains
       !! Partition identity (up to ~1 `exp` round-off): `abs_sfc +
       !! abs_snow + sum(abs_ice_lay) + abs_ocn == 1`, because
       !! `opt_decay_lay**nk == exp(-hi/ICE_OPT_DEP_ICE)`.
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nk
          !! Number of ice layers (declared first — decl-order).
       real(wp), intent(in) :: hs

@@ -423,37 +423,37 @@ contains
    subroutine ocean_epbl_enter_data_impl(this)
       type(ocean_epbl_t), intent(inout) :: this
       if (allocated(this%f_centre)) then
-         !$acc enter data copyin(this%f_centre)
+         !$omp target enter data map(to: this%f_centre)
       end if
       if (allocated(this%mld)) then
-         !$acc enter data copyin(this%mld)
+         !$omp target enter data map(to: this%mld)
       end if
       if (allocated(this%b0)) then
-         !$acc enter data copyin(this%b0)
+         !$omp target enter data map(to: this%b0)
       end if
       if (allocated(this%kd_int)) then
-         !$acc enter data copyin(this%kd_int)
+         !$omp target enter data map(to: this%kd_int)
       end if
       if (allocated(this%la)) then
-         !$acc enter data copyin(this%la)
+         !$omp target enter data map(to: this%la)
       end if
       if (allocated(this%tke_wind)) then
-         !$acc enter data copyin(this%tke_wind)
+         !$omp target enter data map(to: this%tke_wind)
       end if
       if (allocated(this%tke_conv)) then
-         !$acc enter data copyin(this%tke_conv)
+         !$omp target enter data map(to: this%tke_conv)
       end if
       if (allocated(this%tke_forcing)) then
-         !$acc enter data copyin(this%tke_forcing)
+         !$omp target enter data map(to: this%tke_forcing)
       end if
       if (allocated(this%tke_mixing)) then
-         !$acc enter data copyin(this%tke_mixing)
+         !$omp target enter data map(to: this%tke_mixing)
       end if
       if (allocated(this%tke_mech_decay)) then
-         !$acc enter data copyin(this%tke_mech_decay)
+         !$omp target enter data map(to: this%tke_mech_decay)
       end if
       if (allocated(this%tke_conv_decay)) then
-         !$acc enter data copyin(this%tke_conv_decay)
+         !$omp target enter data map(to: this%tke_conv_decay)
       end if
       call scratch_3d_buffer_enter_data_impl(this%t0)
       call scratch_3d_buffer_enter_data_impl(this%s0)
@@ -482,37 +482,37 @@ contains
       call scratch_3d_buffer_exit_data_impl(this%s0)
       call scratch_3d_buffer_exit_data_impl(this%t0)
       if (allocated(this%tke_conv_decay)) then
-         !$acc exit data delete(this%tke_conv_decay)
+         !$omp target exit data map(delete: this%tke_conv_decay)
       end if
       if (allocated(this%tke_mech_decay)) then
-         !$acc exit data delete(this%tke_mech_decay)
+         !$omp target exit data map(delete: this%tke_mech_decay)
       end if
       if (allocated(this%tke_mixing)) then
-         !$acc exit data delete(this%tke_mixing)
+         !$omp target exit data map(delete: this%tke_mixing)
       end if
       if (allocated(this%tke_forcing)) then
-         !$acc exit data delete(this%tke_forcing)
+         !$omp target exit data map(delete: this%tke_forcing)
       end if
       if (allocated(this%tke_conv)) then
-         !$acc exit data delete(this%tke_conv)
+         !$omp target exit data map(delete: this%tke_conv)
       end if
       if (allocated(this%tke_wind)) then
-         !$acc exit data delete(this%tke_wind)
+         !$omp target exit data map(delete: this%tke_wind)
       end if
       if (allocated(this%la)) then
-         !$acc exit data delete(this%la)
+         !$omp target exit data map(delete: this%la)
       end if
       if (allocated(this%kd_int)) then
-         !$acc exit data delete(this%kd_int)
+         !$omp target exit data map(delete: this%kd_int)
       end if
       if (allocated(this%mld)) then
-         !$acc exit data delete(this%mld)
+         !$omp target exit data map(delete: this%mld)
       end if
       if (allocated(this%b0)) then
-         !$acc exit data delete(this%b0)
+         !$omp target exit data map(delete: this%b0)
       end if
       if (allocated(this%f_centre)) then
-         !$acc exit data delete(this%f_centre)
+         !$omp target exit data map(delete: this%f_centre)
       end if
    end subroutine ocean_epbl_exit_data_impl
 
@@ -607,7 +607,7 @@ contains
       !! All followed by the optional convective reduction
       !! (mstar_conv_adj in [0,1]; the u*=0 corner multiplies by
       !! (1 - adj), matching the reference behaviour).
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: scheme
       real(wp), intent(in) :: mstar_const, mstar_cap
       real(wp), intent(in) :: mstar_coef1, c_ek, mstar_conv_adj
@@ -663,7 +663,7 @@ contains
       !! Mixing-length shape factor in [translay_scale, 1]: 1 at the
       !! surface, decaying to the transition-layer floor at the MLD.
       !! `shaped = .false.` (no MLD iteration) returns 1.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: z_depth
          !! Unconditional interface depth below the surface (m).
       real(wp), intent(in) :: mld_guess, translay_scale, mixlen_exponent
@@ -691,7 +691,7 @@ contains
       !! surface Stokes drift and Phillips peak wavenumber (Li &
       !! Fox-Kemper 2017; Breivik et al. 2016).  BLD-independent —
       !! call once per column, outside the MLD iteration.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: ustar_w
          !! Water-side u* (m/s), > 0 (caller floors it).
       real(wp), intent(in) :: rho_ocn
@@ -742,7 +742,7 @@ contains
       !! (Breivik et al. 2016 with Webb & Fox-Kemper 2015 directional
       !! spreading).  No MIN_LANGMUIR / LA_DEPTH_MIN floors — those
       !! belong to MOM6's profile-averaging wave paths, not LF17.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: ustar_w
          !! Water-side u* (m/s).
       real(wp), intent(in) :: zsl
@@ -774,7 +774,7 @@ contains
 
    pure function one_m_exp_x(x) result(f)
       !! (1 - exp(-x)) / x, Taylor-safe at small x.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: x
       real(wp) :: f
       if (x < 1.0e-4_wp) then
@@ -793,7 +793,7 @@ contains
       !! via Ekman / Obukhov / MLD length-scale ratios, split by the
       !! sign of the surface buoyancy flux; all-zero lac coefficients
       !! give La_mod = La exactly.
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: scheme
       real(wp), intent(in) :: coef, expo, max_enh, vonkar
       real(wp), intent(in) :: lac1, lac2, lac3, lac4, lac5

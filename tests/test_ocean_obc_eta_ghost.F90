@@ -117,7 +117,7 @@ contains
       type(ocean_vmix_t), intent(inout) :: vmix
       type(ocean_dyn_t), intent(inout) :: dyn
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+      !$omp target enter data map(to: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
       call ms%enter_data()
       call ct%enter_data()
       call cor%enter_data()
@@ -159,7 +159,7 @@ contains
       call cor%exit_data()
       call ct%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+      !$omp target exit data map(delete: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
    end subroutine map_out
 
    subroutine destroy_all(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, eos, dyn)
@@ -274,15 +274,15 @@ contains
          bc%north%bc_type = OBC_OPEN
 
          call map_in(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
-         !$acc update device(dyn%bt_work%bt_H_ref, dyn%bt_work%bt_eta, &
-         !$acc&              dyn%bt_work%bt_ubt_end, dyn%bt_work%bt_vbt_end, &
-         !$acc&              ms%u_face_x_layer, ms%v_face_y_layer)
+         !$omp target update to(dyn%bt_work%bt_H_ref, dyn%bt_work%bt_eta, &
+         !$omp&              dyn%bt_work%bt_ubt_end, dyn%bt_work%bt_vbt_end, &
+         !$omp&              ms%u_face_x_layer, ms%v_face_y_layer)
 
          ! Apply the open boundary once — sets the physical edge faces and
          ! (the fix) zero-gradient-fills the velocity ghosts, corners included.
          call ocean_obc_apply_baroclinic(grid, bc, dyn%bt_work, ms, DT)
 
-         !$acc update self(ms%u_face_x_layer, ms%v_face_y_layer)
+         !$omp target update from(ms%u_face_x_layer, ms%v_face_y_layer)
          max_u = maxval(abs(ms%u_face_x_layer))   ! full array — ghosts + corners
          max_v = maxval(abs(ms%v_face_y_layer))
 
@@ -370,11 +370,11 @@ contains
          bc%south%bc_type = OBC_OPEN
 
          call map_in(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
-         !$acc update device(dyn%bt_work%bt_H_ref, dyn%bt_work%bt_eta, &
-         !$acc&              dyn%bt_work%bt_ubt_end, dyn%bt_work%bt_vbt_end, &
-         !$acc&              ms%u_face_x_layer, ms%v_face_y_layer)
+         !$omp target update to(dyn%bt_work%bt_H_ref, dyn%bt_work%bt_eta, &
+         !$omp&              dyn%bt_work%bt_ubt_end, dyn%bt_work%bt_vbt_end, &
+         !$omp&              ms%u_face_x_layer, ms%v_face_y_layer)
          call ocean_obc_apply_baroclinic(grid, bc, dyn%bt_work, ms, DT)
-         !$acc update self(ms%u_face_x_layer, ms%v_face_y_layer)
+         !$omp target update from(ms%u_face_x_layer, ms%v_face_y_layer)
 
          ! Check the SOUTH ghost rows over the FULL i extent (includes the
          ! wall-side corner columns).  With the wall×open fix these are
@@ -457,10 +457,10 @@ contains
          bc%north%bc_type = OBC_OPEN
 
          call map_in(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
-         !$acc update device(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer, &
-         !$acc&              ms%tracers(it)%hTr)
+         !$omp target update to(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer, &
+         !$omp&              ms%tracers(it)%hTr)
          call ocean_obc_fill_ghosts(grid, bc, ms)
-         !$acc update self(ms%tracers(it)%hTr, ms%h_layer)
+         !$omp target update from(ms%tracers(it)%hTr, ms%h_layer)
 
          ! Concentration (hTr/h) over the full array — corners included.  With
          ! the corner pre-fill every ghost reverts to ~S_INT; without it the
@@ -568,12 +568,12 @@ contains
          bc%north%bc_type = OBC_WALL
 
          call map_in(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
-         !$acc update device(dyn%bt_work%bt_H_ref, ms%h_layer, ms%tracers(it)%hTr, &
-         !$acc&              ms%tracers(ms%idx_temperature)%hTr)
+         !$omp target update to(dyn%bt_work%bt_H_ref, ms%h_layer, ms%tracers(it)%hTr, &
+         !$omp&              ms%tracers(ms%idx_temperature)%hTr)
 
          call ocean_obc_refill_ghost_ssh(grid, bc, ms, dyn%bt_work%bt_H_ref)
 
-         !$acc update self(ms%h_layer, ms%tracers(it)%hTr)
+         !$omp target update from(ms%h_layer, ms%tracers(it)%hTr)
 
          ! Max |SSH − ETA0| over the W/E ghost columns (full j extent — the
          ! open×open SW/SE corner ghosts and the wall-side N corner ghosts
@@ -713,13 +713,13 @@ contains
          bc%north%bc_type = OBC_WALL
 
          call map_in(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
-         !$acc update device(dyn%bt_work%bt_H_ref, ms%h_layer, &
-         !$acc&              ms%tracers(ms%idx_salinity)%hTr, &
-         !$acc&              ms%tracers(ms%idx_temperature)%hTr)
+         !$omp target update to(dyn%bt_work%bt_H_ref, ms%h_layer, &
+         !$omp&              ms%tracers(ms%idx_salinity)%hTr, &
+         !$omp&              ms%tracers(ms%idx_temperature)%hTr)
 
          call ocean_obc_refill_ghost_ssh(grid, bc, ms, dyn%bt_work%bt_H_ref)
 
-         !$acc update self(ms%h_layer)
+         !$omp target update from(ms%h_layer)
 
          ! Per-layer zero-gradient copy: every W/E ghost layer equals the
          ! first interior cell of its row; every S ghost layer equals the
@@ -810,11 +810,11 @@ contains
          bc%north%bc_type = OBC_WALL
 
          call map_in(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
-         !$acc update device(dyn%bt_work%bt_H_ref, ms%h_layer)
+         !$omp target update to(dyn%bt_work%bt_H_ref, ms%h_layer)
 
          call ocean_obc_refill_ghost_ssh(grid, bc, ms, dyn%bt_work%bt_H_ref)
 
-         !$acc update self(ms%h_layer)
+         !$omp target update from(ms%h_layer)
          identical = all(ms%h_layer == h_before)
          call map_out(metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
 

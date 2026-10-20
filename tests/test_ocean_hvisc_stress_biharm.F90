@@ -96,14 +96,14 @@ contains
       type(ocean_lateral_mix_t), intent(inout), optional :: lmix
       type(ocean_horizontal_viscosity_t), intent(inout), optional :: hv
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
       if (present(lmix)) then
-         !$acc enter data copyin(lmix)
+         !$omp target enter data map(to: lmix)
          call lmix%enter_data()
       end if
       if (present(hv)) then
-         !$acc enter data copyin(hv)
+         !$omp target enter data map(to: hv)
          call hv%enter_data()
       end if
    end subroutine map_in
@@ -115,14 +115,14 @@ contains
       type(ocean_horizontal_viscosity_t), intent(inout), optional :: hv
       if (present(hv)) then
          call hv%exit_data()
-         !$acc exit data delete(hv)
+         !$omp target exit data map(delete: hv)
       end if
       if (present(lmix)) then
          call lmix%exit_data()
-         !$acc exit data delete(lmix)
+         !$omp target exit data map(delete: lmix)
       end if
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call destroy_cartesian_metrics(metrics)
    end subroutine map_out
 
@@ -166,7 +166,7 @@ contains
 
          call map_in(ms, metrics, grid, hv=hv)
          call ocean_horizontal_viscosity_compute_tendencies(grid, metrics, hv, ms, dt=DT)
-         !$acc update self(hv%du_visc%data)
+         !$omp target update from(hv%du_visc%data)
          call map_out(ms, metrics, hv=hv)
 
          ! Interior window well away from every wall (Pass 1/2 mirror BC
@@ -245,28 +245,28 @@ contains
          hv_m6%stress_tensor = .true.
          hv_m6%bound_coef = 0.8_wp
 
-         !$acc enter data copyin(ms)
+         !$omp target enter data map(to: ms)
          call ms%enter_data()
          call make_cartesian_metrics(metrics, grid)
-         !$acc enter data copyin(hv_lap)
+         !$omp target enter data map(to: hv_lap)
          call hv_lap%enter_data()
-         !$acc enter data copyin(hv_m6)
+         !$omp target enter data map(to: hv_m6)
          call hv_m6%enter_data()
 
          call ocean_horizontal_viscosity_compute_tendencies(grid, metrics, hv_lap, ms, dt=DT)
          call ocean_horizontal_viscosity_compute_tendencies(grid, metrics, hv_m6, ms, dt=DT)
-         !$acc update self(hv_lap%du_visc%data, hv_lap%dv_visc%data)
-         !$acc update self(hv_m6%du_visc%data, hv_m6%dv_visc%data)
+         !$omp target update from(hv_lap%du_visc%data, hv_lap%dv_visc%data)
+         !$omp target update from(hv_m6%du_visc%data, hv_m6%dv_visc%data)
 
          allocate (du_lap, source=hv_lap%du_visc%data)
          allocate (dv_lap, source=hv_lap%dv_visc%data)
 
          call hv_m6%exit_data()
-         !$acc exit data delete(hv_m6)
+         !$omp target exit data map(delete: hv_m6)
          call hv_lap%exit_data()
-         !$acc exit data delete(hv_lap)
+         !$omp target exit data map(delete: hv_lap)
          call ms%exit_data()
-         !$acc exit data delete(ms)
+         !$omp target exit data map(delete: ms)
          call destroy_cartesian_metrics(metrics)
 
          max_du = 0.0_wp
@@ -353,7 +353,7 @@ contains
 
          call map_in(ms, metrics, grid, hv=hv)
          call ocean_horizontal_viscosity_compute_tendencies(grid, metrics, hv, ms, dt=DT)
-         !$acc update self(hv%du_visc%data)
+         !$omp target update from(hv%du_visc%data)
          call map_out(ms, metrics, hv=hv)
 
          ! Probe well interior in i (mirror BC contaminates the 2 columns
@@ -426,12 +426,12 @@ contains
       call ocean_lateral_mix_compute_smag_ah(grid_on, metrics_on, lmix_on, ms_on)
       call ocean_horizontal_viscosity_compute_tendencies(grid_on, metrics_on, hv_on, ms_on, &
                                                          lateral_mix=lmix_on)
-      !$acc update self(hv_on%du_visc%data, hv_on%dv_visc%data)
+      !$omp target update from(hv_on%du_visc%data, hv_on%dv_visc%data)
       call map_out(ms_on, metrics_on, lmix_on, hv_on)
 
       call map_in(ms_off, metrics_off, grid_off, hv=hv_off)
       call ocean_horizontal_viscosity_compute_tendencies(grid_off, metrics_off, hv_off, ms_off)
-      !$acc update self(hv_off%du_visc%data, hv_off%dv_visc%data)
+      !$omp target update from(hv_off%du_visc%data, hv_off%dv_visc%data)
       call map_out(ms_off, metrics_off, hv=hv_off)
 
       max_diff = maxval(abs(hv_on%du_visc%data - hv_off%du_visc%data))
@@ -498,13 +498,13 @@ contains
       call map_in(ms_a, metrics_a, grid_a, lmix_inert, hv_a)
       call ocean_horizontal_viscosity_compute_tendencies(grid_a, metrics_a, hv_a, ms_a, &
                                                          lateral_mix=lmix_inert)
-      !$acc update self(hv_a%du_visc%data, hv_a%dv_visc%data)
+      !$omp target update from(hv_a%du_visc%data, hv_a%dv_visc%data)
       call map_out(ms_a, metrics_a, lmix_inert, hv_a)
 
       ! Path B: stress_tensor, no lateral_mix argument at all.
       call map_in(ms_b, metrics_b, grid_b, hv=hv_b)
       call ocean_horizontal_viscosity_compute_tendencies(grid_b, metrics_b, hv_b, ms_b)
-      !$acc update self(hv_b%du_visc%data, hv_b%dv_visc%data)
+      !$omp target update from(hv_b%du_visc%data, hv_b%dv_visc%data)
       call map_out(ms_b, metrics_b, hv=hv_b)
 
       max_diff_u = maxval(abs(hv_a%du_visc%data - hv_b%du_visc%data))
@@ -631,7 +631,7 @@ contains
 
          call map_in(m, met, g, hv=hv)
          call ocean_horizontal_viscosity_compute_tendencies(g, met, hv, m, dt=DT)
-         !$acc update self(hv%du_visc%data, hv%dv_visc%data)
+         !$omp target update from(hv%du_visc%data, hv%dv_visc%data)
          call map_out(m, met, hv=hv)
 
          allocate (du_out, source=hv%du_visc%data)

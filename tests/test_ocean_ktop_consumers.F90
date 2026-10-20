@@ -115,18 +115,18 @@ contains
       sf%cp = SEAWATER_CP
       call sf%set_surface_flux_const(q_heat, q_salt)
 
-      !$acc enter data copyin(ms, sf)
+      !$omp target enter data map(to: ms, sf)
       call ms%enter_data()
       call sf%enter_data()
       call ocean_surface_flux_apply_tracers(grid, sf, ms, DT_STEP)
       associate (hT => ms%tracers(ms%idx_temperature)%hTr, &
                  hS => ms%tracers(ms%idx_salinity)%hTr, &
                  bT => ms%heat_budget_surface, bS => ms%salt_budget_surface)
-         !$acc update self(hT, hS, bT, bS)
+         !$omp target update from(hT, hS, bT, bS)
       end associate
       call sf%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, sf)
+      !$omp target exit data map(delete: ms, sf)
       call sf%destroy()
    end subroutine apply_flux
 

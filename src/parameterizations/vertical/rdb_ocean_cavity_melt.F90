@@ -752,7 +752,7 @@ contains
       !! PROVEN finite.  Reversing that order is the documented
       !! NaN-laundering bug — a NaN velocity would come back out as
       !! `ustar_min` and produce a small, plausible melt rate forever.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: u
          !! Far-field velocity component (m/s).
       real(wp), intent(in) :: v
@@ -812,7 +812,7 @@ contains
       !! salt denominators converge, so `gamma_s/gamma_t -> 1`,
       !! `S_b -> S_w`, the stabilising salt term vanishes and the
       !! destabilising temperature term is left holding the sign.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: l_plus
          !! Viscous Obukhov scale, or `CAVITY_L_PLUS_NEUTRAL`.
       logical :: is_neutral
@@ -849,7 +849,7 @@ contains
       !! does not exist on the equator.  A non-positive logarithm
       !! argument, a non-positive `eta*` argument and a non-positive
       !! denominator are all refused rather than clamped.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: u_star
          !! Friction velocity (m/s), > 0.
       real(wp), intent(in) :: l_plus
@@ -961,7 +961,7 @@ contains
       !!
       !! GUARD: the two `min()` caps are reached only after the power laws
       !! have been proven finite.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: u_star
          !! Friction velocity (m/s), > 0.
       real(wp), intent(in) :: l_plus
@@ -999,7 +999,7 @@ contains
       !! Exchange-velocity dispatch with the Coriolis parameter taken from
       !! the bundle (`par%f_cor`).  Thin wrapper over
       !! `cavity_exchange_velocities_f`, which holds the dispatch.
-      !$acc routine seq
+      !$omp declare target
       type(ocean_cavity_exchange_t), intent(in) :: par
          !! Law selector + parameters.
       type(ocean_cavity_const_t), intent(in) :: const
@@ -1053,7 +1053,7 @@ contains
       !! enough names SIGSEGV the compiler's `fort2` pass.  The public
       !! `cavity_exchange_velocities` passes `par%f_cor`; the bundle's
       !! member is otherwise ignored here.
-      !$acc routine seq
+      !$omp declare target
       type(ocean_cavity_exchange_t), intent(in) :: par
          !! Law selector + parameters (its `f_cor` member is NOT read).
       real(wp), intent(in) :: f_cor
@@ -1191,7 +1191,7 @@ contains
       !! Ice temperature actually used: exactly zero when the mode ignores
       !! it, so an unset or stale `T_ice` cannot leak into an insulating
       !! run through `L_eff`.
-      !$acc routine seq
+      !$omp declare target
       type(ocean_cavity_ice_t), intent(in) :: ice
          !! Ice-conduction bundle.
       real(wp) :: T_ice
@@ -1210,7 +1210,7 @@ contains
       !! p. 1794: the heat-advection term is present for MELTING and
       !! exactly zero for FREEZING, which is what the paper prescribes
       !! rather than an approximation made here.
-      !$acc routine seq
+      !$omp declare target
       type(ocean_cavity_ice_t), intent(in) :: ice
          !! Ice-conduction bundle.
       logical, intent(in) :: melting
@@ -1255,7 +1255,7 @@ contains
       !! routine must not INVENT a finite interface state out of
       !! corrupted input.  The melt flux, the one output that would
       !! silently poison a budget, is the one pinned to zero.
-      !$acc routine seq
+      !$omp declare target
       type(eos_t), intent(in) :: eos
          !! Shared EOS handle — carries the liquidus coefficient set.
       real(wp), intent(in) :: S_w
@@ -1285,7 +1285,7 @@ contains
       !! two-equation form and has its own entry point
       !! (`cavity_two_equation`), while `gamma_s = 0` is not a limit of
       !! this system at all.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: T_w
          !! Far-field temperature (degC).
       real(wp), intent(in) :: S_w
@@ -1440,7 +1440,7 @@ contains
       !! has an implied exchange velocity, and it is resolution- and
       !! timestep-dependent by construction, which is exactly the
       !! far-field-sampling problem the cavity literature is about.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: T_w
          !! Far-field temperature (degC).
       real(wp), intent(in) :: S_w
@@ -1520,7 +1520,7 @@ contains
       !! the salt term wins by about an order of magnitude at seawater
       !! salinities, so melting gives `B_b < 0` and therefore a POSITIVE
       !! Obukhov length.
-      !$acc routine seq
+      !$omp declare target
       type(ocean_cavity_const_t), intent(in) :: const
          !! Constants bundle — `g`, `alpha_T`, `beta_S`.
       real(wp), intent(in) :: T_w
@@ -1550,7 +1550,7 @@ contains
       !! Returns `CAVITY_L_PLUS_NEUTRAL` for a vanishing buoyancy flux —
       !! the `L -> +infinity` neutral limit, carried as a finite sentinel
       !! so no downstream arithmetic has to handle an actual infinity.
-      !$acc routine seq
+      !$omp declare target
       type(ocean_cavity_const_t), intent(in) :: const
          !! Constants bundle — `kappa_vk`.
       real(wp), intent(in) :: u_star
@@ -1572,7 +1572,7 @@ contains
       !! eq. (27) and Rosevear et al. (2022) eqs. (6)+(8) p. 2592.
       !! POSITIVE for melting.  Returns `CAVITY_L_PLUS_NEUTRAL` for a
       !! vanishing buoyancy flux.
-      !$acc routine seq
+      !$omp declare target
       type(ocean_cavity_const_t), intent(in) :: const
          !! Constants bundle — `nu`, `kappa_vk`.
       real(wp), intent(in) :: u_star
@@ -1611,7 +1611,7 @@ contains
       !! reserved or invalid ice mode leaves `c_i_eff = kh = 0`, i.e. the
       !! insulating fluxes, and the refusal is reported by the SOLVER
       !! that produced `m_mass` in the first place.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: T_w
          !! Far-field temperature (degC).
       real(wp), intent(in) :: T_b
@@ -1650,7 +1650,7 @@ contains
       !!                                          the phase change
       !!
       !! (E3) says these are equal; the unit tests assert it to round-off.
-      !$acc routine seq
+      !$omp declare target
       type(ocean_cavity_const_t), intent(in) :: const
          !! Constants bundle — `rho_w`.
       real(wp), intent(in) :: S_w
@@ -1675,7 +1675,7 @@ contains
       !! Solid-ice thickness rate (m/s) from the canonical mass flux,
       !! `m_ice = m_mass/rho_i`.  REPORTING ONLY — this is Jenkins,
       !! Nicholls & Corr (2010)'s `a_b` convention.
-      !$acc routine seq
+      !$omp declare target
       type(ocean_cavity_const_t), intent(in) :: const
          !! Constants bundle — `rho_i`.
       real(wp), intent(in) :: m_mass
@@ -1689,7 +1689,7 @@ contains
       !! mass flux, `m_weq = m_mass/rho_fw`.  REPORTING ONLY — this is
       !! ISOMIP+'s `m_w` (Asay-Davis et al. (2016) eq. (24) p. 2485), the
       !! number their figures are in.
-      !$acc routine seq
+      !$omp declare target
       type(ocean_cavity_const_t), intent(in) :: const
          !! Constants bundle — `rho_fw`.
       real(wp), intent(in) :: m_mass
@@ -1707,7 +1707,7 @@ contains
       !! `cavity_solve_melt`, before any early return, because the type
       !! carries no default initialisers (see its docstring: they would
       !! bar it from a `do concurrent` `local(...)` clause on gfortran).
-      !$acc routine seq
+      !$omp declare target
       type(ocean_cavity_solution_t), intent(out) :: sol
          !! Solution bundle, zeroed.
       sol%T_b = 0.0_wp
@@ -1735,7 +1735,7 @@ contains
       !! coefficients depend on L+, which in turn depends on melt rate via
       !! surface buoyancy forcing, iteration is required for convergence
       !! of the three-equation parameterisation solution."
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: law
          !! `CAVITY_LAW_*` code.
       logical :: is_implicit
@@ -1750,7 +1750,7 @@ contains
       !! `L+ = +infinity`, so `G = +infinity`.  Mapping it that way keeps
       !! the bisection bracket valid instead of taking `log()` of a
       !! negative number.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: lp_new
          !! `L+` re-diagnosed from the state this iterate produced.
       real(wp), intent(in) :: x
@@ -1771,7 +1771,7 @@ contains
       !! solve, the buoyancy flux the answer implies and the `L+` it
       !! re-diagnoses.  The fixed point of `x -> ln(L+_new)` is the
       !! solution of the implicit system.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: x
          !! Trial `ln(L+)`.  At or above `CAVITY_LP_X_HI` the trial `L+`
          !! is the neutral sentinel.
@@ -1844,7 +1844,7 @@ contains
       !! `cavity_solve_melt_f` with the Coriolis parameter taken from the
       !! bundle (`par%f_cor`) — the scalar entry point every host caller
       !! and the kernel suite use.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: T_w
          !! Far-field temperature (degC).
       real(wp), intent(in) :: S_w
@@ -1908,7 +1908,7 @@ contains
       !! After convergence the whole column is re-evaluated ONCE at the
       !! converged scalar, so the returned exchange velocities and the
       !! returned `(T_b, S_b, m_mass)` belong to ONE value of `L+`.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: T_w
          !! Far-field temperature (degC).
       real(wp), intent(in) :: S_w
@@ -2070,7 +2070,7 @@ contains
       !! that keeps the solution BUNDLE inside the callee, so a
       !! `do concurrent` over columns needs no derived-type `local(...)`
       !! clause at all — each iteration writes its own array elements.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: T_w
          !! Far-field temperature (degC).
       real(wp), intent(in) :: S_w
@@ -2131,7 +2131,7 @@ contains
       !! diagnostic that re-computed them from `u*` alone would quietly
       !! report the neutral values instead of the stratification-
       !! suppressed ones.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: T_w
          !! Far-field temperature (degC).
       real(wp), intent(in) :: S_w
@@ -2177,7 +2177,7 @@ contains
       !! per-column SCALAR — what `cavity_melt_columns_2d` calls, so no
       !! device code has to build a modified `ocean_cavity_exchange_t`
       !! (see `cavity_exchange_velocities_f`).
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: T_w
          !! Far-field temperature (degC).
       real(wp), intent(in) :: S_w

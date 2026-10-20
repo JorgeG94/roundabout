@@ -112,7 +112,7 @@ contains
       type(ocean_vmix_t), intent(inout) :: vmix
       type(ocean_dyn_t), intent(inout) :: dyn
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+      !$omp target enter data map(to: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
       call ms%enter_data()
       call ct%enter_data()
       call cor%enter_data()
@@ -154,7 +154,7 @@ contains
       call cor%exit_data()
       call ct%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+      !$omp target exit data map(delete: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
    end subroutine map_out
 
    subroutine destroy_all(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, eos, dyn)
@@ -496,7 +496,7 @@ contains
          call map_out(metrics_split, ms_split, ct_s, cor_s, pgf_s, hv_s, bd_s, ss_s, va_s, hd_s, vd_s, vmix_s, dyn_s)
 
          call make_cartesian_metrics(metrics_unsplit, grid_unsplit)
-         !$acc enter data copyin(ms_unsplit, ct_u, cor_u, pgf_u, hv_u, bd_u, ss_u, va_u, hd_u, vd_u, vmix_u)
+         !$omp target enter data map(to: ms_unsplit, ct_u, cor_u, pgf_u, hv_u, bd_u, ss_u, va_u, hd_u, vd_u, vmix_u)
          call ms_unsplit%enter_data()
          call ct_u%enter_data(); call cor_u%enter_data(); call pgf_u%enter_data()
          call hv_u%enter_data(); call bd_u%enter_data(); call ss_u%enter_data()
@@ -512,7 +512,7 @@ contains
          call ss_u%exit_data(); call bd_u%exit_data(); call hv_u%exit_data()
          call pgf_u%exit_data(); call cor_u%exit_data(); call ct_u%exit_data()
          call ms_unsplit%exit_data()
-         !$acc exit data delete(ms_unsplit, ct_u, cor_u, pgf_u, hv_u, bd_u, ss_u, va_u, hd_u, vd_u, vmix_u)
+         !$omp target exit data map(delete: ms_unsplit, ct_u, cor_u, pgf_u, hv_u, bd_u, ss_u, va_u, hd_u, vd_u, vmix_u)
          call destroy_cartesian_metrics(metrics_unsplit)
 
          max_h_split_final = maxval(abs( &
@@ -866,14 +866,14 @@ contains
          ! GPU (-gpu=mem:separate): map ms before the DC loops inside
          ! ocean_sponge_apply touch u_face_x_layer/v_face_y_layer; bc is
          ! read only host-side (outside the DC) so it needs no map.
-         !$acc enter data copyin(ms)
+         !$omp target enter data map(to: ms)
          call ms%enter_data()
          do step = 1, N_SPONGE_STEPS
             call ocean_sponge_apply(grid, bc, ms, DT)
          end do
-         !$acc update self(ms%u_face_x_layer)
+         !$omp target update from(ms%u_face_x_layer)
          call ms%exit_data()
-         !$acc exit data delete(ms)
+         !$omp target exit data map(delete: ms)
 
          ! Outermost band face (d=0, i = wall_face+0+1 = nghost+2): peak
          ! tau (alpha=1), exact answer u = U0*exp(-STRENGTH*DT*N).
@@ -1030,7 +1030,7 @@ contains
          call map_out(metrics_a, ms_a, ct_a, cor_a, pgf_a, hv_a, bd_a, ss_a, va_a, hd_a, vd_a, vmix_a, dyn_a)
 
          ! Run B: sp present, enable=.false., every other key nonsense.
-         !$acc enter data copyin(sp_b)
+         !$omp target enter data map(to: sp_b)
          call sp_b%enter_data()
          call map_in(grid_b, metrics_b, ms_b, ct_b, cor_b, pgf_b, hv_b, bd_b, ss_b, va_b, hd_b, vd_b, vmix_b, dyn_b)
          do i = 1, N_STEPS
@@ -1040,7 +1040,7 @@ contains
          end do
          call map_out(metrics_b, ms_b, ct_b, cor_b, pgf_b, hv_b, bd_b, ss_b, va_b, hd_b, vd_b, vmix_b, dyn_b)
          call sp_b%exit_data()
-         !$acc exit data delete(sp_b)
+         !$omp target exit data map(delete: sp_b)
 
          call check(error, all(ms_a%u_face_x_layer == ms_b%u_face_x_layer), &
                     "u_face_x_layer must be bit-for-bit identical whether sp is absent or "// &

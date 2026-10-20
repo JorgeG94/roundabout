@@ -63,9 +63,9 @@ contains
       type(continuity_t), intent(inout) :: ct
       type(ocean_metrics_t), intent(inout) :: metrics
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(bs)
+      !$omp target enter data map(to: bs)
       call bs%enter_data()
-      !$acc enter data copyin(ct)
+      !$omp target enter data map(to: ct)
       call ct%enter_data()
    end subroutine map_in
 
@@ -74,9 +74,9 @@ contains
       type(continuity_t), intent(inout) :: ct
       type(ocean_metrics_t), intent(inout) :: metrics
       call ct%exit_data()
-      !$acc exit data delete(ct)
+      !$omp target exit data map(delete: ct)
       call bs%exit_data()
-      !$acc exit data delete(bs)
+      !$omp target exit data map(delete: bs)
       call destroy_cartesian_metrics(metrics)
    end subroutine map_out
 

@@ -69,9 +69,9 @@ contains
    subroutine map_in(ms, bd)
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_bottom_drag_t), intent(inout) :: bd
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(bd)
+      !$omp target enter data map(to: bd)
       call bd%enter_data()
    end subroutine map_in
 
@@ -79,9 +79,9 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_bottom_drag_t), intent(inout) :: bd
       call bd%exit_data()
-      !$acc exit data delete(bd)
+      !$omp target exit data map(delete: bd)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out
 
    ! -----------------------------------------------------------------
@@ -306,7 +306,7 @@ contains
          do step = 1, N_STEPS
             call ocean_bottom_drag_compute_tendencies(grid, bd, ms, DT)
             call ocean_bottom_drag_apply_tendencies(bd, ms, DT)
-            !$acc update self(ms%u_face_x_layer, ms%v_face_y_layer)
+            !$omp target update from(ms%u_face_x_layer, ms%v_face_y_layer)
             ke_now = sum(ms%u_face_x_layer(:, :, 1)**2) + sum(ms%v_face_y_layer(:, :, 1)**2)
             if (ke_now >= ke_prev + 1.0e-14_wp) exit
             ke_prev = ke_now
@@ -498,11 +498,11 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_bottom_drag_t), intent(inout) :: bd
       type(ocean_metrics_t), intent(inout) :: metrics
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(bd)
+      !$omp target enter data map(to: bd)
       call bd%enter_data()
-      !$acc enter data copyin(metrics)
+      !$omp target enter data map(to: metrics)
       call metrics%enter_data()
    end subroutine map_in_cd
 
@@ -511,11 +511,11 @@ contains
       type(ocean_bottom_drag_t), intent(inout) :: bd
       type(ocean_metrics_t), intent(inout) :: metrics
       call metrics%exit_data()
-      !$acc exit data delete(metrics)
+      !$omp target exit data map(delete: metrics)
       call bd%exit_data()
-      !$acc exit data delete(bd)
+      !$omp target exit data map(delete: bd)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out_cd
 
    subroutine test_channel_drag_off(error)

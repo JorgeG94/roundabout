@@ -63,14 +63,14 @@ contains
       type(ocean_lateral_mix_t), intent(inout), optional :: lmix
       type(ocean_horizontal_viscosity_t), intent(inout), optional :: hv
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
       if (present(lmix)) then
-         !$acc enter data copyin(lmix)
+         !$omp target enter data map(to: lmix)
          call lmix%enter_data()
       end if
       if (present(hv)) then
-         !$acc enter data copyin(hv)
+         !$omp target enter data map(to: hv)
          call hv%enter_data()
       end if
    end subroutine map_in
@@ -82,14 +82,14 @@ contains
       type(ocean_horizontal_viscosity_t), intent(inout), optional :: hv
       if (present(hv)) then
          call hv%exit_data()
-         !$acc exit data delete(hv)
+         !$omp target exit data map(delete: hv)
       end if
       if (present(lmix)) then
          call lmix%exit_data()
-         !$acc exit data delete(lmix)
+         !$omp target exit data map(delete: lmix)
       end if
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call destroy_cartesian_metrics(metrics)
    end subroutine map_out
 
@@ -112,7 +112,7 @@ contains
 
       call map_in(ms, metrics, grid, lmix)
       call ocean_lateral_mix_compute_smag_ah(grid, metrics, lmix, ms)
-      !$acc update self(lmix%nu4_face_x, lmix%nu4_face_y)
+      !$omp target update from(lmix%nu4_face_x, lmix%nu4_face_y)
       call map_out(ms, metrics, lmix)
 
       max_diff_x = maxval(abs(lmix%nu4_face_x - NU4_BG))
@@ -146,7 +146,7 @@ contains
 
       call map_in(ms, metrics, grid, lmix)
       call ocean_lateral_mix_compute_smag_ah(grid, metrics, lmix, ms)
-      !$acc update self(lmix%nu4_face_x, lmix%nu4_face_y)
+      !$omp target update from(lmix%nu4_face_x, lmix%nu4_face_y)
       call map_out(ms, metrics, lmix)
 
       max_diff_x = maxval(abs(lmix%nu4_face_x - NU4_BG))
@@ -203,7 +203,7 @@ contains
 
       call map_in(ms, metrics, grid, lmix)
       call ocean_lateral_mix_compute_smag_ah(grid, metrics, lmix, ms)
-      !$acc update self(lmix%nu4_face_x, lmix%nu4_face_y)
+      !$omp target update from(lmix%nu4_face_x, lmix%nu4_face_y)
       call map_out(ms, metrics, lmix)
 
       ! Analytic estimate: for u_face_x(i,j) = SHEAR·j (per-row
@@ -261,7 +261,7 @@ contains
 
       call map_in(ms, metrics, grid, lmix)
       call ocean_lateral_mix_compute_smag_ah(grid, metrics, lmix, ms)
-      !$acc update self(lmix%nu4_face_x, lmix%nu4_face_y)
+      !$omp target update from(lmix%nu4_face_x, lmix%nu4_face_y)
       call map_out(ms, metrics, lmix)
 
       peak_x = maxval(lmix%nu4_face_x)
@@ -316,12 +316,12 @@ contains
       call ocean_lateral_mix_compute_smag_ah(grid_face, metrics_face, lmix_face, ms_face)
       call ocean_horizontal_viscosity_compute_tendencies(grid_face, metrics_face, hv_face, ms_face, &
                                                          lateral_mix=lmix_face)
-      !$acc update self(hv_face%du_visc%data, hv_face%dv_visc%data)
+      !$omp target update from(hv_face%du_visc%data, hv_face%dv_visc%data)
       call map_out(ms_face, metrics_face, lmix_face, hv_face)
 
       call map_in(ms_scalar, metrics_scalar, grid_scalar, hv=hv_scalar)
       call ocean_horizontal_viscosity_compute_tendencies(grid_scalar, metrics_scalar, hv_scalar, ms_scalar)
-      !$acc update self(hv_scalar%du_visc%data, hv_scalar%dv_visc%data)
+      !$omp target update from(hv_scalar%du_visc%data, hv_scalar%dv_visc%data)
       call map_out(ms_scalar, metrics_scalar, hv=hv_scalar)
 
       max_diff = maxval(abs(hv_face%du_visc%data - hv_scalar%du_visc%data))
@@ -422,23 +422,23 @@ contains
          lmix%nu4_max = 1.0e20_wp
 
          call make_anisotropic_metrics(metrics, grid, DX0, DY, AMP)
-         !$acc enter data copyin(ms)
+         !$omp target enter data map(to: ms)
          call ms%enter_data()
-         !$acc enter data copyin(lmix)
+         !$omp target enter data map(to: lmix)
          call lmix%enter_data()
 
          ! Run the biharmonic Smag kernel (which uses the same D_S stencil
          ! as compute_smag).  We check nu4_face_x (which carries D_S at
          ! the two adjacent corners averaged) against the hand formula.
          call ocean_lateral_mix_compute_smag_ah(grid, metrics, lmix, ms)
-         !$acc update self(lmix%nu4_face_x)
+         !$omp target update from(lmix%nu4_face_x)
 
          call lmix%exit_data()
-         !$acc exit data delete(lmix)
+         !$omp target exit data map(delete: lmix)
          call ms%exit_data()
-         !$acc exit data delete(ms)
+         !$omp target exit data map(delete: ms)
          call metrics%exit_data()
-         !$acc exit data delete(metrics)
+         !$omp target exit data map(delete: metrics)
          call metrics%destroy()
 
          ! ---- Hand-compute the expected nu4_face_x at (IP, JP) ----

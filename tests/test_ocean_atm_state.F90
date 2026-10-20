@@ -340,9 +340,9 @@ contains
       !! device implicitly).
       type(ocean_data_input_t), intent(inout) :: reader
       type(atm_state_t), intent(inout) :: atm
-      !$acc enter data copyin(reader)
+      !$omp target enter data map(to: reader)
       call reader%enter_data()
-      !$acc enter data copyin(atm)
+      !$omp target enter data map(to: atm)
       call atm%enter_data()
    end subroutine map_atm
 
@@ -350,9 +350,9 @@ contains
       !! Bring the nine regridded fields back to the host for the asserts
       !! (component arrays only, never the aggregate).
       type(atm_state_t), intent(inout) :: atm
-      !$acc update self(atm%tas, atm%huss, atm%uas, atm%vas, atm%psl)
-      !$acc update self(atm%rlds, atm%rsds, atm%prra, atm%prsn)
-      !$acc update self(atm%rsds_rec, atm%cosz, atm%cosz_mean)
+      !$omp target update from(atm%tas, atm%huss, atm%uas, atm%vas, atm%psl)
+      !$omp target update from(atm%rlds, atm%rsds, atm%prra, atm%prsn)
+      !$omp target update from(atm%rsds_rec, atm%cosz, atm%cosz_mean)
    end subroutine sync_atm
 
    subroutine unmap_atm(reader, atm)
@@ -360,9 +360,9 @@ contains
       type(ocean_data_input_t), intent(inout) :: reader
       type(atm_state_t), intent(inout) :: atm
       call atm%exit_data()
-      !$acc exit data delete(atm)
+      !$omp target exit data map(delete: atm)
       call reader%exit_data()
-      !$acc exit data delete(reader)
+      !$omp target exit data map(delete: reader)
    end subroutine unmap_atm
 
    pure function field_value(atm, v, i, j) result(val)
@@ -691,9 +691,9 @@ contains
       call check(error, reported == measured, "atm_state%bytes() does not match the mapped arrays")
       if (allocated(error)) return
 
-      !$acc enter data copyin(reader)
+      !$omp target enter data map(to: reader)
       call reader%enter_data()
-      !$acc enter data copyin(atm)
+      !$omp target enter data map(to: atm)
       call atm%enter_data()
 
       tq = 1.37_wp*86400.0_wp
@@ -703,8 +703,8 @@ contains
       ! The test's OWN `update self` -- atm_state_update itself issues no
       ! host-visible update, by the mem:separate contract (CLAUDE.md /
       ! `test_open_boundary_out_closes` template).
-      !$acc update self(atm%tas, atm%huss, atm%uas, atm%vas, atm%psl)
-      !$acc update self(atm%rlds, atm%rsds, atm%prra, atm%prsn)
+      !$omp target update from(atm%tas, atm%huss, atm%uas, atm%vas, atm%psl)
+      !$omp target update from(atm%rlds, atm%rsds, atm%prra, atm%prsn)
 
       ll = query_lon_lat(1, 1, metrics)
       expect = coefs(1, 1) + coefs(2, 1)*ll(1) + coefs(3, 1)*ll(2) + coefs(4, 1)*(tq/86400.0_wp)
@@ -713,9 +713,9 @@ contains
       if (allocated(error)) return
 
       call atm%exit_data()
-      !$acc exit data delete(atm)
+      !$omp target exit data map(delete: atm)
       call reader%exit_data()
-      !$acc exit data delete(reader)
+      !$omp target exit data map(delete: reader)
 
       call destroy_cartesian_metrics(metrics)
       call atm%destroy()

@@ -498,7 +498,6 @@ contains
    end subroutine remap_y_face_velocity
 
    pure subroutine rescale_anomaly_ke(nz, h_old_face, h_new_face, u_old_col, u_new_col)
-      !$acc routine seq
       !$omp declare target
       !! KE-conserving rescale of a remapped face-velocity column.
       !! The column remap conserves momentum (Σ h·u) but not KE; restore it by
@@ -801,7 +800,7 @@ contains
    end subroutine ocean_remap_tracer_column
 
    pure subroutine remap_fold_filler_defect(nz, h_old_col, h_new_col, q_src, q_new)
-      !$acc routine seq
+      !$omp declare target
       !! On a column that carries a vanished layer (source or target), make
       !! the tracer remap conservative EXACTLY, not just on a matched column:
       !! the content the remap failed to place, `Σ q_src − Σ q_new`, is

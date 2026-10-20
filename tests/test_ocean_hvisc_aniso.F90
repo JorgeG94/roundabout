@@ -93,18 +93,18 @@ contains
       lmix%kh_vel_scale_live = VEL_SCALE
 
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(lmix)
+      !$omp target enter data map(to: lmix)
       call lmix%enter_data()
 
       call ocean_lateral_mix_compute(grid, metrics, lmix, ms)
-      !$acc update self(lmix%ah_face_x)
+      !$omp target update from(lmix%ah_face_x)
 
       call lmix%exit_data()
-      !$acc exit data delete(lmix)
+      !$omp target exit data map(delete: lmix)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call destroy_cartesian_metrics(metrics)
 
       expected = VEL_SCALE*DX*U
@@ -140,18 +140,18 @@ contains
       lmix%kh_vel_scale_live = 0.0_wp   ! OFF
 
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(lmix)
+      !$omp target enter data map(to: lmix)
       call lmix%enter_data()
 
       call ocean_lateral_mix_compute(grid, metrics, lmix, ms)
-      !$acc update self(lmix%ah_face_x, lmix%ah_face_y)
+      !$omp target update from(lmix%ah_face_x, lmix%ah_face_y)
 
       call lmix%exit_data()
-      !$acc exit data delete(lmix)
+      !$omp target exit data map(delete: lmix)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call destroy_cartesian_metrics(metrics)
 
       max_diff = max(maxval(abs(lmix%ah_face_x - AH_BG)), &
@@ -201,20 +201,20 @@ contains
       call ocean_hvisc_set_aniso_direction(hv, n1, n2)
 
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(hv)
+      !$omp target enter data map(to: hv)
       call hv%enter_data()
 
       call ocean_horizontal_viscosity_compute_tendencies(grid, metrics, hv, ms, dt=DT)
-      !$acc update self(hv%du_visc%data)
+      !$omp target update from(hv%du_visc%data)
 
       allocate (du_visc, source=hv%du_visc%data)
 
       call hv%exit_data()
-      !$acc exit data delete(hv)
+      !$omp target exit data map(delete: hv)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call destroy_cartesian_metrics(metrics)
 
       call hv%destroy()

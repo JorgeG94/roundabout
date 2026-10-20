@@ -267,10 +267,10 @@ contains
    subroutine ocean_sponge_enter_data_impl(this)
       type(ocean_sponge_t), intent(inout) :: this
       if (.not. this%is_init) return
-      !$acc enter data copyin(this%idamp_h, this%idamp_u, this%idamp_v, &
-      !$acc&                  this%ref_tracer, this%u_ref, this%v_ref, this%z_top)
-      !$acc update device(this%idamp_h, this%idamp_u, this%idamp_v, &
-      !$acc&               this%ref_tracer, this%u_ref, this%v_ref, this%z_top)
+      !$omp target enter data map(to: this%idamp_h, this%idamp_u, this%idamp_v, &
+      !$omp&                  this%ref_tracer, this%u_ref, this%v_ref, this%z_top)
+      !$omp target update to(this%idamp_h, this%idamp_u, this%idamp_v, &
+      !$omp&               this%ref_tracer, this%u_ref, this%v_ref, this%z_top)
    end subroutine ocean_sponge_enter_data_impl
 
    subroutine ocean_sponge_exit_data(this)
@@ -284,8 +284,8 @@ contains
    subroutine ocean_sponge_exit_data_impl(this)
       type(ocean_sponge_t), intent(inout) :: this
       if (.not. this%is_init) return
-      !$acc exit data delete(this%idamp_h, this%idamp_u, this%idamp_v, &
-      !$acc&                 this%ref_tracer, this%u_ref, this%v_ref, this%z_top)
+      !$omp target exit data map(delete: this%idamp_h, this%idamp_u, this%idamp_v, &
+      !$omp&                 this%ref_tracer, this%u_ref, this%v_ref, this%z_top)
    end subroutine ocean_sponge_exit_data_impl
 
    pure function ocean_sponge_bytes(this) result(nbytes)
@@ -710,7 +710,7 @@ contains
       !! from the legacy edge/band cosine ramp; the map kernels above derive
       !! it directly from a per-cell `Idamp`). "One home" for the algebra
       !! per the plan (§3.1 / step 10).
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: cur, tgt, decay
       res = cur*decay + tgt*(1.0_wp - decay)
    end function relax_toward
@@ -1082,7 +1082,7 @@ contains
       !! "one home" — the map-driven kernels derive `decay` from a per-cell
       !! `Idamp` instead of this band/strength ramp, but both land on the
       !! same `cur*decay + tgt*(1-decay)` update).
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: hTr_cur, tgt, strength, dt
       integer, intent(in) :: d, band
       real(wp) :: alpha, decay

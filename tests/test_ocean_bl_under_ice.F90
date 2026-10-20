@@ -296,20 +296,20 @@ contains
       type(ocean_vmix_t), intent(inout) :: vmix
       type(ocean_surface_stress_t), intent(inout) :: ss
       type(ocean_surface_flux_t), intent(inout) :: sf
-      !$acc enter data copyin(ms, vmix, ss, sf)
+      !$omp target enter data map(to: ms, vmix, ss, sf)
       call ms%enter_data()
       call vmix%enter_data()
       call ss%enter_data()
       call sf%enter_data()
-      !$acc update device(ss%stress_mag, ss%stress_shelf)
+      !$omp target update to(ss%stress_mag, ss%stress_shelf)
       call vmix_compute_pp81(grid, vmix, ms)
       call vmix_apply_kpp_overlay(grid, vmix, ms, ss, sf)
-      !$acc update self(vmix%kv, vmix%kt, vmix%bl_depth, vmix%gamma_t, vmix%gamma_s)
+      !$omp target update from(vmix%kv, vmix%kt, vmix%bl_depth, vmix%gamma_t, vmix%gamma_s)
       call sf%exit_data()
       call ss%exit_data()
       call vmix%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, vmix, ss, sf)
+      !$omp target exit data map(delete: ms, vmix, ss, sf)
    end subroutine run_kpp
 
    subroutine run_epbl(grid, ms, epbl, ss, sf, dt)
@@ -319,19 +319,19 @@ contains
       type(ocean_surface_stress_t), intent(inout) :: ss
       type(ocean_surface_flux_t), intent(inout) :: sf
       real(wp), intent(in) :: dt
-      !$acc enter data copyin(ms, epbl, ss, sf)
+      !$omp target enter data map(to: ms, epbl, ss, sf)
       call ms%enter_data()
       call epbl%enter_data()
       call ss%enter_data()
       call sf%enter_data()
-      !$acc update device(ss%stress_mag, ss%stress_shelf)
+      !$omp target update to(ss%stress_mag, ss%stress_shelf)
       call epbl_compute(grid, epbl, ms, ss, dt, sf=sf)
-      !$acc update self(epbl%mld, epbl%kd_int, epbl%b0, epbl%tke_wind)
+      !$omp target update from(epbl%mld, epbl%kd_int, epbl%b0, epbl%tke_wind)
       call sf%exit_data()
       call ss%exit_data()
       call epbl%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, epbl, ss, sf)
+      !$omp target exit data map(delete: ms, epbl, ss, sf)
    end subroutine run_epbl
 
    subroutine run_top_drag(ms, td, ss)
@@ -340,17 +340,17 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_top_drag_t), intent(inout) :: td
       type(ocean_surface_stress_t), intent(inout) :: ss
-      !$acc enter data copyin(ms, td)
+      !$omp target enter data map(to: ms, td)
       call ms%enter_data()
       call td%enter_data()
-      !$acc update device(ms%u_face_x_layer, ms%v_face_y_layer, ms%h_layer, ms%wet_mask)
-      !$acc update device(td%cover_u, td%cover_v, td%cover_t)
+      !$omp target update to(ms%u_face_x_layer, ms%v_face_y_layer, ms%h_layer, ms%wet_mask)
+      !$omp target update to(td%cover_u, td%cover_v, td%cover_t)
       call ocean_top_drag_compute_tendencies(td, ms, 1.0_wp)
-      !$acc update self(td%stress_top)
+      !$omp target update from(td%stress_top)
       call td%exit_data()
-      !$acc exit data delete(td)
+      !$omp target exit data map(delete: td)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call publish_shelf_stress(ss, td)
    end subroutine run_top_drag
 
@@ -638,15 +638,15 @@ contains
       sf%salt_cavity = q_salt_cav
       sf%has_heat = .true.
       sf%has_salt = .true.
-      !$acc enter data copyin(ms, sf, cover)
+      !$omp target enter data map(to: ms, sf, cover)
       call ms%enter_data()
       call sf%enter_data()
-      !$acc update device(sf%heat_cavity, sf%salt_cavity)
+      !$omp target update to(sf%heat_cavity, sf%salt_cavity)
       call ocean_surface_flux_assemble(grid, sf, ms, cover_frac=cover)
-      !$acc update self(sf%Q_heat, sf%Q_salt)
+      !$omp target update from(sf%Q_heat, sf%Q_salt)
       call sf%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, sf, cover)
+      !$omp target exit data map(delete: ms, sf, cover)
       deallocate (cover)
    end subroutine assemble_cavity_fluxes
 
@@ -1407,20 +1407,20 @@ contains
       end do
       call ss%set_wind_stress_const(TAU, 0.0_wp)
 
-      !$acc enter data copyin(ms, epbl, ss, sf)
+      !$omp target enter data map(to: ms, epbl, ss, sf)
       call ms%enter_data()
       call epbl%enter_data()
       call ss%enter_data()
       call sf%enter_data()
-      !$acc update device(ms%p_top, ss%stress_mag, ss%stress_shelf)
+      !$omp target update to(ms%p_top, ss%stress_mag, ss%stress_shelf)
       call epbl_compute(grid, epbl, ms, ss, PTOP_DT, sf=sf)
-      !$acc update self(epbl%mld, epbl%kd_int, epbl%b0)
-      !$acc update self(epbl%dpe_t%data, epbl%dcolht_t%data)
+      !$omp target update from(epbl%mld, epbl%kd_int, epbl%b0)
+      !$omp target update from(epbl%dpe_t%data, epbl%dcolht_t%data)
       call sf%exit_data()
       call ss%exit_data()
       call epbl%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, epbl, ss, sf)
+      !$omp target exit data map(delete: ms, epbl, ss, sf)
 
       call check(error, all(ieee_is_finite(epbl%kd_int)), &
                  "EPBL returned a non-finite kd_int")

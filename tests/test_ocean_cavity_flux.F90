@@ -170,12 +170,12 @@ contains
          vf(1, 2, k) = v_n(k)
       end do
 
-      !$acc enter data copyin(cover, wet, h3, ht, hs, uf, vf) &
-      !$acc&           create(a2, t2, s2, u2, v2)
+      !$omp target enter data map(to: cover, wet, h3, ht, hs, uf, vf) &
+      !$omp&           map(alloc: a2, t2, s2, u2, v2)
       call cavity_far_field_impl(1, 1, nz, far_depth, cover, wet, h3, ht, hs, uf, vf, &
                                  a2, t2, s2, u2, v2)
-      !$acc update self(a2, t2, s2, u2, v2)
-      !$acc exit data delete(cover, wet, h3, ht, hs, uf, vf, a2, t2, s2, u2, v2)
+      !$omp target update from(a2, t2, s2, u2, v2)
+      !$omp target exit data map(delete: cover, wet, h3, ht, hs, uf, vf, a2, t2, s2, u2, v2)
 
       active = a2(1, 1)
       t_far = t2(1, 1)
@@ -246,8 +246,8 @@ contains
       ! `metrics%enter_data` already ran inside `make_cartesian_metrics`,
       ! so the cover mask written after it owes an explicit push — the
       ! canonical `mem:separate` trap (2).
-      !$acc update device(metrics%cover_frac)
-      !$acc enter data copyin(ms, sf, cav)
+      !$omp target update to(metrics%cover_frac)
+      !$omp target enter data map(to: ms, sf, cav)
       call ms%enter_data()
       call sf%enter_data()
       call cav%enter_data()
@@ -261,7 +261,7 @@ contains
       call cav%exit_data()
       call sf%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, sf, cav)
+      !$omp target exit data map(delete: ms, sf, cav)
       call cav%destroy()
       call sf%destroy()
       call ms%destroy()
@@ -438,12 +438,12 @@ contains
       uf = 0.0_wp
       vf = 0.0_wp
 
-      !$acc enter data copyin(cover, wet, h3, ht, hs, uf, vf) &
-      !$acc&           create(a2, t2, s2, u2, v2)
+      !$omp target enter data map(to: cover, wet, h3, ht, hs, uf, vf) &
+      !$omp&           map(alloc: a2, t2, s2, u2, v2)
       call cavity_far_field_impl(3, 1, 1, FAR_DEPTH, cover, wet, h3, ht, hs, uf, vf, &
                                  a2, t2, s2, u2, v2)
-      !$acc update self(a2, t2, s2, u2, v2)
-      !$acc exit data delete(cover, wet, h3, ht, hs, uf, vf, a2, t2, s2, u2, v2)
+      !$omp target update from(a2, t2, s2, u2, v2)
+      !$omp target exit data map(delete: cover, wet, h3, ht, hs, uf, vf, a2, t2, s2, u2, v2)
 
       call check(error, a2(1, 1) == 0.0_wp, "a DRY covered column must be inactive")
       if (allocated(error)) return
@@ -483,9 +483,9 @@ contains
 
       call ocean_cavity_flux_step(grid, cav, metrics, ms, eos, sf)
 
-      !$acc update self(cav%melt, cav%t_b, cav%s_b, cav%ustar, cav%t_far, cav%s_far, &
-      !$acc&            cav%u_far, cav%v_far, cav%active, cav%status)
-      !$acc update self(sf%heat_cavity, sf%salt_cavity)
+      !$omp target update from(cav%melt, cav%t_b, cav%s_b, cav%ustar, cav%t_far, cav%s_far, &
+      !$omp&            cav%u_far, cav%v_far, cav%active, cav%status)
+      !$omp target update from(sf%heat_cavity, sf%salt_cavity)
 
       i_cov = NGHOST + 1
       i_open = NGHOST + 4
@@ -576,9 +576,9 @@ contains
       call ocean_surface_flux_assemble(grid, sf, ms)
       call ocean_surface_flux_apply_tracers(grid, sf, ms, 3600.0_wp)
 
-      !$acc update self(sf%heat_cavity, sf%salt_cavity, sf%Q_heat, sf%Q_salt)
-      !$acc update self(ms%tracers(ms%idx_temperature)%hTr, &
-      !$acc&            ms%tracers(ms%idx_salinity)%hTr)
+      !$omp target update from(sf%heat_cavity, sf%salt_cavity, sf%Q_heat, sf%Q_salt)
+      !$omp target update from(ms%tracers(ms%idx_temperature)%hTr, &
+      !$omp&            ms%tracers(ms%idx_salinity)%hTr)
 
       t_after = ms%tracers(ms%idx_temperature)%hTr(i, j, NZ)/H0
       s_after = ms%tracers(ms%idx_salinity)%hTr(i, j, NZ)/H0
@@ -623,10 +623,10 @@ contains
       i = NGHOST + 1
       j = NGHOST + 1
       cav%s_ice = 2.0_wp
-      !$acc update self(cav%active)
+      !$omp target update from(cav%active)
       call ocean_cavity_flux_step(grid, cav, metrics, ms, eos, sf)
-      !$acc update self(cav%melt, cav%s_far, cav%q_ocean)
-      !$acc update self(sf%heat_cavity, sf%salt_cavity)
+      !$omp target update from(cav%melt, cav%s_far, cav%q_ocean)
+      !$omp target update from(sf%heat_cavity, sf%salt_cavity)
 
       expect = -cav%melt(i, j)*(cav%s_far(i, j) - cav%s_ice)
       call check(error, rel_diff(sf%salt_cavity(i, j), expect) <= TOL_PATH, &
@@ -680,9 +680,9 @@ contains
          call ocean_surface_flux_apply_tracers(grid, sf, ms, DT)
       end do
 
-      !$acc update self(ms%tracers(ms%idx_temperature)%hTr, &
-      !$acc&            ms%tracers(ms%idx_salinity)%hTr, &
-      !$acc&            ms%heat_budget_surface, ms%salt_budget_surface)
+      !$omp target update from(ms%tracers(ms%idx_temperature)%hTr, &
+      !$omp&            ms%tracers(ms%idx_salinity)%hTr, &
+      !$omp&            ms%heat_budget_surface, ms%salt_budget_surface)
 
       heat1 = sum(ms%tracers(ms%idx_temperature)%hTr(NGHOST + 1:nx - NGHOST, &
                                                      NGHOST + 1:ny - NGHOST, :))*scale
@@ -759,7 +759,7 @@ contains
       call build_cavity_plane(grid, metrics, ms, sf, cav, eos, p_top_val, T_WARM, &
                               0.05_wp, NX_PHYS)
       call ocean_cavity_flux_step(grid, cav, metrics, ms, eos, sf)
-      !$acc update self(cav%melt, cav%status)
+      !$omp target update from(cav%melt, cav%status)
       m_out = cav%melt(NGHOST + 1, NGHOST + 1)
       call check(error, cav%status(NGHOST + 1, NGHOST + 1) == CAVITY_MELT_OK, &
                  "the ice-pump probe column must solve cleanly")
@@ -785,9 +785,9 @@ contains
       st(2, 1) = 1   ! CAVITY_MELT_NONFINITE_INPUT
       st(3, 1) = 5   ! CAVITY_MELT_NOT_CONVERGED
 
-      !$acc enter data copyin(act, st)
+      !$omp target enter data map(to: act, st)
       call cavity_status_counts_impl(3, 1, act, st, n_nf, n_nc, n_nr, n_ot)
-      !$acc exit data delete(act, st)
+      !$omp target exit data map(delete: act, st)
 
       call check(error, n_nf == 1, "one non-finite column must be counted")
       if (allocated(error)) return
@@ -804,9 +804,9 @@ contains
 
       ! And an INACTIVE column's status is never counted, whatever it says.
       act(2, 1) = 0.0_wp
-      !$acc enter data copyin(act, st)
+      !$omp target enter data map(to: act, st)
       call cavity_status_counts_impl(3, 1, act, st, n_nf, n_nc, n_nr, n_ot)
-      !$acc exit data delete(act, st)
+      !$omp target exit data map(delete: act, st)
       call check(error, n_nf == 0, "an inactive column is never a solver failure")
    end subroutine test_status_nonfinite
 
@@ -829,8 +829,8 @@ contains
       ! Ice salinity above the water's: every covered column is refused.
       cav%s_ice = S_REF + 1.0_wp
       call ocean_cavity_flux_step(grid, cav, metrics, ms, eos, sf)
-      !$acc update self(cav%melt, cav%status)
-      !$acc update self(sf%heat_cavity, sf%salt_cavity)
+      !$omp target update from(cav%melt, cav%status)
+      !$omp target update from(sf%heat_cavity, sf%salt_cavity)
 
       i = NGHOST + 1
       j = NGHOST + 1
@@ -939,16 +939,16 @@ contains
       allocate (qs_ref(nx, ny), source=0.0_wp)
       ! A live atmosphere so the comparison has something to compare.
       call sf%set_surface_flux_const(40.0_wp, 1.0e-5_wp)
-      !$acc update device(sf%Q_heat, sf%Q_salt)
-      !$acc enter data copyin(zero_cover) create(qh_ref, qs_ref)
+      !$omp target update to(sf%Q_heat, sf%Q_salt)
+      !$omp target enter data map(to: zero_cover) map(alloc: qh_ref, qs_ref)
 
       call ocean_surface_flux_assemble(grid, sf, ms)
-      !$acc update self(sf%Q_heat, sf%Q_salt)
+      !$omp target update from(sf%Q_heat, sf%Q_salt)
       qh_ref = sf%Q_heat
       qs_ref = sf%Q_salt
 
       call ocean_surface_flux_assemble(grid, sf, ms, cover_frac=zero_cover)
-      !$acc update self(sf%Q_heat, sf%Q_salt)
+      !$omp target update from(sf%Q_heat, sf%Q_salt)
 
       call check(error, maxval(abs(sf%Q_heat - qh_ref)) <= TOL_PATH*max(maxval(abs(qh_ref)), 1.0_wp), &
                  "a zero cover must reproduce the unmasked Q_heat")
@@ -960,7 +960,7 @@ contains
                  "the comparison must not be 0 == 0")
 
 900   continue
-      !$acc exit data delete(zero_cover, qh_ref, qs_ref)
+      !$omp target exit data map(delete: zero_cover, qh_ref, qs_ref)
       call teardown_cavity_plane(metrics, ms, sf, cav)
    end subroutine test_cover_absent
 
@@ -1005,12 +1005,12 @@ contains
       mag0 = ss%stress_mag
 
       call ss%enter_data()
-      !$acc enter data copyin(cover)
+      !$omp target enter data map(to: cover)
       call ocean_surface_stress_apply_cover(ss, cover)
       ! Idempotence: the mask multiplies by 0 or 1, so a second pass —
       ! which the per-bracket forcing seam would do — must change nothing.
       call ocean_surface_stress_apply_cover(ss, cover)
-      !$acc update self(ss%tau_x, ss%tau_y, ss%stress_mag)
+      !$omp target update from(ss%tau_x, ss%tau_y, ss%stress_mag)
 
       j = NGHOST + 1
       call check(error, ss%stress_mag(i_ice, j) == 0.0_wp, &
@@ -1041,7 +1041,7 @@ contains
                  "the face SHARED with the ice must be closed (EITHER-neighbour rule)")
 
 900   continue
-      !$acc exit data delete(cover)
+      !$omp target exit data map(delete: cover)
       call ss%exit_data()
       call ss%destroy()
    end subroutine test_cover_stress
@@ -1171,18 +1171,18 @@ contains
       sf%heat_added = -15.0_wp
       sf%q_lw = -30.0_wp
       sf%salt_flux = 5.0e-6_wp
-      !$acc update device(sf%Q_heat, sf%Q_salt, sf%heat_added, sf%q_lw, sf%salt_flux)
+      !$omp target update to(sf%Q_heat, sf%Q_salt, sf%heat_added, sf%q_lw, sf%salt_flux)
 
       ! Reference: the SAME state assembled with no cover at all.
       call ocean_cavity_flux_step(grid, cav, metrics, ms, eos, sf)
       call ocean_surface_flux_assemble(grid, sf, ms)
-      !$acc update self(sf%Q_heat, sf%Q_salt)
+      !$omp target update from(sf%Q_heat, sf%Q_salt)
       qh_open = sf%Q_heat
       qs_open = sf%Q_salt
 
       call ocean_surface_flux_assemble(grid, sf, ms, cover_frac=metrics%cover_frac)
-      !$acc update self(sf%Q_heat, sf%Q_salt, sf%heat_cavity, sf%salt_cavity)
-      !$acc update self(sf%heat_content_massin, sf%heat_content_massout)
+      !$omp target update from(sf%Q_heat, sf%Q_salt, sf%heat_cavity, sf%salt_cavity)
+      !$omp target update from(sf%heat_content_massin, sf%heat_content_massout)
 
       call check(error, sf%heat_cavity(i_ice, j) /= 0.0_wp, &
                  "the covered probe column must actually be melting")
@@ -1249,24 +1249,24 @@ contains
       call sf%set_surface_flux_const(200.0_wp, 0.0_wp)
       call sf%set_sw_penetration(0.5_wp, 0.58_wp, 0.35_wp, 23.0_wp)
       call sf%set_restore(.true., .false., 10.0_wp, 0.0_wp, -20.0_wp, 0.0_wp)
-      !$acc update device(sf%Q_heat, sf%Q_salt)
-      !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
+      !$omp target update to(sf%Q_heat, sf%Q_salt)
+      !$omp target update from(ms%tracers(ms%idx_temperature)%hTr)
       t_before = ms%tracers(ms%idx_temperature)%hTr
 
       ! Reference pass with NO cover, on a scratch copy of the state.
       call ocean_surface_flux_apply_sw_penetration(grid, sf, ms, DT)
       call ocean_surface_restore_apply_tracers(grid, sf, ms, DT)
-      !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
+      !$omp target update from(ms%tracers(ms%idx_temperature)%hTr)
       t_ref = ms%tracers(ms%idx_temperature)%hTr
 
       ! Restore the pre-pass state and redo it WITH the cover.
       ms%tracers(ms%idx_temperature)%hTr = t_before
-      !$acc update device(ms%tracers(ms%idx_temperature)%hTr)
+      !$omp target update to(ms%tracers(ms%idx_temperature)%hTr)
       call ocean_surface_flux_apply_sw_penetration(grid, sf, ms, DT, &
                                                    cover_frac=metrics%cover_frac)
       call ocean_surface_restore_apply_tracers(grid, sf, ms, DT, &
                                                cover_frac=metrics%cover_frac)
-      !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
+      !$omp target update from(ms%tracers(ms%idx_temperature)%hTr)
 
       do k = 1, nzl
          call check(error, ms%tracers(ms%idx_temperature)%hTr(i_ice, j, k) == &
@@ -1318,7 +1318,7 @@ contains
       j = NGHOST + 1
 
       call sf%set_surface_flux_const(60.0_wp, 3.0e-5_wp)
-      !$acc update device(sf%Q_heat, sf%Q_salt)
+      !$omp target update to(sf%Q_heat, sf%Q_salt)
 
       heat0 = sum(ms%tracers(ms%idx_temperature)%hTr(NGHOST + 1:nx - NGHOST, &
                                                      NGHOST + 1:ny - NGHOST, :))*scale
@@ -1331,9 +1331,9 @@ contains
          call ocean_surface_flux_apply_tracers(grid, sf, ms, DT)
       end do
 
-      !$acc update self(ms%tracers(ms%idx_temperature)%hTr, &
-      !$acc&            ms%tracers(ms%idx_salinity)%hTr, &
-      !$acc&            ms%heat_budget_surface, ms%salt_budget_surface)
+      !$omp target update from(ms%tracers(ms%idx_temperature)%hTr, &
+      !$omp&            ms%tracers(ms%idx_salinity)%hTr, &
+      !$omp&            ms%heat_budget_surface, ms%salt_budget_surface)
 
       heat1 = sum(ms%tracers(ms%idx_temperature)%hTr(NGHOST + 1:nx - NGHOST, &
                                                      NGHOST + 1:ny - NGHOST, :))*scale

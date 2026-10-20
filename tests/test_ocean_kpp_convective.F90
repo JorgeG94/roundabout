@@ -98,7 +98,7 @@ contains
       type(ocean_surface_stress_t), intent(inout) :: ss
       type(ocean_surface_flux_t), intent(inout) :: sf
       logical, intent(in) :: use_sf
-      !$acc enter data copyin(ms, vmix, ss, sf)
+      !$omp target enter data map(to: ms, vmix, ss, sf)
       call ms%enter_data()
       call vmix%enter_data()
       if (use_sf) then
@@ -109,18 +109,18 @@ contains
             ! old no-flux behaviour.
             type(ocean_surface_flux_t) :: sf_zero
             call sf_zero%init(grid)
-            !$acc enter data copyin(sf_zero)
+            !$omp target enter data map(to: sf_zero)
             call sf_zero%enter_data()
             call vmix_apply_kpp_overlay(grid, vmix, ms, ss, sf_zero)
             call sf_zero%exit_data()
-            !$acc exit data delete(sf_zero)
+            !$omp target exit data map(delete: sf_zero)
             call sf_zero%destroy()
          end block
       end if
-      !$acc update self(vmix%kv, vmix%kt, vmix%bl_depth)
+      !$omp target update from(vmix%kv, vmix%kt, vmix%bl_depth)
       call vmix%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, vmix, ss, sf)
+      !$omp target exit data map(delete: ms, vmix, ss, sf)
    end subroutine run_kpp
 
    ! -----------------------------------------------------------------

@@ -154,14 +154,14 @@ contains
    subroutine bulk_forcing_enter_data(this)
       class(bulk_forcing_t), intent(inout) :: this
       if (.not. this%enable) return
-      !$acc enter data copyin(this%taux_c, this%tauy_c, this%open_water)
+      !$omp target enter data map(to: this%taux_c, this%tauy_c, this%open_water)
       this%on_device = .true.
    end subroutine bulk_forcing_enter_data
 
    subroutine bulk_forcing_exit_data(this)
       class(bulk_forcing_t), intent(inout) :: this
       if (.not. this%enable) return
-      !$acc exit data delete(this%taux_c, this%tauy_c, this%open_water)
+      !$omp target exit data map(delete: this%taux_c, this%tauy_c, this%open_water)
       this%on_device = .false.
    end subroutine bulk_forcing_exit_data
 

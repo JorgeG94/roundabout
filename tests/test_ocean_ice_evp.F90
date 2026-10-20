@@ -128,13 +128,13 @@ contains
          allocate (fq(nx + 1, NY + 1), source=1.0e-4_wp)
          allocate (q(nx + 1, NY + 1), source=-7.0_wp)
          allocate (mira(nx + 1, NY + 1), source=-7.0_wp)
-         !$acc enter data copyin(wet, mask_t, mask_u, mask_v, mask_q, area, mis, fq, q, mira)
+         !$omp target enter data map(to: wet, mask_t, mask_u, mask_v, mask_q, area, mis, fq, q, mira)
          call evp_build_masks_impl(wet, mask_t, mask_u, mask_v, mask_q, nx - 6, NY - 6, 3, &
                                    .false., .false., .false., .false., .false., .false., nx, NY)
          call evp_q_and_mi_ratio_impl(area, fq, mask_t, mask_u, mask_v, mask_q, mis, &
                                       1.0e-10_wp, 1.0e-20_wp, 1.0e-40_wp, q, mira, nx, NY)
-         !$acc update self(mask_q, q, mira)
-         !$acc exit data delete(wet, mask_t, mask_u, mask_v, mask_q, area, mis, fq, q, mira)
+         !$omp target update from(mask_q, q, mira)
+         !$omp target exit data map(delete: wet, mask_t, mask_u, mask_v, mask_q, area, mis, fq, q, mira)
          if (any(mask_q(1, :) /= 0.0_wp) .or. any(mask_q(nx + 1, :) /= 0.0_wp) .or. &
              any(mask_q(:, 1) /= 0.0_wp) .or. any(mask_q(:, NY + 1) /= 0.0_wp) .or. &
              any(q(nx + 1, :) /= 0.0_wp) .or. any(mira(nx + 1, :) /= 0.0_wp) .or. &
@@ -255,8 +255,8 @@ contains
                end do
             end do
 
-            !$acc enter data copyin(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-            !$acc enter data copyin(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+            !$omp target enter data map(to: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+            !$omp target enter data map(to: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
 
             do n = 1, N_OUTER
                call ice_evp_dynamics(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
@@ -264,9 +264,9 @@ contains
                                      fxoc, fyoc, DT_SLOW, par, .true., .true., ws)
             end do
 
-            !$acc update self(ui, vi, str_d, fxoc)
-            !$acc exit data delete(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-            !$acc exit data delete(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+            !$omp target update from(ui, vi, str_d, fxoc)
+            !$omp target exit data map(delete: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+            !$omp target exit data map(delete: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
 
             u_mean = sum(ui(NGHOST + 1:NGHOST + NXP + 1, NGHOST + 1:NGHOST + NYP)) &
                      /real((NXP + 1)*NYP, wp)
@@ -370,8 +370,8 @@ contains
 
          call ws%init(nx, ny)
          call ws%enter_data()
-         !$acc enter data copyin(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc enter data copyin(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target enter data map(to: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target enter data map(to: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
 
          do n = 1, N_OUTER
             call ice_evp_dynamics(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
@@ -379,9 +379,9 @@ contains
                                   fxoc, fyoc, DT_SLOW, par, .false., .true., ws)
          end do
 
-         !$acc update self(ui, vi, str_d, str_t, str_s)
-         !$acc exit data delete(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc exit data delete(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target update from(ui, vi, str_d, str_t, str_s)
+         !$omp target exit data map(delete: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target exit data map(delete: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
 
          pres_mice = P0_DEFAULT/ICE_RHO_ICE*exp(0.0_wp)*MI_CONST
          l_domain = real(NXP, wp)*DX
@@ -498,8 +498,8 @@ contains
 
          call ws%init(nx, ny)
          call ws%enter_data()
-         !$acc enter data copyin(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc enter data copyin(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target enter data map(to: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target enter data map(to: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
 
          do n = 1, N_REIMPOSE
             call ice_evp_dynamics(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
@@ -507,12 +507,12 @@ contains
                                   fxoc, fyoc, dt_eff, par, .false., .false., ws)
             ui = 0.0_wp
             call impose_shear(vi, GAMMA_DOT, DX, NXY, NGHOST, nx, ny)
-            !$acc update device(ui, vi)
+            !$omp target update to(ui, vi)
          end do
 
-         !$acc update self(str_d, str_t, str_s)
-         !$acc exit data delete(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc exit data delete(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target update from(str_d, str_t, str_s)
+         !$omp target exit data map(delete: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target exit data map(delete: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
 
          pres_mice_val = P0_DEFAULT/ICE_RHO_ICE
          pressure = pres_mice_val*MI_CONST
@@ -676,16 +676,16 @@ contains
 
       call ws%init(nx, ny)
       call ws%enter_data()
-      !$acc enter data copyin(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-      !$acc enter data copyin(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+      !$omp target enter data map(to: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+      !$omp target enter data map(to: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
 
       call ice_evp_dynamics(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
                             tau_ax, tau_ay, ui, vi, str_d, str_t, str_s, &
                             fxoc, fyoc, dt_slow, par, .false., .false., ws)
 
-      !$acc update self(str_d)
-      !$acc exit data delete(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-      !$acc exit data delete(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+      !$omp target update from(str_d)
+      !$omp target exit data map(delete: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+      !$omp target exit data map(delete: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
       call ws%exit_data()
       call ws%destroy()
 
@@ -764,13 +764,13 @@ contains
 
          call ws%init(nx, ny)
          call ws%enter_data()
-         !$acc enter data copyin(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc enter data copyin(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target enter data map(to: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target enter data map(to: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
 
          call ice_evp_dynamics(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
                                tau_ax, tau_ay, ui, vi, str_d, str_t, str_s, &
                                fxoc, fyoc, DT_SLOW, par, .false., .false., ws)
-         !$acc update self(str_s, mice)
+         !$omp target update from(str_s, mice)
          worst_ratio_call1 = worst_str_s_ec_ratio(str_s, mice, nx, ny, NGHOST, NXY)
          call check(error, worst_ratio_call1 > 1.1_wp, &
                     "limit_cadence: call 1 must overshoot the yield bound (per-call clamp)")
@@ -788,15 +788,15 @@ contains
          vi = 0.0_wp
          tau_ax = 0.0_wp
          tau_ay = 0.0_wp
-         !$acc update device(ui, vi, tau_ax, tau_ay)
+         !$omp target update to(ui, vi, tau_ax, tau_ay)
          call ice_evp_dynamics(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
                                tau_ax, tau_ay, ui, vi, str_d, str_t, str_s, &
                                fxoc, fyoc, DT_SLOW/432.0_wp, &
                                default_params(evp_sub_steps=1), .false., .false., ws)
 
-         !$acc update self(str_s)
-         !$acc exit data delete(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc exit data delete(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target update from(str_s)
+         !$omp target exit data map(delete: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target exit data map(delete: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
 
          worst_ratio_final = worst_str_s_ec_ratio(str_s, mice, nx, ny, NGHOST, NXY)
          call check(error, worst_ratio_final <= 1.0_wp + 1.0e-12_wp, &
@@ -945,8 +945,8 @@ contains
 
          call ws%init(nx, ny)
          call ws%enter_data()
-         !$acc enter data copyin(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc enter data copyin(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target enter data map(to: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target enter data map(to: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
 
          do n = 1, N_OUTER
             call ice_evp_dynamics(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
@@ -954,9 +954,9 @@ contains
                                   fxoc, fyoc, DT_SLOW, par, .false., .true., ws)
          end do
 
-         !$acc update self(ui, vi, str_d)
-         !$acc exit data delete(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc exit data delete(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target update from(ui, vi, str_d)
+         !$omp target exit data map(delete: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target exit data map(delete: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
 
          ! Ice-free cells that started at 0 stay exactly 0 (the seeded
          ! cell I_SEED is checked separately below via decay).
@@ -1091,8 +1091,8 @@ contains
 
          call ws%init(nx, ny)
          call ws%enter_data()
-         !$acc enter data copyin(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc enter data copyin(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target enter data map(to: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target enter data map(to: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
 
          do n = 1, N_OUTER
             call ice_evp_dynamics(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
@@ -1100,9 +1100,9 @@ contains
                                   fxoc, fyoc, DT_SLOW, par, .false., .true., ws)
          end do
 
-         !$acc update self(ui, str_d, str_t, str_s)
-         !$acc exit data delete(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc exit data delete(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target update from(ui, str_d, str_t, str_s)
+         !$omp target exit data map(delete: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target exit data map(delete: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
 
          call check(error, all(str_t == 0.0_wp), "cavitating: str_t /= 0")
          if (allocated(error)) exit checks
@@ -1209,8 +1209,8 @@ contains
 
          call ws%init(nx, ny)
          call ws%enter_data()
-         !$acc enter data copyin(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc enter data copyin(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target enter data map(to: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target enter data map(to: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
 
          u_scalar = U_IC
          v_scalar = 0.0_wp
@@ -1231,7 +1231,7 @@ contains
                v_scalar = v_new
             end do
 
-            !$acc update self(ui, vi)
+            !$omp target update from(ui, vi)
             worst_err = 0.0_wp
             do j = NGHOST + 1, NGHOST + NYP
                do i = NGHOST + 1, NGHOST + NXP + 1
@@ -1248,8 +1248,8 @@ contains
             if (allocated(error)) exit checks
          end do
 
-         !$acc exit data delete(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc exit data delete(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target exit data map(delete: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target exit data map(delete: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
       end block checks
 
       call ws%exit_data()
@@ -1412,16 +1412,16 @@ contains
          str_s3 = 0.0_wp
          f_corner = 0.0_wp
 
-         !$acc enter data copyin(ice1)
+         !$omp target enter data map(to: ice1)
          call ice1%enter_data()
-         !$acc enter data copyin(ice3)
+         !$omp target enter data map(to: ice3)
          call ice3%enter_data()
          call ws%init(nx, ny)
          call ws%enter_data()
-         !$acc enter data copyin(mis1, mice1, ci1, mis3, mice3, ci3)
-         !$acc enter data copyin(uo, vo, tau_ax, tau_ay, f_corner)
-         !$acc enter data copyin(ui1, vi1, str_d1, str_t1, str_s1, fxoc1, fyoc1)
-         !$acc enter data copyin(ui3, vi3, str_d3, str_t3, str_s3, fxoc3, fyoc3)
+         !$omp target enter data map(to: mis1, mice1, ci1, mis3, mice3, ci3)
+         !$omp target enter data map(to: uo, vo, tau_ax, tau_ay, f_corner)
+         !$omp target enter data map(to: ui1, vi1, str_d1, str_t1, str_s1, fxoc1, fyoc1)
+         !$omp target enter data map(to: ui3, vi3, str_d3, str_t3, str_s3, fxoc3, fyoc3)
 
          call gather_and_run(grid, metrics, f_corner, ice1, uo, vo, tau_ax, tau_ay, &
                              ui1, vi1, str_d1, str_t1, str_s1, fxoc1, fyoc1, &
@@ -1430,15 +1430,15 @@ contains
                              ui3, vi3, str_d3, str_t3, str_s3, fxoc3, fyoc3, &
                              mis3, mice3, ci3, DT_SLOW, par, ws)
 
-         !$acc update self(mis1, mice1, ci1, mis3, mice3, ci3, ui1, ui3)
-         !$acc exit data delete(mis1, mice1, ci1, mis3, mice3, ci3)
-         !$acc exit data delete(uo, vo, tau_ax, tau_ay, f_corner)
-         !$acc exit data delete(ui1, vi1, str_d1, str_t1, str_s1, fxoc1, fyoc1)
-         !$acc exit data delete(ui3, vi3, str_d3, str_t3, str_s3, fxoc3, fyoc3)
+         !$omp target update from(mis1, mice1, ci1, mis3, mice3, ci3, ui1, ui3)
+         !$omp target exit data map(delete: mis1, mice1, ci1, mis3, mice3, ci3)
+         !$omp target exit data map(delete: uo, vo, tau_ax, tau_ay, f_corner)
+         !$omp target exit data map(delete: ui1, vi1, str_d1, str_t1, str_s1, fxoc1, fyoc1)
+         !$omp target exit data map(delete: ui3, vi3, str_d3, str_t3, str_s3, fxoc3, fyoc3)
          call ice1%exit_data()
-         !$acc exit data delete(ice1)
+         !$omp target exit data map(delete: ice1)
          call ice3%exit_data()
-         !$acc exit data delete(ice3)
+         !$omp target exit data map(delete: ice3)
 
          call check(error, all(mis1 == mis3), "gather_ncat_equivalence: mis mismatch")
          if (allocated(error)) exit checks
@@ -1521,9 +1521,9 @@ contains
          stress%tau_x = 0.0_wp
          stress%tau_y = 0.0_wp
 
-         !$acc enter data copyin(ice)
+         !$omp target enter data map(to: ice)
          call ice%enter_data()
-         !$acc enter data copyin(stress)
+         !$omp target enter data map(to: stress)
          call stress%enter_data()
          ! metrics%wet_T is read on-device by ice_cell_concentration_impl inside
          ! ice_ocean_stress_flux -> it MUST be device-present (mem:separate).
@@ -1543,7 +1543,7 @@ contains
          ! never given m_ice ⇒ ci=0 there ⇒ a genuine (and correct) 0.5
          ! blend, not a full-cover a_u=1 — those are exercised by the
          ! half-cover case below instead.
-         !$acc update self(stress%tau_x, stress%tau_y)
+         !$omp target update from(stress%tau_x, stress%tau_y)
          call check(error, all(abs(stress%tau_x(NGHOST + 2:NGHOST + NXP, &
                                                 NGHOST + 1:NGHOST + NYP) - 0.7_wp) &
                                <= epsilon(1.0_wp)*10.0_wp), &
@@ -1558,9 +1558,9 @@ contains
          ! Zero cover: tau_x == tau_a_x bitwise (every face — a=0 exactly
          ! for EVERY face when ci=0 everywhere, including boundaries).
          ice%m_ice = 0.0_wp
-         !$acc update device(ice%m_ice)
+         !$omp target update to(ice%m_ice)
          call ice_ocean_stress_flux(metrics, stress, ice)
-         !$acc update self(stress%tau_x, stress%tau_y)
+         !$omp target update from(stress%tau_x, stress%tau_y)
          call check(error, all(stress%tau_x(NGHOST + 1:NGHOST + NXP + 1, &
                                             NGHOST + 1:NGHOST + NYP) == 0.3_wp), &
                     "tau_coupling: zero-cover tau_x /= tau_a_x")
@@ -1571,9 +1571,9 @@ contains
          ice%m_ice = 0.0_wp
          ice%m_ice(NGHOST + 1, NGHOST + 2, 1) = 3.0_wp*ICE_RHO_ICE
          ! (NGHOST+2, NGHOST+2) stays ice-free -> a_u at face (NGHOST+2,NGHOST+2) = 0.5.
-         !$acc update device(ice%m_ice)
+         !$omp target update to(ice%m_ice)
          call ice_ocean_stress_flux(metrics, stress, ice)
-         !$acc update self(stress%tau_x, stress%tau_y)
+         !$omp target update from(stress%tau_x, stress%tau_y)
          call check(error, abs(stress%tau_x(NGHOST + 2, NGHOST + 2) - &
                                (0.5_wp*0.3_wp + 0.5_wp*0.7_wp)) <= 1.0e-13_wp, &
                     "tau_coupling: half-cover blend mismatch")
@@ -1589,13 +1589,13 @@ contains
             allocate (tau_y_device, source=stress%tau_y)
             stress%tau_x = -999.0_wp
             stress%tau_y = -999.0_wp
-            !$acc update device(stress%tau_x, stress%tau_y)
+            !$omp target update to(stress%tau_x, stress%tau_y)
             ! Pull the device-mirrored ice_tau_mirror_impl output (the
             ! LAST value ice_ocean_stress_flux wrote) to the host — the
             ! resume apply is host-only and reads ice%tau_ocn_x/y as plain
             ! host arrays (component arrays only, never `update self(ice)`
             ! — commit 72152870).
-            !$acc update self(ice%tau_ocn_x, ice%tau_ocn_y)
+            !$omp target update from(ice%tau_ocn_x, ice%tau_ocn_y)
             ! `ice_ocean_stress_resume_apply` is a PLAIN-HOST routine (it
             ! writes stress%tau_x/tau_y on the host, never on the device —
             ! that is the whole point of the resume path). Do NOT
@@ -1610,9 +1610,9 @@ contains
                        "tau_coupling: resume apply != device blend (tau_y)")
          end block
 
-         !$acc exit data delete(stress)
+         !$omp target exit data map(delete: stress)
          call stress%exit_data()
-         !$acc exit data delete(ice)
+         !$omp target exit data map(delete: ice)
          call ice%exit_data()
          ! metrics was mapped once by `make_cartesian_metrics`; it is unmapped
          ! once by `destroy_cartesian_metrics` below (which runs on EVERY exit
@@ -1691,9 +1691,9 @@ contains
          allocate (fyoc_a, source=a_state%ice%fyoc)
 
          call ocean_state_enter_data(a_state)
-         !$acc update device(a_state%ice%u_ice, a_state%ice%v_ice)
-         !$acc update device(a_state%ice%str_d, a_state%ice%str_t, a_state%ice%str_s)
-         !$acc update device(a_state%ice%fxoc, a_state%ice%fyoc)
+         !$omp target update to(a_state%ice%u_ice, a_state%ice%v_ice)
+         !$omp target update to(a_state%ice%str_d, a_state%ice%str_t, a_state%ice%str_s)
+         !$omp target update to(a_state%ice%fxoc, a_state%ice%fyoc)
 
          call ocean_state_restart_write(a_state, grid, decomp, FN, 0.0_wp, 0)
          call ocean_state_exit_data(a_state)
@@ -1708,9 +1708,9 @@ contains
          call metrics_seed_cartesian(b_state, grid)
          call ocean_state_restart_read(b_state, grid, decomp, FN, t_read, step_read)
          call ocean_state_enter_data(b_state)
-         !$acc update self(b_state%ice%u_ice, b_state%ice%v_ice)
-         !$acc update self(b_state%ice%str_d, b_state%ice%str_t, b_state%ice%str_s)
-         !$acc update self(b_state%ice%fxoc, b_state%ice%fyoc)
+         !$omp target update from(b_state%ice%u_ice, b_state%ice%v_ice)
+         !$omp target update from(b_state%ice%str_d, b_state%ice%str_t, b_state%ice%str_s)
+         !$omp target update from(b_state%ice%fxoc, b_state%ice%fyoc)
 
          call check(error, all(b_state%ice%u_ice == u_ice_a), "restart: u_ice mismatch")
          if (allocated(error)) exit checks
@@ -1788,7 +1788,7 @@ contains
 
       ! Case A: uninitialised slot (is_init == .false.).
       allocate (f_corner(nx + 1, ny + 1), source=0.0_wp)
-      !$acc enter data copyin(f_corner)
+      !$omp target enter data map(to: f_corner)
       call ice_evp_step(grid, metrics, f_corner, ice_uninit, ms, 3600.0_wp, par, &
                         wall_bc)
       call check(error,.not. ice_uninit%is_init, &
@@ -1802,9 +1802,9 @@ contains
       call ice_off%init(grid)
       ms%nz_ml = 1
       call ms%init(grid)
-      !$acc enter data copyin(ice_off)
+      !$omp target enter data map(to: ice_off)
       call ice_off%enter_data()
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
 
       block
@@ -1813,7 +1813,7 @@ contains
          allocate (v_ice0, source=ice_off%v_ice)
          call ice_evp_step(grid, metrics, f_corner, ice_off, ms, 3600.0_wp, par, &
                            wall_bc)
-         !$acc update self(ice_off%u_ice, ice_off%v_ice)
+         !$omp target update from(ice_off%u_ice, ice_off%v_ice)
          if (.not. allocated(error)) then
             call check(error, all(ice_off%u_ice == u_ice0), &
                        "disabled_bitident: u_ice mutated by a dynamics=.false. call")
@@ -1824,10 +1824,10 @@ contains
          end if
       end block
 
-      !$acc exit data delete(f_corner)
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: f_corner)
+      !$omp target exit data map(delete: ms)
       call ms%exit_data()
-      !$acc exit data delete(ice_off)
+      !$omp target exit data map(delete: ice_off)
       call ice_off%exit_data()
 
       call ice_off%destroy()
@@ -1914,8 +1914,8 @@ contains
             par = default_params(a_face_stress=a_face)
             call ws%init(nx, ny)
             call ws%enter_data()
-            !$acc enter data copyin(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-            !$acc enter data copyin(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+            !$omp target enter data map(to: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+            !$omp target enter data map(to: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
             block
                integer :: n_inner
                do n_inner = 1, N_OUTER
@@ -1924,9 +1924,9 @@ contains
                                         fxoc, fyoc, DT_SLOW, par, .true., .true., ws)
                end do
             end block
-            !$acc update self(ui, vi, str_d, fxoc)
-            !$acc exit data delete(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-            !$acc exit data delete(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+            !$omp target update from(ui, vi, str_d, fxoc)
+            !$omp target exit data map(delete: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+            !$omp target exit data map(delete: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
             call ws%exit_data()
             call ws%destroy()
 
@@ -2009,14 +2009,14 @@ contains
 
          call ws%init(nx, ny)
          call ws%enter_data()
-         !$acc enter data copyin(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc enter data copyin(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target enter data map(to: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target enter data map(to: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
          call ice_evp_dynamics(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
                                tau_ax, tau_ay, ui, vi, str_d, str_t, str_s, &
                                fxoc, fyoc, DT_SLOW, par, .true., .true., ws)
-         !$acc update self(ui)
-         !$acc exit data delete(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc exit data delete(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target update from(ui)
+         !$omp target exit data map(delete: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target exit data map(delete: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
          call ws%exit_data()
          call ws%destroy()
          ui_on = ui(NGHOST + 2, NGHOST + 2)
@@ -2032,14 +2032,14 @@ contains
 
          call ws%init(nx, ny)
          call ws%enter_data()
-         !$acc enter data copyin(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc enter data copyin(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target enter data map(to: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target enter data map(to: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
          call ice_evp_dynamics(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
                                tau_ax, tau_ay, ui, vi, str_d, str_t, str_s, &
                                fxoc, fyoc, DT_SLOW, par, .true., .true., ws)
-         !$acc update self(ui)
-         !$acc exit data delete(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc exit data delete(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target update from(ui)
+         !$omp target exit data map(delete: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target exit data map(delete: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
          call ws%exit_data()
          call ws%destroy()
          ui_off = ui(NGHOST + 2, NGHOST + 2)
@@ -2116,14 +2116,14 @@ contains
 
          call ws%init(nx, ny)
          call ws%enter_data()
-         !$acc enter data copyin(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc enter data copyin(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target enter data map(to: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target enter data map(to: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
          call ice_evp_dynamics(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
                                tau_ax, tau_ay, ui, vi, str_d, str_t, str_s, &
                                fxoc, fyoc, DT_SLOW, par, .true., .true., ws)
-         !$acc update self(ui, fxoc)
-         !$acc exit data delete(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc exit data delete(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target update from(ui, fxoc)
+         !$omp target exit data map(delete: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target exit data map(delete: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
          call ws%exit_data()
          call ws%destroy()
 
@@ -2152,14 +2152,14 @@ contains
 
          call ws%init(nx, ny)
          call ws%enter_data()
-         !$acc enter data copyin(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc enter data copyin(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target enter data map(to: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target enter data map(to: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
          call ice_evp_dynamics(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
                                tau_ax, tau_ay, ui, vi, str_d, str_t, str_s, &
                                fxoc, fyoc, DT_SLOW, par, .true., .true., ws)
-         !$acc update self(ui, fxoc)
-         !$acc exit data delete(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc exit data delete(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target update from(ui, fxoc)
+         !$omp target exit data map(delete: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target exit data map(delete: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
          call ws%exit_data()
          call ws%destroy()
 
@@ -2235,14 +2235,14 @@ contains
 
          call ws%init(nx, ny)
          call ws%enter_data()
-         !$acc enter data copyin(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc enter data copyin(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target enter data map(to: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target enter data map(to: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
          call ice_evp_dynamics(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
                                tau_ax, tau_ay, ui, vi, str_d, str_t, str_s, &
                                fxoc, fyoc, DT_SLOW, par, .true., .true., ws)
-         !$acc update self(fxoc)
-         !$acc exit data delete(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc exit data delete(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target update from(fxoc)
+         !$omp target exit data map(delete: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target exit data map(delete: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
          call ws%exit_data()
          call ws%destroy()
 
@@ -2349,8 +2349,8 @@ contains
 
          call ws%init(nx, ny)
          call ws%enter_data()
-         !$acc enter data copyin(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc enter data copyin(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target enter data map(to: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target enter data map(to: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
 
          do n = 1, N_OUTER
             call ice_evp_dynamics(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
@@ -2358,9 +2358,9 @@ contains
                                   fxoc, fyoc, DT_SLOW, par, .false., .true., ws)
          end do
 
-         !$acc update self(ui, str_d, fxoc)
-         !$acc exit data delete(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc exit data delete(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target update from(ui, str_d, fxoc)
+         !$omp target exit data map(delete: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target exit data map(delete: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
 
          call check(error,.not. any(ieee_is_nan_grid(ui, nx + 1, ny)), &
                     "a_face_no_ghost_drift: NaN in ui")
@@ -2470,8 +2470,8 @@ contains
 
          call ws%init(nx, ny)
          call ws%enter_data()
-         !$acc enter data copyin(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc enter data copyin(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target enter data map(to: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target enter data map(to: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
 
          do n = 1, N_OUTER
             call ice_evp_dynamics(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
@@ -2479,9 +2479,9 @@ contains
                                   fxoc, fyoc, DT_SLOW, par, .false., .true., ws)
          end do
 
-         !$acc update self(ui, str_d)
-         !$acc exit data delete(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc exit data delete(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target update from(ui, str_d)
+         !$omp target exit data map(delete: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target exit data map(delete: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
 
          ! Same golden as test_ice_margin: the massless-slab ghost drift.
          u_free = sqrt(TAU_A/(RHO_OCEAN_DEFAULT*CDW_DEFAULT))
@@ -2583,17 +2583,17 @@ contains
          ui = 0.0_wp; vi = 0.0_wp; str_d = 0.0_wp; str_t = 0.0_wp; str_s = 0.0_wp
          call ws%init(nx, ny)
          call ws%enter_data()
-         !$acc enter data copyin(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc enter data copyin(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target enter data map(to: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target enter data map(to: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
          do n = 1, N_OUTER
             call ice_evp_dynamics(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
                                   tau_ax, tau_ay, ui, vi, str_d, str_t, str_s, &
                                   fxoc, fyoc, DT_SLOW, par1, .true., .true., ws, &
                                   n_trunc=n_trunc1)
          end do
-         !$acc update self(ui, vi, str_d, str_t, str_s, fxoc, fyoc)
-         !$acc exit data delete(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc exit data delete(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target update from(ui, vi, str_d, str_t, str_s, fxoc, fyoc)
+         !$omp target exit data map(delete: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target exit data map(delete: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
          call ws%exit_data()
          call ws%destroy()
 
@@ -2607,17 +2607,17 @@ contains
          fxoc = 0.0_wp; fyoc = 0.0_wp
          call ws%init(nx, ny)
          call ws%enter_data()
-         !$acc enter data copyin(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc enter data copyin(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target enter data map(to: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target enter data map(to: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
          do n = 1, N_OUTER
             call ice_evp_dynamics(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
                                   tau_ax, tau_ay, ui, vi, str_d, str_t, str_s, &
                                   fxoc, fyoc, DT_SLOW, par2, .true., .true., ws, &
                                   n_trunc=n_trunc2)
          end do
-         !$acc update self(ui, vi, str_d, str_t, str_s, fxoc, fyoc)
-         !$acc exit data delete(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc exit data delete(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target update from(ui, vi, str_d, str_t, str_s, fxoc, fyoc)
+         !$omp target exit data map(delete: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target exit data map(delete: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
 
          call check(error, n_trunc1 == 0 .and. n_trunc2 == 0, &
                     "trunc_disabled_bitident: n_trunc must be 0 with cfl_trunc off "// &
@@ -2696,17 +2696,17 @@ contains
       allocate (ui(NX + 1, NY), source=0.0_wp)
       allocate (vi(NX, NY + 1), source=0.0_wp)
 
-      !$acc enter data copyin(areaT, dy_cu, dx_cv, mi_u, mi_v, ui, vi)
+      !$omp target enter data map(to: areaT, dy_cu, dx_cv, mi_u, mi_v, ui, vi)
 
       checks: block
          ! (A) u positive clip: face (3,2), west donor 1e8.
          ui = 0.0_wp; vi = 0.0_wp
          ui(3, 2) = 100.0_wp
-         !$acc update device(ui, vi)
+         !$omp target update to(ui, vi)
          call evp_truncate_final_impl(areaT, dy_cu, dx_cv, mi_u, mi_v, ui, vi, &
                                       CFL_TRUNC, DT_TR, M_NEGLECT_TEST, NGH, NXP, NYP, &
                                       NX, NY, n_trunc)
-         !$acc update self(ui, vi)
+         !$omp target update from(ui, vi)
          call check(error, abs(ui(3, 2) - U_HI) <= 1.0e-13_wp*abs(U_HI), &
                     "trunc_bound_donor_asymmetry: +u clip against WEST donor mismatch")
          if (allocated(error)) exit checks
@@ -2717,11 +2717,11 @@ contains
          ! (B) u negative clip: face (3,2), EAST donor 4e8.
          ui = 0.0_wp; vi = 0.0_wp
          ui(3, 2) = -100.0_wp
-         !$acc update device(ui, vi)
+         !$omp target update to(ui, vi)
          call evp_truncate_final_impl(areaT, dy_cu, dx_cv, mi_u, mi_v, ui, vi, &
                                       CFL_TRUNC, DT_TR, M_NEGLECT_TEST, NGH, NXP, NYP, &
                                       NX, NY, n_trunc)
-         !$acc update self(ui, vi)
+         !$omp target update from(ui, vi)
          call check(error, abs(ui(3, 2) - U_LO) <= 1.0e-13_wp*abs(U_LO), &
                     "trunc_bound_donor_asymmetry: -u clip against EAST donor mismatch")
          if (allocated(error)) exit checks
@@ -2732,11 +2732,11 @@ contains
          ! (C) v positive clip: face (2,3), SOUTH donor areaT(2,2)=1e8.
          ui = 0.0_wp; vi = 0.0_wp
          vi(2, 3) = 100.0_wp
-         !$acc update device(ui, vi)
+         !$omp target update to(ui, vi)
          call evp_truncate_final_impl(areaT, dy_cu, dx_cv, mi_u, mi_v, ui, vi, &
                                       CFL_TRUNC, DT_TR, M_NEGLECT_TEST, NGH, NXP, NYP, &
                                       NX, NY, n_trunc)
-         !$acc update self(ui, vi)
+         !$omp target update from(ui, vi)
          call check(error, abs(vi(2, 3) - U_HI) <= 1.0e-13_wp*abs(U_HI), &
                     "trunc_bound_donor_asymmetry: +v clip against SOUTH donor mismatch")
          if (allocated(error)) exit checks
@@ -2747,11 +2747,11 @@ contains
          ! (D) v negative clip: face (2,3), NORTH donor areaT(2,3)=4e8.
          ui = 0.0_wp; vi = 0.0_wp
          vi(2, 3) = -100.0_wp
-         !$acc update device(ui, vi)
+         !$omp target update to(ui, vi)
          call evp_truncate_final_impl(areaT, dy_cu, dx_cv, mi_u, mi_v, ui, vi, &
                                       CFL_TRUNC, DT_TR, M_NEGLECT_TEST, NGH, NXP, NYP, &
                                       NX, NY, n_trunc)
-         !$acc update self(ui, vi)
+         !$omp target update from(ui, vi)
          call check(error, abs(vi(2, 3) - U_LO) <= 1.0e-13_wp*abs(U_LO), &
                     "trunc_bound_donor_asymmetry: -v clip against NORTH donor mismatch")
          if (allocated(error)) exit checks
@@ -2765,11 +2765,11 @@ contains
          ui = 0.0_wp; vi = 0.0_wp
          ui(2, 2) = 100.0_wp
          mi_u(2, 2) = 0.0_wp
-         !$acc update device(ui, vi, mi_u)
+         !$omp target update to(ui, vi, mi_u)
          call evp_truncate_final_impl(areaT, dy_cu, dx_cv, mi_u, mi_v, ui, vi, &
                                       CFL_TRUNC, DT_TR, M_NEGLECT_TEST, NGH, NXP, NYP, &
                                       NX, NY, n_trunc)
-         !$acc update self(ui, vi)
+         !$omp target update from(ui, vi)
          call check(error, abs(ui(2, 2) - U_HI) <= 1.0e-13_wp*abs(U_HI), &
                     "trunc_bound_donor_asymmetry: massless face must still be clipped")
          if (allocated(error)) exit checks
@@ -2777,7 +2777,7 @@ contains
                     "trunc_bound_donor_asymmetry: massless face must NOT be counted")
       end block checks
 
-      !$acc exit data delete(areaT, dy_cu, dx_cv, mi_u, mi_v, ui, vi)
+      !$omp target exit data map(delete: areaT, dy_cu, dx_cv, mi_u, mi_v, ui, vi)
       deallocate (areaT, dy_cu, dx_cv, mi_u, mi_v, ui, vi)
    end subroutine test_trunc_bound_donor_asymmetry
 
@@ -2842,8 +2842,8 @@ contains
             end do
          end do
 
-         !$acc enter data copyin(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc enter data copyin(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target enter data map(to: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target enter data map(to: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
 
          do n = 1, N_OUTER
             call ice_evp_dynamics(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
@@ -2852,9 +2852,9 @@ contains
                                   n_trunc=n_trunc)
          end do
 
-         !$acc update self(ui, vi)
-         !$acc exit data delete(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc exit data delete(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target update from(ui, vi)
+         !$omp target exit data map(delete: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target exit data map(delete: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
 
          call check(error, n_trunc > 0, &
                     "trunc_final_clips_and_counts: a forced-runaway drive must clip >0 faces")
@@ -2938,16 +2938,16 @@ contains
          ui = 0.0_wp; vi = 0.0_wp; str_d = 0.0_wp; str_t = 0.0_wp; str_s = 0.0_wp
          call ws%init(nx, ny)
          call ws%enter_data()
-         !$acc enter data copyin(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc enter data copyin(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target enter data map(to: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target enter data map(to: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
          do n = 1, N_OUTER
             call ice_evp_dynamics(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
                                   tau_ax, tau_ay, ui, vi, str_d, str_t, str_s, &
                                   fxoc, fyoc, DT_SLOW, par_off, .true., .true., ws)
          end do
-         !$acc update self(ui, vi, str_d, str_t, str_s, fxoc, fyoc)
-         !$acc exit data delete(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc exit data delete(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target update from(ui, vi, str_d, str_t, str_s, fxoc, fyoc)
+         !$omp target exit data map(delete: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target exit data map(delete: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
          call ws%exit_data()
          call ws%destroy()
 
@@ -2961,17 +2961,17 @@ contains
          fxoc = 0.0_wp; fyoc = 0.0_wp
          call ws%init(nx, ny)
          call ws%enter_data()
-         !$acc enter data copyin(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc enter data copyin(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target enter data map(to: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target enter data map(to: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
          do n = 1, N_OUTER
             call ice_evp_dynamics(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
                                   tau_ax, tau_ay, ui, vi, str_d, str_t, str_s, &
                                   fxoc, fyoc, DT_SLOW, par_on, .true., .true., ws, &
                                   n_trunc=n_trunc)
          end do
-         !$acc update self(ui, vi, str_d, str_t, str_s, fxoc, fyoc)
-         !$acc exit data delete(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc exit data delete(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target update from(ui, vi, str_d, str_t, str_s, fxoc, fyoc)
+         !$omp target exit data map(delete: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target exit data map(delete: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
 
          call check(error, n_trunc == 0, &
                     "trunc_below_bound_bitident: an ordinary drift must not clip (n_trunc=0)")
@@ -3069,16 +3069,16 @@ contains
          ui = 0.0_wp; vi = 0.0_wp; str_d = 0.0_wp; str_t = 0.0_wp; str_s = 0.0_wp
          call ws%init(nx, ny)
          call ws%enter_data()
-         !$acc enter data copyin(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc enter data copyin(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target enter data map(to: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target enter data map(to: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
          do n = 1, N_OUTER
             call ice_evp_dynamics(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
                                   tau_ax, tau_ay, ui, vi, str_d, str_t, str_s, &
                                   fxoc, fyoc, DT_SLOW, par, .true., .true., ws)
          end do
-         !$acc update self(ui, vi)
-         !$acc exit data delete(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc exit data delete(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target update from(ui, vi)
+         !$omp target exit data map(delete: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target exit data map(delete: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
          call ws%exit_data()
          call ws%destroy()
          allocate (ui_a, source=ui); allocate (vi_a, source=vi)
@@ -3088,17 +3088,17 @@ contains
          fxoc = 0.0_wp; fyoc = 0.0_wp
          call ws%init(nx, ny)
          call ws%enter_data()
-         !$acc enter data copyin(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc enter data copyin(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target enter data map(to: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target enter data map(to: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
          do n = 1, N_OUTER
             call ice_evp_dynamics(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
                                   tau_ax, tau_ay, ui, vi, str_d, str_t, str_s, &
                                   fxoc, fyoc, DT_SLOW, par, .true., .true., ws, &
                                   dt_transport=4.0_wp*DT_SLOW)
          end do
-         !$acc update self(ui, vi)
-         !$acc exit data delete(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc exit data delete(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target update from(ui, vi)
+         !$omp target exit data map(delete: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target exit data map(delete: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
          call ws%exit_data()
          call ws%destroy()
 
@@ -3115,17 +3115,17 @@ contains
          fxoc = 0.0_wp; fyoc = 0.0_wp
          call ws%init(nx, ny)
          call ws%enter_data()
-         !$acc enter data copyin(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc enter data copyin(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target enter data map(to: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target enter data map(to: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
          do n = 1, N_OUTER
             call ice_evp_dynamics(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
                                   tau_ax, tau_ay, ui, vi, str_d, str_t, str_s, &
                                   fxoc, fyoc, DT_SLOW, par, .true., .true., ws, &
                                   dt_transport=DT_SLOW)
          end do
-         !$acc update self(ui, vi)
-         !$acc exit data delete(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc exit data delete(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target update from(ui, vi)
+         !$omp target exit data map(delete: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target exit data map(delete: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
 
          call check(error, all(ui == ui_a), &
                     "trunc_uses_transport_dt: explicit dt_transport=dt_slow must match "// &
@@ -3218,19 +3218,19 @@ contains
          ! ---- run OFF ----
          call ws%init(nx, ny)
          call ws%enter_data()
-         !$acc enter data copyin(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc enter data copyin(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target enter data map(to: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target enter data map(to: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
          do n = 1, N_REIMPOSE
             call ice_evp_dynamics(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
                                   tau_ax, tau_ay, ui, vi, str_d, str_t, str_s, &
                                   fxoc, fyoc, dt_eff, par_off, .false., .false., ws)
             ui = 0.0_wp
             call impose_shear(vi, GAMMA_DOT, DX, NXY, NGHOST, nx, ny)
-            !$acc update device(ui, vi)
+            !$omp target update to(ui, vi)
          end do
-         !$acc update self(str_d, str_t, str_s)
-         !$acc exit data delete(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc exit data delete(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target update from(str_d, str_t, str_s)
+         !$omp target exit data map(delete: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target exit data map(delete: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
          call ws%exit_data()
          call ws%destroy()
          allocate (str_d_off, source=str_d); allocate (str_t_off, source=str_t)
@@ -3241,19 +3241,19 @@ contains
          call impose_shear(vi, GAMMA_DOT, DX, NXY, NGHOST, nx, ny)
          call ws%init(nx, ny)
          call ws%enter_data()
-         !$acc enter data copyin(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc enter data copyin(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target enter data map(to: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target enter data map(to: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
          do n = 1, N_REIMPOSE
             call ice_evp_dynamics(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
                                   tau_ax, tau_ay, ui, vi, str_d, str_t, str_s, &
                                   fxoc, fyoc, dt_eff, par_on, .false., .false., ws)
             ui = 0.0_wp
             call impose_shear(vi, GAMMA_DOT, DX, NXY, NGHOST, nx, ny)
-            !$acc update device(ui, vi)
+            !$omp target update to(ui, vi)
          end do
-         !$acc update self(str_d, str_t, str_s)
-         !$acc exit data delete(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-         !$acc exit data delete(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+         !$omp target update from(str_d, str_t, str_s)
+         !$omp target exit data map(delete: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+         !$omp target exit data map(delete: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
 
          call check(error, all(str_d(NGHOST + 1:NGHOST + NXY, J_LO:J_HI) == &
                                str_d_off(NGHOST + 1:NGHOST + NXY, J_LO:J_HI)), &

@@ -299,7 +299,7 @@ contains
 
          angle = 30.0_wp*DEG2RAD
          metrics%angle_dx = angle
-         !$acc update device(metrics%angle_dx)
+         !$omp target update to(metrics%angle_dx)
 
          call make_ms(grid, ms)
          call make_atm(grid, atm)
@@ -456,33 +456,33 @@ contains
       type(ocean_surface_stress_t), intent(inout) :: ss
       type(ocean_surface_flux_t), intent(inout) :: sf
 
-      !$acc enter data copyin(atm, ms, bf, ss, sf)
+      !$omp target enter data map(to: atm, ms, bf, ss, sf)
       call atm%enter_data()
       call ms%enter_data()
       call bf%enter_data()
       call ss%enter_data()
       call sf%enter_data()
       if (ice%enable) then
-         !$acc enter data copyin(ice)
+         !$omp target enter data map(to: ice)
          call ice%enter_data()
       end if
 
       call bulk_forcing_apply(grid, metrics, bc, atm, ms, ice, bf, ss, sf)
 
-      !$acc update self(sf%q_sens, sf%q_lat, sf%evap, sf%q_sw, sf%q_lw)
-      !$acc update self(sf%lprec, sf%fprec, sf%p_surf_atm)
-      !$acc update self(bf%taux_c, bf%tauy_c, ss%tau_x, ss%tau_y)
+      !$omp target update from(sf%q_sens, sf%q_lat, sf%evap, sf%q_sw, sf%q_lw)
+      !$omp target update from(sf%lprec, sf%fprec, sf%p_surf_atm)
+      !$omp target update from(bf%taux_c, bf%tauy_c, ss%tau_x, ss%tau_y)
 
       if (ice%enable) then
          call ice%exit_data()
-         !$acc exit data delete(ice)
+         !$omp target exit data map(delete: ice)
       end if
       call sf%exit_data()
       call ss%exit_data()
       call bf%exit_data()
       call ms%exit_data()
       call atm%exit_data()
-      !$acc exit data delete(atm, ms, bf, ss, sf)
+      !$omp target exit data map(delete: atm, ms, bf, ss, sf)
    end subroutine run_apply
 
    ! =================================================================
@@ -522,14 +522,14 @@ contains
 
          ! Production device residency (mem:separate: no implicit copies):
          ! map both objects, run the seam, bring the four outputs back.
-         !$acc enter data copyin(atm, ice)
+         !$omp target enter data map(to: atm, ice)
          call atm%enter_data()
          call ice%enter_data()
          call ice_atm_forcing_from_atm(ice, atm, cfg_bulk)
-         !$acc update self(ice%atm_sf0, ice%atm_dsfdt, ice%atm_sw_dn, ice%atm_fprec)
+         !$omp target update from(ice%atm_sf0, ice%atm_dsfdt, ice%atm_sw_dn, ice%atm_fprec)
          call ice%exit_data()
          call atm%exit_data()
-         !$acc exit data delete(atm, ice)
+         !$omp target exit data map(delete: atm, ice)
 
          ip = grid%nghost + 2
          jp = grid%nghost + 2

@@ -63,9 +63,9 @@ contains
    subroutine map_in(ms, vd)
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_vdiff_t), intent(inout) :: vd
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(vd)
+      !$omp target enter data map(to: vd)
       call vd%enter_data()
    end subroutine map_in
 
@@ -73,9 +73,9 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_vdiff_t), intent(inout) :: vd
       call vd%exit_data()
-      !$acc exit data delete(vd)
+      !$omp target exit data map(delete: vd)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out
 
    ! -----------------------------------------------------------------
@@ -138,7 +138,7 @@ contains
          u_prev = U0
          do step = 1, 50
             ! Picard: freeze |U| at the current bed velocity (v=0 here).
-            !$acc update self(ms%u_face_x_layer)
+            !$omp target update from(ms%u_face_x_layer)
             speed = abs(ms%u_face_x_layer(ig, jg, 1))
             lam_u = CD*speed/H1
             ! lam_u/lam_v/tau_u/tau_v are unmapped local host arrays — the
@@ -149,7 +149,7 @@ contains
             call vdiff_apply_momentum(grid, vd, ms, DT, &
                                       tau_u=tau_u, tau_v=tau_v, &
                                       lambda_bot_u=lam_u, lambda_bot_v=lam_v, rho0=RHO0)
-            !$acc update self(ms%u_face_x_layer)
+            !$omp target update from(ms%u_face_x_layer)
             u_bed = ms%u_face_x_layer(ig, jg, 1)
             if (u_bed < 0.0_wp .or. u_bed > U0 + 1.0e-12_wp) bounded = .false.
             if (u_bed > u_prev + 1.0e-12_wp) monotone = .false.
@@ -217,7 +217,7 @@ contains
          call vdiff_apply_momentum(grid, vd, ms, DT, &
                                    tau_u=tau_u, tau_v=tau_v, &
                                    lambda_bot_u=lam_u, lambda_bot_v=lam_v, rho0=RHO0)
-         !$acc update self(ms%u_face_x_layer)
+         !$omp target update from(ms%u_face_x_layer)
          u_bed_imp = ms%u_face_x_layer(ig, jg, 1)
          u_surf_imp = ms%u_face_x_layer(ig, jg, NZ)
          call map_out(ms, vd)
@@ -350,7 +350,7 @@ contains
          call vdiff_apply_momentum(grid, vd, ms, DT, &
                                    tau_u=tau_u, tau_v=tau_v, &
                                    lambda_bot_u=lam_u, lambda_bot_v=lam_v, rho0=RHO0)
-         !$acc update self(ms%u_face_x_layer)
+         !$omp target update from(ms%u_face_x_layer)
          u_bed = ms%u_face_x_layer(ig, jg, 1)
          u_surf = ms%u_face_x_layer(ig, jg, NZ)
          call map_out(ms, vd)
@@ -373,7 +373,7 @@ contains
          call vdiff_apply_momentum(grid, vd, ms, DT, &
                                    tau_u=tau_u, tau_v=tau_v, &
                                    lambda_bot_u=lam_u, lambda_bot_v=lam_v, rho0=RHO0)
-         !$acc update self(ms%u_face_x_layer)
+         !$omp target update from(ms%u_face_x_layer)
          u_surf = ms%u_face_x_layer(ig, jg, NZ)
          u_mid = ms%u_face_x_layer(ig, jg, NZ/2)
          u_bed = ms%u_face_x_layer(ig, jg, 1)
@@ -436,7 +436,7 @@ contains
          call vdiff_apply_momentum(grid, vd, ms, DT, &
                                    tau_u=tau_u, tau_v=tau_v, &
                                    lambda_bot_u=lam_u, lambda_bot_v=lam_v, rho0=RHO0)
-         !$acc update self(ms%u_face_x_layer)
+         !$omp target update from(ms%u_face_x_layer)
          u_land = ms%u_face_x_layer(ig, jg, NZ)
          u_wet = ms%u_face_x_layer(ig - 1, jg, NZ)
          call map_out(ms, vd)

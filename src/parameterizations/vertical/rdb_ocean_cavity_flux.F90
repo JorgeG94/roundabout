@@ -595,14 +595,14 @@ contains
       !! configure-time host fill that MUST reach the device, and the
       !! rest carry the zero `init` promised on both toolchains.
       type(ocean_cavity_flux_t), intent(inout) :: this
-      !$acc enter data copyin(this%f_cor, this%active, this%t_far, this%s_far, &
-      !$acc&                  this%u_far, this%v_far, this%ustar, this%t_b, &
-      !$acc&                  this%s_b, this%melt, this%q_ocean, this%gamma_t, &
-      !$acc&                  this%gamma_s, this%status, this%comp_scale)
-      !$acc update device(this%f_cor, this%active, this%t_far, this%s_far, &
-      !$acc&              this%u_far, this%v_far, this%ustar, this%t_b, &
-      !$acc&              this%s_b, this%melt, this%q_ocean, this%gamma_t, &
-      !$acc&              this%gamma_s, this%status, this%comp_scale)
+      !$omp target enter data map(to: this%f_cor, this%active, this%t_far, this%s_far, &
+      !$omp&                  this%u_far, this%v_far, this%ustar, this%t_b, &
+      !$omp&                  this%s_b, this%melt, this%q_ocean, this%gamma_t, &
+      !$omp&                  this%gamma_s, this%status, this%comp_scale)
+      !$omp target update to(this%f_cor, this%active, this%t_far, this%s_far, &
+      !$omp&              this%u_far, this%v_far, this%ustar, this%t_b, &
+      !$omp&              this%s_b, this%melt, this%q_ocean, this%gamma_t, &
+      !$omp&              this%gamma_s, this%status, this%comp_scale)
    end subroutine ocean_cavity_flux_enter_data_impl
 
    subroutine ocean_cavity_flux_exit_data(this)
@@ -615,10 +615,10 @@ contains
 
    subroutine ocean_cavity_flux_exit_data_impl(this)
       type(ocean_cavity_flux_t), intent(inout) :: this
-      !$acc exit data delete(this%f_cor, this%active, this%t_far, this%s_far, &
-      !$acc&                 this%u_far, this%v_far, this%ustar, this%t_b, &
-      !$acc&                 this%s_b, this%melt, this%q_ocean, this%gamma_t, &
-      !$acc&                 this%gamma_s, this%status, this%comp_scale)
+      !$omp target exit data map(delete: this%f_cor, this%active, this%t_far, this%s_far, &
+      !$omp&                 this%u_far, this%v_far, this%ustar, this%t_b, &
+      !$omp&                 this%s_b, this%melt, this%q_ocean, this%gamma_t, &
+      !$omp&                 this%gamma_s, this%status, this%comp_scale)
    end subroutine ocean_cavity_flux_exit_data_impl
 
    pure function ocean_cavity_flux_bytes(this) result(nbytes)

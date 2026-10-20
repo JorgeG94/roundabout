@@ -115,23 +115,23 @@ contains
       real(wp), intent(in) :: res_v(grid%nx_total, grid%ny_total + 1)
       logical, intent(in) :: use_res
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(lmix)
+      !$omp target enter data map(to: lmix)
       call lmix%enter_data()
       if (use_res) then
-         !$acc enter data copyin(res_u, res_v)
+         !$omp target enter data map(to: res_u, res_v)
          call ocean_lateral_mix_compute_leith(grid, metrics, lmix, ms, &
                                               res_fn_u=res_u, res_fn_v=res_v)
-         !$acc exit data delete(res_u, res_v)
+         !$omp target exit data map(delete: res_u, res_v)
       else
          call ocean_lateral_mix_compute_leith(grid, metrics, lmix, ms)
       end if
-      !$acc update self(lmix%ah_face_x, lmix%ah_face_y)
+      !$omp target update from(lmix%ah_face_x, lmix%ah_face_y)
       call lmix%exit_data()
-      !$acc exit data delete(lmix)
+      !$omp target exit data map(delete: lmix)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call destroy_cartesian_metrics(metrics)
    end subroutine run_leith
 
@@ -354,16 +354,16 @@ contains
       type(ocean_metrics_t), intent(inout) :: metrics
       type(ocean_lateral_mix_t), intent(inout) :: lmix
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(lmix)
+      !$omp target enter data map(to: lmix)
       call lmix%enter_data()
       call ocean_lateral_mix_compute_smag_ah(grid, metrics, lmix, ms)
-      !$acc update self(lmix%nu4_face_x, lmix%nu4_face_y)
+      !$omp target update from(lmix%nu4_face_x, lmix%nu4_face_y)
       call lmix%exit_data()
-      !$acc exit data delete(lmix)
+      !$omp target exit data map(delete: lmix)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call destroy_cartesian_metrics(metrics)
    end subroutine run_smag_ah
 

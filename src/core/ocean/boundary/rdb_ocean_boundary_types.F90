@@ -500,43 +500,43 @@ contains
       !! the data_* buffers remain host-only (not consumed by device kernels).
       type(ocean_bc_state_t), intent(inout) :: this
       if (.not. this%is_init) return
-      !$acc enter data copyin(this)
+      !$omp target enter data map(to: this)
       if (allocated(this%tres_west)) then
-         !$acc enter data copyin(this%tres_west)
+         !$omp target enter data map(to: this%tres_west)
       end if
       if (allocated(this%tres_east)) then
-         !$acc enter data copyin(this%tres_east)
+         !$omp target enter data map(to: this%tres_east)
       end if
       if (allocated(this%tres_south)) then
-         !$acc enter data copyin(this%tres_south)
+         !$omp target enter data map(to: this%tres_south)
       end if
       if (allocated(this%tres_north)) then
-         !$acc enter data copyin(this%tres_north)
+         !$omp target enter data map(to: this%tres_north)
       end if
       ! Orlanski rx and u_prev arrays (§2, v2).
       if (allocated(this%rx_west)) then
-         !$acc enter data copyin(this%rx_west)
+         !$omp target enter data map(to: this%rx_west)
       end if
       if (allocated(this%rx_east)) then
-         !$acc enter data copyin(this%rx_east)
+         !$omp target enter data map(to: this%rx_east)
       end if
       if (allocated(this%rx_south)) then
-         !$acc enter data copyin(this%rx_south)
+         !$omp target enter data map(to: this%rx_south)
       end if
       if (allocated(this%rx_north)) then
-         !$acc enter data copyin(this%rx_north)
+         !$omp target enter data map(to: this%rx_north)
       end if
       if (allocated(this%u_prev_west)) then
-         !$acc enter data copyin(this%u_prev_west)
+         !$omp target enter data map(to: this%u_prev_west)
       end if
       if (allocated(this%u_prev_east)) then
-         !$acc enter data copyin(this%u_prev_east)
+         !$omp target enter data map(to: this%u_prev_east)
       end if
       if (allocated(this%u_prev_south)) then
-         !$acc enter data copyin(this%u_prev_south)
+         !$omp target enter data map(to: this%u_prev_south)
       end if
       if (allocated(this%u_prev_north)) then
-         !$acc enter data copyin(this%u_prev_north)
+         !$omp target enter data map(to: this%u_prev_north)
       end if
    end subroutine ocean_bc_state_enter_data
 
@@ -546,43 +546,43 @@ contains
       if (.not. this%is_init) return
       ! Orlanski arrays (§2, v2) — reverse allocation order.
       if (allocated(this%u_prev_north)) then
-         !$acc exit data delete(this%u_prev_north)
+         !$omp target exit data map(delete: this%u_prev_north)
       end if
       if (allocated(this%u_prev_south)) then
-         !$acc exit data delete(this%u_prev_south)
+         !$omp target exit data map(delete: this%u_prev_south)
       end if
       if (allocated(this%u_prev_east)) then
-         !$acc exit data delete(this%u_prev_east)
+         !$omp target exit data map(delete: this%u_prev_east)
       end if
       if (allocated(this%u_prev_west)) then
-         !$acc exit data delete(this%u_prev_west)
+         !$omp target exit data map(delete: this%u_prev_west)
       end if
       if (allocated(this%rx_north)) then
-         !$acc exit data delete(this%rx_north)
+         !$omp target exit data map(delete: this%rx_north)
       end if
       if (allocated(this%rx_south)) then
-         !$acc exit data delete(this%rx_south)
+         !$omp target exit data map(delete: this%rx_south)
       end if
       if (allocated(this%rx_east)) then
-         !$acc exit data delete(this%rx_east)
+         !$omp target exit data map(delete: this%rx_east)
       end if
       if (allocated(this%rx_west)) then
-         !$acc exit data delete(this%rx_west)
+         !$omp target exit data map(delete: this%rx_west)
       end if
       ! Reservoir arrays (§1, v2).
       if (allocated(this%tres_north)) then
-         !$acc exit data delete(this%tres_north)
+         !$omp target exit data map(delete: this%tres_north)
       end if
       if (allocated(this%tres_south)) then
-         !$acc exit data delete(this%tres_south)
+         !$omp target exit data map(delete: this%tres_south)
       end if
       if (allocated(this%tres_east)) then
-         !$acc exit data delete(this%tres_east)
+         !$omp target exit data map(delete: this%tres_east)
       end if
       if (allocated(this%tres_west)) then
-         !$acc exit data delete(this%tres_west)
+         !$omp target exit data map(delete: this%tres_west)
       end if
-      !$acc exit data delete(this)
+      !$omp target exit data map(delete: this)
    end subroutine ocean_bc_state_exit_data
 
    pure subroutine ocean_bc_state_set_edges(this, has_west, has_east, has_south, has_north)

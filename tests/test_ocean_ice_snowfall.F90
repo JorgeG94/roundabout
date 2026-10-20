@@ -173,7 +173,7 @@ contains
       type(ocean_surface_flux_t), intent(inout) :: sf
       real(wp), intent(in) :: air_temp, restore_lambda, sw_down, snowfall
 
-      !$acc enter data copyin(ms, sf)
+      !$omp target enter data map(to: ms, sf)
       call ms%enter_data()
       call ice%enter_data()
       call sf%enter_data()
@@ -198,14 +198,14 @@ contains
                  hto => ice%heat_to_ocn, qs => sf%Q_salt, qh => sf%Q_heat, &
                  af => ice%atm_fprec, spo => ice%snow_part_ocn, fod => ice%fprec_ocn_diag, &
                  psz => ice%part_size)
-         !$acc update self(hT, hS, mi, msn, ei, si, mf, sd, hf, md, fb, h2o, h2i, hto, qs, qh, &
-         !$acc              af, spo, fod, psz)
+         !$omp target update from(hT, hS, mi, msn, ei, si, mf, sd, hf, md, fb, h2o, h2i, hto, qs, qh, &
+         !$omp              af, spo, fod, psz)
       end associate
 
       call sf%exit_data()
       call ice%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, sf)
+      !$omp target exit data map(delete: ms, sf)
    end subroutine run_chain_snow
 
    subroutine run_chain_pre26(grid, eos, ms, ice, sf, air_temp, restore_lambda, sw_down)
@@ -224,7 +224,7 @@ contains
       type(ocean_surface_flux_t), intent(inout) :: sf
       real(wp), intent(in) :: air_temp, restore_lambda, sw_down
 
-      !$acc enter data copyin(ms, sf)
+      !$omp target enter data map(to: ms, sf)
       call ms%enter_data()
       call ice%enter_data()
       call sf%enter_data()
@@ -241,13 +241,13 @@ contains
                  hS => ms%tracers(ms%idx_salinity)%hTr, &
                  mi => ice%m_ice, msn => ice%m_snow, &
                  qs => sf%Q_salt, qh => sf%Q_heat)
-         !$acc update self(hT, hS, mi, msn, qs, qh)
+         !$omp target update from(hT, hS, mi, msn, qs, qh)
       end associate
 
       call sf%exit_data()
       call ice%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, sf)
+      !$omp target exit data map(delete: ms, sf)
    end subroutine run_chain_pre26
 
    subroutine seed_cold_pack(ice, ip, jp)

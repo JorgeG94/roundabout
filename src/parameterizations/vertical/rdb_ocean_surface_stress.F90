@@ -279,8 +279,8 @@ contains
 
    subroutine ocean_surfstress_enter_data_impl(this)
       type(ocean_surface_stress_t), intent(inout) :: this
-      !$acc enter data copyin(this%tau_x, this%tau_y, this%stress_mag, &
-      !$acc                   this%stress_shelf)
+      !$omp target enter data map(to: this%tau_x, this%tau_y, this%stress_mag, &
+      !$omp                   this%stress_shelf)
       ! Force the host wind values onto the device.  On OpenMP the root
       ! map(to:state) can leave tau_x/tau_y already "present" (descriptors
       ! come over with the parent), making the copyin above a no-op copy —
@@ -290,8 +290,8 @@ contains
       ! BEFORE this call — the `update device` here is what pushes it (the
       ! mem:separate trap: a missed push here gives `stress_mag == 0` on
       ! device, silently killing KPP/EPBL wind mixing, CLAUDE.md:312).
-      !$acc update device(this%tau_x, this%tau_y, this%stress_mag, &
-      !$acc                this%stress_shelf)
+      !$omp target update to(this%tau_x, this%tau_y, this%stress_mag, &
+      !$omp                this%stress_shelf)
       call scratch_3d_buffer_enter_data_impl(this%du_stress)
       call scratch_3d_buffer_enter_data_impl(this%dv_stress)
    end subroutine ocean_surfstress_enter_data_impl
@@ -308,8 +308,8 @@ contains
       type(ocean_surface_stress_t), intent(inout) :: this
       call scratch_3d_buffer_exit_data_impl(this%du_stress)
       call scratch_3d_buffer_exit_data_impl(this%dv_stress)
-      !$acc exit data delete(this%tau_x, this%tau_y, this%stress_mag, &
-      !$acc                  this%stress_shelf)
+      !$omp target exit data map(delete: this%tau_x, this%tau_y, this%stress_mag, &
+      !$omp                  this%stress_shelf)
    end subroutine ocean_surfstress_exit_data_impl
 
    subroutine ocean_surfstress_set_const(this, tau_x_val, tau_y_val)
@@ -616,16 +616,16 @@ contains
       logical, intent(in)    :: lwait
          !! .false. ⇒ leave the apply on queue 1 without syncing (batched).
       integer :: i, j, k
-      !$acc kernels async(1)
+      ! [acc->omp] dropped CUDA-graph wrapper: kernels async(1)
       do concurrent(k=1:nz, j=1:ny, i=1:nx + 1)
          u_face(i, j, k) = u_face(i, j, k) + dt*du_stress(i, j, k)
       end do
       do concurrent(k=1:nz, j=1:ny + 1, i=1:nx)
          v_face(i, j, k) = v_face(i, j, k) + dt*dv_stress(i, j, k)
       end do
-      !$acc end kernels
+      ! [acc->omp] dropped CUDA-graph wrapper: end kernels
       if (lwait) then
-         !$acc wait(1)
+         ! [acc->omp] dropped CUDA-graph wrapper: wait (1)
       end if
    end subroutine surfstress_apply_impl
 

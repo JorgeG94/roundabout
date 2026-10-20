@@ -114,15 +114,15 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_slopes_t), intent(inout) :: sl
       type(ocean_gm_t), intent(inout) :: gm
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
       ! Bed datum of the slopes' geopotential interface heights: every
       ! case here has a flat bed under a constant-depth column at rest
       ! (eta = 0), so D = Sum_k h.  Host-side, BEFORE the slot's map.
       call sl%set_bathymetry(sum(ms%h_layer, dim=3))
-      !$acc enter data copyin(sl)
+      !$omp target enter data map(to: sl)
       call sl%enter_data()
-      !$acc enter data copyin(gm)
+      !$omp target enter data map(to: gm)
       call gm%enter_data()
    end subroutine map_in
 
@@ -130,14 +130,14 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_slopes_t), intent(inout) :: sl
       type(ocean_gm_t), intent(inout) :: gm
-      !$acc update self(gm%uhD, gm%vhD, gm%gm_src, gm%khth_u, gm%khth_v)
-      !$acc update self(sl%slope_x, sl%slope_y, sl%n2_u, sl%n2_v)
+      !$omp target update from(gm%uhD, gm%vhD, gm%gm_src, gm%khth_u, gm%khth_v)
+      !$omp target update from(sl%slope_x, sl%slope_y, sl%n2_u, sl%n2_v)
       call gm%exit_data()
-      !$acc exit data delete(gm)
+      !$omp target exit data map(delete: gm)
       call sl%exit_data()
-      !$acc exit data delete(sl)
+      !$omp target exit data map(delete: sl)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out
 
    subroutine fill_tilted_TS(ms, grid, nz, dz, gx)
@@ -393,7 +393,7 @@ contains
          call map_in_ct(ms, sl, gm, ct)
 
          j = NGHOST + 1
-         !$acc update self(ms%h_layer)
+         !$omp target update from(ms%h_layer)
          tilt0 = abs(ms%h_layer(iw, j, 1) - ms%h_layer(ie, j, 1))
          tilt = tilt0
          prev = tilt0 + 1.0_wp
@@ -402,7 +402,7 @@ contains
             call ocean_slopes_compute(grid, metrics, eos, sl, ms, DTL)
             call gm_compute_transports(grid, metrics, gm, sl, ms, DTL)
             call continuity_gm_apply(grid, metrics, ct, ms, gm, DTL, 1.0_wp, TR_MODE_ADVECT)
-            !$acc update self(ms%h_layer)
+            !$omp target update from(ms%h_layer)
             tilt = abs(ms%h_layer(iw, j, 1) - ms%h_layer(ie, j, 1))
             if (tilt > prev + 1.0e-9_wp) monotone = .false.
             prev = tilt
@@ -652,15 +652,15 @@ contains
          call fill_layers(ms, h_entry, ni, nj, NZ)
          call map_in_ct(ms, sl, gm, ct)
          call gm_compute_transports(grid, metrics, gm, sl, ms, DT)
-         !$acc update self(gm%uhD)
+         !$omp target update from(gm%uhD)
          call check(error, abs(gm%uhD(ic + 1, jc, 1) - cap) <= 1.0e-12_wp*cap .and. &
                     abs(-gm%uhD(ic, jc, 1) - cap) <= 1.0e-12_wp*cap, &
                     "the dome must drain the partial cell AT the cap (case strength)")
          if (allocated(error)) exit checks
          ms%h_layer = h_left
-         !$acc update device(ms%h_layer)
+         !$omp target update to(ms%h_layer)
          call continuity_gm_apply(grid, metrics, ct, ms, gm, DT, 1.0_wp, TR_MODE_ADVECT)
-         !$acc update self(ms%h_layer)
+         !$omp target update from(ms%h_layer)
          h_fold = ms%h_layer(ic, jc, 1)
          call map_out_ct(ms, sl, gm, ct)
          call check(error, h_fold < 0.0_wp, &
@@ -720,7 +720,7 @@ contains
          call gm_compute_transports(grid, metrics, gm, sl, ms, DT)
          ! `map_out_ct` brings back h / T / S only (mem:separate): pull the
          ! transports explicitly, or the host reads case (a)'s copy.
-         !$acc update self(gm%uhD, gm%vhD)
+         !$omp target update from(gm%uhD, gm%vhD)
          call map_out_ct(ms, sl, gm, ct)
          worst_out = max(gm%uhD(ic + 1, jc, 1), -gm%uhD(ic, jc, 1), &
                          gm%vhD(ic, jc + 1, 1), -gm%vhD(ic, jc, 1))
@@ -766,17 +766,17 @@ contains
       type(ocean_slopes_t), intent(inout) :: sl
       type(ocean_gm_t), intent(inout) :: gm
       type(continuity_t), intent(inout) :: ct
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
       ! Bed datum of the slopes' geopotential interface heights: every
       ! case here has a flat bed under a constant-depth column at rest
       ! (eta = 0), so D = Sum_k h.  Host-side, BEFORE the slot's map.
       call sl%set_bathymetry(sum(ms%h_layer, dim=3))
-      !$acc enter data copyin(sl)
+      !$omp target enter data map(to: sl)
       call sl%enter_data()
-      !$acc enter data copyin(gm)
+      !$omp target enter data map(to: gm)
       call gm%enter_data()
-      !$acc enter data copyin(ct)
+      !$omp target enter data map(to: ct)
       call ct%enter_data()
    end subroutine map_in_ct
 
@@ -785,17 +785,17 @@ contains
       type(ocean_slopes_t), intent(inout) :: sl
       type(ocean_gm_t), intent(inout) :: gm
       type(continuity_t), intent(inout) :: ct
-      !$acc update self(ms%h_layer)
-      !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
-      !$acc update self(ms%tracers(ms%idx_salinity)%hTr)
+      !$omp target update from(ms%h_layer)
+      !$omp target update from(ms%tracers(ms%idx_temperature)%hTr)
+      !$omp target update from(ms%tracers(ms%idx_salinity)%hTr)
       call ct%exit_data()
-      !$acc exit data delete(ct)
+      !$omp target exit data map(delete: ct)
       call gm%exit_data()
-      !$acc exit data delete(gm)
+      !$omp target exit data map(delete: gm)
       call sl%exit_data()
-      !$acc exit data delete(sl)
+      !$omp target exit data map(delete: sl)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out_ct
 
    function sum_phys_h(ms, i0, i1, j0, j1, nz) result(s)

@@ -130,18 +130,18 @@ contains
       type(hgrid_t), intent(in) :: grid
       type(ocean_state_t), intent(inout) :: state
 
-      !$acc enter data copyin(state%multilayer, state%surface_flux)
+      !$omp target enter data map(to: state%multilayer, state%surface_flux)
       call state%multilayer%enter_data()
       call state%surface_flux%enter_data()
-      !$acc update device(state%multilayer%h_layer, state%surface_flux%Q_heat)
+      !$omp target update to(state%multilayer%h_layer, state%surface_flux%Q_heat)
       call ocean_surface_flux_apply_tracers(grid, state%surface_flux, &
                                             state%multilayer, DT)
       associate (hT => state%multilayer%tracers(state%multilayer%idx_temperature)%hTr)
-         !$acc update self(hT)
+         !$omp target update from(hT)
       end associate
       call state%surface_flux%exit_data()
       call state%multilayer%exit_data()
-      !$acc exit data delete(state%multilayer, state%surface_flux)
+      !$omp target exit data map(delete: state%multilayer, state%surface_flux)
    end subroutine run_apply
 
    ! ---------------------------------------------------------------------

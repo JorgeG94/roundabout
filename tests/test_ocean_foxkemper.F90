@@ -300,13 +300,13 @@ contains
       epbl%f_centre = 7.0e-5_wp
       epbl%rho0 = RHO0
 
-      !$acc enter data copyin(ms, epbl, ss, mle)
+      !$omp target enter data map(to: ms, epbl, ss, mle)
       call ms%enter_data()
       call epbl%enter_data()
       call ss%enter_data()
       call mle%enter_data()
       call mle_compute_transports(grid, metrics, mle, ms, epbl, ss=ss)
-      !$acc update self(mle%uhml, mle%vhml)
+      !$omp target update from(mle%uhml, mle%vhml)
       call mle%exit_data()
 
       call check(error, maxval(abs(mle%uhml)) == 0.0_wp, "T4: uhml stays zero")
@@ -316,7 +316,7 @@ contains
       call ss%exit_data()
       call epbl%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, epbl, ss, mle)
+      !$omp target exit data map(delete: ms, epbl, ss, mle)
       call destroy_cartesian_metrics(metrics)
       call mle%destroy()
       call ss%destroy()
@@ -383,13 +383,13 @@ contains
       epbl%f_centre = 7.0e-5_wp
       epbl%rho0 = RHO0
 
-      !$acc enter data copyin(ms, epbl, ss, mle, bc)
+      !$omp target enter data map(to: ms, epbl, ss, mle, bc)
       call ms%enter_data()
       call epbl%enter_data()
       call ss%enter_data()
       call mle%enter_data()
       call mle_compute_transports(grid, metrics, mle, ms, epbl, ss=ss, bc=bc)
-      !$acc update self(mle%uhml, mle%vhml)
+      !$omp target update from(mle%uhml, mle%vhml)
       call mle%exit_data()
 
       iw = NGHOST + 1
@@ -418,7 +418,7 @@ contains
       call ss%exit_data()
       call epbl%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, epbl, ss, mle, bc)
+      !$omp target exit data map(delete: ms, epbl, ss, mle, bc)
       call destroy_cartesian_metrics(metrics)
       call mle%destroy()
       call ss%destroy()
@@ -459,13 +459,13 @@ contains
       epbl%f_centre = 1.0e-4_wp
       epbl%rho0 = RHO0
 
-      !$acc enter data copyin(ms, epbl, ss, mle)
+      !$omp target enter data map(to: ms, epbl, ss, mle)
       call ms%enter_data()
       call epbl%enter_data()
       call ss%enter_data()
       call mle%enter_data()
       call mle_compute_transports(grid, metrics, mle, ms, epbl, ss=ss)
-      !$acc update self(mle%uhml, mle%vhml)
+      !$omp target update from(mle%uhml, mle%vhml)
       call mle%exit_data()
 
       call check(error, maxval(abs(mle%uhml)) < 1.0e-12_wp, "T5: uhml=0")
@@ -475,7 +475,7 @@ contains
       call ss%exit_data()
       call epbl%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, epbl, ss, mle)
+      !$omp target exit data map(delete: ms, epbl, ss, mle)
       call destroy_cartesian_metrics(metrics)
       call mle%destroy()
       call ss%destroy()
@@ -655,7 +655,7 @@ contains
          end do
 
          ! Attach all state to device.
-         !$acc enter data copyin(ms, epbl, ss, mle, ct)
+         !$omp target enter data map(to: ms, epbl, ss, mle, ct)
          call ms%enter_data()
          call epbl%enter_data()
          call ss%enter_data()
@@ -667,7 +667,7 @@ contains
 
          ! Snapshot mass_flux_x_layer BEFORE the fold by pulling uhml back.
          ! We verify the fold is non-trivial: |uhml| > 0.
-         !$acc update self(mle%uhml)
+         !$omp target update from(mle%uhml)
          flux_norm_before = maxval(abs(mle%uhml))
 
          ! Run N_STEPS of continuity_tracer_step_split WITH the mle argument
@@ -678,12 +678,12 @@ contains
 
          ! Pull results back to host.
          call ct%exit_data()
-         !$acc exit data delete(ct)
+         !$omp target exit data map(delete: ct)
          call mle%exit_data()
          call ss%exit_data()
          call epbl%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, epbl, ss, mle)
+         !$omp target exit data map(delete: ms, epbl, ss, mle)
 
          ! (i) h conserved: Σh after = Σh before (closed-wall, zero velocity
          !     outside the FK fold, and sum_k a(k)=0 => fold adds nothing to
@@ -821,52 +821,52 @@ contains
          epbl%f_centre = F0
 
          ! --- Run (A): no mle arg ---
-         !$acc enter data copyin(ms_a, ct_a)
+         !$omp target enter data map(to: ms_a, ct_a)
          call ms_a%enter_data()
          call ct_a%enter_data()
          call continuity_tracer_step_split(grid, metrics, ct_a, ms_a, DT)
          call ms_a%exit_data()
          call ct_a%exit_data()
-         !$acc exit data delete(ms_a, ct_a)
+         !$omp target exit data map(delete: ms_a, ct_a)
 
          ! --- Compute MLE transports (shared uhml/vhml for B and C) ---
-         !$acc enter data copyin(epbl, ss, mle)
+         !$omp target enter data map(to: epbl, ss, mle)
          call epbl%enter_data()
          call ss%enter_data()
          call mle%enter_data()
          call mle_compute_transports(grid, metrics, mle, ms_a, epbl, ss=ss)
 
          ! Verify uhml is non-zero (density gradient is strong enough).
-         !$acc update self(mle%uhml)
+         !$omp target update from(mle%uhml)
          call check(error, maxval(abs(mle%uhml)) > 0.0_wp, &
                     "T8: uhml zero — density gradient did not generate FK transport")
          if (allocated(error)) exit checks
 
          ! --- Run (B): mle present, fold_active=.false. ---
-         !$acc enter data copyin(ms_b, ct_b)
+         !$omp target enter data map(to: ms_b, ct_b)
          call ms_b%enter_data()
          call ct_b%enter_data()
          call continuity_tracer_step_split(grid, metrics, ct_b, ms_b, DT, &
                                            mle=mle, mle_fold_active=.false.)
          call ms_b%exit_data()
          call ct_b%exit_data()
-         !$acc exit data delete(ms_b, ct_b)
+         !$omp target exit data map(delete: ms_b, ct_b)
 
          ! --- Run (C): mle present, fold_active=.true. ---
-         !$acc enter data copyin(ms_c, ct_c)
+         !$omp target enter data map(to: ms_c, ct_c)
          call ms_c%enter_data()
          call ct_c%enter_data()
          call continuity_tracer_step_split(grid, metrics, ct_c, ms_c, DT, &
                                            mle=mle, mle_fold_active=.true.)
          call ms_c%exit_data()
          call ct_c%exit_data()
-         !$acc exit data delete(ms_c, ct_c)
+         !$omp target exit data map(delete: ms_c, ct_c)
 
          ! Tear down MLE/EPBL/SS device attachments.
          call mle%exit_data()
          call ss%exit_data()
          call epbl%exit_data()
-         !$acc exit data delete(epbl, ss, mle)
+         !$omp target exit data map(delete: epbl, ss, mle)
 
          ! --- Assert (B) == (A) (fold suppressed => no FK contribution) ---
          max_diff_ba = maxval(abs(ms_b%h_layer - ms_a%h_layer))
@@ -1005,7 +1005,7 @@ contains
          s_hi = maxval(S_REF) + 0.05_wp*(maxval(S_REF) - minval(S_REF))
          mass0 = area*sum(ms%tracers(ms%idx_salinity)%hTr(i0:i1, j0:j1, :))
 
-         !$acc enter data copyin(ms, ct, epbl, ss, mle, bc)
+         !$omp target enter data map(to: ms, ct, epbl, ss, mle, bc)
          call ms%enter_data()
          call ct%enter_data()
          call epbl%enter_data()
@@ -1017,7 +1017,7 @@ contains
          ! the dt_limit presence to see failing-before vs passing-after.
          call mle_compute_transports(grid, metrics, mle, ms, epbl, ss=ss, &
                                      dt_limit=DT_WIN)
-         !$acc update self(mle%uhml)
+         !$omp target update from(mle%uhml)
 
          ! Build the windowed drain inputs directly, the way the dyn step
          ! does but without the RK2 bookkeeping: the net window transport is
@@ -1042,7 +1042,7 @@ contains
                end do
             end do
          end do
-         !$acc update device(ct%uhtr, ct%vhtr, ms%h_layer)
+         !$omp target update to(ct%uhtr, ct%vhtr, ms%h_layer)
 
          ! Spend the window.
          call continuity_tracer_drain(grid, metrics, ct, ms, RATIO, bc=bc)
@@ -1052,7 +1052,7 @@ contains
          call epbl%exit_data()
          call ct%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, ct, epbl, ss, mle, bc)
+         !$omp target exit data map(delete: ms, ct, epbl, ss, mle, bc)
 
          ! (i) conservation of interior salinity mass.
          mass1 = area*sum(ms%tracers(ms%idx_salinity)%hTr(i0:i1, j0:j1, :))
@@ -1333,7 +1333,7 @@ contains
          ! Full-domain (interior) salt mass before the run.
          mass0 = area*sum(ms%tracers(ms%idx_salinity)%hTr(i0:i1, j0:j1, :))
 
-         !$acc enter data copyin(ms, ct, epbl, ss, mle, bc)
+         !$omp target enter data map(to: ms, ct, epbl, ss, mle, bc)
          call ms%enter_data()
          call ct%enter_data()
          call epbl%enter_data()
@@ -1366,7 +1366,7 @@ contains
          call epbl%exit_data()
          call ct%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, ct, epbl, ss, mle, bc)
+         !$omp target exit data map(delete: ms, ct, epbl, ss, mle, bc)
 
          mass1 = area*sum(ms%tracers(ms%idx_salinity)%hTr(i0:i1, j0:j1, :))
          salt_rel_drift = abs(mass1 - mass0)/abs(mass0)
@@ -1399,11 +1399,11 @@ contains
 
       nx = grid%nx_total
       ny = grid%ny_total
-      !$acc update self(ms%h_layer)
+      !$omp target update from(ms%h_layer)
       if (allocated(ms%tracers)) then
          do it = 1, size(ms%tracers)
             if (allocated(ms%tracers(it)%hTr)) then
-               !$acc update self(ms%tracers(it)%hTr)
+               !$omp target update from(ms%tracers(it)%hTr)
             end if
          end do
       end if
@@ -1445,11 +1445,11 @@ contains
          end do
       end do
 
-      !$acc update device(ms%h_layer)
+      !$omp target update to(ms%h_layer)
       if (allocated(ms%tracers)) then
          do it = 1, size(ms%tracers)
             if (allocated(ms%tracers(it)%hTr)) then
-               !$acc update device(ms%tracers(it)%hTr)
+               !$omp target update to(ms%tracers(it)%hTr)
             end if
          end do
       end if
@@ -1591,13 +1591,13 @@ contains
       epbl%f_centre = 7.0e-5_wp
       epbl%rho0 = RHO0
 
-      !$acc enter data copyin(ms, epbl, ss, mle)
+      !$omp target enter data map(to: ms, epbl, ss, mle)
       call ms%enter_data()
       call epbl%enter_data()
       call ss%enter_data()
       call mle%enter_data()
       call mle_compute_transports(grid, metrics, mle, ms, epbl, ss=ss)
-      !$acc update self(mle%uhml, mle%vhml)
+      !$omp target update from(mle%uhml, mle%vhml)
       call mle%exit_data()
 
       max_u = maxval(abs(mle%uhml))
@@ -1606,7 +1606,7 @@ contains
       call ss%exit_data()
       call epbl%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, epbl, ss, mle)
+      !$omp target exit data map(delete: ms, epbl, ss, mle)
       call destroy_cartesian_metrics(metrics)
       call mle%destroy()
       call ss%destroy()
@@ -1656,13 +1656,13 @@ contains
       epbl%b0 = b0_val
       ss%tau_x = tau_val
       ss%tau_y = 0.0_wp
-      !$acc enter data copyin(ms, epbl, ss, mle)
+      !$omp target enter data map(to: ms, epbl, ss, mle)
       call ms%enter_data()
       call epbl%enter_data()
       call ss%enter_data()
       call mle%enter_data()
       call mle_compute_transports(grid, metrics, mle, ms, epbl, ss=ss)
-      !$acc update self(mle%uhml)
+      !$omp target update from(mle%uhml)
       max_uhml = maxval(abs(mle%uhml))
       ! Full symmetric teardown -- this helper is called twice per test, so a
       ! partial exit would leak device mappings that collide on the next call.
@@ -1670,7 +1670,7 @@ contains
       call ss%exit_data()
       call epbl%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, epbl, ss, mle)
+      !$omp target exit data map(delete: ms, epbl, ss, mle)
       call mle%destroy(); call ss%destroy(); call epbl%destroy(); call ms%destroy()
       call destroy_cartesian_metrics(metrics)
    end subroutine run_bodner_transport

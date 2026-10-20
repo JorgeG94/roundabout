@@ -118,9 +118,9 @@ contains
       ! the free surface that tilts).  Host-side, BEFORE the slot's map.
       call sl%set_bathymetry(spread(spread(maxval(sum(ms%h_layer, dim=3)), &
                                            1, grid%nx_total), 2, grid%ny_total))
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(sl)
+      !$omp target enter data map(to: sl)
       call sl%enter_data()
    end subroutine map_in
 
@@ -129,11 +129,11 @@ contains
       type(ocean_metrics_t), intent(inout) :: metrics
       type(ocean_slopes_t), intent(inout) :: sl
       ! Pull device-side outputs back to host before unmapping.
-      !$acc update self(sl%slope_x, sl%slope_y, sl%n2_u, sl%n2_v)
+      !$omp target update from(sl%slope_x, sl%slope_y, sl%n2_u, sl%n2_v)
       call sl%exit_data()
-      !$acc exit data delete(sl)
+      !$omp target exit data map(delete: sl)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call destroy_cartesian_metrics(metrics)
    end subroutine map_out
 

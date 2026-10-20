@@ -313,14 +313,14 @@ contains
          end do
       end do
 
-      !$acc enter data copyin(u_w, v_w, u_c, v_c, ta, qa, slp, sst, wet) &
-      !$acc&   create(taux_c, tauy_c, qsens, qlat, evapm, cd, ch, ce)
+      !$omp target enter data map(to: u_w, v_w, u_c, v_c, ta, qa, slp, sst, wet) &
+      !$omp&   map(alloc: taux_c, tauy_c, qsens, qlat, evapm, cd, ch, ce)
       call bulk_flux_driver_2d(NX, NY, u_w, v_w, u_c, v_c, ta, qa, slp, sst, wet, &
                                Z_WIND, Z_TA, N_ITER, &
                                taux_c, tauy_c, qsens, qlat, evapm, cd, ch, ce)
-      !$acc update self(taux_c, tauy_c, qsens, qlat, evapm, cd, ch, ce)
-      !$acc exit data delete(u_w, v_w, u_c, v_c, ta, qa, slp, sst, wet, &
-      !$acc&   taux_c, tauy_c, qsens, qlat, evapm, cd, ch, ce)
+      !$omp target update from(taux_c, tauy_c, qsens, qlat, evapm, cd, ch, ce)
+      !$omp target exit data map(delete: u_w, v_w, u_c, v_c, ta, qa, slp, sst, wet, &
+      !$omp&   taux_c, tauy_c, qsens, qlat, evapm, cd, ch, ce)
 
       do j = 1, NY
          do i = 1, NX

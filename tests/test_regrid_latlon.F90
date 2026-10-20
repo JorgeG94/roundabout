@@ -755,11 +755,11 @@ contains
 
       allocate (dst_dev(wts%nx, wts%ny), source=0.0_wp)
       call wts%enter_data()
-      !$acc enter data copyin(src) create(dst_dev)
+      !$omp target enter data map(to: src) map(alloc: dst_dev)
       call regrid_apply_2d_impl(wts%nx, wts%ny, wts%nmax, wts%nsx, wts%nsy, &
                                 wts%idx_i, wts%idx_j, wts%w, src, dst_dev)
-      !$acc update self(dst_dev)
-      !$acc exit data delete(src, dst_dev)
+      !$omp target update from(dst_dev)
+      !$omp target exit data map(delete: src, dst_dev)
       call wts%exit_data()
 
       do j = 1, wts%ny

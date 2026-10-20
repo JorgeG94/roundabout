@@ -237,11 +237,11 @@ contains
                                       sf=sf, vcoord=vc)
 
             if (mod(step, PROBE) == 0 .or. step == N_STEPS) then
-               !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer, &
-               !$acc&            ms%rho_layer, &
-               !$acc&            ms%tracers(ms%idx_salinity)%hTr, &
-               !$acc&            ms%tracers(ms%idx_temperature)%hTr, &
-               !$acc&            dyn%bt_work%wd_wet_dyn)
+               !$omp target update from(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer, &
+               !$omp&            ms%rho_layer, &
+               !$omp&            ms%tracers(ms%idx_salinity)%hTr, &
+               !$omp&            ms%tracers(ms%idx_temperature)%hTr, &
+               !$omp&            dyn%bt_work%wd_wet_dyn)
 
                ! No NaN/Inf anywhere.
                if (.not. all_finite(ms, NZ, msg_field)) then
@@ -583,17 +583,17 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       real(wp), intent(inout) :: wet_dyn(:, :)
       real(wp), intent(in) :: dt
-      !$acc enter data copyin(ms, sf, wet_dyn)
+      !$omp target enter data map(to: ms, sf, wet_dyn)
       call ms%enter_data()
       call sf%enter_data()
       call ocean_surface_flux_apply_tracers(grid, sf, ms, dt, wet_dyn=wet_dyn)
       associate (hT => ms%tracers(ms%idx_temperature)%hTr, &
                  hS => ms%tracers(ms%idx_salinity)%hTr)
-         !$acc update self(hT, hS)
+         !$omp target update from(hT, hS)
       end associate
       call sf%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, sf, wet_dyn)
+      !$omp target exit data map(delete: ms, sf, wet_dyn)
    end subroutine run_apply_dyn
 
    ! ---- slot map/destroy (trimmed from test_ocean_baroclinic_longrun) ----
@@ -615,9 +615,9 @@ contains
       type(ocean_vmix_t), intent(inout) :: vmix
       type(ocean_dyn_t), intent(inout) :: dyn
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(ct, cor, pgf, hv, bd, ss, sf, va, hd, vd, vmix, dyn)
+      !$omp target enter data map(to: ct, cor, pgf, hv, bd, ss, sf, va, hd, vd, vmix, dyn)
       call ct%enter_data(); call cor%enter_data(); call pgf%enter_data()
       call hv%enter_data(); call bd%enter_data(); call ss%enter_data()
       call sf%enter_data(); call va%enter_data(); call hd%enter_data()
@@ -645,8 +645,8 @@ contains
       call ss%exit_data(); call bd%exit_data(); call hv%exit_data()
       call pgf%exit_data(); call cor%exit_data(); call ct%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ct, cor, pgf, hv, bd, ss, sf, va, hd, vd, vmix, dyn)
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ct, cor, pgf, hv, bd, ss, sf, va, hd, vd, vmix, dyn)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out
 
    subroutine destroy_all(ms, ct, cor, pgf, hv, bd, ss, sf, va, hd, vd, vmix, eos, dyn)

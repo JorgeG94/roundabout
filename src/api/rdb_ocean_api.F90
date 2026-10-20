@@ -729,7 +729,7 @@ contains
 
       associate (hlayer => h%state%multilayer%h_layer, ng => h%grid%nghost, &
                  nxp => h%grid%nx_phys, nyp => h%grid%ny_phys)
-         !$acc update self(hlayer)
+         !$omp target update from(hlayer)
          if (handle_has_area(h)) then
             ! Curvilinear (spherical / supergrid / tripolar) cells differ
             ! in area, and `grid%dx*grid%dy` is a placeholder there (1 m^2
@@ -1411,11 +1411,11 @@ contains
                end do
             end do
          end do
-         !$acc update device(hl)
+         !$omp target update to(hl)
       end associate
       call ocean_eos_compute(h%state%eos, h%state%multilayer)
       associate (rl => h%state%multilayer%rho_layer)
-         !$acc update self(rl)
+         !$omp target update from(rl)
       end associate
       status = int(OCEAN_STATUS_OK, c_int)
    end function rdb_ocean_set_h
@@ -1447,7 +1447,7 @@ contains
       ng = h%grid%nghost
       associate (uf => h%state%multilayer%u_face_x_layer)
          uf(ng + 1:ng + nx_p + 1, ng + 1:ng + ny_p, :) = real(u_data, wp)
-         !$acc update device(uf)
+         !$omp target update to(uf)
       end associate
       status = int(OCEAN_STATUS_OK, c_int)
    end function rdb_ocean_set_u
@@ -1478,7 +1478,7 @@ contains
       ng = h%grid%nghost
       associate (vf => h%state%multilayer%v_face_y_layer)
          vf(ng + 1:ng + nx_p, ng + 1:ng + ny_p + 1, :) = real(v_data, wp)
-         !$acc update device(vf)
+         !$omp target update to(vf)
       end associate
       status = int(OCEAN_STATUS_OK, c_int)
    end function rdb_ocean_set_v
@@ -1551,13 +1551,13 @@ contains
                                                h%state%bc%periodic_x, h%state%bc%periodic_y)
             call ocean_fold_wrap_eta_2d(h%grid, h%state%bc, b)
          end if
-         !$acc update device(b)
+         !$omp target update to(b)
       end associate
       ! The isopycnal slopes' bed datum is a copy of `b` (no-op when the
       ! slot is off); refresh it from the re-wrapped field.
       if (h%state%slopes%is_init) then
          call h%state%slopes%set_bathymetry(h%state%barotropic%b)
-         !$acc update device(h%state%slopes%bathy)
+         !$omp target update to(h%state%slopes%bathy)
       end if
 
       if (h%state%dyn%n_inner >= 1) then
@@ -1569,7 +1569,7 @@ contains
                                                   h%state%bc%periodic_x, h%state%bc%periodic_y)
                call ocean_fold_wrap_eta_2d(h%grid, h%state%bc, bref)
             end if
-            !$acc update device(bref)
+            !$omp target update to(bref)
          end associate
       end if
       status = int(OCEAN_STATUS_OK, c_int)
@@ -1605,7 +1605,7 @@ contains
       associate (tx => h%state%surface_stress%tau_x, ty => h%state%surface_stress%tau_y)
          tx(ng + 1:ng + nx_p + 1, ng + 1:ng + ny_p) = real(taux_data, wp)
          ty(ng + 1:ng + nx_p, ng + 1:ng + ny_p + 1) = real(tauy_data, wp)
-         !$acc update device(tx, ty)
+         !$omp target update to(tx, ty)
       end associate
       status = int(OCEAN_STATUS_OK, c_int)
    end function rdb_ocean_set_wind
@@ -1635,7 +1635,7 @@ contains
       ng = h%grid%nghost
       associate (qh => h%state%surface_flux%Q_heat)
          qh(ng + 1:ng + nx_p, ng + 1:ng + ny_p) = real(q_data, wp)
-         !$acc update device(qh)
+         !$omp target update to(qh)
       end associate
       status = int(OCEAN_STATUS_OK, c_int)
    end function rdb_ocean_set_heat_flux
@@ -1665,7 +1665,7 @@ contains
       ng = h%grid%nghost
       associate (qs => h%state%surface_flux%Q_salt)
          qs(ng + 1:ng + nx_p, ng + 1:ng + ny_p) = real(q_data, wp)
-         !$acc update device(qs)
+         !$omp target update to(qs)
       end associate
       status = int(OCEAN_STATUS_OK, c_int)
    end function rdb_ocean_set_salt_flux
@@ -1728,11 +1728,11 @@ contains
                end do
             end do
          end do
-         !$acc update device(htr)
+         !$omp target update to(htr)
       end associate
       call ocean_eos_compute(h%state%eos, h%state%multilayer)
       associate (rl => h%state%multilayer%rho_layer)
-         !$acc update self(rl)
+         !$omp target update from(rl)
       end associate
       h%host_is_current = .true.
       status = int(OCEAN_STATUS_OK, c_int)
@@ -2123,19 +2123,19 @@ contains
       associate (ms => h%state%multilayer, bt => h%state%barotropic, &
                  bw => h%state%dyn%bt_work, ss => h%state%surface_stress, &
                  vm => h%state%vmix, mt => h%state%metrics, sf => h%state%surface_flux)
-         !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer, &
-         !$acc&            ms%hu_face_x_layer, ms%hv_face_y_layer, &
-         !$acc&            ms%w_interface, ms%rho_layer)
+         !$omp target update from(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer, &
+         !$omp&            ms%hu_face_x_layer, ms%hv_face_y_layer, &
+         !$omp&            ms%w_interface, ms%rho_layer)
          if (allocated(ms%tracers)) then
             do it = 1, size(ms%tracers)
-               !$acc update self(ms%tracers(it)%hTr)
+               !$omp target update from(ms%tracers(it)%hTr)
             end do
          end if
-         !$acc update self(bt%b, bw%bt_eta)
-         !$acc update self(ss%tau_x, ss%tau_y)
-         !$acc update self(sf%Q_heat, sf%Q_salt)
-         !$acc update self(vm%kv, vm%kt, vm%ks)
-         !$acc update self(mt%wet_T)
+         !$omp target update from(bt%b, bw%bt_eta)
+         !$omp target update from(ss%tau_x, ss%tau_y)
+         !$omp target update from(sf%Q_heat, sf%Q_salt)
+         !$omp target update from(vm%kv, vm%kt, vm%ks)
+         !$omp target update from(mt%wet_T)
       end associate
       h%host_is_current = .true.
    end subroutine ocean_handle_refresh_host

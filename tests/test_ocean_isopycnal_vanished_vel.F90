@@ -56,14 +56,14 @@ contains
 
    subroutine map_in(ms)
       type(multilayer_state_t), intent(inout) :: ms
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
    end subroutine map_in
 
    subroutine map_out(ms)
       type(multilayer_state_t), intent(inout) :: ms
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out
 
    ! -----------------------------------------------------------------

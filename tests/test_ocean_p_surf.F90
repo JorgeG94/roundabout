@@ -103,12 +103,12 @@ contains
       end do
 
       call psurf%enter_data()
-      !$acc enter data copyin(p_surf, eta_tide)
-      !$acc update device(p_surf, eta_tide)
+      !$omp target enter data map(to: p_surf, eta_tide)
+      !$omp target update to(p_surf, eta_tide)
 
       ! --- no tide: eta_seam == eta_ib == -p_surf/(rho0 g) ---
       call p_surf_update_seam(psurf, p_surf, g_bt)
-      !$acc update self(psurf%eta_ib, psurf%eta_seam)
+      !$omp target update from(psurf%eta_ib, psurf%eta_seam)
       maxdev = 0.0_wp
       maxdev_wrongsign = 0.0_wp
       do j = 1, ny
@@ -147,7 +147,7 @@ contains
 
       ! --- with tide: eta_seam == eta_ib + eta_tide (exact additive) ---
       call p_surf_update_seam(psurf, p_surf, g_bt, eta_tide=eta_tide)
-      !$acc update self(psurf%eta_ib, psurf%eta_seam)
+      !$omp target update from(psurf%eta_ib, psurf%eta_seam)
       maxdev = 0.0_wp
       do j = 1, ny
          do i = 1, nx
@@ -164,7 +164,7 @@ contains
    subroutine cleanup_fold(psurf, p_surf, eta_tide)
       type(ocean_p_surf_t), intent(inout) :: psurf
       real(wp), allocatable, intent(inout) :: p_surf(:, :), eta_tide(:, :)
-      !$acc exit data delete(p_surf, eta_tide)
+      !$omp target exit data map(delete: p_surf, eta_tide)
       call psurf%exit_data()
       call psurf%destroy()
       deallocate (p_surf, eta_tide)
@@ -310,7 +310,7 @@ contains
       psurf%rho0 = eos%rho0
       call p_surf_configure(psurf, nx, ny)
 
-      !$acc enter data copyin(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn, sf, psurf)
+      !$omp target enter data map(to: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn, sf, psurf)
       call ms%enter_data()
       call ct%enter_data()
       call cor%enter_data()
@@ -332,7 +332,7 @@ contains
                                    sf=sf, psurf=psurf)
       end do
 
-      !$acc update self(ms%u_face_x_layer)
+      !$omp target update from(ms%u_face_x_layer)
       ! Mean signed u over interior u-faces (away from the walls).
       usum = 0.0_wp
       ni = 0
@@ -360,7 +360,7 @@ contains
       call cor%exit_data()
       call ct%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn, sf, psurf)
+      !$omp target exit data map(delete: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn, sf, psurf)
       call metrics%exit_data()
 
       call check(error, mean_u == mean_u, "mean_u is NaN")
@@ -457,7 +457,7 @@ contains
       psurf%rho0 = eos%rho0
       call p_surf_configure(psurf, nx, ny)
 
-      !$acc enter data copyin(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn, sf, psurf)
+      !$omp target enter data map(to: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn, sf, psurf)
       call ms%enter_data()
       call ct%enter_data()
       call cor%enter_data()
@@ -479,7 +479,7 @@ contains
                                    sf=sf, psurf=psurf)
       end do
 
-      !$acc update self(ms%u_face_x_layer, ms%v_face_y_layer, dyn%bt_work%bt_eta)
+      !$omp target update from(ms%u_face_x_layer, ms%v_face_y_layer, dyn%bt_work%bt_eta)
       ! C-grid faces are staggered (u has nx+1 in dim 1, v has ny+1 in
       ! dim 2), so take the arrays' own shapes via source-only allocation.
       allocate (eta_out, source=dyn%bt_work%bt_eta)
@@ -500,7 +500,7 @@ contains
       call cor%exit_data()
       call ct%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn, sf, psurf)
+      !$omp target exit data map(delete: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn, sf, psurf)
       call metrics%exit_data()
 
       call check(error, all(eta_out == eta_out), "eta_out is NaN")

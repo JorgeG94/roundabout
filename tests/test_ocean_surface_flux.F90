@@ -62,17 +62,17 @@ contains
          !! inout: enter_data / exit_data update device state
       type(multilayer_state_t), intent(inout) :: ms
       real(wp), intent(in) :: dt
-      !$acc enter data copyin(ms, sf)
+      !$omp target enter data map(to: ms, sf)
       call ms%enter_data()
       call sf%enter_data()
       call ocean_surface_flux_apply_tracers(grid, sf, ms, dt)
       associate (hT => ms%tracers(ms%idx_temperature)%hTr, &
                  hS => ms%tracers(ms%idx_salinity)%hTr)
-         !$acc update self(hT, hS)
+         !$omp target update from(hT, hS)
       end associate
       call sf%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, sf)
+      !$omp target exit data map(delete: ms, sf)
    end subroutine run_apply
 
    ! -----------------------------------------------------------------
@@ -264,7 +264,7 @@ contains
 
          call sf%set_surface_flux_const(Q_HEAT, Q_SALT)
 
-         !$acc enter data copyin(ms, sf)
+         !$omp target enter data map(to: ms, sf)
          call ms%enter_data()
          call sf%enter_data()
          do step = 1, N_STEPS
@@ -276,7 +276,7 @@ contains
          call budgets%drain_contributors()
          call sf%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, sf)
+         !$omp target exit data map(delete: ms, sf)
 
          ! Surface flux fires at every interior cell on the surface
          ! layer.  `apply_tracers` writes at i=1..nx_total, j=1..ny_total

@@ -170,7 +170,7 @@ contains
          metrics%use_closed_faces = .true.
          ! The masks are device-present (grown before the map), so the
          ! builder wrote the device copy; pull it back for the host census.
-         !$acc update self(metrics%open_u, metrics%open_v)
+         !$omp target update from(metrics%open_u, metrics%open_v)
       end if
 
       ms%nz_ml = NZ
@@ -229,19 +229,19 @@ contains
    subroutine map_in(ms, rd)
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_redi_t), intent(inout) :: rd
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(rd)
+      !$omp target enter data map(to: rd)
       call rd%enter_data()
    end subroutine map_in
 
    subroutine pull_back(ms, rd)
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_redi_t), intent(inout) :: rd
-      !$acc update self(rd%uKoL, rd%uKoR, rd%uhEff, rd%uPoL, rd%uPoR)
-      !$acc update self(rd%vKoL, rd%vKoR, rd%vhEff, rd%vPoL, rd%vPoR)
-      !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
-      !$acc update self(ms%tracers(ms%idx_salinity)%hTr)
+      !$omp target update from(rd%uKoL, rd%uKoR, rd%uhEff, rd%uPoL, rd%uPoR)
+      !$omp target update from(rd%vKoL, rd%vKoR, rd%vhEff, rd%vPoL, rd%vPoR)
+      !$omp target update from(ms%tracers(ms%idx_temperature)%hTr)
+      !$omp target update from(ms%tracers(ms%idx_salinity)%hTr)
    end subroutine pull_back
 
    subroutine map_out(ms, rd, metrics)
@@ -249,9 +249,9 @@ contains
       type(ocean_redi_t), intent(inout) :: rd
       type(ocean_metrics_t), intent(inout) :: metrics
       call rd%exit_data()
-      !$acc exit data delete(rd)
+      !$omp target exit data map(delete: rd)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call destroy_cartesian_metrics(metrics)
    end subroutine map_out
 
@@ -458,8 +458,8 @@ contains
             call ms%enforce_vanished_content(ni, nj)
             call ms%scan_vanished_content(ni, nj, n_i1, worst_i1)
             n_i1_max = max(n_i1_max, n_i1)
-            !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
-            !$acc update self(ms%tracers(ms%idx_salinity)%hTr)
+            !$omp target update from(ms%tracers(ms%idx_temperature)%hTr)
+            !$omp target update from(ms%tracers(ms%idx_salinity)%hTr)
             finite_all = finite_all .and. &
                          all_finite_3d(ms%tracers(ms%idx_temperature)%hTr) .and. &
                          all_finite_3d(ms%tracers(ms%idx_salinity)%hTr) .and. &
@@ -656,13 +656,13 @@ contains
          call redi_calc_coeffs(grid, metrics, eos, rd, ms)
          ! ... then continuity over-drains the cell to the observed -8.2e-4 m,
          ! its content advected with it, and Phase B runs on that state.
-         !$acc update self(ms%h_layer, ms%tracers(ms%idx_temperature)%hTr)
-         !$acc update self(ms%tracers(ms%idx_salinity)%hTr)
+         !$omp target update from(ms%h_layer, ms%tracers(ms%idx_temperature)%hTr)
+         !$omp target update from(ms%tracers(ms%idx_salinity)%hTr)
          ms%h_layer(id, jd, kd) = -8.2e-4_wp
          ms%tracers(ms%idx_temperature)%hTr(id, jd, kd) = c_t*ms%h_layer(id, jd, kd)
          ms%tracers(ms%idx_salinity)%hTr(id, jd, kd) = c_s*ms%h_layer(id, jd, kd)
-         !$acc update device(ms%h_layer, ms%tracers(ms%idx_temperature)%hTr)
-         !$acc update device(ms%tracers(ms%idx_salinity)%hTr)
+         !$omp target update to(ms%h_layer, ms%tracers(ms%idx_temperature)%hTr)
+         !$omp target update to(ms%tracers(ms%idx_salinity)%hTr)
          call redi_apply_flux(grid, metrics, rd, ms, DT)
          call pull_back(ms, rd)
          call map_out(ms, rd, metrics)

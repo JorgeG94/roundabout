@@ -172,7 +172,7 @@ contains
    !! `fv_diff`; Colella & Woodward 1984).  Returns the cell-centred difference
    !! across layer k given the three layer thicknesses and values.
    pure function redi_fv_diff(hkm1, hk, hkp1, skm1, sk, skp1) result(d)
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: hkm1, hk, hkp1  !! layer thicknesses (above/centre/below)
       real(wp), intent(in) :: skm1, sk, skp1  !! layer scalar values
       real(wp) :: d
@@ -190,7 +190,7 @@ contains
 
    !> A true signum: -|a| if x<0, +|a| if x>0, 0 if x==0 (MOM6 `signum`).
    pure function redi_signum(a, x) result(s)
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: a, x
       real(wp) :: s
 
@@ -202,7 +202,7 @@ contains
    !! c_method=2 finite-volume slope, b_method=1 PCM ends) — the slope input to
    !! the PPM edge interpolation.
    pure subroutine redi_plm_diff(nk, h, s, diff)
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nk
       real(wp), intent(in) :: h(nk)     !! layer thicknesses
       real(wp), intent(in) :: s(nk)     !! layer scalar values
@@ -231,7 +231,7 @@ contains
    !> PPM quasi-fourth-order edge value at interface k+1/2 (MOM6 `ppm_edge`;
    !! Colella & Woodward 1984 eq. 1.6).
    pure function redi_ppm_edge(hkm1, hk, hkp1, hkp2, ak, akp1, pk, pkp1, h_neglect) result(e)
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: hkm1, hk, hkp1, hkp2  !! widths of cells k-1..k+2
       real(wp), intent(in) :: ak, akp1              !! cell averages k, k+1
       real(wp), intent(in) :: pk, pkp1              !! PLM slopes k, k+1
@@ -268,7 +268,7 @@ contains
    !! `edge(nk+1)`=bed in the MOM6 top-down sense (see module header on the
    !! deferred k-flip).
    pure subroutine redi_interface_scalar(nk, h, tr, edge, h_neglect)
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nk
       real(wp), intent(in) :: h(nk)        !! layer thicknesses
       real(wp), intent(in) :: tr(nk)       !! layer scalar (e.g. T)
@@ -297,7 +297,7 @@ contains
    !! degenerate (dRhoPos==dRhoNeg) cases device-safely (clamped values, no
    !! host I/O).
    pure function redi_interpolate_position(dRhoNeg, Pneg, dRhoPos, Ppos) result(pos)
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: dRhoNeg  !! negative density difference
       real(wp), intent(in) :: Pneg     !! position of the negative difference
       real(wp), intent(in) :: dRhoPos  !! positive density difference
@@ -326,7 +326,7 @@ contains
    !> Absolute (pressure) position of neutral surface `ks` in a column
    !! (MOM6 `absolute_position`): Pint(K) + frac*(Pint(K+1)-Pint(K)).
    pure function redi_absolute_position(nk, Pint, Karr, frac) result(p)
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nk
       real(wp), intent(in) :: Pint(nk + 1)  !! interface pressures
       integer, intent(in) :: Karr         !! layer index for this surface
@@ -346,7 +346,7 @@ contains
    pure subroutine redi_neutral_positions_continuous(nk, Pl, Tl, Sl, dRdTl, dRdSl, &
                                                      Pr, Tr, Sr, dRdTr, dRdSr, &
                                                      PoL, PoR, KoL, KoR, hEff)
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nk
       real(wp), intent(in) :: Pl(nk + 1), Tl(nk + 1), Sl(nk + 1)     !! left interface P, T, S
       real(wp), intent(in) :: dRdTl(nk + 1), dRdSl(nk + 1)         !! left interface dR/dT, dR/dS
@@ -596,11 +596,11 @@ contains
    subroutine ocean_redi_enter_data_impl(this)
       type(ocean_redi_t), intent(inout) :: this
       if (.not. this%is_init) return
-      !$acc enter data copyin(this%uPoL, this%uPoR, this%uKoL, this%uKoR, this%uhEff)
-      !$acc enter data copyin(this%vPoL, this%vPoR, this%vKoL, this%vKoR, this%vhEff)
-      !$acc enter data copyin(this%uKb, this%uKt, this%vKb, this%vKt)
-      !$acc enter data copyin(this%khtr_u, this%khtr_v)
-      !$acc enter data copyin(this%tr_snap)
+      !$omp target enter data map(to: this%uPoL, this%uPoR, this%uKoL, this%uKoR, this%uhEff)
+      !$omp target enter data map(to: this%vPoL, this%vPoR, this%vKoL, this%vKoR, this%vhEff)
+      !$omp target enter data map(to: this%uKb, this%uKt, this%vKb, this%vKt)
+      !$omp target enter data map(to: this%khtr_u, this%khtr_v)
+      !$omp target enter data map(to: this%tr_snap)
    end subroutine ocean_redi_enter_data_impl
 
    subroutine ocean_redi_exit_data(this)
@@ -614,11 +614,11 @@ contains
    subroutine ocean_redi_exit_data_impl(this)
       type(ocean_redi_t), intent(inout) :: this
       if (.not. this%is_init) return
-      !$acc exit data delete(this%tr_snap)
-      !$acc exit data delete(this%khtr_u, this%khtr_v)
-      !$acc exit data delete(this%uKb, this%uKt, this%vKb, this%vKt)
-      !$acc exit data delete(this%vPoL, this%vPoR, this%vKoL, this%vKoR, this%vhEff)
-      !$acc exit data delete(this%uPoL, this%uPoR, this%uKoL, this%uKoR, this%uhEff)
+      !$omp target exit data map(delete: this%tr_snap)
+      !$omp target exit data map(delete: this%khtr_u, this%khtr_v)
+      !$omp target exit data map(delete: this%uKb, this%uKt, this%vKb, this%vKt)
+      !$omp target exit data map(delete: this%vPoL, this%vPoR, this%vKoL, this%vKoR, this%vhEff)
+      !$omp target exit data map(delete: this%uPoL, this%uPoR, this%uKoL, this%uKoR, this%uhEff)
    end subroutine ocean_redi_exit_data_impl
 
    ! =====================================================================
@@ -726,7 +726,7 @@ contains
    end subroutine redi_open_windows_y
 
    pure subroutine redi_open_window(nz, ok, kb, kt)
-      !$acc routine seq
+      !$omp declare target
       !! A face's OPEN WINDOW from its per-layer `ok` flags (`open .and.`
       !! live on both sides; module header): `kt` the topmost `ok` layer,
       !! `kb..kt` the contiguous `ok` run counted down from it.  No `ok`
@@ -766,7 +766,7 @@ contains
       !! window (fillers under an ice draft; nothing — exactly 0 — when
       !! `kt = nz`); dR/dT, dR/dS = -rho² dSV/dX at each interface.  Only
       !! the first `nk+1` entries of the outputs are written.
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nz
       integer, intent(in) :: kb, kt
          !! Native (bottom-up) open window, `1 <= kb <= kt <= nz`.
@@ -840,7 +840,7 @@ contains
       !! the flipped frame.  A short window (`nk < nz`) leaves `2*(nz-nk)`
       !! trailing surfaces, filled as inert padding: the last surface
       !! repeated and `hEff = 0`, which Phase B skips.
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nz, ns
       integer, intent(in) :: kb, kt
          !! Native (bottom-up) open window, `1 <= kb <= kt <= nz`.
@@ -1033,7 +1033,7 @@ contains
    ! =====================================================================
 
    pure function redi_signum1(x) result(s)
-      !$acc routine seq
+      !$omp declare target
       !! signum(1.,x): -1 if x<0, +1 if x>0, 0 if x==0 (MOM6 sign guard).
       real(wp), intent(in) :: x
       real(wp) :: s
@@ -1042,7 +1042,7 @@ contains
    end function redi_signum1
 
    pure function redi_ppm_ave(xL, xR, aL, aR, aMean) result(av)
-      !$acc routine seq
+      !$omp declare target
       !! Mean of a PPM parabola between fractional positions xL,xR in [0,1]
       !! (MOM6 `ppm_ave`).  Device-safe: dx<0 / dx>1 FATALs collapse to the
       !! dx==0 branch value (no host I/O on device).
@@ -1061,7 +1061,7 @@ contains
    end function redi_ppm_ave
 
    pure subroutine redi_tracer_column(kb, kt, h_col, htr_col, Tlay, Tint, aLe, aRe)
-      !$acc routine seq
+      !$omp declare target
       !! Build one column's TOP-DOWN layer-average tracer `Tlay`, PPM
       !! interface edges `Tint`, and per-layer limited PPM left/right edges
       !! `aLe/aRe` from the bottom-up native (h, hTr) column (fixed-size
@@ -1109,7 +1109,7 @@ contains
    pure function redi_sublayer_dT(nz, klt, klb, krt, krb, &
                                   PoLt, PoLb, PoRt, PoRb, &
                                   TlL, TiL, aLL, aRL, TlR, TiR, aLR, aRR) result(dT)
-      !$acc routine seq
+      !$omp declare target
       !! Along-neutral tracer difference for one sublayer (MOM6
       !! neutral_surface_flux continuous branch).  TOP-DOWN layer indices
       !! (klt/klb = KoL at the surface/bed bound of the sublayer; krt/krb
@@ -1300,7 +1300,7 @@ contains
                                   iL, jL, iR, jR, fa, fb, &
                                   PoL, PoR, KoL, KoR, hEff, kb, kt, use_open, &
                                   coef, is_left, dTr)
-      !$acc routine seq
+      !$omp declare target
       !! Accumulate ONE C-grid face's neutral-surface tracer flux into the
       !! owning cell's `dTr`.  Builds the left/right tracer columns from the
       !! READ-ONLY snapshot `hTr_in` (the live `hTr` is also written by the

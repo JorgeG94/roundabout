@@ -155,7 +155,7 @@ contains
          call ocean_vcoord_closed_face_masks(metrics%open_u, metrics%open_v, &
                                              tgt, ni, nj, NZ, H_VANISHED)
          metrics%use_closed_faces = .true.
-         !$acc update self(metrics%open_u, metrics%open_v)
+         !$omp target update from(metrics%open_u, metrics%open_v)
          full = abs(tgt - H_NOM) <= 1.0e-9_wp*H_NOM
       end select
 
@@ -235,24 +235,24 @@ contains
       type(ocean_slopes_t), intent(inout) :: sl
       type(ocean_gm_t), intent(inout) :: gm
       type(eos_t), intent(in) :: eos
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(sl)
+      !$omp target enter data map(to: sl)
       call sl%enter_data()
-      !$acc enter data copyin(gm)
+      !$omp target enter data map(to: gm)
       call gm%enter_data()
 
       call ocean_slopes_compute(grid, metrics, eos, sl, ms, DT)
       call gm_compute_transports(grid, metrics, gm, sl, ms, DT)
 
-      !$acc update self(gm%uhD, gm%vhD, gm%gm_src)
-      !$acc update self(sl%slope_x, sl%slope_y, sl%n2_u, sl%n2_v)
+      !$omp target update from(gm%uhD, gm%vhD, gm%gm_src)
+      !$omp target update from(sl%slope_x, sl%slope_y, sl%n2_u, sl%n2_v)
       call gm%exit_data()
-      !$acc exit data delete(gm)
+      !$omp target exit data map(delete: gm)
       call sl%exit_data()
-      !$acc exit data delete(sl)
+      !$omp target exit data map(delete: sl)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine run_kernels
 
    subroutine teardown(metrics, ms, sl, gm)

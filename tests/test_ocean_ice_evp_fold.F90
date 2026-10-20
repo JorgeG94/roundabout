@@ -219,8 +219,8 @@ contains
       call ws%init(nx, ny)
       call ws%enter_data()
 
-      !$acc enter data copyin(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-      !$acc enter data copyin(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+      !$omp target enter data map(to: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+      !$omp target enter data map(to: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
 
       call ice_evp_dynamics(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
                             tau_ax, tau_ay, ui, vi, str_d, str_t, str_s, &
@@ -228,9 +228,9 @@ contains
                             land_w=.false., land_e=.false., land_s=.true., &
                             land_n=.false., bc=bc)
 
-      !$acc update self(ui, vi, str_d, str_t, str_s)
-      !$acc exit data delete(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-      !$acc exit data delete(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+      !$omp target update from(ui, vi, str_d, str_t, str_s)
+      !$omp target exit data map(delete: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+      !$omp target exit data map(delete: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
       call ws%exit_data()
       call ws%destroy()
 
@@ -327,8 +327,8 @@ contains
       call ws%init(nx, ny)
       call ws%enter_data()
 
-      !$acc enter data copyin(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-      !$acc enter data copyin(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+      !$omp target enter data map(to: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+      !$omp target enter data map(to: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
 
       call ice_evp_dynamics(grid, metrics, f_corner, mis, mice, ci, uo, vo, &
                             tau_ax, tau_ay, ui, vi, str_d, str_t, str_s, &
@@ -336,9 +336,9 @@ contains
                             land_w=.false., land_e=.false., land_s=.true., &
                             land_n=.false., bc=bc)
 
-      !$acc update self(vi)
-      !$acc exit data delete(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-      !$acc exit data delete(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+      !$omp target update from(vi)
+      !$omp target exit data map(delete: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+      !$omp target exit data map(delete: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
       call ws%exit_data()
       call ws%destroy()
 
@@ -393,8 +393,8 @@ contains
       call ws%init(nx, ny)
       call ws%enter_data()
 
-      !$acc enter data copyin(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-      !$acc enter data copyin(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+      !$omp target enter data map(to: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+      !$omp target enter data map(to: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
 
       n_trunc_total = 0
       do n = 1, n_outer
@@ -416,9 +416,9 @@ contains
          n_trunc_total = n_trunc_total + n_out
       end do
 
-      !$acc update self(ui, vi)
-      !$acc exit data delete(mis, mice, ci, uo, vo, tau_ax, tau_ay)
-      !$acc exit data delete(ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
+      !$omp target update from(ui, vi)
+      !$omp target exit data map(delete: mis, mice, ci, uo, vo, tau_ax, tau_ay)
+      !$omp target exit data map(delete: ui, vi, str_d, str_t, str_s, fxoc, fyoc, f_corner)
       call ws%exit_data()
       call ws%destroy()
    end subroutine run_n_steps

@@ -359,7 +359,7 @@ contains
       !! reset (SIS2_ice_thm.F90:1420-1424) is unreachable here (a spend
       !! only runs when `frazil > 0`, which always deposits mass) and is
       !! deliberately NOT ported.
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nk
          !! Number of ice layers (declared first — decl-order).
       real(wp), intent(in) :: frazil

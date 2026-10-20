@@ -125,7 +125,7 @@ contains
          call ms%init(grid)
          n_before = size(ms%tracers)
 
-         !$acc enter data copyin(ms)
+         !$omp target enter data map(to: ms)
          call ms%enter_data()
          call check(error, ms%registry_locked, "enter_data must set registry_locked")
          if (allocated(error)) exit checks
@@ -139,7 +139,7 @@ contains
                     "a refused registration must not grow the registry")
       end block checks
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       if (.not. allocated(error)) then
          call check(error,.not. ms%registry_locked, "exit_data must clear registry_locked")
       end if
@@ -264,9 +264,9 @@ contains
    subroutine map_in(ms, ct)
       type(multilayer_state_t), intent(inout) :: ms
       type(continuity_t), intent(inout) :: ct
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(ct)
+      !$omp target enter data map(to: ct)
       call ct%enter_data()
    end subroutine map_in
 
@@ -274,9 +274,9 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(continuity_t), intent(inout) :: ct
       call ct%exit_data()
-      !$acc exit data delete(ct)
+      !$omp target exit data map(delete: ct)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out
 
    subroutine test_tracks_salinity_under_advection(error)
@@ -405,18 +405,18 @@ contains
             end do
          end do
 
-         !$acc enter data copyin(ms_a, sf_a)
+         !$omp target enter data map(to: ms_a, sf_a)
          call ms_a%enter_data()
          call sf_a%enter_data()
          call ocean_surface_flux_apply_tracers(grid, sf_a, ms_a, DT)
          associate (hS => ms_a%tracers(ms_a%idx_salinity)%hTr, &
                     hPs => ms_a%tracers(idx_ps)%hTr, &
                     budget => ms_a%salt_budget_surface)
-            !$acc update self(hS, hPs, budget)
+            !$omp target update from(hS, hPs, budget)
          end associate
          call sf_a%exit_data()
          call ms_a%exit_data()
-         !$acc exit data delete(ms_a, sf_a)
+         !$omp target exit data map(delete: ms_a, sf_a)
 
          ! ---- Run B: WITHOUT pseudo-salt (reference for the budget check) ----
          ms_b%nz_ml = NZ
@@ -430,16 +430,16 @@ contains
                sf_b%Q_salt(i, j) = Q_SALT_CONST*(1.0_wp + 0.1_wp*real(i, wp))
             end do
          end do
-         !$acc enter data copyin(ms_b, sf_b)
+         !$omp target enter data map(to: ms_b, sf_b)
          call ms_b%enter_data()
          call sf_b%enter_data()
          call ocean_surface_flux_apply_tracers(grid, sf_b, ms_b, DT)
          associate (budget => ms_b%salt_budget_surface)
-            !$acc update self(budget)
+            !$omp target update from(budget)
          end associate
          call sf_b%exit_data()
          call ms_b%exit_data()
-         !$acc exit data delete(ms_b, sf_b)
+         !$omp target exit data map(delete: ms_b, sf_b)
 
          ! (1) Exact match: pseudo-salt's increment == salinity's increment.
          delta_s = ms_a%tracers(ms_a%idx_salinity)%hTr(3, 2, NZ) - 35.0_wp*H_LAYER
@@ -511,7 +511,7 @@ contains
          call map_in(ms_a, ct_a)
          call continuity_tracer_step_split(grid, metrics_a, ct_a, ms_a, DT)
          associate (hb => ms_a%heat_budget_horiz_adv, sb => ms_a%salt_budget_horiz_adv)
-            !$acc update self(hb, sb)
+            !$omp target update from(hb, sb)
          end associate
          call map_out(ms_a, ct_a)
 
@@ -543,7 +543,7 @@ contains
          call map_in(ms_b, ct_b)
          call continuity_tracer_step_split(grid, metrics_b, ct_b, ms_b, DT)
          associate (hb => ms_b%heat_budget_horiz_adv, sb => ms_b%salt_budget_horiz_adv)
-            !$acc update self(hb, sb)
+            !$omp target update from(hb, sb)
          end associate
          call map_out(ms_b, ct_b)
 
@@ -628,11 +628,11 @@ contains
       d = 0.0_wp
       ! mem:separate: the kernel is a `do concurrent`, so map the local
       ! inputs/outputs explicitly (inert on host builds).
-      !$acc enter data copyin(h, hps, hs, d)
+      !$omp target enter data map(to: h, hps, hs, d)
       call ocean_pseudo_salt_deviation(h, hps, hs, d, NXL, NYL, NZL, &
                                        ieee_value(0.0_wp, ieee_quiet_nan))
-      !$acc update self(d)
-      !$acc exit data delete(h, hps, hs, d)
+      !$omp target update from(d)
+      !$omp target exit data map(delete: h, hps, hs, d)
       call check(error, ieee_is_nan(d(1, 1, 1)), &
                  "a vanished layer's pseudo-salt deviation must be missing (NaN), not 0")
       if (allocated(error)) return

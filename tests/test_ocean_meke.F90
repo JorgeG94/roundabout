@@ -87,9 +87,9 @@ contains
       meke%meke = 1.0_wp
       allocate (mom(grid%nx_total, grid%ny_total), source=mom_val)
       call map_in(ms, gm, meke)
-      !$acc enter data copyin(mom)
+      !$omp target enter data map(to: mom)
       call meke_step(grid, metrics, meke, gm, ms=ms, dt=DT, ke_diss_ext=mom)
-      !$acc exit data delete(mom)
+      !$omp target exit data map(delete: mom)
       call map_out(ms, gm, meke)
       e_out = meke%meke(NGHOST + 1, NGHOST + 1)
       deallocate (mom)
@@ -255,11 +255,11 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_gm_t), intent(inout) :: gm
       type(ocean_meke_t), intent(inout) :: meke
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(gm)
+      !$omp target enter data map(to: gm)
       call gm%enter_data()
-      !$acc enter data copyin(meke)
+      !$omp target enter data map(to: meke)
       call meke%enter_data()
    end subroutine map_in
 
@@ -267,13 +267,13 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_gm_t), intent(inout) :: gm
       type(ocean_meke_t), intent(inout) :: meke
-      !$acc update self(meke%meke, meke%kh_diff, meke%le, meke%bottom_fac2)
+      !$omp target update from(meke%meke, meke%kh_diff, meke%le, meke%bottom_fac2)
       call meke%exit_data()
-      !$acc exit data delete(meke)
+      !$omp target exit data map(delete: meke)
       call gm%exit_data()
-      !$acc exit data delete(gm)
+      !$omp target exit data map(delete: gm)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out
 
    ! ------------------------------------------------------------------
@@ -382,7 +382,7 @@ contains
          do it = 1, N_ITER - 100
             call meke_step(grid, metrics, meke, gm, ms=ms, dt=DT)
          end do
-         !$acc update self(meke%meke)
+         !$omp target update from(meke%meke)
          e_prev100 = meke%meke(NGHOST + 1, NGHOST + 1)
          do it = N_ITER - 99, N_ITER
             call meke_step(grid, metrics, meke, gm, ms=ms, dt=DT)
@@ -707,15 +707,15 @@ contains
          call map_in(ms, gm, meke)
          ! mass_flux_*_layer is `create` (not copyin) in ms enter_data ⇒ push
          ! the host values onto the device explicitly.
-         !$acc update device(ms%mass_flux_x_layer, ms%mass_flux_y_layer)
+         !$omp target update to(ms%mass_flux_x_layer, ms%mass_flux_y_layer)
          tot0 = sum_phys(meke, grid)
-         !$acc update self(meke%meke)
+         !$omp target update from(meke%meke)
          e_left0 = meke%meke(ic, jc)
          do it = 1, 20
             call meke_step(grid, metrics, meke, gm, ms=ms, dt=DT)
          end do
          tot = sum_phys(meke, grid)
-         !$acc update self(meke%meke)
+         !$omp target update from(meke%meke)
          e_left1 = meke%meke(ic, jc)
          call map_out(ms, gm, meke)
 
@@ -773,7 +773,7 @@ contains
          call map_in(ms, gm, meke)
          e_before = 1.0_wp
          call meke_step(grid, metrics, meke, gm, ms=ms, dt=DT)
-         !$acc update self(meke%meke)
+         !$omp target update from(meke%meke)
          e_after = meke%meke(ic, jc)
          call map_out(ms, gm, meke)
 
@@ -796,7 +796,7 @@ contains
       type(hgrid_t), intent(in) :: grid
       real(wp) :: s
       integer :: i, j
-      !$acc update self(meke%meke)
+      !$omp target update from(meke%meke)
       s = 0.0_wp
       do j = 1, grid%ny_total
          do i = 1, grid%nx_total
@@ -920,16 +920,16 @@ contains
          ! NOTE: the enter_data() TBP MUST be on its own line — a `; call`
          ! after an !$acc directive is swallowed into the directive comment
          ! and never executes (the component arrays then never attach).
-         !$acc enter data copyin(ms)
+         !$omp target enter data map(to: ms)
          call ms%enter_data()
-         !$acc enter data copyin(gm)
+         !$omp target enter data map(to: gm)
          call gm%enter_data()
-         !$acc enter data copyin(vm)
+         !$omp target enter data map(to: vm)
          call vm%enter_data()
-         !$acc enter data copyin(meke)
+         !$omp target enter data map(to: meke)
          call meke%enter_data()
          call meke_step(grid, metrics, meke, gm, varmix=vm, ms=ms, dt=DT)
-         !$acc update self(vm%khth_u, vm%khth_v, meke%kh_diff)
+         !$omp target update from(vm%khth_u, vm%khth_v, meke%kh_diff)
          ic = NGHOST + 2
          jc = NGHOST + 1
          khu_before = vm%khth_u(ic, jc)
@@ -941,12 +941,12 @@ contains
 
          ! ---- Pass B: khth_fac > 0 ⇒ varmix%khth picks up geom-mean kh. ----
          meke%khth_fac = KHTH_FAC
-         !$acc update device(meke%khth_fac)
+         !$omp target update to(meke%khth_fac)
          ! reset varmix base to BASE on device.
          vm%khth_u = BASE; vm%khth_v = BASE
-         !$acc update device(vm%khth_u, vm%khth_v)
+         !$omp target update to(vm%khth_u, vm%khth_v)
          call meke_step(grid, metrics, meke, gm, varmix=vm, ms=ms, dt=DT)
-         !$acc update self(vm%khth_u, meke%kh_diff)
+         !$omp target update from(vm%khth_u, meke%kh_diff)
          khu_after = vm%khth_u(ic, jc)
          ! geom mean of kh_diff(ic-1,jc) and kh_diff(ic,jc) (uniform field).
          expect = BASE + KHTH_FAC*sqrt(meke%kh_diff(ic - 1, jc)*meke%kh_diff(ic, jc))
@@ -971,13 +971,13 @@ contains
       type(ocean_varmix_t), intent(inout) :: vm
       type(ocean_meke_t), intent(inout) :: meke
       call meke%exit_data()
-      !$acc exit data delete(meke)
+      !$omp target exit data map(delete: meke)
       call vm%exit_data()
-      !$acc exit data delete(vm)
+      !$omp target exit data map(delete: vm)
       call gm%exit_data()
-      !$acc exit data delete(gm)
+      !$omp target exit data map(delete: gm)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine teardown_A
 
 end module test_ocean_meke

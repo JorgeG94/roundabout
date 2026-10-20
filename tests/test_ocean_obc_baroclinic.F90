@@ -141,7 +141,7 @@ contains
       type(ocean_vmix_t), intent(inout) :: vmix
       type(ocean_dyn_t), intent(inout) :: dyn
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+      !$omp target enter data map(to: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
       call ms%enter_data()
       call ct%enter_data()
       call cor%enter_data()
@@ -183,7 +183,7 @@ contains
       call cor%exit_data()
       call ct%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+      !$omp target exit data map(delete: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
    end subroutine map_out
 
    subroutine destroy_all(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, eos, dyn)
@@ -275,14 +275,14 @@ contains
          bt_work%bt_ubt_end(i_e, :) = UBT_E
 
          ! GPU map — kernel runs on device.
-         !$acc enter data copyin(ms, bt_work, bc)
+         !$omp target enter data map(to: ms, bt_work, bc)
          call ms%enter_data()
          call bt_work%enter_data()
          call ocean_obc_apply_baroclinic(grid, bc, bt_work, ms, 1.0_wp)
-         !$acc update self(ms%u_face_x_layer, ms%h_layer)
+         !$omp target update from(ms%u_face_x_layer, ms%h_layer)
          call bt_work%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, bt_work, bc)
+         !$omp target exit data map(delete: ms, bt_work, bc)
 
          ! Pick the central j column.
          j_mid = ng + NY_PHYS/2 + 1
@@ -405,7 +405,7 @@ contains
                va, hd, vd, vmix, ms, DT, N_INNER, bc=bc)
          end do
 
-         !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
+         !$omp target update from(ms%tracers(ms%idx_temperature)%hTr)
          call map_out(metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
 
          heat_after = sum(ms%tracers(ms%idx_temperature)%hTr(i0:i1, j0:j1, :))
@@ -743,14 +743,14 @@ contains
 
          call ms%enter_data()
          ! mass_flux_x_layer is create'd (not copyin'd) by enter_data — push host values now.
-         !$acc update device(ms%mass_flux_x_layer)
+         !$omp target update to(ms%mass_flux_x_layer)
          call ocean_bc_state_enter_data(bc)
 
          do step = 1, N_STEPS
             call ocean_obc_update_reservoirs(grid, bc, ms, DT)
          end do
 
-         !$acc update self(bc%tres_east)
+         !$omp target update from(bc%tres_east)
          call ocean_bc_state_exit_data(bc)
          call ms%exit_data()
 
@@ -823,12 +823,12 @@ contains
 
          call ms%enter_data()
          ! mass_flux_x_layer is create'd (not copyin'd) by enter_data — push host values now.
-         !$acc update device(ms%mass_flux_x_layer)
+         !$omp target update to(ms%mass_flux_x_layer)
          call ocean_bc_state_enter_data(bc)
          do step = 1, N_STEPS
             call ocean_obc_update_reservoirs(grid, bc, ms, DT)
          end do
-         !$acc update self(bc%tres_west)
+         !$omp target update from(bc%tres_west)
          call ocean_bc_state_exit_data(bc)
          call ms%exit_data()
 
@@ -903,10 +903,10 @@ contains
 
          call ms%enter_data()
          ! mass_flux_x_layer is create'd (not copyin'd) by enter_data — push host values now.
-         !$acc update device(ms%mass_flux_x_layer)
+         !$omp target update to(ms%mass_flux_x_layer)
          call ocean_bc_state_enter_data(bc)
          call ocean_obc_update_reservoirs(grid, bc, ms, DT)
-         !$acc update self(bc%tres_east)
+         !$omp target update from(bc%tres_east)
          call ocean_bc_state_exit_data(bc)
          call ms%exit_data()
 
@@ -944,10 +944,10 @@ contains
 
          call ms%enter_data()
          ! mass_flux_x_layer is create'd (not copyin'd) by enter_data — push host values now.
-         !$acc update device(ms%mass_flux_x_layer)
+         !$omp target update to(ms%mass_flux_x_layer)
          call ocean_bc_state_enter_data(bc)
          call ocean_obc_update_reservoirs(grid, bc, ms, DT)
-         !$acc update self(bc%tres_west)
+         !$omp target update from(bc%tres_west)
          call ocean_bc_state_exit_data(bc)
          call ms%exit_data()
 
@@ -1018,17 +1018,17 @@ contains
          max_step = 0.0_wp
          do step = 1, N_STEPS
             ! Read tres before update (pull from device).
-            !$acc update self(bc%tres_east)
+            !$omp target update from(bc%tres_east)
             tres_prev = bc%tres_east(j_mid, 1, 1)
 
             ! Alternate direction each step; push updated flux to device.
             sign_val = real(1 - 2*mod(step, 2), wp)  ! +1, -1, +1, ...
             ms%mass_flux_x_layer(i_e + 1, :, :) = sign_val*U_SMALL*H0
-            !$acc update device(ms%mass_flux_x_layer)
+            !$omp target update to(ms%mass_flux_x_layer)
 
             call ocean_obc_update_reservoirs(grid, bc, ms, DT)
 
-            !$acc update self(bc%tres_east)
+            !$omp target update from(bc%tres_east)
             tres_curr = bc%tres_east(j_mid, 1, 1)
             max_step = max(max_step, abs(tres_curr - tres_prev))
          end do
@@ -1241,7 +1241,7 @@ contains
          bc%south%bc_type = OBC_OPEN
          bc%north%bc_type = OBC_OPEN
 
-         !$acc enter data copyin(bt_work, cor, bc, force_u, force_v)
+         !$omp target enter data map(to: bt_work, cor, bc, force_u, force_v)
          call bt_work%enter_data()
          call cor%enter_data()
 
@@ -1266,10 +1266,10 @@ contains
                                         dy_cu=metrics%dy_cu, dy_cv=metrics%dyCv, iarea_bu=metrics%iareaBu, iarea_t=metrics%iareaT, &
                                            idx_cu=metrics%idxCu, idy_cv=metrics%idyCv)
 
-         !$acc update self(bt_work%bt_zeta_corner)
+         !$omp target update from(bt_work%bt_zeta_corner)
          call cor%exit_data()
          call bt_work%exit_data()
-         !$acc exit data delete(bt_work, cor, bc, force_u, force_v)
+         !$omp target exit data map(delete: bt_work, cor, bc, force_u, force_v)
 
          ! West corner line: bt_zeta_corner(i_w, j) for j in 1:ny+1
          max_zeta_w = maxval(abs(bt_work%bt_zeta_corner(i_w, :)))
@@ -1310,7 +1310,7 @@ contains
          bt_work%bt_ubt = SMALL_U
          bt_work%bt_vbt = 0.0_wp
 
-         !$acc enter data copyin(bt_work, cor, bc, force_u, force_v)
+         !$omp target enter data map(to: bt_work, cor, bc, force_u, force_v)
          call bt_work%enter_data()
          call cor%enter_data()
 
@@ -1335,10 +1335,10 @@ contains
                                         dy_cu=metrics%dy_cu, dy_cv=metrics%dyCv, iarea_bu=metrics%iareaBu, iarea_t=metrics%iareaT, &
                                            idx_cu=metrics%idxCu, idy_cv=metrics%idyCv)
 
-         !$acc update self(bt_work%bt_zeta_corner)
+         !$omp target update from(bt_work%bt_zeta_corner)
          call cor%exit_data()
          call bt_work%exit_data()
-         !$acc exit data delete(bt_work, cor, bc, force_u, force_v)
+         !$omp target exit data map(delete: bt_work, cor, bc, force_u, force_v)
 
          max_zeta_w = maxval(abs(bt_work%bt_zeta_corner(i_w, :)))
          max_zeta_e = maxval(abs(bt_work%bt_zeta_corner(i_e, :)))
@@ -1446,16 +1446,16 @@ contains
          dhdx_val = u_int1 - u_int2      ! = 0.02
          rx_raw_expected = min(dhdt_val/dhdx_val, RX_MAX)  ! = 1.5
 
-         !$acc enter data copyin(ms, bt_work, bc)
+         !$omp target enter data map(to: ms, bt_work, bc)
          call ms%enter_data()
          call bt_work%enter_data()
          call ocean_bc_state_enter_data(bc)
          call ocean_obc_apply_baroclinic(grid, bc, bt_work, ms, DT)
-         !$acc update self(bc%rx_east)
+         !$omp target update from(bc%rx_east)
          call ocean_bc_state_exit_data(bc)
          call bt_work%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, bt_work, bc)
+         !$omp target exit data map(delete: ms, bt_work, bc)
 
          rx_found = bc%rx_east(j_mid, 1)
          rx_expected = rx_raw_expected
@@ -1477,16 +1477,16 @@ contains
 
          ! dhdt = 0.01 - 0.03 = -0.02; dhdx = 0.03 - 0.01 = 0.02 → product < 0 → incoming
 
-         !$acc enter data copyin(ms, bt_work, bc)
+         !$omp target enter data map(to: ms, bt_work, bc)
          call ms%enter_data()
          call bt_work%enter_data()
          call ocean_bc_state_enter_data(bc)
          call ocean_obc_apply_baroclinic(grid, bc, bt_work, ms, DT)
-         !$acc update self(bc%rx_east)
+         !$omp target update from(bc%rx_east)
          call ocean_bc_state_exit_data(bc)
          call bt_work%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, bt_work, bc)
+         !$omp target exit data map(delete: ms, bt_work, bc)
 
          rx_found = bc%rx_east(j_mid, 1)
          diff = abs(rx_found)   ! should be 0 (gamma=1, rx_raw=0)
@@ -1617,7 +1617,7 @@ contains
          end do
          call map_out(metrics_anom, ms_anom, ct_a, cor_a, pgf_a, hv_a, bd_a, ss_a, va_a, hd_a, vd_a, vmix_a, dyn_a)
 
-         !$acc enter data copyin(bc_orl)
+         !$omp target enter data map(to: bc_orl)
          call ocean_bc_state_enter_data(bc_orl)
          call map_in(grid_orl, metrics_orl, ms_orl, ct_o, cor_o, pgf_o, hv_o, bd_o, ss_o, va_o, hd_o, vd_o, vmix_o, dyn_o)
          do step = 1, N_STEPS
@@ -1627,7 +1627,7 @@ contains
          end do
          call map_out(metrics_orl, ms_orl, ct_o, cor_o, pgf_o, hv_o, bd_o, ss_o, va_o, hd_o, vd_o, vmix_o, dyn_o)
          call ocean_bc_state_exit_data(bc_orl)
-         !$acc exit data delete(bc_orl)
+         !$omp target exit data map(delete: bc_orl)
 
          block
             integer :: ng
@@ -1712,7 +1712,7 @@ contains
          bt_work%bt_ubt_end = 0.0_wp   ! Orlanski base u_b from ubt_end = 0
          bt_work%bt_H_ref = real(nz_loc, wp)*H0
 
-         !$acc enter data copyin(ms, bt_work, bc)
+         !$omp target enter data map(to: ms, bt_work, bc)
          call ms%enter_data()
          call bt_work%enter_data()
          call ocean_bc_state_enter_data(bc)
@@ -1721,11 +1721,11 @@ contains
             call ocean_obc_apply_baroclinic(grid, bc, bt_work, ms, DT)
          end do
 
-         !$acc update self(ms%u_face_x_layer)
+         !$omp target update from(ms%u_face_x_layer)
          call ocean_bc_state_exit_data(bc)
          call bt_work%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, bt_work, bc)
+         !$omp target exit data map(delete: ms, bt_work, bc)
 
          ! Analytical: rx = 0 ⟹ u_b_base = u_wall_old = U_INT (per-layer
          ! anchor — the radiation update must NOT collapse the boundary to
@@ -1921,7 +1921,7 @@ contains
          bt_work%bt_ubt = 0.0_wp
          bt_work%bt_vbt = 0.0_wp
 
-         !$acc enter data copyin(bt_work, cor, bc, force_u, force_v)
+         !$omp target enter data map(to: bt_work, cor, bc, force_u, force_v)
          call bt_work%enter_data()
          call cor%enter_data()
 
@@ -1946,10 +1946,10 @@ contains
                                         dy_cu=metrics%dy_cu, dy_cv=metrics%dyCv, iarea_bu=metrics%iareaBu, iarea_t=metrics%iareaT, &
                                            idx_cu=metrics%idxCu, idy_cv=metrics%idyCv)
 
-         !$acc update self(bt_work%bt_eta, bt_work%bt_ubt)
+         !$omp target update from(bt_work%bt_eta, bt_work%bt_ubt)
          call cor%exit_data()
          call bt_work%exit_data()
-         !$acc exit data delete(bt_work, cor, bc, force_u, force_v)
+         !$omp target exit data map(delete: bt_work, cor, bc, force_u, force_v)
 
          block
             integer :: ng
@@ -2022,7 +2022,7 @@ contains
          bt_work%bt_ubt = 0.0_wp
          bt_work%bt_vbt = 0.0_wp
 
-         !$acc enter data copyin(bt_work, cor, bc, force_u, force_v)
+         !$omp target enter data map(to: bt_work, cor, bc, force_u, force_v)
          call bt_work%enter_data()
          call cor%enter_data()
 
@@ -2047,10 +2047,10 @@ contains
                                         dy_cu=metrics%dy_cu, dy_cv=metrics%dyCv, iarea_bu=metrics%iareaBu, iarea_t=metrics%iareaT, &
                                            idx_cu=metrics%idxCu, idy_cv=metrics%idyCv)
 
-         !$acc update self(bt_work%bt_ubt)
+         !$omp target update from(bt_work%bt_ubt)
          call cor%exit_data()
          call bt_work%exit_data()
-         !$acc exit data delete(bt_work, cor, bc, force_u, force_v)
+         !$omp target exit data map(delete: bt_work, cor, bc, force_u, force_v)
 
          ! First interior u-face should have grown from 0 toward U_EXT.
          u_int_after = bt_work%bt_ubt(ng + 2, ng + NY_PHYS/2 + 1)
@@ -2277,16 +2277,16 @@ contains
          bt_work%bt_vbt_end = 0.0_wp
          bt_work%bt_H_ref = real(nz_loc, wp)*H0
 
-         !$acc enter data copyin(ms, bt_work, bc)
+         !$omp target enter data map(to: ms, bt_work, bc)
          call ms%enter_data()
          call bt_work%enter_data()
          call ocean_bc_state_enter_data(bc)
          call ocean_obc_apply_baroclinic(grid, bc, bt_work, ms, DT)
-         !$acc update self(ms%u_face_x_layer, ms%v_face_y_layer)
+         !$omp target update from(ms%u_face_x_layer, ms%v_face_y_layer)
          call ocean_bc_state_exit_data(bc)
          call bt_work%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, bt_work, bc)
+         !$omp target exit data map(delete: ms, bt_work, bc)
 
          ! Every wall face must still hold its per-layer value exactly.
          max_dev = 0.0_wp
@@ -2380,7 +2380,7 @@ contains
          allocate (force_u(nxt + 1, nyt), source=0.0_wp)
          allocate (force_v(nxt, nyt + 1), source=0.0_wp)
 
-         !$acc enter data copyin(bt_work, cor, bc, force_u, force_v)
+         !$omp target enter data map(to: bt_work, cor, bc, force_u, force_v)
          call bt_work%enter_data()
          call cor%enter_data()
          call ocean_bc_state_enter_data(bc)
@@ -2406,11 +2406,11 @@ contains
                                         dy_cu=metrics%dy_cu, dy_cv=metrics%dyCv, iarea_bu=metrics%iareaBu, iarea_t=metrics%iareaT, &
                                            idx_cu=metrics%idxCu, idy_cv=metrics%idyCv)
 
-         !$acc update self(bt_work%bt_ubt_end)
+         !$omp target update from(bt_work%bt_ubt_end)
          call ocean_bc_state_exit_data(bc)
          call cor%exit_data()
          call bt_work%exit_data()
-         !$acc exit data delete(bt_work, cor, bc, force_u, force_v)
+         !$omp target exit data map(delete: bt_work, cor, bc, force_u, force_v)
 
          max_asym = 0.0_wp
          max_mag = 0.0_wp

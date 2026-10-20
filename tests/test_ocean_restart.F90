@@ -403,7 +403,7 @@ contains
       ! 0.04 m).  Without this the round-trip compare below would pass even
       ! if the registry silently dropped wd_wet_dyn (all-1 == all-1).
       if (do_wd) then
-         !$acc update self(A%dyn%bt_work%wd_wet_dyn)
+         !$omp target update from(A%dyn%bt_work%wd_wet_dyn)
          call check(error, &
                     minval(A%dyn%bt_work%wd_wet_dyn(NGHOST + 1:NGHOST + NX, NGHOST + 1:NGHOST + NY)) < 0.5_wp, &
                     "wetdry restart: hysteresis mask trivial at write time (patch flooded?)")
@@ -419,7 +419,7 @@ contains
          ! though D=0.07 sits below rewet_depth; EMERGED: force wd_wet_dyn=0.
          A%dyn%bt_work%wd_wet_dyn(WD_WET_I, WD_WET_J) = 1.0_wp
          A%dyn%bt_work%wd_wet_dyn(WD_EMRG_I, WD_EMRG_J) = 0.0_wp
-         !$acc update device(A%dyn%bt_work%wd_wet_dyn)
+         !$omp target update to(A%dyn%bt_work%wd_wet_dyn)
          wd_A = A%dyn%bt_work%wd_wet_dyn
       end if
       call ocean_state_restart_write(A, gA, decomp, FN, real(N_STEPS, wp)*DT, N_STEPS)
@@ -542,12 +542,12 @@ contains
       call advance(gA, A, sfA)
       call advance(gB, B, sfB)
 
-      !$acc update self(A%multilayer%h_layer, A%multilayer%u_face_x_layer, &
-      !$acc&            A%multilayer%v_face_y_layer, A%barotropic%h, &
-      !$acc&            A%barotropic%u_face_x, A%barotropic%v_face_y)
-      !$acc update self(B%multilayer%h_layer, B%multilayer%u_face_x_layer, &
-      !$acc&            B%multilayer%v_face_y_layer, B%barotropic%h, &
-      !$acc&            B%barotropic%u_face_x, B%barotropic%v_face_y)
+      !$omp target update from(A%multilayer%h_layer, A%multilayer%u_face_x_layer, &
+      !$omp&            A%multilayer%v_face_y_layer, A%barotropic%h, &
+      !$omp&            A%barotropic%u_face_x, A%barotropic%v_face_y)
+      !$omp target update from(B%multilayer%h_layer, B%multilayer%u_face_x_layer, &
+      !$omp&            B%multilayer%v_face_y_layer, B%barotropic%h, &
+      !$omp&            B%barotropic%u_face_x, B%barotropic%v_face_y)
 
       ok = arrays_identical_3d(A%multilayer%h_layer, B%multilayer%h_layer)
       call check(error, ok, "h_layer not bit-identical after restart")
@@ -566,7 +566,7 @@ contains
       if (allocated(error)) return
 
       do it = 1, size(A%multilayer%tracers)
-         !$acc update self(A%multilayer%tracers(it)%hTr, B%multilayer%tracers(it)%hTr)
+         !$omp target update from(A%multilayer%tracers(it)%hTr, B%multilayer%tracers(it)%hTr)
          ok = arrays_identical_3d(A%multilayer%tracers(it)%hTr, &
                                   B%multilayer%tracers(it)%hTr)
          call check(error, ok, "tracer hTr not bit-identical after restart")
@@ -583,8 +583,8 @@ contains
       ! A dropped registration (bl_depth / rho_layer) shows up here AND in
       ! the prognostics above, but the direct check localizes the failure.
       if (phys) then
-         !$acc update self(A%vmix%bl_depth, B%vmix%bl_depth)
-         !$acc update self(A%multilayer%rho_layer, B%multilayer%rho_layer)
+         !$omp target update from(A%vmix%bl_depth, B%vmix%bl_depth)
+         !$omp target update from(A%multilayer%rho_layer, B%multilayer%rho_layer)
          ok = arrays_identical_2d(A%vmix%bl_depth, B%vmix%bl_depth)
          call check(error, ok, "vmix bl_depth not bit-identical after restart")
          if (.not. allocated(error)) then

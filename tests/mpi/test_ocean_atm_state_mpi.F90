@@ -337,35 +337,35 @@ contains
       call sf%init(grid)
       call sf%set_components(grid, .true.)
 
-      !$acc enter data copyin(reader)
+      !$omp target enter data map(to: reader)
       call reader%enter_data()
-      !$acc enter data copyin(atm)
+      !$omp target enter data map(to: atm)
       call atm%enter_data()
 
       tq = TQ_DAYS*86400.0_wp
       call ocean_data_input_update_all(reader, tq)
       call atm_state_update(atm, reader, metrics, tq)
-      !$acc update self(atm%tas)
+      !$omp target update from(atm%tas)
 
       ! Production device residency (as `test_ocean_bulk_forcing::run_apply`):
       ! the GPU build is mem:separate, so every object `bulk_forcing_apply`
       ! touches must be mapped -- the stress seam refresh in particular.
       ! `ice` stays disabled here, so it is not mapped.
-      !$acc enter data copyin(ms, bf, ss, sf)
+      !$omp target enter data map(to: ms, bf, ss, sf)
       call ms%enter_data()
       call bf%enter_data()
       call ss%enter_data()
       call sf%enter_data()
 
       call bulk_forcing_apply(grid, metrics, bc, atm, ms, ice, bf, ss, sf)
-      !$acc update self(ss%tau_x, ss%tau_y)
-      !$acc update self(sf%q_sens)
+      !$omp target update from(ss%tau_x, ss%tau_y)
+      !$omp target update from(sf%q_sens)
 
       call sf%exit_data()
       call ss%exit_data()
       call bf%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, bf, ss, sf)
+      !$omp target exit data map(delete: ms, bf, ss, sf)
 
       allocate (snap%tas(size(atm%tas, 1), size(atm%tas, 2)))
       snap%tas = atm%tas
@@ -382,9 +382,9 @@ contains
       snap%ng = grid%nghost
 
       call atm%exit_data()
-      !$acc exit data delete(atm)
+      !$omp target exit data map(delete: atm)
       call reader%exit_data()
-      !$acc exit data delete(reader)
+      !$omp target exit data map(delete: reader)
       call atm%destroy()
       call reader%destroy()
       call destroy_cartesian_metrics(metrics)

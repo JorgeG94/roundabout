@@ -782,7 +782,7 @@ contains
          call ocean_halo_centre(ms%wet_mask, device_resident=.false.)
       end if
       call metrics_apply_land_mask(metrics, ms%wet_mask, grid, per_x, per_y, north_fold)
-      !$acc enter data copyin(metrics)
+      !$omp target enter data map(to: metrics)
       call metrics%enter_data()
    end subroutine make_cartesian_metrics_island
 
@@ -885,7 +885,7 @@ contains
       else
          call make_cartesian_metrics(metrics, grid)
       end if
-      !$acc enter data copyin(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+      !$omp target enter data map(to: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
       call ms%enter_data()
       call ct%enter_data()
       call cor%enter_data()
@@ -900,9 +900,9 @@ contains
       call dyn%enter_data()
 
       ! Measure initial mass + tracer sums
-      !$acc update self(ms%h_layer)
-      !$acc update self(ms%tracers(ms%idx_salinity)%hTr)
-      !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
+      !$omp target update from(ms%h_layer)
+      !$omp target update from(ms%tracers(ms%idx_salinity)%hTr)
+      !$omp target update from(ms%tracers(ms%idx_temperature)%hTr)
       local_mass0 = interior_mass_sum(ms%h_layer, NX_G, NY_G, ng_use, NZ, DX, DY)
       mass0 = local_mass0  ! serial — no allreduce needed; same on all ranks
       salt0 = interior_tracer_sum(ms%tracers(ms%idx_salinity)%hTr, NX_G, NY_G, ng_use, NZ, DX, DY)
@@ -916,9 +916,9 @@ contains
       end do
 
       ! Pull state to host for measurement
-      !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
-      !$acc update self(ms%tracers(ms%idx_salinity)%hTr)
-      !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
+      !$omp target update from(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
+      !$omp target update from(ms%tracers(ms%idx_salinity)%hTr)
+      !$omp target update from(ms%tracers(ms%idx_temperature)%hTr)
 
       local_massN = interior_mass_sum(ms%h_layer, NX_G, NY_G, ng_use, NZ, DX, DY)
       local_ke = interior_ke_sum(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer, &
@@ -941,7 +941,7 @@ contains
       call cor%exit_data()
       call ct%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+      !$omp target exit data map(delete: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
       call destroy_cartesian_metrics(metrics)
       call ocean_bc_state_destroy(bc)
       call dyn%destroy(); call vmix%destroy(); call vd%destroy()
@@ -1082,7 +1082,7 @@ contains
       else
          call make_cartesian_metrics(metrics, grid)
       end if
-      !$acc enter data copyin(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+      !$omp target enter data map(to: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
       call ms%enter_data()
       call ct%enter_data()
       call cor%enter_data()
@@ -1111,9 +1111,9 @@ contains
       end if
 
       ! Measure initial mass + tracer sums (allreduce over ranks)
-      !$acc update self(ms%h_layer)
-      !$acc update self(ms%tracers(ms%idx_salinity)%hTr)
-      !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
+      !$omp target update from(ms%h_layer)
+      !$omp target update from(ms%tracers(ms%idx_salinity)%hTr)
+      !$omp target update from(ms%tracers(ms%idx_temperature)%hTr)
       local_mass0 = interior_mass_sum(ms%h_layer, nxl, nyl, ng_use, NZ, DX, DY)
       call halo_allreduce_sum(local_mass0, global_mass0)
       mass0 = global_mass0
@@ -1143,9 +1143,9 @@ contains
                                  bt_halo_val)
 
       ! Pull state to host for measurement
-      !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
-      !$acc update self(ms%tracers(ms%idx_salinity)%hTr)
-      !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
+      !$omp target update from(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
+      !$omp target update from(ms%tracers(ms%idx_salinity)%hTr)
+      !$omp target update from(ms%tracers(ms%idx_temperature)%hTr)
 
       local_massN = interior_mass_sum(ms%h_layer, nxl, nyl, ng_use, NZ, DX, DY)
       local_ke = interior_ke_sum(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer, &
@@ -1174,7 +1174,7 @@ contains
       call cor%exit_data()
       call ct%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+      !$omp target exit data map(delete: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
       call destroy_cartesian_metrics(metrics)
       call ocean_bc_state_destroy(bc)
       call dyn%destroy(); call vmix%destroy(); call vd%destroy()

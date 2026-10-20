@@ -796,9 +796,9 @@ contains
       ! The cases live in a helper so the early `return` on the first failed
       ! check cannot skip the unmap and leave a stale device block bound to
       ! this stack address for whatever test runs next.
-      !$acc enter data copyin(h_old, h_new)
+      !$omp target enter data map(to: h_old, h_new)
       call precondition_scan_cases(error, NX, NY, NZ, h_old, h_new)
-      !$acc exit data delete(h_old, h_new)
+      !$omp target exit data map(delete: h_old, h_new)
    end subroutine test_precondition_scan
 
    subroutine precondition_scan_cases(error, nx, ny, nz, h_old, h_new)
@@ -825,7 +825,7 @@ contains
       ! One column 10% short in the TARGET: the sweep would delete that
       ! tenth of the column's tracer content with no diagnostic at all.
       h_new(2, 3, :) = h_new(2, 3, :)*0.9_wp
-      !$acc update device(h_new)
+      !$omp target update to(h_new)
       call ocean_remap_scan_preconditions(nx, ny, nz, h_old, h_new, &
                                           OCEAN_REMAP_PRECOND_RTOL, &
                                           n_bad, worst_rel, worst_neg)
@@ -841,7 +841,7 @@ contains
       ! mass rather than losing it.
       h_old(4, 2, 3) = -2.0_wp
       h_old(4, 2, 4) = h_old(4, 2, 4) + 10.0_wp
-      !$acc update device(h_old)
+      !$omp target update to(h_old)
       call ocean_remap_scan_preconditions(nx, ny, nz, h_old, h_new, &
                                           OCEAN_REMAP_PRECOND_RTOL, &
                                           n_bad, worst_rel, worst_neg)
@@ -855,7 +855,7 @@ contains
       ! the relative test must not trip on a 0/0.
       h_old = 0.0_wp
       h_new = 0.0_wp
-      !$acc update device(h_old, h_new)
+      !$omp target update to(h_old, h_new)
       call ocean_remap_scan_preconditions(nx, ny, nz, h_old, h_new, &
                                           OCEAN_REMAP_PRECOND_RTOL, &
                                           n_bad, worst_rel, worst_neg)

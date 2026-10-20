@@ -243,7 +243,7 @@ contains
       !! Large & Pond (1982) / CORE-OMIP formula, with the 0.98 factor
       !! that reduces the fresh-water saturation value for the salinity
       !! depression of vapour pressure over seawater.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: sst_k
          !! SST in Kelvin.
       real(wp), intent(in) :: rho_air
@@ -258,7 +258,7 @@ contains
       !! Clausius-Clapeyron-like form as `bulk_flux_qsat_seawater` with
       !! ice-specific coefficients (no 0.98 salinity-depression factor —
       !! that correction is a liquid-seawater effect only).
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: t_k
          !! Ice/snow surface temperature, Kelvin.
       real(wp), intent(in) :: rho_air
@@ -271,7 +271,7 @@ contains
       !! Neutral-stability, 10 m drag coefficient (Large & Yeager 2009
       !! eq. 11a-b): a wind-speed polynomial fit below 33 m/s, pinned to
       !! a constant above it.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: u10n
          !! 10 m-equivalent neutral wind speed (m/s), already floored
          !! by the caller at `BULK_WIND_MIN`.
@@ -297,7 +297,7 @@ contains
       !! convention by subtracting this from the downward longwave
       !! input, `q_lw = rlds - lw_up`, before writing the
       !! `ocean_surface_flux_t%q_lw` component.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: sst_k
          !! SST in Kelvin.
       real(wp), intent(in) :: emissivity
@@ -312,7 +312,7 @@ contains
       !! after Paulson 1970 / the KEYPS form used throughout CORE bulk
       !! codes; linear stable branch).  Shared by all three reference
       !! heights (wind, temperature, humidity) in `bulk_flux_column`.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: zeta_in
       real(wp), intent(out) :: psi_m, psi_h
       real(wp) :: zeta, x2, x
@@ -342,7 +342,7 @@ contains
       !! `pure` hot-loop kernel, not a validating entry point; the
       !! namelist-facing caller validates `bulk_flux_config_t%n_iter`
       !! via `bulk_flux_config_n_iter_ok` before calling here).
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: u_wind, v_wind
          !! Wind components at `z_wind` (m/s), earth-relative.
       real(wp), intent(in) :: u_cur, v_cur

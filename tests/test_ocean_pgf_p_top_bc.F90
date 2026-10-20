@@ -140,19 +140,19 @@ contains
 
       call make_cartesian_metrics(metrics, grid)
       call pgf%set_bathymetry(b)
-      !$acc enter data copyin(ms, pgf)
+      !$omp target enter data map(to: ms, pgf)
       call ms%enter_data()
       call pgf%enter_data()
-      !$acc update device(ms%p_top, ms%h_layer, ms%rho_layer)
+      !$omp target update to(ms%p_top, ms%h_layer, ms%rho_layer)
       if (present(eos)) then
          call ocean_pressure_force_compute(grid, metrics, pgf, ms, eos=eos)
       else
          call ocean_pressure_force_compute(grid, metrics, pgf, ms)
       end if
-      !$acc update self(pgf%dpdx_face%data, pgf%dpdy_face%data, pgf%pa%data)
+      !$omp target update from(pgf%dpdx_face%data, pgf%dpdy_face%data, pgf%pa%data)
       call pgf%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, pgf)
+      !$omp target exit data map(delete: ms, pgf)
       call destroy_cartesian_metrics(metrics)
    end subroutine run_pgf
 

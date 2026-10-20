@@ -121,7 +121,7 @@ contains
       type(ocean_dyn_t), intent(inout) :: dyn
       type(coriolis_adv_t), intent(inout) :: cor
       type(multilayer_state_t), intent(inout) :: ms
-      !$acc enter data copyin(dyn, cor, ms)
+      !$omp target enter data map(to: dyn, cor, ms)
       call dyn%enter_data()
       call cor%enter_data()
       call ms%enter_data()
@@ -134,7 +134,7 @@ contains
       call ms%exit_data()
       call cor%exit_data()
       call dyn%exit_data()
-      !$acc exit data delete(dyn, cor, ms)
+      !$omp target exit data map(delete: dyn, cor, ms)
    end subroutine unmap_harness
 
    subroutine run_wave_drag_dispatch(grid, metrics, dyn, ms, dt_inner, &
@@ -213,7 +213,7 @@ contains
                                                  cor%f_corner, N_STEPS, DT_INNER)
       ! `bt_ubt` holds the TIME-MEAN over the substep loop; `bt_ubt_end` is
       ! the end-of-loop snapshot (the actual final decayed value).
-      !$acc update self(dyn%bt_work%bt_ubt_end)
+      !$omp target update from(dyn%bt_work%bt_ubt_end)
       call unmap_harness(dyn, cor, ms)
 
       ip = grid%nghost + NX_PHYS/2
@@ -308,7 +308,7 @@ contains
                                                     cor%f_corner, N_STEPS, DT_INNER)
          ! bt_ubt is the substep-loop TIME-MEAN; bt_ubt_end is the
          ! end-of-loop (final decayed) value the closed form describes.
-         !$acc update self(dyn%bt_work%bt_ubt_end)
+         !$omp target update from(dyn%bt_work%bt_ubt_end)
          call unmap_harness(dyn, cor, ms)
 
          ! Uniform r_H over a uniform IC -> u stays exactly spatially uniform
@@ -363,7 +363,7 @@ contains
                                      .false., 0.0_wp, 0.0_wp)
          call barotropic_substep_nonlinear_interior(grid, metrics, dyn%bt_work, &
                                                     cor%f_corner, N_STEPS, DT_INNER)
-         !$acc update self(dyn%bt_work%bt_ubt_end)
+         !$omp target update from(dyn%bt_work%bt_ubt_end)
          call unmap_harness(dyn, cor, ms)
 
          jp = grid%nghost + NY_PHYS/2
@@ -418,7 +418,7 @@ contains
          ! "Outer step" A.
          call run_wave_drag_dispatch(grid, metrics, dyn, ms, DT_INNER, &
                                      .false., 0.0_wp, 0.0_wp)
-         !$acc update self(dyn%bt_work%bt_rem_u)
+         !$omp target update from(dyn%bt_work%bt_rem_u)
          factor_a = dyn%bt_work%bt_rem_u(ip, jp)
 
          ! "Outer step" B — re-run the SAME dispatch from the SAME bt_work,
@@ -427,7 +427,7 @@ contains
          ! giving factor_a**2 instead of factor_a.
          call run_wave_drag_dispatch(grid, metrics, dyn, ms, DT_INNER, &
                                      .false., 0.0_wp, 0.0_wp)
-         !$acc update self(dyn%bt_work%bt_rem_u)
+         !$omp target update from(dyn%bt_work%bt_rem_u)
          factor_b = dyn%bt_work%bt_rem_u(ip, jp)
          call unmap_harness(dyn, cor, ms)
 
@@ -471,7 +471,7 @@ contains
          call map_harness(dyn, cor, ms)
          call run_wave_drag_dispatch(grid, metrics, dyn, ms, DT_INNER, &
                                      .true., R_LINEAR, HBBL)
-         !$acc update self(dyn%bt_work%bt_rem_u)
+         !$omp target update from(dyn%bt_work%bt_rem_u)
          call unmap_harness(dyn, cor, ms)
 
          ip = grid%nghost + NX_PHYS/2
@@ -563,7 +563,7 @@ contains
       call map_harness(dyn, cor, ms)
       ip = grid%nghost + NX_PHYS/2
       jp = grid%nghost + NY_PHYS/2
-      !$acc update self(dyn%bt_work%bt_ubt)
+      !$omp target update from(dyn%bt_work%bt_ubt)
       u(0) = dyn%bt_work%bt_ubt(ip, jp)
       do n = 1, k_steps
          call run_wave_drag_dispatch(grid, metrics, dyn, ms, dt_inner, &
@@ -574,7 +574,7 @@ contains
          ! exactly, AND `bt_ubt` itself already holds it (the substep
          ! kernel's own IC for the next call) -- read bt_ubt_end for
          ! consistency with the multi-step tests, nothing to copy back.
-         !$acc update self(dyn%bt_work%bt_ubt_end)
+         !$omp target update from(dyn%bt_work%bt_ubt_end)
          u(n) = dyn%bt_work%bt_ubt_end(ip, jp)
       end do
       call unmap_harness(dyn, cor, ms)

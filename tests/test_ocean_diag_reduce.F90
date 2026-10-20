@@ -438,12 +438,12 @@ contains
                     "test setup: POISON must sit below the buffer minimum")
          if (allocated(error)) exit checks
 
-         !$acc enter data copyin(buf)
+         !$omp target enter data map(to: buf)
 #ifdef RDB_GPU_OFFLOAD
          call poison_host(buf)
 #endif
          call diag_reduce_stats(buf, N1, N2, N3, vmin, vmax, vsum)
-         !$acc exit data delete(buf)
+         !$omp target exit data map(delete: buf)
 
          call check(error, vmin == ref_min, &
                     "device reduction vmin must be the mapped device data, not the host copy")
@@ -487,12 +487,12 @@ contains
                     "test setup: POISON must sit below the buffer minimum")
          if (allocated(error)) exit checks
 
-         !$acc enter data copyin(buf)
+         !$omp target enter data map(to: buf)
 #ifdef RDB_GPU_OFFLOAD
          call poison_host(buf)
 #endif
          call diag_reduce_stats(buf, N1, N2, N3, vmin, vmax, vsum)
-         !$acc exit data delete(buf)
+         !$omp target exit data map(delete: buf)
 
          call check(error, vmax == ref_max, "device all-negative vmax must equal maxval")
          if (allocated(error)) exit checks
@@ -535,12 +535,12 @@ contains
                     "test setup: POISON must sit below the buffer minimum")
          if (allocated(error)) exit checks
 
-         !$acc enter data copyin(buf)
+         !$omp target enter data map(to: buf)
 #ifdef RDB_GPU_OFFLOAD
          call poison_host(buf)
 #endif
          call diag_reduce_stats(buf, N1, N2, N3, vmin, vmax, vsum, n_valid)
-         !$acc exit data delete(buf)
+         !$omp target exit data map(delete: buf)
 
          call check(error,.not. ieee_is_nan(vsum), &
                     "the device reduction must not let the NaN sentinel poison the sum")
@@ -592,13 +592,13 @@ contains
                     "test setup: POISON must sit below the buffer minimum")
          if (allocated(error)) exit checks
 
-         !$acc enter data copyin(buf)
+         !$omp target enter data map(to: buf)
 #ifdef RDB_GPU_OFFLOAD
          call poison_host(buf)
 #endif
          call diag_field_stats(buf, on_device=.true., vmin=vmin, vmax=vmax, &
                                vmean=vmean, n_valid=n_valid, n_total=n_total)
-         !$acc exit data delete(buf)
+         !$omp target exit data map(delete: buf)
 
          call check(error, vmin /= POISON, &
                     "the stats shim returned POISON -- it lost device residency")

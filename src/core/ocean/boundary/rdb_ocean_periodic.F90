@@ -100,7 +100,7 @@ contains
       ! X-wrap first, then Y-wrap in a separate loop.  Two passes needed
       ! because the Y-wrap reads the x-ghost columns the X-pass just wrote.
       ! Same queue ⇒ ordered ⇒ the X→Y dependency holds.
-      !$acc kernels async(1)
+      ! [acc->omp] dropped CUDA-graph wrapper: kernels async(1)
       if (wrap_x) then
          do concurrent(k=1:nz, j=1:ny_total, i=1:nx_total)
             if (i <= nghost) then
@@ -121,9 +121,9 @@ contains
             end if
          end do
       end if
-      !$acc end kernels
+      ! [acc->omp] dropped CUDA-graph wrapper: end kernels
       if (lwait) then
-         !$acc wait(1)
+         ! [acc->omp] dropped CUDA-graph wrapper: wait (1)
       end if
    end subroutine ocean_periodic_wrap_centre_3d
 
@@ -199,7 +199,7 @@ contains
       i_e = nghost + nx_phys + 1
 
       ! Two-pass: X-wrap (+ belt-and-braces) first, Y-wrap second.
-      !$acc kernels async(1)
+      ! [acc->omp] dropped CUDA-graph wrapper: kernels async(1)
       if (wrap_x) then
          do concurrent(k=1:nz, j=1:ny_total, i=1:nx_face)
             if (i <= nghost) then
@@ -221,9 +221,9 @@ contains
             end if
          end do
       end if
-      !$acc end kernels
+      ! [acc->omp] dropped CUDA-graph wrapper: end kernels
       if (lwait) then
-         !$acc wait(1)
+         ! [acc->omp] dropped CUDA-graph wrapper: wait (1)
       end if
    end subroutine ocean_periodic_wrap_face_x_3d
 
@@ -296,7 +296,7 @@ contains
 
       ! Two-pass: X-wrap first, Y-wrap (+ belt-and-braces) second.
       if (wrap_x) then
-         !$acc kernels async(1)
+         ! [acc->omp] dropped CUDA-graph wrapper: kernels async(1)
          do concurrent(k=1:nz, j=1:ny_face, i=1:nx_total)
             if (i <= nghost) then
                fld(i, j, k) = fld(i + nx_phys, j, k)
@@ -305,10 +305,10 @@ contains
                fld(i, j, k) = fld(i - nx_phys, j, k)
             end if
          end do
-         !$acc end kernels
+         ! [acc->omp] dropped CUDA-graph wrapper: end kernels
       end if
       if (wrap_y) then
-         !$acc kernels async(1)
+         ! [acc->omp] dropped CUDA-graph wrapper: kernels async(1)
          do concurrent(k=1:nz, j=1:ny_face, i=1:nx_total)
             if (j <= nghost) then
                fld(i, j, k) = fld(i, j + ny_phys, k)
@@ -318,10 +318,10 @@ contains
             end if
             if (j == j_n) fld(i, j, k) = fld(i, j_s, k)
          end do
-         !$acc end kernels
+         ! [acc->omp] dropped CUDA-graph wrapper: end kernels
       end if
       if (lwait) then
-         !$acc wait(1)
+         ! [acc->omp] dropped CUDA-graph wrapper: wait (1)
       end if
    end subroutine ocean_periodic_wrap_face_y_3d
 
@@ -398,7 +398,7 @@ contains
       end if
 
       ! Single sync for the whole batch (no-op on non-OpenACC builds).
-      !$acc wait(1)
+      ! [acc->omp] dropped CUDA-graph wrapper: wait (1)
    end subroutine ocean_periodic_wrap_state
 
 end module rdb_ocean_periodic

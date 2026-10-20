@@ -170,15 +170,15 @@ contains
 
    subroutine map_in(ms)
       type(multilayer_state_t), intent(inout) :: ms
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
    end subroutine map_in
 
    subroutine map_out(ms)
       type(multilayer_state_t), intent(inout) :: ms
-      !$acc update self(ms%u_face_x_layer, ms%v_face_y_layer)
+      !$omp target update from(ms%u_face_x_layer, ms%v_face_y_layer)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out
 
    ! ------------------------------------------------------------------
@@ -297,10 +297,10 @@ contains
       allocate (u_ic, source=ms%u_face_x_layer)
 
       call map_in(ms)
-      !$acc enter data copyin(bd)
+      !$omp target enter data map(to: bd)
       call bd%enter_data()
       call ocean_bottom_drag_compute_tendencies(grid, bd, ms, DT)
-      !$acc update self(bd%du_drag%data)
+      !$omp target update from(bd%du_drag%data)
 
       err_lin = 0.0_wp
       err_other = 0.0_wp
@@ -320,7 +320,7 @@ contains
          call ocean_bottom_drag_compute_tendencies(grid, bd, ms, DT)
          call ocean_bottom_drag_apply_tendencies(bd, ms, DT)
       end do
-      !$acc update self(ms%u_face_x_layer)
+      !$omp target update from(ms%u_face_x_layer)
       err_decay = 0.0_wp
       err_rest = 0.0_wp
       expect = U0*(1.0_wp - DT*R)**NSTEP
@@ -339,7 +339,7 @@ contains
       bd%variant = BDRAG_QUADRATIC
       bd%c_drag = CD
       call ocean_bottom_drag_compute_tendencies(grid, bd, ms, DT)
-      !$acc update self(bd%du_drag%data)
+      !$omp target update from(bd%du_drag%data)
       err_q = 0.0_wp
       do j = 1, ny
          do i = 2, nx
@@ -351,7 +351,7 @@ contains
       end do
 
       call bd%exit_data()
-      !$acc exit data delete(bd)
+      !$omp target exit data map(delete: bd)
       call map_out(ms)
 
       call check(error, shallow_seen, "the channel has faces whose first live layer is not k=1")
@@ -422,20 +422,20 @@ contains
       end do
 
       call map_in(ms)
-      !$acc enter data copyin(bd, vd)
+      !$omp target enter data map(to: bd, vd)
       call bd%enter_data()
       call vd%enter_data()
-      !$acc enter data copyin(tau_u, tau_v)
+      !$omp target enter data map(to: tau_u, tau_v)
       do step = 1, NSTEP
          call ocean_bottom_drag_compute_tendencies(grid, bd, ms, DT)
          call vdiff_apply_momentum(grid, vd, ms, DT, tau_u=tau_u, tau_v=tau_v, &
                                    lambda_bot_u=bd%lambda_bot_u, &
                                    lambda_bot_v=bd%lambda_bot_v, rho0=RHO0)
       end do
-      !$acc exit data delete(tau_u, tau_v)
+      !$omp target exit data map(delete: tau_u, tau_v)
       call vd%exit_data()
       call bd%exit_data()
-      !$acc exit data delete(bd, vd)
+      !$omp target exit data map(delete: bd, vd)
       call map_out(ms)
 
       ke1 = 0.0_wp
@@ -522,18 +522,18 @@ contains
       allocate (tau_v(nx, ny + 1), source=0.0_wp)
 
       call map_in(ms)
-      !$acc enter data copyin(bd, vd)
+      !$omp target enter data map(to: bd, vd)
       call bd%enter_data()
       call vd%enter_data()
-      !$acc enter data copyin(tau_u, tau_v)
+      !$omp target enter data map(to: tau_u, tau_v)
       call ocean_bottom_drag_compute_tendencies(grid, bd, ms, DT)
       call vdiff_apply_momentum(grid, vd, ms, DT, tau_u=tau_u, tau_v=tau_v, &
                                 lambda_bot_u=bd%lambda_bot_u, &
                                 lambda_bot_v=bd%lambda_bot_v, rho0=RHO0)
-      !$acc exit data delete(tau_u, tau_v)
+      !$omp target exit data map(delete: tau_u, tau_v)
       call vd%exit_data()
       call bd%exit_data()
-      !$acc exit data delete(bd, vd)
+      !$omp target exit data map(delete: bd, vd)
       call map_out(ms)
 
       ig = NGHOST + 2
@@ -587,12 +587,12 @@ contains
       bd%hbbl = 60.0_wp
       bd%bed_factor = 2.0_wp
       call map_in(ms)
-      !$acc enter data copyin(bd)
+      !$omp target enter data map(to: bd)
       call bd%enter_data()
       call ocean_bottom_drag_compute_tendencies(grid, bd, ms, 600.0_wp)
-      !$acc update self(bd%du_drag%data)
+      !$omp target update from(bd%du_drag%data)
       call bd%exit_data()
-      !$acc exit data delete(bd)
+      !$omp target exit data map(delete: bd)
       call map_out(ms)
       ig = NGHOST + 2
       jg = NGHOST + 2
@@ -629,15 +629,15 @@ contains
       allocate (ht0, source=ms%tracers(ms%idx_temperature)%hTr)
       src = DT*QGEO/(geo%rho0*geo%cp)
 
-      !$acc enter data copyin(ms, geo)
+      !$omp target enter data map(to: ms, geo)
       call ms%enter_data()
       call ocean_geothermal_apply_tracers(grid, geo, ms, DT)
       associate (hT => ms%tracers(ms%idx_temperature)%hTr, &
                  bgeo => ms%heat_budget_geothermal)
-         !$acc update self(hT, bgeo)
+         !$omp target update from(hT, bgeo)
       end associate
       call ms%exit_data()
-      !$acc exit data delete(ms, geo)
+      !$omp target exit data map(delete: ms, geo)
 
       err_kb = 0.0_wp
       err_other = 0.0_wp
@@ -724,14 +724,14 @@ contains
       tm%frac_rough = 0.1_wp
       tm%e_max = 1.0e3_wp
 
-      !$acc enter data copyin(ms, tm)
+      !$omp target enter data map(to: ms, tm)
       call ms%enter_data()
       call tm%enter_data()
       call tidal_mixing_compute(grid, tm, ms, 1800.0_wp)
-      !$acc update self(tm%kd_int)
+      !$omp target update from(tm%kd_int)
       call tm%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, tm)
+      !$omp target exit data map(delete: ms, tm)
 
       kd = 0.0_wp
       do k = 1, ms%nz_ml + 1
@@ -771,12 +771,12 @@ contains
       bd%variant = BDRAG_QUADRATIC
       bd%c_drag = CD
       call map_in(ms)
-      !$acc enter data copyin(bd)
+      !$omp target enter data map(to: bd)
       call bd%enter_data()
       call ocean_bottom_drag_compute_tendencies(grid, bd, ms, DT)
-      !$acc update self(bd%du_drag%data)
+      !$omp target update from(bd%du_drag%data)
       call bd%exit_data()
-      !$acc exit data delete(bd)
+      !$omp target exit data map(delete: bd)
       call map_out(ms)
 
       call check(error, all(ms%k_bot == 1) .and. all(ms%k_bot_u == 1), &
