@@ -168,7 +168,7 @@ module rdb_coriolis_adv
          !! Set from `&ocean_hvisc_nml no_slip` (shared with the lateral
          !! strain).  All-wet ⇒ `wet_q≡1` ⇒ factor `≡1` ⇒ bit-identical.
       logical :: hk_pair_floor = .false.
-         !! Run the `sadourny_hk` PAIR-FLOORED passes (the inline pair coefficient) even
+         !! Run the `sadourny_hk` PAIR-FLOORED passes (the pair coefficient inlined in passes 5f/6f) even
          !! with `&vcoord_nml zfixed_closed_faces` off.  Latched at setup
          !! for the coordinates that lay STATIC bed fillers (`z_fixed`,
          !! `zstar`, `zstar_full`): over a stepped bed an OPEN face then
@@ -416,7 +416,6 @@ contains
       real(wp) :: h_vf_SW, h_vf_NW, h_vf_SE, h_vf_NE
       real(wp) :: h_uf_SW, h_uf_NW, h_uf_SE, h_uf_NE
       real(wp) :: vh_sum, uh_sum, h_eff_sum
-      real(wp) :: hh, p1, p2, p3
       real(wp) :: ns
 
       nx = grid%nx_total
@@ -630,7 +629,6 @@ contains
       real(wp) :: h_vf_SW, h_vf_NW, h_vf_SE, h_vf_NE
       real(wp) :: h_uf_SW, h_uf_NW, h_uf_SE, h_uf_NE
       real(wp) :: vh_sum, uh_sum, h_eff_sum
-      real(wp) :: hh, p1, p2, p3
       real(wp) :: ns
 
       nx = grid%nx_total
@@ -891,7 +889,7 @@ contains
       !! Under `&vcoord_nml zfixed_closed_faces` (`metrics%use_closed_faces`)
       !! Passes 5/6 run a PAIR-FLOORED twin: every PV in a pair coefficient
       !! is evaluated with a corner thickness of at least half the larger of
-      !! the pair's two face thicknesses (the inline pair coefficient).  Without it the
+      !! the pair's two face thicknesses (the pair coefficient inlined in passes 5f/6f).  Without it the
       !! "cross" pairs — a corner PV times a transport whose far cell lies
       !! outside that corner — carry an unbounded `h_face/h_corner`, which a
       !! z-level staircase (a live partial bottom cell as thin as
@@ -1084,7 +1082,7 @@ contains
          ! Each pair coefficient sums three corner PVs; the "cross" ones meet a
          ! transport whose far cell lies outside the corner, so `h_face/h_corner`
          ! is unbounded there (a thin live partial cell next to a full level).
-         ! the pair coefficient re-evaluates each PV at a corner thickness of at least
+         ! The pair coefficient re-evaluates each PV at a corner thickness of at least
          ! half the pair's larger face thickness — the bound `sadourny_energy`
          ! has by construction — and the floor belongs to the PAIR, so the
          ! u- and v-tendencies share the coefficient (HK energy antisymmetry).
@@ -1103,9 +1101,9 @@ contains
             q_NW = this%q_corner%data(i - 1, j + 1, k)
             q_SE = this%q_corner%data(i + 1, j, k)
             q_SW = this%q_corner%data(i - 1, j, k)
-            iw = max(1, (i) - 1)
+            iw = max(1, i - 1)
             ie = min(nx, i)
-            js = max(1, (j) - 1)
+            js = max(1, j - 1)
             jn = min(ny, j)
             aSW = metrics%wet_T(iw, js)*metrics%areaT(iw, js)
             aSE = metrics%wet_T(ie, js)*metrics%areaT(ie, js)
@@ -1116,9 +1114,9 @@ contains
             hm_den = aSW + aSE + aNW + aNE
             h_S = hm_num/max(hm_den, H_DIV_EPS)
             h_S = max(h_S, CORIOLIS_H_MIN_PV)
-            iw = max(1, (i) - 1)
+            iw = max(1, i - 1)
             ie = min(nx, i)
-            js = max(1, (j + 1) - 1)
+            js = max(1, j)
             jn = min(ny, j + 1)
             aSW = metrics%wet_T(iw, js)*metrics%areaT(iw, js)
             aSE = metrics%wet_T(ie, js)*metrics%areaT(ie, js)
@@ -1129,9 +1127,9 @@ contains
             hm_den = aSW + aSE + aNW + aNE
             h_N = hm_num/max(hm_den, H_DIV_EPS)
             h_N = max(h_N, CORIOLIS_H_MIN_PV)
-            iw = max(1, (i + 1) - 1)
+            iw = max(1, i)
             ie = min(nx, i + 1)
-            js = max(1, (j + 1) - 1)
+            js = max(1, j)
             jn = min(ny, j + 1)
             aSW = metrics%wet_T(iw, js)*metrics%areaT(iw, js)
             aSE = metrics%wet_T(ie, js)*metrics%areaT(ie, js)
@@ -1144,7 +1142,7 @@ contains
             h_NE = max(h_NE, CORIOLIS_H_MIN_PV)
             iw = max(1, (i - 1) - 1)
             ie = min(nx, i - 1)
-            js = max(1, (j + 1) - 1)
+            js = max(1, j)
             jn = min(ny, j + 1)
             aSW = metrics%wet_T(iw, js)*metrics%areaT(iw, js)
             aSE = metrics%wet_T(ie, js)*metrics%areaT(ie, js)
@@ -1155,9 +1153,9 @@ contains
             hm_den = aSW + aSE + aNW + aNE
             h_NW = hm_num/max(hm_den, H_DIV_EPS)
             h_NW = max(h_NW, CORIOLIS_H_MIN_PV)
-            iw = max(1, (i + 1) - 1)
+            iw = max(1, i)
             ie = min(nx, i + 1)
-            js = max(1, (j) - 1)
+            js = max(1, j - 1)
             jn = min(ny, j)
             aSW = metrics%wet_T(iw, js)*metrics%areaT(iw, js)
             aSE = metrics%wet_T(ie, js)*metrics%areaT(ie, js)
@@ -1170,7 +1168,7 @@ contains
             h_SE = max(h_SE, CORIOLIS_H_MIN_PV)
             iw = max(1, (i - 1) - 1)
             ie = min(nx, i - 1)
-            js = max(1, (j) - 1)
+            js = max(1, j - 1)
             jn = min(ny, j)
             aSW = metrics%wet_T(iw, js)*metrics%areaT(iw, js)
             aSE = metrics%wet_T(ie, js)*metrics%areaT(ie, js)
@@ -1242,9 +1240,9 @@ contains
             q_NW = this%q_corner%data(i, j + 1, k)
             q_SE = this%q_corner%data(i + 1, j - 1, k)
             q_SW = this%q_corner%data(i, j - 1, k)
-            iw = max(1, (i) - 1)
+            iw = max(1, i - 1)
             ie = min(nx, i)
-            js = max(1, (j) - 1)
+            js = max(1, j - 1)
             jn = min(ny, j)
             aSW = metrics%wet_T(iw, js)*metrics%areaT(iw, js)
             aSE = metrics%wet_T(ie, js)*metrics%areaT(ie, js)
@@ -1255,9 +1253,9 @@ contains
             hm_den = aSW + aSE + aNW + aNE
             h_W = hm_num/max(hm_den, H_DIV_EPS)
             h_W = max(h_W, CORIOLIS_H_MIN_PV)
-            iw = max(1, (i + 1) - 1)
+            iw = max(1, i)
             ie = min(nx, i + 1)
-            js = max(1, (j) - 1)
+            js = max(1, j - 1)
             jn = min(ny, j)
             aSW = metrics%wet_T(iw, js)*metrics%areaT(iw, js)
             aSE = metrics%wet_T(ie, js)*metrics%areaT(ie, js)
@@ -1268,9 +1266,9 @@ contains
             hm_den = aSW + aSE + aNW + aNE
             h_E = hm_num/max(hm_den, H_DIV_EPS)
             h_E = max(h_E, CORIOLIS_H_MIN_PV)
-            iw = max(1, (i + 1) - 1)
+            iw = max(1, i)
             ie = min(nx, i + 1)
-            js = max(1, (j + 1) - 1)
+            js = max(1, j)
             jn = min(ny, j + 1)
             aSW = metrics%wet_T(iw, js)*metrics%areaT(iw, js)
             aSE = metrics%wet_T(ie, js)*metrics%areaT(ie, js)
@@ -1281,9 +1279,9 @@ contains
             hm_den = aSW + aSE + aNW + aNE
             h_NE = hm_num/max(hm_den, H_DIV_EPS)
             h_NE = max(h_NE, CORIOLIS_H_MIN_PV)
-            iw = max(1, (i) - 1)
+            iw = max(1, i - 1)
             ie = min(nx, i)
-            js = max(1, (j + 1) - 1)
+            js = max(1, j)
             jn = min(ny, j + 1)
             aSW = metrics%wet_T(iw, js)*metrics%areaT(iw, js)
             aSE = metrics%wet_T(ie, js)*metrics%areaT(ie, js)
@@ -1294,7 +1292,7 @@ contains
             hm_den = aSW + aSE + aNW + aNE
             h_NW = hm_num/max(hm_den, H_DIV_EPS)
             h_NW = max(h_NW, CORIOLIS_H_MIN_PV)
-            iw = max(1, (i + 1) - 1)
+            iw = max(1, i)
             ie = min(nx, i + 1)
             js = max(1, (j - 1) - 1)
             jn = min(ny, j - 1)
@@ -1307,7 +1305,7 @@ contains
             hm_den = aSW + aSE + aNW + aNE
             h_SE = hm_num/max(hm_den, H_DIV_EPS)
             h_SE = max(h_SE, CORIOLIS_H_MIN_PV)
-            iw = max(1, (i) - 1)
+            iw = max(1, i - 1)
             ie = min(nx, i)
             js = max(1, (j - 1) - 1)
             jn = min(ny, j - 1)
@@ -1476,7 +1474,6 @@ contains
       real(wp) :: aSW, aSE, aNW, aNE, hm_num, hm_den
       integer :: iw, ie, js, jn
       real(wp) :: q_S, q_N, q_W, q_E, ke_grad_x, ke_grad_y
-      real(wp) :: hh, p1, p2, p3
       real(wp) :: ns
       logical :: usf
       real(wp) :: pv_part, av_a, av_b, fv1, fv2, fv3, fv4
@@ -1668,7 +1665,7 @@ contains
             ! the 2048^2 double-gyre kernel time at 12 GB/s, bound off or on.
             iw = max(1, i - 1)
             ie = min(nx, i)
-            js = max(1, j + 1 - 1)
+            js = max(1, j)
             jn = min(ny, j + 1)
             aSW = metrics%wet_T(iw, js)*metrics%areaT(iw, js)
             aSE = metrics%wet_T(ie, js)*metrics%areaT(ie, js)
@@ -1735,7 +1732,7 @@ contains
             ! −(f+ζ)·u estimates — east corner (i+1,j) × u(i+1,j/j-1); west
             ! corner (i,j) × u(i,j/j-1) — BEFORE subtracting the KE gradient.
             ! Inline, not a call -- see Pass 5.
-            iw = max(1, i + 1 - 1)
+            iw = max(1, i)
             ie = min(nx, i + 1)
             js = max(1, j - 1)
             jn = min(ny, j)
