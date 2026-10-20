@@ -166,8 +166,8 @@ module rdb_ocean_pressure_force
       !! Per-layer acceleration
       !!   a_k = -g_FS · ∇η - Σ_{j>k} g'_j · ∇η_j_interface.
       !! NK = 2 only (asserted at init):
-      !!   a_top = -g_FS · ∂(h_1 + h_2)/∂x
-      !!   a_bot = -g_FS · ∂(h_1 + h_2)/∂x - g'_int · ∂h_1/∂x
+      !!   a_top = -g_FS · ∂η/∂x,                    η = h_1 + h_2 - b
+      !!   a_bot = -g_FS · ∂η/∂x - g'_int · ∂e/∂x,     e = h_1 - b
       !! `pgf%gprime_gfs` is g_FS (m/s²), `pgf%gprime_gint` the single
       !! internal g'. No EOS, no Picard — densities fixed by GFS/GINT.
    integer, parameter, public :: OPGF_VARIANT_FV_WRIGHT = 3
@@ -1180,7 +1180,13 @@ contains
       !! 10³–10⁴ on shelf-break/spoon configs, over-driving the gyre.
       !!
       !!   a_top = -g_FS · ∇η
-      !!   a_bot = -g_FS · ∇η - g'_int · ∇h_1
+      !!   a_bot = -g_FS · ∇η - g'_int · ∇e,   e = h_1 - b
+      !!
+      !! `e` is the interface height (above the `-b` bed).  The same `∇b`
+      !! subtraction applies here: over a sloping bed a FLAT resting
+      !! interface has `∇h_1 = ∇b`, so differencing `h_1` alone pushes the
+      !! bed layer with a spurious `g'_int · ∇b` (the double-gyre spoon
+      !! spun up ~2e-3 m²/s² of En from rest with no wind).
       !!
       !! u-face gradient `(f(i,j) - f(i-1,j)) · idxCu(i,j)`, mirror for
       !! v-face. Higher k stays zero ⇒ no-op on NK > 2.
@@ -1213,7 +1219,7 @@ contains
          sum_h_right = h_layer(i, j, 1) + h_layer(i, j, 2)
          db_dx = (b(i, j) - b(i - 1, j))*idxCu(i, j)
          dssh_dx = (sum_h_right - sum_h_left)*idxCu(i, j) - db_dx
-         dhbot_dx = (h_layer(i, j, 1) - h_layer(i - 1, j, 1))*idxCu(i, j)
+         dhbot_dx = (h_layer(i, j, 1) - h_layer(i - 1, j, 1))*idxCu(i, j) - db_dx
          dpdx_face(i, j, 2) = -gfs*dssh_dx                 ! top layer (k=nz=2)
          dpdx_face(i, j, 1) = -gfs*dssh_dx - gint*dhbot_dx  ! bottom layer (k=1)
       end do
@@ -1225,7 +1231,7 @@ contains
          sum_h_above = h_layer(i, j, 1) + h_layer(i, j, 2)
          db_dy = (b(i, j) - b(i, j - 1))*idyCv(i, j)
          dssh_dy = (sum_h_above - sum_h_below)*idyCv(i, j) - db_dy
-         dhbot_dy = (h_layer(i, j, 1) - h_layer(i, j - 1, 1))*idyCv(i, j)
+         dhbot_dy = (h_layer(i, j, 1) - h_layer(i, j - 1, 1))*idyCv(i, j) - db_dy
          dpdy_face(i, j, 2) = -gfs*dssh_dy
          dpdy_face(i, j, 1) = -gfs*dssh_dy - gint*dhbot_dy
       end do

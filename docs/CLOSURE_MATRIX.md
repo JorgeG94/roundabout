@@ -174,7 +174,7 @@ All methods conserve column integrals to round-off and are monotone.
 |---|---|---|---|---|
 | Montgomery potential | **default** | `form = "mont"` | Vertical recursion plus one horizontal difference. Valid on any bathymetry and vcoord; exact at rest in isopycnal columns. | `test_ocean_pgf_mont`, `test_ocean_pgf_fv` |
 | FV-lite, FV-Wright | available | `form = "fv_lite"`, `"fv_wright"` | Finite-volume forms. Surface-relative. | `test_ocean_pgf_fv` |
-| gprime | available | `form = "gprime"` | Two-layer reduced gravity. | — |
+| gprime | available | `form = "gprime"` | Two-layer reduced gravity; the interface term differences the interface HEIGHT `h_1 - b`, so a flat interface over a sloping bed is at rest. | `test_ocean_pgf_gprime` |
 | FV-MOM6 | available | `form = "fv_mom6"` | MOM6 analytic finite-volume PGF with a pressure-stack surface BC. | `test_ocean_pgf_sigma_rest` |
 | In-layer T/S reconstruction | opt-in; **refused** under `z_fixed` with a cavity | `reconstruct_for_pressure` (`.false.`), `recon_scheme` (`1`) | PLM or PPM T/S inside each layer. Exact at rest for linear EOS and linear T/S. FV-MOM6 only. | `test_ocean_pgf_reconstruct`, `test_ocean_pgf_sigma_rest`, `test_ocean_pgf_eos_fast`, `test_ocean_vcoord_hygiene` |
 | In-situ-pressure density (MOM6 `RECONSTRUCT_FOR_PRESSURE=False`) | **default** (FV-MOM6, pressure-dependent EOS only) | `insitu_density` (`.true.`) | Evaluates density at in-situ pressure. `.false.` restores the potential-density integral. Refused with `&ocean_psurf_nml in_eos`. | `test_ocean_pgf_wright_analytic`, `test_ocean_pgf_eos_fast`, `test_ocean_pgf_insitu` |
