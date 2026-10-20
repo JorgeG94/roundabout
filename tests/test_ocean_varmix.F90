@@ -56,6 +56,7 @@ contains
    !   Uniform f-plane (beta_dx2 = 0), dx = 10 km, f = 1e-4 s^-1:
    !   f2_dx2 = (dx_u^2 + dy_u^2)*f^2 = 2*(1e4)^2*(1e-4)^2 = 2 ⇒ dx_term = 2,
    !   s = sqrt(2).  cg1 = 1, alpha = 1.5 ⇒ alpha*cg1 = 1.5.
+   !   p=1 hand value: s/(s + 1.5) = 1.4142136/2.9142136 = 0.485281.
    !   p=3 hand value: s^3/(s^3 + 1.5^3) = 2.8284271/6.2034271 = 0.455946.
    !   The pre-fix code (integer p/2 = 1 on odd p) gave
    !   dx_term/(dx_term + 1.5^3) = 2/5.375 = 0.372093 — a 0.084 gap, so this
@@ -65,7 +66,13 @@ contains
    ! ------------------------------------------------------------------
    subroutine test_resfn_odd_power(error)
       type(error_type), allocatable, intent(out) :: error
-      real(wp) :: r3, expect, s
+      real(wp) :: r1, r3, expect, s
+      call resfn_at_power(1, 1.5_wp, r1)
+      ! p=1 hand value: s/(s + 1.5) with s = sqrt(dx_term) = sqrt(2)
+      ! = 1.414213562373095/2.914213562373095 = 0.485281374238571
+      call check(error, abs(r1 - 0.485281374238571_wp) <= 1.0e-13_wp, &
+                 "p=1 Res_fn must be s/(s+alpha*cg1) with s = sqrt(dx_term) (0.485281...)")
+      if (allocated(error)) return
       call resfn_at_power(3, 1.5_wp, r3)
       s = sqrt(2.0_wp)
       expect = s**3/(s**3 + 1.5_wp**3)
