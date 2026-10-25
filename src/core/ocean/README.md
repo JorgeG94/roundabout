@@ -1376,7 +1376,9 @@ concrete need:
   `T_f = λ1·S + λ2 + λ3·p`, every EOS variant, `rdb_eos`; the triple
   rides the `eos_t` handle and is chosen by `&ocean_eos_nml
   tfreeze_set` — `"seaice"` = SIS2 default ⇒ bit-identical, `"isomip"`
-  = the ISOMIP+ cavity set) and the frazil accumulator
+  = the ISOMIP+ cavity set; `tfreeze_form="teos_poly"` swaps in the
+  TEOS-10 CT liquidus under `ts_convention="cons_abs"`, the flat-POD
+  `eos%ts_convention` / `tfreeze_form` / `tfreeze_sat_frac` fields) and the frazil accumulator
   (`rdb_ice_frazil` — once per outer step on the post-RK2-average
   state the driver clamps the surface layer at T_f and banks the
   supercooling deficit `ρ·Cp·h·(T_f−T)⁺` into the restart-carried

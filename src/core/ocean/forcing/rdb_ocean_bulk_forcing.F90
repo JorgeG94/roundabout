@@ -95,7 +95,7 @@ module rdb_ocean_bulk_forcing
    use rdb_ocean_bulk_flux, only: bulk_flux_config_t, bulk_flux_column, &
                                   bulk_flux_longwave_up, BULK_T0_KELVIN
    use rdb_ocean_surface_stress, only: ocean_surface_stress_t
-   use rdb_ocean_surface_flux, only: ocean_surface_flux_t, SEAWATER_CP
+   use rdb_ocean_surface_flux, only: ocean_surface_flux_t
    use rdb_ocean_halo_state, only: ocean_seam_refresh_surface_stress
    use rdb_ocean_halo, only: ocean_halo_centre
    use rdb_mem_report, only: arr_bytes
@@ -283,7 +283,7 @@ contains
                                   this%taux_c, this%tauy_c, &
                                   sf%q_sens, sf%q_lat, sf%evap, sf%q_sw, sf%q_lw, &
                                   sf%lprec, sf%fprec, sf%p_surf_atm, &
-                                  sf%heat_content_lprec, sf%heat_content_fprec)
+                                  sf%heat_content_lprec, sf%heat_content_fprec, sf%cp)
 
       ! Scalar halo of the cell-centred stress -- see the module
       ! docstring for why this (not the vector seam refresh) runs
@@ -324,7 +324,7 @@ contains
                                           open_water, &
                                           taux_c, tauy_c, q_sens, q_lat, evap, q_sw, q_lw, &
                                           lprec, fprec, p_surf_atm, &
-                                          heat_content_lprec, heat_content_fprec)
+                                          heat_content_lprec, heat_content_fprec, cp)
       !! One `bulk_flux_column` call per PHYSICAL T-cell (see the
       !! module docstring for why ghost cells are never touched here).
       !! Land / dry cells (`wet_T <= 0.5`) write explicit zero to every
@@ -345,6 +345,9 @@ contains
       real(wp), intent(inout) :: q_sw(nx, ny), q_lw(nx, ny)
       real(wp), intent(inout) :: lprec(nx, ny), fprec(nx, ny), p_surf_atm(nx, ny)
       real(wp), intent(inout) :: heat_content_lprec(nx, ny), heat_content_fprec(nx, ny)
+      real(wp), intent(in) :: cp
+         !! Specific heat (J/kg/K) of the heat content of precipitation:
+         !! `sf%cp` (`&ocean_eos_nml c_p`, default 3992).
 
       integer :: i, j, ii, jj
       real(wp) :: ow, cosA, sinA, u_g, v_g, u_c, v_c, sst, sst_k, lw_up
@@ -385,8 +388,8 @@ contains
             lprec(ii, jj) = ow*prra(ii, jj)
             fprec(ii, jj) = ow*prsn(ii, jj)
             p_surf_atm(ii, jj) = psl(ii, jj)
-            heat_content_lprec(ii, jj) = SEAWATER_CP*sst*lprec(ii, jj)
-            heat_content_fprec(ii, jj) = SEAWATER_CP*sst*fprec(ii, jj)
+            heat_content_lprec(ii, jj) = cp*sst*lprec(ii, jj)
+            heat_content_fprec(ii, jj) = cp*sst*fprec(ii, jj)
          else
             taux_c(ii, jj) = 0.0_wp
             tauy_c(ii, jj) = 0.0_wp

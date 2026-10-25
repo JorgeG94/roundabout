@@ -4077,6 +4077,48 @@ class OceanEos(Group):
         allowed=('seaice', 'isomip'),
     )
 
+    ts_convention = Enum(
+        'ts_convention',
+        doc="Meaning of the T/S tracers: 'pot_prac' = potential temperature + practical salinity (default); 'cons_abs' = TEOS-10 Conservative Temperature + Absolute Salinity (roquet_rho/roquet_spv only)",
+        units='',
+        required=False,
+        default='pot_prac',
+        allowed=('pot_prac', 'cons_abs'),
+    )
+
+    tfreeze_form = Enum(
+        'tfreeze_form',
+        doc="Liquidus form: 'linear' (tfreeze_set coefficients, default) or 'teos_poly' (TEOS-10 CT_freezing_poly(SA,p); needs ts_convention='cons_abs')",
+        units='',
+        required=False,
+        default='linear',
+        allowed=('linear', 'teos_poly'),
+    )
+
+    tfreeze_sat_frac = Real(
+        'tfreeze_sat_frac',
+        doc='Air-saturation fraction of the TEOS-10 polynomial liquidus (0 = no dissolved air; ACCESS-OM3 parity)',
+        units='',
+        required=False,
+        default=0.0,
+        has_min=True,
+        vmin=0.0,
+        has_max=True,
+        vmax=1.0,
+    )
+
+    c_p = Real(
+        'c_p',
+        doc='Seawater heat capacity for ocean heat-flux <-> temperature conversion (MOM6 C_P); 3992 (OM3) by default under both ts_conventions, TEOS-10 cp0 = 3991.86795711963',
+        units='J kg-1 K-1',
+        required=False,
+        default=3992.0,
+        has_min=True,
+        vmin=3000.0,
+        has_max=True,
+        vmax=4500.0,
+    )
+
     p_ref = Real(
         'p_ref',
         doc='Reference pressure for the potential density ms%rho_layer (horizontally uniform by design; 0 => surface density)',
@@ -6647,4 +6689,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 62
-N_KNOBS = 729
+N_KNOBS = 733

@@ -7,7 +7,7 @@ module rdb_constants
 
    public :: wp
    public :: GRAVITY, RHO_WATER, OMEGA_EARTH
-   public :: CP_WATER
+   public :: CP_WATER, SEAWATER_CP_DEFAULT
    public :: LATENT_HEAT_VAPORIZATION
    public :: DRY_TOLERANCE
    public :: NH_MIN_DEPTH
@@ -41,6 +41,10 @@ module rdb_constants
    real(wp), parameter :: OMEGA_EARTH = 7.2921e-5_wp
       !! Earth angular velocity (rad/s)
    real(wp), parameter :: CP_WATER = 4000.0_wp
+   real(wp), parameter :: SEAWATER_CP_DEFAULT = 3992.0_wp
+      !! Seawater heat capacity (J/(kg K)): MOM6 `C_P` as set by ACCESS-OM3.
+      !! Default of `&ocean_eos_nml c_p` under both T/S conventions.  The
+      !! exact TEOS-10 value cp0 = 3991.86795711963 is opt-in.
       !! Specific heat capacity of seawater (J/(kg·K)).  Converts surface
       !! heat flux Q_net [W/m²] to kinematic heat flux Q_net/(rho_0·cp) [m·K/s].
    real(wp), parameter :: LATENT_HEAT_VAPORIZATION = 2.5e6_wp

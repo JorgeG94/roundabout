@@ -46,7 +46,17 @@ module test_ocean_freezing_point
                       parse_tfreeze_set, eos_apply_tfreeze_set, &
                       TFREEZE_SET_SEAICE, TFREEZE_SET_ISOMIP, TFREEZE_SET_INVALID, &
                       EOS_VARIANT_LINEAR, EOS_VARIANT_WRIGHT_97, &
-                      EOS_VARIANT_ROQUET_SPV
+                      EOS_VARIANT_ROQUET_SPV, EOS_VARIANT_ROQUET_RHO, &
+                      TS_POT_PRAC, TS_CONS_ABS, TFREEZE_FORM_LINEAR, TFREEZE_FORM_TEOS_POLY, &
+                      eos_apply_ts_convention, parse_ts_convention, parse_tfreeze_form, &
+                      TS_INVALID, TFREEZE_FORM_INVALID
+   use rdb_teos10_convert, only: ct_freezing_poly, CP0
+   use rdb_ocean_setup, only: configure_ocean_reference_density
+   use rdb_ocean_surface_flux, only: SEAWATER_CP
+   use rdb_ocean_geothermal, only: ocean_geothermal_t
+   use rdb_tracer, only: tracer_t
+   use rdb_state, only: register_default_tracers
+   use rdb_ocean_diag_fills, only: register_default_diags
    implicit none
    private
 
@@ -101,9 +111,301 @@ contains
                   new_unittest("freezing_point_tfreeze_set_fail_loud", &
                                test_tfreeze_set_fail_loud), &
                   new_unittest("freezing_point_configured_set_reaches_ice_handle", &
-                               test_configured_set_reaches_ice_handle) &
+                               test_configured_set_reaches_ice_handle), &
+                  new_unittest("teos2b_defaults", test_teos2b_defaults), &
+                  new_unittest("teos2b_teos_poly_freezing_point", test_teos_poly_freezing), &
+                  new_unittest("teos2b_fail_loud_matrix", test_teos2b_fail_loud_matrix), &
+                  new_unittest("teos2b_cp_follows_convention", test_teos2b_cp), &
+                  new_unittest("teos2b_tracer_metadata", test_teos2b_tracer_metadata), &
+                  new_unittest("teos2b_diag_metadata", test_teos2b_diag_metadata) &
                   ]
    end subroutine collect_ocean_freezing_point_tests
+
+   subroutine test_teos2b_defaults(error)
+      !! Defaults read as pot_prac / linear / 0 -- config and handle.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+      type(eos_t) :: eos
+      call check(error, trim(cfg%ocean%eos%ts_convention) == "pot_prac" .and. &
+                 trim(cfg%ocean%eos%tfreeze_form) == "linear" .and. &
+                 cfg%ocean%eos%tfreeze_sat_frac == 0.0_wp, &
+                 "config defaults must be pot_prac / linear / 0")
+      if (allocated(error)) return
+      call check(error, eos%ts_convention == TS_POT_PRAC .and. &
+                 eos%tfreeze_form == TFREEZE_FORM_LINEAR .and. &
+                 eos%tfreeze_sat_frac == 0.0_wp, "eos_t defaults must be pot_prac / linear / 0")
+      if (allocated(error)) return
+      call check(error, parse_ts_convention("cons_abs") == TS_CONS_ABS .and. &
+                 parse_ts_convention("bogus") == TS_INVALID .and. &
+                 parse_tfreeze_form("teos_poly") == TFREEZE_FORM_TEOS_POLY .and. &
+                 parse_tfreeze_form("bogus") == TFREEZE_FORM_INVALID, "parse functions")
+   end subroutine test_teos2b_defaults
+
+   subroutine test_teos_poly_freezing(error)
+      !! teos_poly at SA = 35.16504, p = 0, sat_frac = 0 equals
+      !! `ct_freezing_poly` exactly and is ~ -1.92 degC; linear stays -1.89.
+      !! Pressure: callers pass Pa, the polynomial wants dbar.
+      type(error_type), allocatable, intent(out) :: error
+      type(eos_t) :: eos
+      real(wp) :: t_poly, t_lin
+      eos%variant = EOS_VARIANT_ROQUET_RHO
+      t_lin = eos_freezing_point(eos, 35.0_wp, 0.0_wp)
+      call check(error, abs(t_lin + 1.89_wp) < 1.0e-12_wp, "linear liquidus at S=35 must stay -1.89")
+      if (allocated(error)) return
+      call eos_apply_ts_convention(eos, TS_CONS_ABS, TFREEZE_FORM_TEOS_POLY, 0.0_wp)
+      t_poly = eos_freezing_point(eos, 35.16504_wp, 0.0_wp)
+      call check(error, t_poly == ct_freezing_poly(35.16504_wp, 0.0_wp, 0.0_wp), &
+                 "teos_poly p=0 must equal ct_freezing_poly exactly")
+      if (allocated(error)) return
+      call check(error, abs(t_poly + 1.92_wp) < 0.01_wp, "teos_poly freezing CT ~ -1.92 degC")
+      if (allocated(error)) return
+      call check(error, eos_freezing_point(eos, 34.0_wp, 1.0e7_wp) == &
+                 ct_freezing_poly(34.0_wp, 1000.0_wp, 0.0_wp), &
+                 "teos_poly must convert Pa to dbar (1e7 Pa = 1000 dbar)")
+      if (allocated(error)) return
+      call eos_apply_ts_convention(eos, TS_CONS_ABS, TFREEZE_FORM_TEOS_POLY, 0.5_wp)
+      call check(error, eos_freezing_point(eos, 35.0_wp, 0.0_wp) == &
+                 ct_freezing_poly(35.0_wp, 0.0_wp, 0.5_wp), "sat_frac must reach the polynomial")
+   end subroutine test_teos_poly_freezing
+
+   subroutine test_teos2b_fail_loud_matrix(error)
+      !! Each refusal, with a baseline first so a failure can only come from
+      !! the one key moved.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+      integer :: ierr
+
+      cfg%ocean%eos%eos = "roquet_rho"
+      cfg%ocean%eos%ts_convention = "cons_abs"
+      ierr = -999
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "cons_abs + roquet_rho must validate")
+      if (allocated(error)) return
+      cfg%ocean%eos%eos = "roquet_spv"
+      ierr = -999
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "cons_abs + roquet_spv must validate")
+      if (allocated(error)) return
+      cfg%ocean%eos%tfreeze_form = "teos_poly"
+      ierr = -999
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "cons_abs + teos_poly must validate")
+      if (allocated(error)) return
+
+      ! teos_poly without cons_abs.
+      cfg%ocean%eos%ts_convention = "pot_prac"
+      ierr = -999
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, "teos_poly requires cons_abs")
+      if (allocated(error)) return
+      cfg%ocean%eos%tfreeze_form = "linear"
+
+      ! cons_abs with a non-Roquet EOS.
+      cfg%ocean%eos%ts_convention = "cons_abs"
+      cfg%ocean%eos%eos = "wright"
+      ierr = -999
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, "cons_abs requires a Roquet EOS")
+      if (allocated(error)) return
+      cfg%ocean%eos%eos = "roquet_rho"
+
+      ! cons_abs + sea ice.
+      cfg%ocean%ice%enable = .true.
+      ierr = -999
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, "cons_abs + ice must be refused")
+      if (allocated(error)) return
+      cfg%ocean%ice%enable = .false.
+
+      ! cons_abs + cavity melt (refused on its own merits too, so only the
+      ! status is asserted; the cons_abs reason is in the logged message).
+      cfg%ocean%cavity_melt%enable = .true.
+      ierr = -999
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, "cons_abs + cavity melt must be refused")
+      if (allocated(error)) return
+      cfg%ocean%cavity_melt%enable = .false.
+
+      ! cons_abs + file-based z-init; the analytic profile stays legal.
+      cfg%ocean%zinit%enable = .true.
+      cfg%ocean%zinit%source = "file"
+      cfg%ocean%zinit%file = "woa.nc"
+      ierr = -999
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, "cons_abs + file z-init must be refused")
+      if (allocated(error)) return
+      cfg%ocean%zinit%source = "linear"
+      cfg%ocean%zinit%file = ""
+      ierr = -999
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "cons_abs + analytic z-init stays legal")
+      if (allocated(error)) return
+      cfg%ocean%zinit%enable = .false.
+
+      ! cons_abs + bulk formulae (SST read as theta) and scalar restoring
+      ! (targets documented as theta / PSU).
+      cfg%ocean%bulk_flux%enable = .true.
+      ierr = -999
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, "cons_abs + bulk flux must be refused")
+      if (allocated(error)) return
+      cfg%ocean%bulk_flux%enable = .false.
+      cfg%ocean%restore%enable_restore_temp = .true.
+      ierr = -999
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, "cons_abs + restore temp must be refused")
+      if (allocated(error)) return
+      cfg%ocean%restore%enable_restore_temp = .false.
+      cfg%ocean%restore%enable_restore_salt = .true.
+      ierr = -999
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, "cons_abs + restore salt must be refused")
+      if (allocated(error)) return
+      cfg%ocean%restore%enable_restore_salt = .false.
+
+      ! c_p outside the physical bound 3000-4500 J/(kg K).
+      cfg%ocean%eos%c_p = 100.0_wp
+      ierr = -999
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, "c_p = 100 must be refused")
+      if (allocated(error)) return
+      cfg%ocean%eos%c_p = 3992.0_wp
+
+      ! Unrecognised strings.
+      cfg%ocean%eos%ts_convention = "conservative"
+      ierr = -999
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, "unknown ts_convention must fail loud")
+      if (allocated(error)) return
+      cfg%ocean%eos%ts_convention = "cons_abs"
+      cfg%ocean%eos%tfreeze_form = "millero"
+      ierr = -999
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, "unknown tfreeze_form must fail loud")
+   end subroutine test_teos2b_fail_loud_matrix
+
+   subroutine test_teos2b_cp(error)
+      !! sf%cp and the geothermal cp follow `&ocean_eos_nml c_p`, NOT the
+      !! T/S convention: 3992 by default under both conventions (ACCESS-OM3
+      !! runs CT/SA with C_P = 3992), and an explicit TEOS-10 cp0 is passed
+      !! through unchanged.  Pass 2 is the one that fails if cons_abs ever
+      !! starts switching the heat capacity on its own again.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+      type(config_t) :: cfg_default  ! never written: reset source (flang-new rejects config_t())
+      type(hgrid_t) :: grid
+      type(ocean_state_t) :: state
+      type(ocean_geothermal_t) :: geo
+      integer :: pass
+      real(wp) :: want
+
+      do pass = 1, 3
+         cfg = cfg_default
+         cfg%sim_type = "ocean"
+         cfg%nx = 6
+         cfg%ny = 5
+         cfg%dx = 1000.0_wp
+         cfg%dy = 1000.0_wp
+         cfg%nz_layers = 2
+         cfg%nghost = 2
+         want = SEAWATER_CP
+         if (pass >= 2) then
+            cfg%ocean%eos%eos = "roquet_rho"
+            cfg%ocean%eos%ts_convention = "cons_abs"
+         end if
+         if (pass == 3) then
+            cfg%ocean%eos%c_p = CP0
+            want = CP0
+         end if
+         call grid%init(6, 5, 2, 1000.0_wp, 1000.0_wp)
+         call state%init_from_config(cfg, grid)
+         call configure_ocean_drag(cfg, state, compute_rank=0)
+         call configure_ocean_reference_density(state, geo=geo)
+         call check(error, SEAWATER_CP == 3992.0_wp, "SEAWATER_CP must stay 3992")
+         if (allocated(error)) return
+         call check(error, state%surface_flux%cp == want .and. geo%cp == want, &
+                    "sf%cp / geo%cp must equal &ocean_eos_nml c_p (pass "// &
+                    achar(48 + pass)//")")
+         if (pass >= 2 .and. .not. allocated(error)) then
+            call check(error, state%eos%ts_convention == TS_CONS_ABS, &
+                       "cons_abs must reach the EOS handle")
+         end if
+         call state%destroy()
+         if (allocated(error)) return
+      end do
+   end subroutine test_teos2b_cp
+
+   subroutine test_teos2b_tracer_metadata(error)
+      !! cons_abs relabels the T/S tracers (CF names); default unchanged.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+      type(tracer_t) :: tr_s, tr_t
+      call register_default_tracers(tr_s, tr_t, cfg)
+      call check(error, trim(tr_t%standard_name) == "sea_water_potential_temperature" .and. &
+                 trim(tr_s%units) == "PSU", "default tracer metadata must stay theta/PSU")
+      if (allocated(error)) return
+      cfg%ocean%eos%ts_convention = "cons_abs"
+      call register_default_tracers(tr_s, tr_t, cfg)
+      call check(error, trim(tr_t%standard_name) == "sea_water_conservative_temperature" .and. &
+                 trim(tr_t%long_name) == "conservative temperature" .and. &
+                 trim(tr_t%units) == "degC" .and. &
+                 trim(tr_s%standard_name) == "sea_water_absolute_salinity" .and. &
+                 trim(tr_s%long_name) == "absolute salinity" .and. &
+                 trim(tr_s%units) == "g kg-1", "cons_abs tracer metadata")
+   end subroutine test_teos2b_tracer_metadata
+
+   subroutine test_teos2b_diag_metadata(error)
+      !! The canonical `temperature` / `salinity` diags keep their KEYS but
+      !! take CF metadata from the T/S convention (read off the state's EOS
+      !! handle); the default pot_prac metadata is unchanged.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+      type(hgrid_t) :: grid
+      type(ocean_state_t) :: state
+      integer :: pass, it, is, i
+
+      do pass = 1, 2
+         cfg%sim_type = "ocean"
+         cfg%nx = 6
+         cfg%ny = 5
+         cfg%dx = 1000.0_wp
+         cfg%dy = 1000.0_wp
+         cfg%nz_layers = 2
+         cfg%nghost = 2
+         call grid%init(6, 5, 2, 1000.0_wp, 1000.0_wp)
+         call state%init_from_config(cfg, grid)
+         if (pass == 2) state%eos%ts_convention = TS_CONS_ABS
+         call register_default_diags(state, dt_out=3600.0_wp)
+         it = 0
+         is = 0
+         do i = 1, state%diag%nvars
+            if (trim(state%diag%vars(i)%name) == "temperature") it = i
+            if (trim(state%diag%vars(i)%name) == "salinity") is = i
+         end do
+         call check(error, it > 0 .and. is > 0, "temperature / salinity diag keys must stay")
+         if (.not. allocated(error)) then
+            if (pass == 1) then
+               call check(error, &
+                          trim(state%diag%vars(it)%standard_name) == "sea_water_potential_temperature" .and. &
+                          trim(state%diag%vars(it)%long_name) == "sea_water_potential_temperature" .and. &
+                          trim(state%diag%vars(it)%units) == "degC" .and. &
+                          trim(state%diag%vars(is)%standard_name) == "sea_water_salinity" .and. &
+                          trim(state%diag%vars(is)%long_name) == "sea_water_salinity" .and. &
+                          trim(state%diag%vars(is)%units) == "psu", "default diag metadata must stay theta/psu")
+            else
+               call check(error, &
+                          trim(state%diag%vars(it)%standard_name) == "sea_water_conservative_temperature" .and. &
+                          trim(state%diag%vars(it)%long_name) == "conservative temperature" .and. &
+                          trim(state%diag%vars(it)%units) == "degC" .and. &
+                          trim(state%diag%vars(is)%standard_name) == "sea_water_absolute_salinity" .and. &
+                          trim(state%diag%vars(is)%long_name) == "absolute salinity" .and. &
+                          trim(state%diag%vars(is)%units) == "g kg-1", "cons_abs diag metadata")
+            end if
+         end if
+         call state%destroy()
+         if (allocated(error)) return
+      end do
+   end subroutine test_teos2b_diag_metadata
 
    subroutine make_eos(eos)
       !! Minimal EOS handle — the point function only reads the flat POD,

@@ -761,6 +761,10 @@ Equation-of-state variant selector, liquidus set + reference pressure.
 |------|---------|-------|-------------|
 | `eos` | `"linear"` |  | Equation-of-state variant |
 | `tfreeze_set` | `"seaice"` |  | Named liquidus coefficient set for eos_freezing_point (T_f = l1*S + l2 + l3*p): 'seaice' = SIS2/MOM6 (-0.054, 0, -7.53e-8), 'isomip' = ISOMIP+ (-0.0573, 0.0832, -7.53e-8) |
+| `ts_convention` | `"pot_prac"` |  | Meaning of the T/S tracers: 'pot_prac' = potential temperature + practical salinity (default); 'cons_abs' = TEOS-10 Conservative Temperature + Absolute Salinity (roquet_rho/roquet_spv only) |
+| `tfreeze_form` | `"linear"` |  | Liquidus form: 'linear' (tfreeze_set coefficients, default) or 'teos_poly' (TEOS-10 CT_freezing_poly(SA,p); needs ts_convention='cons_abs') |
+| `tfreeze_sat_frac` | `0.0000000000E+00` |  | Air-saturation fraction of the TEOS-10 polynomial liquidus (0 = no dissolved air; ACCESS-OM3 parity) |
+| `c_p` | `0.3992000000E+04` | J kg-1 K-1 | Seawater heat capacity for ocean heat-flux <-> temperature conversion (MOM6 C_P); 3992 (OM3) by default under both ts_conventions, TEOS-10 cp0 = 3991.86795711963 |
 | `p_ref` | `0.0000000000E+00` | Pa | Reference pressure for the potential density ms%rho_layer (horizontally uniform by design; 0 => surface density) |
 
 ### &ocean_bdrag_nml

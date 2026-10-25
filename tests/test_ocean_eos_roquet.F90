@@ -36,10 +36,12 @@ module test_ocean_eos_roquet
    use rdb_constants, only: wp
    use rdb_eos, only: eos_t, eos_density_point, eos_specvol_derivs, &
                       EOS_VARIANT_LINEAR, EOS_VARIANT_WRIGHT_97, &
-                      EOS_VARIANT_ROQUET_SPV, roquet_model_ct, roquet_model_ct_derivs
+                      EOS_VARIANT_ROQUET_SPV, EOS_VARIANT_ROQUET_RHO, TS_CONS_ABS, &
+                      roquet_model_ct, roquet_model_ct_derivs, &
+                      roquet_spv_value, roquet_rho_value
    use rdb_ocean_eos_compute, only: ocean_eos_compute
    use rdb_ocean_pressure_force, only: OPGF_VARIANT_FV_WRIGHT, OPGF_VARIANT_FV_LITE
-   use rdb_teos10_convert, only: ct_from_pt
+   use rdb_teos10_convert, only: ct_from_pt, ct_from_pt_derivs, pt_from_ct, sp_from_sr
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use testdrive, only: new_unittest, unittest_type, error_type, check
@@ -62,9 +64,97 @@ contains
                   new_unittest("roquet_fail_loud_fv_wright", test_fail_loud_fv_wright), &
                   new_unittest("roquet_fresh_water_finite", test_fresh_water_finite), &
                   new_unittest("roquet_3d_fill_matches_point", test_3d_fill_matches_point), &
-                  new_unittest("roquet_model_ct_pins_gsw", test_model_ct_pins_gsw) &
+                  new_unittest("roquet_model_ct_pins_gsw", test_model_ct_pins_gsw), &
+                  new_unittest("roquet_cons_abs_density_identity", test_cons_abs_density_identity), &
+                  new_unittest("roquet_cons_abs_specvol_derivs_identity", &
+                               test_cons_abs_derivs_identity), &
+                  new_unittest("roquet_cons_abs_value_inc_identity", test_cons_abs_value_identity) &
                   ]
    end subroutine collect_ocean_eos_roquet_tests
+
+   subroutine test_cons_abs_density_identity(error)
+      !! `eos_density_point(cons_abs; CT, SA)` equals
+      !! `eos_density_point(pot_prac; pt_from_ct(SA, CT), sp_from_sr(SA))`
+      !! to 1e-9 kg/m^3, for BOTH Roquet variants (IOC/SCOR/IAPSO 2010;
+      !! Roquet et al. 2015): the cons_abs path is the identity on (CT, SA).
+      type(error_type), allocatable, intent(out) :: error
+      real(wp), parameter :: SA(4) = [30.0_wp, 34.0_wp, 35.16504_wp, 38.0_wp]
+      real(wp), parameter :: CT(4) = [-1.5_wp, 4.0_wp, 10.0_wp, 25.0_wp]
+      real(wp), parameter :: P(3) = [0.0_wp, 1.0e7_wp, 5.0e7_wp]
+      integer, parameter :: VARS(2) = [EOS_VARIANT_ROQUET_SPV, EOS_VARIANT_ROQUET_RHO]
+      type(eos_t) :: ec, ep
+      real(wp) :: r_c, r_p, mx
+      integer :: iv, i, ip
+
+      mx = 0.0_wp
+      do iv = 1, 2
+         ec%variant = VARS(iv)
+         ec%ts_convention = TS_CONS_ABS
+         ep%variant = VARS(iv)
+         do ip = 1, 3
+            do i = 1, 4
+               r_c = eos_density_point(ec, CT(i), SA(i), P(ip))
+               r_p = eos_density_point(ep, pt_from_ct(SA(i), CT(i)), sp_from_sr(SA(i)), P(ip))
+               mx = max(mx, abs(r_c - r_p))
+            end do
+         end do
+      end do
+      call check(error, mx <= 1.0e-9_wp, "cons_abs density != pot_prac(pt_from_ct, sp_from_sr)")
+   end subroutine test_cons_abs_density_identity
+
+   subroutine test_cons_abs_derivs_identity(error)
+      !! `eos_specvol_derivs` under cons_abs returns dSV/dCT, dSV/dSA
+      !! (unit Jacobian); the pot_prac derivatives at the converted point
+      !! equal those after the chain rule through ct_from_pt_derivs.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp), parameter :: SA(4) = [30.0_wp, 34.0_wp, 35.16504_wp, 38.0_wp]
+      real(wp), parameter :: CT(4) = [-1.5_wp, 4.0_wp, 10.0_wp, 25.0_wp]
+      integer, parameter :: VARS(2) = [EOS_VARIANT_ROQUET_SPV, EOS_VARIANT_ROQUET_RHO]
+      type(eos_t) :: ec, ep
+      real(wp) :: a, b, pt, sp, dt_p, ds_p, ct_dummy, dct_dpt, dct_dsr, mx, p
+      integer :: iv, i, ip
+
+      mx = 0.0_wp
+      do iv = 1, 2
+         ec%variant = VARS(iv)
+         ec%ts_convention = TS_CONS_ABS
+         ep%variant = VARS(iv)
+         do ip = 1, 3
+            p = 2.5e7_wp*real(ip - 1, wp)
+            do i = 1, 4
+               call eos_specvol_derivs(ec, CT(i), SA(i), p, a, b)
+               pt = pt_from_ct(SA(i), CT(i))
+               sp = sp_from_sr(SA(i))
+               call eos_specvol_derivs(ep, pt, sp, p, dt_p, ds_p)
+               call ct_from_pt_derivs(SA(i), pt, ct_dummy, dct_dpt, dct_dsr)
+               ! model-variable derivatives from the CT/SA ones.
+               mx = max(mx, abs(a*dct_dpt - dt_p)/max(abs(dt_p), 1.0e-30_wp), &
+                        abs((b + a*dct_dsr)*(35.16504_wp/35.0_wp) - ds_p)/max(abs(ds_p), 1.0e-30_wp))
+            end do
+         end do
+      end do
+      call check(error, mx <= 1.0e-8_wp, "cons_abs specvol derivatives != chain-ruled pot_prac")
+   end subroutine test_cons_abs_derivs_identity
+
+   subroutine test_cons_abs_value_identity(error)
+      !! The value-only entry points the 3-D fill and the PGF kernels share
+      !! (`rdb_roquet_{spv,rho}.inc`) honour the same flag.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: sa, ct, pt, sp, mx
+      integer :: i
+      mx = 0.0_wp
+      do i = 0, 6
+         sa = 31.0_wp + real(i, wp)
+         ct = -1.0_wp + 3.5_wp*real(i, wp)
+         pt = pt_from_ct(sa, ct)
+         sp = sp_from_sr(sa)
+         mx = max(mx, abs(roquet_spv_value(ct, sa, 2.0e7_wp, .true.) &
+                          - roquet_spv_value(pt, sp, 2.0e7_wp, .false.))*1035.0_wp, &
+                  abs(roquet_rho_value(ct, sa, 2.0e7_wp, .true.) &
+                      - roquet_rho_value(pt, sp, 2.0e7_wp, .false.)))
+      end do
+      call check(error, mx <= 1.0e-9_wp, "cons_abs value entry points != pot_prac converted")
+   end subroutine test_cons_abs_value_identity
 
    pure function make_roquet() result(eos)
       type(eos_t) :: eos
@@ -174,11 +264,11 @@ contains
       real(wp) :: sr, ct, dct_dpt, dct_dsr
       integer :: ip
       do ip = 1, NP
-         ct = roquet_model_ct(PT_REF(ip), SA_REF(ip)/SR_PER_SP)
+         ct = roquet_model_ct(PT_REF(ip), SA_REF(ip)/SR_PER_SP, .false.)
          call check(error, abs(ct - CT_REF(ip)) <= 1.0e-10_wp, &
                     "roquet_model_ct differs from the TEOS-10 GSW Conservative Temperature")
          if (allocated(error)) return
-         call roquet_model_ct_derivs(PT_REF(ip), SA_REF(ip)/SR_PER_SP, sr, ct, dct_dpt, dct_dsr)
+         call roquet_model_ct_derivs(PT_REF(ip), SA_REF(ip)/SR_PER_SP, sr, ct, dct_dpt, dct_dsr, .false.)
          call check(error, abs(ct - CT_REF(ip)) <= 1.0e-10_wp, &
                     "roquet_model_ct_derivs differs from the TEOS-10 GSW Conservative Temperature")
          if (allocated(error)) return

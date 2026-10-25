@@ -40,8 +40,11 @@
 !
 ! Do NOT add state, logging, or anything impure to this file.
 
-   pure subroutine rdb_roq_rho_ts_coeffs(t_roq, s_roq, r0_roq, r1_roq, r2_roq, r3_roq)
+   pure subroutine rdb_roq_rho_ts_coeffs(t_roq, s_roq, r0_roq, r1_roq, r2_roq, r3_roq, cons_roq)
       !$acc routine seq
+      logical, intent(in)   :: cons_roq
+         !! `.true.` = (T, S) are already (CT, SA) (`TS_CONS_ABS`): no SR
+         !! factor, no PT->CT conversion.
       !! The (T, S)-dependent coefficients of the Roquet in-situ-density
       !! polynomial viewed as a polynomial in PRESSURE. Everything expensive
       !! in the EOS -- the shared PT->CT conversion (`rdb_roq_ct_of`, one
@@ -64,8 +67,14 @@
       ! CT, through the one shared helper (`rdb_roq_ct_of`, `rdb_roquet_spv.inc`,
       ! included before this file in the consuming module). This fit's ΔS
       ! offset (32, vs the SpV fit's 24) is distinct and folded into zs here.
-      zt_roq = rdb_roq_ct_of(t_roq, s_roq)
-      zs_roq = sqrt(abs(s_roq*ROQ_SR_FACTOR + ROQ_RHO_RDELTAS)*ROQ_R1_S0)
+      zt_roq = rdb_roq_ct_of(t_roq, s_roq, cons_roq)
+      ! Branch, not `merge`: see `rdb_roq_ts_coeffs` (bit-identity of the
+      ! pot_prac s*F + delta contraction).
+      if (cons_roq) then
+         zs_roq = sqrt(abs(s_roq + ROQ_RHO_RDELTAS)*ROQ_R1_S0)
+      else
+         zs_roq = sqrt(abs(s_roq*ROQ_SR_FACTOR + ROQ_RHO_RDELTAS)*ROQ_R1_S0)
+      end if
 
       r3_roq = RHO003 + (zs_roq*RHO103 + zt_roq*RHO013)
       r2_roq = RHO002 + (zs_roq*(RHO102 + zs_roq*RHO202) &

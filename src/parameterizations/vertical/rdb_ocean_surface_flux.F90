@@ -84,7 +84,7 @@
 !!       registered (derived-field rule, `ocean_state_build_restart_registry`
 !!       in `ocean_state/rdb_ocean_state_restart.F90`).
 module rdb_ocean_surface_flux
-   use rdb_constants, only: wp
+   use rdb_constants, only: wp, SEAWATER_CP_DEFAULT
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use, intrinsic :: iso_fortran_env, only: int64
@@ -106,9 +106,9 @@ module rdb_ocean_surface_flux
    ! (specified in m/day) to MKS m/s at the seed call.
    real(wp), parameter :: SECONDS_PER_DAY = 86400.0_wp
 
-   ! Specific heat capacity of seawater (J/kg/K).  Wright (1997)
-   ! Table A1 reference value; same as MOM6's `CP_SW` default.
-   real(wp), parameter, public :: SEAWATER_CP = 3992.0_wp
+   ! Specific heat capacity of seawater (J/kg/K): alias of
+   ! `SEAWATER_CP_DEFAULT` (MOM6 `C_P` as set by ACCESS-OM3).
+   real(wp), parameter, public :: SEAWATER_CP = SEAWATER_CP_DEFAULT
 
    type :: ocean_surface_flux_t
       logical :: is_init = .false.

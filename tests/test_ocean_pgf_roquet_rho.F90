@@ -56,6 +56,7 @@ module test_ocean_pgf_roquet_rho
                                        roquet_rho_recon_dpa_intz, roquet_rho_recon_dpa_face
    use rdb_ocean_pgf_reconstruct, only: boole_dpa_intz_layer, boole_dpa_face_pcm, &
                                         boole_dpa_face
+   use rdb_teos10_convert, only: pt_from_ct, sp_from_sr
    use pic_logger, only: global_logger
    implicit none
    private
@@ -105,7 +106,8 @@ contains
                   new_unittest("rho_matches_generic_boole", test_rho_generic), &
                   new_unittest("rho_pcm_face_matches_quadrature", test_rho_pcm_face_quadrature), &
                   new_unittest("rho_inc_matches_eos_point", test_rho_inc_matches_point), &
-                  new_unittest("rho_recon_twins_match_generic_and_quadrature", test_rho_recon_twins) &
+                  new_unittest("rho_recon_twins_match_generic_and_quadrature", test_rho_recon_twins), &
+                  new_unittest("rho_cons_matches_converted", test_rho_cons_matches_converted) &
                   ]
    end subroutine collect_ocean_pgf_roquet_rho_tests
 
@@ -168,7 +170,7 @@ contains
             do is = 1, N_S
                do it = 1, N_T
                   call roquet_rho_pcm_dpa_intz(T_SET(it), S_SET(is), E_TOP_SET(il), DZ_SET(il), &
-                                               RHO0, rho_ref, dpa, intz)
+                                               RHO0, rho_ref, dpa, intz, .false.)
                   call gl_layer(eos, T_SET(it), S_SET(is), E_TOP_SET(il), DZ_SET(il), &
                                 rho_ref, dpa_q, intz_q)
                   err = max(abs(dpa - dpa_q)/(GRAVITY*RHO0*DZ_SET(il)), &
@@ -212,7 +214,7 @@ contains
          do is = 1, N_S
             do it = 1, N_T
                call roquet_rho_pcm_dpa_intz(T_SET(it), S_SET(is), E_TOP_SET(il), DZ_SET(il), &
-                                            RHO0, RHO0, dpa, intz)
+                                            RHO0, RHO0, dpa, intz, .false.)
                call boole_dpa_intz_layer(eos, RHO0, RHO0, E_TOP_SET(il), DZ_SET(il), &
                                          T_SET(it), T_SET(it), T_SET(it), &
                                          S_SET(is), S_SET(is), S_SET(is), &
@@ -227,12 +229,12 @@ contains
       hw(:, 2) = [0.8_wp, 0.2_wp, 0.65_wp, 0.35_wp]
       do iw = 1, 2
          do n = 1, NCASE
-            call roquet_rho_pcm_dpa_intz(C(5, n), C(7, n), C(1, n), C(3, n), RHO0, RHO0, dpa_l, intz)
-            call roquet_rho_pcm_dpa_intz(C(6, n), C(8, n), C(2, n), C(4, n), RHO0, RHO0, dpa_r, intz)
+            call roquet_rho_pcm_dpa_intz(C(5, n), C(7, n), C(1, n), C(3, n), RHO0, RHO0, dpa_l, intz, .false.)
+            call roquet_rho_pcm_dpa_intz(C(6, n), C(8, n), C(2, n), C(4, n), RHO0, RHO0, dpa_r, intz, .false.)
             call roquet_rho_pcm_dpa_face(C(1, n), C(2, n), C(3, n), C(4, n), &
                                          C(5, n), C(6, n), C(7, n), C(8, n), dpa_l, dpa_r, &
                                          hw(1, iw), hw(2, iw), hw(3, iw), hw(4, iw), &
-                                         RHO0, RHO0, fa)
+                                         RHO0, RHO0, fa, .false.)
             call boole_dpa_face_pcm(eos, RHO0, RHO0, C(1, n), C(2, n), C(3, n), C(4, n), &
                                     C(5, n), C(6, n), C(7, n), C(8, n), dpa_l, dpa_r, &
                                     hw(1, iw), hw(2, iw), hw(3, iw), hw(4, iw), fb)
@@ -274,7 +276,7 @@ contains
          call roquet_rho_pcm_dpa_face(C(1, n), C(2, n), C(3, n), C(4, n), &
                                       C(5, n), C(6, n), C(7, n), C(8, n), dpa_l, dpa_r, &
                                       1.0_wp, 0.0_wp, 1.0_wp, 0.0_wp, &
-                                      RHO0, RHO0, fa)
+                                      RHO0, RHO0, fa, .false.)
          fq = gl_face_pcm(eos, C(1, n), C(2, n), C(3, n), C(4, n), &
                           C(5, n), C(6, n), C(7, n), C(8, n))
          err = abs(fa - fq)/(GRAVITY*RHO0*0.5_wp*(C(3, n) + C(4, n)))
@@ -343,10 +345,10 @@ contains
       do ip = 1, size(P_GRID)
          do is = 1, size(S_GRID)
             do it = 1, size(T_GRID)
-               v_inc = roquet_rho_value(T_GRID(it), S_GRID(is), P_GRID(ip))
+               v_inc = roquet_rho_value(T_GRID(it), S_GRID(is), P_GRID(ip), .false.)
                v_point = eos_density_point(eos, T_GRID(it), S_GRID(is), P_GRID(ip))
                max_diff = max(max_diff, abs(v_inc - v_point))
-               call roquet_rho_point(T_GRID(it), S_GRID(is), P_GRID(ip), v_indep, d_dt, d_ds)
+               call roquet_rho_point(T_GRID(it), S_GRID(is), P_GRID(ip), v_indep, d_dt, d_ds, .false.)
                max_rel = max(max_rel, abs(v_inc - v_indep)/abs(v_indep))
             end do
          end do
@@ -359,6 +361,91 @@ contains
       call global_logger%info(trim(msg))
       call check(error, max_rel <= 1.0e-14_wp, trim(msg))
    end subroutine test_rho_inc_matches_point
+
+   subroutine test_rho_cons_matches_converted(error)
+      !! `cons = .true.` on (CT, SA) must equal `cons = .false.` on the
+      !! converted pair (theta = pt_from_ct(SA, CT), SP = sp_from_sr(SA)):
+      !! the two paths are the same fit, differing only in where the
+      !! SR / CT conversion happens, so the answer is round-off.  Covers
+      !! the PCM layer, the PCM cross-face rule and the PLM / PPM
+      !! reconstruct layer kernels.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp), parameter :: TOL_CONS_PCM = 1.0e-10_wp
+         !! PCM layer: no profile, so the two paths are the same number.
+      real(wp), parameter :: TOL_CONS_INTERP = 1.0e-7_wp
+         !! Face / PLM / PPM kernels interpolate T and S linearly across the
+         !! sub-columns / layer: linear in (CT, SA) is not linear in
+         !! (theta, SP), so the two agree to the second-order curvature of
+         !! CT(theta) over the profile, not to round-off.
+      real(wp) :: ct(3), sa(3), th(3), sp(3), dpa_c, dpa_p, intz_c, intz_p
+      real(wp) :: dl_c, dr_c, dl_p, dr_p, fa_c, fa_p, err, max_pcm, max_interp, scale
+      integer :: it, is, il, ip, m
+      logical :: parabolic
+      character(len=200) :: msg
+
+      max_pcm = 0.0_wp
+      max_interp = 0.0_wp
+      do il = 1, N_LAY
+         scale = GRAVITY*RHO0*DZ_SET(il)
+         do is = 1, N_S
+            do it = 1, N_T
+               ! Mean, top and bottom edge values (m = 1, 2, 3).
+               ct = [T_SET(it), T_SET(it) + 0.7_wp, T_SET(it) - 0.4_wp]
+               sa = [S_SET(is), S_SET(is) - 0.05_wp, S_SET(is) + 0.08_wp]
+               do m = 1, 3
+                  th(m) = pt_from_ct(sa(m), ct(m))
+                  sp(m) = sp_from_sr(sa(m))
+               end do
+               call roquet_rho_pcm_dpa_intz(ct(1), sa(1), E_TOP_SET(il), DZ_SET(il), RHO0, RHO0, &
+                                            dpa_c, intz_c, .true.)
+               call roquet_rho_pcm_dpa_intz(th(1), sp(1), E_TOP_SET(il), DZ_SET(il), RHO0, RHO0, &
+                                            dpa_p, intz_p, .false.)
+               err = max(abs(dpa_c - dpa_p)/scale, &
+                         abs(intz_c - intz_p)/(0.5_wp*scale*DZ_SET(il)))
+               max_pcm = max(max_pcm, err)
+               ! Cross-face rule: right column slightly warmer / saltier.
+               call roquet_rho_pcm_dpa_intz(ct(1) + 0.5_wp, sa(1) + 0.2_wp, E_TOP_SET(il) - 3.0_wp, &
+                                            0.9_wp*DZ_SET(il), RHO0, RHO0, dr_c, intz_c, .true.)
+               call roquet_rho_pcm_dpa_intz(pt_from_ct(sa(1) + 0.2_wp, ct(1) + 0.5_wp), &
+                                            sp_from_sr(sa(1) + 0.2_wp), E_TOP_SET(il) - 3.0_wp, &
+                                            0.9_wp*DZ_SET(il), RHO0, RHO0, dr_p, intz_p, .false.)
+               dl_c = dpa_c
+               dl_p = dpa_p
+               call roquet_rho_pcm_dpa_face(E_TOP_SET(il), E_TOP_SET(il) - 3.0_wp, DZ_SET(il), &
+                                            0.9_wp*DZ_SET(il), ct(1), ct(1) + 0.5_wp, sa(1), sa(1) + 0.2_wp, &
+                                            dl_c, dr_c, 0.8_wp, 0.2_wp, 0.65_wp, 0.35_wp, RHO0, RHO0, &
+                                            fa_c, .true.)
+               call roquet_rho_pcm_dpa_face(E_TOP_SET(il), E_TOP_SET(il) - 3.0_wp, DZ_SET(il), &
+                                            0.9_wp*DZ_SET(il), th(1), pt_from_ct(sa(1) + 0.2_wp, ct(1) + 0.5_wp), &
+                                            sp(1), sp_from_sr(sa(1) + 0.2_wp), &
+                                            dl_p, dr_p, 0.8_wp, 0.2_wp, 0.65_wp, 0.35_wp, RHO0, RHO0, &
+                                            fa_p, .false.)
+               max_interp = max(max_interp, abs(fa_c - fa_p)/scale)
+               do ip = 1, 2
+                  parabolic = (ip == 2)
+                  call roquet_rho_recon_dpa_intz(RHO0, RHO0, E_TOP_SET(il), DZ_SET(il), &
+                                                 ct(2), ct(3), ct(1), sa(2), sa(3), sa(1), &
+                                                 parabolic, dpa_c, intz_c, .true.)
+                  call roquet_rho_recon_dpa_intz(RHO0, RHO0, E_TOP_SET(il), DZ_SET(il), &
+                                                 th(2), th(3), th(1), sp(2), sp(3), sp(1), &
+                                                 parabolic, dpa_p, intz_p, .false.)
+                  err = max(abs(dpa_c - dpa_p)/scale, &
+                            abs(intz_c - intz_p)/(0.5_wp*scale*DZ_SET(il)))
+                  max_interp = max(max_interp, err)
+               end do
+               if (max_pcm > TOL_CONS_PCM .or. max_interp > TOL_CONS_INTERP) then
+                  write (msg, '(a,2f7.2,2es11.3,a,es10.3)') "cons vs converted T,S,e_top,dz=", &
+                     T_SET(it), S_SET(is), E_TOP_SET(il), DZ_SET(il), " rel err ", max(max_pcm, max_interp)
+                  call check(error, .false., trim(msg))
+                  return
+               end if
+            end do
+         end do
+      end do
+      write (msg, '(a,es10.3,a,es10.3)') "rho cons=T (CT,SA) vs cons=F (theta,SP): PCM layer max rel err ", &
+         max_pcm, "; face/PLM/PPM ", max_interp
+      call global_logger%info(trim(msg))
+   end subroutine test_rho_cons_matches_converted
 
    subroutine column_edges(t_t, t_b, t_m, s_t, s_b, s_m)
       !! A PLM/PPM-like sub-layer profile: edges off the mean. Copied
@@ -495,7 +582,7 @@ contains
                   call column_edges(t_t, t_b, T_SET(it), s_t, s_b, S_SET(is))
                   call roquet_rho_recon_dpa_intz(RHO0, RHO0, E_TOP_SET(il), DZ_SET(il), &
                                                  t_t, t_b, T_SET(it), s_t, s_b, S_SET(is), &
-                                                 parabolic, dpa, intz)
+                                                 parabolic, dpa, intz, .false.)
                   call boole_dpa_intz_layer(eos, RHO0, RHO0, E_TOP_SET(il), DZ_SET(il), &
                                             t_t, t_b, T_SET(it), s_t, s_b, S_SET(is), &
                                             parabolic, dpa_b, intz_b)
@@ -525,7 +612,7 @@ contains
             call roquet_rho_recon_dpa_face(RHO0, RHO0, C(1, n), C(2, n), C(3, n), C(4, n), &
                                            t_t, t_b, C(5, n), t_t2, t_b2, C(6, n), &
                                            s_t, s_b, C(7, n), s_t2, s_b2, C(8, n), &
-                                           dpa_l, dpa_r, parabolic, fa)
+                                           dpa_l, dpa_r, parabolic, fa, .false.)
             call boole_dpa_face(eos, RHO0, RHO0, C(1, n), C(2, n), C(3, n), C(4, n), &
                                 t_t, t_b, C(5, n), t_t2, t_b2, C(6, n), &
                                 s_t, s_b, C(7, n), s_t2, s_b2, C(8, n), &

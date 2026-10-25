@@ -526,6 +526,13 @@ contains
       ocean_state%surface_stress%rho0 = ocean_state%eos%rho0
       ocean_state%vmix%rho0 = ocean_state%eos%rho0
       if (present(geo)) geo%rho0 = ocean_state%eos%rho0
+      ! Heat-to-temperature divisor, `&ocean_eos_nml c_p` (MOM6 `C_P`; default
+      ! 3992 = `SEAWATER_CP`, bit-identical, and the ACCESS-OM3 value under
+      ! CT/SA too -- it does not follow `ts_convention`).  Set HERE with
+      ! `rho0`: host-side scalars folded into the `dt/(rho0*cp)` divisors,
+      ! so no `!$acc update device`.
+      ocean_state%surface_flux%cp = ocean_state%eos%c_p
+      if (present(geo)) geo%cp = ocean_state%eos%c_p
    end subroutine configure_ocean_reference_density
 
    module subroutine configure_ocean_pgf(cfg, ocean_state, compute_rank, ierr)

@@ -53,6 +53,20 @@ contains
       tr_T%eos_coeff = -cfg%alpha_T
       tr_T%eos_ref = cfg%T_ref
 
+      ! TEOS-10 convention (`&ocean_eos_nml ts_convention = "cons_abs"`):
+      ! the same slots now carry Conservative Temperature / Absolute
+      ! Salinity (IOC/SCOR/IAPSO 2010).  Names stay `temperature` /
+      ! `salinity` (registry lookups, diag keys); only the metadata
+      ! changes.
+      if (trim(adjustl(cfg%ocean%eos%ts_convention)) == "cons_abs") then
+         tr_S%long_name = "absolute salinity"
+         tr_S%units = "g kg-1"
+         tr_S%standard_name = "sea_water_absolute_salinity"
+         tr_T%long_name = "conservative temperature"
+         tr_T%units = "degC"
+         tr_T%standard_name = "sea_water_conservative_temperature"
+      end if
+
    end subroutine register_default_tracers
 
 end module rdb_state

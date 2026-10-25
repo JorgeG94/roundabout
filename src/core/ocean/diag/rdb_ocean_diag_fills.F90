@@ -27,7 +27,7 @@ module rdb_ocean_diag_fills
                              DIAG_VGRID_SIGMA, DIAG_VGRID_ZSTAR, &
                              DIAG_VGRID_DENSITY, DIAG_COORD_UNSET, &
                              DIAG_MISSING_VALUE
-   use rdb_eos, only: eos_t, eos_density_point
+   use rdb_eos, only: eos_t, eos_density_point, TS_CONS_ABS
    use rdb_ocean_vcoord, only: invert_density_targets
    use rdb_remap_column, only: remap_column
    use rdb_ice_column, only: ICE_RHO_ICE, ICE_RHO_SNOW
@@ -1552,15 +1552,31 @@ contains
                                   1, DIAG_OP_INSTANT, "sea_surface_height_above_geoid", &
                                   "sea_surface_height")
       if (state%multilayer%idx_temperature > 0) then
-         call register_one_canonical(state, specs, dcoord, dtout, "temperature", "degC", &
-                                     fill_temperature, nz, DIAG_OP_MEAN, &
-                                     "sea_water_potential_temperature", &
-                                     "sea_water_potential_temperature")
+         if (state%eos%ts_convention == TS_CONS_ABS) then
+            ! TEOS-10 convention: same slot/key, CF metadata follows the
+            ! tracer (`register_default_tracers`).
+            call register_one_canonical(state, specs, dcoord, dtout, "temperature", "degC", &
+                                        fill_temperature, nz, DIAG_OP_MEAN, &
+                                        "conservative temperature", &
+                                        "sea_water_conservative_temperature")
+         else
+            call register_one_canonical(state, specs, dcoord, dtout, "temperature", "degC", &
+                                        fill_temperature, nz, DIAG_OP_MEAN, &
+                                        "sea_water_potential_temperature", &
+                                        "sea_water_potential_temperature")
+         end if
       end if
       if (state%multilayer%idx_salinity > 0) then
-         call register_one_canonical(state, specs, dcoord, dtout, "salinity", "psu", &
-                                     fill_salinity, nz, DIAG_OP_MEAN, &
-                                     "sea_water_salinity", "sea_water_salinity")
+         if (state%eos%ts_convention == TS_CONS_ABS) then
+            call register_one_canonical(state, specs, dcoord, dtout, "salinity", "g kg-1", &
+                                        fill_salinity, nz, DIAG_OP_MEAN, &
+                                        "absolute salinity", &
+                                        "sea_water_absolute_salinity")
+         else
+            call register_one_canonical(state, specs, dcoord, dtout, "salinity", "psu", &
+                                        fill_salinity, nz, DIAG_OP_MEAN, &
+                                        "sea_water_salinity", "sea_water_salinity")
+         end if
       end if
       if (state%multilayer%idx_age > 0) then
          call register_one_canonical(state, specs, dcoord, dtout, "age", "s", fill_age, &

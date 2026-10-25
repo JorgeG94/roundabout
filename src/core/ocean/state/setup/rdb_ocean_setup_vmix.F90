@@ -42,8 +42,20 @@ contains
       ! `eos_apply_tfreeze_set` leaves the handle untouched for it.
       call eos_apply_tfreeze_set(ocean_state%eos, &
                                  parse_tfreeze_set(cfg%ocean%eos%tfreeze_set))
+      ! T/S convention + liquidus form: same site and reasons as the
+      ! liquidus set above (flat POD, host assignment before any copy and
+      ! before `enter_data`).  Invalid strings are fatal in `validate_config`.
+      call eos_apply_ts_convention(ocean_state%eos, &
+                                   parse_ts_convention(cfg%ocean%eos%ts_convention), &
+                                   parse_tfreeze_form(cfg%ocean%eos%tfreeze_form), &
+                                   cfg%ocean%eos%tfreeze_sat_frac)
+      ocean_state%eos%c_p = cfg%ocean%eos%c_p
       if (compute_rank == 0) then
          call logger%info("EOS variant:      "//trim(cfg%ocean%eos%eos))
+         if (ocean_state%eos%ts_convention == TS_CONS_ABS) then
+            call logger%info("T/S convention:   cons_abs (T = Conservative Temperature, "// &
+                             "S = Absolute Salinity)")
+         end if
          if (parse_tfreeze_set(cfg%ocean%eos%tfreeze_set) /= TFREEZE_SET_SEAICE) then
             call logger%info("Liquidus set:     "//trim(cfg%ocean%eos%tfreeze_set)// &
                              " (ISOMIP+ / Asay-Davis et al. 2016 Table 4; the "// &

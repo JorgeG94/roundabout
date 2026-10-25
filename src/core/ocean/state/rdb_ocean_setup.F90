@@ -29,7 +29,8 @@ module rdb_ocean_setup
    use rdb_eos, only: parse_eos_variant, eos_validate, &
                       EOS_VARIANT_ROQUET_SPV, EOS_VARIANT_ROQUET_RHO, &
                       parse_tfreeze_set, eos_apply_tfreeze_set, &
-                      TFREEZE_SET_SEAICE
+                      parse_ts_convention, parse_tfreeze_form, eos_apply_ts_convention, &
+                      TS_CONS_ABS, TFREEZE_SET_SEAICE
    use rdb_ocean_vcoord, only: parse_ocean_vcoord_type, VCOORD_EULERIAN_Z, &
                                VCOORD_RHO, VCOORD_HYCOM, VCOORD_LAGRANGIAN, &
                                VCOORD_Z_FIXED, ocean_vcoord_z_fixed_target, &

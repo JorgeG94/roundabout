@@ -44,7 +44,11 @@ contains
       use rdb_ocean_surface_flux, only: sw_source_is_implemented
       use rdb_ocean_vmix, only: kpp_sw_method_is_implemented, &
                                 bkgnd_henyey_conflicts_profile
-      use rdb_eos, only: parse_tfreeze_set, TFREEZE_SET_INVALID
+      use rdb_eos, only: parse_tfreeze_set, TFREEZE_SET_INVALID, &
+                         parse_ts_convention, parse_tfreeze_form, parse_eos_variant, &
+                         TS_INVALID, TS_CONS_ABS, TFREEZE_FORM_INVALID, &
+                         TFREEZE_FORM_TEOS_POLY, EOS_VARIANT_ROQUET_SPV, &
+                         EOS_VARIANT_ROQUET_RHO
       use rdb_ocean_top_drag, only: parse_tdrag_variant, tdrag_variant_is_implemented, &
                                     TDRAG_LINEAR, TDRAG_QUADRATIC
       use rdb_ocean_cavity_melt, only: parse_cavity_exchange_law, parse_cavity_ice_mode, &
@@ -323,6 +327,95 @@ contains
                            "(-0.054*S - 7.53e-8*p); 'isomip' is the ISOMIP+ "// &
                            "ice-shelf-cavity set (-0.0573*S + 0.0832 - 7.53e-8*p, "// &
                            "Asay-Davis et al. 2016 Table 4).")
+         has_error = .true.
+      end if
+
+      ! ---- TEOS-10 tracer convention + liquidus form (`&ocean_eos_nml`) ----
+      ! Fail-loud matrix.  Every refusal names the knob and the reason; none
+      ! is a silent downgrade.  `cons_abs` flips the meaning of the T/S
+      ! tracers everywhere, so each place that would still read them as
+      ! theta/SP must be refused until it converts (PR-3 initial conditions,
+      ! PR-4 sea ice).
+      if (parse_ts_convention(cfg%ocean%eos%ts_convention) == TS_INVALID) then
+         call logger%error("&ocean_eos_nml ts_convention = '"// &
+                           trim(cfg%ocean%eos%ts_convention)// &
+                           "' is not recognised (allowed: pot_prac, cons_abs).")
+         has_error = .true.
+      end if
+      if (parse_tfreeze_form(cfg%ocean%eos%tfreeze_form) == TFREEZE_FORM_INVALID) then
+         call logger%error("&ocean_eos_nml tfreeze_form = '"// &
+                           trim(cfg%ocean%eos%tfreeze_form)// &
+                           "' is not recognised (allowed: linear, teos_poly).")
+         has_error = .true.
+      end if
+      if (cfg%ocean%eos%c_p < 3000.0_wp .or. cfg%ocean%eos%c_p > 4500.0_wp) then
+         call logger%error("&ocean_eos_nml c_p is outside the physical seawater range "// &
+                           "3000-4500 J kg-1 K-1 (MOM6 C_P is ~3992).")
+         has_error = .true.
+      end if
+      if (parse_ts_convention(cfg%ocean%eos%ts_convention) == TS_CONS_ABS) then
+         if (parse_eos_variant(cfg%ocean%eos%eos) /= EOS_VARIANT_ROQUET_SPV .and. &
+             parse_eos_variant(cfg%ocean%eos%eos) /= EOS_VARIANT_ROQUET_RHO) then
+            call logger%error("&ocean_eos_nml ts_convention='cons_abs' requires "// &
+                              "eos='roquet_rho' or 'roquet_spv' (got '"// &
+                              trim(cfg%ocean%eos%eos)//"'): the linear and Wright "// &
+                              "EOS are fits in potential temperature / practical "// &
+                              "salinity, so reading CT/SA into them is a silent "// &
+                              "~0.3 degC physics error.")
+            has_error = .true.
+         end if
+         if (cfg%ocean%ice%enable) then
+            call logger%error("&ocean_eos_nml ts_convention='cons_abs' is refused with "// &
+                              "&ocean_ice_nml enable=.true.: the sea-ice thermodynamics "// &
+                              "are theta/SP-based and the coupler-boundary conversion "// &
+                              "(and c_p in frazil/basal heat) is not ported yet "// &
+                              "(TEOS-10 PR-4).")
+            has_error = .true.
+         end if
+         if (cfg%ocean%cavity_melt%enable) then
+            call logger%error("&ocean_eos_nml ts_convention='cons_abs' is refused with "// &
+                              "&ocean_cavity_melt_nml enable=.true.: the "// &
+                              "three-equation melt liquidus is linear in SP and "// &
+                              "in-situ/potential temperature, and its CT/SA form is "// &
+                              "undecided.")
+            has_error = .true.
+         end if
+         if (cfg%ocean%bulk_flux%enable) then
+            call logger%error("&ocean_eos_nml ts_convention='cons_abs' is refused with "// &
+                              "&ocean_bulk_flux_nml enable=.true.: the bulk formulae "// &
+                              "use SST as a potential temperature (T + 273.15) and the "// &
+                              "CT->theta export conversion is not ported yet (TEOS-10 "// &
+                              "PR-3).")
+            has_error = .true.
+         end if
+         if (cfg%ocean%restore%enable_restore_temp .or. &
+             cfg%ocean%restore%enable_restore_salt) then
+            call logger%error("&ocean_eos_nml ts_convention='cons_abs' is refused with "// &
+                              "&ocean_restore_nml enable_restore_temp / "// &
+                              "enable_restore_salt: the scalar restoring targets are "// &
+                              "documented as theta / PSU and their conversion to CT/SA "// &
+                              "is pending (TEOS-10 PR-3).")
+            has_error = .true.
+         end if
+         if (cfg%ocean%zinit%enable .and. &
+             trim(adjustl(cfg%ocean%zinit%source)) == "file") then
+            call logger%error("&ocean_eos_nml ts_convention='cons_abs' is refused with "// &
+                              "a file-based &ocean_zinit_nml (source='file'): the "// &
+                              "WOA fields are potential temperature / practical "// &
+                              "salinity and would be read as CT/SA silently; the "// &
+                              "conversion at read time is not ported yet (TEOS-10 "// &
+                              "PR-3).  Use source='linear' or the scalar "// &
+                              "&ocean_ic_nml / &tracer_nml initial conditions, which "// &
+                              "are interpreted in the model convention.")
+            has_error = .true.
+         end if
+      end if
+      if (parse_tfreeze_form(cfg%ocean%eos%tfreeze_form) == TFREEZE_FORM_TEOS_POLY .and. &
+          parse_ts_convention(cfg%ocean%eos%ts_convention) /= TS_CONS_ABS) then
+         call logger%error("&ocean_eos_nml tfreeze_form='teos_poly' requires "// &
+                           "ts_convention='cons_abs': the TEOS-10 liquidus is "// &
+                           "CT_freezing(SA, p) by construction, so evaluating it on "// &
+                           "theta/SP would silently skip the conversion.")
          has_error = .true.
       end if
 

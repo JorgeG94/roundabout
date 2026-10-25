@@ -20,9 +20,10 @@ module rdb_eos
    !! ocean C-grid shim `ocean_eos_compute` lives in
    !! `rdb_ocean_eos_compute` (core/ocean/state/), and the coastal
    !! shim in `rdb_ml_eos`.
-   use rdb_constants, only: wp, H_VANISHED
+   use rdb_constants, only: wp, H_VANISHED, SEAWATER_CP_DEFAULT
    use rdb_grid, only: hgrid_t
-   use rdb_teos10_convert, only: SR_FACTOR, CP0, CT_SFAC, ct_from_pt, ct_from_pt_derivs
+   use rdb_teos10_convert, only: SR_FACTOR, CP0, CT_SFAC, ct_from_pt, ct_from_pt_derivs, &
+                                 ct_freezing_poly
    implicit none
    private
 
@@ -39,6 +40,8 @@ module rdb_eos
    public :: parse_eos_variant
    public :: parse_tfreeze_set
    public :: eos_apply_tfreeze_set
+   public :: parse_ts_convention, parse_tfreeze_form
+   public :: eos_apply_ts_convention
    public :: roquet_spv_ts_coeffs
    public :: roquet_spv_value
    public :: roquet_rho_ts_coeffs
@@ -101,11 +104,26 @@ module rdb_eos
       !! linear and Wright (1997) branches — they consume (PT, SP)
       !! directly.  Default.
    integer, parameter, public :: TS_CONS_ABS = 2
-      !! Reserved: conservative temperature + absolute salinity
-      !! (CT, SA) — for a future TEOS-10/Roquet-CT branch that does
-      !! the CT/SA->PT/SP conversion locally inside its `acc routine
-      !! seq` body.  Not yet device-callable; consumers always pass
-      !! the model-prognostic (T, S) regardless of convention.
+      !! Conservative temperature + absolute salinity (CT, SA), the
+      !! TEOS-10 pair (IOC/SCOR/IAPSO 2010).  Selected by
+      !! `&ocean_eos_nml ts_convention = "cons_abs"`; only the two
+      !! Roquet et al. (2015) variants accept it (`validate_config`
+      !! refuses it elsewhere).  Under it the Roquet points take T as CT
+      !! and S as SA DIRECTLY: no Reference-Salinity factor, no PT->CT
+      !! conversion, unit Jacobian.  The heat capacity is the separate
+      !! `eos_t%c_p` (`&ocean_eos_nml c_p`); it does not follow the
+      !! convention.
+   integer, parameter, public :: TS_INVALID = 0
+      !! Unrecognised `ts_convention` string (`validate_config` fails loud).
+   integer, parameter, public :: TFREEZE_FORM_INVALID = 0
+      !! Unrecognised `tfreeze_form` string (`validate_config` fails loud).
+   integer, parameter, public :: TFREEZE_FORM_LINEAR = 1
+      !! Linear liquidus `T_f = l1*S + l2 + l3*p` (`tfreeze_set`).  Default.
+   integer, parameter, public :: TFREEZE_FORM_TEOS_POLY = 2
+      !! TEOS-10 polynomial liquidus `CT_f(SA, p, sat_frac)` (IOC/SCOR/IAPSO
+      !! 2010, manual section 3.33; McDougall & Barker 2011).  S is read as
+      !! SA and the result is a Conservative Temperature, so it requires
+      !! `ts_convention = "cons_abs"`.
 
    ! ======================================================================
    ! Seawater freezing-point (liquidus) coefficient SETS.
@@ -589,10 +607,22 @@ module rdb_eos
          !! Liquidus pressure coefficient λ3 (degC/Pa).
       integer :: ts_convention = TS_POT_PRAC
          !! Tracer T/S convention this EOS expects (TS_POT_PRAC /
-         !! TS_CONS_ABS).  Identity for linear + Wright.  This type is
+         !! TS_CONS_ABS), written at configure from
+         !! `&ocean_eos_nml ts_convention` by `eos_apply_ts_convention`.
+         !! Identity for linear + Wright.  This type is
          !! a flat POD — NO allocatable component — so it copies into
          !! registers for free when passed by value into the device
          !! point routines (`!$acc routine seq`).
+      integer :: tfreeze_form = TFREEZE_FORM_LINEAR
+         !! Liquidus functional form (`TFREEZE_FORM_*`), from
+         !! `&ocean_eos_nml tfreeze_form`.  Default linear (bit-identical).
+      real(wp) :: tfreeze_sat_frac = 0.0_wp
+         !! Air-saturation fraction of the TEOS-10 polynomial liquidus
+         !! (`TFREEZE_FORM_TEOS_POLY`); unused by the linear form.
+      real(wp) :: c_p = SEAWATER_CP_DEFAULT
+         !! Seawater heat capacity (J/(kg K)) for the ocean-side heat-flux
+         !! <-> temperature conversion, from `&ocean_eos_nml c_p` (MOM6
+         !! `C_P`).  The default equals `SEAWATER_CP` (bit-identical).
    contains
       procedure, non_overridable :: init => eos_init
       procedure, non_overridable :: destroy => eos_destroy
@@ -687,6 +717,53 @@ contains
       end select
    end function parse_tfreeze_set
 
+   pure function parse_ts_convention(name) result(code)
+      !! `&ocean_eos_nml ts_convention` string -> `TS_*` code.  No default
+      !! fallback: a typo returns `TS_INVALID` and `validate_config` aborts
+      !! (silently running the wrong convention is a ~0.3 degC error).
+      character(len=*), intent(in) :: name
+      integer :: code
+      select case (trim(adjustl(name)))
+      case ("pot_prac", "POT_PRAC")
+         code = TS_POT_PRAC
+      case ("cons_abs", "CONS_ABS")
+         code = TS_CONS_ABS
+      case default
+         code = TS_INVALID
+      end select
+   end function parse_ts_convention
+
+   pure function parse_tfreeze_form(name) result(code)
+      !! `&ocean_eos_nml tfreeze_form` string -> `TFREEZE_FORM_*` code; a
+      !! typo returns `TFREEZE_FORM_INVALID` (fails loud in `validate_config`).
+      character(len=*), intent(in) :: name
+      integer :: code
+      select case (trim(adjustl(name)))
+      case ("linear", "LINEAR")
+         code = TFREEZE_FORM_LINEAR
+      case ("teos_poly", "TEOS_POLY")
+         code = TFREEZE_FORM_TEOS_POLY
+      case default
+         code = TFREEZE_FORM_INVALID
+      end select
+   end function parse_tfreeze_form
+
+   pure subroutine eos_apply_ts_convention(eos, ts_code, form_code, sat_frac)
+      !! Write the T/S convention and liquidus form onto the EOS handle.
+      !! Same configure-time contract as `eos_apply_tfreeze_set`: called
+      !! once before the flat-POD handle is copied onto slots and before
+      !! `enter_data`, so no `!$acc update device` is owed.  Invalid codes
+      !! leave the handle untouched (`validate_config` owns the abort).
+      type(eos_t), intent(inout) :: eos
+      integer, intent(in) :: ts_code, form_code
+      real(wp), intent(in) :: sat_frac
+      if (ts_code == TS_POT_PRAC .or. ts_code == TS_CONS_ABS) eos%ts_convention = ts_code
+      if (form_code == TFREEZE_FORM_LINEAR .or. form_code == TFREEZE_FORM_TEOS_POLY) then
+         eos%tfreeze_form = form_code
+      end if
+      eos%tfreeze_sat_frac = sat_frac
+   end subroutine eos_apply_ts_convention
+
    pure subroutine eos_apply_tfreeze_set(eos, code)
       !! Write the named liquidus coefficient SET onto the EOS handle.
       !! Called once, at configure time, from the earliest
@@ -764,10 +841,12 @@ contains
       case (EOS_VARIANT_ROQUET_SPV)
          call eos_roquet_spv_impl(h_layer, hS_layer, hT_layer, rho_layer, &
                                   eos%rho0, eos%p_ref, &
+                                  eos%ts_convention == TS_CONS_ABS, &
                                   nx, ny, nz)
       case (EOS_VARIANT_ROQUET_RHO)
          call eos_roquet_rho_impl(h_layer, hS_layer, hT_layer, rho_layer, &
                                   eos%rho0, eos%p_ref, &
+                                  eos%ts_convention == TS_CONS_ABS, &
                                   nx, ny, nz)
       case default
          error stop "eos_compute_arrays: unknown eos%variant"
@@ -883,7 +962,7 @@ contains
    end subroutine eos_wright_impl
 
    pure subroutine eos_roquet_spv_impl(h_layer, hS_layer, hT_layer, rho_layer, &
-                                       rho_0, p_ref, nx, ny, nz)
+                                       rho_0, p_ref, cons, nx, ny, nz)
       !! Roquet et al. (2015) SpV EOS evaluated at a single reference
       !! pressure `p_ref` (a SCALAR by design — see the
       !! horizontal-uniformity contract in `eos_compute_arrays`).  Same
@@ -905,6 +984,8 @@ contains
       real(wp), intent(in) :: hT_layer(nx, ny, nz)
       real(wp), intent(out) :: rho_layer(nx, ny, nz)
       real(wp), intent(in) :: rho_0, p_ref
+      logical, intent(in) :: cons
+         !! `.true.` = (T, S) are (CT, SA) (`TS_CONS_ABS`): no conversion.
 
       integer :: i, j, k
       real(wp) :: inv_h, S_k, T_k, sv_k
@@ -917,7 +998,7 @@ contains
             inv_h = 1.0_wp/h_layer(i, j, k)
             S_k = hS_layer(i, j, k)*inv_h
             T_k = hT_layer(i, j, k)*inv_h
-            sv_k = roquet_spv_value(T_k, S_k, p_ref)
+            sv_k = roquet_spv_value(T_k, S_k, p_ref, cons)
             rho_layer(i, j, k) = 1.0_wp/sv_k
          else
             rho_layer(i, j, k) = rho_0
@@ -926,7 +1007,7 @@ contains
    end subroutine eos_roquet_spv_impl
 
    pure subroutine eos_roquet_rho_impl(h_layer, hS_layer, hT_layer, rho_layer, &
-                                       rho_0, p_ref, nx, ny, nz)
+                                       rho_0, p_ref, cons, nx, ny, nz)
       !! Roquet et al. (2015) in-situ-density EOS (polyTEOS10_55t)
       !! evaluated at a single reference pressure `p_ref` (a SCALAR by
       !! design — see the horizontal-uniformity contract in
@@ -941,6 +1022,8 @@ contains
       real(wp), intent(in) :: hT_layer(nx, ny, nz)
       real(wp), intent(out) :: rho_layer(nx, ny, nz)
       real(wp), intent(in) :: rho_0, p_ref
+      logical, intent(in) :: cons
+         !! `.true.` = (T, S) are (CT, SA) (`TS_CONS_ABS`): no conversion.
 
       integer :: i, j, k
       real(wp) :: inv_h, S_k, T_k
@@ -953,7 +1036,7 @@ contains
             inv_h = 1.0_wp/h_layer(i, j, k)
             S_k = hS_layer(i, j, k)*inv_h
             T_k = hT_layer(i, j, k)*inv_h
-            rho_layer(i, j, k) = roquet_rho_value(T_k, S_k, p_ref)
+            rho_layer(i, j, k) = roquet_rho_value(T_k, S_k, p_ref, cons)
          else
             rho_layer(i, j, k) = rho_0
          end if
@@ -1097,33 +1180,50 @@ contains
       end do
    end subroutine eos_wright_pgf_column_sweep_impl
 
-   pure function roquet_model_ct(T_pt, S_sp) result(ct)
+   pure function roquet_model_ct(T_pt, S_sp, cons) result(ct)
       !! Conservative Temperature (degC) of the model's (potential
       !! temperature degC, practical salinity) state, as every Roquet EOS
       !! path converts it: SR = SP·ROQ_SR_FACTOR, CT = ct_from_pt(SR, PT)
       !! (McDougall & Barker 2011). Public so the conversion the EOS
       !! actually uses can be pinned against the TEOS-10 check value.
       !$acc routine seq
+      logical, intent(in) :: cons
+         !! `.true.` = (T, S) are already (CT, SA) (`TS_CONS_ABS`): no SR
+         !! factor, no PT->CT conversion, unit Jacobian.
       real(wp), intent(in) :: T_pt  !! Potential temperature, p_ref = 0 (degC).
       real(wp), intent(in) :: S_sp  !! Practical salinity.
       real(wp) :: ct
-      ct = ct_from_pt(S_sp*ROQ_SR_FACTOR, T_pt)
+      if (cons) then
+         ct = T_pt
+      else
+         ct = ct_from_pt(S_sp*ROQ_SR_FACTOR, T_pt)
+      end if
    end function roquet_model_ct
 
-   pure subroutine roquet_model_ct_derivs(T_pt, S_sp, SR, CT, dct_dpt, dct_dsr)
+   pure subroutine roquet_model_ct_derivs(T_pt, S_sp, SR, CT, dct_dpt, dct_dsr, cons)
       !! `roquet_model_ct` plus SR and the analytic dCT/dPT (1) and
       !! dCT/dSR (degC per g/kg) the Roquet points chain-rule through.
       !$acc routine seq
+      logical, intent(in) :: cons
+         !! `.true.` = (T, S) are already (CT, SA) (`TS_CONS_ABS`): no SR
+         !! factor, no PT->CT conversion, unit Jacobian.
       real(wp), intent(in) :: T_pt  !! Potential temperature, p_ref = 0 (degC).
       real(wp), intent(in) :: S_sp  !! Practical salinity.
       real(wp), intent(out) :: SR   !! Reference Salinity (g/kg).
       real(wp), intent(out) :: CT   !! Conservative Temperature (degC).
       real(wp), intent(out) :: dct_dpt, dct_dsr
-      SR = S_sp*ROQ_SR_FACTOR
-      call ct_from_pt_derivs(SR, T_pt, CT, dct_dpt, dct_dsr)
+      if (cons) then
+         SR = S_sp
+         CT = T_pt
+         dct_dpt = 1.0_wp
+         dct_dsr = 0.0_wp
+      else
+         SR = S_sp*ROQ_SR_FACTOR
+         call ct_from_pt_derivs(SR, T_pt, CT, dct_dpt, dct_dsr)
+      end if
    end subroutine roquet_model_ct_derivs
 
-   pure subroutine roquet_spv_point(T_pt, S_sp, p, sv, dsv_dt_model, dsv_ds_model)
+   pure subroutine roquet_spv_point(T_pt, S_sp, p, sv, dsv_dt_model, dsv_ds_model, cons)
       !! Fused Roquet et al. (2015) SpV evaluation at a point, in MODEL
       !! variables (potential temperature `T_pt` degC, practical salinity
       !! `S_sp` PSU, pressure `p` Pa).  Returns specific volume `sv`
@@ -1162,6 +1262,9 @@ contains
       !! Transcribed from the verified prototype roquet_spv_eos.py.  One
       !! sqrt for zs (shared by SV and both derivatives).
       !$acc routine seq
+      logical, intent(in) :: cons
+         !! `.true.` = (T, S) are already (CT, SA) (`TS_CONS_ABS`): no SR
+         !! factor, no PT->CT conversion, unit Jacobian.
       real(wp), intent(in) :: T_pt, S_sp, p
       real(wp), intent(out) :: sv, dsv_dt_model, dsv_ds_model
 
@@ -1175,10 +1278,14 @@ contains
       ! the one conversion both Roquet points share. The module floors its
       ! internal x2 at a tiny positive so dct_dsr never hits 0/0 at SP=0
       ! (fresh water) -- bit-identical for any real-ocean salinity.
-      call roquet_model_ct_derivs(T_pt, S_sp, SR, CT, dct_dpt, dct_dsr)
+      call roquet_model_ct_derivs(T_pt, S_sp, SR, CT, dct_dpt, dct_dsr, cons)
 
       zt = CT
-      zs = sqrt(abs(S_sp*ROQ_SR_FACTOR + ROQ_RDELTAS)*ROQ_R1_S0)
+      if (cons) then
+         zs = sqrt(abs(S_sp + ROQ_RDELTAS)*ROQ_R1_S0)
+      else
+         zs = sqrt(abs(S_sp*ROQ_SR_FACTOR + ROQ_RDELTAS)*ROQ_R1_S0)
+      end if
       zp = p
 
       ! --- specific volume SV(zs, zt, zp) ---
@@ -1230,10 +1337,14 @@ contains
       ! Chain rule to the model variables (PT, SP).  The SP route includes
       ! the CT-via-SR coupling (CT depends on SR = SP·factor).
       dsv_dt_model = dsv_dct*dct_dpt
-      dsv_ds_model = (dsv_dsa + dsv_dct*dct_dsr)*ROQ_SR_FACTOR
+      if (cons) then
+         dsv_ds_model = dsv_dsa + dsv_dct*dct_dsr
+      else
+         dsv_ds_model = (dsv_dsa + dsv_dct*dct_dsr)*ROQ_SR_FACTOR
+      end if
    end subroutine roquet_spv_point
 
-   pure subroutine roquet_spv_ts_coeffs(T_pt, S_sp, sv0, sv1, sv2, sv3)
+   pure subroutine roquet_spv_ts_coeffs(T_pt, S_sp, sv0, sv1, sv2, sv3, cons)
       !! The (T, S)-dependent coefficients of the Roquet et al. (2015) SpV
       !! polynomial viewed as a polynomial in PRESSURE, in model variables
       !! (potential temperature `T_pt` degC, practical salinity `S_sp` PSU):
@@ -1258,6 +1369,9 @@ contains
       !! here): kernel modules include the same file for a local, inlinable
       !! copy rather than calling this out-of-line entry point.
       !$acc routine seq
+      logical, intent(in) :: cons
+         !! `.true.` = (T, S) are already (CT, SA) (`TS_CONS_ABS`): no SR
+         !! factor, no PT->CT conversion, unit Jacobian.
       real(wp), intent(in)  :: T_pt
          !! Potential temperature (degC).
       real(wp), intent(in)  :: S_sp
@@ -1267,26 +1381,29 @@ contains
       real(wp), intent(out) :: sv1, sv2, sv3
          !! Coefficients of `p`, `p^2`, `p^3` (Pa-powers folded in).
 
-      call rdb_roq_ts_coeffs(T_pt, S_sp, sv0, sv1, sv2, sv3)
+      call rdb_roq_ts_coeffs(T_pt, S_sp, sv0, sv1, sv2, sv3, cons)
    end subroutine roquet_spv_ts_coeffs
 
-   pure function roquet_spv_value(T_pt, S_sp, p) result(sv)
+   pure function roquet_spv_value(T_pt, S_sp, p, cons) result(sv)
       !! VALUE-ONLY Roquet et al. (2015) specific volume (m^3/kg) at a point,
       !! model variables (PT degC, SP PSU, p Pa).  The same number as
       !! `roquet_spv_point`'s `sv` without the dSV/dT, dSV/dS and PT->CT
       !! chain-rule work that a density-only consumer (`rho_layer`,
       !! `eos_density_point`) would discard -- roughly half the arithmetic.
       !$acc routine seq
+      logical, intent(in) :: cons
+         !! `.true.` = (T, S) are already (CT, SA) (`TS_CONS_ABS`): no SR
+         !! factor, no PT->CT conversion, unit Jacobian.
       real(wp), intent(in) :: T_pt, S_sp, p
       real(wp) :: sv
 
       real(wp) :: sv0, sv1, sv2, sv3
 
-      call rdb_roq_ts_coeffs(T_pt, S_sp, sv0, sv1, sv2, sv3)
+      call rdb_roq_ts_coeffs(T_pt, S_sp, sv0, sv1, sv2, sv3, cons)
       sv = rdb_roq_spv_p(sv0, sv1, sv2, sv3, p)
    end function roquet_spv_value
 
-   pure subroutine roquet_rho_ts_coeffs(T_pt, S_sp, r0, r1, r2, r3)
+   pure subroutine roquet_rho_ts_coeffs(T_pt, S_sp, r0, r1, r2, r3, cons)
       !! The (T, S)-dependent coefficients of the Roquet et al. (2015)
       !! in-situ-DENSITY polynomial viewed as a polynomial in PRESSURE, in
       !! model variables (potential temperature `T_pt` degC, practical
@@ -1305,6 +1422,9 @@ contains
       !! the shared `rdb_roq_ct_of` helper) for a local, inlinable copy
       !! rather than calling this out-of-line entry point.
       !$acc routine seq
+      logical, intent(in) :: cons
+         !! `.true.` = (T, S) are already (CT, SA) (`TS_CONS_ABS`): no SR
+         !! factor, no PT->CT conversion, unit Jacobian.
       real(wp), intent(in)  :: T_pt
          !! Potential temperature (degC).
       real(wp), intent(in)  :: S_sp
@@ -1314,10 +1434,10 @@ contains
       real(wp), intent(out) :: r1, r2, r3
          !! Coefficients of `p`, `p^2`, `p^3` (Pa-powers folded in).
 
-      call rdb_roq_rho_ts_coeffs(T_pt, S_sp, r0, r1, r2, r3)
+      call rdb_roq_rho_ts_coeffs(T_pt, S_sp, r0, r1, r2, r3, cons)
    end subroutine roquet_rho_ts_coeffs
 
-   pure subroutine roquet_rho_point(T_pt, S_sp, p, rho, drho_dt_model, drho_ds_model)
+   pure subroutine roquet_rho_point(T_pt, S_sp, p, rho, drho_dt_model, drho_ds_model, cons)
       !! Fused Roquet et al. (2015) in-situ DENSITY evaluation at a
       !! point, in MODEL variables (potential temperature `T_pt` degC,
       !! practical salinity `S_sp` PSU, pressure `p` Pa).  Returns
@@ -1332,6 +1452,9 @@ contains
       !! SP·(35.16504/35), CT = ct_from_pt_derivs(SR, PT) from
       !! `rdb_teos10_convert`, shared rather than copied now.
       !$acc routine seq
+      logical, intent(in) :: cons
+         !! `.true.` = (T, S) are already (CT, SA) (`TS_CONS_ABS`): no SR
+         !! factor, no PT->CT conversion, unit Jacobian.
       real(wp), intent(in) :: T_pt, S_sp, p
       real(wp), intent(out) :: rho, drho_dt_model, drho_ds_model
 
@@ -1342,7 +1465,7 @@ contains
       real(wp) :: drdzs0, drdzs1, drdzs2, drdzs3, drho_dsa
 
       ! Same shared conversion as `roquet_spv_point`.
-      call roquet_model_ct_derivs(T_pt, S_sp, SR, CT, dct_dpt, dct_dsr)
+      call roquet_model_ct_derivs(T_pt, S_sp, SR, CT, dct_dpt, dct_dsr, cons)
 
       zt = CT
       zs = sqrt(abs(SR + ROQ_RHO_RDELTAS)*ROQ_R1_S0)
@@ -1397,10 +1520,14 @@ contains
       ! Chain rule to the model variables (PT, SP); same structure as
       ! roquet_spv_point's chain rule, for density instead of SV.
       drho_dt_model = drho_dct*dct_dpt
-      drho_ds_model = (drho_dsa + drho_dct*dct_dsr)*ROQ_SR_FACTOR
+      if (cons) then
+         drho_ds_model = drho_dsa + drho_dct*dct_dsr
+      else
+         drho_ds_model = (drho_dsa + drho_dct*dct_dsr)*ROQ_SR_FACTOR
+      end if
    end subroutine roquet_rho_point
 
-   pure function roquet_rho_value(T_pt, S_sp, p) result(rho)
+   pure function roquet_rho_value(T_pt, S_sp, p, cons) result(rho)
       !! VALUE-ONLY Roquet et al. (2015) in-situ density (kg/m^3) at a
       !! point, model variables (PT degC, SP PSU, p Pa).  The same
       !! number as `roquet_rho_point`'s `rho` without the d(rho)/dT,
@@ -1415,12 +1542,15 @@ contains
       !! (same SR/CT conversion via the shared `rdb_roq_ct_of` helper, same
       !! Horner nesting, same evaluation order).
       !$acc routine seq
+      logical, intent(in) :: cons
+         !! `.true.` = (T, S) are already (CT, SA) (`TS_CONS_ABS`): no SR
+         !! factor, no PT->CT conversion, unit Jacobian.
       real(wp), intent(in) :: T_pt, S_sp, p
       real(wp) :: rho
 
       real(wp) :: r0, r1, r2, r3
 
-      call rdb_roq_rho_ts_coeffs(T_pt, S_sp, r0, r1, r2, r3)
+      call rdb_roq_rho_ts_coeffs(T_pt, S_sp, r0, r1, r2, r3, cons)
       rho = rdb_roq_rho_p(r0, r1, r2, r3, p)
    end function roquet_rho_value
 
@@ -1467,10 +1597,10 @@ contains
       real(wp) :: rho_roq, drho_dt_roq, drho_ds_roq, inv_rho2
 
       if (eos%variant == EOS_VARIANT_ROQUET_SPV) then
-         call roquet_spv_point(T, S, p, sv_roq, dsv_dt, dsv_ds)
+         call roquet_spv_point(T, S, p, sv_roq, dsv_dt, dsv_ds, eos%ts_convention == TS_CONS_ABS)
       else if (eos%variant == EOS_VARIANT_ROQUET_RHO) then
          ! dSV/dX = -drho/dX / rho^2 (SV = 1/rho).
-         call roquet_rho_point(T, S, p, rho_roq, drho_dt_roq, drho_ds_roq)
+         call roquet_rho_point(T, S, p, rho_roq, drho_dt_roq, drho_ds_roq, eos%ts_convention == TS_CONS_ABS)
          inv_rho2 = 1.0_wp/(rho_roq*rho_roq)
          dsv_dt = -drho_dt_roq*inv_rho2
          dsv_ds = -drho_ds_roq*inv_rho2
@@ -1579,14 +1709,14 @@ contains
       real(wp) :: rho_roq, drho_dt_roq, drho_ds_roq
 
       if (eos%variant == EOS_VARIANT_ROQUET_SPV) then
-         call roquet_spv_point(T, S, p, sv_roq, dsv_dt_roq, dsv_ds_roq)
+         call roquet_spv_point(T, S, p, sv_roq, dsv_dt_roq, dsv_ds_roq, eos%ts_convention == TS_CONS_ABS)
          inv_sv2 = 1.0_wp/(sv_roq*sv_roq)
          alpha_T = dsv_dt_roq*inv_sv2
          beta_S = -dsv_ds_roq*inv_sv2
       else if (eos%variant == EOS_VARIANT_ROQUET_RHO) then
          ! alpha_T = -d(rho)/dT, beta_S = +d(rho)/dS, direct from the
          ! density-form point routine (no SV round-trip needed).
-         call roquet_rho_point(T, S, p, rho_roq, drho_dt_roq, drho_ds_roq)
+         call roquet_rho_point(T, S, p, rho_roq, drho_dt_roq, drho_ds_roq, eos%ts_convention == TS_CONS_ABS)
          alpha_T = -drho_dt_roq
          beta_S = drho_ds_roq
       else if (eos%variant == EOS_VARIANT_WRIGHT_97) then
@@ -1665,9 +1795,9 @@ contains
 
       if (eos%variant == EOS_VARIANT_ROQUET_SPV) then
          ! Value-only: no discarded derivative work.
-         rho = 1.0_wp/roquet_spv_value(T, S, p)
+         rho = 1.0_wp/roquet_spv_value(T, S, p, eos%ts_convention == TS_CONS_ABS)
       else if (eos%variant == EOS_VARIANT_ROQUET_RHO) then
-         rho = roquet_rho_value(T, S, p)
+         rho = roquet_rho_value(T, S, p, eos%ts_convention == TS_CONS_ABS)
       else if (eos%variant == EOS_VARIANT_WRIGHT_97) then
          T_sq = T*T
          alpha_0 = WRIGHT_A0 + WRIGHT_A1*T + WRIGHT_A2*S
@@ -1709,10 +1839,10 @@ contains
       real(wp) :: drho_dt_roq, drho_ds_roq, inv_rho2
 
       if (eos%variant == EOS_VARIANT_ROQUET_SPV) then
-         call roquet_spv_point(T, S, p, sv_roq, dsv_dt, dsv_ds)
+         call roquet_spv_point(T, S, p, sv_roq, dsv_dt, dsv_ds, eos%ts_convention == TS_CONS_ABS)
          rho = 1.0_wp/sv_roq
       else if (eos%variant == EOS_VARIANT_ROQUET_RHO) then
-         call roquet_rho_point(T, S, p, rho, drho_dt_roq, drho_ds_roq)
+         call roquet_rho_point(T, S, p, rho, drho_dt_roq, drho_ds_roq, eos%ts_convention == TS_CONS_ABS)
          inv_rho2 = 1.0_wp/(rho*rho)
          dsv_dt = -drho_dt_roq*inv_rho2
          dsv_ds = -drho_ds_roq*inv_rho2
@@ -1750,7 +1880,8 @@ contains
       !! callable), plus `elemental` so callers can evaluate whole
       !! salinity arrays in one reference.
       !!
-      !! The form is LINEAR for every `eos%variant`:
+      !! The form is LINEAR for every `eos%variant` unless
+      !! `eos%tfreeze_form` selects the TEOS-10 polynomial (below):
       !!
       !!   T_f = λ1·S + λ2 + λ3·p
       !!
@@ -1768,7 +1899,17 @@ contains
       !! `TFREEZE_FORM = "LINEAR"` is its default under any density
       !! branch.
       !!
-      !! VARIANT / FORM DISPATCH SEAM.  A NONLINEAR liquidus — MOM6's
+      !! TEOS-10 FORM (`eos%tfreeze_form == TFREEZE_FORM_TEOS_POLY`,
+      !! `&ocean_eos_nml tfreeze_form = "teos_poly"`): returns
+      !! `ct_freezing_poly(SA = S, p/1e4 dbar, eos%tfreeze_sat_frac)` --
+      !! the TEOS-10 manual section 3.33 polynomial (IOC/SCOR/IAPSO 2010;
+      !! McDougall & Barker 2011), S read as Absolute Salinity, result a
+      !! Conservative Temperature (about -1.92 degC at SA = 35.16504,
+      !! p = 0, against the linear set's -1.89).  The branch leads the
+      !! function and leaves the linear expression below untouched, so the
+      !! default is bit-identical.
+      !!
+      !! VARIANT / FORM DISPATCH SEAM.  A further NONLINEAR liquidus — MOM6's
       !! `TFREEZE_FORM = "MILLERO_78"` (Millero 1978, UNESCO TP28) or a
       !! TEOS-10 `t_freezing(SA, p)` polynomial — is a different
       !! FUNCTIONAL FORM, not another coefficient triple, so it does NOT
@@ -1841,7 +1982,13 @@ contains
          !! surface — the frazil kernel's use case).
       real(wp) :: T_f
 
-      T_f = (eos%tfr_s*S + eos%tfr_p*p) + eos%tfr_0
+      if (eos%tfreeze_form == TFREEZE_FORM_TEOS_POLY) then
+         ! TEOS-10 polynomial: S is SA (g/kg), result is CT.  The
+         ! polynomial wants sea pressure in dbar; callers pass Pa.
+         T_f = ct_freezing_poly(S, p*1.0e-4_wp, eos%tfreeze_sat_frac)
+      else
+         T_f = (eos%tfr_s*S + eos%tfr_p*p) + eos%tfr_0
+      end if
    end function eos_freezing_point
 
 #include "rdb_roquet_spv.inc"

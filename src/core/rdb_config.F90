@@ -2,10 +2,10 @@
 module rdb_config
    !! Reads simulation parameters from a namelist input file
 #ifdef LFORTRAN_PASSING
-   use rdb_constants, only: wp, DEG2RAD, &
+   use rdb_constants, only: wp, DEG2RAD, SEAWATER_CP_DEFAULT, &
                             nz_stack_required, nz_stack_is_sufficient
 #else
-   use rdb_constants, only: NZ_STACK_MAX, wp, DEG2RAD, &
+   use rdb_constants, only: NZ_STACK_MAX, wp, DEG2RAD, SEAWATER_CP_DEFAULT, &
                             nz_stack_required, nz_stack_is_sufficient
 #endif
    use pic_logger, only: logger => global_logger
@@ -1257,6 +1257,59 @@ module rdb_config
          !! agree on what "density" means; they are kept independent
          !! because a diagnostic remap to a different reference is a
          !! legitimate request.
+      character(len=16) :: ts_convention = "pot_prac"
+         !! Meaning of the prognostic T/S tracers.
+         !!
+         !!   * `"pot_prac"` (DEFAULT ⇒ bit-identical) — potential
+         !!     temperature (degC) and practical salinity; the Roquet et al.
+         !!     (2015) variants convert to SR/CT internally.
+         !!   * `"cons_abs"` — Conservative Temperature and Absolute
+         !!     Salinity (the TEOS-10 pair, IOC/SCOR/IAPSO 2010).  The
+         !!     Roquet points take T as CT and S as SA directly (no SR
+         !!     factor, unit Jacobian); the heat-to-temperature conversion
+         !!     still uses `c_p` (it does NOT switch to TEOS-10 cp0 by
+         !!     itself -- OM3 runs CT/SA with `C_P = 3992`); the tracers
+         !!     are labelled `sea_water_conservative_temperature` /
+         !!     `sea_water_absolute_salinity`.
+         !!
+         !! `cons_abs` REQUIRES `eos` in {roquet_rho, roquet_spv}, and is
+         !! refused (fail-loud) with `&ocean_ice_nml enable` (PR-4 will
+         !! convert at the coupler boundary), with `&ocean_cavity_melt_nml
+         !! enable` (its liquidus is undecided) and with a file-based
+         !! `&ocean_zinit_nml` (PR-3 will convert the WOA theta/SP; until
+         !! then it would be read as CT/SA silently), with
+         !! `&ocean_bulk_flux_nml enable` (the bulk formulae take SST as a
+         !! potential temperature and the CT->theta export conversion is
+         !! not ported; PR-3) and with `&ocean_restore_nml
+         !! enable_restore_temp` / `enable_restore_salt` (the scalar
+         !! targets are documented as theta / PSU; conversion pending
+         !! PR-3).  Scalar/analytic initial conditions are interpreted IN
+         !! the model convention and are NOT converted.
+      character(len=16) :: tfreeze_form = "linear"
+         !! Liquidus functional form for `eos_freezing_point`.
+         !!
+         !!   * `"linear"` (DEFAULT ⇒ bit-identical) — the `tfreeze_set`
+         !!     coefficients.
+         !!   * `"teos_poly"` — the TEOS-10 polynomial `CT_f(SA, p,
+         !!     sat_frac)` (manual section 3.33; McDougall & Barker 2011).
+         !!     S is read as SA, the result is a Conservative Temperature
+         !!     (about -1.92 degC at SA = 35.16504, p = 0).  Requires
+         !!     `ts_convention = "cons_abs"`.
+      real(wp) :: tfreeze_sat_frac = 0.0_wp
+         !! Air-saturation fraction of the TEOS-10 polynomial liquidus
+         !! (`tfreeze_form = "teos_poly"`; 0 = no dissolved air, 1 = fully
+         !! air-saturated).  Ignored by the linear form.  The default 0 is
+         !! ACCESS-OM3 parity: OM3 runs `TFREEZE_FORM = "TEOS_POLY"`, the
+         !! polynomial without the dissolved-air term.
+      real(wp) :: c_p = SEAWATER_CP_DEFAULT
+         !! Seawater heat capacity (J/(kg K)) used for every ocean-side
+         !! heat-flux <-> temperature-tendency conversion (MOM6 `C_P`).
+         !! Default 3992 under BOTH `ts_convention`s: it is the historical
+         !! value and the one ACCESS-OM3 sets (its CT/SA run keeps
+         !! `C_P = 3992`).  The exact TEOS-10 value for Conservative
+         !! Temperature is cp0 = 3991.86795711963 (IOC/SCOR/IAPSO 2010,
+         !! eq. 3.3.3); set it explicitly to get Q/(rho0*cp0) as the CT
+         !! tendency.  Sea-ice thermodynamics keep their own constant.
    end type ocean_eos_config_t
    type :: ocean_bdrag_config_t
       character(len=16) :: form = "quadratic"

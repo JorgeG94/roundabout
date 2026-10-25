@@ -38,6 +38,7 @@ module rdb_ocean_pressure_force
                              scratch_3d_buffer_exit_data_impl
    use rdb_eos, only: eos_wright_pgf_column_sweep_impl, eos_t, &
                       EOS_VARIANT_WRIGHT_97, EOS_VARIANT_ROQUET_SPV, EOS_VARIANT_ROQUET_RHO, &
+                      TS_CONS_ABS, &
                       WRIGHT_A0, WRIGHT_A1, WRIGHT_A2, &
                       WRIGHT_B0, WRIGHT_B1, WRIGHT_B2, WRIGHT_B3, WRIGHT_B4, WRIGHT_B5, &
                       WRIGHT_C0, WRIGHT_C1, WRIGHT_C2, WRIGHT_C3, WRIGHT_C4, WRIGHT_C5, &
@@ -940,6 +941,7 @@ contains
                                                  pgf%rho0, pgf%rho_ref, pgf%h_neglect, &
                                                  pgf%gfs_scale, pgf%mass_weight, &
                                                  eos%variant, &
+                                                 eos%ts_convention == TS_CONS_ABS, &
                                                  ms%p_top, pgf%p_top_in_bc, &
                                                  metrics%idxCu, metrics%idyCv, nx, ny, nz)
          else
@@ -1659,10 +1661,12 @@ contains
       logical  :: parabolic
       integer  :: km2, km1, kp1, kp2, k_top_c, k_don_c
       integer  :: eos_variant
+      logical  :: cons
 
       inv_rho0 = 1.0_wp/rho0
       parabolic = (recon_scheme == PGF_RECON_PPM)
       eos_variant = eos%variant
+      cons = eos%ts_convention == TS_CONS_ABS
 
       ! ---- Pass C (per column): the layer-mean T/S every pass reads ----
       ! `hT/h` on a live layer and, on a vanished one, its I1′ DONOR's:
@@ -1810,7 +1814,7 @@ contains
                                        conc_T(i, j, k), &
                                        S_t(i, j, k), S_b(i, j, k), &
                                        conc_S(i, j, k), &
-                                       parabolic, dpa_kk, intz_kk)
+                                       parabolic, dpa_kk, intz_kk, cons)
             pa(i, j, k) = dpa_kk
             intz_dpa(i, j, k) = intz_kk
          end do
@@ -1822,7 +1826,7 @@ contains
                                            conc_T(i, j, k), &
                                            S_t(i, j, k), S_b(i, j, k), &
                                            conc_S(i, j, k), &
-                                           parabolic, dpa_kk, intz_kk)
+                                           parabolic, dpa_kk, intz_kk, cons)
             pa(i, j, k) = dpa_kk
             intz_dpa(i, j, k) = intz_kk
          end do
@@ -1888,7 +1892,7 @@ contains
                                        T_t(i, j, k), T_b(i, j, k), t_m_R, &
                                        S_t(i - 1, j, k), S_b(i - 1, j, k), s_m_L, &
                                        S_t(i, j, k), S_b(i, j, k), s_m_R, &
-                                       dpa_L, dpa_R, parabolic, dpa_kk)
+                                       dpa_L, dpa_R, parabolic, dpa_kk, cons)
             intx_dpa(i, j, k) = dpa_kk
          end do
       else if (eos_variant == EOS_VARIANT_ROQUET_RHO) then
@@ -1907,7 +1911,7 @@ contains
                                            T_t(i, j, k), T_b(i, j, k), t_m_R, &
                                            S_t(i - 1, j, k), S_b(i - 1, j, k), s_m_L, &
                                            S_t(i, j, k), S_b(i, j, k), s_m_R, &
-                                           dpa_L, dpa_R, parabolic, dpa_kk)
+                                           dpa_L, dpa_R, parabolic, dpa_kk, cons)
             intx_dpa(i, j, k) = dpa_kk
          end do
       else
@@ -1983,7 +1987,7 @@ contains
                                        T_t(i, j, k), T_b(i, j, k), t_m_R, &
                                        S_t(i, j - 1, k), S_b(i, j - 1, k), s_m_L, &
                                        S_t(i, j, k), S_b(i, j, k), s_m_R, &
-                                       dpa_L, dpa_R, parabolic, dpa_kk)
+                                       dpa_L, dpa_R, parabolic, dpa_kk, cons)
             inty_dpa(i, j, k) = dpa_kk
          end do
       else if (eos_variant == EOS_VARIANT_ROQUET_RHO) then
@@ -2002,7 +2006,7 @@ contains
                                            T_t(i, j, k), T_b(i, j, k), t_m_R, &
                                            S_t(i, j - 1, k), S_b(i, j - 1, k), s_m_L, &
                                            S_t(i, j, k), S_b(i, j, k), s_m_R, &
-                                           dpa_L, dpa_R, parabolic, dpa_kk)
+                                           dpa_L, dpa_R, parabolic, dpa_kk, cons)
             inty_dpa(i, j, k) = dpa_kk
          end do
       else
@@ -2143,7 +2147,7 @@ contains
                                                    dpdx_face, dpdy_face, &
                                                    rho0, rho_ref, h_neglect, &
                                                    gfs_scale, mass_weight, &
-                                                   eos_variant, &
+                                                   eos_variant, cons, &
                                                    p_top, p_top_in_bc, &
                                                    idxCu, idyCv, nx, ny, nz)
       !! FV_MOM6 pressure gradient, constant-by-layer (PCM) T/S, density at
@@ -2265,6 +2269,9 @@ contains
          !!     5-point Boole rule over Roquet et al. (2015) in-situ density
          !!     (ΔS = 32, no `1/SV` reciprocal), same (T, S) hoist
          !!     (`roquet_rho_pcm_dpa_intz` / `roquet_rho_pcm_dpa_face`).
+      logical, intent(in)    :: cons
+         !! `.true.` = (T, S) are (CT, SA) (`TS_CONS_ABS`): the Roquet
+         !! branches skip the SR factor and PT->CT conversion.
       real(wp), intent(in)    :: p_top(nx, ny)
          !! Top-of-column pressure (Pa, `>= 0`), `multilayer_state_t%p_top`.
       logical, intent(in)    :: p_top_in_bc
@@ -2365,7 +2372,7 @@ contains
             t_m = conc_T(i, j, k)
             s_m = conc_S(i, j, k)
             call roquet_pcm_dpa_intz(t_m, s_m, e_face(i, j, k + 1), h_layer(i, j, k), &
-                                     rho0, rho_ref, dpa_kk, intz_kk)
+                                     rho0, rho_ref, dpa_kk, intz_kk, cons)
             pa(i, j, k) = dpa_kk
             intz_dpa(i, j, k) = intz_kk
          end do
@@ -2374,7 +2381,7 @@ contains
             t_m = conc_T(i, j, k)
             s_m = conc_S(i, j, k)
             call roquet_rho_pcm_dpa_intz(t_m, s_m, e_face(i, j, k + 1), h_layer(i, j, k), &
-                                         rho0, rho_ref, dpa_kk, intz_kk)
+                                         rho0, rho_ref, dpa_kk, intz_kk, cons)
             pa(i, j, k) = dpa_kk
             intz_dpa(i, j, k) = intz_kk
          end do
@@ -2422,7 +2429,7 @@ contains
             call roquet_pcm_dpa_face(e_face(i - 1, j, k + 1), e_face(i, j, k + 1), &
                                      h_layer(i - 1, j, k), h_layer(i, j, k), &
                                      t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R, &
-                                     hwt_ll, hwt_lr, hwt_rr, hwt_rl, rho0, rho_ref, dpa_kk)
+                                     hwt_ll, hwt_lr, hwt_rr, hwt_rl, rho0, rho_ref, dpa_kk, cons)
             intx_dpa(i, j, k) = dpa_kk
          end do
       else
@@ -2441,7 +2448,7 @@ contains
             call roquet_rho_pcm_dpa_face(e_face(i - 1, j, k + 1), e_face(i, j, k + 1), &
                                          h_layer(i - 1, j, k), h_layer(i, j, k), &
                                          t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R, &
-                                         hwt_ll, hwt_lr, hwt_rr, hwt_rl, rho0, rho_ref, dpa_kk)
+                                         hwt_ll, hwt_lr, hwt_rr, hwt_rl, rho0, rho_ref, dpa_kk, cons)
             intx_dpa(i, j, k) = dpa_kk
          end do
       end if
@@ -2498,7 +2505,7 @@ contains
             call roquet_pcm_dpa_face(e_face(i, j - 1, k + 1), e_face(i, j, k + 1), &
                                      h_layer(i, j - 1, k), h_layer(i, j, k), &
                                      t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R, &
-                                     hwt_ll, hwt_lr, hwt_rr, hwt_rl, rho0, rho_ref, dpa_kk)
+                                     hwt_ll, hwt_lr, hwt_rr, hwt_rl, rho0, rho_ref, dpa_kk, cons)
             inty_dpa(i, j, k) = dpa_kk
          end do
       else
@@ -2517,7 +2524,7 @@ contains
             call roquet_rho_pcm_dpa_face(e_face(i, j - 1, k + 1), e_face(i, j, k + 1), &
                                          h_layer(i, j - 1, k), h_layer(i, j, k), &
                                          t_m_L, t_m_R, s_m_L, s_m_R, dpa_L, dpa_R, &
-                                         hwt_ll, hwt_lr, hwt_rr, hwt_rl, rho0, rho_ref, dpa_kk)
+                                         hwt_ll, hwt_lr, hwt_rr, hwt_rl, rho0, rho_ref, dpa_kk, cons)
             inty_dpa(i, j, k) = dpa_kk
          end do
       end if
@@ -2740,8 +2747,11 @@ contains
       dpa_face = acc/90.0_wp
    end subroutine wright_pcm_dpa_face
 
-   pure subroutine roquet_pcm_dpa_intz(t, s, e_top, dz, rho0, rho_ref, dpa, intz_dpa)
+   pure subroutine roquet_pcm_dpa_intz(t, s, e_top, dz, rho0, rho_ref, dpa, intz_dpa, cons)
       !$acc routine seq
+      logical, intent(in) :: cons
+         !! `.true.` = (T, S) are (CT, SA) (`TS_CONS_ABS`): no SR factor, no
+         !! PT->CT conversion in the EOS.
       !! Vertical integral of the Roquet et al. (2015) SpV in-situ density
       !! anomaly over one constant-T/S (PCM) layer: the 5-point Boole rule
       !! of `boole_dpa_intz_layer` (MOM6 `int_density_dz_generic_pcm`, which
@@ -2796,7 +2806,7 @@ contains
       real(wp) :: sv0, sv1, sv2, sv3, gxrho, rho_anom
       real(wp) :: r1, r2, r3, r4, r5
 
-      call rdb_roq_ts_coeffs(t, s, sv0, sv1, sv2, sv3)
+      call rdb_roq_ts_coeffs(t, s, sv0, sv1, sv2, sv3, cons)
       gxrho = GRAVITY*rho0
       ! The five Boole points, top (n = 1) to bottom (n = 5), at the same
       ! `z5 = e_top - 0.25*(n-1)*dz` as `boole_dpa_intz_layer`.
@@ -2815,8 +2825,11 @@ contains
    pure subroutine roquet_pcm_dpa_face(e_top_l, e_top_r, dz_l, dz_r, &
                                        t_l, t_r, s_l, s_r, dpa_l, dpa_r, &
                                        hwt_ll, hwt_lr, hwt_rr, hwt_rl, &
-                                       rho0, rho_ref, dpa_face)
+                                       rho0, rho_ref, dpa_face, cons)
       !$acc routine seq
+      logical, intent(in) :: cons
+         !! `.true.` = (T, S) are (CT, SA) (`TS_CONS_ABS`): no SR factor, no
+         !! PT->CT conversion in the EOS.
       !! Cross-face 5-point Boole quadrature of the layer `dpa` for a PCM
       !! column pair under Roquet SpV (`intx_dpa` / `inty_dpa`): the Roquet
       !! twin of `wright_pcm_dpa_face`, and `boole_dpa_face_pcm` with the
@@ -2855,7 +2868,7 @@ contains
          wtt_r = wl*hwt_lr + wr*hwt_rr
          call roquet_pcm_dpa_intz(wtt_l*t_l + wtt_r*t_r, wtt_l*s_l + wtt_r*s_r, &
                                   wl*e_top_l + wr*e_top_r, wl*dz_l + wr*dz_r, &
-                                  rho0, rho_ref, dpa_m, intz_m)
+                                  rho0, rho_ref, dpa_m, intz_m, cons)
          if (m == 3) then
             acc = acc + 12.0_wp*dpa_m
          else
@@ -2865,8 +2878,11 @@ contains
       dpa_face = acc/90.0_wp
    end subroutine roquet_pcm_dpa_face
 
-   pure subroutine roquet_rho_pcm_dpa_intz(t, s, e_top, dz, rho0, rho_ref, dpa, intz_dpa)
+   pure subroutine roquet_rho_pcm_dpa_intz(t, s, e_top, dz, rho0, rho_ref, dpa, intz_dpa, cons)
       !$acc routine seq
+      logical, intent(in) :: cons
+         !! `.true.` = (T, S) are (CT, SA) (`TS_CONS_ABS`): no SR factor, no
+         !! PT->CT conversion in the EOS.
       !! Vertical integral of the Roquet et al. (2015) in-situ-DENSITY
       !! (polyTEOS10_55t, ΔS = 32) anomaly over one constant-T/S (PCM)
       !! layer: the 5-point Boole rule of `boole_dpa_intz_layer` (Adcroft,
@@ -2907,7 +2923,7 @@ contains
       real(wp) :: r0, r1, r2, r3, gxrho, rho_anom
       real(wp) :: r_1, r_2, r_3, r_4, r_5
 
-      call rdb_roq_rho_ts_coeffs(t, s, r0, r1, r2, r3)
+      call rdb_roq_rho_ts_coeffs(t, s, r0, r1, r2, r3, cons)
       gxrho = GRAVITY*rho0
       ! The five Boole points, top (n = 1) to bottom (n = 5), at the same
       ! `z5 = e_top - 0.25*(n-1)*dz` as `boole_dpa_intz_layer`.
@@ -2926,8 +2942,11 @@ contains
    pure subroutine roquet_rho_pcm_dpa_face(e_top_l, e_top_r, dz_l, dz_r, &
                                            t_l, t_r, s_l, s_r, dpa_l, dpa_r, &
                                            hwt_ll, hwt_lr, hwt_rr, hwt_rl, &
-                                           rho0, rho_ref, dpa_face)
+                                           rho0, rho_ref, dpa_face, cons)
       !$acc routine seq
+      logical, intent(in) :: cons
+         !! `.true.` = (T, S) are (CT, SA) (`TS_CONS_ABS`): no SR factor, no
+         !! PT->CT conversion in the EOS.
       !! Cross-face 5-point Boole quadrature of the layer `dpa` for a PCM
       !! column pair under Roquet in-situ density (`intx_dpa` / `inty_dpa`):
       !! the in-situ-density twin of `roquet_pcm_dpa_face`, and
@@ -2966,7 +2985,7 @@ contains
          wtt_r = wl*hwt_lr + wr*hwt_rr
          call roquet_rho_pcm_dpa_intz(wtt_l*t_l + wtt_r*t_r, wtt_l*s_l + wtt_r*s_r, &
                                       wl*e_top_l + wr*e_top_r, wl*dz_l + wr*dz_r, &
-                                      rho0, rho_ref, dpa_m, intz_m)
+                                      rho0, rho_ref, dpa_m, intz_m, cons)
          if (m == 3) then
             acc = acc + 12.0_wp*dpa_m
          else
@@ -3468,8 +3487,11 @@ contains
 
    pure subroutine roquet_recon_dpa_intz(rho0, rho_ref, e_top, dz, &
                                          t_t, t_b, t_mean, s_t, s_b, s_mean, &
-                                         parabolic, dpa, intz_dpa)
+                                         parabolic, dpa, intz_dpa, cons)
       !$acc routine seq
+      logical, intent(in) :: cons
+         !! `.true.` = (T, S) are (CT, SA) (`TS_CONS_ABS`): no SR factor, no
+         !! PT->CT conversion in the EOS.
       !! `boole_dpa_intz_layer` (the reconstruct-for-pressure in-layer 5-point
       !! Boole rule over a PLM / PPM T/S profile) specialised to Roquet SpV:
       !! the same five sub-points, weights and summation order, with the
@@ -3512,7 +3534,7 @@ contains
          t5 = wt_t*t_t + wt_b*t_b + t6*wt_t*wt_b
          s5 = wt_t*s_t + wt_b*s_b + s6*wt_t*wt_b
          p5 = -gxrho*(e_top - 0.25_wp*real(n - 1, wp)*dz)
-         call rdb_roq_ts_coeffs(t5, s5, sv0, sv1, sv2, sv3)
+         call rdb_roq_ts_coeffs(t5, s5, sv0, sv1, sv2, sv3, cons)
          r5(n) = 1.0_wp/rdb_roq_spv_p(sv0, sv1, sv2, sv3, p5) - rho_ref
       end do
 
@@ -3527,8 +3549,11 @@ contains
                                          e_top_l, e_top_r, dz_l, dz_r, &
                                          t_t_l, t_b_l, t_m_l, t_t_r, t_b_r, t_m_r, &
                                          s_t_l, s_b_l, s_m_l, s_t_r, s_b_r, s_m_r, &
-                                         dpa_l, dpa_r, parabolic, dpa_face)
+                                         dpa_l, dpa_r, parabolic, dpa_face, cons)
       !$acc routine seq
+      logical, intent(in) :: cons
+         !! `.true.` = (T, S) are (CT, SA) (`TS_CONS_ABS`): no SR factor, no
+         !! PT->CT conversion in the EOS.
       !! `boole_dpa_face` (the reconstruct-for-pressure cross-face 5-point
       !! Boole rule) with the Roquet vertical rule `roquet_recon_dpa_intz` at
       !! the three interior sub-columns -- identical sub-columns, weights and
@@ -3568,7 +3593,7 @@ contains
                                     wl*s_t_l + wr*s_t_r, &
                                     wl*s_b_l + wr*s_b_r, &
                                     wl*s_m_l + wr*s_m_r, &
-                                    parabolic, dpa_m, intz_m)
+                                    parabolic, dpa_m, intz_m, cons)
          acc = acc + BOOLE_W(m)*dpa_m
       end do
       dpa_face = acc/90.0_wp
@@ -3576,8 +3601,11 @@ contains
 
    pure subroutine roquet_rho_recon_dpa_intz(rho0, rho_ref, e_top, dz, &
                                              t_t, t_b, t_mean, s_t, s_b, s_mean, &
-                                             parabolic, dpa, intz_dpa)
+                                             parabolic, dpa, intz_dpa, cons)
       !$acc routine seq
+      logical, intent(in) :: cons
+         !! `.true.` = (T, S) are (CT, SA) (`TS_CONS_ABS`): no SR factor, no
+         !! PT->CT conversion in the EOS.
       !! `boole_dpa_intz_layer` (the reconstruct-for-pressure in-layer
       !! 5-point Boole rule over a PLM / PPM T/S profile) specialised to
       !! Roquet et al. (2015) in-situ density (ΔS = 32, "polyTEOS10_55t"):
@@ -3623,7 +3651,7 @@ contains
          t5 = wt_t*t_t + wt_b*t_b + t6*wt_t*wt_b
          s5 = wt_t*s_t + wt_b*s_b + s6*wt_t*wt_b
          p5 = -gxrho*(e_top - 0.25_wp*real(n - 1, wp)*dz)
-         call rdb_roq_rho_ts_coeffs(t5, s5, r0, r1, r2, r3)
+         call rdb_roq_rho_ts_coeffs(t5, s5, r0, r1, r2, r3, cons)
          r5(n) = rdb_roq_rho_p(r0, r1, r2, r3, p5) - rho_ref
       end do
 
@@ -3638,8 +3666,11 @@ contains
                                              e_top_l, e_top_r, dz_l, dz_r, &
                                              t_t_l, t_b_l, t_m_l, t_t_r, t_b_r, t_m_r, &
                                              s_t_l, s_b_l, s_m_l, s_t_r, s_b_r, s_m_r, &
-                                             dpa_l, dpa_r, parabolic, dpa_face)
+                                             dpa_l, dpa_r, parabolic, dpa_face, cons)
       !$acc routine seq
+      logical, intent(in) :: cons
+         !! `.true.` = (T, S) are (CT, SA) (`TS_CONS_ABS`): no SR factor, no
+         !! PT->CT conversion in the EOS.
       !! `boole_dpa_face` (the reconstruct-for-pressure cross-face 5-point
       !! Boole rule) with the Roquet in-situ-density vertical rule
       !! `roquet_rho_recon_dpa_intz` at the three interior sub-columns --
@@ -3680,7 +3711,7 @@ contains
                                         wl*s_t_l + wr*s_t_r, &
                                         wl*s_b_l + wr*s_b_r, &
                                         wl*s_m_l + wr*s_m_r, &
-                                        parabolic, dpa_m, intz_m)
+                                        parabolic, dpa_m, intz_m, cons)
          acc = acc + BOOLE_W(m)*dpa_m
       end do
       dpa_face = acc/90.0_wp

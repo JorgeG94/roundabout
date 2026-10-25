@@ -505,6 +505,30 @@ contains
                           "(-0.054, 0, -7.53e-8), 'isomip' = ISOMIP+ "// &
                           "(-0.0573, 0.0832, -7.53e-8)", &
                           allowed=[character(len=6) :: "seaice", "isomip"]))
+      ps => cfg%ocean%eos%ts_convention
+      call g%add(nml_enum("ts_convention", ps, &
+                          "Meaning of the T/S tracers: 'pot_prac' = potential "// &
+                          "temperature + practical salinity (default); 'cons_abs' = "// &
+                          "TEOS-10 Conservative Temperature + Absolute Salinity "// &
+                          "(roquet_rho/roquet_spv only)", &
+                          allowed=[character(len=8) :: "pot_prac", "cons_abs"]))
+      ps => cfg%ocean%eos%tfreeze_form
+      call g%add(nml_enum("tfreeze_form", ps, &
+                          "Liquidus form: 'linear' (tfreeze_set coefficients, default) "// &
+                          "or 'teos_poly' (TEOS-10 CT_freezing_poly(SA,p); needs "// &
+                          "ts_convention='cons_abs')", &
+                          allowed=[character(len=9) :: "linear", "teos_poly"]))
+      pr => cfg%ocean%eos%tfreeze_sat_frac
+      call g%add(nml_real("tfreeze_sat_frac", pr, &
+                          "Air-saturation fraction of the TEOS-10 polynomial liquidus "// &
+                          "(0 = no dissolved air; ACCESS-OM3 parity)", &
+                          min=0.0_wp, max=1.0_wp))
+      pr => cfg%ocean%eos%c_p
+      call g%add(nml_real("c_p", pr, &
+                          "Seawater heat capacity for ocean heat-flux <-> temperature "// &
+                          "conversion (MOM6 C_P); 3992 (OM3) by default under both "// &
+                          "ts_conventions, TEOS-10 cp0 = 3991.86795711963", &
+                          units="J kg-1 K-1", min=3000.0_wp, max=4500.0_wp))
       pr => cfg%ocean%eos%p_ref
       call g%add(nml_real("p_ref", pr, &
                           "Reference pressure for the potential density "// &

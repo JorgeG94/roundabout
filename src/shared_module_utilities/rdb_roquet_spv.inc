@@ -42,7 +42,7 @@
 ! inline copy -- a consumer of the density inc must `#include` this SpV inc
 ! FIRST, in the same module `contains`, so the helper is in scope.
 
-   pure function rdb_roq_ct_of(t_roq, s_roq) result(ct_roq)
+   pure function rdb_roq_ct_of(t_roq, s_roq, cons_roq) result(ct_roq)
       !$acc routine seq
       !! CT = ct_from_pt(SR, PT) -- the verified GSW surface polynomial
       !! (McDougall & Barker 2011; GSW `gsw_ct_from_pt`), same nesting as
@@ -66,11 +66,18 @@
          !! Potential temperature (degC).
       real(wp), intent(in)  :: s_roq
          !! Practical salinity (PSU).
+      logical, intent(in)   :: cons_roq
+         !! `.true.` = `t_roq` already IS Conservative Temperature
+         !! (`TS_CONS_ABS`): returned unchanged, no conversion.
       real(wp) :: ct_roq
          !! Conservative Temperature (degC).
 
       real(wp) :: x2_roq, xx_roq, yy_roq, hh_roq
 
+      if (cons_roq) then
+         ct_roq = t_roq
+         return
+      end if
       x2_roq = max(ROQ_CT_SFAC*(s_roq*ROQ_SR_FACTOR), 1.0e-20_wp)
       xx_roq = sqrt(x2_roq)
       yy_roq = t_roq*0.025_wp
@@ -101,8 +108,11 @@
       ct_roq = hh_roq/ROQ_CP0
    end function rdb_roq_ct_of
 
-   pure subroutine rdb_roq_ts_coeffs(t_roq, s_roq, sv0_roq, sv1_roq, sv2_roq, sv3_roq)
+   pure subroutine rdb_roq_ts_coeffs(t_roq, s_roq, sv0_roq, sv1_roq, sv2_roq, sv3_roq, cons_roq)
       !$acc routine seq
+      logical, intent(in)   :: cons_roq
+         !! `.true.` = (T, S) are already (CT, SA) (`TS_CONS_ABS`): no SR
+         !! factor, no PT->CT conversion.
       !! The (T, S)-dependent coefficients of the Roquet SpV polynomial viewed
       !! as a polynomial in PRESSURE.  Everything expensive in the EOS -- two
       !! sqrt, the degree-7 PT->CT polynomial and the ~50-term (zs, zt) sums
@@ -121,8 +131,15 @@
       real(wp) :: svts0_roq, sv0s0_roq
 
       ! CT, through the one shared helper (`rdb_roq_ct_of` above).
-      zt_roq = rdb_roq_ct_of(t_roq, s_roq)
-      zs_roq = sqrt(abs(s_roq*ROQ_SR_FACTOR + ROQ_RDELTAS)*ROQ_R1_S0)
+      zt_roq = rdb_roq_ct_of(t_roq, s_roq, cons_roq)
+      ! Branch, not `merge`: the pot_prac line must stay textually the
+      ! pre-cons_abs expression so the compiler contracts it the same way
+      ! (a `merge`d SR broke the s*F + delta FMA on the GPU build).
+      if (cons_roq) then
+         zs_roq = sqrt(abs(s_roq + ROQ_RDELTAS)*ROQ_R1_S0)
+      else
+         zs_roq = sqrt(abs(s_roq*ROQ_SR_FACTOR + ROQ_RDELTAS)*ROQ_R1_S0)
+      end if
 
       sv3_roq = SPV003 + (zs_roq*SPV103 + zt_roq*SPV013)
       sv2_roq = SPV002 + (zs_roq*(SPV102 + zs_roq*SPV202) &
