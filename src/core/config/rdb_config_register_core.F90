@@ -878,6 +878,12 @@ contains
                           "pre-regridded NetCDF, or the analytic affine "// &
                           "lin_* profile (no file)", &
                           allowed=[character(len=15) :: "file", "linear"]))
+      ps => cfg%ocean%zinit%input_convention
+      call g%add(nml_enum("input_convention", ps, &
+                          "source='file': what the T/S variables hold: 'pot_prac' = "// &
+                          "theta/SP (WOA; converted to CT/SA on read under "// &
+                          "ts_convention='cons_abs'), 'cons_abs' = CT/SA as is", &
+                          allowed=[character(len=8) :: "pot_prac", "cons_abs"]))
       ps => cfg%ocean%zinit%file
       call g%add(nml_string("file", ps, "Path to the model-grid T/S NetCDF"))
       ps => cfg%ocean%zinit%t_var

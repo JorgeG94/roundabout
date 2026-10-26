@@ -92,6 +92,7 @@ module rdb_ocean_bulk_forcing
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_ice_state, only: ocean_sea_ice_t
    use rdb_atm_state, only: atm_state_t
+   use rdb_teos10_convert, only: pt_from_ct
    use rdb_ocean_bulk_flux, only: bulk_flux_config_t, bulk_flux_column, &
                                   bulk_flux_longwave_up, BULK_T0_KELVIN
    use rdb_ocean_surface_stress, only: ocean_surface_stress_t
@@ -121,6 +122,12 @@ module rdb_ocean_bulk_forcing
          !! %enable`). `.false.` (default): every procedure below is an
          !! immediate no-op -- bit-identical to a pre-C2c-3a build.
       logical :: on_device = .false.
+      logical :: cons_abs = .false.
+         !! Latched `&ocean_eos_nml ts_convention == "cons_abs"`: the model
+         !! T/S are CT/SA, so the SST fed to the bulk formulae is
+         !! `pt_from_ct(SA, CT)` of the top layer (IOC/SCOR/IAPSO 2010;
+         !! McDougall & Barker 2011).  `.false.` (default) is the original
+         !! expression, bit-identical.
       integer :: nx_total = 0, ny_total = 0
       type(ocean_atm_forcing_config_t) :: cfg_atm
          !! Latched copy of `cfg%ocean%atm_forcing` -- `wind_relative`/
@@ -214,6 +221,7 @@ contains
 
       this%cfg_atm = cfg%ocean%atm_forcing
       this%cfg_bulk = cfg%ocean%bulk_flux
+      this%cons_abs = trim(adjustl(cfg%ocean%eos%ts_convention)) == "cons_abs"
       this%nx_total = grid%nx_total
       this%ny_total = grid%ny_total
       allocate (this%taux_c(this%nx_total, this%ny_total), source=0.0_wp)
@@ -248,13 +256,21 @@ contains
       type(ocean_surface_stress_t), intent(inout) :: ss
       type(ocean_surface_flux_t), intent(inout) :: sf
 
-      integer :: nx, ny, ng, nxp, nyp, nz, idx_T
+      integer :: nx, ny, ng, nxp, nyp, nz, idx_T, idx_Sarg
+      logical :: cons_abs
 
       if (.not. this%enable) return
       if (.not. atm%enable) return
       if (.not. allocated(ms%tracers)) return
       idx_T = ms%idx_temperature
       if (idx_T <= 0) return
+
+      ! TEOS-10: export theta = pt_from_ct(SA, CT) to the bulk formulae.
+      ! The salinity tracer is the SA source; without one there is nothing
+      ! to convert with, so the model T is passed as is.
+      cons_abs = this%cons_abs .and. ms%idx_salinity > 0
+      idx_Sarg = idx_T
+      if (cons_abs) idx_Sarg = ms%idx_salinity
 
       nx = grid%nx_total
       ny = grid%ny_total
@@ -278,8 +294,8 @@ contains
                                   atm%uas, atm%vas, atm%tas, atm%huss, atm%psl, &
                                   atm%rlds, atm%rsds, atm%prra, atm%prsn, &
                                   ms%u_face_x_layer, ms%v_face_y_layer, &
-                                  ms%tracers(idx_T)%hTr, ms%h_layer, &
-                                  this%open_water, &
+                                  ms%tracers(idx_T)%hTr, ms%tracers(idx_Sarg)%hTr, ms%h_layer, &
+                                  cons_abs, this%open_water, &
                                   this%taux_c, this%tauy_c, &
                                   sf%q_sens, sf%q_lat, sf%evap, sf%q_sw, sf%q_lw, &
                                   sf%lprec, sf%fprec, sf%p_surf_atm, &
@@ -320,8 +336,8 @@ contains
                                           wind_relative, ocean_albedo, z_wind, z_ta, emissivity, &
                                           wet_T, angle_dx, uas, vas, tas, huss, psl, &
                                           rlds, rsds, prra, prsn, &
-                                          u_face_x_layer, v_face_y_layer, hTr_T, h_layer, &
-                                          open_water, &
+                                          u_face_x_layer, v_face_y_layer, hTr_T, hTr_S, h_layer, &
+                                          cons_abs, open_water, &
                                           taux_c, tauy_c, q_sens, q_lat, evap, q_sw, q_lw, &
                                           lprec, fprec, p_surf_atm, &
                                           heat_content_lprec, heat_content_fprec, cp)
@@ -338,23 +354,29 @@ contains
       real(wp), intent(in) :: uas(nx, ny), vas(nx, ny), tas(nx, ny), huss(nx, ny), psl(nx, ny)
       real(wp), intent(in) :: rlds(nx, ny), rsds(nx, ny), prra(nx, ny), prsn(nx, ny)
       real(wp), intent(in) :: u_face_x_layer(nx + 1, ny, nz), v_face_y_layer(nx, ny + 1, nz)
-      real(wp), intent(in) :: hTr_T(nx, ny, nz), h_layer(nx, ny, nz)
+      real(wp), intent(in) :: hTr_T(nx, ny, nz), hTr_S(nx, ny, nz), h_layer(nx, ny, nz)
       real(wp), intent(in) :: open_water(nx, ny)
       real(wp), intent(inout) :: taux_c(nx, ny), tauy_c(nx, ny)
       real(wp), intent(inout) :: q_sens(nx, ny), q_lat(nx, ny), evap(nx, ny)
       real(wp), intent(inout) :: q_sw(nx, ny), q_lw(nx, ny)
       real(wp), intent(inout) :: lprec(nx, ny), fprec(nx, ny), p_surf_atm(nx, ny)
       real(wp), intent(inout) :: heat_content_lprec(nx, ny), heat_content_fprec(nx, ny)
+      logical, intent(in) :: cons_abs
+         !! `.true.` under `&ocean_eos_nml ts_convention = "cons_abs"`
+         !! (with a salinity tracer): the SST handed to the bulk formulae
+         !! and to the longwave emission is `pt_from_ct(SA, CT)` of the top
+         !! layer, SA = `hTr_S/h`.  `.false.` takes the model T as is
+         !! (bit-identical default).
       real(wp), intent(in) :: cp
          !! Specific heat (J/kg/K) of the heat content of precipitation:
          !! `sf%cp` (`&ocean_eos_nml c_p`, default 3992).
 
       integer :: i, j, ii, jj
-      real(wp) :: ow, cosA, sinA, u_g, v_g, u_c, v_c, sst, sst_k, lw_up
+      real(wp) :: ow, cosA, sinA, u_g, v_g, u_c, v_c, sst, sst_f, sst_k, lw_up
       real(wp) :: taux, tauy, sens, lat, evp, cd, ch, ce, ustar
 
       do concurrent(j=1:nyp, i=1:nxp) &
-         local(ii, jj, ow, cosA, sinA, u_g, v_g, u_c, v_c, sst, sst_k, lw_up, &
+         local(ii, jj, ow, cosA, sinA, u_g, v_g, u_c, v_c, sst, sst_f, sst_k, lw_up, &
                taux, tauy, sens, lat, evp, cd, ch, ce, ustar)
          ii = ng + i
          jj = ng + j
@@ -372,10 +394,18 @@ contains
                v_c = 0.0_wp
             end if
             sst = hTr_T(ii, jj, nz)/(h_layer(ii, jj, nz) + H_DIV_EPS)
-            call bulk_flux_column(u_g, v_g, u_c, v_c, tas(ii, jj), huss(ii, jj), psl(ii, jj), sst, &
+            ! Bulk formulae and longwave emission take a POTENTIAL
+            ! temperature; the model T is CT under cons_abs.  The heat
+            ! content of the precipitation below keeps the model T
+            ! (ocean-frame enthalpy with c_p).
+            sst_f = sst
+            if (cons_abs) then
+               sst_f = pt_from_ct(hTr_S(ii, jj, nz)/(h_layer(ii, jj, nz) + H_DIV_EPS), sst)
+            end if
+            call bulk_flux_column(u_g, v_g, u_c, v_c, tas(ii, jj), huss(ii, jj), psl(ii, jj), sst_f, &
                                   z_wind, z_ta, n_iter, &
                                   taux, tauy, sens, lat, evp, cd, ch, ce, ustar)
-            sst_k = sst + BULK_T0_KELVIN
+            sst_k = sst_f + BULK_T0_KELVIN
             lw_up = bulk_flux_longwave_up(sst_k, emissivity)
 
             taux_c(ii, jj) = ow*taux

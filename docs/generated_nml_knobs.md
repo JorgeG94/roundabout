@@ -613,8 +613,8 @@ Surface buoyancy restoring (MOM6 RESTOREBUOY): piston-velocity relaxation of top
 | `enable_restore_salt` | `.false.` |  | Master switch for SSS restoring |
 | `piston_t` | `0.0000000000E+00` | m/day | SST piston velocity (MOM6 FLUXCONST_T) |
 | `piston_s` | `0.0000000000E+00` | m/day | SSS piston velocity (MOM6 FLUXCONST_S) |
-| `restore_sst` | `0.0000000000E+00` | degC | Scalar target SST |
-| `restore_sss` | `0.0000000000E+00` | PSU | Scalar target SSS |
+| `restore_sst` | `0.0000000000E+00` | degC | Scalar target SST, in the model T convention (theta or CT) |
+| `restore_sss` | `0.0000000000E+00` | PSU | Scalar target SSS, in the model S convention (SP or SA) |
 
 ### &ocean_geothermal_nml
 
@@ -975,6 +975,7 @@ Z-level T/S initial-condition overlay (A2).
 |------|---------|-------|-------------|
 | `enable` | `.false.` |  | Master switch (default off; requires RDB_ENABLE_NETCDF=ON) |
 | `source` | `"file"` |  | Where the T(z)/S(z) profile comes from: a pre-regridded NetCDF, or the analytic affine lin_* profile (no file) |
+| `input_convention` | `"pot_prac"` |  | source='file': what the T/S variables hold: 'pot_prac' = theta/SP (WOA; converted to CT/SA on read under ts_convention='cons_abs'), 'cons_abs' = CT/SA as is |
 | `file` | `""` |  | Path to the model-grid T/S NetCDF |
 | `t_var` | `""` |  | Temperature variable-name override (blank tries temp/T/temperature) |
 | `s_var` | `""` |  | Salinity variable-name override (blank tries salt/S/salinity) |

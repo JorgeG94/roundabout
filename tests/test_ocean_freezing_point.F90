@@ -226,41 +226,44 @@ contains
       if (allocated(error)) return
       cfg%ocean%cavity_melt%enable = .false.
 
-      ! cons_abs + file-based z-init; the analytic profile stays legal.
+      ! PR-3 lifted the file z-init, bulk-flux and scalar-restoring
+      ! refusals (they now convert / read the model convention).  The
+      ! zinit pairing that stays refused: a CT/SA file into a theta/SP model.
       cfg%ocean%zinit%enable = .true.
       cfg%ocean%zinit%source = "file"
       cfg%ocean%zinit%file = "woa.nc"
       ierr = -999
       call validate_config(cfg, ierr=ierr)
-      call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, "cons_abs + file z-init must be refused")
+      call check(error, ierr == OCEAN_STATUS_OK, "cons_abs + file z-init (theta/SP file) must validate")
       if (allocated(error)) return
+      cfg%ocean%zinit%input_convention = "cons_abs"
+      ierr = -999
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "cons_abs + cons_abs file must validate")
+      if (allocated(error)) return
+      cfg%ocean%eos%ts_convention = "pot_prac"
+      ierr = -999
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
+                 "pot_prac model + cons_abs input_convention must be refused")
+      if (allocated(error)) return
+      cfg%ocean%eos%ts_convention = "cons_abs"
+      cfg%ocean%zinit%input_convention = "bogus"
+      ierr = -999
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, "unknown input_convention must fail loud")
+      if (allocated(error)) return
+      cfg%ocean%zinit%input_convention = "pot_prac"
       cfg%ocean%zinit%source = "linear"
       cfg%ocean%zinit%file = ""
-      ierr = -999
-      call validate_config(cfg, ierr=ierr)
-      call check(error, ierr == OCEAN_STATUS_OK, "cons_abs + analytic z-init stays legal")
-      if (allocated(error)) return
       cfg%ocean%zinit%enable = .false.
-
-      ! cons_abs + bulk formulae (SST read as theta) and scalar restoring
-      ! (targets documented as theta / PSU).
-      cfg%ocean%bulk_flux%enable = .true.
-      ierr = -999
-      call validate_config(cfg, ierr=ierr)
-      call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, "cons_abs + bulk flux must be refused")
-      if (allocated(error)) return
-      cfg%ocean%bulk_flux%enable = .false.
       cfg%ocean%restore%enable_restore_temp = .true.
-      ierr = -999
-      call validate_config(cfg, ierr=ierr)
-      call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, "cons_abs + restore temp must be refused")
-      if (allocated(error)) return
-      cfg%ocean%restore%enable_restore_temp = .false.
       cfg%ocean%restore%enable_restore_salt = .true.
       ierr = -999
       call validate_config(cfg, ierr=ierr)
-      call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, "cons_abs + restore salt must be refused")
+      call check(error, ierr == OCEAN_STATUS_OK, "cons_abs + scalar restoring must validate")
       if (allocated(error)) return
+      cfg%ocean%restore%enable_restore_temp = .false.
       cfg%ocean%restore%enable_restore_salt = .false.
 
       ! c_p outside the physical bound 3000-4500 J/(kg K).

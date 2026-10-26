@@ -852,14 +852,19 @@ contains
          !! (`&ocean_cavity_dyn_nml trim_ic_for_p_surf`) puts the top at
          !! `z_draft - eta_trim`.  Absent => `metrics%z_draft`.
 
-      logical :: cav
+      logical :: cav, conv
 
       cav = state%metrics%use_cavity
+      ! File holding theta / SP into a CT / SA model: convert on read.
+      ! (validate_config refuses the opposite pairing.)
+      conv = trim(adjustl(cfg%ocean%eos%ts_convention)) == "cons_abs" .and. &
+             trim(adjustl(cfg%ocean%zinit%input_convention)) == "pot_prac"
       if (present(z_top)) then
          if (trim(adjustl(cfg%ocean%zinit%source)) == "linear") then
             call seed_ts_linear_z(state%multilayer, cfg%ocean%zinit, ierr, z_top)
          else
-            call seed_ts_from_zfile(state%multilayer, grid, cfg%ocean%zinit, ierr, z_top)
+            call seed_ts_from_zfile(state%multilayer, grid, cfg%ocean%zinit, ierr, z_top, &
+                                    to_cons_abs=conv)
          end if
          return
       end if
@@ -873,9 +878,10 @@ contains
       else
          if (cav) then
             call seed_ts_from_zfile(state%multilayer, grid, cfg%ocean%zinit, ierr, &
-                                    state%metrics%z_draft)
+                                    state%metrics%z_draft, to_cons_abs=conv)
          else
-            call seed_ts_from_zfile(state%multilayer, grid, cfg%ocean%zinit, ierr)
+            call seed_ts_from_zfile(state%multilayer, grid, cfg%ocean%zinit, ierr, &
+                                    to_cons_abs=conv)
          end if
       end if
    end subroutine seed_zinit_overlay

@@ -380,35 +380,21 @@ contains
                               "undecided.")
             has_error = .true.
          end if
-         if (cfg%ocean%bulk_flux%enable) then
-            call logger%error("&ocean_eos_nml ts_convention='cons_abs' is refused with "// &
-                              "&ocean_bulk_flux_nml enable=.true.: the bulk formulae "// &
-                              "use SST as a potential temperature (T + 273.15) and the "// &
-                              "CT->theta export conversion is not ported yet (TEOS-10 "// &
-                              "PR-3).")
-            has_error = .true.
-         end if
-         if (cfg%ocean%restore%enable_restore_temp .or. &
-             cfg%ocean%restore%enable_restore_salt) then
-            call logger%error("&ocean_eos_nml ts_convention='cons_abs' is refused with "// &
-                              "&ocean_restore_nml enable_restore_temp / "// &
-                              "enable_restore_salt: the scalar restoring targets are "// &
-                              "documented as theta / PSU and their conversion to CT/SA "// &
-                              "is pending (TEOS-10 PR-3).")
-            has_error = .true.
-         end if
-         if (cfg%ocean%zinit%enable .and. &
-             trim(adjustl(cfg%ocean%zinit%source)) == "file") then
-            call logger%error("&ocean_eos_nml ts_convention='cons_abs' is refused with "// &
-                              "a file-based &ocean_zinit_nml (source='file'): the "// &
-                              "WOA fields are potential temperature / practical "// &
-                              "salinity and would be read as CT/SA silently; the "// &
-                              "conversion at read time is not ported yet (TEOS-10 "// &
-                              "PR-3).  Use source='linear' or the scalar "// &
-                              "&ocean_ic_nml / &tracer_nml initial conditions, which "// &
-                              "are interpreted in the model convention.")
-            has_error = .true.
-         end if
+      end if
+      if (trim(adjustl(cfg%ocean%zinit%input_convention)) /= "pot_prac" .and. &
+          trim(adjustl(cfg%ocean%zinit%input_convention)) /= "cons_abs") then
+         call logger%error("&ocean_zinit_nml input_convention = '"// &
+                           trim(cfg%ocean%zinit%input_convention)// &
+                           "' is not recognised (allowed: pot_prac, cons_abs).")
+         has_error = .true.
+      end if
+      if (parse_ts_convention(cfg%ocean%eos%ts_convention) /= TS_CONS_ABS .and. &
+          trim(adjustl(cfg%ocean%zinit%input_convention)) == "cons_abs") then
+         call logger%error("&ocean_zinit_nml input_convention='cons_abs' requires "// &
+                           "&ocean_eos_nml ts_convention='cons_abs': there is no "// &
+                           "CT/SA -> theta/SP initial-condition path, so a CT/SA "// &
+                           "file would be read as theta/SP silently.")
+         has_error = .true.
       end if
       if (parse_tfreeze_form(cfg%ocean%eos%tfreeze_form) == TFREEZE_FORM_TEOS_POLY .and. &
           parse_ts_convention(cfg%ocean%eos%ts_convention) /= TS_CONS_ABS) then

@@ -262,7 +262,7 @@ coefficient by `ρ_0` first.
 |---|---|---|---|---|
 | Source of α/β for KPP `B_0` and double diffusion | **default** `"constant"` | `&ocean_vmix_nml buoyancy_coeffs` (`"constant"` or `"eos"`) | `"eos"` takes α and β from the active EOS. Byte-identical to `"constant"` under the linear EOS. | `test_ocean_eos_buoyancy` |
 | Potential-density reference pressure | opt-in | `&ocean_eos_nml p_ref` (`0.0`) | Pressure that `ms%rho_layer` is referenced to. Horizontally uniform by design. | `test_ocean_eos_p_top` |
-| T/S tracer convention | **default** `"pot_prac"` | `&ocean_eos_nml ts_convention` (`"pot_prac"` or `"cons_abs"`) | `"cons_abs"` makes the T/S tracers Conservative Temperature and Absolute Salinity (IOC/SCOR/IAPSO 2010): both Roquet et al. (2015) fits take T, S directly (no SR factor, no PT→CT, unit Jacobian); the heat capacity does not follow the convention — it is `&ocean_eos_nml c_p` (MOM6 `C_P`, default 3992 = ACCESS-OM3's value under CT/SA; TEOS-10 cp0 = 3991.86795711963, manual eq. 3.3.3, is opt-in). Fails loud unless `eos` is `roquet_rho`/`roquet_spv`, and with sea ice, cavity melt, `&ocean_bulk_flux_nml enable`, `&ocean_restore_nml` temp/salt restoring, or a file-based `&ocean_zinit_nml` (those convert in later PRs). `c_p` is bounded to 3000-4500. | `test_ocean_eos_roquet`, `test_ocean_freezing_point` |
+| T/S tracer convention | **default** `"pot_prac"` | `&ocean_eos_nml ts_convention` (`"pot_prac"` or `"cons_abs"`) | `"cons_abs"` makes the T/S tracers Conservative Temperature and Absolute Salinity (IOC/SCOR/IAPSO 2010): both Roquet et al. (2015) fits take T, S directly (no SR factor, no PT→CT, unit Jacobian); the heat capacity does not follow the convention — it is `&ocean_eos_nml c_p` (MOM6 `C_P`, default 3992 = ACCESS-OM3's value under CT/SA; TEOS-10 cp0 = 3991.86795711963, manual eq. 3.3.3, is opt-in). Fails loud unless `eos` is `roquet_rho`/`roquet_spv`, and with sea ice or cavity melt (later PRs). Under `cons_abs`: a file `&ocean_zinit_nml` holding θ/SP (`input_convention = "pot_prac"`, the default, as WOA) is converted on the host after interpolation, SA first (`SA = sr_from_sp(SP)`, Reference Salinity, no δSA) then `CT = ct_from_pt(SA, θ)`; `input_convention = "cons_abs"` reads CT/SA as is and is refused under a `pot_prac` model. `&ocean_bulk_flux_nml` evaluates its formulae and longwave emission at `θ = pt_from_ct(SA, CT)` of the top layer (heat content of precipitation keeps the model T with `c_p`). `&ocean_restore_nml` `restore_sst`/`restore_sss` are read in the model convention (OM3 restores toward a variable that is already Absolute Salinity). Derived diagnostics `temperature_pt` (θ, CMOR `thetao`) and `salinity_sp` (SP, CMOR `so`) are identity copies under `pot_prac`; under `cons_abs` `temperature`/`salinity` are CMOR `bigthetao`/`absso`. `c_p` is bounded to 3000-4500. | `test_ocean_eos_roquet`, `test_ocean_freezing_point`, `test_ocean_zinit`, `test_ocean_diag`, `test_ocean_bulk_forcing` |
 | Liquidus form | **default** `"linear"` | `&ocean_eos_nml tfreeze_form` (`"linear"` or `"teos_poly"`), `tfreeze_sat_frac` | `"teos_poly"` is the TEOS-10 polynomial `CT_f(SA, p, sat_frac)` (manual section 3.33; McDougall & Barker 2011), about −1.92 °C at SA = 35.16504, p = 0. Needs `ts_convention = "cons_abs"`. `tfreeze_sat_frac` (default 0 = no dissolved air) is ACCESS-OM3 parity (`TFREEZE_FORM = "TEOS_POLY"`). | `test_ocean_freezing_point` |
 | Freezing-point coefficient set | **default** `"seaice"` | `&ocean_eos_nml tfreeze_set` (`"seaice"` or `"isomip"`) | Named liquidus sets. They differ by about 0.031 °C at S = 34.5, enough to flip the sign of an ice-shelf melt rate. | `test_ocean_freezing_point` |
 | Top-of-column pressure in the EOS | opt-in | `&ocean_psurf_nml in_eos` (`.false.`) | Evaluates in-situ density at `p_top + hydrostatic`. | `test_ocean_eos_p_top`, `test_ocean_bl_under_ice` |
@@ -732,8 +732,8 @@ non-conservative — increment mirrored into the surface heat/salt budget)
 | `enable_restore_salt` | `.false.` | Master switch for SSS restoring (effective only when `piston_s /= 0`). |
 | `piston_t` | `0.0` | SST piston velocity (m/day, MOM6 `FLUXCONST_T`; converted to m/s at seed). |
 | `piston_s` | `0.0` | SSS piston velocity (m/day, MOM6 `FLUXCONST_S`). |
-| `restore_sst` | `0.0` | Scalar target SST (degC). |
-| `restore_sss` | `0.0` | Scalar target SSS (PSU). |
+| `restore_sst` | `0.0` | Scalar target SST (degC), in the model T convention (θ, or CT under `cons_abs`); never converted. |
+| `restore_sss` | `0.0` | Scalar target SSS (PSU), in the model S convention (SP, or SA under `cons_abs`); never converted. |
 
 **Ocean** dials live in the per-concern `&ocean_<group>_nml` sub-namelists
 (`vmix`, `hvisc`, `bdrag`, `pgf`, `coriolis`, …) — see the working envelope in
@@ -762,13 +762,20 @@ non-conservative — increment mirrored into the surface heat/salt budget)
 Dated reconciliation log, kept verbatim. Read it for the history of why a row
 looks the way it does. It is not needed to use the tables.
 
+- **2026-10-26** — TEOS-10 PR 3: `&ocean_zinit_nml input_convention`
+  (`pot_prac` default | `cons_abs`); file z-init, bulk flux and scalar
+  restoring now run under `cons_abs` (their PR 2b refusals are lifted);
+  derived diagnostics `temperature_pt` / `salinity_sp`. Defaults
+  bit-identical. Still refused under `cons_abs`: sea ice (PR 4) and cavity
+  melt.
 - **2026-10-25** — `ts_convention = "cons_abs"`, `tfreeze_form = "teos_poly"`,
   `tfreeze_sat_frac` and `c_p` added (§6). OM3's `MOM_parameter_doc.all`
   (`USE_CONTEMP_ABSSAL = True`, `EQN_OF_STATE = "ROQUET_RHO"`,
   `TFREEZE_FORM = "TEOS_POLY"`, `C_P = 3992`) fixed the defaults: sat
   fraction 0 and `c_p = 3992` under both conventions. All default to the previous behaviour
   (bit-identical). Not yet covered under `cons_abs`: initial-condition
-  conversion, PT/SP diagnostics, sea ice and cavity melt (refused).
+  conversion, PT/SP diagnostics, sea ice and cavity melt (refused);
+  initial conditions, PT/SP diagnostics, bulk flux and restoring landed in PR 3.
 - **2026-10-13** — `eos = "roquet_rho"` added (§6). **Answer change for
   `roquet_spv` and `roquet_rho`:** their PT→CT conversion carried two
   misplaced polynomial terms; it now uses the GSW-verified

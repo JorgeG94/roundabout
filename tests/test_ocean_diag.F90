@@ -35,6 +35,8 @@ module test_ocean_diag
                                 BUDGET_HEAT_TOTAL, BUDGET_KE, &
                                 budget_total_mass, budget_total_tracer, &
                                 budget_total_ke, budget_contributor_t
+   use rdb_eos, only: TS_CONS_ABS
+   use rdb_teos10_convert, only: pt_from_ct, sp_from_sr
    use testdrive, only: error_type, check, new_unittest, unittest_type
    implicit none
    private
@@ -93,6 +95,8 @@ contains
                   new_unittest("derived_catalog_lists_every_entry", test_derived_catalog_size), &
                   new_unittest("derived_h_layer_direct_copy", test_derived_h_layer), &
                   new_unittest("derived_rho_layer_direct_copy", test_derived_rho_layer), &
+                  new_unittest("derived_pt_sp_cons_abs_device_vs_host", test_derived_pt_sp_cons_abs), &
+                  new_unittest("derived_pt_sp_pot_prac_identity", test_derived_pt_sp_identity), &
                   new_unittest("derived_vorticity_z_rigid_rotation", test_derived_vorticity), &
                   new_unittest("vorticity_z_free_slip_wall_no_sheet", test_vorticity_free_slip_wall), &
                   new_unittest("vorticity_z_no_slip_wall_image_vorticity", test_vorticity_no_slip_wall), &
@@ -1364,7 +1368,7 @@ contains
    ! ---------------------------------------------------------------------
 
    subroutine test_derived_catalog_size(error)
-      !! Catalog ships 30 entries: 7 base + 3 sea-ice velocity diags +
+      !! Catalog ships 32 entries (30 + the TEOS-10 temperature_pt / salinity_sp pair): 7 base + 3 sea-ice velocity diags +
       !! 13 ice-shelf-cavity diags (11 melt-interface, gated on
       !! `&ocean_cavity_melt_nml`, and 2 geometry, gated on
       !! `&ocean_cavity_dyn_nml`) + 5 ACCESS-OM3-parity diags (C7 part 1:
@@ -1374,7 +1378,7 @@ contains
       type(error_type), allocatable, intent(out) :: error
       integer :: n
       n = derived_catalog_size()
-      call check(error, n == 30, "derived catalog should hold 30 entries")
+      call check(error, n == 32, "derived catalog should hold 32 entries")
    end subroutine test_derived_catalog_size
 
    subroutine test_derived_h_layer(error)
@@ -1406,6 +1410,103 @@ contains
       end block checks
       call state%destroy()
    end subroutine test_derived_h_layer
+
+   subroutine fill_ts_pattern(state)
+      !! Distinct theta/SP-like values per cell and layer (hTr = value*h).
+      type(ocean_state_t), intent(inout) :: state
+      integer :: i, j, k, it, is
+      real(wp) :: h
+      it = state%multilayer%idx_temperature
+      is = state%multilayer%idx_salinity
+      state%multilayer%h_layer = 10.0_wp
+      do k = 1, NZ
+         do j = 1, size(state%multilayer%h_layer, 2)
+            do i = 1, size(state%multilayer%h_layer, 1)
+               h = 10.0_wp + real(k, wp)
+               state%multilayer%h_layer(i, j, k) = h
+               state%multilayer%tracers(it)%hTr(i, j, k) = h*(2.0_wp + 3.0_wp*real(k, wp) + 0.1_wp*real(i, wp))
+               state%multilayer%tracers(is)%hTr(i, j, k) = h*(34.0_wp + 0.2_wp*real(j, wp) + 0.1_wp*real(k, wp))
+            end do
+         end do
+      end do
+   end subroutine fill_ts_pattern
+
+   subroutine test_derived_pt_sp_cons_abs(error)
+      !! Under `cons_abs` the `temperature_pt` / `salinity_sp` device fills
+      !! equal the host `pt_from_ct(SA, CT)` / `sp_from_sr(SA)` to <= 1e-12
+      !! (CMOR thetao / so).
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_state_t) :: state
+      integer :: i, j, k, it, is
+      real(wp) :: sa, ct, worst_t, worst_s, gap
+      checks: block
+         call setup_state(grid, state)
+         state%eos%ts_convention = TS_CONS_ABS
+         call fill_ts_pattern(state)
+         it = state%multilayer%idx_temperature
+         is = state%multilayer%idx_salinity
+         call register_derived(state, "temperature_pt", time_op=DIAG_OP_INSTANT, dt_out=1.0_wp)
+         call register_derived(state, "salinity_sp", time_op=DIAG_OP_INSTANT, dt_out=1.0_wp)
+         call ocean_state_enter_data(state)
+         call state%diag%step(state, dt=1.0_wp, t=1.0_wp)
+         call ocean_state_exit_data(state)
+         worst_t = 0.0_wp
+         worst_s = 0.0_wp
+         gap = 0.0_wp
+         do k = 1, NZ
+            do j = 1, grid%ny_total
+               do i = 1, grid%nx_total
+                  ct = state%multilayer%tracers(it)%hTr(i, j, k)/state%multilayer%h_layer(i, j, k)
+                  sa = state%multilayer%tracers(is)%hTr(i, j, k)/state%multilayer%h_layer(i, j, k)
+                  worst_t = max(worst_t, abs(state%diag%vars(1)%output_buffer(i, j, k) - pt_from_ct(sa, ct)))
+                  worst_s = max(worst_s, abs(state%diag%vars(2)%output_buffer(i, j, k) - sp_from_sr(sa)))
+                  gap = max(gap, abs(state%diag%vars(1)%output_buffer(i, j, k) - ct))
+               end do
+            end do
+         end do
+         call check(error, worst_t <= 1.0e-12_wp, "temperature_pt must equal host pt_from_ct")
+         if (allocated(error)) exit checks
+         call check(error, worst_s <= 1.0e-12_wp, "salinity_sp must equal host sp_from_sr")
+         if (allocated(error)) exit checks
+         call check(error, gap > 1.0e-3_wp, "theta must differ from CT somewhere (the diag is not an alias)")
+      end block checks
+      call state%destroy()
+   end subroutine test_derived_pt_sp_cons_abs
+
+   subroutine test_derived_pt_sp_identity(error)
+      !! Under `pot_prac` the pair are identity copies of T / S.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_state_t) :: state
+      integer :: i, j, k, it, is
+      real(wp) :: worst
+      checks: block
+         call setup_state(grid, state)
+         call fill_ts_pattern(state)
+         it = state%multilayer%idx_temperature
+         is = state%multilayer%idx_salinity
+         call register_derived(state, "temperature_pt", time_op=DIAG_OP_INSTANT, dt_out=1.0_wp)
+         call register_derived(state, "salinity_sp", time_op=DIAG_OP_INSTANT, dt_out=1.0_wp)
+         call ocean_state_enter_data(state)
+         call state%diag%step(state, dt=1.0_wp, t=1.0_wp)
+         call ocean_state_exit_data(state)
+         worst = 0.0_wp
+         do k = 1, NZ
+            do j = 1, grid%ny_total
+               do i = 1, grid%nx_total
+                  worst = max(worst, &
+                              abs(state%diag%vars(1)%output_buffer(i, j, k) - &
+                                  state%multilayer%tracers(it)%hTr(i, j, k)/state%multilayer%h_layer(i, j, k)), &
+                              abs(state%diag%vars(2)%output_buffer(i, j, k) - &
+                                  state%multilayer%tracers(is)%hTr(i, j, k)/state%multilayer%h_layer(i, j, k)))
+               end do
+            end do
+         end do
+         call check(error, worst <= 1.0e-12_wp, "pot_prac temperature_pt/salinity_sp must be identity")
+      end block checks
+      call state%destroy()
+   end subroutine test_derived_pt_sp_identity
 
    subroutine test_derived_rho_layer(error)
       !! `rho_layer` direct copy from the EOS slot on every LIVE layer, and

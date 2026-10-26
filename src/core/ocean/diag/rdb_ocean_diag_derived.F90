@@ -19,6 +19,8 @@ module rdb_ocean_diag_derived
                              DIAG_VGRID_LAYER, DIAG_VGRID_SURFACE, DIAG_COORD_UNSET, &
                              DIAG_VGRID_DENSITY, diag_spec_t, parse_diag_spec, &
                              DIAG_MISSING_VALUE
+   use rdb_eos, only: TS_CONS_ABS
+   use rdb_teos10_convert, only: pt_from_ct, sp_from_sr
    use rdb_ocean_diag_fills, only: register_default_diags, is_canonical_diag_name, &
                                    coord_remap_proc, diag_mask_vanished_is_on, &
                                    canonical_diag_gate_hint
@@ -40,6 +42,8 @@ module rdb_ocean_diag_derived
    public :: fill_h_layer, fill_rho_layer, fill_vorticity_z, fill_vorticity_z_impl
    public :: fill_ke_total, fill_transport_x, fill_transport_y
    public :: fill_mld_density
+   public :: fill_temperature_pt, fill_salinity_sp
+   public :: fill_temperature_pt_impl, fill_salinity_sp_impl
    public :: fill_umo, fill_vmo, fill_tauuo, fill_tauvo, fill_kd_interface
    public :: fill_ice_speed, fill_ice_u, fill_ice_v
    public :: fill_melt, fill_melt_m_per_yr, fill_thermal_driving
@@ -86,7 +90,7 @@ module rdb_ocean_diag_derived
          !! transports, not average them — so those entries set `.true.`.
    end type derived_entry_t
 
-   integer, parameter :: N_CATALOG = 30
+   integer, parameter :: N_CATALOG = 32
    type(derived_entry_t) :: CATALOG(N_CATALOG)
    logical :: catalog_initialised = .false.
 
@@ -187,6 +191,26 @@ contains
                     units="m s-1", &
                     standard_name="sea_ice_y_velocity", &
                     fill=fill_ice_v, is_layered=.false.)
+      ! ---- TEOS-10 derived pair.  Under `ts_convention = "cons_abs"` the
+      ! canonical `temperature` / `salinity` are CT / SA (CMOR
+      ! `bigthetao` / `absso`); these two give the theta / SP the
+      ! conventional atlases and observations use (CMOR `thetao` / `so`),
+      ! computed per layer from the SA and CT tracers.  Under `pot_prac`
+      ! they are identity copies of T / S so a diag list stays portable.
+      CATALOG(31) = derived_entry_t( &
+                    name="temperature_pt", &
+                    long_name="potential temperature", &
+                    units="degC", &
+                    standard_name="sea_water_potential_temperature", &
+                    fill=fill_temperature_pt, is_layered=.true.)
+      ! CMOR name: thetao.
+      CATALOG(32) = derived_entry_t( &
+                    name="salinity_sp", &
+                    long_name="practical salinity", &
+                    units="1e-3", &
+                    standard_name="sea_water_salinity", &
+                    fill=fill_salinity_sp, is_layered=.true.)
+      ! CMOR name: so.
       ! ---- Ice-shelf cavity (P2c).  Eleven melt-interface fields, all
       ! gated on `&ocean_cavity_melt_nml enable`, plus two GEOMETRY
       ! fields that need only `&ocean_cavity_dyn_nml`.  Every one is
@@ -632,6 +656,114 @@ contains
          end if
       end do
    end subroutine fill_rho_layer_impl
+
+   subroutine fill_temperature_pt(state_handle, buf)
+      !! Potential temperature theta per layer.  `cons_abs`:
+      !! `pt_from_ct(SA, CT)` from the two tracers (McDougall & Barker
+      !! 2011); `pot_prac`: identity copy of the temperature tracer.
+      !! NaN on vanished layers (the tracer-diag convention).
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      integer :: it, is
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         it = state%multilayer%idx_temperature
+         is = state%multilayer%idx_salinity
+         if (it <= 0) then
+            buf = 0.0_wp
+            return
+         end if
+         if (state%eos%ts_convention == TS_CONS_ABS .and. is > 0) then
+            call fill_temperature_pt_impl(.true., state%multilayer%h_layer, &
+                                          state%multilayer%tracers(it)%hTr, &
+                                          state%multilayer%tracers(is)%hTr, buf)
+         else
+            call fill_temperature_pt_impl(.false., state%multilayer%h_layer, &
+                                          state%multilayer%tracers(it)%hTr, &
+                                          state%multilayer%tracers(it)%hTr, buf)
+         end if
+      end select
+   end subroutine fill_temperature_pt
+
+   subroutine fill_salinity_sp(state_handle, buf)
+      !! Practical salinity SP per layer.  `cons_abs`: `sp_from_sr(SA)`
+      !! (Reference Salinity = Absolute Salinity, no delta-SA);
+      !! `pot_prac`: identity copy of the salinity tracer.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      integer :: is
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         is = state%multilayer%idx_salinity
+         if (is <= 0) then
+            buf = 0.0_wp
+            return
+         end if
+         call fill_salinity_sp_impl(state%eos%ts_convention == TS_CONS_ABS, &
+                                    state%multilayer%h_layer, &
+                                    state%multilayer%tracers(is)%hTr, buf)
+      end select
+   end subroutine fill_salinity_sp
+
+   pure subroutine fill_temperature_pt_impl(cons, h_layer, hTr_T, hTr_S, buf)
+      !! `buf = theta` on live layers (`cons`: from CT, SA; else a copy of
+      !! T), IEEE NaN on vanished ones.
+      logical, intent(in) :: cons
+      ! assumed-shape-ok: diag fill — fires once per output frame (cadence-bounded).
+      real(wp), intent(in)    :: h_layer(:, :, :)
+      real(wp), intent(in)    :: hTr_T(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      real(wp), intent(in)    :: hTr_S(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      real(wp), intent(inout) :: buf(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      integer :: i, j, k, nx, ny, nz
+      real(wp) :: qnan, h
+      nx = min(size(buf, 1), size(h_layer, 1))
+      ny = min(size(buf, 2), size(h_layer, 2))
+      nz = min(size(buf, 3), size(h_layer, 3))
+      qnan = ieee_value(0.0_wp, ieee_quiet_nan)
+      do concurrent(k=1:nz, j=1:ny, i=1:nx) local(h)
+         h = h_layer(i, j, k)
+         ! vanished-ok: NaN missing-data sentinel, as `fill_tracer_impl`.
+         if (rdb_vl_is_live(h)) then
+            if (cons) then
+               buf(i, j, k) = pt_from_ct(rdb_vl_conc(hTr_S(i, j, k), h), &
+                                         rdb_vl_conc(hTr_T(i, j, k), h))
+            else
+               buf(i, j, k) = rdb_vl_conc(hTr_T(i, j, k), h)
+            end if
+         else
+            buf(i, j, k) = qnan
+         end if
+      end do
+   end subroutine fill_temperature_pt_impl
+
+   pure subroutine fill_salinity_sp_impl(cons, h_layer, hTr_S, buf)
+      !! `buf = SP` on live layers (`cons`: `sp_from_sr(SA)`; else a copy
+      !! of S), IEEE NaN on vanished ones.
+      logical, intent(in) :: cons
+      ! assumed-shape-ok: diag fill — fires once per output frame (cadence-bounded).
+      real(wp), intent(in)    :: h_layer(:, :, :)
+      real(wp), intent(in)    :: hTr_S(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      real(wp), intent(inout) :: buf(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      integer :: i, j, k, nx, ny, nz
+      real(wp) :: qnan, h
+      nx = min(size(buf, 1), size(h_layer, 1))
+      ny = min(size(buf, 2), size(h_layer, 2))
+      nz = min(size(buf, 3), size(h_layer, 3))
+      qnan = ieee_value(0.0_wp, ieee_quiet_nan)
+      do concurrent(k=1:nz, j=1:ny, i=1:nx) local(h)
+         h = h_layer(i, j, k)
+         ! vanished-ok: NaN missing-data sentinel, as `fill_tracer_impl`.
+         if (rdb_vl_is_live(h)) then
+            if (cons) then
+               buf(i, j, k) = sp_from_sr(rdb_vl_conc(hTr_S(i, j, k), h))
+            else
+               buf(i, j, k) = rdb_vl_conc(hTr_S(i, j, k), h)
+            end if
+         else
+            buf(i, j, k) = qnan
+         end if
+      end do
+   end subroutine fill_salinity_sp_impl
 
    pure subroutine copy3_impl(src, buf)
       !! Shared device copy `buf = src` with shape clipping — every

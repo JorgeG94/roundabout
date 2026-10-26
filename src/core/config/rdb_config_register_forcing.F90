@@ -459,10 +459,10 @@ contains
                           units="m/day", min=0.0_wp))
       pr => cfg%ocean%restore%restore_sst
       call g%add(nml_real("restore_sst", pr, &
-                          "Scalar target SST", units="degC"))
+                          "Scalar target SST, in the model T convention (theta or CT)", units="degC"))
       pr => cfg%ocean%restore%restore_sss
       call g%add(nml_real("restore_sss", pr, &
-                          "Scalar target SSS", units="PSU"))
+                          "Scalar target SSS, in the model S convention (SP or SA)", units="PSU"))
       call schema%add_group(g)
    end subroutine register_ocean_restore
 

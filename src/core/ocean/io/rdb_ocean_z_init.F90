@@ -49,6 +49,7 @@ module rdb_ocean_z_init
    use rdb_grid, only: hgrid_t
    use rdb_config, only: ocean_zinit_config_t
    use rdb_multilayer_state, only: multilayer_state_t
+   use rdb_teos10_convert, only: sr_from_sp, ct_from_pt
    use rdb_io_netcdf, only: nc_check, nc_open_read, nc_close, &
                             nc_get_var_slab_3d, nc_get_var_1d
    use netcdf, only: nf90_noerr, nf90_inq_varid, nf90_inquire_variable, &
@@ -62,13 +63,14 @@ module rdb_ocean_z_init
 
    public :: seed_ts_from_zfile
    public :: seed_ts_linear_z
+   public :: convert_pot_prac_to_cons_abs
    public :: interp_column_linear_z
    public :: build_z_ctr
    public :: zinit_dims_ok
 
 contains
 
-   subroutine seed_ts_from_zfile(ms, grid, cfg, ierr, z_draft)
+   subroutine seed_ts_from_zfile(ms, grid, cfg, ierr, z_draft, to_cons_abs)
       !! Read T/S from the configured z-level NetCDF and overwrite the
       !! tracer slots with the depth-interpolated profiles.  Wet columns
       !! interpolate; dry columns get the namelist land-fill constants.
@@ -88,6 +90,12 @@ contains
          !! `z = 0`, so the column top sits at `z_draft` under a shelf.
          !! Absent ⇒ `z_top = 0` (open ocean), bit-identical to the
          !! pre-cavity behaviour.
+      logical, intent(in), optional :: to_cons_abs
+         !! `.true.` converts the interpolated WET-column theta / SP to
+         !! Conservative Temperature / Absolute Salinity before they are
+         !! stored (`convert_pot_prac_to_cons_abs`: SA first, then CT from
+         !! the converted SA).  The conversion acts on T and S, never on
+         !! `hTr`.  Absent / `.false.` is bit-identical to before.
 
       integer :: ncid, ng, nx, ny, nz_ml, nz_src, local_ierr
       integer :: idx_S, idx_T, i, j, k
@@ -96,8 +104,10 @@ contains
       real(wp) :: z_ctr(ms%nz_ml)
       real(wp) :: t_col(ms%nz_ml), s_col(ms%nz_ml)
       real(wp) :: z_top
-      logical :: needs_transpose, have_draft
+      logical :: needs_transpose, have_draft, convert
 
+      convert = .false.
+      if (present(to_cons_abs)) convert = to_cons_abs
       have_draft = present(z_draft)
       if (have_draft) then
          if (.not. draft_shape_ok(z_draft, ms)) then
@@ -219,6 +229,7 @@ contains
                ! never need reconciling.
                call interp_column_linear_z(z_src, t_src(i, j, :), nz_src, z_ctr, nz_ml, t_col)
                call interp_column_linear_z(z_src, s_src(i, j, :), nz_src, z_ctr, nz_ml, s_col)
+               if (convert) call convert_pot_prac_to_cons_abs(nz_ml, t_col, s_col)
             end if
 
             ! Roundabout tracer convention: hTr = value * h_layer.
@@ -243,6 +254,26 @@ contains
                        " source z-levels onto "//to_string(nz_ml)//" model layers.")
       if (present(ierr)) ierr = OCEAN_STATUS_OK
    end subroutine seed_ts_from_zfile
+
+   pure subroutine convert_pot_prac_to_cons_abs(n, t, s)
+      !! In place: potential temperature / practical salinity ->
+      !! Conservative Temperature / Absolute Salinity (IOC/SCOR/IAPSO 2010;
+      !! McDougall & Barker 2011).  ORDER MATTERS: `s` becomes Reference
+      !! Salinity first (`sr_from_sp`, exact parity with ACCESS-OM3, no
+      !! delta-SA atlas), THEN `t = ct_from_pt(SA, theta)` uses that
+      !! already-converted salinity.  Host-side, seed time.
+      integer, intent(in) :: n
+      real(wp), intent(inout) :: t(n)
+         !! In: theta (degC).  Out: CT (degC).
+      real(wp), intent(inout) :: s(n)
+         !! In: SP.  Out: SA (g/kg).
+      integer :: k
+
+      do k = 1, n
+         s(k) = sr_from_sp(s(k))
+         t(k) = ct_from_pt(s(k), t(k))
+      end do
+   end subroutine convert_pot_prac_to_cons_abs
 
    pure subroutine build_z_ctr(h_layer, nz_ml, z_top, z_ctr)
       !! Layer-centre GEOPOTENTIAL depths (positive-down from the `z = 0`

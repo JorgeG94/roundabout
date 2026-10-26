@@ -3324,7 +3324,7 @@ class OceanRestore(Group):
 
     restore_sst = Real(
         'restore_sst',
-        doc='Scalar target SST',
+        doc='Scalar target SST, in the model T convention (theta or CT)',
         units='degC',
         required=False,
         default=0.0,
@@ -3332,7 +3332,7 @@ class OceanRestore(Group):
 
     restore_sss = Real(
         'restore_sss',
-        doc='Scalar target SSS',
+        doc='Scalar target SSS, in the model S convention (SP or SA)',
         units='PSU',
         required=False,
         default=0.0,
@@ -5315,6 +5315,15 @@ class OceanZinit(Group):
         allowed=('file', 'linear'),
     )
 
+    input_convention = Enum(
+        'input_convention',
+        doc="source='file': what the T/S variables hold: 'pot_prac' = theta/SP (WOA; converted to CT/SA on read under ts_convention='cons_abs'), 'cons_abs' = CT/SA as is",
+        units='',
+        required=False,
+        default='pot_prac',
+        allowed=('pot_prac', 'cons_abs'),
+    )
+
     file = Str(
         'file',
         doc='Path to the model-grid T/S NetCDF',
@@ -6689,4 +6698,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 62
-N_KNOBS = 733
+N_KNOBS = 734

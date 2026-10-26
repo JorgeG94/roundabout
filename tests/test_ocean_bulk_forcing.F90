@@ -47,6 +47,7 @@ module test_ocean_bulk_forcing
    use rdb_ocean_surface_stress, only: ocean_surface_stress_t
    use rdb_ocean_surface_flux, only: ocean_surface_flux_t
    use rdb_ocean_bulk_forcing, only: bulk_forcing_t, bulk_forcing_apply
+   use rdb_teos10_convert, only: pt_from_ct
    use rdb_ice_atm_forcing, only: ice_atm_forcing_from_atm
    implicit none
    private
@@ -75,6 +76,7 @@ contains
 
       testsuite = [ &
                   new_unittest("bulk_forcing_matches_column", test_matches_column), &
+                  new_unittest("bulk_forcing_cons_abs_sst_is_theta", test_cons_abs_sst), &
                   new_unittest("bulk_forcing_rotation_exact", test_rotation_exact), &
                   new_unittest("bulk_forcing_open_water_halves", test_open_water_halves), &
                   new_unittest("ice_atm_forcing_seb_linearization", test_ice_seb_linearization) &
@@ -256,6 +258,81 @@ contains
 
       call destroy_cartesian_metrics(metrics)
    end subroutine test_matches_column
+
+   subroutine test_cons_abs_sst(error)
+      !! Under `cons_abs` the model top-layer T is a Conservative
+      !! Temperature: the SST reaching `bulk_flux_column` and the longwave
+      !! emission is `theta = pt_from_ct(SA, CT)` (IOC/SCOR/IAPSO 2010;
+      !! McDougall & Barker 2011).  Compared with a DIRECT call at theta,
+      !! and shown to differ from the unconverted CT call.  The default
+      !! (`cons_abs = .false.`) stays the exact-bit result of
+      !! `bulk_forcing_matches_column`.
+      type(error_type), allocatable, intent(out) :: error
+
+      type(hgrid_t) :: grid
+      type(ocean_metrics_t) :: metrics
+      type(ocean_bc_state_t) :: bc
+      type(multilayer_state_t) :: ms
+      type(ocean_sea_ice_t) :: ice
+      type(atm_state_t) :: atm
+      type(bulk_forcing_t) :: bf
+      type(ocean_surface_stress_t) :: ss
+      type(ocean_surface_flux_t) :: sf
+
+      real(wp), parameter :: SA_TOP = 35.2_wp
+      real(wp) :: theta, taux_ref, tauy_ref, sens_ref, lat_ref, evap_ref, cd, ch, ce, ustar
+      real(wp) :: sens_ct, lw_ref, lw_ct
+      integer :: ip, jp
+
+      checks: block
+         call make_grid(grid)
+         call make_cartesian_metrics(metrics, grid)
+         call init_halo_single_rank(grid)
+         ip = grid%nghost + 2
+         jp = grid%nghost + 2
+
+         call make_ms(grid, ms)
+         ms%tracers(ms%idx_salinity)%hTr = SA_TOP*H0
+         call make_atm(grid, atm)
+         call make_bulk_forcing(grid, .true., bf)
+         bf%cons_abs = .true.
+         call ss%init(grid)
+         call sf%init(grid)
+         call sf%set_components(grid, .true.)
+
+         call run_apply(grid, metrics, bc, atm, ms, ice, bf, ss, sf)
+
+         theta = pt_from_ct(SA_TOP, SST_DEGC)
+         call bulk_flux_column(UAS, VAS, 0.0_wp, 0.0_wp, TAS, HUSS, PSL, theta, &
+                               Z_WIND, Z_TA, N_ITER, &
+                               taux_ref, tauy_ref, sens_ref, lat_ref, evap_ref, cd, ch, ce, ustar)
+         call bulk_flux_column(UAS, VAS, 0.0_wp, 0.0_wp, TAS, HUSS, PSL, SST_DEGC, &
+                               Z_WIND, Z_TA, N_ITER, &
+                               taux_ref, tauy_ref, sens_ct, lat_ref, evap_ref, cd, ch, ce, ustar)
+         call bulk_flux_column(UAS, VAS, 0.0_wp, 0.0_wp, TAS, HUSS, PSL, theta, &
+                               Z_WIND, Z_TA, N_ITER, &
+                               taux_ref, tauy_ref, sens_ref, lat_ref, evap_ref, cd, ch, ce, ustar)
+         lw_ref = RLDS - bulk_flux_longwave_up(theta + BULK_T0_KELVIN, EMISSIVITY)
+         lw_ct = RLDS - bulk_flux_longwave_up(SST_DEGC + BULK_T0_KELVIN, EMISSIVITY)
+
+         call check(error, abs(theta - SST_DEGC) > 1.0e-2_wp, "theta must differ from CT here")
+         if (allocated(error)) exit checks
+         call check(error, sf%q_sens(ip, jp), sens_ref, "q_sens uses theta", thr=1.0e-10_wp, rel=.true.)
+         if (allocated(error)) exit checks
+         call check(error, sf%q_lat(ip, jp), lat_ref, "q_lat uses theta", thr=1.0e-10_wp, rel=.true.)
+         if (allocated(error)) exit checks
+         call check(error, sf%q_lw(ip, jp), lw_ref, "q_lw uses theta", thr=1.0e-10_wp, rel=.true.)
+         if (allocated(error)) exit checks
+         call check(error, abs(sf%q_lw(ip, jp) - lw_ct) > 1.0e-3_wp, "q_lw must NOT use the raw CT")
+         if (allocated(error)) exit checks
+         call check(error, abs(sf%q_sens(ip, jp) - sens_ct) > 1.0e-6_wp, "q_sens must NOT use the raw CT")
+         if (allocated(error)) exit checks
+
+         call ocean_halo_destroy()
+      end block checks
+
+      call destroy_cartesian_metrics(metrics)
+   end subroutine test_cons_abs_sst
 
    subroutine test_rotation_exact(error)
       !! angle_dx = 30 deg uniformly: the output stress is the EXACT

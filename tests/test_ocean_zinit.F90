@@ -47,7 +47,8 @@ module test_ocean_zinit
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_config, only: ocean_zinit_config_t
-   use rdb_ocean_z_init, only: seed_ts_from_zfile, interp_column_linear_z, &
+   use rdb_teos10_convert, only: sr_from_sp, sp_from_sr, ct_from_pt, pt_from_ct
+   use rdb_ocean_z_init, only: convert_pot_prac_to_cons_abs, seed_ts_from_zfile, interp_column_linear_z, &
                                seed_ts_linear_z, build_z_ctr, zinit_dims_ok
    use rdb_ocean_sponge, only: ocean_sponge_t, ocean_sponge_refresh_target
    use rdb_io_netcdf, only: nc_create_file, nc_close, nc_def_dim, &
@@ -96,6 +97,8 @@ contains
                   new_unittest("zinit_draft_offset", test_draft_offset), &
                   new_unittest("zinit_draft_bitident", test_draft_bitident), &
                   new_unittest("zinit_linear_source", test_linear_source), &
+                  new_unittest("zinit_cons_abs_conversion_sa_first", test_cons_abs_sa_first), &
+                  new_unittest("zinit_cons_abs_file_seed", test_cons_abs_file_seed), &
                   new_unittest("sponge_linear_z_target_matches_the_zinit_seed", &
                                test_sponge_target_matches_zinit) &
                   ]
@@ -161,6 +164,99 @@ contains
       type(hgrid_t) :: g
       call g%init(nx_phys, ny_phys, NGHOST, 1.0_wp, 1.0_wp)
    end function make_grid
+
+   ! =================================================================
+   ! TEOS-10 PR 3 — WOA theta / SP -> CT / SA at read time.
+   ! =================================================================
+
+   subroutine test_cons_abs_sa_first(error)
+      !! The conversion is SA FIRST: CT == ct_from_pt(sr_from_sp(SP), theta)
+      !! EXACTLY, it differs from the (wrong) ct_from_pt(SP, theta), and the
+      !! round trip theta = pt_from_ct(SA, CT), SP = sp_from_sr(SA) closes
+      !! to <= 1e-10.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: N = 5
+      real(wp) :: th(N), sp(N), t(N), s(N), wrong
+      real(wp) :: worst_th, worst_sp, min_gap
+      integer :: k
+
+      th = [24.3_wp, 15.1_wp, 8.7_wp, 3.2_wp, 1.1_wp]
+      sp = [35.8_wp, 35.2_wp, 34.6_wp, 34.7_wp, 34.9_wp]
+      t = th
+      s = sp
+      call convert_pot_prac_to_cons_abs(N, t, s)
+      worst_th = 0.0_wp
+      worst_sp = 0.0_wp
+      min_gap = huge(1.0_wp)
+      do k = 1, N
+         call check(error, s(k) == sr_from_sp(sp(k)), "SA must be sr_from_sp(SP) exactly")
+         if (allocated(error)) return
+         call check(error, t(k) == ct_from_pt(sr_from_sp(sp(k)), th(k)), &
+                    "CT must be ct_from_pt(sr_from_sp(SP), theta) exactly")
+         if (allocated(error)) return
+         wrong = ct_from_pt(sp(k), th(k))
+         min_gap = min(min_gap, abs(t(k) - wrong))
+         worst_th = max(worst_th, abs(pt_from_ct(s(k), t(k)) - th(k)))
+         worst_sp = max(worst_sp, abs(sp_from_sr(s(k)) - sp(k)))
+      end do
+      call check(error, min_gap > 1.0e-6_wp, "SA-first CT must differ from ct_from_pt(SP, theta)")
+      if (allocated(error)) return
+      call check(error, worst_th <= 1.0e-10_wp, "theta round trip must close to 1e-10")
+      if (allocated(error)) return
+      call check(error, worst_sp <= 1.0e-10_wp, "SP round trip must close to 1e-10")
+   end subroutine test_cons_abs_sa_first
+
+   subroutine test_cons_abs_file_seed(error)
+      !! Through the file reader: with `to_cons_abs` the stored T/S are
+      !! CT/SA of the interpolated theta/SP (acting on T and S, then
+      !! multiplied by h into hTr); without it (absent or .false.) the
+      !! result is BIT-IDENTICAL to the pre-PR reader.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NX = 2, NY = 2, NZ_ML = 4, NZ_SRC = 4
+      type(multilayer_state_t) :: ms, ms0, msf
+      type(hgrid_t) :: grid
+      type(ocean_zinit_config_t) :: cfg
+      real(wp) :: z_src(NZ_SRC), t_src(NX, NY, NZ_SRC), s_src(NX, NY, NZ_SRC)
+      real(wp) :: th, sp, ct, sa, h, worst
+      integer :: i, j, k, ng
+
+      z_src = [50.0_wp, 150.0_wp, 250.0_wp, 350.0_wp]
+      do k = 1, NZ_SRC
+         t_src(:, :, k) = 20.0_wp - 0.04_wp*z_src(k)
+         s_src(:, :, k) = 35.5_wp - 0.002_wp*z_src(k)
+      end do
+      call write_zfile("/tmp/test_zinit_cons.nc", NX, NY, NZ_SRC, z_src, t_src, s_src)
+      grid = make_grid(NX, NY)
+      cfg%file = "/tmp/test_zinit_cons.nc"
+      call make_state(ms, NX, NY, NZ_ML, 400.0_wp)
+      call make_state(ms0, NX, NY, NZ_ML, 400.0_wp)
+      call make_state(msf, NX, NY, NZ_ML, 400.0_wp)
+      call seed_ts_from_zfile(ms0, grid, cfg)
+      call seed_ts_from_zfile(msf, grid, cfg, to_cons_abs=.false.)
+      call seed_ts_from_zfile(ms, grid, cfg, to_cons_abs=.true.)
+
+      call check(error, all(msf%tracers(msf%idx_temperature)%hTr == ms0%tracers(ms0%idx_temperature)%hTr) .and. &
+                 all(msf%tracers(msf%idx_salinity)%hTr == ms0%tracers(ms0%idx_salinity)%hTr), &
+                 "to_cons_abs=.false. must be bit-identical to the default reader")
+      if (allocated(error)) return
+
+      ng = NGHOST
+      worst = 0.0_wp
+      do j = 1, NY
+         do i = 1, NX
+            do k = 1, NZ_ML
+               h = ms0%h_layer(ng + i, ng + j, k)
+               th = ms0%tracers(ms0%idx_temperature)%hTr(ng + i, ng + j, k)/h
+               sp = ms0%tracers(ms0%idx_salinity)%hTr(ng + i, ng + j, k)/h
+               sa = sr_from_sp(sp)
+               ct = ct_from_pt(sa, th)
+               worst = max(worst, abs(ms%tracers(ms%idx_temperature)%hTr(ng + i, ng + j, k)/h - ct), &
+                           abs(ms%tracers(ms%idx_salinity)%hTr(ng + i, ng + j, k)/h - sa))
+            end do
+         end do
+      end do
+      call check(error, worst <= 1.0e-12_wp, "file-seeded T/S must be CT/SA of the interpolated theta/SP")
+   end subroutine test_cons_abs_file_seed
 
    ! =================================================================
    ! T1 — exact recovery: source levels AT the layer centres.

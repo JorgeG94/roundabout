@@ -18,12 +18,12 @@ from rdb._knob import RdbDeadKnobWarning
 
 
 def test_group_and_knob_counts():
-    # 62 groups / 733 knobs total, i.e. exactly what `rdb_nml_json` +
+    # 62 groups / 734 knobs total, i.e. exactly what `rdb_nml_json` +
     # `tools/gen_python_config.py` report for the live schema (the last
     # bump: &ocean_eos_nml ts_convention, tfreeze_form, tfreeze_sat_frac,
     # c_p -- TEOS-10 PR 2b, 4 knobs).
     assert N_GROUPS == 62
-    assert N_KNOBS == 733
+    assert N_KNOBS == 734
     assert "ocean_bc" in ALL_GROUPS
 
 

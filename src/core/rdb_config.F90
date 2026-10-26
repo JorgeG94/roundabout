@@ -494,9 +494,14 @@ module rdb_config
       real(wp) :: piston_s = 0.0_wp
          !! SSS piston velocity (m/day).
       real(wp) :: restore_sst = 0.0_wp
-         !! Scalar target SST (degC).
+         !! Scalar target SST (degC), in the MODEL convention: potential
+         !! temperature under `ts_convention = "pot_prac"`, Conservative
+         !! Temperature under `"cons_abs"`.  Never converted.
       real(wp) :: restore_sss = 0.0_wp
-         !! Scalar target SSS (PSU).
+         !! Scalar target SSS (PSU), in the MODEL convention: practical
+         !! salinity under `ts_convention = "pot_prac"`, Absolute Salinity
+         !! under `"cons_abs"` (OM3 restores toward a file variable that is
+         !! already Absolute Salinity).  Never converted.
    end type ocean_restore_config_t
 
    type :: ocean_geothermal_config_t
@@ -1275,16 +1280,25 @@ module rdb_config
          !! `cons_abs` REQUIRES `eos` in {roquet_rho, roquet_spv}, and is
          !! refused (fail-loud) with `&ocean_ice_nml enable` (PR-4 will
          !! convert at the coupler boundary), with `&ocean_cavity_melt_nml
-         !! enable` (its liquidus is undecided) and with a file-based
-         !! `&ocean_zinit_nml` (PR-3 will convert the WOA theta/SP; until
-         !! then it would be read as CT/SA silently), with
-         !! `&ocean_bulk_flux_nml enable` (the bulk formulae take SST as a
-         !! potential temperature and the CT->theta export conversion is
-         !! not ported; PR-3) and with `&ocean_restore_nml
-         !! enable_restore_temp` / `enable_restore_salt` (the scalar
-         !! targets are documented as theta / PSU; conversion pending
-         !! PR-3).  Scalar/analytic initial conditions are interpreted IN
-         !! the model convention and are NOT converted.
+         !! enable` (its liquidus is undecided).
+         !!
+         !! The other consumers convert or are in the model convention:
+         !!   * a file `&ocean_zinit_nml` holding theta / SP
+         !!     (`input_convention = "pot_prac"`) is converted at read time,
+         !!     SA first then CT from SA;
+         !!   * `&ocean_bulk_flux_nml` evaluates its formulae on
+         !!     `theta = pt_from_ct(SA, CT)` of the surface layer (the only
+         !!     surface-side conversion; heat contents of the precipitation
+         !!     streams keep the model T with `c_p`);
+         !!   * the `&ocean_restore_nml` `restore_sst` / `restore_sss`
+         !!     targets are read IN the model convention (CT / SA; OM3
+         !!     restores toward a file variable that is already Absolute
+         !!     Salinity, and does not restore temperature);
+         !!   * the derived diagnostics `temperature_pt` / `salinity_sp`
+         !!     give theta / SP (CMOR `thetao` / `so`); `temperature` /
+         !!     `salinity` are CT / SA (`bigthetao` / `absso`).
+         !! Scalar/analytic initial conditions are interpreted IN the model
+         !! convention and are NOT converted.
       character(len=16) :: tfreeze_form = "linear"
          !! Liquidus functional form for `eos_freezing_point`.
          !!
@@ -3004,6 +3018,25 @@ module rdb_config
          !! `T_init_bottom` family is linear in LAYER INDEX, so under a
          !! terrain-following coordinate with a tilted lid it tilts the
          !! isopycnals with the coordinate and the column is NOT at rest.
+      character(len=16) :: input_convention = "pot_prac"
+         !! What the `source = "file"` T/S variables hold.
+         !!
+         !!   * `"pot_prac"` (DEFAULT => bit-identical) -- potential
+         !!     temperature (degC) and practical salinity, as World Ocean
+         !!     Atlas `ptemp` / `salt` do.  Under `&ocean_eos_nml
+         !!     ts_convention = "cons_abs"` they are converted on the host,
+         !!     after the depth interpolation and before the device map:
+         !!     SA = sr_from_sp(SP) FIRST, then CT = ct_from_pt(SA, theta)
+         !!     with the already-converted SA (IOC/SCOR/IAPSO 2010;
+         !!     McDougall & Barker 2011).  Reference Salinity is used as
+         !!     Absolute Salinity (no delta-SA atlas), the ACCESS-OM3
+         !!     behaviour.
+         !!   * `"cons_abs"` -- the file already holds CT / SA; read as is.
+         !!     Refused (fail-loud) under a `pot_prac` model: there is no
+         !!     CT -> theta initial-condition path.
+         !!
+         !! Dry-column `land_fill_t/s` and the `source = "linear"` profile
+         !! are always in the MODEL convention and are never converted.
       character(len=256) :: file = ""
          !! Path to the model-grid T/S NetCDF (dims x/y/z; vars
          !! temp/salt/z_src with the documented name-fallbacks).
