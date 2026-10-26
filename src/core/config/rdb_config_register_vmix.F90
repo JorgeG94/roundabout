@@ -339,10 +339,10 @@ contains
                              "Master switch (diagnostic; default off)"))
       pr => cfg%ocean%wavespeed%mono_n2
       call g%add(nml_real("mono_n2", pr, &
-                          "DEFERRED N2-monotonising depth (EBT path); < 0 = off"))
+                          "N2-monotonising depth; NOT IMPLEMENTED (refused together with use_ebt); < 0 = off"))
       pl => cfg%ocean%wavespeed%use_ebt
       call g%add(nml_logical("use_ebt", pl, &
-                             "DEFERRED equivalent-barotropic variant"))
+                        "Also compute the equivalent-barotropic speed cg1_ebt + structure ebt_struct (GM does not consume it yet)"))
       pi => cfg%ocean%wavespeed%n_wavespeed
       call g%add(nml_int("n_wavespeed", pi, "Recompute cadence (every N steps)", min=1))
 

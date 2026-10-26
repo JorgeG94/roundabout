@@ -739,8 +739,8 @@ class MixedLayerRestratification:
 class WaveSpeed:
     """``WaveSpeed(cadence=1)`` -> `&ocean_wavespeed_nml enable=.true.`,
     `n_wavespeed`. Diagnostic; required by `VariableMixing` (implied
-    automatically). `mono_n2`/`use_ebt` are DEFERRED in the Fortran and
-    are not offered."""
+    automatically). `mono_n2` (not implemented) and `use_ebt` (EBT speed +
+    structure, not yet consumed by GM) are not offered."""
 
     def __init__(self, cadence=1):
         self.cadence = cadence

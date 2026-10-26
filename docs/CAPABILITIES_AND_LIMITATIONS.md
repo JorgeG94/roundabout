@@ -251,7 +251,7 @@ Every vertical closure adds into the interface diffusivities `kv` and `kt`. `ks`
 | Convective adjustment | Shipped | `&ocean_conv_nml enable` | Writes `kv` and `kt` only, never `ks`, so salt does not convect. Two v1 limits against MOM6. |
 | Background mixing | Shipped | `&ocean_vmix_nml bkgnd_profile` **xor** `bkgnd_henyey` | The two schemes are mutually exclusive. Both default off. |
 | Double diffusion | Shipped | `&ocean_ddiff_nml` | Makes `ks` differ from `kt`. |
-| First-baroclinic wave speed and Rossby radius | Shipped, **diagnostic** | `&ocean_wavespeed_nml enable` | Feeds resolution-aware GM, Redi and MEKE scaling. Not called by the unsplit path. |
+| First-baroclinic wave speed and Rossby radius | Shipped, **diagnostic** | `&ocean_wavespeed_nml enable` | Feeds resolution-aware GM, Redi and MEKE scaling. Not called by the unsplit path. `use_ebt` adds the equivalent-barotropic speed and vertical structure (computed, not yet consumed by GM; `mono_n2` unimplemented). |
 
 ### Lateral closures and eddies
 

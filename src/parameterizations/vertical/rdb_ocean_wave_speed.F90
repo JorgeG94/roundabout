@@ -9,6 +9,18 @@ module rdb_ocean_wave_speed
    !! Sturm-count bisection (no early exit -> warp-divergence-free).
    !! Reference: Chelton et al. (1998).
    !!
+   !! Optional equivalent-barotropic (EBT) mode (`use_ebt`): the gravest
+   !! PRESSURE mode of the same layered Sturm-Liouville problem
+   !! (Killworth, Chelton & de Szoeke 1997; de Szoeke & Chelton 1999;
+   !! Killworth & Blundell 2003), used as the vertical shape of mesoscale
+   !! eddy stirring (Hallberg 2013).  Unknowns live at the `kc` LAYER
+   !! centres of the committed (merged) stack; surface Neumann, bed
+   !! Dirichlet (p'=0 at the bed interface, half-cell ghost).  Gives the
+   !! speed `cg1_ebt = 1/sqrt(lambda_min)` (-> 2NH/pi for constant N, twice
+   !! the first-baroclinic NH/pi) and the one-signed structure
+   !! `ebt_struct(i,j,k)`, normalised to 1 at the surface, remapped
+   !! conservatively (PLM) from the merged stack onto the raw layers.
+   !!
    !! Vertical ordering (load-bearing): rdb is bottom-up (k=1 bed,
    !! k=nz surface); the eigensolve is surface-down so the column kernel
    !! FLIPS on gather (local k_loc=1 is the surface layer).
@@ -21,6 +33,7 @@ module rdb_ocean_wave_speed
    use rdb_constants, only: wp, GRAVITY, NZ_STACK_MAX
 #endif
    use rdb_grid, only: hgrid_t
+   use rdb_remap_column, only: remap_column_plm
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_ocean_metrics, only: ocean_metrics_t
    use, intrinsic :: iso_fortran_env, only: int64
@@ -31,6 +44,7 @@ module rdb_ocean_wave_speed
    public :: ocean_wave_speed_t
    public :: wavespeed_compute
    public :: wavespeed_cg1_column
+   public :: wavespeed_mode_column
    public :: wavespeed_rd
 
    ! ---- Fixed numerical constants (NOT namelist knobs) ----
@@ -45,6 +59,15 @@ module rdb_ocean_wave_speed
 #endif
    integer, parameter :: MAX_ITT = 40
       !! Fixed bisection budget — no early exit (GPU-divergence-free).
+   integer, parameter :: EBT_ITT = 64
+      !! Fixed bisection budget for the EBT eigenvalue (bracket
+      !! [0, Gershgorin] halves each pass, no early exit).
+   integer, parameter :: EBT_NINV = 4
+      !! Fixed inverse-iteration count for the EBT eigenvector.
+   real(wp), parameter :: EBT_SHIFT = 1.0e-6_wp
+      !! Inverse-iteration shift sits at `lambda*(1 - EBT_SHIFT)`.
+   real(wp), parameter :: EBT_PIVMIN = 1.0e-100_wp
+      !! Pivot floor in the EBT Sturm count.
    integer, parameter :: MAX_DBL = 128
       !! Cap on the Sturm-count doubling prelude (data-dependent trip
       !! count, but O(1) det evals; the inner bisection stays fixed).
@@ -76,10 +99,15 @@ module rdb_ocean_wave_speed
       logical :: enable = .false.
          !! Master switch.  Default off — bit-identity preserved.
       real(wp) :: mono_n2_depth = -1.0_wp
-         !! DEFERRED: limit N^2 from increasing with depth below this
-         !! depth.  `< 0` = off.
+         !! Limit N^2 from increasing with depth below this depth.
+         !! `< 0` = off.  NOT IMPLEMENTED (inert); `validate_config`
+         !! refuses it together with `use_ebt`.
       logical :: use_ebt = .false.
-         !! DEFERRED: pressure-Neumann / equivalent-barotropic variant.
+         !! Also compute the equivalent-barotropic speed `cg1_ebt` and
+         !! vertical structure `ebt_struct` (computed in the same column
+         !! launch as `cg1`).  `cg1` itself stays first-baroclinic.  GM does
+         !! not consume the structure yet.  Default off: `cg1` bit-identical
+         !! and `ebt_struct` stays 1.
       integer :: n_wavespeed = 1
          !! Cadence: recompute every `n_wavespeed` steps (slow
          !! diagnostic).  Default every step (cheap when default-off).
@@ -101,6 +129,13 @@ module rdb_ocean_wave_speed
          !! namelist-scalar `beta`.
       real(wp), allocatable :: cg1(:, :)
          !! First-baroclinic gravity-wave speed (m/s).
+      real(wp), allocatable :: cg1_ebt(:, :)
+         !! Equivalent-barotropic gravity-wave speed (m/s); 0 on land and
+         !! degenerate columns.  Only written when `use_ebt`.
+      real(wp), allocatable :: ebt_struct(:, :, :)
+         !! EBT vertical structure at T cells, bottom-up (k=nz surface),
+         !! surface value 1.  Initialised to 1 ("no structure"); written
+         !! only when `use_ebt` (0 on land / degenerate columns).
       real(wp), allocatable :: rd(:, :)
          !! First-mode Rossby deformation radius (m).
       real(wp), allocatable :: rd_over_dx(:, :)
@@ -122,19 +157,25 @@ contains
    ! Lifecycle
    ! =================================================================
 
-   subroutine ocean_wave_speed_init(this, grid)
-      !! Allocate the persistent (nx, ny) fields.  Always allocates
-      !! (configure runs after init, so `enable` is not known yet);
-      !! the off-state footprint is four 2D arrays.
+   subroutine ocean_wave_speed_init(this, grid, nz_ml)
+      !! Allocate the persistent fields.  Always allocates (configure runs
+      !! after init, so `enable` is not known yet); the off-state footprint
+      !! is five 2D arrays plus the `(nx, ny, nz)` EBT structure (`nz_ml`
+      !! defaults to 1 when absent: a column of ones).
       class(ocean_wave_speed_t), intent(inout) :: this
       type(hgrid_t), intent(in) :: grid
-      integer :: nx, ny
+      integer, intent(in), optional :: nz_ml
+      integer :: nx, ny, nzs
 
       nx = grid%nx_total
       ny = grid%ny_total
+      nzs = 1
+      if (present(nz_ml)) nzs = max(1, nz_ml)
       allocate (this%f_centre(nx, ny), source=0.0_wp)
       allocate (this%beta_centre(nx, ny), source=0.0_wp)
       allocate (this%cg1(nx, ny), source=0.0_wp)
+      allocate (this%cg1_ebt(nx, ny), source=0.0_wp)
+      allocate (this%ebt_struct(nx, ny, nzs), source=1.0_wp)
       allocate (this%rd(nx, ny), source=0.0_wp)
       allocate (this%rd_over_dx(nx, ny), source=0.0_wp)
       this%is_init = .true.
@@ -146,6 +187,8 @@ contains
       if (allocated(this%f_centre)) deallocate (this%f_centre)
       if (allocated(this%beta_centre)) deallocate (this%beta_centre)
       if (allocated(this%cg1)) deallocate (this%cg1)
+      if (allocated(this%cg1_ebt)) deallocate (this%cg1_ebt)
+      if (allocated(this%ebt_struct)) deallocate (this%ebt_struct)
       if (allocated(this%rd)) deallocate (this%rd)
       if (allocated(this%rd_over_dx)) deallocate (this%rd_over_dx)
    end subroutine ocean_wave_speed_destroy
@@ -168,6 +211,12 @@ contains
       end if
       if (allocated(this%cg1)) then
          !$acc enter data copyin(this%cg1)
+      end if
+      if (allocated(this%cg1_ebt)) then
+         !$acc enter data copyin(this%cg1_ebt)
+      end if
+      if (allocated(this%ebt_struct)) then
+         !$acc enter data copyin(this%ebt_struct)
       end if
       if (allocated(this%rd)) then
          !$acc enter data copyin(this%rd)
@@ -192,6 +241,12 @@ contains
       end if
       if (allocated(this%rd)) then
          !$acc exit data delete(this%rd)
+      end if
+      if (allocated(this%ebt_struct)) then
+         !$acc exit data delete(this%ebt_struct)
+      end if
+      if (allocated(this%cg1_ebt)) then
+         !$acc exit data delete(this%cg1_ebt)
       end if
       if (allocated(this%cg1)) then
          !$acc exit data delete(this%cg1)
@@ -260,17 +315,52 @@ contains
    ! =================================================================
 
    pure subroutine wavespeed_cg1_column(nz, h_rak, rho_rak, rho0, cg1)
-      !! First-baroclinic wave speed for ONE column.  `h_rak`/`rho_rak`
-      !! are in Roundabout ordering (k=1 bed, k=nz surface), fixed-size
-      !! NZ_STACK_MAX arrays; only 1..nz are read.  Returns `cg1` (m/s),
-      !! 0 for land / homogeneous / `kc<2` / sub-floor columns.
-      !! Gathers+flips surface-down, backtracking convective merge,
-      !! symmetric tridiag, fixed-budget Sturm-count bisection.
+      !! First-baroclinic wave speed for ONE column (no EBT output).
+      !! Thin wrapper over `wavespeed_mode_column` with `use_ebt=.false.`.
       !$acc routine seq
       integer, intent(in) :: nz
       real(wp), intent(in) :: h_rak(NZ_STACK_MAX), rho_rak(NZ_STACK_MAX)
       real(wp), intent(in) :: rho0
       real(wp), intent(out) :: cg1
+      real(wp) :: cg1_ebt
+      real(wp) :: phi(NZ_STACK_MAX)
+
+      call wavespeed_mode_column(nz, h_rak, rho_rak, rho0, .false., cg1, cg1_ebt, phi)
+   end subroutine wavespeed_cg1_column
+
+   pure subroutine wavespeed_mode_column(nz, h_rak, rho_rak, rho0, use_ebt, &
+                                         cg1, cg1_ebt, phi_rak)
+      !! First-baroclinic wave speed `cg1` and (when `use_ebt`) the
+      !! equivalent-barotropic speed `cg1_ebt` + structure `phi_rak` for ONE
+      !! column.  `h_rak`/`rho_rak`/`phi_rak` are in Roundabout ordering
+      !! (k=1 bed, k=nz surface), fixed-size NZ_STACK_MAX arrays; only 1..nz
+      !! are read/written.  `cg1` is 0 for land / homogeneous / `kc<2` /
+      !! sub-floor columns; those columns also get `cg1_ebt = 0` and
+      !! `phi_rak = 0` (structure 0, not 1).  With `use_ebt = .false.`,
+      !! `cg1_ebt`/`phi_rak` are set to 0 and the `cg1` arithmetic is
+      !! untouched (bit-identical).
+      !! Gathers+flips surface-down, backtracking convective merge,
+      !! tridiag, fixed-budget Sturm-count bisection.
+      !!
+      !! EBT: with the merged stack surface-down (layer 1 = surface), layer
+      !! `k` has upper interface `k` and lower interface `k+1`, `Igu(K) =
+      !! 1/(g'_K h_{K-1})`, `Igl(K) = 1/(g'_K h_K)`.  Pressure rows,
+      !!   lam p_1  = Igu(2) (p_1 - p_2)                      (surface Neumann)
+      !!   lam p_k  = Igl(k) (p_k - p_{k-1}) + Igu(k+1) (p_k - p_{k+1})
+      !!   lam p_kc = Igl(kc) (p_kc - p_{kc-1}) + 2 Igl(kc) p_kc  (bed Dirichlet)
+      !! (the bed ghost is a half cell, hence the factor 2).  `lam =
+      !! 1/c_ebt^2` is the smallest eigenvalue (Sturm-count bisection on the
+      !! LDL pivots, fixed budget); the eigenvector is `EBT_NINV` inverse
+      !! iterations at `lam (1 - EBT_SHIFT)`, normalised to 1 at the surface
+      !! and remapped (conservative PLM, no boundary extrapolation) from the
+      !! merged thicknesses to the raw ones.
+      !$acc routine seq
+      integer, intent(in) :: nz
+      real(wp), intent(in) :: h_rak(NZ_STACK_MAX), rho_rak(NZ_STACK_MAX)
+      real(wp), intent(in) :: rho0
+      logical, intent(in) :: use_ebt
+      real(wp), intent(out) :: cg1, cg1_ebt
+      real(wp), intent(out) :: phi_rak(NZ_STACK_MAX)
 
       ! column arrays (surface-down): 5 total (spec §7)
       real(wp) :: hc(NZ_STACK_MAX), rc(NZ_STACK_MAX)
@@ -283,6 +373,8 @@ contains
       logical :: do_weld, do_weld2
 
       cg1 = 0.0_wp
+      cg1_ebt = 0.0_wp
+      phi_rak = 0.0_wp
       if (nz < 2) return
       g_rho0 = GRAVITY/rho0
 
@@ -379,7 +471,129 @@ contains
       end do
       lam_mid = 0.5_wp*(lam_lo + lam_hi)
       if (lam_mid > 0.0_wp) cg1 = 1.0_wp/sqrt(lam_mid)
-   end subroutine wavespeed_cg1_column
+
+      if (use_ebt .and. cg1 > 0.0_wp) then
+         call ebt_column(nz, kc, hc, h_rak, igu, igl, cg1_ebt, phi_rak)
+      end if
+   end subroutine wavespeed_mode_column
+
+   pure subroutine ebt_column(nz, kc, hc, h_rak, igu, igl, cg1_ebt, phi_rak)
+      !! EBT eigenvalue + structure on the committed stack (see
+      !! `wavespeed_mode_column`).  `hc(1:kc)` are the merged thicknesses
+      !! (surface-down); `h_rak(1:nz)` the raw bottom-up ones.
+      !$acc routine seq
+      integer, intent(in) :: nz, kc
+      real(wp), intent(in) :: hc(NZ_STACK_MAX)
+      real(wp), intent(in) :: h_rak(NZ_STACK_MAX)
+      real(wp), intent(in) :: igu(NZ_STACK_MAX + 1), igl(NZ_STACK_MAX + 1)
+      real(wp), intent(out) :: cg1_ebt
+      real(wp), intent(out) :: phi_rak(NZ_STACK_MAX)
+
+      real(wp) :: dg(NZ_STACK_MAX), bp(NZ_STACK_MAX), x(NZ_STACK_MAX)
+      real(wp) :: dzo(NZ_STACK_MAX), dzn(NZ_STACK_MAX)
+      real(wp) :: qo(NZ_STACK_MAX), qn(NZ_STACK_MAX)
+      real(wp) :: lam_lo, lam_hi, lam_mid, lam, sig, q, xmax, rowsum
+      integer :: k, it, nneg, kg
+
+      cg1_ebt = 0.0_wp
+      phi_rak = 0.0_wp
+
+      ! ---- diagonal (surface-down layer rows) ----
+      dg(1) = igu(2)
+      do k = 2, kc - 1
+         dg(k) = igl(k) + igu(k + 1)
+      end do
+      dg(kc) = 3.0_wp*igl(kc)
+
+      ! ---- Gershgorin upper bound ----
+      lam_hi = 0.0_wp
+      do k = 1, kc
+         rowsum = dg(k)
+         if (k >= 2) rowsum = rowsum + igl(k)
+         if (k < kc) rowsum = rowsum + igu(k + 1)
+         lam_hi = max(lam_hi, rowsum)
+      end do
+      lam_lo = 0.0_wp
+
+      ! ---- fixed-budget bisection on the Sturm count (pivots < 0) ----
+      do it = 1, EBT_ITT
+         lam_mid = 0.5_wp*(lam_lo + lam_hi)
+         q = dg(1) - lam_mid
+         nneg = 0
+         if (q < 0.0_wp) nneg = 1
+         do k = 2, kc
+            if (abs(q) < EBT_PIVMIN) q = EBT_PIVMIN
+            q = dg(k) - lam_mid - igu(k)*igl(k)/q
+            if (q < 0.0_wp) nneg = nneg + 1
+         end do
+         if (nneg >= 1) then
+            lam_hi = lam_mid
+         else
+            lam_lo = lam_mid
+         end if
+      end do
+      lam = 0.5_wp*(lam_lo + lam_hi)
+      if (lam <= 0.0_wp) return
+      cg1_ebt = 1.0_wp/sqrt(lam)
+
+      ! ---- inverse iteration (Thomas on the shifted rows) ----
+      sig = lam*(1.0_wp - EBT_SHIFT)
+      do k = 1, kc
+         x(k) = 1.0_wp
+      end do
+      do it = 1, EBT_NINV
+         bp(1) = dg(1) - sig
+         do k = 2, kc
+            bp(k) = dg(k) - sig - igu(k)*igl(k)/bp(k - 1)
+            x(k) = x(k) + igl(k)/bp(k - 1)*x(k - 1)
+         end do
+         x(kc) = x(kc)/bp(kc)
+         do k = kc - 1, 1, -1
+            x(k) = (x(k) + igu(k + 1)*x(k + 1))/bp(k)
+         end do
+         xmax = 0.0_wp
+         do k = 1, kc
+            xmax = max(xmax, abs(x(k)))
+         end do
+         do k = 1, kc
+            x(k) = x(k)/xmax
+         end do
+      end do
+
+      ! ---- surface normalisation; zero surface value => structure 0 ----
+      if (x(1) == 0.0_wp) return
+      xmax = 1.0_wp/x(1)
+      do k = 1, kc
+         qo(k) = max(0.0_wp, x(k)*xmax)
+         dzo(k) = hc(k)
+      end do
+      ! pad the committed stack to nz layers with zero-thickness copies of
+      ! the bed value, then PLM-remap onto the raw (surface-down) thicknesses
+      do k = kc + 1, nz
+         qo(k) = qo(kc)
+         dzo(k) = 0.0_wp
+      end do
+      do k = 1, nz
+         dzn(k) = h_rak(nz + 1 - k)
+      end do
+      call remap_column_plm(nz, dzo, dzn, qo, qn)
+
+      ! flip back to bottom-up (surface value pinned to exactly 1: the
+      ! surface raw layer lies inside committed layer 1, whose PLM slope is
+      ! flattened at the boundary); vanished raw layers inherit the committed
+      ! value above them (remap returns 0 for dz_new <= 0)
+      do k = 1, nz
+         kg = nz + 1 - k
+         if (dzn(k) > 0.0_wp) then
+            phi_rak(kg) = max(0.0_wp, qn(k))
+            if (k == 1) phi_rak(kg) = 1.0_wp
+         else if (k > 1) then
+            phi_rak(kg) = phi_rak(kg + 1)
+         else
+            phi_rak(kg) = 1.0_wp
+         end if
+      end do
+   end subroutine ebt_column
 
    pure integer function sturm_count(igu, igl, kc, lam) result(n_chg)
       !! Number of Sturm-sequence sign changes (eigenvalues < lam) via
@@ -463,7 +677,8 @@ contains
    ! =================================================================
 
    pure subroutine wavespeed_compute(grid, metrics, this, ms)
-      !! Fill `this%cg1`, `this%rd`, `this%rd_over_dx` over the domain.
+      !! Fill `this%cg1`, `this%rd`, `this%rd_over_dx` over the domain
+      !! (and `cg1_ebt` + `ebt_struct` when `use_ebt`).
       !! `rho_layer` is a top-level allocatable that reaches the device
       !! directly, so no outer-shim tracer dereference is needed (unlike
       !! EPBL/kappa-shear).  Call at the `n_wavespeed` cadence.
@@ -474,57 +689,86 @@ contains
       type(ocean_metrics_t), intent(in) :: metrics
       type(ocean_wave_speed_t), intent(inout) :: this
       type(multilayer_state_t), intent(in) :: ms
-      integer :: nx, ny, nz
+      integer :: nx, ny, nz, nze
 
       if (.not. this%is_init) return
       if (.not. this%enable) return
       if (.not. allocated(ms%rho_layer)) return
       if (.not. allocated(this%cg1)) return
+      if (.not. allocated(this%ebt_struct)) return
 
       nx = grid%nx_total
       ny = grid%ny_total
       nz = ms%nz_ml
+      ! The kernel's `ebt_struct` dummy is declared with the array's REAL
+      ! third extent, not `nz`: an `init` without `nz_ml` allocates one
+      ! layer, and declaring it `(nx, ny, nz)` would make the device map
+      ! a partially-present section (an OpenACC abort) even with
+      ! `use_ebt` off, when the kernel never touches it.  With `use_ebt`
+      ! on, a mismatched extent is a setup bug, so fail loud rather than
+      ! skip the whole solve (which would also leave `cg1` stale).
+      nze = size(this%ebt_struct, 3)
+      if (this%use_ebt .and. nze /= nz) then
+         error stop "wavespeed_compute: use_ebt needs ebt_struct allocated with nz_ml layers "// &
+            "(ocean_wave_speed_init nz_ml)"
+      end if
 
-      call wavespeed_compute_impl(nx, ny, nz, this%rho0, &
+      call wavespeed_compute_impl(nx, ny, nz, this%rho0, this%use_ebt, &
                                   ms%h_layer, ms%rho_layer, ms%wet_mask, &
                                   this%f_centre, this%beta_centre, metrics%dxT, &
-                                  this%cg1, this%rd, this%rd_over_dx)
+                                  this%cg1, this%rd, this%rd_over_dx, &
+                                  this%cg1_ebt, nze, this%ebt_struct)
    end subroutine wavespeed_compute
 
-   pure subroutine wavespeed_compute_impl(nx, ny, nz, rho0, h_layer, rho_layer, &
-                                          wet_mask, f_centre, beta_centre, dxT, &
-                                          cg1, rd, rd_over_dx)
+   pure subroutine wavespeed_compute_impl(nx, ny, nz, rho0, use_ebt, h_layer, &
+                                          rho_layer, wet_mask, f_centre, beta_centre, &
+                                          dxT, cg1, rd, rd_over_dx, cg1_ebt, nze, ebt_struct)
       !! Flat-impl wavespeed kernel (explicit-shape; NVHPC
       !! descriptor-walk-free).  Per-column Sturm-Liouville solve
       !! (`wavespeed_cg1_column`) + the deformation-radius blend
       !! (`wavespeed_rd`), then the metres-denominated resolution ratio
-      !! `rd_over_dx = rd / dxT`.
+      !! `rd_over_dx = rd / dxT`.  With `use_ebt`, the same column launch
+      !! also writes `cg1_ebt` and `ebt_struct` (0 on land / degenerate
+      !! columns); with it off neither is touched.
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: rho0
+      logical, intent(in) :: use_ebt
       real(wp), intent(in) :: h_layer(nx, ny, nz), rho_layer(nx, ny, nz)
       real(wp), intent(in) :: wet_mask(nx, ny)
       real(wp), intent(in) :: f_centre(nx, ny), beta_centre(nx, ny), dxT(nx, ny)
       real(wp), intent(out) :: cg1(nx, ny), rd(nx, ny), rd_over_dx(nx, ny)
+      integer, intent(in) :: nze
+         !! Third extent of `ebt_struct` (== nz whenever `use_ebt`).
+      real(wp), intent(inout) :: cg1_ebt(nx, ny), ebt_struct(nx, ny, nze)
 
       integer :: i, j, k
-      real(wp) :: h_col(NZ_STACK_MAX), rho_col(NZ_STACK_MAX)
-      real(wp) :: cg1_v, rd_v
+      real(wp) :: h_col(NZ_STACK_MAX), rho_col(NZ_STACK_MAX), phi_col(NZ_STACK_MAX)
+      real(wp) :: cg1_v, rd_v, ebt_v
 
       do concurrent(j=1:ny, i=1:nx) &
-         local(k, h_col, rho_col, cg1_v, rd_v)
+         local(k, h_col, rho_col, phi_col, cg1_v, rd_v, ebt_v)
          cg1_v = 0.0_wp
          rd_v = 0.0_wp
+         ebt_v = 0.0_wp
+         phi_col = 0.0_wp
          if (wet_mask(i, j) > 0.0_wp .and. nz >= 2) then
             do k = 1, nz
                h_col(k) = h_layer(i, j, k)
                rho_col(k) = rho_layer(i, j, k)
             end do
-            call wavespeed_cg1_column(nz, h_col, rho_col, rho0, cg1_v)
+            call wavespeed_mode_column(nz, h_col, rho_col, rho0, use_ebt, &
+                                       cg1_v, ebt_v, phi_col)
             rd_v = wavespeed_rd(cg1_v, f_centre(i, j), beta_centre(i, j))
          end if
          cg1(i, j) = cg1_v
          rd(i, j) = rd_v
          rd_over_dx(i, j) = rd_v/max(dxT(i, j), F_DENOM_FLOOR)
+         if (use_ebt) then
+            cg1_ebt(i, j) = ebt_v
+            do k = 1, nz
+               ebt_struct(i, j, k) = phi_col(k)
+            end do
+         end if
       end do
    end subroutine wavespeed_compute_impl
 
@@ -537,6 +781,8 @@ contains
       nbytes = arr_bytes(this%f_centre) &
                + arr_bytes(this%beta_centre) &
                + arr_bytes(this%cg1) &
+               + arr_bytes(this%cg1_ebt) &
+               + arr_bytes(this%ebt_struct) &
                + arr_bytes(this%rd) &
                + arr_bytes(this%rd_over_dx)
    end function ocean_wave_speed_bytes

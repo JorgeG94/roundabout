@@ -1062,9 +1062,10 @@ Two further consequences worth naming. The ALE remap is the LAST velocity writer
   fixed-budget bisection (no data-dependent early-exit) — occupancy
   comfortably above the kappa-shear cliff per the dev-time MRE.
   Matches the verified Python reference prototype to ~1e-6; golden
-  nz=4 column `cg1 = 3.266407 m/s`.  Deferred: the equivalent-barotropic
-  (`use_ebt`) and N²-monotonising (`mono_n2`) EBT refinements (knobs
-  reserved, default off); the `|∇|f||`-vs-`|∇f|` equator kink shared
+  nz=4 column `cg1 = 3.266407 m/s`.  The equivalent-barotropic
+  mode (`use_ebt`) has since shipped (speed + structure, not yet consumed
+  by GM); deferred: the N²-monotonising (`mono_n2`) refinement (knob
+  reserved, refused with `use_ebt`); the `|∇|f||`-vs-`|∇f|` equator kink shared
   with VarMix/MEKE (house idiom, not fixed here).
 
 <a id="a22"></a>

@@ -477,8 +477,8 @@ First-baroclinic wave speed + Rossby deformation radius (diagnostic).
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `enable` | `.false.` |  | Master switch (diagnostic; default off) |
-| `mono_n2` | `-0.1000000000E+01` |  | DEFERRED N2-monotonising depth (EBT path); < 0 = off |
-| `use_ebt` | `.false.` |  | DEFERRED equivalent-barotropic variant |
+| `mono_n2` | `-0.1000000000E+01` |  | N2-monotonising depth; NOT IMPLEMENTED (refused together with use_ebt); < 0 = off |
+| `use_ebt` | `.false.` |  | Also compute the equivalent-barotropic speed cg1_ebt + structure ebt_struct (GM does not consume it yet) |
 | `n_wavespeed` | `1` |  | Recompute cadence (every N steps) |
 
 ### &ocean_foxkemper_nml
