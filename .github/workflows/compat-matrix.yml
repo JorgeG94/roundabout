@@ -76,6 +76,21 @@ jobs:
           extra-packages: libnetcdf
           checkout-repo: false
 
+      # Keep OpenMPI off UCX. On some GitHub-hosted runners (seen on Intel
+      # Xeon Platinum 8573C / Sapphire Rapids, not on AMD EPYC 7763) the action
+      # prints "Disabled unusable UCX UD transports exposed by this
+      # GitHub-hosted runner" and exports UCX_TLS=^ud,ud:aux. UCX is then left
+      # with a transport whose max message size is 0, and every multi-rank
+      # launch aborts in MPI_Comm_dup ("Message size 4 bigger than supported
+      # by selected transport. Max = 0"), so the result depended on which CPU
+      # the job landed on. These are single-node runs: the ob1 PML over the
+      # shared-memory BTL is the right transport anyway, and it never touches
+      # UCX. Same fix as mpi.yml's gfortran + openmpi leg.
+      - name: Route OpenMPI around UCX
+        run: |
+          echo "OMPI_MCA_pml=ob1" >> "$GITHUB_ENV"
+          echo "OMPI_MCA_btl=self,sm,tcp" >> "$GITHUB_ENV"
+
       - name: Install a recent CMake
         run: pip install --upgrade "cmake>=4.0"
 
