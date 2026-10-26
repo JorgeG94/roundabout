@@ -654,7 +654,11 @@ contains
          if (this%varmix%enable) call this%varmix%init(grid)
          if (this%meke%enable) call this%meke%init(grid)
       end if
-      call this%wavespeed%init(grid)
+      if (this%use_multilayer) then
+         call this%wavespeed%init(grid, nz_ml=this%multilayer%nz_ml)
+      else
+         call this%wavespeed%init(grid)
+      end if
       call this%eos%init(grid)
       if (this%use_multilayer) then
          call this%vcoord%init(grid, nz_ml=this%multilayer%nz_ml)

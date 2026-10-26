@@ -26,6 +26,18 @@
 !!        Gill form — metric bug 2 + its tail.
 !!   T10 — beta-plane build_static is bit-identical to the legacy
 !!        set_f_centre; beta_centre == the namelist beta in the interior.
+!!   T11 — EBT, constant N: c_ebt = 2NH/pi (and = 2 cg1), O(dz^2) in nz;
+!!        phi = cos(pi*depth/(2H)); phi(surface) = 1, monotone, >= 0.
+!!   T12 — EBT, exponential N = N0 exp(z/d): Bessel-function mode.
+!!   T13 — EBT on a column with a welded (merged) stack: PLM remap to the
+!!        raw layers keeps phi(surface) = 1, monotone, within [0,1].
+!!   T14 — use_ebt = .false.: cg1 bit-identical to the pre-EBT routine,
+!!        ebt_struct == 1, cg1_ebt == 0; use_ebt = .true. leaves cg1 alone.
+!!   T15 — degenerate columns (homogeneous, kc < 2, land): cg1_ebt = 0 and
+!!        structure 0 (not 1).
+!!   T16 — wavespeed_compute with use_ebt on the device kernel
+!!        (mem:separate template) matches the host column solve.
+!!   T17 — validate_config refuses mono_n2 >= 0 together with use_ebt.
 module test_ocean_wave_speed
    use testdrive, only: new_unittest, unittest_type, error_type, check
 #ifdef LFORTRAN_PASSING
@@ -41,7 +53,10 @@ module test_ocean_wave_speed
    use ocean_test_metrics, only: make_cartesian_metrics, make_spherical_metrics, &
                                  destroy_cartesian_metrics
    use rdb_ocean_wave_speed, only: ocean_wave_speed_t, wavespeed_compute, &
-                                   wavespeed_cg1_column, wavespeed_rd
+                                   wavespeed_cg1_column, wavespeed_mode_column, &
+                                   wavespeed_rd
+   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_VALIDATE
    implicit none
    private
 
@@ -56,6 +71,10 @@ module test_ocean_wave_speed
 
    integer, parameter :: NGHOST = 2
    real(wp), parameter :: RHO0 = 1035.0_wp
+   real(wp), parameter :: CG1_OLD_A = 2.57413138395536345_wp
+      !! cg1 of the inverted-ramp column from the PRE-EBT routine (bit pattern).
+   real(wp), parameter :: CG1_OLD_B = 3.11350735571780257_wp
+      !! cg1 of the non-uniform-thickness column from the PRE-EBT routine.
 
 contains
 
@@ -75,7 +94,14 @@ contains
                   new_unittest("wavespeed_f_centre_and_beta_from_planetary_coriolis", &
                                test_f_centre_beta_planetary), &
                   new_unittest("wavespeed_beta_plane_build_static_bit_identical", &
-                               test_beta_plane_bit_identical) &
+                               test_beta_plane_bit_identical), &
+                  new_unittest("wavespeed_ebt_constant_n_analytic", test_ebt_constant_n), &
+                  new_unittest("wavespeed_ebt_exponential_n_bessel", test_ebt_exponential_n), &
+                  new_unittest("wavespeed_ebt_merged_stack_remap", test_ebt_merged_stack), &
+                  new_unittest("wavespeed_ebt_off_bit_identical_struct_one", test_ebt_off), &
+                  new_unittest("wavespeed_ebt_degenerate_columns_zero", test_ebt_degenerate), &
+                  new_unittest("wavespeed_ebt_compute_device_kernel", test_ebt_compute), &
+                  new_unittest("wavespeed_ebt_mono_n2_refused", test_ebt_mono_n2_refused) &
                   ]
    end subroutine collect_ocean_wave_speed_tests
 
@@ -361,6 +387,7 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_wave_speed_t), intent(inout) :: ws
       !$acc update self(ws%cg1, ws%rd, ws%rd_over_dx)
+      !$acc update self(ws%ebt_struct, ws%cg1_ebt)
       call ws%exit_data()
       !$acc exit data delete(ws)
       call ms%exit_data()
@@ -731,5 +758,462 @@ contains
          deallocate (f_centre, f_corner)
       end block checks
    end subroutine test_beta_plane_bit_identical
+
+   ! -----------------------------------------------------------------
+   ! EBT helpers
+   ! -----------------------------------------------------------------
+   !! Pack a bottom-up column into NZ_STACK_MAX arrays and call the mode
+   !! solver on the host.  `phi_rak` comes back bottom-up (k=nz surface).
+   subroutine mode_of(nz, h_rak, rho_rak, use_ebt, cg1, cebt, phi_rak)
+      integer, intent(in) :: nz
+      real(wp), intent(in) :: h_rak(nz), rho_rak(nz)
+      logical, intent(in) :: use_ebt
+      real(wp), intent(out) :: cg1, cebt, phi_rak(nz)
+      real(wp) :: h_col(NZ_STACK_MAX), rho_col(NZ_STACK_MAX), phi_col(NZ_STACK_MAX)
+      integer :: k
+      h_col = 0.0_wp
+      rho_col = 0.0_wp
+      do k = 1, nz
+         h_col(k) = h_rak(k)
+         rho_col(k) = rho_rak(k)
+      end do
+      call wavespeed_mode_column(nz, h_col, rho_col, RHO0, use_ebt, cg1, cebt, phi_col)
+      phi_rak = phi_col(1:nz)
+   end subroutine mode_of
+
+   !! Uniform-dz constant-N column, bottom-up (k=1 bed).
+   subroutine const_n_column(nz, hcol, nbv, h_rak, rho_rak)
+      integer, intent(in) :: nz
+      real(wp), intent(in) :: hcol, nbv
+      real(wp), intent(out) :: h_rak(nz), rho_rak(nz)
+      real(wp) :: dz
+      integer :: k
+      dz = hcol/real(nz, wp)
+      do k = 1, nz
+         h_rak(k) = dz
+         rho_rak(nz + 1 - k) = RHO0 + (nbv*nbv*RHO0/GRAVITY)*(real(k, wp) - 0.5_wp)*dz
+      end do
+   end subroutine const_n_column
+
+   ! -----------------------------------------------------------------
+   ! T11 — EBT, constant N, flat column.  Surface-Neumann / bed-Dirichlet
+   ! pressure mode: p = cos(pi*depth/(2H)), c_ebt = 2 N H / pi, i.e. twice
+   ! the first-baroclinic N H / pi.  Second order in dz.
+   ! -----------------------------------------------------------------
+   subroutine test_ebt_constant_n(error)
+      type(error_type), allocatable, intent(out) :: error
+      real(wp), parameter :: HCOL = 1000.0_wp, NBV = 0.01_wp
+      real(wp), parameter :: PI = 3.14159265358979323846_wp
+      integer, parameter :: NZS(3) = [25, 50, 100]
+      real(wp) :: cex, ec(3), ep(3), cg1, cebt, depth, perr
+      real(wp), allocatable :: h_rak(:), rho_rak(:), phi(:)
+      integer :: m, nz, k, ksd
+
+      cex = 2.0_wp*NBV*HCOL/PI
+      do m = 1, 3
+         nz = NZS(m)
+         allocate (h_rak(nz), rho_rak(nz), phi(nz))
+         call const_n_column(nz, HCOL, NBV, h_rak, rho_rak)
+         call mode_of(nz, h_rak, rho_rak, .true., cg1, cebt, phi)
+         ec(m) = abs(cebt - cex)/cex
+         ep(m) = 0.0_wp
+         do k = 1, nz
+            ksd = nz + 1 - k                      ! surface-down index
+            depth = (real(ksd, wp) - 0.5_wp)*HCOL/real(nz, wp)
+            perr = abs(phi(k) - cos(0.5_wp*PI*depth/HCOL))
+            ep(m) = max(ep(m), perr)
+         end do
+         if (m == 2) then
+            call check(error, ec(m) < 0.02_wp, "c_ebt != 2NH/pi within 2% at nz=50")
+            if (allocated(error)) return
+            call check(error, abs(cebt/cg1 - 2.0_wp) < 0.05_wp, &
+                       "c_ebt / cg1 != 2 for constant N")
+            if (allocated(error)) return
+            call check(error, phi(nz) == 1.0_wp, "EBT surface value != 1")
+            if (allocated(error)) return
+            call check(error, ep(m) < 2.0e-2_wp, "phi != cos(pi*depth/2H) within 2e-2")
+            if (allocated(error)) return
+            do k = 1, nz
+               call check(error, phi(k) >= 0.0_wp, "EBT structure negative")
+               if (allocated(error)) return
+               if (k < nz) then
+                  call check(error, phi(k) <= phi(k + 1), "EBT structure not monotone")
+                  if (allocated(error)) return
+               end if
+            end do
+         end if
+         deallocate (h_rak, rho_rak, phi)
+      end do
+      ! O(dz^2): halving dz cuts the error ~4x (>= 3 required)
+      call check(error, ec(1) > 3.0_wp*ec(2) .and. ec(2) > 3.0_wp*ec(3), &
+                 "c_ebt error is not O(dz^2) across nz = 25/50/100")
+      if (allocated(error)) return
+      call check(error, ep(1) > 2.5_wp*ep(2) .and. ep(2) > 2.5_wp*ep(3), &
+                 "phi error is not converging across nz = 25/50/100")
+   end subroutine test_ebt_constant_n
+
+   ! -----------------------------------------------------------------
+   ! T12 — EBT, exponential stratification N = N0 exp(z/d) (z <= 0).
+   ! With lambda = 1/c^2, p(z) = exp(z/d) u and u'' + (lambda N^2 - d^-2) u = 0;
+   ! t = k exp(z/d), k = sqrt(lambda) N0 d turns it into Bessel's equation of
+   ! order 1 (Abramowitz & Stegun 9.1.1):
+   !   p(z) = exp(z/d) [ J1(t) Y0(k) - Y1(t) J0(k) ].
+   ! Surface Neumann (p'(0) = 0, using (t J1)' = t J0) is satisfied by that
+   ! combination; bed Dirichlet p(-H) = 0 gives the eigen-condition
+   !   J1(k e^{-H/d}) Y0(k) - Y1(k e^{-H/d}) J0(k) = 0
+   ! and c_ebt = N0 d / k_1 (smallest root).  Reference: Killworth & Blundell
+   ! (2003) use the same family for exponential N.
+   ! -----------------------------------------------------------------
+   subroutine test_ebt_exponential_n(error)
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NZ = 100
+      real(wp), parameter :: HCOL = 1000.0_wp, DSCALE = 500.0_wp, N0 = 0.005_wp
+      real(wp) :: h_rak(NZ), rho_rak(NZ), phi(NZ), cg1, cebt
+      real(wp) :: dz, zc, kk, klo, khi, kmid, flo, fmid, cex, perr, pa, pa_s
+      integer :: k, ksd, it
+
+      dz = HCOL/real(NZ, wp)
+      do k = 1, NZ
+         h_rak(k) = dz
+         ksd = NZ + 1 - k
+         zc = -(real(ksd, wp) - 0.5_wp)*dz
+         ! rho(z) = rho_s + (rho0/g) N0^2 d/2 (1 - exp(2z/d)); stable
+         rho_rak(k) = RHO0 + (RHO0/GRAVITY)*N0*N0*DSCALE*0.5_wp*(1.0_wp - exp(2.0_wp*zc/DSCALE))
+         ! (rho_s = RHO0 at the surface; density increases downward)
+      end do
+      call mode_of(NZ, h_rak, rho_rak, .true., cg1, cebt, phi)
+
+      ! analytic smallest root: scan then bisect
+      klo = 0.05_wp
+      flo = ebt_bessel_f(klo, HCOL, DSCALE)
+      khi = klo
+      do it = 1, 400
+         khi = klo + 0.05_wp
+         if (ebt_bessel_f(khi, HCOL, DSCALE)*flo < 0.0_wp) exit
+         klo = khi
+         flo = ebt_bessel_f(klo, HCOL, DSCALE)
+      end do
+      do it = 1, 80
+         kmid = 0.5_wp*(klo + khi)
+         fmid = ebt_bessel_f(kmid, HCOL, DSCALE)
+         if (fmid*flo > 0.0_wp) then
+            klo = kmid
+            flo = fmid
+         else
+            khi = kmid
+         end if
+      end do
+      kk = 0.5_wp*(klo + khi)
+      cex = N0*DSCALE/kk
+      call check(error, abs(cebt - cex)/cex < 0.05_wp, &
+                 "exponential-N c_ebt differs from the Bessel eigenvalue by > 5%")
+      if (allocated(error)) return
+
+      ! eigenvector vs the Bessel mode, normalised at the surface layer
+      perr = 0.0_wp
+      pa_s = ebt_bessel_p(-0.5_wp*dz, kk, DSCALE)
+      do k = 1, NZ
+         ksd = NZ + 1 - k
+         zc = -(real(ksd, wp) - 0.5_wp)*dz
+         pa = ebt_bessel_p(zc, kk, DSCALE)/pa_s
+         perr = max(perr, abs(phi(k) - pa))
+      end do
+      call check(error, perr < 5.0e-2_wp, "exponential-N phi differs from the Bessel mode")
+   end subroutine test_ebt_exponential_n
+
+   pure function ebt_bessel_f(k, hcol, d) result(f)
+      real(wp), intent(in) :: k, hcol, d
+      real(wp) :: f, t1
+      t1 = k*exp(-hcol/d)
+      f = bessel_j1(t1)*bessel_y0(k) - bessel_y1(t1)*bessel_j0(k)
+   end function ebt_bessel_f
+
+   pure function ebt_bessel_p(z, k, d) result(p)
+      real(wp), intent(in) :: z, k, d
+      real(wp) :: p, t
+      t = k*exp(z/d)
+      p = exp(z/d)*(bessel_j1(t)*bessel_y0(k) - bessel_y1(t)*bessel_j0(k))
+   end function ebt_bessel_p
+
+   ! -----------------------------------------------------------------
+   ! T13 — a stack that merges (an inverted pair welds): the committed
+   ! stack is shorter than nz and the structure is remapped (conservative
+   ! PLM) back onto the raw layers.  Surface value 1, one-signed, bounded
+   ! by the surface value, monotone toward the bed, finite.
+   ! -----------------------------------------------------------------
+   subroutine test_ebt_merged_stack(error)
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NZ = 11
+      real(wp) :: rho_sd(NZ), h_rak(NZ), rho_rak(NZ), phi(NZ), cg1, cebt
+      integer :: k
+
+      do k = 1, NZ
+         rho_sd(k) = RHO0 + 5.0_wp*real(k - 1, wp)/real(NZ - 1, wp)
+      end do
+      rho_sd(6) = rho_sd(7) + 1.5_wp        ! same inverted column as T6
+      do k = 1, NZ
+         h_rak(k) = 100.0_wp
+         rho_rak(NZ + 1 - k) = rho_sd(k)
+      end do
+      call mode_of(NZ, h_rak, rho_rak, .true., cg1, cebt, phi)
+      call check(error, cebt > cg1 .and. cebt < 4.0_wp*cg1, &
+                 "merged-stack c_ebt not in (cg1, 4 cg1)")
+      if (allocated(error)) return
+      call check(error, phi(NZ) == 1.0_wp, "merged-stack surface value != 1")
+      if (allocated(error)) return
+      do k = 1, NZ
+         call check(error, phi(k) >= 0.0_wp .and. phi(k) <= 1.0_wp, &
+                    "merged-stack structure outside [0,1]")
+         if (allocated(error)) return
+         if (k < NZ) then
+            call check(error, phi(k) <= phi(k + 1) + 1.0e-14_wp, &
+                       "merged-stack structure not monotone")
+            if (allocated(error)) return
+         end if
+      end do
+      ! the two welded raw layers (surface-down 6,7 -> bottom-up 6,5) lie in
+      ! ONE committed layer: with a PLM closure on a monotone profile they
+      ! stay within the committed value's neighbours, never above the layer
+      ! above them.
+      call check(error, phi(NZ - 6) <= phi(NZ - 5), "welded layers not ordered")
+   end subroutine test_ebt_merged_stack
+
+   ! -----------------------------------------------------------------
+   ! T14 — use_ebt = .false.: cg1 BIT-IDENTICAL to the pre-EBT routine
+   ! (literals captured from the previous implementation), ebt_struct stays
+   ! 1 and cg1_ebt 0 after wavespeed_compute; use_ebt = .true. leaves cg1
+   ! untouched bit for bit.
+   ! -----------------------------------------------------------------
+   subroutine test_ebt_off(error)
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_metrics_t) :: metrics
+      type(multilayer_state_t) :: ms
+      type(ocean_wave_speed_t) :: ws
+      integer, parameter :: NX = 5, NY = 4, NZ = 11
+      real(wp) :: rho_sd(NZ), h_rak(NZ), rho_rak(NZ), cg1_ref, cebt, phi(NZ)
+      real(wp), allocatable :: f_centre(:, :)
+      real(wp) :: cg1_off(5, 4)
+      integer :: i, j, k
+
+      checks: block
+         ! reference column: T6 inverted ramp
+         do k = 1, NZ
+            rho_sd(k) = RHO0 + 5.0_wp*real(k - 1, wp)/real(NZ - 1, wp)
+         end do
+         rho_sd(6) = rho_sd(7) + 1.5_wp
+         do k = 1, NZ
+            h_rak(k) = 100.0_wp
+            rho_rak(NZ + 1 - k) = rho_sd(k)
+         end do
+         call mode_of(NZ, h_rak, rho_rak, .false., cg1_ref, cebt, phi)
+         call check(error, cg1_ref == CG1_OLD_A, "use_ebt off: cg1 not bit-identical (inverted ramp)")
+         if (allocated(error)) exit checks
+         call check(error, cebt == 0.0_wp .and. all(phi == 0.0_wp), &
+                    "use_ebt off: EBT outputs must stay 0 at the column level")
+         if (allocated(error)) exit checks
+         call mode_of(NZ, h_rak, rho_rak, .true., cg1_ref, cebt, phi)
+         call check(error, cg1_ref == CG1_OLD_A, "use_ebt on changed cg1")
+         if (allocated(error)) exit checks
+
+         call grid%init(NX, NY, NGHOST, 10000.0_wp, 10000.0_wp)
+         call make_cartesian_metrics(metrics, grid)
+         ms%nz_ml = NZ
+         call ms%init(grid)
+         ms%wet_mask = 1.0_wp
+         do k = 1, NZ
+            ms%h_layer(:, :, k) = 100.0_wp
+            ms%rho_layer(:, :, k) = rho_rak(k)
+         end do
+         ! a second, non-uniform-thickness column family on the odd columns
+         do j = 1, grid%ny_total
+            do i = 1, grid%nx_total, 2
+               do k = 1, NZ
+                  ms%h_layer(i, j, k) = 60.0_wp + 8.0_wp*real(k, wp)
+                  ms%rho_layer(i, j, k) = RHO0 + 0.4_wp*real(NZ - k, wp)**1.3_wp
+               end do
+            end do
+         end do
+         allocate (f_centre(grid%nx_total, grid%ny_total), source=1.0e-4_wp)
+         call ws%init(grid, nz_ml=NZ)
+         ws%enable = .true.
+         ws%rho0 = RHO0
+         call ws%build_static(grid, metrics, f_centre)
+         call check(error, all(ws%ebt_struct == 1.0_wp), "ebt_struct not initialised to 1")
+         if (allocated(error)) exit checks
+
+         call map_in_ws(ms, ws)
+         call wavespeed_compute(grid, metrics, ws, ms)
+         call map_out_ws(ms, ws)
+         call check(error, all(ws%ebt_struct == 1.0_wp), &
+                    "use_ebt off: ebt_struct must stay exactly 1")
+         if (allocated(error)) exit checks
+         call check(error, all(ws%cg1_ebt == 0.0_wp), "use_ebt off: cg1_ebt must stay 0")
+         if (allocated(error)) exit checks
+         call check(error, ws%cg1(2, 2) == CG1_OLD_A, &
+                    "use_ebt off: compute cg1 not bit-identical (even column)")
+         if (allocated(error)) exit checks
+         call check(error, ws%cg1(3, 2) == CG1_OLD_B, &
+                    "use_ebt off: compute cg1 not bit-identical (odd column)")
+         if (allocated(error)) exit checks
+         cg1_off = ws%cg1(1:5, 1:4)
+
+         ! twin call with use_ebt on: cg1 unchanged bit for bit
+         ws%use_ebt = .true.
+         call map_in_ws(ms, ws)
+         call wavespeed_compute(grid, metrics, ws, ms)
+         call map_out_ws(ms, ws)
+         call check(error, all(ws%cg1(1:5, 1:4) == cg1_off), "use_ebt on changed cg1")
+
+         call ws%destroy()
+         call ms%destroy()
+         call destroy_cartesian_metrics(metrics)
+         deallocate (f_centre)
+      end block checks
+   end subroutine test_ebt_off
+
+   ! -----------------------------------------------------------------
+   ! T15 — degenerate columns give cg1_ebt = 0 and structure 0, not 1.
+   ! -----------------------------------------------------------------
+   subroutine test_ebt_degenerate(error)
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NZ = 10
+      real(wp) :: h_rak(NZ), rho_rak(NZ), phi(NZ), cg1, cebt
+      real(wp) :: h1(1), r1(1), phi1(1)
+      integer :: k
+
+      do k = 1, NZ
+         h_rak(k) = 50.0_wp
+         rho_rak(k) = RHO0
+      end do
+      call mode_of(NZ, h_rak, rho_rak, .true., cg1, cebt, phi)
+      call check(error, cg1 == 0.0_wp .and. cebt == 0.0_wp .and. all(phi == 0.0_wp), &
+                 "homogeneous column must give cg1 = 0, c_ebt = 0, structure 0")
+      if (allocated(error)) return
+
+      ! statically unstable (denser at the surface): the whole stack welds
+      ! to kc < 2
+      do k = 1, NZ
+         rho_rak(k) = RHO0 + 2.0_wp*real(k - 1, wp)/real(NZ - 1, wp)
+      end do
+      call mode_of(NZ, h_rak, rho_rak, .true., cg1, cebt, phi)
+      call check(error, cg1 == 0.0_wp .and. cebt == 0.0_wp .and. all(phi == 0.0_wp), &
+                 "kc < 2 column must give cg1 = 0, c_ebt = 0, structure 0")
+      if (allocated(error)) return
+
+      ! single layer
+      h1 = [500.0_wp]
+      r1 = [RHO0]
+      call mode_of(1, h1, r1, .true., cg1, cebt, phi1)
+      call check(error, cebt == 0.0_wp .and. phi1(1) == 0.0_wp, &
+                 "single-layer column must give structure 0")
+   end subroutine test_ebt_degenerate
+
+   ! -----------------------------------------------------------------
+   ! T16 — the DEVICE kernel with use_ebt (mem:separate template, after
+   ! `test_open_boundary_out_closes`): every array the column launch
+   ! touches is mapped, results come back with a COMPONENT-wise
+   ! `update self(ws%ebt_struct, ws%cg1_ebt)` (never the whole type).
+   ! Wet columns match the host column solve exactly; the land cell is 0.
+   ! -----------------------------------------------------------------
+   subroutine test_ebt_compute(error)
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_metrics_t) :: metrics
+      type(multilayer_state_t) :: ms
+      type(ocean_wave_speed_t) :: ws
+      integer, parameter :: NX = 5, NY = 4, NZ = 20
+      real(wp), parameter :: HCOL = 1000.0_wp, NBV = 0.01_wp
+      real(wp) :: h_rak(NZ), rho_rak(NZ), phi(NZ), cg1, cebt
+      real(wp), allocatable :: f_centre(:, :)
+      integer :: i, j, k, land_i, land_j
+
+      checks: block
+         call const_n_column(NZ, HCOL, NBV, h_rak, rho_rak)
+         call mode_of(NZ, h_rak, rho_rak, .true., cg1, cebt, phi)
+
+         call grid%init(NX, NY, NGHOST, 10000.0_wp, 10000.0_wp)
+         call make_cartesian_metrics(metrics, grid)
+         ms%nz_ml = NZ
+         call ms%init(grid)
+         ms%wet_mask = 1.0_wp
+         land_i = grid%nghost + 2
+         land_j = grid%nghost + 2
+         ms%wet_mask(land_i, land_j) = 0.0_wp
+         do k = 1, NZ
+            ms%h_layer(:, :, k) = h_rak(k)
+            ms%rho_layer(:, :, k) = rho_rak(k)
+         end do
+         allocate (f_centre(grid%nx_total, grid%ny_total), source=1.0e-4_wp)
+         call ws%init(grid, nz_ml=NZ)
+         ws%enable = .true.
+         ws%use_ebt = .true.
+         ws%rho0 = RHO0
+         call ws%build_static(grid, metrics, f_centre)
+
+         call map_in_ws(ms, ws)
+         call wavespeed_compute(grid, metrics, ws, ms)
+         call map_out_ws(ms, ws)
+
+         do j = 1, grid%ny_total
+            do i = 1, grid%nx_total
+               if (i == land_i .and. j == land_j) then
+                  call check(error, ws%cg1_ebt(i, j) == 0.0_wp .and. &
+                             all(ws%ebt_struct(i, j, :) == 0.0_wp), &
+                             "land cell: c_ebt and structure must be exactly 0")
+               else
+                  call check(error, ws%cg1_ebt(i, j) == cebt, &
+                             "device c_ebt differs from the host column solve")
+                  if (allocated(error)) exit checks
+                  call check(error, all(ws%ebt_struct(i, j, :) == phi), &
+                             "device structure differs from the host column solve")
+                  if (allocated(error)) exit checks
+                  call check(error, ws%ebt_struct(i, j, NZ) == 1.0_wp, &
+                             "device structure surface value != 1")
+               end if
+               if (allocated(error)) exit checks
+            end do
+         end do
+
+         call ws%destroy()
+         call ms%destroy()
+         call destroy_cartesian_metrics(metrics)
+         deallocate (f_centre)
+      end block checks
+   end subroutine test_ebt_compute
+
+   ! -----------------------------------------------------------------
+   ! T17 — `mono_n2` is not implemented: with `use_ebt` it must fail
+   ! loud rather than be silently ignored.
+   ! -----------------------------------------------------------------
+   subroutine test_ebt_mono_n2_refused(error)
+      type(error_type), allocatable, intent(out) :: error
+      integer :: ierr
+
+      ierr = validate_wavespeed("use_ebt = .true., mono_n2 = 500.0")
+      call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
+                 "mono_n2 >= 0 with use_ebt must be refused")
+      if (allocated(error)) return
+      ierr = validate_wavespeed("use_ebt = .true.")
+      call check(error, ierr == OCEAN_STATUS_OK, "use_ebt alone must be accepted")
+      if (allocated(error)) return
+      ierr = validate_wavespeed("mono_n2 = 500.0")
+      call check(error, ierr == OCEAN_STATUS_OK, "mono_n2 without use_ebt keeps its old behaviour")
+   end subroutine test_ebt_mono_n2_refused
+
+   function validate_wavespeed(body) result(ierr)
+      character(len=*), intent(in) :: body
+      integer :: ierr
+      type(config_t) :: cfg
+
+      ierr = -999
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+         new_line('a')// &
+         "&ocean_wavespeed enable = .true., "//body//" /"//new_line('a'), cfg, ierr=ierr)
+      if (ierr /= OCEAN_STATUS_OK) return
+      call validate_config(cfg, ierr=ierr)
+   end function validate_wavespeed
 
 end module test_ocean_wave_speed

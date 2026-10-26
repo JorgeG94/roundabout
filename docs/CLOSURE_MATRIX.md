@@ -572,7 +572,7 @@ Diagnostics have no feedback on the dynamics.
 
 | Diagnostic | Status | Knob (default) | What it does | Test |
 |---|---|---|---|---|
-| First-baroclinic wave speed and Rossby radius | opt-in | `&ocean_wavespeed_nml enable` (`.false.`) | Per-column rigid-lid eigensolve, once per outer step. Feeds the resolution scaling of GM, Redi and MEKE. | `test_ocean_wave_speed` |
+| First-baroclinic wave speed and Rossby radius | opt-in | `&ocean_wavespeed_nml enable` (`.false.`) | Per-column rigid-lid eigensolve, once per outer step. Feeds the resolution scaling of GM, Redi and MEKE. Opt-in `use_ebt` (`.false.`) also computes the equivalent-barotropic speed `cg1_ebt` and the surface-normalised pressure-mode structure `ebt_struct` (surface Neumann, bed Dirichlet; PLM-remapped from the merged stack); nothing consumes it yet (GM structure is the next PR) and `mono_n2` stays unimplemented (refused with `use_ebt`). | `test_ocean_wave_speed` |
 | Cavity diagnostics (13) | opt-in | see [section 13](#13-ice-shelf-cavity) | Melt rate, driving terms, exchange velocities, geometry. | `test_ocean_cavity_diags` |
 
 **Full notes in the archive:** [wave-speed diagnostic (original cells)](CLOSURE_MATRIX_ARCHIVE.md#a25)

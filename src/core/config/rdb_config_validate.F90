@@ -805,6 +805,13 @@ contains
                               "&ocean_wavespeed_nml enable=.true. (the resolution function needs cg1)")
             has_error = .true.
          end if
+         ! `mono_n2` (N^2 monotonisation of the EBT path) is not implemented;
+         ! a silently ignored knob is a trap, so refuse it with `use_ebt`.
+         if (cfg%ocean%wavespeed%use_ebt .and. cfg%ocean%wavespeed%mono_n2 >= 0.0_wp) then
+            call logger%error("&ocean_wavespeed_nml mono_n2 >= 0 with use_ebt=.true.: "// &
+                              "N^2 monotonisation of the EBT mode is not implemented yet")
+            has_error = .true.
+         end if
          ! The resolution-function power is an integer >= 1 (Hallberg 2013
          ! form `s^p/(s^p + (alpha*cg1)^p)`); p < 1 has no meaning and would
          ! divide by zero or invert the limits.  Refused regardless of enable.

@@ -1848,9 +1848,12 @@ module rdb_config
       logical :: enable = .false.
          !! Master switch.  Default off — bit-identity preserved.
       real(wp) :: mono_n2 = -1.0_wp
-         !! DEFERRED: N^2-monotonising depth.  `< 0` = off.
+         !! N^2-monotonising depth.  `< 0` = off.  NOT IMPLEMENTED:
+         !! `validate_config` refuses `>= 0` together with `use_ebt`.
       logical :: use_ebt = .false.
-         !! DEFERRED: equivalent-barotropic / pressure-Neumann variant.
+         !! Also compute the equivalent-barotropic speed `cg1_ebt` and
+         !! vertical structure `ebt_struct` (`cg1` stays first-baroclinic).
+         !! GM does not consume the structure yet.
       integer :: n_wavespeed = 1
          !! Recompute cadence (every N steps); slow diagnostic.
    end type ocean_wave_speed_config_t

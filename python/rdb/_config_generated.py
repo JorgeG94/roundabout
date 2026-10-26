@@ -2561,7 +2561,7 @@ class OceanWavespeed(Group):
 
     mono_n2 = Real(
         'mono_n2',
-        doc='DEFERRED N2-monotonising depth (EBT path); < 0 = off',
+        doc='N2-monotonising depth; NOT IMPLEMENTED (refused together with use_ebt); < 0 = off',
         units='',
         required=False,
         default=-1.0,
@@ -2569,7 +2569,7 @@ class OceanWavespeed(Group):
 
     use_ebt = Bool(
         'use_ebt',
-        doc='DEFERRED equivalent-barotropic variant',
+        doc='Also compute the equivalent-barotropic speed cg1_ebt + structure ebt_struct (GM does not consume it yet)',
         units='',
         required=False,
         default=False,
