@@ -23,10 +23,13 @@
 !!     columns keep their banks and stay at zero ice mass.
 module test_ocean_ice_coupling
    use testdrive, only: new_unittest, unittest_type, error_type, check
-   use rdb_constants, only: wp, H_VANISHED
+   use rdb_constants, only: wp, H_VANISHED, RHO_WATER
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
-   use rdb_eos, only: eos_t, eos_freezing_point
+   use rdb_eos, only: eos_t, eos_freezing_point, eos_apply_ts_convention, &
+                      TS_CONS_ABS, TFREEZE_FORM_TEOS_POLY
+   use rdb_teos10_convert, only: pt_from_ct, sp_from_sr
+   use rdb_ice_basal_flux, only: ice_compute_basal_flux
    use rdb_ocean_surface_flux, only: ocean_surface_flux_t, ocean_surface_flux_apply_tracers
    use rdb_ice_state, only: ocean_sea_ice_t
    use rdb_ice_frazil, only: ice_frazil_accumulate
@@ -67,7 +70,10 @@ contains
                   new_unittest("brine_rejection_salinifies", test_brine_sign), &
                   new_unittest("salt_budget_closes", test_salt_budget), &
                   new_unittest("disabled_and_zero_bank_noop", test_zero_bank_noop), &
-                  new_unittest("uptake_skips_ghosts_dry_and_vanished", test_skip_gates) &
+                  new_unittest("uptake_skips_ghosts_dry_and_vanished", test_skip_gates), &
+                  new_unittest("cons_abs_basal_seam_theta_sp", test_cons_abs_basal), &
+                  new_unittest("cons_abs_uptake_theta_closure", test_cons_abs_uptake), &
+                  new_unittest("pot_prac_basal_seam_identity", test_pot_prac_basal) &
                   ]
    end subroutine collect_ocean_ice_coupling_tests
 
@@ -510,5 +516,151 @@ contains
       end block checks
       call teardown(ms, eos, ice, sf)
    end subroutine test_skip_gates
+
+   subroutine run_basal(grid, eos, ms, ice)
+      !! Map, run the basal-flux/seam kernel, pull the seam + fb host-ward.
+      type(hgrid_t), intent(in) :: grid
+      type(eos_t), intent(in) :: eos
+      type(multilayer_state_t), intent(inout) :: ms
+      type(ocean_sea_ice_t), intent(inout) :: ice
+
+      !$acc enter data copyin(ms)
+      call ms%enter_data()
+      call ice%enter_data()
+      call ice_compute_basal_flux(grid, eos, ms, ice, DT_THERM)
+      associate (fb => ice%fb, ss => ice%sst_seam, sl => ice%ssurf_seam, tf => ice%tfw_seam)
+         !$acc update self(fb, ss, sl, tf)
+      end associate
+      call ice%exit_data()
+      call ms%exit_data()
+      !$acc exit data delete(ms)
+   end subroutine run_basal
+
+   subroutine test_cons_abs_basal(error)
+      !! cons_abs: the ice seam carries theta, SP and the theta freezing
+      !! point; the basal flux is the OCEAN-side rho*c_p*(CT - CT_f)*h/dt with
+      !! c_p from the knob (4100).
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(eos_t) :: eos
+      type(ocean_sea_ice_t) :: ice
+      type(ocean_surface_flux_t) :: sf
+      real(wp), parameter :: SA = 35.16504_wp
+      real(wp), parameter :: CT = -1.0_wp
+      real(wp), parameter :: CP_TEST = 4100.0_wp
+      real(wp) :: ct_f, expected
+      integer :: ip, jp
+      checks: block
+         call setup_state(grid, ms, eos, ice, sf, CT)
+         call eos_apply_ts_convention(eos, TS_CONS_ABS, TFREEZE_FORM_TEOS_POLY, 0.0_wp)
+         eos%c_p = CP_TEST
+         ms%tracers(ms%idx_salinity)%hTr = SA*H_LAYER
+         ice%m_ice(:, :, 1) = 1.0_wp
+         ct_f = eos_freezing_point(eos, SA, 0.0_wp)
+         call run_basal(grid, eos, ms, ice)
+         ip = grid%nx_total/2
+         jp = grid%ny_total/2
+
+         call check(error, abs(ice%sst_seam(ip, jp) - pt_from_ct(SA, CT)) < 1.0e-12_wp, &
+                    "sst_seam must be theta = pt_from_ct(SA, CT)")
+         if (allocated(error)) exit checks
+         call check(error, abs(ice%ssurf_seam(ip, jp) - sp_from_sr(SA)) < 1.0e-12_wp, &
+                    "ssurf_seam must be SP = sp_from_sr(SA)")
+         if (allocated(error)) exit checks
+         call check(error, abs(ice%tfw_seam(ip, jp) - pt_from_ct(SA, ct_f)) < 1.0e-12_wp, &
+                    "tfw_seam must be the theta freezing point")
+         if (allocated(error)) exit checks
+         call check(error, abs(ice%ssurf_seam(ip, jp) - SA) > 0.1_wp, &
+                    "SP must differ from SA (the conversion really ran)")
+         if (allocated(error)) exit checks
+         expected = RHO_WATER*CP_TEST*(CT - ct_f)*H_LAYER/DT_THERM
+         call check(error, abs(ice%fb(ip, jp) - expected) < 1.0e-10_wp*expected, &
+                    "fb must use CT - CT_f and c_p from the knob")
+      end block checks
+      call teardown(ms, eos, ice, sf)
+   end subroutine test_cons_abs_basal
+
+   subroutine test_pot_prac_basal(error)
+      !! pot_prac default: the seam is the raw T, S, T_f and fb uses 3992,
+      !! bit-for-bit.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(eos_t) :: eos
+      type(ocean_sea_ice_t) :: ice
+      type(ocean_surface_flux_t) :: sf
+      real(wp) :: t_f, t_sfc, s_sfc
+      integer :: ip, jp
+      checks: block
+         call setup_state(grid, ms, eos, ice, sf, T_WARM)
+         ice%m_ice(:, :, 1) = 1.0_wp
+         t_f = eos_freezing_point(eos, S_INIT, 0.0_wp)
+         t_sfc = (T_WARM*H_LAYER)/H_LAYER
+         s_sfc = (S_INIT*H_LAYER)/H_LAYER
+         call run_basal(grid, eos, ms, ice)
+         ip = grid%nx_total/2
+         jp = grid%ny_total/2
+         call check(error, ice%sst_seam(ip, jp) == t_sfc .and. ice%ssurf_seam(ip, jp) == s_sfc &
+                    .and. ice%tfw_seam(ip, jp) == t_f, "pot_prac seam must be the raw T, S, T_f")
+         if (allocated(error)) exit checks
+         call check(error, ice%fb(ip, jp) == RHO_WATER*3992.0_wp*max(0.0_wp, t_sfc - t_f)*H_LAYER/DT_THERM, &
+                    "pot_prac fb must be bit-identical (c_p = 3992)")
+      end block checks
+      call teardown(ms, eos, ice, sf)
+   end subroutine test_pot_prac_basal
+
+   subroutine test_cons_abs_uptake(error)
+      !! cons_abs frazil uptake: surface at CT_f (SA = 35.16504).  The ice is
+      !! charged the THETA liquid enthalpy at the theta freezing point (not
+      !! the CT value): m_frozen and the energy closure match the analytic
+      !! theta form, and the frazil onset temperature is min(theta_f,
+      !! ice liquidus - offset).
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(eos_t) :: eos
+      type(ocean_sea_ice_t) :: ice
+      type(ocean_surface_flux_t) :: sf
+      real(wp), parameter :: SA = 35.16504_wp
+      real(wp) :: ct_f, th_f, sp, enth_ocean, min_denth, t_frazil, enth_frazil, m_an, e_ice
+      integer :: ip, jp, k
+      checks: block
+         call setup_state(grid, ms, eos, ice, sf, 0.0_wp)
+         call eos_apply_ts_convention(eos, TS_CONS_ABS, TFREEZE_FORM_TEOS_POLY, 0.0_wp)
+         ct_f = eos_freezing_point(eos, SA, 0.0_wp)
+         th_f = pt_from_ct(SA, ct_f)
+         sp = sp_from_sr(SA)
+         ms%tracers(ms%idx_salinity)%hTr = SA*H_LAYER
+         ms%tracers(ms%idx_temperature)%hTr(:, :, NZ) = ct_f*H_LAYER
+         ice%frazil_heat = E_BANK
+         call run_uptake(grid, eos, ms, ice)
+         ip = grid%nx_total/2
+         jp = grid%ny_total/2
+
+         enth_ocean = ice_enthalpy_liquid(th_f, sp)
+         min_denth = ICE_LAT_FUS*(1.0_wp - ICE_LIQ_LIM)
+         t_frazil = min(th_f, ice_t_freeze(ICE_BULK_SALINITY) - ICE_FRAZIL_T_OFFSET)
+         enth_frazil = min(ice_enth_from_ts(t_frazil, ICE_BULK_SALINITY), enth_ocean - min_denth)
+         m_an = E_BANK/(enth_ocean - enth_frazil)
+         call check(error, abs(ice%m_frozen_diag(ip, jp) - m_an) <= 1.0e-12_wp*m_an, &
+                    "cons_abs m_frozen must match the theta/SP analytic mass")
+         if (allocated(error)) exit checks
+         e_ice = 0.0_wp
+         do k = 1, ice%nk_ice
+            e_ice = e_ice + (ice%m_ice(ip, jp, 1)/real(ice%nk_ice, wp))*ice%enth_ice(ip, jp, 1, k)
+         end do
+         call check(error, abs(ice%m_frozen_diag(ip, jp)*enth_ocean - e_ice - E_BANK) &
+                    <= 1.0e-10_wp*E_BANK, "cons_abs energy closure in theta")
+         if (allocated(error)) exit checks
+         ! salt bookkeeping is in the ice's SP: (m_frozen*SP - salt_to_ice)/dt
+         call check(error, abs(ice%salt_flux_diag(ip, jp) &
+                               - (ice%m_frozen_diag(ip, jp)*sp &
+                                  - ice%m_frozen_diag(ip, jp)*ICE_BULK_SALINITY)/DT_THERM) &
+                    <= 1.0e-12_wp*abs(ice%salt_flux_diag(ip, jp)) + 1.0e-18_wp, &
+                    "cons_abs salt flux uses SP")
+      end block checks
+      call teardown(ms, eos, ice, sf)
+   end subroutine test_cons_abs_uptake
 
 end module test_ocean_ice_coupling

@@ -34,8 +34,8 @@ module rdb_ice_basal_flux
    use rdb_constants, only: wp, RHO_WATER, H_VANISHED
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
-   use rdb_eos, only: eos_t, eos_freezing_point
-   use rdb_ocean_surface_flux, only: SEAWATER_CP
+   use rdb_eos, only: eos_t, eos_freezing_point, TS_CONS_ABS
+   use rdb_teos10_convert, only: pt_from_ct, sp_from_sr
    use rdb_ice_column, only: ICE_RHO_ICE
    use rdb_ice_state, only: ocean_sea_ice_t
    implicit none
@@ -101,14 +101,17 @@ contains
       real(wp), intent(in) :: dt_therm
 
       integer :: i, j, cat, i_lo, i_hi, j_lo, j_hi
-      real(wp) :: h, sst, s_surf, tfw, m_ice_tot
+      real(wp) :: h, sst, s_surf, tfw, m_ice_tot, t_excess
+      logical :: cons
+
+      cons = eos%ts_convention == TS_CONS_ABS
 
       i_lo = nghost + 1
       i_hi = nx - nghost
       j_lo = nghost + 1
       j_hi = ny - nghost
 
-      do concurrent(j=j_lo:j_hi, i=i_lo:i_hi) local(h, sst, s_surf, tfw, cat, m_ice_tot)
+      do concurrent(j=j_lo:j_hi, i=i_lo:i_hi) local(h, sst, s_surf, tfw, cat, m_ice_tot, t_excess)
          fb(i, j) = 0.0_wp
          sst_seam(i, j) = 0.0_wp
          ssurf_seam(i, j) = 0.0_wp
@@ -118,6 +121,17 @@ contains
             sst = hTr_T(i, j, nz)/h
             s_surf = hTr_S(i, j, nz)/h
             tfw = eos_freezing_point(eos, s_surf, 0.0_wp)
+            ! OCEAN-side available heat: model T, S, T_f (CT, SA, CT liquidus
+            ! under cons_abs) -- formed BEFORE the ice-boundary conversion.
+            t_excess = max(0.0_wp, sst - tfw)
+            if (cons) then
+               ! Ice-boundary conversion (IOC/SCOR/IAPSO 2010; McDougall & Barker
+               ! 2011): the ice is theta/SP, so the seam carries theta, SP and
+               ! the theta freezing point.
+               tfw = pt_from_ct(s_surf, tfw)
+               sst = pt_from_ct(s_surf, sst)
+               s_surf = sp_from_sr(s_surf)
+            end if
             sst_seam(i, j) = sst
             ssurf_seam(i, j) = s_surf
             tfw_seam(i, j) = tfw
@@ -126,7 +140,7 @@ contains
                m_ice_tot = m_ice_tot + m_ice(i, j, cat)
             end do
             if (m_ice_tot > ICE_RHO_ICE*H_VANISHED) then
-               fb(i, j) = RHO_WATER*SEAWATER_CP*max(0.0_wp, sst - tfw)*h/dt_therm
+               fb(i, j) = RHO_WATER*eos%c_p*t_excess*h/dt_therm
             end if
          end if
       end do

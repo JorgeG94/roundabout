@@ -33,7 +33,6 @@ module rdb_ice_frazil
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_eos, only: eos_t, eos_freezing_point
-   use rdb_ocean_surface_flux, only: SEAWATER_CP
    implicit none
    private
 
@@ -82,6 +81,9 @@ contains
       !! area integral).  Per wet cell at k = nz:
       !!
       !!   T = hTr_T/h,  S = hTr_S/h,  T_f = eos_freezing_point(S, 0)
+      !!   (OCEAN side: under `ts_convention = "cons_abs"` T, S, T_f are
+      !!   CT, SA and the CT liquidus -- no conversion here; `Cp` is
+      !!   `eos%c_p`, `&ocean_eos_nml c_p`, default 3992.)
       !!   if T < T_f:  frazil_heat += ρ·Cp·h·(T_f − T)  and
       !!                hTr_T = h·T_f   (exact clamp)
       !!
@@ -120,7 +122,7 @@ contains
             if (t_sfc < t_f) then
                d_htr = h*(t_f - t_sfc)
                frazil_heat(i, j) = frazil_heat(i, j) &
-                                   + RHO_WATER*SEAWATER_CP*d_htr
+                                   + RHO_WATER*eos%c_p*d_htr
                heat_budget_frazil(i, j, 1) = heat_budget_frazil(i, j, 1) + d_htr
                ! Exact clamp: T_after = (h·T_f)/h == T_f.
                hTr_T(i, j, nz) = h*t_f

@@ -68,7 +68,8 @@ module rdb_ice_frazil_uptake
    use rdb_constants, only: wp, H_VANISHED
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
-   use rdb_eos, only: eos_t, eos_freezing_point
+   use rdb_eos, only: eos_t, eos_freezing_point, TS_CONS_ABS
+   use rdb_teos10_convert, only: pt_from_ct, sp_from_sr
    use rdb_ice_enthalpy, only: ICE_LAT_FUS, ICE_LIQ_LIM, ice_enthalpy_liquid, &
                                ice_enth_from_ts, ice_t_freeze
    use rdb_ice_column, only: ICE_BULK_SALINITY, ICE_NK_MAX
@@ -176,8 +177,11 @@ contains
 
       integer :: i, j, i_lo, i_hi, j_lo, j_hi
       real(wp) :: h, sst, s_surf, tfw
+      logical :: cons
       real(wp) :: m_snow_pt, m_ice_pt, m_frozen_pt, salt_to_ice_pt
       real(wp) :: enth_ice_col(ICE_NK_MAX), sal_ice_col(ICE_NK_MAX)
+
+      cons = eos%ts_convention == TS_CONS_ABS
 
       i_lo = nghost + 1
       i_hi = nx - nghost
@@ -194,6 +198,15 @@ contains
             sst = hTr_T(i, j, nz)/h
             s_surf = hTr_S(i, j, nz)/h
             tfw = eos_freezing_point(eos, s_surf, 0.0_wp)
+            if (cons) then
+               ! Ice-boundary conversion (IOC/SCOR/IAPSO 2010; McDougall &
+               ! Barker 2011): the ice stores theta/SP, so hand it theta, SP
+               ! and the theta freezing point (the ice liquidus it is compared
+               ! against in the column is theta-based).
+               tfw = pt_from_ct(s_surf, tfw)
+               sst = pt_from_ct(s_surf, sst)
+               s_surf = sp_from_sr(s_surf)
+            end if
 
             m_snow_pt = m_snow(i, j, 1)
             m_ice_pt = m_ice(i, j, 1)
@@ -271,8 +284,11 @@ contains
       integer :: i, j, i_lo, i_hi, j_lo, j_hi
       integer :: cat, k_merge
       real(wp) :: h, sst, s_surf, tfw, i_part
+      logical :: cons
       real(wp) :: m_snow_pt, m_ice_pt, m_frozen_pt, salt_to_ice_pt, frazil_col
       real(wp) :: enth_ice_col(ICE_NK_MAX), sal_ice_col(ICE_NK_MAX)
+
+      cons = eos%ts_convention == TS_CONS_ABS
 
       i_lo = nghost + 1
       i_hi = nx - nghost
@@ -291,6 +307,15 @@ contains
             sst = hTr_T(i, j, nz)/h
             s_surf = hTr_S(i, j, nz)/h
             tfw = eos_freezing_point(eos, s_surf, 0.0_wp)
+            if (cons) then
+               ! Ice-boundary conversion (IOC/SCOR/IAPSO 2010; McDougall &
+               ! Barker 2011): the ice stores theta/SP, so hand it theta, SP
+               ! and the theta freezing point (the ice liquidus it is compared
+               ! against in the column is theta-based).
+               tfw = pt_from_ct(s_surf, tfw)
+               sst = pt_from_ct(s_surf, sst)
+               s_surf = sp_from_sr(s_surf)
+            end if
 
             ! ---- 1. k_merge scan (SIS2:1124-1129) ----
             k_merge = 1

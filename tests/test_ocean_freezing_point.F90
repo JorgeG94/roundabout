@@ -209,11 +209,12 @@ contains
       if (allocated(error)) return
       cfg%ocean%eos%eos = "roquet_rho"
 
-      ! cons_abs + sea ice.
+      ! cons_abs + sea ice: allowed since TEOS-10 PR-4 (the coupler converts
+      ! to theta/SP at the ice boundary).
       cfg%ocean%ice%enable = .true.
       ierr = -999
       call validate_config(cfg, ierr=ierr)
-      call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, "cons_abs + ice must be refused")
+      call check(error, ierr == OCEAN_STATUS_OK, "cons_abs + ice must validate (PR-4)")
       if (allocated(error)) return
       cfg%ocean%ice%enable = .false.
 

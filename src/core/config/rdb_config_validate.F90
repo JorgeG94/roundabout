@@ -334,8 +334,8 @@ contains
       ! Fail-loud matrix.  Every refusal names the knob and the reason; none
       ! is a silent downgrade.  `cons_abs` flips the meaning of the T/S
       ! tracers everywhere, so each place that would still read them as
-      ! theta/SP must be refused until it converts (PR-3 initial conditions,
-      ! PR-4 sea ice).
+      ! theta/SP must be refused until it converts (PR-3 initial conditions).  Sea ice converts at
+      ! the coupler boundary (theta/SP on the ice side), so it is allowed.
       if (parse_ts_convention(cfg%ocean%eos%ts_convention) == TS_INVALID) then
          call logger%error("&ocean_eos_nml ts_convention = '"// &
                            trim(cfg%ocean%eos%ts_convention)// &
@@ -362,14 +362,6 @@ contains
                               "EOS are fits in potential temperature / practical "// &
                               "salinity, so reading CT/SA into them is a silent "// &
                               "~0.3 degC physics error.")
-            has_error = .true.
-         end if
-         if (cfg%ocean%ice%enable) then
-            call logger%error("&ocean_eos_nml ts_convention='cons_abs' is refused with "// &
-                              "&ocean_ice_nml enable=.true.: the sea-ice thermodynamics "// &
-                              "are theta/SP-based and the coupler-boundary conversion "// &
-                              "(and c_p in frazil/basal heat) is not ported yet "// &
-                              "(TEOS-10 PR-4).")
             has_error = .true.
          end if
          if (cfg%ocean%cavity_melt%enable) then

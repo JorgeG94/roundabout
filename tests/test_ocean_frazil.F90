@@ -24,7 +24,9 @@ module test_ocean_frazil
    use rdb_constants, only: wp, RHO_WATER
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
-   use rdb_eos, only: eos_t, eos_freezing_point
+   use rdb_eos, only: eos_t, eos_freezing_point, eos_apply_ts_convention, &
+                      TS_CONS_ABS, TFREEZE_FORM_TEOS_POLY
+   use rdb_teos10_convert, only: ct_freezing_poly
    use rdb_ocean_surface_flux, only: SEAWATER_CP
    use rdb_ice_state, only: ocean_sea_ice_t
    use rdb_ice_frazil, only: ice_frazil_accumulate
@@ -57,7 +59,9 @@ contains
                   new_unittest("frazil_warm_cell_untouched", test_warm_noop), &
                   new_unittest("frazil_energy_conservation", test_energy), &
                   new_unittest("frazil_skips_ghosts_and_dry", test_ghost_dry), &
-                  new_unittest("frazil_second_call_idempotent", test_idempotent) &
+                  new_unittest("frazil_second_call_idempotent", test_idempotent), &
+                  new_unittest("frazil_pot_prac_bit_identical", test_pot_prac_bits), &
+                  new_unittest("frazil_cons_abs_onset_and_cp", test_cons_abs_onset) &
                   ]
    end subroutine collect_ocean_frazil_tests
 
@@ -338,5 +342,82 @@ contains
       if (allocated(hT_1)) deallocate (hT_1)
       call teardown(ms, eos, ice)
    end subroutine test_idempotent
+
+   subroutine test_pot_prac_bits(error)
+      !! (d) pot_prac default: the bank is EXACTLY rho*3992*(h*(T_f - T)) --
+      !! the `eos%c_p` read is bit-identical to the old SEAWATER_CP constant.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(eos_t) :: eos
+      type(ocean_sea_ice_t) :: ice
+      real(wp) :: t_f, t_sfc, expected
+      integer :: ip, jp
+      checks: block
+         call setup_state(grid, ms, eos, ice, T_COLD)
+         t_f = eos_freezing_point(eos, S_INIT, 0.0_wp)
+         t_sfc = (T_COLD*H_LAYER)/H_LAYER
+         expected = 0.0_wp + RHO_WATER*SEAWATER_CP*(H_LAYER*(t_f - t_sfc))
+         call run_frazil(grid, eos, ms, ice)
+         ip = grid%nx_total/2
+         jp = grid%ny_total/2
+         call check(error, ice%frazil_heat(ip, jp) == expected, &
+                    "pot_prac bank must be bit-identical to rho*SEAWATER_CP*h*(Tf-T)")
+      end block checks
+      call teardown(ms, eos, ice)
+   end subroutine test_pot_prac_bits
+
+   subroutine test_cons_abs_onset(error)
+      !! (a)+(c) cons_abs + teos_poly at SA = 35.16504, p = 0: the onset is
+      !! the CT liquidus ct_freezing_poly = -1.9165 degC (below the linear
+      !! -1.899, so a cell at -1.905 is NOT supercooled), a cell at -3 banks
+      !! rho*c_p*h*(CT_f - CT) with c_p taken from the knob (4100, not 3992),
+      !! and the cell is clamped to CT_f.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(eos_t) :: eos
+      type(ocean_sea_ice_t) :: ice
+      real(wp), parameter :: SA = 35.16504_wp
+      real(wp), parameter :: CP_TEST = 4100.0_wp
+      real(wp) :: ct_f, t_lin, expected
+      integer :: ip, jp
+      checks: block
+         ! --- no frazil between the two liquidi (-1.905 < -1.899 linear) ---
+         call setup_state(grid, ms, eos, ice, -1.905_wp)
+         t_lin = eos_freezing_point(eos, SA, 0.0_wp)
+         call eos_apply_ts_convention(eos, TS_CONS_ABS, TFREEZE_FORM_TEOS_POLY, 0.0_wp)
+         eos%c_p = CP_TEST
+         ms%tracers(ms%idx_salinity)%hTr = SA*H_LAYER
+         ct_f = eos_freezing_point(eos, SA, 0.0_wp)
+         call check(error, abs(ct_f - ct_freezing_poly(SA, 0.0_wp, 0.0_wp)) < 1.0e-14_wp, &
+                    "cons_abs onset must be ct_freezing_poly(SA, 0, 0)")
+         if (allocated(error)) exit checks
+         call check(error, abs(ct_f + 1.92_wp) < 0.01_wp .and. ct_f < t_lin - 0.01_wp, &
+                    "CT_f ~ -1.9165 degC, shifted DOWN against the linear -1.899")
+         if (allocated(error)) exit checks
+         call run_frazil(grid, eos, ms, ice)
+         ip = grid%nx_total/2
+         jp = grid%ny_total/2
+         call check(error, ice%frazil_heat(ip, jp) == 0.0_wp, &
+                    "-1.905 is above CT_f: no frazil under cons_abs")
+         if (allocated(error)) exit checks
+         call teardown(ms, eos, ice)
+
+         ! --- supercooled: bank uses c_p from the knob, clamp to CT_f ---
+         call setup_state(grid, ms, eos, ice, T_COLD)
+         call eos_apply_ts_convention(eos, TS_CONS_ABS, TFREEZE_FORM_TEOS_POLY, 0.0_wp)
+         eos%c_p = CP_TEST
+         ms%tracers(ms%idx_salinity)%hTr = SA*H_LAYER
+         call run_frazil(grid, eos, ms, ice)
+         expected = RHO_WATER*CP_TEST*H_LAYER*(ct_f - T_COLD)
+         call check(error, abs(ice%frazil_heat(ip, jp) - expected) < 1.0e-9_wp*expected, &
+                    "cons_abs bank must be rho*c_p(knob)*h*(CT_f - CT)")
+         if (allocated(error)) exit checks
+         call check(error, abs(ms%tracers(ms%idx_temperature)%hTr(ip, jp, NZ)/H_LAYER - ct_f) &
+                    < 1.0e-12_wp, "surface CT clamped to CT_f")
+      end block checks
+      call teardown(ms, eos, ice)
+   end subroutine test_cons_abs_onset
 
 end module test_ocean_frazil

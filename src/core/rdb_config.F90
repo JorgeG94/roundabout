@@ -1277,10 +1277,12 @@ module rdb_config
          !!     are labelled `sea_water_conservative_temperature` /
          !!     `sea_water_absolute_salinity`.
          !!
-         !! `cons_abs` REQUIRES `eos` in {roquet_rho, roquet_spv}, and is
-         !! refused (fail-loud) with `&ocean_ice_nml enable` (PR-4 will
-         !! convert at the coupler boundary), with `&ocean_cavity_melt_nml
-         !! enable` (its liquidus is undecided).
+         !! `cons_abs` REQUIRES `eos` in {roquet_rho, roquet_spv}.  It is
+         !! supported with `&ocean_ice_nml enable`: the ice-ocean boundary
+         !! converts once (theta = pt_from_ct(SA, CT), SP = sp_from_sr(SA),
+         !! theta freezing point), so the ice stays theta/SP while the ocean
+         !! heat budget stays CT/SA.  It is refused (fail-loud) with
+         !! `&ocean_cavity_melt_nml enable` (its liquidus is undecided).
          !!
          !! The other consumers convert or are in the model convention:
          !!   * a file `&ocean_zinit_nml` holding theta / SP
