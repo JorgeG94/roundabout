@@ -661,6 +661,9 @@ contains
       pl => cfg%ocean%hvisc%bound_thin_layer
       call g%add(nml_logical("bound_thin_layer", pl, &
                              "stress_tensor: thin-layer ratio on Kh bound + harmonic corner thickness + T-masked h_u/h_v"))
+      pl => cfg%ocean%hvisc%biharm_stress
+      call g%add(nml_logical("biharm_stress", pl, &
+                             "stress_tensor: biharmonic inside the stress tensor with the joint Laplacian+biharmonic bound"))
       pl => cfg%ocean%hvisc%kh_bg_at_points
       call g%add(nml_logical("kh_bg_at_points", pl, &
                              "stress_tensor: Laplacian floor (vel-scale, sin-lat) built AT T and corner points"))

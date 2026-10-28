@@ -896,6 +896,7 @@ Lateral-viscosity closure + coefficients.
 | `kh_sin_lat` | `0.0000000000E+00` | m^2/s | Latitude Laplacian viscosity floor kh_sin_lat*|sin(lat)|^kh_pwr_of_sine (0=off; MOM6 KH_SIN_LAT) |
 | `kh_pwr_of_sine` | `0.4000000000E+01` |  | Exponent of |sin(lat)| in the kh_sin_lat floor (MOM6 KH_PWR_OF_SINE) |
 | `bound_thin_layer` | `.false.` |  | stress_tensor: thin-layer ratio on Kh bound + harmonic corner thickness + T-masked h_u/h_v |
+| `biharm_stress` | `.false.` |  | stress_tensor: biharmonic inside the stress tensor with the joint Laplacian+biharmonic bound |
 | `kh_bg_at_points` | `.false.` |  | stress_tensor: Laplacian floor (vel-scale, sin-lat) built AT T and corner points |
 | `ah_vel_scale` | `0.0000000000E+00` | m/s | Biharmonic velocity-scale floor Ah>=U*Delta^3 under smag_ah (0=off; MOM6 AH_VEL_SCALE) |
 | `bound_coriolis_biharm` | `.false.` |  | Coriolis bound on the Smagorinsky biharmonic (needs smag_ah; MOM6 BOUND_CORIOLIS_BIHARM) |

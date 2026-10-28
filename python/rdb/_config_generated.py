@@ -4963,6 +4963,14 @@ class OceanHvisc(Group):
         default=False,
     )
 
+    biharm_stress = Bool(
+        'biharm_stress',
+        doc='stress_tensor: biharmonic inside the stress tensor with the joint Laplacian+biharmonic bound',
+        units='',
+        required=False,
+        default=False,
+    )
+
     kh_bg_at_points = Bool(
         'kh_bg_at_points',
         doc='stress_tensor: Laplacian floor (vel-scale, sin-lat) built AT T and corner points',
@@ -7254,4 +7262,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 63
-N_KNOBS = 798
+N_KNOBS = 799

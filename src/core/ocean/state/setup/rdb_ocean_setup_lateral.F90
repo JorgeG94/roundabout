@@ -71,6 +71,18 @@ contains
             cfg%ocean%hvisc%kh_vel_scale, cfg%ocean%hvisc%kh_sin_lat, &
             cfg%ocean%hvisc%kh_pwr_of_sine)
       end if
+      ! Stress-form biharmonic statics (needs nu_4 on the hvisc slot, set by the
+      ! grid setup before this routine).  The strain-rate Smagorinsky fill of
+      ! `nu4_face_*` is then dead work (the velocity add-on is skipped), so it
+      ! is switched off.
+      if (cfg%ocean%hvisc%biharm_stress) then
+         call ocean_state%hvisc%build_biharm_stress( &
+            ocean_state%metrics, ocean_state%coriolis_adv%f_corner, &
+            cfg%ocean%hvisc%ah_vel_scale, cfg%ocean%hvisc%smag_bi_const, &
+            cfg%ocean%hvisc%smag_ah, cfg%ocean%hvisc%bound_coriolis_biharm, &
+            cfg%ocean%hvisc%bound_coriolis_vel)
+         ocean_state%lateral_mix%smag_ah_active = .false.
+      end if
       ocean_state%lateral_mix%c_leith_bi = cfg%ocean%hvisc%c_leith_bi
       ocean_state%lateral_mix%nu4_bg = cfg%ocean%hvisc%nu_4_bg
       ocean_state%lateral_mix%nu4_max = cfg%ocean%hvisc%nu_4_max

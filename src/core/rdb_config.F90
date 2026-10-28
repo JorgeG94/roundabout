@@ -1598,6 +1598,22 @@ module rdb_config
          !! the face thicknesses are masked by the T wet mask (Griffies &
          !! Hallberg 2000).  Required for stress-form viscosity on z* columns
          !! with vanished layers.  Default `.false.` ⇒ bit-identical.
+      logical :: biharm_stress = .false.
+         !! Stress-tensor path only (fails loud without `stress_tensor`, with
+         !! `no_slip`, with `lateral_closure='leith_biharm'`, or with no
+         !! biharmonic coefficient configured): fold the biharmonic into the
+         !! stress tensor (Griffies & Hallberg 2000) -
+         !! `sigma_xx = h_T(Kh e - Ah e2)`, `sigma_xy = h_q wet_q (Kh s - Ah s2)` with
+         !! `e2`/`s2` the strains of the stress-form Laplacian - so it is
+         !! thickness-weighted, coast-masked and momentum-conserving.
+         !! `Ah = max(max(nu_4, ah_vel_scale·Δ³), |S|(C_b Δ⁴ + Δ⁶ f|S|/(5V²)))`
+         !! (Smagorinsky terms need `smag_ah`; `|S|` is built square-then-
+         !! average; `nu_4` is the constant `AH`; `nu_4_bg`/`nu_4_max` are not
+         !! consulted), bounded jointly with the Laplacian: the Laplacian takes
+         !! its stability budget first and `Ah <= rho·r·Ah_max` with
+         !! `rho = 1 - Kh/(r Kh_max)` and `Ah_max` from the discrete stencil
+         !! (`bound_coef·0.5/(dt·D4)`).  The velocity-form add-on is skipped.
+         !! Default `.false.` ⇒ bit-identical.
       logical :: kh_bg_at_points = .false.
          !! Stress-tensor path only (fails loud without `stress_tensor`):
          !! build the static Laplacian floor AT the T centres and AT the Bu

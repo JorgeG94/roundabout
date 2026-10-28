@@ -18,7 +18,7 @@ contains
                                        lateral_closure_is_implemented, &
                                        lateral_closure_conflicts_smag_ah, &
                                        has_biharmonic_backstop, &
-                                       leith_biharm_is_inert
+                                       leith_biharm_is_inert, LMIX_LEITH_BIHARM
       use rdb_ocean_horizontal_viscosity, only: aniso_mode_is_implemented
       use rdb_vcoord, only: parse_vcoord_type, vcoord_h_min_is_coherent, &
                             parse_z_fixed_profile, z_fixed_nominal_dz, &
@@ -998,6 +998,31 @@ contains
                               "stress_tensor=.true. - the thin-layer ratio and harmonic "// &
                               "corner thickness act only in the stress-form assembly")
             has_error = .true.
+         end if
+         if (cfg%ocean%hvisc%biharm_stress) then
+            if (.not. cfg%ocean%hvisc%stress_tensor) then
+               call logger%error("&ocean_hvisc_nml biharm_stress=.true. requires "// &
+                                 "stress_tensor=.true. - the biharmonic is folded into "// &
+                                 "the stress tensor assembly")
+               has_error = .true.
+            end if
+            if (cfg%ocean%hvisc%no_slip) then
+               call logger%error("&ocean_hvisc_nml biharm_stress=.true. is incompatible "// &
+                                 "with no_slip=.true. (the biharmonic is free-slip only)")
+               has_error = .true.
+            end if
+            if (lateral_closure_code == LMIX_LEITH_BIHARM) then
+               call logger%error("&ocean_hvisc_nml biharm_stress=.true. is incompatible "// &
+                                 "with lateral_closure='leith_biharm' (its nu4 field "// &
+                                 "is not consumed by the stress-form biharmonic)")
+               has_error = .true.
+            end if
+            if (.not. (cfg%ocean%hvisc%nu_4 > 0.0_wp .or. &
+                       (cfg%ocean%hvisc%smag_ah .and. cfg%ocean%hvisc%smag_bi_const > 0.0_wp))) then
+               call logger%error("&ocean_hvisc_nml biharm_stress=.true. needs a biharmonic "// &
+                                 "coefficient: nu_4>0 or smag_ah=.true. with smag_bi_const>0")
+               has_error = .true.
+            end if
          end if
          if (cfg%ocean%hvisc%kh_bg_at_points .and. .not. cfg%ocean%hvisc%stress_tensor) then
             call logger%error("&ocean_hvisc_nml kh_bg_at_points=.true. requires "// &

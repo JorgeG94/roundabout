@@ -52,8 +52,11 @@ module rdb_ocean_horizontal_viscosity
    !! `stress_tensor`, the harmonic part is momentum-conserving and
    !! coast-masked while the velocity-form biharmonic part is neither
    !! (a documented fidelity divergence from MOM6, which sums both into
-   !! one stress tensor before differencing — porting the biharmonic
-   !! into the stress tensor is a follow-on PR, not this module today).
+   !! one stress tensor before differencing).  `biharm_stress` closes that
+   !! gap: the biharmonic is assembled from the strains of the stress-form
+   !! Laplacian into a thickness-weighted stress (Griffies & Hallberg
+   !! 2000), jointly bounded with the Laplacian, and the velocity-form
+   !! add-on is skipped.
    use rdb_constants, only: wp, H_VANISHED, H_DIV_EPS, PI
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
@@ -103,6 +106,29 @@ module rdb_ocean_horizontal_viscosity
          !! the velocity Laplacian `A·∇²u`.  Default false ⇒
          !! bit-identical to the historical kernel.  See the module
          !! header for the operator form.
+      logical :: biharm_stress = .false.
+         !! Stress path only.  Fold the biharmonic INTO the stress tensor
+         !! (Griffies & Hallberg 2000): `sigma = h·(Kh·e - Ah·e2)` at T and
+         !! `h_q·(Kh·s - Ah·s2)·wet_q` at Bu, with `e2`/`s2` the strains of the
+         !! stress-form Laplacian, so the biharmonic is thickness-weighted,
+         !! coast-masked and momentum-conserving.  The velocity-form add-on
+         !! (`nu_4`, `smag_ah`, `leith_biharm`) is skipped.  Default off.
+      type(scratch_3d_buffer_t) :: ah4_t
+         !! Biharmonic viscosity `Ah` at T, `(nx, ny, nz)` (m^4/s), after the
+         !! joint Laplacian + biharmonic bound.
+      type(scratch_3d_buffer_t) :: ah4_q
+         !! Same at the Bu corners `(nx+1, ny+1, nz)`.
+      real(wp), allocatable :: bh_bg_t(:, :), bh_bg_q(:, :)
+         !! Static biharmonic floor `max(AH, c_A·Delta^3)` at T / Bu.
+      real(wp), allocatable :: bh_sm_t(:, :), bh_sm_q(:, :)
+         !! Smagorinsky factor `C_b·Delta^4` (0 when Smagorinsky is off).
+      real(wp), allocatable :: bh_cr_t(:, :), bh_cr_q(:, :)
+         !! Coriolis-bound factor `Delta^6·f/(5V^2)` (`f` = max|f| of the four
+         !! corners at T, |f| at Bu); 0 when the bound is off.
+      real(wp), allocatable :: bh_mx_t(:, :), bh_mx_q(:, :)
+         !! `1/D4` of the discrete biharmonic stencil (m^4): the forward-Euler
+         !! limit is `Ah_max = bound_coef·0.5/(dt·D4)`.  Uniform square grid:
+         !! `D4 = 32/Delta^4`.
       logical :: kh_bg_at_points = .false.
          !! Stress path: max-combine the point statics `kh_bg_t`/`kh_bg_q`
          !! into the T/corner coefficient seed (see `build_kh_bg_points`).
@@ -225,6 +251,7 @@ module rdb_ocean_horizontal_viscosity
    contains
       procedure, non_overridable :: init => ocean_hvisc_init
       procedure, non_overridable :: build_kh_bg_points => ocean_hvisc_build_kh_bg_points
+      procedure, non_overridable :: build_biharm_stress => ocean_hvisc_build_biharm_stress
       procedure, non_overridable :: destroy => ocean_hvisc_destroy
       procedure, non_overridable :: enter_data => ocean_hvisc_enter_data
       procedure, non_overridable :: exit_data => ocean_hvisc_exit_data
@@ -256,6 +283,8 @@ contains
       call this%str_xy%init(nx + 1, ny + 1, nz, "ocean_hvisc_str_xy")
       call this%ah_t%init(nx, ny, nz, "ocean_hvisc_ah_t")
       call this%ah_q%init(nx + 1, ny + 1, nz, "ocean_hvisc_ah_q")
+      call this%ah4_t%init(nx, ny, nz, "ocean_hvisc_ah4_t")
+      call this%ah4_q%init(nx + 1, ny + 1, nz, "ocean_hvisc_ah4_q")
       allocate (this%ke_diss(nx, ny), source=0.0_wp)
       this%is_init = .true.
    end subroutine ocean_hvisc_init
@@ -271,6 +300,13 @@ contains
       call this%str_xy%destroy()
       call this%ah_t%destroy()
       call this%ah_q%destroy()
+      call this%ah4_t%destroy()
+      call this%ah4_q%destroy()
+      this%biharm_stress = .false.
+      if (allocated(this%bh_bg_t)) then
+         deallocate (this%bh_bg_t, this%bh_bg_q, this%bh_sm_t, this%bh_sm_q, &
+                     this%bh_cr_t, this%bh_cr_q, this%bh_mx_t, this%bh_mx_q)
+      end if
       if (allocated(this%ke_diss)) deallocate (this%ke_diss)
       if (allocated(this%kh_bg_t)) deallocate (this%kh_bg_t)
       if (allocated(this%kh_bg_q)) deallocate (this%kh_bg_q)
@@ -317,6 +353,251 @@ contains
       end do
       this%kh_bg_at_points = .true.
    end subroutine ocean_hvisc_build_kh_bg_points
+
+   subroutine ocean_hvisc_build_biharm_stress(this, metrics, f_corner, ah_vel_scale, smag_bi_const, &
+                                              smag_on, cor_on, cor_vel)
+      !! Host-side, once at configure and BEFORE `enter_data`: build the
+      !! 2-D statics of the stress-form biharmonic (`biharm_stress`) at the T
+      !! centres and the Bu corners:
+      !!   floor      `max(AH, c_A·Delta^3)`        (`AH` = `this%nu_4`)
+      !!   Smag       `C_b·Delta^4`                  (0 unless `smag_on`)
+      !!   Coriolis   `Delta^6·f/(5·V^2)`            (0 unless `smag_on .and. cor_on`)
+      !!   stencil    `1/D4`, the discrete forward-Euler limit of the
+      !!              biharmonic stress divergence (Griffies & Hallberg 2000):
+      !!              `Ah_max = bound_coef·0.5/(dt·D4)`; `D4 = 32/Delta^4` on a
+      !!              uniform square grid, so `Ah_max = c_b·Delta^4/(64·dt)`.
+      !! `Delta^2 = 2·dx^2·dy^2/(dx^2+dy^2)`.  `D4` is the larger of the u-row and
+      !! v-row absolute coefficient sums of `div(Ah·strain(L(u)))`, `L` the
+      !! stress-form Laplacian; cells whose stencil leaves the interior copy the
+      !! nearest fully interior value.
+      class(ocean_horizontal_viscosity_t), intent(inout) :: this
+      type(ocean_metrics_t), intent(in) :: metrics
+      real(wp), intent(in) :: f_corner(:, :)
+      real(wp), intent(in) :: ah_vel_scale, smag_bi_const, cor_vel
+      logical, intent(in) :: smag_on, cor_on
+      real(wp), parameter :: BIG = 1.0e30_wp
+      integer :: nx, ny, i, j, il, ih, jl, jh, ic, jc
+      real(wp) :: d2, d4r, ru, rv, fm, cc
+
+      nx = size(metrics%dx2h, 1)
+      ny = size(metrics%dx2h, 2)
+      if (size(f_corner, 1) < nx + 1 .or. size(f_corner, 2) < ny + 1) then
+         error stop "ocean_hvisc_build_biharm_stress: f_corner smaller than (nx+1, ny+1)"
+      end if
+      if (allocated(this%bh_bg_t)) then
+         deallocate (this%bh_bg_t, this%bh_bg_q, this%bh_sm_t, this%bh_sm_q, &
+                     this%bh_cr_t, this%bh_cr_q, this%bh_mx_t, this%bh_mx_q)
+      end if
+      allocate (this%bh_bg_t(nx, ny), this%bh_sm_t(nx, ny), this%bh_cr_t(nx, ny), this%bh_mx_t(nx, ny))
+      allocate (this%bh_bg_q(nx + 1, ny + 1), this%bh_sm_q(nx + 1, ny + 1), &
+                this%bh_cr_q(nx + 1, ny + 1), this%bh_mx_q(nx + 1, ny + 1))
+      this%bh_mx_t = BIG
+      this%bh_mx_q = BIG
+      cc = 1.0_wp/(5.0_wp*cor_vel*cor_vel)
+
+      do j = 1, ny
+         do i = 1, nx
+            d2 = harm_len2(metrics%dx2h(i, j), metrics%dy2h(i, j))
+            this%bh_bg_t(i, j) = max(this%nu_4, ah_vel_scale*d2*sqrt(d2))
+            this%bh_sm_t(i, j) = 0.0_wp
+            this%bh_cr_t(i, j) = 0.0_wp
+            if (smag_on) then
+               this%bh_sm_t(i, j) = smag_bi_const*d2*d2
+               if (cor_on) then
+                  fm = max(abs(f_corner(i, j)), abs(f_corner(i + 1, j)), &
+                           abs(f_corner(i, j + 1)), abs(f_corner(i + 1, j + 1)))
+                  this%bh_cr_t(i, j) = d2*d2*d2*fm*cc
+               end if
+            end if
+         end do
+      end do
+      do j = 1, ny + 1
+         do i = 1, nx + 1
+            d2 = harm_len2(metrics%dx2q(i, j), metrics%dy2q(i, j))
+            this%bh_bg_q(i, j) = max(this%nu_4, ah_vel_scale*d2*sqrt(d2))
+            this%bh_sm_q(i, j) = 0.0_wp
+            this%bh_cr_q(i, j) = 0.0_wp
+            if (smag_on) then
+               this%bh_sm_q(i, j) = smag_bi_const*d2*d2
+               if (cor_on) this%bh_cr_q(i, j) = d2*d2*d2*abs(f_corner(i, j))*cc
+            end if
+         end do
+      end do
+
+      ! ---- stencil bound 1/D4: T cells with a fully interior stencil ----
+      il = 2
+      ih = nx - 1
+      jl = 2
+      jh = ny - 1
+      if (ih >= il .and. jh >= jl) then
+         do j = jl, jh
+            do i = il, ih
+               ru = metrics%dy2h(i, j)* &
+                    (metrics%dy_dxT(i, j)*(metrics%idyCu(i + 1, j)*uu(i + 1, j) + metrics%idyCu(i, j)*uu(i, j)) + &
+                     metrics%dx_dyT(i, j)*(metrics%idxCv(i, j + 1)*vu(i, j + 1) + metrics%idxCv(i, j)*vu(i, j)))* &
+                    max(metrics%idyCu(i + 1, j)*metrics%iareaCu(i + 1, j), metrics%idyCu(i, j)*metrics%iareaCu(i, j))
+               rv = metrics%dx2h(i, j)* &
+                    (metrics%dy_dxT(i, j)*(metrics%idyCu(i + 1, j)*uv(i + 1, j) + metrics%idyCu(i, j)*uv(i, j)) + &
+                     metrics%dx_dyT(i, j)*(metrics%idxCv(i, j + 1)*vv(i, j + 1) + metrics%idxCv(i, j)*vv(i, j)))* &
+                    max(metrics%idxCv(i, j + 1)*metrics%iareaCv(i, j + 1), metrics%idxCv(i, j)*metrics%iareaCv(i, j))
+               d4r = max(ru, rv)
+               if (d4r > 0.0_wp) this%bh_mx_t(i, j) = 1.0_wp/d4r
+            end do
+         end do
+         do j = 1, ny
+            do i = 1, nx
+               ic = min(max(i, il), ih)
+               jc = min(max(j, jl), jh)
+               this%bh_mx_t(i, j) = this%bh_mx_t(ic, jc)
+            end do
+         end do
+      end if
+      ! ---- corners: u-faces (I,J),(I,J-1) and v-faces (I,J),(I-1,J) interior ----
+      il = 3
+      ih = nx - 1
+      jl = 3
+      jh = ny - 1
+      if (ih >= il .and. jh >= jl) then
+         do j = jl, jh
+            do i = il, ih
+               ru = metrics%dx2q(i, j)* &
+                    (metrics%dy_dxBu(i, j)*(metrics%idyCv(i, j)*vu(i, j) + metrics%idyCv(i - 1, j)*vu(i - 1, j)) + &
+                     metrics%dx_dyBu(i, j)*(metrics%idxCu(i, j)*uu(i, j) + metrics%idxCu(i, j - 1)*uu(i, j - 1)))* &
+                    max(metrics%idxCu(i, j)*metrics%iareaCu(i, j), metrics%idxCu(i, j - 1)*metrics%iareaCu(i, j - 1))
+               rv = metrics%dy2q(i, j)* &
+                    (metrics%dy_dxBu(i, j)*(metrics%idyCv(i, j)*vv(i, j) + metrics%idyCv(i - 1, j)*vv(i - 1, j)) + &
+                     metrics%dx_dyBu(i, j)*(metrics%idxCu(i, j)*uv(i, j) + metrics%idxCu(i, j - 1)*uv(i, j - 1)))* &
+                    max(metrics%idyCv(i, j)*metrics%iareaCv(i, j), metrics%idyCv(i - 1, j)*metrics%iareaCv(i - 1, j))
+               d4r = max(ru, rv)
+               if (d4r > 0.0_wp) this%bh_mx_q(i, j) = 1.0_wp/d4r
+            end do
+         end do
+         do j = 1, ny + 1
+            do i = 1, nx + 1
+               ic = min(max(i, il), ih)
+               jc = min(max(j, jl), jh)
+               this%bh_mx_q(i, j) = this%bh_mx_q(ic, jc)
+            end do
+         end do
+      end if
+      this%biharm_stress = .true.
+
+   contains
+
+      pure function harm_len2(a2, b2) result(d2)
+         real(wp), intent(in) :: a2, b2
+         real(wp) :: d2
+         d2 = 0.0_wp
+         if (a2 + b2 > 0.0_wp) d2 = 2.0_wp*a2*b2/(a2 + b2)
+      end function harm_len2
+
+      ! Sums of |coefficients| of the stress-form Laplacian L at a face:
+      ! uu = dL_u/du at u-face (I,j); vu = dL_v/du at v-face (i,J);
+      ! uv = dL_u/dv at u-face (I,j); vv = dL_v/dv at v-face (i,J).
+      ! Faces outside the interior (tendency pinned to 0) give 0.
+      pure function uu(ii, jj) result(r)
+         integer, intent(in) :: ii, jj
+         real(wp) :: r
+         r = 0.0_wp
+         if (ii < 2 .or. ii > nx .or. jj < 2 .or. jj > ny - 1) return
+         r = metrics%iareaCu(ii, jj)*(metrics%idyCu(ii, jj)*(tu_u(ii - 1, jj) + tu_u(ii, jj)) + &
+                                      metrics%idxCu(ii, jj)*(qu_u(ii, jj + 1) + qu_u(ii, jj)))
+      end function uu
+
+      pure function uv(ii, jj) result(r)
+         integer, intent(in) :: ii, jj
+         real(wp) :: r
+         r = 0.0_wp
+         if (ii < 2 .or. ii > nx .or. jj < 2 .or. jj > ny - 1) return
+         r = metrics%iareaCu(ii, jj)*(metrics%idyCu(ii, jj)*(tu_v(ii - 1, jj) + tu_v(ii, jj)) + &
+                                      metrics%idxCu(ii, jj)*(qu_v(ii, jj + 1) + qu_v(ii, jj)))
+      end function uv
+
+      pure function vu(ii, jj) result(r)
+         integer, intent(in) :: ii, jj
+         real(wp) :: r
+         r = 0.0_wp
+         if (ii < 2 .or. ii > nx - 1 .or. jj < 2 .or. jj > ny) return
+         r = metrics%iareaCv(ii, jj)*(metrics%idyCv(ii, jj)*(qv_u(ii + 1, jj) + qv_u(ii, jj)) + &
+                                      metrics%idxCv(ii, jj)*(tv_u(ii, jj) + tv_u(ii, jj - 1)))
+      end function vu
+
+      pure function vv(ii, jj) result(r)
+         integer, intent(in) :: ii, jj
+         real(wp) :: r
+         r = 0.0_wp
+         if (ii < 2 .or. ii > nx - 1 .or. jj < 2 .or. jj > ny) return
+         r = metrics%iareaCv(ii, jj)*(metrics%idyCv(ii, jj)*(qv_v(ii + 1, jj) + qv_v(ii, jj)) + &
+                                      metrics%idxCv(ii, jj)*(tv_v(ii, jj) + tv_v(ii, jj - 1)))
+      end function vv
+
+      ! Tension (T) and shear (Bu) strain pieces, weighted by the stress-flux
+      ! metric (dy^2 at T / dx^2 at Bu for L_u; dx^2 at T / dy^2 at Bu for L_v).
+      pure function tu_u(ii, jj) result(r)
+         integer, intent(in) :: ii, jj
+         real(wp) :: r
+         r = 0.0_wp
+         if (ii < 1 .or. ii > nx .or. jj < 1 .or. jj > ny) return
+         r = metrics%dy2h(ii, jj)*metrics%dy_dxT(ii, jj)*(metrics%idyCu(ii + 1, jj) + metrics%idyCu(ii, jj))
+      end function tu_u
+
+      pure function tu_v(ii, jj) result(r)
+         integer, intent(in) :: ii, jj
+         real(wp) :: r
+         r = 0.0_wp
+         if (ii < 1 .or. ii > nx .or. jj < 1 .or. jj > ny) return
+         r = metrics%dy2h(ii, jj)*metrics%dx_dyT(ii, jj)*(metrics%idxCv(ii, jj + 1) + metrics%idxCv(ii, jj))
+      end function tu_v
+
+      pure function qu_u(ii, jj) result(r)
+         integer, intent(in) :: ii, jj
+         real(wp) :: r
+         r = 0.0_wp
+         if (ii < 2 .or. ii > nx .or. jj < 2 .or. jj > ny) return
+         r = metrics%dx2q(ii, jj)*metrics%dx_dyBu(ii, jj)*(metrics%idxCu(ii, jj) + metrics%idxCu(ii, jj - 1))
+      end function qu_u
+
+      pure function qu_v(ii, jj) result(r)
+         integer, intent(in) :: ii, jj
+         real(wp) :: r
+         r = 0.0_wp
+         if (ii < 2 .or. ii > nx .or. jj < 2 .or. jj > ny) return
+         r = metrics%dx2q(ii, jj)*metrics%dy_dxBu(ii, jj)*(metrics%idyCv(ii, jj) + metrics%idyCv(ii - 1, jj))
+      end function qu_v
+
+      pure function tv_u(ii, jj) result(r)
+         integer, intent(in) :: ii, jj
+         real(wp) :: r
+         r = 0.0_wp
+         if (ii < 1 .or. ii > nx .or. jj < 1 .or. jj > ny) return
+         r = metrics%dx2h(ii, jj)*metrics%dy_dxT(ii, jj)*(metrics%idyCu(ii + 1, jj) + metrics%idyCu(ii, jj))
+      end function tv_u
+
+      pure function tv_v(ii, jj) result(r)
+         integer, intent(in) :: ii, jj
+         real(wp) :: r
+         r = 0.0_wp
+         if (ii < 1 .or. ii > nx .or. jj < 1 .or. jj > ny) return
+         r = metrics%dx2h(ii, jj)*metrics%dx_dyT(ii, jj)*(metrics%idxCv(ii, jj + 1) + metrics%idxCv(ii, jj))
+      end function tv_v
+
+      pure function qv_u(ii, jj) result(r)
+         integer, intent(in) :: ii, jj
+         real(wp) :: r
+         r = 0.0_wp
+         if (ii < 2 .or. ii > nx .or. jj < 2 .or. jj > ny) return
+         r = metrics%dy2q(ii, jj)*metrics%dx_dyBu(ii, jj)*(metrics%idxCu(ii, jj) + metrics%idxCu(ii, jj - 1))
+      end function qv_u
+
+      pure function qv_v(ii, jj) result(r)
+         integer, intent(in) :: ii, jj
+         real(wp) :: r
+         r = 0.0_wp
+         if (ii < 2 .or. ii > nx .or. jj < 2 .or. jj > ny) return
+         r = metrics%dy2q(ii, jj)*metrics%dy_dxBu(ii, jj)*(metrics%idyCv(ii, jj) + metrics%idyCv(ii - 1, jj))
+      end function qv_v
+
+   end subroutine ocean_hvisc_build_biharm_stress
 
    pure subroutine ocean_hvisc_set_aniso_direction(this, n1, n2)
       !! Precompute the constant Smith & McWilliams (2003) direction-
@@ -380,9 +661,15 @@ contains
       call scratch_3d_buffer_enter_data_impl(this%str_xy)
       call scratch_3d_buffer_enter_data_impl(this%ah_t)
       call scratch_3d_buffer_enter_data_impl(this%ah_q)
+      call scratch_3d_buffer_enter_data_impl(this%ah4_t)
+      call scratch_3d_buffer_enter_data_impl(this%ah4_q)
       !$acc enter data copyin(this%ke_diss)
       if (allocated(this%kh_bg_t)) then
          !$acc enter data copyin(this%kh_bg_t, this%kh_bg_q)
+      end if
+      if (allocated(this%bh_bg_t)) then
+         !$acc enter data copyin(this%bh_bg_t, this%bh_bg_q, this%bh_sm_t, this%bh_sm_q)
+         !$acc enter data copyin(this%bh_cr_t, this%bh_cr_q, this%bh_mx_t, this%bh_mx_q)
       end if
    end subroutine ocean_hvisc_enter_data_impl
 
@@ -404,6 +691,12 @@ contains
       call scratch_3d_buffer_exit_data_impl(this%str_xy)
       call scratch_3d_buffer_exit_data_impl(this%ah_t)
       call scratch_3d_buffer_exit_data_impl(this%ah_q)
+      call scratch_3d_buffer_exit_data_impl(this%ah4_t)
+      call scratch_3d_buffer_exit_data_impl(this%ah4_q)
+      if (allocated(this%bh_bg_t)) then
+         !$acc exit data delete(this%bh_bg_t, this%bh_bg_q, this%bh_sm_t, this%bh_sm_q)
+         !$acc exit data delete(this%bh_cr_t, this%bh_cr_q, this%bh_mx_t, this%bh_mx_q)
+      end if
       if (allocated(this%kh_bg_t)) then
          !$acc exit data delete(this%kh_bg_q, this%kh_bg_t)
       end if
@@ -594,6 +887,39 @@ contains
             metrics%wet_u, metrics%wet_v, metrics%wet_q, &
             metrics%wet_T, this%bound_thin_layer, &
             nx, ny, nz)
+
+         ! Step C (biharm_stress): the biharmonic as part of the stress tensor,
+         ! added to the Laplacian divergence just written.  `str_xx`/`str_xy`
+         ! are lent as strain scratch (their Laplacian values are consumed).
+         if (this%biharm_stress) then
+            call hvisc_bh_strains( &
+               u, v, this%str_xx%data, this%str_xy%data, &
+               metrics%idxCu, metrics%idyCu, metrics%idxCv, metrics%idyCv, &
+               metrics%dy_dxT, metrics%dx_dyT, metrics%dy_dxBu, metrics%dx_dyBu, &
+               metrics%wet_u, metrics%wet_v, metrics%wet_q, nx, ny, nz)
+            call hvisc_bh_ah( &
+               this%str_xx%data, this%str_xy%data, this%ah_t%data, this%ah_q%data, &
+               this%ah4_t%data, this%ah4_q%data, h, metrics%wet_T, this%bound_thin_layer, &
+               this%bound_coef, dt_local, &
+               this%bh_bg_t, this%bh_sm_t, this%bh_cr_t, this%bh_mx_t, &
+               this%bh_bg_q, this%bh_sm_q, this%bh_cr_q, this%bh_mx_q, &
+               metrics%idxT, metrics%idyT, metrics%idxCu, metrics%idyCu, &
+               metrics%idxCv, metrics%idyCv, metrics%iareaCu, metrics%iareaCv, nx, ny, nz)
+            call hvisc_bh_laplacian( &
+               this%str_xx%data, this%str_xy%data, this%lap_u%data, this%lap_v%data, &
+               metrics%idxCu, metrics%idyCu, metrics%idxCv, metrics%idyCv, &
+               metrics%dx2h, metrics%dy2h, metrics%dx2q, metrics%dy2q, &
+               metrics%iareaCu, metrics%iareaCv, metrics%wet_u, metrics%wet_v, nx, ny, nz)
+            call hvisc_bh_divergence( &
+               this%lap_u%data, this%lap_v%data, h, this%str_xx%data, this%str_xy%data, &
+               this%ah4_t%data, this%ah4_q%data, this%du_visc%data, this%dv_visc%data, &
+               metrics%idxCu, metrics%idyCu, metrics%idxCv, metrics%idyCv, &
+               metrics%dx2h, metrics%dy2h, metrics%dx2q, metrics%dy2q, &
+               metrics%dy_dxT, metrics%dx_dyT, metrics%dy_dxBu, metrics%dx_dyBu, &
+               metrics%iareaCu, metrics%iareaCv, &
+               metrics%wet_u, metrics%wet_v, metrics%wet_q, metrics%wet_T, &
+               this%bound_thin_layer, nx, ny, nz)
+         end if
          ! Outer shim: dereference the multilayer + lateral-mix + this
          ! components on host, then dispatch to a flat-impl with explicit-
          ! shape array dummies.  Without this layering NVHPC's `do
@@ -653,6 +979,10 @@ contains
                nx, ny, nz)
          end if
       end if
+
+      ! `biharm_stress`: the biharmonic already went through the stress tensor
+      ! above, so the velocity-form add-on below is skipped.
+      if (this%biharm_stress) return
 
       ! Biharmonic add-on.  Independent of the harmonic dispatch above
       ! (stress-tensor, face, or scalar) — sums into the same tendency
@@ -1397,6 +1727,279 @@ contains
       end do
    end subroutine hvisc_biharm_lap_closed
 
+   pure subroutine hvisc_bh_strains(u_face, v_face, e_t, s_q, idxCu, idyCu, idxCv, idyCv, &
+                                    dy_dxT, dx_dyT, dy_dxBu, dx_dyBu, wet_u, wet_v, wet_q, nx, ny, nz)
+      !! Biharmonic-in-stress, stage 1: the velocity strains.  Tension
+      !! `e_T = du/dx - dv/dy` at T (face velocities masked by `wet_u`/`wet_v`)
+      !! and shear `s_q = (dv/dx + du/dy)·wet_q` at Bu (free-slip), zero on the
+      !! boundary corner ring.  Written into `e_t`/`s_q` (the caller lends the
+      !! `str_xx`/`str_xy` scratch, free once the Laplacian divergence is done).
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in)  :: u_face(nx + 1, ny, nz), v_face(nx, ny + 1, nz)
+      real(wp), intent(inout) :: e_t(nx, ny, nz), s_q(nx + 1, ny + 1, nz)
+      real(wp), intent(in)  :: idxCu(nx + 1, ny), idyCu(nx + 1, ny), idxCv(nx, ny + 1), idyCv(nx, ny + 1)
+      real(wp), intent(in)  :: dy_dxT(nx, ny), dx_dyT(nx, ny), dy_dxBu(nx + 1, ny + 1), dx_dyBu(nx + 1, ny + 1)
+      real(wp), intent(in)  :: wet_u(nx + 1, ny), wet_v(nx, ny + 1), wet_q(nx + 1, ny + 1)
+      integer :: i, j, k
+      real(wp) :: dudx, dvdy, dvdx, dudy
+
+      do concurrent(k=1:nz, j=1:ny, i=1:nx) local(dudx, dvdy)
+         dudx = dy_dxT(i, j)*(idyCu(i + 1, j)*wet_u(i + 1, j)*u_face(i + 1, j, k) - &
+                              idyCu(i, j)*wet_u(i, j)*u_face(i, j, k))
+         dvdy = dx_dyT(i, j)*(idxCv(i, j + 1)*wet_v(i, j + 1)*v_face(i, j + 1, k) - &
+                              idxCv(i, j)*wet_v(i, j)*v_face(i, j, k))
+         e_t(i, j, k) = dudx - dvdy
+      end do
+      do concurrent(k=1:nz, j=2:ny, i=2:nx) local(dvdx, dudy)
+         dvdx = dy_dxBu(i, j)*(idyCv(i, j)*v_face(i, j, k) - idyCv(i - 1, j)*v_face(i - 1, j, k))
+         dudy = dx_dyBu(i, j)*(idxCu(i, j)*u_face(i, j, k) - idxCu(i, j - 1)*u_face(i, j - 1, k))
+         s_q(i, j, k) = (dvdx + dudy)*wet_q(i, j)
+      end do
+      do concurrent(k=1:nz, j=1:ny + 1)
+         s_q(1, j, k) = 0.0_wp
+         s_q(nx + 1, j, k) = 0.0_wp
+      end do
+      do concurrent(k=1:nz, i=1:nx + 1)
+         s_q(i, 1, k) = 0.0_wp
+         s_q(i, ny + 1, k) = 0.0_wp
+      end do
+   end subroutine hvisc_bh_strains
+
+   pure subroutine hvisc_bh_ah(e_t, s_q, ah_t, ah_q, ah4_t, ah4_q, h_layer, wet_T, thin, bound_coef, dt, &
+                               bg_t, sm_t, cr_t, mx_t, bg_q, sm_q, cr_q, mx_q, &
+                               idxT, idyT, idxCu, idyCu, idxCv, idyCv, iareaCu, iareaCv, nx, ny, nz)
+      !! Biharmonic-in-stress, stage 2: the viscosity `Ah` at T and Bu with the
+      !! JOINT Laplacian + biharmonic stability bound (Griffies & Hallberg 2000).
+      !!   `|S|_T^2 = e_T^2 + (1/4)·sum_4corners s_q^2`,
+      !!   `|S|_q^2 = s_q^2 + (1/4)·sum_4cells e_T^2`   (square, then average),
+      !!   `Ah = max(Ah_bg, |S|·(C_b·Delta^4 + Delta^6·f·|S|/(5V^2)))`.
+      !! The Laplacian spends the stability budget first: with `Kh` the already
+      !! CFL-clamped `ah_t`/`ah_q`, `rho = max(0, 1 - Kh/(r·Kh_max))`, and
+      !! `Ah <- min(Ah, rho·r·Ah_max)`, `Ah_max = bound_coef·0.5/(dt·D4)`.
+      !! `r` is the thin-layer ratio (1 unless `thin`); the `Kh_max` below repeats
+      !! the expression of `hvisc_clamp_A` so `Kh = r·Kh_max` gives `rho = 0`.
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in)  :: e_t(nx, ny, nz), s_q(nx + 1, ny + 1, nz)
+      real(wp), intent(in)  :: ah_t(nx, ny, nz), ah_q(nx + 1, ny + 1, nz)
+      real(wp), intent(inout) :: ah4_t(nx, ny, nz), ah4_q(nx + 1, ny + 1, nz)
+      real(wp), intent(in)  :: h_layer(nx, ny, nz), wet_T(nx, ny)
+      logical, intent(in)   :: thin
+      real(wp), intent(in)  :: bound_coef, dt
+      real(wp), intent(in)  :: bg_t(nx, ny), sm_t(nx, ny), cr_t(nx, ny), mx_t(nx, ny)
+      real(wp), intent(in)  :: bg_q(nx + 1, ny + 1), sm_q(nx + 1, ny + 1), cr_q(nx + 1, ny + 1), mx_q(nx + 1, ny + 1)
+      real(wp), intent(in)  :: idxT(nx, ny), idyT(nx, ny)
+      real(wp), intent(in)  :: idxCu(nx + 1, ny), idyCu(nx + 1, ny)
+      real(wp), intent(in)  :: idxCv(nx, ny + 1), idyCv(nx, ny + 1)
+      real(wp), intent(in)  :: iareaCu(nx + 1, ny), iareaCv(nx, ny + 1)
+      integer :: i, j, k
+      real(wp) :: idt, smag, a_raw, kh_max, khr, rho, ah_max, r, hmin
+      real(wp) :: denom, tx, ty, dx2, dy2, hc, hcw, hce, hcs, hcn
+      real(wp) :: huS, huN, hvW, hvE, hq
+
+      idt = 1.0_wp/dt
+      do concurrent(k=1:nz, j=1:ny, i=1:nx) &
+         local(smag, a_raw, kh_max, khr, rho, ah_max, r, hmin, denom, tx, ty, dx2, dy2, hc, hcw, hce, hcs, hcn)
+         smag = sqrt(e_t(i, j, k)*e_t(i, j, k) + 0.25_wp*(((s_q(i, j, k)*s_q(i, j, k) + &
+                                                            s_q(i + 1, j + 1, k)*s_q(i + 1, j + 1, k)) + &
+                                                           (s_q(i + 1, j, k)*s_q(i + 1, j, k) + &
+                                                            s_q(i, j + 1, k)*s_q(i, j + 1, k)))))
+         a_raw = max(bg_t(i, j), smag*(sm_t(i, j) + cr_t(i, j)*smag))
+         ! Laplacian budget at T (copy of the hvisc_clamp_A bound).
+         dx2 = 1.0_wp/(idxT(i, j)*idxT(i, j))
+         dy2 = 1.0_wp/(idyT(i, j)*idyT(i, j))
+         tx = dy2*(idyT(i, j)/idxT(i, j))*(idyCu(i + 1, j) + idyCu(i, j))* &
+              max(idyCu(i + 1, j)*iareaCu(i + 1, j), idyCu(i, j)*iareaCu(i, j))
+         ty = dx2*(idxT(i, j)/idyT(i, j))*(idxCv(i, j + 1) + idxCv(i, j))* &
+              max(idxCv(i, j + 1)*iareaCv(i, j + 1), idxCv(i, j)*iareaCv(i, j))
+         denom = max(tx, ty)
+         r = 1.0_wp
+         rho = 1.0_wp
+         if (denom > 0.0_wp) then
+            kh_max = bound_coef*0.25_wp*idt/denom
+            if (thin) then
+               hc = hvisc_hm(h_layer, wet_T, i, j, k, nx, ny, nz)
+               hcw = hvisc_hm(h_layer, wet_T, i - 1, j, k, nx, ny, nz)
+               hce = hvisc_hm(h_layer, wet_T, i + 1, j, k, nx, ny, nz)
+               hcs = hvisc_hm(h_layer, wet_T, i, j - 1, k, nx, ny, nz)
+               hcn = hvisc_hm(h_layer, wet_T, i, j + 1, k, nx, ny, nz)
+               hmin = min(min(0.5_wp*(hcw + hc), 0.5_wp*(hc + hce)), &
+                          min(0.5_wp*(hcs + hc), 0.5_wp*(hc + hcn)))
+               r = min(1.0_wp, hmin/(hc + H_DIV_EPS))
+            end if
+            khr = r*kh_max
+            rho = 0.0_wp
+            if (khr > 0.0_wp) rho = max(0.0_wp, 1.0_wp - ah_t(i, j, k)/khr)
+         end if
+         ah_max = bound_coef*0.5_wp*idt*mx_t(i, j)
+         ah4_t(i, j, k) = min(a_raw, rho*r*ah_max)
+      end do
+
+      do concurrent(k=1:nz, j=2:ny, i=2:nx) &
+         local(smag, a_raw, kh_max, khr, rho, ah_max, r, hmin, denom, tx, ty, dx2, dy2, huS, huN, hvW, hvE, hq)
+         smag = sqrt(s_q(i, j, k)*s_q(i, j, k) + 0.25_wp*(((e_t(i - 1, j - 1, k)*e_t(i - 1, j - 1, k) + &
+                                                            e_t(i, j, k)*e_t(i, j, k)) + &
+                                                           (e_t(i, j - 1, k)*e_t(i, j - 1, k) + &
+                                                            e_t(i - 1, j, k)*e_t(i - 1, j, k)))))
+         a_raw = max(bg_q(i, j), smag*(sm_q(i, j) + cr_q(i, j)*smag))
+         dx2 = 1.0_wp/(idxCu(i, j)*idxCu(i, j))
+         dy2 = 1.0_wp/(idyCv(i, j)*idyCv(i, j))
+         tx = dx2*(idxCu(i, j) + idxCu(i, j - 1))* &
+              max(idxCu(i, j)*iareaCu(i, j), idxCu(i, j - 1)*iareaCu(i, j - 1))
+         ty = dy2*(idyCv(i, j) + idyCv(i - 1, j))* &
+              max(idyCv(i, j)*iareaCv(i, j), idyCv(i - 1, j)*iareaCv(i - 1, j))
+         denom = max(tx, ty)
+         r = 1.0_wp
+         rho = 1.0_wp
+         if (denom > 0.0_wp) then
+            kh_max = bound_coef*0.25_wp*idt/denom
+            if (thin) then
+               huS = 0.5_wp*(hvisc_hm(h_layer, wet_T, i - 1, j - 1, k, nx, ny, nz) + &
+                             hvisc_hm(h_layer, wet_T, i, j - 1, k, nx, ny, nz))
+               huN = 0.5_wp*(hvisc_hm(h_layer, wet_T, i - 1, j, k, nx, ny, nz) + &
+                             hvisc_hm(h_layer, wet_T, i, j, k, nx, ny, nz))
+               hvW = 0.5_wp*(hvisc_hm(h_layer, wet_T, i - 1, j - 1, k, nx, ny, nz) + &
+                             hvisc_hm(h_layer, wet_T, i - 1, j, k, nx, ny, nz))
+               hvE = 0.5_wp*(hvisc_hm(h_layer, wet_T, i, j - 1, k, nx, ny, nz) + &
+                             hvisc_hm(h_layer, wet_T, i, j, k, nx, ny, nz))
+               hq = hvisc_hq_harmonic(huS, huN, hvW, hvE)
+               hmin = min(min(huS, huN), min(hvW, hvE))
+               r = min(1.0_wp, hmin/(hq + H_DIV_EPS))
+            end if
+            khr = r*kh_max
+            rho = 0.0_wp
+            if (khr > 0.0_wp) rho = max(0.0_wp, 1.0_wp - ah_q(i, j, k)/khr)
+         end if
+         ah_max = bound_coef*0.5_wp*idt*mx_q(i, j)
+         ah4_q(i, j, k) = min(a_raw, rho*r*ah_max)
+      end do
+   end subroutine hvisc_bh_ah
+
+   pure subroutine hvisc_bh_laplacian(e_t, s_q, lap_u, lap_v, idxCu, idyCu, idxCv, idyCv, &
+                                      dx2h, dy2h, dx2q, dy2q, iareaCu, iareaCv, wet_u, wet_v, nx, ny, nz)
+      !! Biharmonic-in-stress, stage 3: the stress-form Laplacian of the
+      !! velocity, `L_u = div(1·e, 1·s)` at u-faces and `L_v` at v-faces
+      !! (the same divergence stencil as the Laplacian stress path with unit
+      !! viscosity and no thickness), zero on the pinned boundary faces.
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in)  :: e_t(nx, ny, nz), s_q(nx + 1, ny + 1, nz)
+      real(wp), intent(inout) :: lap_u(nx + 1, ny, nz), lap_v(nx, ny + 1, nz)
+      real(wp), intent(in)  :: idxCu(nx + 1, ny), idyCu(nx + 1, ny), idxCv(nx, ny + 1), idyCv(nx, ny + 1)
+      real(wp), intent(in)  :: dx2h(nx, ny), dy2h(nx, ny), dx2q(nx + 1, ny + 1), dy2q(nx + 1, ny + 1)
+      real(wp), intent(in)  :: iareaCu(nx + 1, ny), iareaCv(nx, ny + 1)
+      real(wp), intent(in)  :: wet_u(nx + 1, ny), wet_v(nx, ny + 1)
+      integer :: i, j, k
+
+      do concurrent(k=1:nz, j=2:ny - 1, i=2:nx)
+         lap_u(i, j, k) = wet_u(i, j)*iareaCu(i, j)* &
+                          (idyCu(i, j)*(dy2h(i, j)*e_t(i, j, k) - dy2h(i - 1, j)*e_t(i - 1, j, k)) + &
+                           idxCu(i, j)*(dx2q(i, j + 1)*s_q(i, j + 1, k) - dx2q(i, j)*s_q(i, j, k)))
+      end do
+      do concurrent(k=1:nz, j=1:ny)
+         lap_u(1, j, k) = 0.0_wp
+         lap_u(nx + 1, j, k) = 0.0_wp
+      end do
+      do concurrent(k=1:nz, i=1:nx + 1)
+         lap_u(i, 1, k) = 0.0_wp
+         lap_u(i, ny, k) = 0.0_wp
+      end do
+      do concurrent(k=1:nz, j=2:ny, i=2:nx - 1)
+         lap_v(i, j, k) = wet_v(i, j)*iareaCv(i, j)* &
+                          (idyCv(i, j)*(dy2q(i + 1, j)*s_q(i + 1, j, k) - dy2q(i, j)*s_q(i, j, k)) - &
+                           idxCv(i, j)*(dx2h(i, j)*e_t(i, j, k) - dx2h(i, j - 1)*e_t(i, j - 1, k)))
+      end do
+      do concurrent(k=1:nz, i=1:nx)
+         lap_v(i, 1, k) = 0.0_wp
+         lap_v(i, ny + 1, k) = 0.0_wp
+      end do
+      do concurrent(k=1:nz, j=1:ny + 1)
+         lap_v(1, j, k) = 0.0_wp
+         lap_v(nx, j, k) = 0.0_wp
+      end do
+   end subroutine hvisc_bh_laplacian
+
+   pure subroutine hvisc_bh_divergence(lap_u, lap_v, h_layer, str_xx, str_xy, ah4_t, ah4_q, &
+                                       du_visc, dv_visc, idxCu, idyCu, idxCv, idyCv, &
+                                       dx2h, dy2h, dx2q, dy2q, dy_dxT, dx_dyT, dy_dxBu, dx_dyBu, &
+                                       iareaCu, iareaCv, wet_u, wet_v, wet_q, wet_T, thin, nx, ny, nz)
+      !! Biharmonic-in-stress, stages 4-5: second strains of the Laplacian,
+      !!   `e2_T = (dy/dx)_T·delta_x(L_u/dy) - (dx/dy)_T·delta_y(L_v/dx)`,
+      !!   `s2_q = (dy/dx)_q·delta_x(L_v/dy) + (dx/dy)_q·delta_y(L_u/dx)`,
+      !! the thickness-weighted biharmonic stress
+      !!   `str_xx = -Ah_T·e2_T·h_T`, `str_xy = -Ah_q·s2_q·h_q·wet_q`
+      !! (sign: this module's `str = +A·strain·h` gives `+A·del2 u`, so the
+      !! biharmonic enters as `-Ah·del4 u`), and ADDS its thickness-weighted
+      !! divergence to `du_visc`/`dv_visc`.  Linear in the stress, so adding it
+      !! to the Laplacian divergence equals one divergence of the summed stress.
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in)  :: lap_u(nx + 1, ny, nz), lap_v(nx, ny + 1, nz)
+      real(wp), intent(in)  :: h_layer(nx, ny, nz)
+      real(wp), intent(inout) :: str_xx(nx, ny, nz), str_xy(nx + 1, ny + 1, nz)
+      real(wp), intent(in)  :: ah4_t(nx, ny, nz), ah4_q(nx + 1, ny + 1, nz)
+      real(wp), intent(inout) :: du_visc(nx + 1, ny, nz), dv_visc(nx, ny + 1, nz)
+      real(wp), intent(in)  :: idxCu(nx + 1, ny), idyCu(nx + 1, ny), idxCv(nx, ny + 1), idyCv(nx, ny + 1)
+      real(wp), intent(in)  :: dx2h(nx, ny), dy2h(nx, ny), dx2q(nx + 1, ny + 1), dy2q(nx + 1, ny + 1)
+      real(wp), intent(in)  :: dy_dxT(nx, ny), dx_dyT(nx, ny), dy_dxBu(nx + 1, ny + 1), dx_dyBu(nx + 1, ny + 1)
+      real(wp), intent(in)  :: iareaCu(nx + 1, ny), iareaCv(nx, ny + 1)
+      real(wp), intent(in)  :: wet_u(nx + 1, ny), wet_v(nx, ny + 1), wet_q(nx + 1, ny + 1), wet_T(nx, ny)
+      logical, intent(in)   :: thin
+      integer :: i, j, k
+      real(wp) :: e2, s2, h_t, h_q, huS, huN, hvW, hvE
+      real(wp), parameter :: H_NEGLECT = H_VANISHED   ! vanished-ok: additive denominator floor, same role as the Laplacian stress divergence
+
+      do concurrent(k=1:nz, j=1:ny, i=1:nx) local(e2, h_t)
+         e2 = dy_dxT(i, j)*(idyCu(i + 1, j)*lap_u(i + 1, j, k) - idyCu(i, j)*lap_u(i, j, k)) - &
+              dx_dyT(i, j)*(idxCv(i, j + 1)*lap_v(i, j + 1, k) - idxCv(i, j)*lap_v(i, j, k))
+         h_t = h_layer(i, j, k)
+         if (thin) h_t = hvisc_hm(h_layer, wet_T, i, j, k, nx, ny, nz)
+         str_xx(i, j, k) = -ah4_t(i, j, k)*e2*h_t
+      end do
+      do concurrent(k=1:nz, j=2:ny, i=2:nx) local(s2, h_q, huS, huN, hvW, hvE)
+         s2 = dy_dxBu(i, j)*(idyCv(i, j)*lap_v(i, j, k) - idyCv(i - 1, j)*lap_v(i - 1, j, k)) + &
+              dx_dyBu(i, j)*(idxCu(i, j)*lap_u(i, j, k) - idxCu(i, j - 1)*lap_u(i, j - 1, k))
+         h_q = 0.25_wp*((h_layer(i - 1, j - 1, k) + h_layer(i, j, k)) + &
+                        (h_layer(i - 1, j, k) + h_layer(i, j - 1, k)))
+         if (thin) then
+            huS = 0.5_wp*(hvisc_hm(h_layer, wet_T, i - 1, j - 1, k, nx, ny, nz) + &
+                          hvisc_hm(h_layer, wet_T, i, j - 1, k, nx, ny, nz))
+            huN = 0.5_wp*(hvisc_hm(h_layer, wet_T, i - 1, j, k, nx, ny, nz) + &
+                          hvisc_hm(h_layer, wet_T, i, j, k, nx, ny, nz))
+            hvW = 0.5_wp*(hvisc_hm(h_layer, wet_T, i - 1, j - 1, k, nx, ny, nz) + &
+                          hvisc_hm(h_layer, wet_T, i - 1, j, k, nx, ny, nz))
+            hvE = 0.5_wp*(hvisc_hm(h_layer, wet_T, i, j - 1, k, nx, ny, nz) + &
+                          hvisc_hm(h_layer, wet_T, i, j, k, nx, ny, nz))
+            h_q = hvisc_hq_harmonic(huS, huN, hvW, hvE)
+         end if
+         str_xy(i, j, k) = -ah4_q(i, j, k)*s2*h_q*wet_q(i, j)
+      end do
+      do concurrent(k=1:nz, j=1:ny + 1)
+         str_xy(1, j, k) = 0.0_wp
+         str_xy(nx + 1, j, k) = 0.0_wp
+      end do
+      do concurrent(k=1:nz, i=1:nx + 1)
+         str_xy(i, 1, k) = 0.0_wp
+         str_xy(i, ny + 1, k) = 0.0_wp
+      end do
+
+      do concurrent(k=1:nz, j=2:ny - 1, i=2:nx) local(h_t)
+         h_t = 0.5_wp*(h_layer(i - 1, j, k) + h_layer(i, j, k))
+         if (thin) h_t = 0.5_wp*(hvisc_hm(h_layer, wet_T, i - 1, j, k, nx, ny, nz) + &
+                                 hvisc_hm(h_layer, wet_T, i, j, k, nx, ny, nz))
+         du_visc(i, j, k) = du_visc(i, j, k) + wet_u(i, j)*iareaCu(i, j)* &
+                            (idyCu(i, j)*(dy2h(i, j)*str_xx(i, j, k) - dy2h(i - 1, j)*str_xx(i - 1, j, k)) + &
+                             idxCu(i, j)*(dx2q(i, j + 1)*str_xy(i, j + 1, k) - dx2q(i, j)*str_xy(i, j, k)))/ &
+                            (h_t + H_NEGLECT)
+      end do
+      do concurrent(k=1:nz, j=2:ny, i=2:nx - 1) local(h_t)
+         h_t = 0.5_wp*(h_layer(i, j - 1, k) + h_layer(i, j, k))
+         if (thin) h_t = 0.5_wp*(hvisc_hm(h_layer, wet_T, i, j - 1, k, nx, ny, nz) + &
+                                 hvisc_hm(h_layer, wet_T, i, j, k, nx, ny, nz))
+         dv_visc(i, j, k) = dv_visc(i, j, k) + wet_v(i, j)*iareaCv(i, j)* &
+                            (idyCv(i, j)*(dy2q(i + 1, j)*str_xy(i + 1, j, k) - dy2q(i, j)*str_xy(i, j, k)) - &
+                             idxCv(i, j)*(dx2h(i, j)*str_xx(i, j, k) - dx2h(i, j - 1)*str_xx(i, j - 1, k)))/ &
+                            (h_t + H_NEGLECT)
+      end do
+   end subroutine hvisc_bh_divergence
+
    pure subroutine hvisc_fill_A_scalar(ah_t, ah_q, nu_h, nx, ny, nz)
       !! Fill the T-cell and corner harmonic-viscosity fields with the
       !! scalar `nu_h` (no flow-aware closure active).  Constant ⇒ the
@@ -2023,6 +2626,12 @@ contains
                + this%str_xy%bytes() &
                + this%ah_t%bytes() &
                + this%ah_q%bytes() &
+               + this%ah4_t%bytes() &
+               + this%ah4_q%bytes() &
+               + arr_bytes(this%bh_bg_t) + arr_bytes(this%bh_bg_q) &
+               + arr_bytes(this%bh_sm_t) + arr_bytes(this%bh_sm_q) &
+               + arr_bytes(this%bh_cr_t) + arr_bytes(this%bh_cr_q) &
+               + arr_bytes(this%bh_mx_t) + arr_bytes(this%bh_mx_q) &
                + arr_bytes(this%ke_diss) &
                + arr_bytes(this%kh_bg_t) &
                + arr_bytes(this%kh_bg_q)
