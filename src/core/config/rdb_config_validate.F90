@@ -993,6 +993,16 @@ contains
                               "the |sin(lat)| floor would vanish everywhere")
             has_error = .true.
          end if
+         if (cfg%ocean%hvisc%kh_bg_at_points .and. .not. cfg%ocean%hvisc%stress_tensor) then
+            call logger%error("&ocean_hvisc_nml kh_bg_at_points=.true. requires "// &
+                              "stress_tensor=.true. - the point statics seed the "// &
+                              "T/corner coefficients that only the stress path reads")
+            has_error = .true.
+         end if
+         if (cfg%ocean%hvisc%kh_bg_at_points .and. cfg%ocean%hvisc%kh_vel_scale < 0.0_wp) then
+            call logger%error("&ocean_hvisc_nml kh_vel_scale must be >= 0")
+            has_error = .true.
+         end if
          ! Only anisotropy mode 0 (grid-relative `aniso_dir`) has an
          ! implemented direction tensor; a requested-but-unimplemented mode
          ! must abort, not silently fall back to the grid-i default.

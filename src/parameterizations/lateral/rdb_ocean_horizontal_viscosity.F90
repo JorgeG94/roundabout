@@ -59,7 +59,8 @@ module rdb_ocean_horizontal_viscosity
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_ocean_lateral_mix, only: ocean_lateral_mix_t, LMIX_NONE, &
-                                    LMIX_LEITH, LMIX_SMAGORINSKY, LMIX_LEITH_BIHARM
+                                    LMIX_LEITH, LMIX_SMAGORINSKY, LMIX_LEITH_BIHARM, &
+                                    kh_lat_floor, vel_scale_floor
    use rdb_scratch_3d, only: scratch_3d_buffer_t, &
                              scratch_3d_buffer_enter_data_impl, &
                              scratch_3d_buffer_exit_data_impl
@@ -92,6 +93,16 @@ module rdb_ocean_horizontal_viscosity
          !! the velocity Laplacian `A·∇²u`.  Default false ⇒
          !! bit-identical to the historical kernel.  See the module
          !! header for the operator form.
+      logical :: kh_bg_at_points = .false.
+         !! Stress path: max-combine the point statics `kh_bg_t`/`kh_bg_q`
+         !! into the T/corner coefficient seed (see `build_kh_bg_points`).
+         !! Default off ⇒ bit-identical.
+      real(wp), allocatable :: kh_bg_t(:, :)
+         !! Static Laplacian floor AT the T centres `(nx, ny)` (m²/s):
+         !! `max(nu_h, c_K·Δ_T, K_s·|sin φ_T|^p)`.  Allocated only when
+         !! `kh_bg_at_points`.
+      real(wp), allocatable :: kh_bg_q(:, :)
+         !! Same AT the Bu corners `(nx+1, ny+1)`.
       logical :: no_slip = .false.
          !! Coastal lateral BC selector (shared with the lateral-mix /
          !! Coriolis kernels).  `.false.` (free-slip) masks the corner
@@ -203,6 +214,7 @@ module rdb_ocean_horizontal_viscosity
          !! rate (the quantity MEKE needs is a rate, so no accumulation).
    contains
       procedure, non_overridable :: init => ocean_hvisc_init
+      procedure, non_overridable :: build_kh_bg_points => ocean_hvisc_build_kh_bg_points
       procedure, non_overridable :: destroy => ocean_hvisc_destroy
       procedure, non_overridable :: enter_data => ocean_hvisc_enter_data
       procedure, non_overridable :: exit_data => ocean_hvisc_exit_data
@@ -250,7 +262,51 @@ contains
       call this%ah_t%destroy()
       call this%ah_q%destroy()
       if (allocated(this%ke_diss)) deallocate (this%ke_diss)
+      if (allocated(this%kh_bg_t)) deallocate (this%kh_bg_t)
+      if (allocated(this%kh_bg_q)) deallocate (this%kh_bg_q)
    end subroutine ocean_hvisc_destroy
+
+   subroutine ocean_hvisc_build_kh_bg_points(this, geolatT, geolatBu, dx2h, dy2h, dx2q, dy2q, &
+                                             kh_vel_scale, kh_sin_lat, kh_pwr_of_sine)
+      !! Host-side, once at configure and BEFORE `enter_data`: build the
+      !! static Laplacian floors AT the T centres and AT the Bu corners,
+      !! `Kh = max(nu_h, c_K·Δ, K_s·|sin φ|^p)`, with the latitude and the
+      !! harmonic cell length `Δ² = 2dx²dy²/(dx²+dy²)` evaluated AT the
+      !! point itself (not a face mean).  `geolat*` in degrees.
+      class(ocean_horizontal_viscosity_t), intent(inout) :: this
+      real(wp), intent(in) :: geolatT(:, :), geolatBu(:, :)
+      real(wp), intent(in) :: dx2h(:, :), dy2h(:, :), dx2q(:, :), dy2q(:, :)
+      real(wp), intent(in) :: kh_vel_scale, kh_sin_lat, kh_pwr_of_sine
+      integer :: nx, ny, i, j
+
+      nx = size(geolatT, 1)
+      ny = size(geolatT, 2)
+      if (size(geolatBu, 1) < nx + 1 .or. size(geolatBu, 2) < ny + 1 .or. &
+          size(dx2q, 1) < nx + 1 .or. size(dx2q, 2) < ny + 1 .or. &
+          size(dy2q, 1) < nx + 1 .or. size(dy2q, 2) < ny + 1 .or. &
+          size(dx2h, 1) < nx .or. size(dx2h, 2) < ny .or. &
+          size(dy2h, 1) < nx .or. size(dy2h, 2) < ny) then
+         error stop "ocean_hvisc_build_kh_bg_points: metric arrays smaller than the T/corner shapes"
+      end if
+      if (allocated(this%kh_bg_t)) deallocate (this%kh_bg_t)
+      if (allocated(this%kh_bg_q)) deallocate (this%kh_bg_q)
+      allocate (this%kh_bg_t(nx, ny), this%kh_bg_q(nx + 1, ny + 1))
+      do j = 1, ny
+         do i = 1, nx
+            this%kh_bg_t(i, j) = max(this%nu_h, &
+                                     vel_scale_floor(kh_vel_scale, dx2h(i, j), dy2h(i, j)), &
+                                     kh_lat_floor(geolatT(i, j), kh_sin_lat, kh_pwr_of_sine))
+         end do
+      end do
+      do j = 1, ny + 1
+         do i = 1, nx + 1
+            this%kh_bg_q(i, j) = max(this%nu_h, &
+                                     vel_scale_floor(kh_vel_scale, dx2q(i, j), dy2q(i, j)), &
+                                     kh_lat_floor(geolatBu(i, j), kh_sin_lat, kh_pwr_of_sine))
+         end do
+      end do
+      this%kh_bg_at_points = .true.
+   end subroutine ocean_hvisc_build_kh_bg_points
 
    pure subroutine ocean_hvisc_set_aniso_direction(this, n1, n2)
       !! Precompute the constant Smith & McWilliams (2003) direction-
@@ -315,6 +371,9 @@ contains
       call scratch_3d_buffer_enter_data_impl(this%ah_t)
       call scratch_3d_buffer_enter_data_impl(this%ah_q)
       !$acc enter data copyin(this%ke_diss)
+      if (allocated(this%kh_bg_t)) then
+         !$acc enter data copyin(this%kh_bg_t, this%kh_bg_q)
+      end if
    end subroutine ocean_hvisc_enter_data_impl
 
    subroutine ocean_hvisc_exit_data(this)
@@ -335,6 +394,9 @@ contains
       call scratch_3d_buffer_exit_data_impl(this%str_xy)
       call scratch_3d_buffer_exit_data_impl(this%ah_t)
       call scratch_3d_buffer_exit_data_impl(this%ah_q)
+      if (allocated(this%kh_bg_t)) then
+         !$acc exit data delete(this%kh_bg_q, this%kh_bg_t)
+      end if
       !$acc exit data delete(this%ke_diss)
    end subroutine ocean_hvisc_exit_data_impl
 
@@ -475,6 +537,13 @@ contains
                this%ah_t%data, this%ah_q%data, nx, ny, nz)
          else
             call hvisc_fill_A_scalar(this%ah_t%data, this%ah_q%data, nu_h, nx, ny, nz)
+         end if
+
+         ! Step A1: static point floors AT T and AT the corners
+         ! (`kh_bg_at_points`), max-combined into the seed.  Off ⇒ skipped.
+         if (this%kh_bg_at_points) then
+            call hvisc_max_static_points(this%ah_t%data, this%ah_q%data, &
+                                         this%kh_bg_t, this%kh_bg_q, nx, ny, nz)
          end if
 
          ! Step A2 (anisotropic, Smith & McWilliams 2003): ADD the
@@ -1333,6 +1402,22 @@ contains
       end do
    end subroutine hvisc_fill_A_scalar
 
+   pure subroutine hvisc_max_static_points(ah_t, ah_q, kh_bg_t, kh_bg_q, nx, ny, nz)
+      !! `max`-combine the static point floors into the T-cell and corner
+      !! coefficient seed, every layer.  The stress form never
+      !! differentiates `A`, so a point-wise floor needs no smoothing.
+      integer, intent(in)  :: nx, ny, nz
+      real(wp), intent(inout) :: ah_t(nx, ny, nz), ah_q(nx + 1, ny + 1, nz)
+      real(wp), intent(in)  :: kh_bg_t(nx, ny), kh_bg_q(nx + 1, ny + 1)
+      integer :: i, j, k
+      do concurrent(k=1:nz, j=1:ny, i=1:nx)
+         ah_t(i, j, k) = max(ah_t(i, j, k), kh_bg_t(i, j))
+      end do
+      do concurrent(k=1:nz, j=2:ny, i=2:nx)
+         ah_q(i, j, k) = max(ah_q(i, j, k), kh_bg_q(i, j))
+      end do
+   end subroutine hvisc_max_static_points
+
    pure subroutine hvisc_add_aniso_coef(ah_t, ah_q, kh_aniso, n1n2, nx, ny, nz)
       !! Add the Smith & McWilliams (2003) anisotropic direction-tensor
       !! coefficients onto the co-located isotropic viscosities.  The
@@ -1825,7 +1910,9 @@ contains
                + this%str_xy%bytes() &
                + this%ah_t%bytes() &
                + this%ah_q%bytes() &
-               + arr_bytes(this%ke_diss)
+               + arr_bytes(this%ke_diss) &
+               + arr_bytes(this%kh_bg_t) &
+               + arr_bytes(this%kh_bg_q)
    end function ocean_horizontal_viscosity_bytes
 
 end module rdb_ocean_horizontal_viscosity

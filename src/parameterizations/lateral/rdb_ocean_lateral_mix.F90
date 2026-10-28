@@ -26,6 +26,7 @@ module rdb_ocean_lateral_mix
    public :: ocean_lateral_mix_compute_smag
    public :: ocean_lateral_mix_compute_smag_ah
    public :: ocean_lateral_mix_compute_lat_floor
+   public :: kh_lat_floor, vel_scale_floor
    public :: ocean_lateral_mix_compute_leith_biharm
    public :: ocean_lateral_mix_compute_vel_scale
    public :: ocean_lateral_mix_compute
@@ -199,6 +200,27 @@ contains
       this%is_init = .true.
    end subroutine ocean_lateral_mix_init
 
+   pure elemental function kh_lat_floor(lat_deg, ks, p) result(f)
+      !! Latitude Laplacian floor `ks·|sin φ|^p` (m²/s) at latitude
+      !! `lat_deg` (degrees).  Shared by the face statics (velocity path)
+      !! and the T/corner point statics (stress path).
+      real(wp), intent(in) :: lat_deg, ks, p
+      real(wp) :: f
+      f = ks*abs(sin(lat_deg*DEG2RAD))**p
+   end function kh_lat_floor
+
+   pure elemental function vel_scale_floor(c, dx2, dy2) result(f)
+      !! Velocity-scale floor `c·Δ` (m²/s) with the harmonic cell length
+      !! `Δ = sqrt(2·dx²·dy²/(dx²+dy²))` from the squared spacings.
+      real(wp), intent(in) :: c, dx2, dy2
+      real(wp) :: f
+      if (dx2 + dy2 > 0.0_wp) then
+         f = c*sqrt(2.0_wp*dx2*dy2/(dx2 + dy2))
+      else
+         f = 0.0_wp   ! degenerate (zero-spacing ghost) cell
+      end if
+   end function vel_scale_floor
+
    subroutine ocean_lateral_mix_build_statics(this, geolatBu, f_corner)
       !! Host-side, once at configure and BEFORE `enter_data`: build the
       !! static per-face latitude floor (`kh_sin_lat > 0`) and the per-T-cell
@@ -226,15 +248,13 @@ contains
          do j = 1, ny
             do i = 1, nx + 1
                lat = 0.5_wp*(geolatBu(i, j) + geolatBu(i, j + 1))
-               this%kh_floor_x(i, j) = this%kh_sin_lat* &
-                                       abs(sin(lat*DEG2RAD))**this%kh_pwr_of_sine
+               this%kh_floor_x(i, j) = kh_lat_floor(lat, this%kh_sin_lat, this%kh_pwr_of_sine)
             end do
          end do
          do j = 1, ny + 1
             do i = 1, nx
                lat = 0.5_wp*(geolatBu(i, j) + geolatBu(i + 1, j))
-               this%kh_floor_y(i, j) = this%kh_sin_lat* &
-                                       abs(sin(lat*DEG2RAD))**this%kh_pwr_of_sine
+               this%kh_floor_y(i, j) = kh_lat_floor(lat, this%kh_sin_lat, this%kh_pwr_of_sine)
             end do
          end do
       end if

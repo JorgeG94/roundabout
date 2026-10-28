@@ -1563,6 +1563,15 @@ module rdb_config
       real(wp) :: kh_pwr_of_sine = 4.0_wp
          !! Exponent of `|sin φ|` in the `kh_sin_lat` floor (MOM6
          !! `KH_PWR_OF_SINE`).  Inert while `kh_sin_lat = 0`.
+      logical :: kh_bg_at_points = .false.
+         !! Stress-tensor path only (fails loud without `stress_tensor`):
+         !! build the static Laplacian floor AT the T centres and AT the Bu
+         !! corners, `max(nu_h, kh_vel_scale·Δ, kh_sin_lat·|sin φ|^p)` with
+         !! the local latitude and the local `Δ = sqrt(2dx²dy²/(dx²+dy²))`,
+         !! and `max`-combine it into the T/corner coefficient seed.  This
+         !! replaces the face-mean-then-max of the face floors (the
+         !! `|sin φ|^p` floor is convex, so the two differ).  Default off
+         !! ⇒ bit-identical.
       real(wp) :: ah_vel_scale = 0.0_wp
          !! Biharmonic velocity-scale floor (m/s): the background that the
          !! Smagorinsky biharmonic is `max`ed against becomes
