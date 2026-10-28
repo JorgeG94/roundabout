@@ -576,6 +576,20 @@ contains
          end do
       end if
 
+      ! --- Tidal-mixing + law-of-the-wall BBL kd_int (merged every stage).
+      !     Their column solves refresh once per thermo interval, so a
+      !     resume between refreshes (always the case under
+      !     `diabatic_first = .false.`, where the refresh is the interval's
+      !     last step) must carry the interval's diffusivity: a cold zero
+      !     would drop the closure for the rest of the interval.
+      !     `optional`: a pre-fix checkpoint has no such field. ---
+      if (allocated(state%vmix_tidal%kd_int)) then
+         call register_full_3d_opt(reg, "tidal_kd_int", state%vmix_tidal%kd_int)
+      end if
+      if (allocated(state%vdiff%bbl_mix%kd_int)) then
+         call register_full_3d_opt(reg, "bbl_kd_int", state%vdiff%bbl_mix%kd_int)
+      end if
+
       ! --- Kappa-shear kd_int / tke_int (merged every stage) ---
       if (allocated(state%kshear%kd_int)) then
          call register_full_3d(reg, "kshear_kd_int", state%kshear%kd_int)

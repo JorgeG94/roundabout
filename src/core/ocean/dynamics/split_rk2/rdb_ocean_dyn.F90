@@ -3340,7 +3340,7 @@ contains
       ! wasteful).  `run_stage_split` then applies the rotated flux to each
       ! tracer (Phase B) after `tracer_hdiff`.  No-op when absent / disabled.
       if (present(redi)) then
-         if (dyn%enable_thermodynamics .and. dyn%is_thermo_step()) then
+         if (dyn%enable_thermodynamics .and. dyn%is_thermo_step() .and. .not. dyn%thermo_deferred()) then
             if (redi%enable) then
                call profiler_start("ocean_redi")
                call redi_calc_coeffs(grid, metrics, eos, redi, ms)
@@ -3592,6 +3592,14 @@ contains
       ! drain just advected, and before the ALE remap.  (Mixing coefficients
       ! and the GM / Redi / MLE terms are computed in the stage chain.)
       if (dyn%thermo_deferred() .and. dyn%enable_thermodynamics .and. dyn%is_thermo_step()) then
+         ! Lateral tracer diffusion first (OM3: right after tracer advection,
+         ! full tracer dt): the drain wraps hTr's ghosts on a single rank
+         ! only, so refresh them before the stencil reads.
+         call profiler_start("ocean_deferred_tracer")
+         call refresh_tracer_ghosts(grid, ms, bc)
+         call apply_deferred_tracer_step(grid, metrics, dyn, eos, hd, ms, dt, redi, varmix, bc)
+         call profiler_stop("ocean_deferred_tracer")
+         call probe_dS(grid, ms, "after deferred hdiff/redi", 3, dyn%outer_step_count + 1)
          call profiler_start("ocean_deferred_thermo")
          dyn%n_deferred_thermo = dyn%n_deferred_thermo + 1
          dyn%deferred_thermo_clock = ct%t_dyn_rel_adv
@@ -3705,6 +3713,47 @@ contains
 
       dyn%outer_step_count = dyn%outer_step_count + 1
    end subroutine ocean_dyn_step_split
+
+   subroutine apply_deferred_tracer_step(grid, metrics, dyn, eos, hd, ms, dt, redi, varmix, bc)
+      !! Lateral tracer diffusion of one thermo interval under
+      !! `diabatic_first = .false.`: along-coordinate `tracer_hdiff`, then
+      !! Redi neutral diffusion (coefficients built here, from the
+      !! post-advection T/S/h), both with the FULL tracer dt, on the tracers
+      !! the window drain has just advected.  Caller refreshes tracer ghosts.
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_metrics_t), intent(in) :: metrics
+      type(ocean_dyn_t), intent(in) :: dyn
+      type(eos_t), intent(in) :: eos
+      type(ocean_hdiff_tracer_t), intent(inout) :: hd
+      type(multilayer_state_t), intent(inout) :: ms
+      real(wp), intent(in) :: dt
+      type(ocean_redi_t), intent(inout), optional :: redi
+      type(ocean_varmix_t), intent(inout), optional :: varmix
+      type(ocean_bc_state_t), intent(inout), optional :: bc
+      real(wp) :: therm_dt
+
+      therm_dt = dyn%therm_dt(dt)
+      call profiler_start("ocean_tracer_hdiff")
+      call tracer_hdiff(grid, metrics, hd, ms, therm_dt, active=.true., bc=bc)
+      call profiler_stop("ocean_tracer_hdiff")
+      if (present(redi)) then
+         if (redi%enable) then
+            call profiler_start("ocean_redi")
+            call redi_calc_coeffs(grid, metrics, eos, redi, ms)
+            if (present(varmix)) then
+               if (varmix%enable) then
+                  call redi_apply_flux(grid, metrics, redi, ms, therm_dt, &
+                                       khtr_u_ext=varmix%khtr_u, khtr_v_ext=varmix%khtr_v, bc=bc)
+               else
+                  call redi_apply_flux(grid, metrics, redi, ms, therm_dt, bc=bc)
+               end if
+            else
+               call redi_apply_flux(grid, metrics, redi, ms, therm_dt, bc=bc)
+            end if
+            call profiler_stop("ocean_redi")
+         end if
+      end if
+   end subroutine apply_deferred_tracer_step
 
    subroutine apply_deferred_thermo(grid, metrics, dyn, vd, vmix, ms, dt, sf, geo)
       !! The tracer-changing thermo applies of one thermo interval, run once
@@ -3999,7 +4048,11 @@ contains
       if (present(bc)) call ocean_fold_wrap_state(grid, bc, ms)
 
       call profiler_start("ocean_tracer_hdiff")
-      call tracer_hdiff(grid, metrics, hd, ms, therm_dt, active=therm_active, bc=bc)
+      ! diabatic_first = .false. (N > 1): hdiff + Redi run once per interval in
+      ! `apply_deferred_tracer_step`, after the window drain, with the full
+      ! tracer dt -- here they would act on the held (pre-drain) hTr.
+      call tracer_hdiff(grid, metrics, hd, ms, therm_dt, &
+                        active=therm_active .and. .not. dyn%thermo_deferred(), bc=bc)
       call profiler_stop("ocean_tracer_hdiff")
       call probe_dS(grid, ms, "after tracer_hdiff", stage_id, step_id)
 
@@ -4009,7 +4062,7 @@ contains
       ! outer step.  THERMO cadence (self-gated inside on `therm_active`
       ! via the same `is_thermo_step` window the coeffs were built under).
       ! No-op when absent / disabled / khtr<=0.
-      if (present(redi) .and. therm_active) then
+      if (present(redi) .and. therm_active .and. .not. dyn%thermo_deferred()) then
          call profiler_start("ocean_redi")
          ! VarMix seam: feed Redi the spatially-varying KhTr when VarMix is
          ! enabled; otherwise Redi falls back to its scalar khtr.

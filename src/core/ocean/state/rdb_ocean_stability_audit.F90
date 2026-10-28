@@ -619,6 +619,18 @@ contains
                          ", or reduce dt/dt_therm_ratio.", ierr, OCEAN_STATUS_ERR_SETUP)
                return
             end if
+            ! diabatic_first = .false.: hdiff runs once per interval with the
+            ! FULL tracer dt (no subcycling), so its explicit Laplacian sits
+            ! within a factor 2 of the forward-Euler limit well before the
+            ! hard bound above (Griffies 1998 sec. on the explicit limit).
+            if (.not. cfg%ocean%vmix%diabatic_first .and. cfg%ocean%vmix%dt_therm_ratio > 1 &
+                .and. dnum > 0.5_wp*DIFFUSIVE_NUMBER_LIMIT) then
+               call logger%warning("&ocean_hdiff_nml kappa_h = "//to_string(kappa_h)// &
+                                   " with diabatic_first=.false.: the interval-end hdiff takes one "// &
+                                   "step of dt_therm = "//to_string(dt_therm)//"s, diffusive number "// &
+                                   to_string(dnum)//" is above half the stability limit "// &
+                                   to_string(DIFFUSIVE_NUMBER_LIMIT))
+            end if
          end block
       end if
 

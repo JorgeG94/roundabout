@@ -679,7 +679,7 @@ on the thermo step (unchanged).
 orders the interval at `dt_therm_ratio > 1`; `.false.` is ACCESS-OM3
 (`DIABATIC_FIRST = False`): the thermo work and the ALE remap close the
 interval (steps `N, 2N, ...`) while the GM coefficient chain keeps leading it.
-Per-item placement table: `docs/howto/tracer_advect_cadence.md`.
+Lateral tracer diffusion (hdiff + Redi, full tracer dt) runs at the interval end, after the drain. Per-item placement table: `docs/howto/tracer_advect_cadence.md`.
 
 `&ocean_vmix_nml tracer_recon` selects the FACE-VALUE reconstruction used
 by that drain — the mass-flux split, the per-layer conservation shell and

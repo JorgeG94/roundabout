@@ -66,7 +66,10 @@ contains
                   new_unittest("diabatic_last_cadence_predicates", test_df_cadence), &
                   new_unittest("diabatic_last_thermo_at_interval_end", test_df_ordering), &
                   new_unittest("diabatic_first_knob_inert_at_ratio1", test_df_ratio1), &
-                  new_unittest("diabatic_last_ice_restart", test_df_ice_restart) &
+                  new_unittest("diabatic_last_ice_restart", test_df_ice_restart), &
+                  new_unittest("diabatic_last_hdiff_dose_once", test_df_hdiff), &
+                  new_unittest("diabatic_last_redi_full_dt_subcycling", test_df_redi), &
+                  new_unittest("diabatic_last_restart_tidal_bbl_kd", test_df_restart_kd) &
                   ]
    end subroutine collect_ocean_tracer_ratio_pc_tests
 
@@ -78,7 +81,7 @@ contains
       end if
    end subroutine ensure_comm
 
-   function case_nml(ratio, uniform, vcoord, dfirst, therm) result(nml)
+   function case_nml(ratio, uniform, vcoord, dfirst, therm, extra) result(nml)
       !! Closed wind-driven basin with an island (divergent flow, real `h`
       !! motion), `pred_corr` (default), `dt_therm_ratio = 4`.
       integer, intent(in) :: ratio
@@ -88,6 +91,8 @@ contains
          !! `&ocean_vmix_nml diabatic_first` (default: leave unset = `.true.`).
       integer, intent(in), optional :: therm
          !! `dt_therm_ratio` (default 4).
+      character(len=*), intent(in), optional :: extra
+         !! Extra namelist text appended verbatim (e.g. `&ocean_bbl_mixing_nml ... /`).
       character(len=:), allocatable :: nml
       character(len=:), allocatable :: vc, df
       character(len=16) :: ts
@@ -126,6 +131,7 @@ contains
             "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', "// &
             "north = 'wall' /"//NL// &
             "&output_nml output_to_file = .false. /"//NL
+      if (present(extra)) nml = nml//extra//NL
    end function case_nml
 
    subroutine make_engine(engine, cfg, nml, ok, restart_file, t0, step0)
@@ -154,22 +160,27 @@ contains
       ok = .true.
    end subroutine make_engine
 
-   subroutine advance(engine, cfg, t, nsteps, ok)
+   subroutine advance(engine, cfg, t, nsteps, ok, dtv)
       type(ocean_engine_t), intent(inout) :: engine
       type(config_t), intent(inout) :: cfg
       real(wp), intent(inout) :: t
       integer, intent(in) :: nsteps
       logical, intent(out) :: ok
+      real(wp), intent(in), optional :: dtv
+         !! Step size (default `DT`).
       integer :: n, ierr
+      real(wp) :: dtl
+      dtl = DT
+      if (present(dtv)) dtl = dtv
       ok = .false.
       do n = 1, nsteps
-         call engine_step(engine, DT, t, ierr=ierr)
+         call engine_step(engine, dtl, t, ierr=ierr)
          if (ierr /= OCEAN_STATUS_OK) return
-         call engine_step_ice(engine, cfg, DT, t, ierr=ierr)
+         call engine_step_ice(engine, cfg, dtl, t, ierr=ierr)
          if (ierr /= OCEAN_STATUS_OK) return
-         call engine_step_finalize(engine, DT, t, ierr=ierr)
+         call engine_step_finalize(engine, dtl, t, ierr=ierr)
          if (ierr /= OCEAN_STATUS_OK) return
-         t = t + DT
+         t = t + dtl
       end do
       ok = .true.
    end subroutine advance
@@ -429,18 +440,19 @@ contains
       end do
    end subroutine test_restart
 
-   subroutine restart_at(error, ratio, dfirst)
+   subroutine restart_at(error, ratio, dfirst, extra)
       !! Straight 12 steps vs 8 steps + (flush, checkpoint) + warm restart +
       !! 4 steps.  8 = two whole windows, so the checkpoint is window-aligned.
       type(error_type), allocatable, intent(out) :: error
       integer, intent(in) :: ratio
       logical, intent(in), optional :: dfirst
+      character(len=*), intent(in), optional :: extra
       type(ocean_engine_t), target :: ea, eb, ec
       type(config_t) :: ca, cb, cc
       real(wp) :: ta, tb, tc
       integer :: ierr, step_c
       logical :: ok
-      call make_engine(ea, ca, case_nml(ratio, .false., dfirst=dfirst), ok)
+      call make_engine(ea, ca, case_nml(ratio, .false., dfirst=dfirst, extra=extra), ok)
       call check(error, ok, "straight engine setup failed")
       if (allocated(error)) return
       ta = 0.0_wp
@@ -448,13 +460,21 @@ contains
       call check(error, ok, "straight run failed")
       if (allocated(error)) return
 
-      call make_engine(eb, cb, case_nml(ratio, .false., dfirst=dfirst), ok)
+      call make_engine(eb, cb, case_nml(ratio, .false., dfirst=dfirst, extra=extra), ok)
       call check(error, ok, "writer engine setup failed")
       if (allocated(error)) return
       tb = 0.0_wp
       call advance(eb, cb, tb, 8, ok)
       call check(error, ok, "writer run failed")
       if (allocated(error)) return
+      if (present(extra)) then
+         associate (kt_ => eb%state%vmix_tidal%kd_int, kb_ => eb%state%vdiff%bbl_mix%kd_int)
+            !$acc update self(kt_, kb_)
+            call check(error, maxval(kt_) > 0.0_wp .and. maxval(kb_) > 0.0_wp, &
+                       "tidal/BBL kd_int is zero at the checkpoint: restart test would be vacuous")
+         end associate
+         if (allocated(error)) return
+      end if
       ! the driver's FIX-1 flush: an exact no-op on a window boundary
       call ocean_dyn_flush_tracer_window(eb%grid, eb%state%metrics, eb%state%dyn, &
                                          eb%state%continuity, eb%state%multilayer, &
@@ -465,7 +485,7 @@ contains
       call engine_exit_data(eb)
       call engine_teardown(eb)
 
-      call make_engine(ec, cc, case_nml(ratio, .false., dfirst=dfirst), ok, restart_file=FN, t0=tc, step0=step_c)
+      call make_engine(ec, cc, case_nml(ratio, .false., dfirst=dfirst, extra=extra), ok, restart_file=FN, t0=tc, step0=step_c)
       call check(error, ok, "warm restart setup failed")
       if (allocated(error)) return
       call check(error, step_c == 8, "restart step count not restored")
@@ -807,6 +827,211 @@ contains
       smax = maxval(abs(a(ng + 1:size(a, 1) - ng, ng + 1:size(a, 2) - ng, nz)))
       imax = maxval(abs(a(ng + 1:size(a, 1) - ng, ng + 1:size(a, 2) - ng, 1:nz - 1)))
    end subroutine surface_age
+
+   function flat_nml(dtv, therm, ratio, uniform, extra) result(nml)
+      !! Closed flat-bottom basin, no wind, no flow: only the tracer physics
+      !! acts.  `diabatic_first = .false.` whenever `therm > 1`.
+      real(wp), intent(in) :: dtv
+      integer, intent(in) :: therm, ratio
+      logical, intent(in) :: uniform
+      character(len=*), intent(in), optional :: extra
+      character(len=:), allocatable :: nml
+      character(len=*), parameter :: NL = new_line("a")
+      character(len=16) :: ts, rs, ds
+      character(len=:), allocatable :: tr, df
+      write (ts, '(i0)') therm
+      write (rs, '(i0)') ratio
+      write (ds, '(f10.2)') dtv
+      df = ""
+      if (therm > 1) df = ", diabatic_first = .false."
+      if (uniform) then
+         tr = "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0 /"//NL
+      else
+         tr = "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0, "// &
+              "T_init_surface = 20.0, T_init_bottom = 4.0 /"//NL
+      end if
+      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
+            "&time_nml t_end = 86400.0, dt_fixed = "//trim(adjustl(ds))//" /"//NL// &
+            "&nonhydrostatic_nml nz_layers = 6 /"//NL// &
+            tr// &
+            "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
+            "&ocean_vmix_nml dt_therm_ratio = "//trim(ts)//", dt_tracer_advect_ratio = "//trim(rs)//df//" /"//NL// &
+            "&ocean_diag_nml enabled = .false. /"//NL// &
+            "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 10000.0, dy = 10000.0 /"//NL// &
+            "&physics_nml coriolis_f = 1.0e-4 /"//NL// &
+            "&vcoord_nml vcoord_type = 'zstar' /"//NL// &
+            "&ocean_topo_nml topo_config = 'flat', max_depth = 1000.0 /"//NL// &
+            "&ocean_tracers_nml enable_ideal_age = .true. /"//NL// &
+            "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL// &
+            "&output_nml output_to_file = .false. /"//NL
+      if (present(extra)) nml = nml//extra//NL
+   end function flat_nml
+
+   subroutine set_age_step(engine, i_step, a_left, a_right)
+      !! Overwrite the age content with a zonal step profile (concentration
+      !! `a_left` for i <= i_step, `a_right` beyond) times the layer
+      !! thickness, ghosts included, then push it to the device.
+      type(ocean_engine_t), intent(inout), target :: engine
+      integer, intent(in) :: i_step
+      real(wp), intent(in) :: a_left, a_right
+      integer :: ia, i
+      ia = engine%state%multilayer%idx_age
+      do i = 1, size(engine%state%multilayer%h_layer, 1)
+         engine%state%multilayer%tracers(ia)%hTr(i, :, :) = &
+            merge(a_left, a_right, i <= i_step)*engine%state%multilayer%h_layer(i, :, :)
+      end do
+      associate (ha => engine%state%multilayer%tracers(ia)%hTr)
+         !$acc update device(ha)
+      end associate
+   end subroutine set_age_step
+
+   subroutine run_age_profile(nml, nsteps, i_step, a_left, a_right, hage, ok, hlay)
+      !! Engine run from the stepped age profile; returns the age content.
+      character(len=*), intent(in) :: nml
+      integer, intent(in) :: nsteps, i_step
+      real(wp), intent(in) :: a_left, a_right
+      real(wp), allocatable, intent(out) :: hage(:, :, :)
+      logical, intent(out) :: ok
+      real(wp), allocatable, intent(out), optional :: hlay(:, :, :)
+         !! Layer thickness after the run.
+      type(ocean_engine_t), target :: e
+      type(config_t) :: c
+      real(wp) :: t
+      integer :: ia
+      call make_engine(e, c, nml, ok)
+      if (.not. ok) return
+      call set_age_step(e, i_step, a_left, a_right)
+      t = 0.0_wp
+      call advance(e, c, t, nsteps, ok)
+      ia = e%state%multilayer%idx_age
+      associate (ha => e%state%multilayer%tracers(ia)%hTr)
+         !$acc update self(ha)
+      end associate
+      hage = e%state%multilayer%tracers(ia)%hTr
+      if (present(hlay)) then
+         !$acc update self(e%state%multilayer%h_layer)
+         hlay = e%state%multilayer%h_layer
+      end if
+      call engine_exit_data(e)
+      call engine_teardown(e)
+   end subroutine run_age_profile
+
+   subroutine test_df_hdiff(error)
+      !! `diabatic_first = .false.`: the tracer Laplacian is applied ONCE per
+      !! interval, at the interval end, with the full tracer dt.  A zonal step
+      !! of age content on a flat, motionless basin: the hdiff increment (run
+      !! with `kappa_h` minus the identical run without) is zero after steps
+      !! 1-3 and, after step 4, equals the analytic one-step explicit Laplacian
+      !! `D h (A(i+1) - 2 A(i) + A(i-1))`, `D = kappa_h dt_therm / dx^2`, in every
+      !! layer below the (reset) surface -- for tracer-advect ratio 4 and 1.
+      !! Applying it twice, with dt instead of dt_therm, or not at all, fails.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp), parameter :: KAP = 4166.6666666666667_wp   ! D = 0.1 at dt_therm = 2400 s
+      real(wp), parameter :: AL = 2.0e6_wp, AR = 5.0e5_wp
+      integer, parameter :: IC = 15
+      real(wp), allocatable :: h0(:, :, :), hk(:, :, :), hz(:, :, :), hl(:, :, :)
+      character(len=:), allocatable :: nk
+      real(wp) :: dmax, err, d_exp, hh
+      integer :: r, nz, j, k, i
+      logical :: ok
+      nk = "&ocean_hdiff_nml kappa_h = 4166.6666666666667 /"
+      do r = 1, 4, 3
+         call run_age_profile(flat_nml(DT, 4, r, .true.), 3, IC, AL, AR, h0, ok)
+         call check(error, ok, "control run (3 steps) failed")
+         if (allocated(error)) return
+         call run_age_profile(flat_nml(DT, 4, r, .true., nk), 3, IC, AL, AR, hk, ok)
+         call check(error, ok, "kappa_h run (3 steps) failed")
+         if (allocated(error)) return
+         call check(error, all(h0 == hk), "hdiff acted before the interval end")
+         if (allocated(error)) return
+         call run_age_profile(flat_nml(DT, 4, r, .true.), 4, IC, AL, AR, hz, ok)
+         if (ok) call run_age_profile(flat_nml(DT, 4, r, .true., nk), 4, IC, AL, AR, hk, ok, hl)
+         call check(error, ok, "4-step runs failed")
+         if (allocated(error)) return
+         nz = size(hk, 3)
+         dmax = 0.0_wp
+         err = 0.0_wp
+         j = size(hk, 2)/2
+         do k = 1, nz - 1
+            do i = 3, size(hk, 1) - 2
+               hh = 0.5_wp*(hl(IC, j, k) + hl(IC + 1, j, k))   ! face-mean thickness
+               ! analytic increment of the content: D h (A(i+1) - 2A(i) + A(i-1))
+               d_exp = 0.0_wp
+               if (i == IC) d_exp = 0.1_wp*hh*(AR - AL)
+               if (i == IC + 1) d_exp = 0.1_wp*hh*(AL - AR)
+               dmax = max(dmax, abs(d_exp))
+               err = max(err, abs((hk(i, j, k) - hz(i, j, k)) - d_exp))
+            end do
+         end do
+         write (*, '(a,i0,a,es10.2,a,es10.2)') "  hdiff dose, ratio ", r, ": max|expected|=", dmax, &
+            " max err=", err
+         call check(error, dmax > 1.0_wp, "no hdiff increment expected: test would pass vacuously")
+         if (allocated(error)) return
+         call check(error, err <= 1.0e-10_wp*dmax, "hdiff increment differs from one full-dt explicit step")
+         if (allocated(error)) return
+      end do
+   end subroutine test_df_hdiff
+
+   subroutine redi_nitt(nml, nsteps, dtv, n_itt, ok)
+      character(len=*), intent(in) :: nml
+      integer, intent(in) :: nsteps
+      real(wp), intent(in) :: dtv
+      integer, intent(out) :: n_itt
+      logical, intent(out) :: ok
+      type(ocean_engine_t), target :: e
+      type(config_t) :: c
+      real(wp) :: t
+      call make_engine(e, c, nml, ok)
+      n_itt = -1
+      if (.not. ok) return
+      t = 0.0_wp
+      call advance(e, c, t, nsteps, ok, dtv)
+      n_itt = e%state%redi%n_itt
+      call engine_exit_data(e)
+      call engine_teardown(e)
+   end subroutine redi_nitt
+
+   subroutine test_df_redi(error)
+      !! Redi under `diabatic_first = .false.` takes the FULL tracer dt after
+      !! the drain, so its CFL-driven subcycle count is the one a single
+      !! 2400 s step (dt = 2400, ratio 1) needs -- more than the 600 s one.
+      type(error_type), allocatable, intent(out) :: error
+      character(len=*), parameter :: RD = "&ocean_redi_nml enable = .true., khtr = 1.2e5, "// &
+                                     "check_diffusive_cfl = .true. /"
+      integer :: na, nb, nc
+      logical :: ok
+      call redi_nitt(flat_nml(DT, 4, 4, .false., RD), 4, DT, na, ok)
+      call check(error, ok, "df=F ratio 4 run failed")
+      if (allocated(error)) return
+      call redi_nitt(flat_nml(4.0_wp*DT, 1, 1, .false., RD), 1, 4.0_wp*DT, nb, ok)
+      call check(error, ok, "dt=2400 reference run failed")
+      if (allocated(error)) return
+      call redi_nitt(flat_nml(DT, 1, 1, .false., RD), 1, DT, nc, ok)
+      call check(error, ok, "dt=600 reference run failed")
+      if (allocated(error)) return
+      write (*, '(a,i0,a,i0,a,i0)') "  redi n_itt: df=F ratio4=", na, "  dt2400=", nb, "  dt600=", nc
+      call check(error, nb > nc, "reference runs do not discriminate dt (n_itt equal): test is vacuous")
+      if (allocated(error)) return
+      call check(error, na == nb, "Redi n_itt is not the one the full tracer dt needs")
+   end subroutine test_df_redi
+
+   subroutine test_df_restart_kd(error)
+      !! `diabatic_first = .false.` + tidal + law-of-the-wall BBL mixing: the
+      !! checkpoint at the interval boundary must carry both `kd_int` fields
+      !! (their refresh is the interval's last step), so 8 + 4 steps with a
+      !! warm restart is bit-identical to 12 straight, ratio 4 and 1.
+      type(error_type), allocatable, intent(out) :: error
+      character(len=*), parameter :: X = "&ocean_tidal_mixing_nml enable = .true., e_uniform = 1.0e-3 /"// &
+                                     new_line("a")// &
+                                     "&ocean_bdrag_nml form = 'quadratic', cd = 3.0e-3, hbbl = 10.0, bg_vel = 0.1 /"// &
+                                     new_line("a")// &
+                                     "&ocean_bbl_mixing_nml enable = .true. /"
+      integer :: r
+      do r = 1, 4, 3
+         call restart_at(error, r, dfirst=.false., extra=X)
+         if (allocated(error)) return
+      end do
+   end subroutine test_df_restart_kd
 
    subroutine delete_file(fname)
       character(len=*), intent(in) :: fname
