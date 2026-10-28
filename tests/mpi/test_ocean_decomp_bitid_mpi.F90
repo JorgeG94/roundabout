@@ -73,6 +73,16 @@
 !!   * sss_restore - the island basin with FILE sea-surface-salinity restoring
 !!     (per-rank windowed two-record target, halo-exchanged, piston salt flux,
 !!     net-zero shift through the EFP allreduce); needs NetCDF;
+!!   * the OM3-parity feature cases, each the spherical spoon basin plus ONE
+!!     feature: `gm_ebt_struct` (EBT vertical structure of KhTh), `gm_fgnv`
+!!     (FGNV streamfunction), `meke_gm_work` (MEKE source from the GM work),
+!!     `hvisc_om3_floors` (latitude / velocity-scale / Coriolis-bounded
+!!     viscosity), `vmix_no_interior` (`interior_closure = 'none'`),
+!!     `redi_cfl_fold` (Redi diffusive-CFL subcycling, `n_itt > 1`, on the
+!!     tripolar fold), `tidal_files` (tidal `tideamp`/`h2` read from a file),
+!!     `tidal_polzin` (the Polzin vertical profile) and `bbl_lotw` (the
+!!     law-of-the-wall bottom-boundary-layer tracer mixing); the two tidal
+!!     cases need NetCDF;
 !!   * sea_ice — sea ice on the ocean's decomposition: Winton thermo +
 !!     ITD, EVP dynamics (CFL clip, `project_ci`) and the ice->ocean
 !!     stress blend in a cooled periodic channel, `dt_therm_ratio = 2`;
@@ -168,6 +178,7 @@ program test_ocean_decomp_bitid_mpi
    character(len=*), parameter :: BATHY_FILE = "bitid_bathy.nc"
    character(len=*), parameter :: ZINIT_FILE = "bitid_zinit.nc"
    character(len=*), parameter :: SSS_FILE = "bitid_sss.nc"
+   character(len=*), parameter :: TIDE_FILE = "bitid_tide.nc"
 
    type :: field_t
       !! One compared field: a host copy of the whole local array (2-D
@@ -192,7 +203,7 @@ program test_ocean_decomp_bitid_mpi
    integer :: rank, nprocs, n_fail, total_fail, ic
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(19) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(28) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -203,7 +214,11 @@ program test_ocean_decomp_bitid_mpi
                                                 "file_readers_zstar", "sea_ice", &
                                                 "sea_ice_transport", "tripolar", &
                                                 "visc_rem_chain", "sea_ice_fold", &
-                                                "sea_ice_fold_nodyn", "sss_restore"]
+                                                "sea_ice_fold_nodyn", "sss_restore", &
+                                                "gm_ebt_struct", "gm_fgnv", "meke_gm_work", &
+                                                "hvisc_om3_floors", "vmix_no_interior", &
+                                                "redi_cfl_fold", "tidal_files", &
+                                                "tidal_polzin", "bbl_lotw"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -221,6 +236,8 @@ program test_ocean_decomp_bitid_mpi
       if (trim(CASES(ic)) == "file_readers" .or. &
           trim(CASES(ic)) == "file_readers_zstar_full" .or. &
           trim(CASES(ic)) == "sss_restore" .or. &
+          trim(CASES(ic)) == "tidal_files" .or. &
+          trim(CASES(ic)) == "tidal_polzin" .or. &
           trim(CASES(ic)) == "file_readers_zstar") cycle
 #endif
       call run_case(trim(CASES(ic)), trim(SCHEMES(1)))
@@ -253,7 +270,7 @@ contains
       character(len=:), allocatable :: nml
       character(len=*), parameter :: NL = new_line("a")
       character(len=16) :: spx, spy, snx, sny
-      character(len=:), allocatable :: common, bt_extra, ice_dyn
+      character(len=:), allocatable :: common, bt_extra, ice_dyn, hv_extra
 
       ! The visc_rem chain rides on the common &ocean_bt_nml group (one
       ! group per namelist).  D1 follow-up (2026-10): the weighted
@@ -270,6 +287,11 @@ contains
       if (label == "visc_rem_chain") then
          bt_extra = ", visc_rem_chain = .true., frhat_scheme = 'hybrid'"
       end if
+      hv_extra = ""
+      if (label == "hvisc_om3_floors") then
+         hv_extra = ", kh_sin_lat = 2000.0, kh_pwr_of_sine = 4.0, ah_vel_scale = 0.01, "// &
+                    "bound_coriolis_biharm = .true., bound_coriolis_vel = 6.0"
+      end if
       write (spx, '(i0)') px
       write (spy, '(i0)') py
       write (snx, '(i0)') NX_G
@@ -283,7 +305,7 @@ contains
                "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"'"// &
                bt_extra//" /"//NL// &
                "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
-               "smag_ah = .true. /"//NL// &
+               "smag_ah = .true."//hv_extra//" /"//NL// &
                "&ocean_diag_nml enabled = .false. /"//NL// &
                ""
 
@@ -415,7 +437,7 @@ contains
                "&ocean_bc_nml west = 'tidal', east = 'open', south = 'wall', north = 'wall', "// &
                "west_n_tidal = 1, west_tidal_amp = 0.5, west_tidal_phase = 0.0, "// &
                "west_tidal_omega = 1.4051890e-4 /"//NL
-      case ("tripolar")
+      case ("tripolar", "redi_cfl_fold")
          ! Analytic tripolar cap (59N-83N, phi_join 74N) closed by the north
          ! fold, periodic in x, under a constant wind, with the double-Drake
          ! land walls reaching the fold line at asymmetric columns (1 and
@@ -435,11 +457,26 @@ contains
                "slope_scale = 0.2 /"//NL// &
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'tripolar_fold' /"//NL
-      case ("spherical", "closures")
+         if (label == "redi_cfl_fold") then
+            ! Redi at a diffusivity far above the explicit-diffusion limit
+            ! with `check_diffusive_cfl`: the cell CFL (a cross-rank max) sets
+            ! n_itt > 1 passes, each followed by a tracer-halo refresh that
+            ! must cross the fold and the periodic seam.
+            nml = nml// &
+                  "&ocean_eos_nml eos = 'wright' /"//NL// &
+                  "&ocean_slopes_nml enable = .true. /"//NL// &
+                  "&ocean_redi_nml enable = .true., khtr = 2.0e6, "// &
+                  "check_diffusive_cfl = .true. /"//NL
+         end if
+      case ("spherical", "closures", "gm_ebt_struct", "gm_fgnv", "meke_gm_work", &
+            "hvisc_om3_floors", "vmix_no_interior", "tidal_files", "tidal_polzin", &
+            "bbl_lotw")
          ! Lon-lat sector, spoon basin, Wright EOS.  "closures" adds the
          ! lateral and vertical parameterisation set on top (EPBL instead of
          ! KPP, Fox-Kemper MLE, GM + MEKE, Redi, kappa-shear, tidal mixing,
-         ! convective adjustment, geothermal heating, tracer hdiff).
+         ! convective adjustment, geothermal heating, tracer hdiff).  The
+         ! OM3-parity labels (the `select case` after the block below) each
+         ! add ONE feature to this basin.
          nml = common// &
                "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
                "dx = 1.0, dy = 1.0 /"//NL// &
@@ -466,6 +503,58 @@ contains
                   "&ocean_geothermal_nml enable = .true. /"//NL// &
                   "&ocean_hdiff_nml kappa_h = 100.0 /"//NL
          end if
+         select case (label)
+         case ("gm_ebt_struct")
+            ! GM with the EBT vertical structure of KhTh (the structure is the
+            ! wave-speed slot's `ebt_struct`, a per-cell field read at both
+            ! cells of every face).
+            nml = nml// &
+                  "&ocean_slopes_nml enable = .true. /"//NL// &
+                  "&ocean_wavespeed_nml enable = .true., use_ebt = .true. /"//NL// &
+                  "&ocean_gm_nml enable = .true., khth = 500.0, use_ebt_struct = .true. /"//NL
+         case ("gm_fgnv")
+            ! GM with the FGNV streamfunction (a tridiagonal BVP per face
+            ! column on the cg1 of the two bounding cells).
+            nml = nml// &
+                  "&ocean_slopes_nml enable = .true. /"//NL// &
+                  "&ocean_wavespeed_nml enable = .true. /"//NL// &
+                  "&ocean_gm_nml enable = .true., khth = 500.0, use_fgnv = .true., "// &
+                  "fgnv_filter_scale = 0.1 /"//NL
+         case ("meke_gm_work")
+            ! MEKE sourced from the work of the final bolus transports, fed
+            ! back into the VarMix KhTh (`khth_fac`) so the source reaches
+            ! the state: with the feedback off the MEKE field alone changes.
+            nml = nml// &
+                  "&ocean_slopes_nml enable = .true. /"//NL// &
+                  "&ocean_wavespeed_nml enable = .true. /"//NL// &
+                  "&ocean_varmix_nml enable = .true., khth = 500.0 /"//NL// &
+                  "&ocean_gm_nml enable = .true., khth = 500.0, gm_src_form = 'work' /"//NL// &
+                  "&ocean_meke_nml enable = .true., gmcoeff = 0.15, damping = 1.0e-6, "// &
+                  "khth_fac = 1.0, alpha_grid = 1.0 /"//NL
+         case ("vmix_no_interior")
+            ! No interior (shear / PP81) closure: KPP boundary layer only.
+            nml = nml// &
+                  "&ocean_vmix_nml interior_closure = 'none' /"//NL
+         case ("tidal_files", "tidal_polzin")
+            ! Tidal mixing with `tideamp` and `h2` read from a whole-grid
+            ! file (each rank reads its own band); `tidal_polzin` adds the
+            ! Polzin stretched-height vertical profile.
+            nml = nml// &
+                  "&ocean_tidal_mixing_nml enable = .true., e_compute = .true., "// &
+                  "tideamp_source = 'file', tideamp_file = '"//TIDE_FILE//"', "// &
+                  "h2_source = 'file', h2_file = '"//TIDE_FILE//"', "// &
+                  "kd_max = 0.1, energy_limiter = 'reinject', bed_share = 'lump'"
+            if (label == "tidal_polzin") nml = nml//", profile = 'polzin'"
+            nml = nml//" /"//NL
+         case ("bbl_lotw")
+            ! Law-of-the-wall BBL tracer mixing: needs the per-face viscous
+            ! BBL (bbl_glue + a bottom drag with hbbl > 0) under it.
+            nml = nml// &
+                  "&ocean_vdiff_nml hvel_mom6 = .true., bbl_glue = .true. /"//NL// &
+                  "&ocean_bdrag_nml form = 'quadratic', cd = 3.0e-3, hbbl = 10.0, "// &
+                  "bg_vel = 0.1 /"//NL// &
+                  "&ocean_bbl_mixing_nml enable = .true. /"//NL
+         end select
       case ("obc_radiation_sponge")
          ! Orlanski-radiating open south edge with tracer reservoirs, a
          ! clamped (inflow) north edge, and a relaxing sponge band west.
@@ -1426,6 +1515,29 @@ contains
       call nc_enddef(ncid)
       ierr = nf90_put_var(ncid, v1, tt)
       call rdb_put_var_1d(ncid, v2, [0.0_wp, 86400.0_wp])
+      call nc_close(ncid)
+
+      ! Internal-tide fields (x, y): a tidal speed and a roughness variance
+      ! that differ from each other and vary in both directions, so a tile
+      ! that read the wrong window cannot match the serial run.
+      deallocate (tt)
+      allocate (tt(NX_G, NY_G, 2))
+      do j = 1, NY_G
+         do i = 1, NX_G
+            x = real(i, wp)/real(NX_G, wp)
+            y = real(j, wp)/real(NY_G, wp)
+            tt(i, j, 1) = 0.02_wp + 0.04_wp*x*(1.0_wp - y)
+            tt(i, j, 2) = 2000.0_wp + 6000.0_wp*y*(1.0_wp - 0.5_wp*x)
+         end do
+      end do
+      call nc_create_file(TIDE_FILE, ncid)
+      call nc_def_dim(ncid, "x", NX_G, dx_)
+      call nc_def_dim(ncid, "y", NY_G, dy_)
+      call nc_def_var_2d(ncid, "tideamp", [dx_, dy_], v1)
+      call nc_def_var_2d(ncid, "h2", [dx_, dy_], v2)
+      call nc_enddef(ncid)
+      call nc_put_var_2d(ncid, v1, tt(:, :, 1))
+      call nc_put_var_2d(ncid, v2, tt(:, :, 2))
       call nc_close(ncid)
    end subroutine write_input_files
 #endif
