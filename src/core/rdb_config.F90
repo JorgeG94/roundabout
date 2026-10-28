@@ -2020,6 +2020,20 @@ module rdb_config
       real(wp) :: khtr = 0.0_wp
          !! Redi neutral diffusivity KhTr (m^2/s; production 1e2-1e3).  0 ⇒
          !! no neutral flux even when enabled.
+      logical :: check_diffusive_cfl = .false.
+         !! Subcycle the neutral flux so the explicit-diffusion stability
+         !! limit is respected: `n_itt = max(1, ceiling(max_i CFL_i - 4*epsilon))` with
+         !! `CFL_i = 2*sum_f(KhTr_f*dt*dy_f/dx_f)/area_i` (the sum over the
+         !! cell's four faces, after the `max_diffusive_cfl` cap).  The
+         !! global max is taken over all ranks, so `n_itt` is
+         !! decomposition-independent.  Default off.  The MOM6 name
+         !! `CHECK_DIFFUSIVE_CFL`; the OM3 value is `True`.
+      real(wp) :: max_diffusive_cfl = -1.0_wp
+         !! `<= 0` ⇒ off.  Otherwise each face coefficient is capped at
+         !! `(max_diffusive_cfl/8)*min(area_L, area_R)` so no cell exceeds
+         !! this `CFL_i`; without `check_diffusive_cfl` it also sets
+         !! `n_itt = ceiling(max_diffusive_cfl)`.  The MOM6 name
+         !! `MAX_TR_DIFFUSION_CFL`; the OM3 value is 2.0.
    end type ocean_redi_config_t
    type :: ocean_varmix_config_t
       !! `&ocean_varmix_nml`: spatially-varying GM/Redi lateral-diffusivity

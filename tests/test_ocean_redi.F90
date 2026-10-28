@@ -23,7 +23,13 @@ module test_ocean_redi
    use rdb_eos, only: eos_t, EOS_VARIANT_LINEAR
    use rdb_ocean_redi, only: redi_interface_scalar, redi_interpolate_position, &
                              redi_neutral_positions_continuous, &
-                             ocean_redi_t, redi_calc_coeffs, redi_apply_flux
+                             ocean_redi_t, redi_calc_coeffs, redi_apply_flux, &
+                             redi_max_cell_cfl, redi_limit_coef
+   use rdb_decomp, only: decomp_t, decomp_init
+   use rdb_ocean_halo, only: ocean_halo_init, ocean_halo_destroy, ocean_halo_centre
+   use rdb_comm_env, only: comm_env_init, comm_env_setup_roles
+   use rdb_ocean_boundary_types, only: ocean_bc_state_t, ocean_bc_state_init, &
+                                       OBC_PERIODIC
    use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
    implicit none
    private
@@ -37,6 +43,7 @@ module test_ocean_redi
    real(wp), parameter :: ALPHA_T = 0.2_wp     ! kg/m^3/degC
    real(wp), parameter :: BETA_S = 0.78_wp     ! kg/m^3/PSU
    real(wp), parameter :: DT = 1800.0_wp
+   logical :: comm_inited = .false.
 
 contains
 
@@ -52,7 +59,12 @@ contains
                   new_unittest("redi_along_isopycnal_zero", test_along_isopycnal_zero), &
                   new_unittest("redi_cross_isopycnal_downgradient", test_cross_downgradient), &
                   new_unittest("redi_varmix_khtr_consumed", test_varmix_khtr), &
-                  new_unittest("redi_wall_no_leak", test_wall_no_leak) &
+                  new_unittest("redi_wall_no_leak", test_wall_no_leak), &
+                  new_unittest("redi_cfl_iteration_count", test_cfl_iteration_count), &
+                  new_unittest("redi_cfl_local_limit", test_cfl_local_limit), &
+                  new_unittest("redi_cfl_subcycle_equivalence", test_cfl_subcycle_equiv), &
+                  new_unittest("redi_cfl_subcycle_conserves", test_cfl_subcycle_conserves), &
+                  new_unittest("redi_cfl_subcycle_stability", test_cfl_subcycle_stability) &
                   ]
    end subroutine collect_ocean_redi_tests
 
@@ -723,5 +735,409 @@ contains
          deallocate (sa, sb, sc)
       end block checks
    end subroutine test_varmix_khtr
+
+   ! ==================================================================
+   ! Diffusive-CFL control (check_diffusive_cfl / max_diffusive_cfl)
+   ! ==================================================================
+
+   subroutine fill_strat(ms, grid, nz, dz)
+      !! Flat isopycnals: T increases upward (k=nz surface), S uniform,
+      !! uniform layer thickness `dz`.  hTr = value * h.
+      type(multilayer_state_t), intent(inout) :: ms
+      type(hgrid_t), intent(in) :: grid
+      integer, intent(in) :: nz
+      real(wp), intent(in) :: dz
+      integer :: i, j, k
+      ms%h_layer = dz
+      ms%u_face_x_layer = 0.0_wp
+      ms%v_face_y_layer = 0.0_wp
+      do k = 1, nz
+         do j = 1, grid%ny_total
+            do i = 1, grid%nx_total
+               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = (T0 + 0.02_wp*(real(k, wp) - 0.5_wp)*dz)*dz
+               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = S0*dz
+            end do
+         end do
+      end do
+   end subroutine fill_strat
+
+   subroutine comm_once()
+      if (.not. comm_inited) then
+         call comm_env_init()
+         call comm_env_setup_roles(.false.)
+         comm_inited = .true.
+      end if
+   end subroutine comm_once
+
+   ! ------------------------------------------------------------------
+   ! n_itt: one cell with CFL = 3.4 (all four of its faces at KhTr_hi,
+   ! every other face 0).  check -> ceiling(3.4) = 4; cap only -> 2;
+   ! check + cap=2 -> the cell is capped to CFL 2 -> 2; both off -> 1.
+   ! ------------------------------------------------------------------
+   subroutine test_cfl_iteration_count(error)
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_metrics_t) :: metrics
+      type(ocean_redi_t) :: rd
+      type(eos_t) :: eos
+      integer, parameter :: NX = 6, NY = 5, NZ = 4, IC = 4, JC = 3
+      real(wp), parameter :: DX = 1000.0_wp, DZ = 50.0_wp
+      real(wp) :: khi
+      real(wp), allocatable :: ku(:, :), kv(:, :)
+      integer :: n_chk, n_cap, n_both, n_off
+      call comm_once()
+      checks: block
+         call make_grid(grid, NX, NY, DX)
+         ms%nz_ml = NZ
+         call ms%init(grid)
+         call setup_redi(rd, grid, NZ, khtr=1.0_wp)
+         call make_eos(eos)
+         call fill_strat(ms, grid, NZ, DZ)
+         khi = 3.4_wp*DX*DX/(8.0_wp*DT)   ! 8 KhTr dt/dx^2 = 3.4
+         allocate (ku(grid%nx_total + 1, grid%ny_total), kv(grid%nx_total, grid%ny_total + 1))
+         ku = 0.0_wp
+         kv = 0.0_wp
+         ku(IC, JC) = khi
+         ku(IC + 1, JC) = khi
+         kv(IC, JC) = khi
+         kv(IC, JC + 1) = khi
+         call map_in(ms, metrics, grid, rd, eos)
+         !$acc enter data copyin(ku, kv)
+         call redi_calc_coeffs(grid, metrics, eos, rd, ms)
+
+         rd%check_diffusive_cfl = .true.
+         rd%max_diffusive_cfl = -1.0_wp
+         call redi_apply_flux(grid, metrics, rd, ms, DT, khtr_u_ext=ku, khtr_v_ext=kv)
+         n_chk = rd%n_itt
+         rd%check_diffusive_cfl = .false.
+         rd%max_diffusive_cfl = 2.0_wp
+         call redi_apply_flux(grid, metrics, rd, ms, DT, khtr_u_ext=ku, khtr_v_ext=kv)
+         n_cap = rd%n_itt
+         rd%check_diffusive_cfl = .true.
+         call redi_apply_flux(grid, metrics, rd, ms, DT, khtr_u_ext=ku, khtr_v_ext=kv)
+         n_both = rd%n_itt
+         rd%check_diffusive_cfl = .false.
+         rd%max_diffusive_cfl = -1.0_wp
+         call redi_apply_flux(grid, metrics, rd, ms, DT, khtr_u_ext=ku, khtr_v_ext=kv)
+         n_off = rd%n_itt
+         !$acc exit data delete(ku, kv)
+         call map_out(ms, metrics, rd)
+
+         call check(error, n_chk, 4, "check_diffusive_cfl, CFL 3.4 -> n_itt = 4")
+         if (allocated(error)) exit checks
+         call check(error, n_cap, 2, "max_diffusive_cfl = 2, no check -> n_itt = 2")
+         if (allocated(error)) exit checks
+         call check(error, n_both, 2, "check + cap 2: capped cell CFL = 2 -> n_itt = 2")
+         if (allocated(error)) exit checks
+         call check(error, n_off, 1, "both off -> n_itt = 1")
+      end block checks
+      call rd%destroy()
+      call ms%destroy()
+   end subroutine test_cfl_iteration_count
+
+   ! ------------------------------------------------------------------
+   ! Local limit: with a large uniform KhTr every capped cell has
+   ! CFL = 2 (<= 2 + 1e-12); in a mixed field the uncapped faces are
+   ! returned bit for bit and the capped ones sit exactly at the cap.
+   ! ------------------------------------------------------------------
+   subroutine test_cfl_local_limit(error)
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_metrics_t) :: metrics
+      type(ocean_redi_t) :: rd
+      type(eos_t) :: eos
+      integer, parameter :: NX = 6, NY = 5, NZ = 4, IC = 4, JC = 3
+      real(wp), parameter :: DX = 1000.0_wp, DZ = 50.0_wp, CMAX = 2.0_wp
+      real(wp) :: cfl_cap, cmax_capped, cmax_free, c, lim, area, khi, klo
+      real(wp), allocatable :: ku(:, :), kv(:, :)
+      integer :: i, j, nbad
+      call comm_once()
+      checks: block
+         call make_grid(grid, NX, NY, DX)
+         ms%nz_ml = NZ
+         call ms%init(grid)
+         call setup_redi(rd, grid, NZ, khtr=1.0_wp)
+         call make_eos(eos)
+         call fill_strat(ms, grid, NZ, DZ)
+         area = DX*DX
+         cfl_cap = CMAX/8.0_wp
+         khi = 3.4_wp*DX*DX/(8.0_wp*DT)
+         klo = 10.0_wp                        ! khdt = 1.8e4 m^2 << cap*area = 2.5e5
+         allocate (ku(grid%nx_total + 1, grid%ny_total), kv(grid%nx_total, grid%ny_total + 1))
+         ku = klo
+         kv = klo
+         ku(IC, JC) = khi
+         ku(IC + 1, JC) = khi
+         kv(IC, JC) = khi
+         kv(IC, JC + 1) = khi
+         call map_in(ms, metrics, grid, rd, eos)
+         !$acc enter data copyin(ku, kv)
+         call redi_calc_coeffs(grid, metrics, eos, rd, ms)
+         rd%max_diffusive_cfl = CMAX
+         call redi_apply_flux(grid, metrics, rd, ms, DT, khtr_u_ext=ku, khtr_v_ext=kv)
+         ! Device reduction on the resolved face KhTr the kernel used.
+         call redi_max_cell_cfl(grid%nx_total, grid%ny_total, grid%nghost, grid%nx_phys, &
+                                grid%ny_phys, DT, .true., cfl_cap, rd%khtr_u, rd%khtr_v, &
+                                metrics%dy_cu, metrics%dx_cv, metrics%idxCu, metrics%idyCv, &
+                                metrics%areaT, cmax_capped)
+         call redi_max_cell_cfl(grid%nx_total, grid%ny_total, grid%nghost, grid%nx_phys, &
+                                grid%ny_phys, DT, .false., cfl_cap, rd%khtr_u, rd%khtr_v, &
+                                metrics%dy_cu, metrics%dx_cv, metrics%idxCu, metrics%idyCv, &
+                                metrics%areaT, cmax_free)
+         !$acc exit data delete(ku, kv)
+         call map_out(ms, metrics, rd)
+
+         call check(error, cmax_free > 3.39_wp, "uncapped field really has CFL 3.4 (test is live)")
+         if (allocated(error)) exit checks
+         call check(error, cmax_capped <= CMAX + 1.0e-12_wp, "capped CFL_i <= max_diffusive_cfl + 1e-12")
+         if (allocated(error)) exit checks
+         call check(error, cmax_capped >= CMAX - 1.0e-9_wp, "the cap is active (cell reaches CFL 2)")
+         if (allocated(error)) exit checks
+
+         ! Face-level: uncapped faces are bit-identical, capped ones sit at the cap.
+         nbad = 0
+         do j = 1, 2
+            do i = 1, 2
+               if (i == 1) c = DT*klo*DX*(1.0_wp/DX)
+               if (i == 2) c = DT*khi*DX*(1.0_wp/DX)
+               lim = redi_limit_coef(c, .true., cfl_cap, area, area, 1)
+               if (c <= cfl_cap*area) then
+                  if (lim /= c) nbad = nbad + 1
+               else
+                  if (abs(lim - cfl_cap*area) > 1.0e-12_wp*area) nbad = nbad + 1
+               end if
+            end do
+         end do
+         call check(error, nbad, 0, "uncapped faces bit-identical, capped faces at the cap")
+         if (allocated(error)) exit checks
+         c = DT*klo*DX*(1.0_wp/DX)
+         call check(error, redi_limit_coef(c, .false., cfl_cap, area, area, 1) == c, &
+                    "knobs off: coefficient returned untouched")
+      end block checks
+      call rd%destroy()
+      call ms%destroy()
+   end subroutine test_cfl_local_limit
+
+   ! ------------------------------------------------------------------
+   ! n_itt = 2 (CFL 1.5 via check) == two manual dt/2 calls on the SAME
+   ! Phase-A coefficients with a halo refresh between.  Periodic x, so
+   ! a missing inter-pass refresh leaves pass 2 reading stale seam ghosts.
+   ! ------------------------------------------------------------------
+   subroutine test_cfl_subcycle_equiv(error)
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_metrics_t) :: metrics
+      type(ocean_redi_t) :: rd
+      type(eos_t) :: eos
+      type(ocean_bc_state_t) :: bc
+      type(decomp_t) :: decomp
+      integer, parameter :: NX = 8, NY = 5, NZ = 4
+      real(wp), parameter :: DX = 1000.0_wp, DZ = 50.0_wp, TWOPI = 6.283185307179586_wp
+      real(wp), allocatable :: s_sub(:, :, :), t_sub(:, :, :), s_ref(:, :, :), s_init(:, :, :)
+      real(wp) :: khtr, dmax, smax, s_moved
+      integer :: i, j, k, n_sub, i0, i1, j0, j1
+      call comm_once()
+      checks: block
+         call make_grid(grid, NX, NY, DX)
+         call decomp_init(decomp, NX, NY, 1, 1, 0)
+         call ocean_halo_init(decomp, NGHOST, .true., .false.)
+         ms%nz_ml = NZ
+         call ms%init(grid)
+         call setup_redi(rd, grid, NZ, khtr=1.0_wp)
+         call make_eos(eos)
+         call ocean_bc_state_init(bc, grid, nz_ml=NZ, n_tracers=0)
+         bc%west%bc_type = OBC_PERIODIC
+         bc%east%bc_type = OBC_PERIODIC
+         bc%periodic_x = .true.
+         i0 = grid%nghost + 1
+         i1 = grid%nghost + NX
+         j0 = grid%nghost + 1
+         j1 = grid%nghost + NY
+         khtr = 1.5_wp*DX*DX/(8.0_wp*DT)   ! CFL = 1.5 -> n_itt = 2
+         rd%khtr = khtr
+
+         ! S carries a cross-isopycnal x-sinusoid that is periodic in the
+         ! GHOSTS too, so the seam flux is non-zero from pass 1.
+         call fill_strat(ms, grid, NZ, DZ)
+         do k = 1, NZ
+            do j = 1, grid%ny_total
+               do i = 1, grid%nx_total
+                  ms%tracers(ms%idx_salinity)%hTr(i, j, k) = &
+                     (S0 + 0.05_wp*sin(TWOPI*(real(i - grid%nghost, wp) - 0.5_wp)/real(NX, wp)))*DZ
+               end do
+            end do
+         end do
+         s_init = ms%tracers(ms%idx_salinity)%hTr
+
+         ! ---- subcycled: one call, check_diffusive_cfl ----
+         call map_in(ms, metrics, grid, rd, eos)
+         call redi_calc_coeffs(grid, metrics, eos, rd, ms)
+         rd%check_diffusive_cfl = .true.
+         call redi_apply_flux(grid, metrics, rd, ms, DT, bc=bc)
+         n_sub = rd%n_itt
+         !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
+         !$acc update self(ms%tracers(ms%idx_salinity)%hTr)
+         s_sub = ms%tracers(ms%idx_salinity)%hTr
+         t_sub = ms%tracers(ms%idx_temperature)%hTr
+         call map_out(ms, metrics, rd)
+         call rd%destroy()
+         call ms%destroy()
+
+         ! ---- reference: same Phase A, two dt/2 calls + manual refresh ----
+         call ms%init(grid)
+         call setup_redi(rd, grid, NZ, khtr=khtr)
+         call fill_strat(ms, grid, NZ, DZ)
+         ms%tracers(ms%idx_salinity)%hTr = s_init
+         call map_in(ms, metrics, grid, rd, eos)
+         call redi_calc_coeffs(grid, metrics, eos, rd, ms)
+         call redi_apply_flux(grid, metrics, rd, ms, 0.5_wp*DT, bc=bc)
+         call ocean_halo_centre(ms%tracers(ms%idx_temperature)%hTr, NZ)
+         call ocean_halo_centre(ms%tracers(ms%idx_salinity)%hTr, NZ)
+         call redi_apply_flux(grid, metrics, rd, ms, 0.5_wp*DT, bc=bc)
+         !$acc update self(ms%tracers(ms%idx_salinity)%hTr)
+         s_ref = ms%tracers(ms%idx_salinity)%hTr
+         call map_out(ms, metrics, rd)
+
+         call check(error, n_sub, 2, "check_diffusive_cfl picked n_itt = 2")
+         if (allocated(error)) exit checks
+         s_moved = maxval(abs(s_ref(i0:i1, j0:j1, :) - s_init(i0:i1, j0:j1, :)))
+         call check(error, s_moved > 1.0e-4_wp*DZ, "the seam flux moved S (test is live)")
+         if (allocated(error)) exit checks
+         smax = maxval(abs(s_ref(i0:i1, j0:j1, :)))
+         dmax = maxval(abs(s_sub(i0:i1, j0:j1, :) - s_ref(i0:i1, j0:j1, :)))
+         call check(error, dmax <= 1.0e-14_wp*smax, &
+                    "subcycled n_itt=2 == two manual dt/2 calls with halo refresh (1e-14)")
+      end block checks
+      call ocean_halo_destroy()
+      call rd%destroy()
+      call ms%destroy()
+   end subroutine test_cfl_subcycle_equiv
+
+   ! ------------------------------------------------------------------
+   ! Conservation of sum(hTr) with n_itt = 3 (cap 3, huge KhTr), walls.
+   ! ------------------------------------------------------------------
+   subroutine test_cfl_subcycle_conserves(error)
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_metrics_t) :: metrics
+      type(ocean_redi_t) :: rd
+      type(eos_t) :: eos
+      integer, parameter :: NX = 7, NY = 6, NZ = 4
+      real(wp), parameter :: DX = 1000.0_wp, DZ = 50.0_wp, TWOPI = 6.283185307179586_wp
+      real(wp) :: ssum0, ssum1, tsum0, tsum1, s_change
+      real(wp), allocatable :: s0f(:, :, :)
+      integer :: i, j, k, i0, i1, j0, j1
+      call comm_once()
+      checks: block
+         call make_grid(grid, NX, NY, DX)
+         ms%nz_ml = NZ
+         call ms%init(grid)
+         call setup_redi(rd, grid, NZ, khtr=2000.0_wp)
+         call make_eos(eos)
+         call fill_strat(ms, grid, NZ, DZ)
+         do k = 1, NZ
+            do j = 1, grid%ny_total
+               do i = 1, grid%nx_total
+                  ms%tracers(ms%idx_salinity)%hTr(i, j, k) = (S0 + 0.1_wp*sin(0.9_wp*real(i, wp)) &
+                                                              *cos(0.7_wp*real(j, wp)))*DZ
+               end do
+            end do
+         end do
+         i0 = grid%nghost + 1
+         i1 = grid%nghost + NX
+         j0 = grid%nghost + 1
+         j1 = grid%nghost + NY
+         ssum0 = sum(ms%tracers(ms%idx_salinity)%hTr(i0:i1, j0:j1, :))
+         tsum0 = sum(ms%tracers(ms%idx_temperature)%hTr(i0:i1, j0:j1, :))
+         s0f = ms%tracers(ms%idx_salinity)%hTr
+         rd%max_diffusive_cfl = 3.0_wp
+         call map_in(ms, metrics, grid, rd, eos)
+         call run_redi(grid, metrics, eos, rd, ms)
+         call map_out(ms, metrics, rd)
+         ssum1 = sum(ms%tracers(ms%idx_salinity)%hTr(i0:i1, j0:j1, :))
+         tsum1 = sum(ms%tracers(ms%idx_temperature)%hTr(i0:i1, j0:j1, :))
+         s_change = maxval(abs(ms%tracers(ms%idx_salinity)%hTr(i0:i1, j0:j1, :) - s0f(i0:i1, j0:j1, :)))
+         call check(error, rd%n_itt, 3, "max_diffusive_cfl = 3 -> n_itt = 3")
+         if (allocated(error)) exit checks
+         call check(error, s_change > 1.0e-4_wp, "S is genuinely redistributed (conservation is live)")
+         if (allocated(error)) exit checks
+         call check(error, abs(ssum1 - ssum0) <= 1.0e-12_wp*abs(ssum0), "n_itt=3: sum(h*S) conserved (1e-12)")
+         if (allocated(error)) exit checks
+         call check(error, abs(tsum1 - tsum0) <= 1.0e-12_wp*abs(tsum0), "n_itt=3: sum(h*T) conserved (1e-12)")
+      end block checks
+      call rd%destroy()
+      call ms%destroy()
+   end subroutine test_cfl_subcycle_conserves
+
+   ! ------------------------------------------------------------------
+   ! Stability.  Flat isopycnals, passive checkerboard (+/-1), cell
+   ! CFL = 3, i.e. KhTr dt/dx^2 = 3/8.  One explicit pass multiplies the
+   ! 2-D checkerboard by 1 - 8 KhTr dt/dx^2 = -2 (overshoot, growth);
+   ! check_diffusive_cfl splits into n_itt = 3 passes of factor 0, which
+   ! stays inside the initial bounds.
+   ! ------------------------------------------------------------------
+   subroutine test_cfl_subcycle_stability(error)
+      type(error_type), allocatable, intent(out) :: error
+      integer :: n_off, n_on
+      real(wp) :: amp_off, amp_on
+      call comm_once()
+      call checker_run(.false., amp_off, n_off)
+      call checker_run(.true., amp_on, n_on)
+      checks: block
+         call check(error, n_off, 1, "knobs off: single pass")
+         if (allocated(error)) exit checks
+         call check(error, amp_off > 1.5_wp, "one pass at CFL 3 overshoots the checkerboard bounds")
+         if (allocated(error)) exit checks
+         call check(error, n_on, 3, "check_diffusive_cfl: CFL 3 -> n_itt = 3")
+         if (allocated(error)) exit checks
+         call check(error, amp_on <= 1.0_wp + 1.0e-12_wp, "subcycled: no new extrema")
+      end block checks
+   end subroutine test_cfl_subcycle_stability
+
+   subroutine checker_run(subcycle, amp, n_itt)
+      !! Run one Redi step on the +/-1 checkerboard; return max|value| and n_itt.
+      logical, intent(in) :: subcycle
+      real(wp), intent(out) :: amp
+      integer, intent(out) :: n_itt
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_metrics_t) :: metrics
+      type(ocean_redi_t) :: rd
+      type(eos_t) :: eos
+      integer, parameter :: NX = 8, NY = 8, NZ = 4
+      real(wp), parameter :: DX = 1000.0_wp, DZ = 50.0_wp
+      integer :: i, j, k, idx, i0, i1, j0, j1
+      call make_grid(grid, NX, NY, DX)
+      ms%nz_ml = NZ
+      call ms%init(grid)
+      call ms%register_passive_tracer(grid, "chk", "1", "checkerboard", idx)
+      call setup_redi(rd, grid, NZ, khtr=3.0_wp*DX*DX/(8.0_wp*DT))
+      call make_eos(eos)
+      call fill_strat(ms, grid, NZ, DZ)
+      do k = 1, NZ
+         do j = 1, grid%ny_total
+            do i = 1, grid%nx_total
+               ms%tracers(idx)%hTr(i, j, k) = real(1 - 2*modulo(i + j, 2), wp)*DZ
+            end do
+         end do
+      end do
+      rd%check_diffusive_cfl = subcycle
+      call map_in(ms, metrics, grid, rd, eos)
+      call run_redi(grid, metrics, eos, rd, ms)
+      !$acc update self(ms%tracers(idx)%hTr)
+      call map_out(ms, metrics, rd)
+      i0 = grid%nghost + 1
+      i1 = grid%nghost + NX
+      j0 = grid%nghost + 1
+      j1 = grid%nghost + NY
+      amp = maxval(abs(ms%tracers(idx)%hTr(i0:i1, j0:j1, :)))/DZ
+      n_itt = rd%n_itt
+      call rd%destroy()
+      call ms%destroy()
+   end subroutine checker_run
 
 end module test_ocean_redi

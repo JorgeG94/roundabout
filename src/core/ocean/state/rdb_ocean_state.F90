@@ -837,6 +837,8 @@ contains
       this%redi%enable = cfg%ocean%redi%enable
       this%redi%continuous = cfg%ocean%redi%continuous
       this%redi%khtr = cfg%ocean%redi%khtr
+      this%redi%check_diffusive_cfl = cfg%ocean%redi%check_diffusive_cfl
+      this%redi%max_diffusive_cfl = cfg%ocean%redi%max_diffusive_cfl
       this%varmix%enable = cfg%ocean%varmix%enable
       this%varmix%use_visbeck = cfg%ocean%varmix%use_visbeck
       this%varmix%resoln_scaled_khth = cfg%ocean%varmix%resoln_scaled_khth

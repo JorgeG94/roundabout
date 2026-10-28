@@ -83,6 +83,12 @@ contains
       pr => cfg%ocean%redi%khtr
       call g%add(nml_real("khtr", pr, &
                           "Redi neutral diffusivity KhTr (production 1e2-1e3)", units="m^2/s"))
+      pl => cfg%ocean%redi%check_diffusive_cfl
+      call g%add(nml_logical("check_diffusive_cfl", pl, &
+                             "Subcycle Redi so the explicit-diffusion CFL stays <= 1 per pass (default off)"))
+      pr => cfg%ocean%redi%max_diffusive_cfl
+      call g%add(nml_real("max_diffusive_cfl", pr, &
+                          "Redi: cap face coefficients at this cell CFL (<=0 off; OM3 2.0)", units="nondim"))
 
       call schema%add_group(g)
    end subroutine register_redi

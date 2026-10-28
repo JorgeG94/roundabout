@@ -80,6 +80,12 @@ module rdb_ocean_redi
    use rdb_tracer, only: TRACER_BUDGET_HEAT, TRACER_BUDGET_SALT
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_mem_report, only: arr_bytes
+   use rdb_halo, only: halo_allreduce_max
+   use rdb_ocean_halo, only: ocean_halo_centre, ocean_halo_is_init, &
+                             ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y
+   use rdb_ocean_periodic, only: ocean_periodic_wrap_centre_3d
+   use rdb_ocean_fold_apply, only: ocean_fold_wrap_centre_3d_state
+   use pic_logger, only: logger => global_logger
    implicit none
    private
 
@@ -98,6 +104,9 @@ module rdb_ocean_redi
    public :: ocean_redi_t
    public :: redi_calc_coeffs
    public :: redi_apply_flux
+   public :: redi_max_cell_cfl
+   public :: redi_iteration_count
+   public :: redi_limit_coef
 
    ! =====================================================================
    ! R2 — neutral-diffusion slot + two-phase GPU flux kernel
@@ -120,6 +129,19 @@ module rdb_ocean_redi
          !! Scalar Redi neutral diffusivity (m^2/s); the FALLBACK used when
          !! VarMix is off (0 => no flux).  When VarMix is enabled its
          !! spatially-varying `khtr_u`/`khtr_v` override this per face.
+
+      logical :: check_diffusive_cfl = .false.
+         !! Subcycle Phase B so the explicit-diffusion limit holds (see
+         !! `redi_apply_flux`).  Off + `max_diffusive_cfl <= 0` ⇒ the
+         !! single-pass path, bit-identical to the pre-subcycling kernel.
+      real(wp) :: max_diffusive_cfl = -1.0_wp
+         !! `<= 0` off.  `> 0`: cap each face coefficient at
+         !! `(max_diffusive_cfl/8)*min(areaT_L, areaT_R)`; without
+         !! `check_diffusive_cfl` also fixes `n_itt = ceiling(max_diffusive_cfl)`.
+      integer :: n_itt = 1
+         !! Diagnostic: the number of Phase-B passes of the last apply.
+      logical :: n_itt_logged = .false.
+         !! The first `n_itt > 1` is logged once at info level.
 
       ! ---- Cached extents ----
       integer :: nx_total = 0
@@ -1168,9 +1190,11 @@ contains
          !! booked in `*_budget_hdiff` below so the closed budget stays
          !! closed.  An MPI seam (`has_* = .false.`) is never a wall.
          !! Absent ⇒ all edges WALL.
-      integer :: nx, ny, nz, it
+      integer :: nx, ny, nz, it, pass, n_itt
       integer :: nghost, nxp, nyp
-      logical :: use_ext, wall_w, wall_e, wall_s, wall_n
+      logical :: use_ext, wall_w, wall_e, wall_s, wall_n, use_cap
+      real(wp) :: cfl_cap, cfl_loc, cfl_max
+      character(len=160) :: msg
 
       if (.not. this%is_init) return
       if (.not. this%enable) return
@@ -1216,38 +1240,174 @@ contains
          call redi_face_const(nx, ny + 1, this%khtr, this%khtr_v)
       end if
 
-      do it = 1, size(ms%tracers)
-         ! Snapshot this tracer's hTr so the double-visit gather reads the
-         ! pre-step field (order-independent — see `tr_snap`).
-         call redi_snapshot(nx, ny, nz, ms%tracers(it)%hTr, this%tr_snap)
-         call redi_apply_flux_impl(nx, ny, nz, this%nsurf, dt, &
-                                   nghost, nxp, nyp, wall_w, wall_e, wall_s, wall_n, &
-                                   this%khtr_u, this%khtr_v, &
-                                   metrics%dy_cu, metrics%dx_cv, &
-                                   metrics%idxCu, metrics%idyCv, metrics%areaT, &
-                                   ms%h_layer, this%tr_snap, ms%tracers(it)%hTr, &
-                                   this%uPoL, this%uPoR, this%uKoL, this%uKoR, this%uhEff, &
-                                   this%vPoL, this%vPoR, this%vKoL, this%vKoR, this%vhEff, &
-                                   this%uKb, this%uKt, this%vKb, this%vKt, &
-                                   metrics%use_closed_faces)
-         ! Closed-budget bookkeeping (salt / heat): fold the realised Redi
-         ! change into the same lateral-diffusion accumulator `tracer_hdiff`
-         ! uses.  Interior faces cancel in the interior sum, so what survives
-         ! is exactly the flux through the OPEN physical faces — the term the
-         ! console `out` column must carry.  `hTr - tr_snap` is the realised
-         ! increment and is exact (Sterbenz: the two are within a factor 2).
-         select case (ms%tracers(it)%budget_id)
-         case (TRACER_BUDGET_SALT)
-            call redi_budget_accumulate(nx, ny, nz, ms%tracers(it)%hTr, this%tr_snap, &
-                                        ms%salt_budget_hdiff)
-         case (TRACER_BUDGET_HEAT)
-            call redi_budget_accumulate(nx, ny, nz, ms%tracers(it)%hTr, this%tr_snap, &
-                                        ms%heat_budget_hdiff)
-         case default
-            ! Passive tracers carry no closed budget.
-         end select
+      ! ---- Diffusive-CFL control (n_itt passes at dt/n_itt) ----
+      ! Both knobs off ⇒ n_itt = 1, use_cap = .false.: the loop below is the
+      ! single-pass kernel with unchanged arithmetic (bit-identical).
+      use_cap = this%max_diffusive_cfl > 0.0_wp
+      cfl_cap = 0.0_wp
+      if (use_cap) cfl_cap = this%max_diffusive_cfl/8.0_wp
+      n_itt = 1
+      if (this%check_diffusive_cfl) then
+         call redi_max_cell_cfl(nx, ny, nghost, nxp, nyp, dt, use_cap, cfl_cap, &
+                                this%khtr_u, this%khtr_v, &
+                                metrics%dy_cu, metrics%dx_cv, &
+                                metrics%idxCu, metrics%idyCv, metrics%areaT, cfl_loc)
+         call halo_allreduce_max(cfl_loc, cfl_max)
+         n_itt = redi_iteration_count(cfl_max)
+      else if (use_cap) then
+         n_itt = redi_iteration_count(this%max_diffusive_cfl)
+      end if
+      this%n_itt = n_itt
+      if (n_itt > 1 .and. .not. this%n_itt_logged) then
+         this%n_itt_logged = .true.
+         write (msg, "(a,i0,a)") "Redi neutral diffusion: diffusive-CFL control "// &
+            "subcycles the tracer flux n_itt = ", n_itt, " passes"
+         call logger%info(trim(msg))
+      end if
+
+      do pass = 1, n_itt
+         do it = 1, size(ms%tracers)
+            ! Snapshot this tracer's hTr so the double-visit gather reads the
+            ! pre-step field (order-independent — see `tr_snap`).  Re-taken
+            ! every pass: pass p+1 diffuses the pass-p result.
+            call redi_snapshot(nx, ny, nz, ms%tracers(it)%hTr, this%tr_snap)
+            call redi_apply_flux_impl(nx, ny, nz, this%nsurf, dt, &
+                                      nghost, nxp, nyp, wall_w, wall_e, wall_s, wall_n, &
+                                      this%khtr_u, this%khtr_v, &
+                                      metrics%dy_cu, metrics%dx_cv, &
+                                      metrics%idxCu, metrics%idyCv, metrics%areaT, &
+                                      ms%h_layer, this%tr_snap, ms%tracers(it)%hTr, &
+                                      this%uPoL, this%uPoR, this%uKoL, this%uKoR, this%uhEff, &
+                                      this%vPoL, this%vPoR, this%vKoL, this%vKoR, this%vhEff, &
+                                      this%uKb, this%uKt, this%vKb, this%vKt, &
+                                      metrics%use_closed_faces, use_cap, cfl_cap, n_itt)
+            ! Closed-budget bookkeeping (salt / heat): fold the realised Redi
+            ! change into the same lateral-diffusion accumulator `tracer_hdiff`
+            ! uses.  Interior faces cancel in the interior sum, so what survives
+            ! is exactly the flux through the OPEN physical faces — the term the
+            ! console `out` column must carry.  `hTr - tr_snap` is the realised
+            ! increment and is exact (Sterbenz: the two are within a factor 2).
+            ! Per pass the increments simply add.
+            select case (ms%tracers(it)%budget_id)
+            case (TRACER_BUDGET_SALT)
+               call redi_budget_accumulate(nx, ny, nz, ms%tracers(it)%hTr, this%tr_snap, &
+                                           ms%salt_budget_hdiff)
+            case (TRACER_BUDGET_HEAT)
+               call redi_budget_accumulate(nx, ny, nz, ms%tracers(it)%hTr, this%tr_snap, &
+                                           ms%heat_budget_hdiff)
+            case default
+               ! Passive tracers carry no closed budget.
+            end select
+         end do
+         ! Pass p+1 reads neighbour columns across the periodic / MPI / fold
+         ! seams: refresh the tracer ghosts the pass just invalidated.
+         if (pass < n_itt) call redi_refresh_tracer_halos(grid, ms, bc)
       end do
    end subroutine redi_apply_flux
+
+   pure function redi_iteration_count(cfl) result(n)
+      !! `n_itt = max(1, ceiling(cfl - 4*epsilon(cfl)))`: the number of forward-Euler
+      !! passes that bring a cell CFL (scale: `redi_max_cell_cfl`) to <= 1
+      !! per pass.  The `4*epsilon` guard absorbs round-off so an exact integer CFL does
+      !! not buy an extra pass.
+      real(wp), intent(in) :: cfl
+      integer :: n
+      n = max(1, ceiling(cfl - 4.0_wp*epsilon(cfl)))
+   end function redi_iteration_count
+
+   pure function redi_limit_coef(c, use_cap, cap, aL, aR, n_itt) result(r)
+      !! The face coefficient Phase B multiplies by `dTr*hEff`: the full-step
+      !! `c = dt*KhTr*dy/dx` (m^2), optionally capped at `cap*min(aL, aR)`
+      !! (`cap = max_diffusive_cfl/8`), then split over `n_itt` passes.
+      !! Both off ⇒ returns `c` untouched (bit-identical).
+      !! `!$acc routine seq` so the `do concurrent` face loop can call it.
+      !$acc routine seq
+      real(wp), intent(in) :: c, cap, aL, aR
+      logical, intent(in) :: use_cap
+      integer, intent(in) :: n_itt
+      real(wp) :: r
+      r = c
+      if (use_cap) r = min(r, cap*min(aL, aR))
+      if (n_itt > 1) r = r/real(n_itt, wp)
+   end function redi_limit_coef
+
+   subroutine redi_max_cell_cfl(nx, ny, nghost, nxp, nyp, dt, use_cap, cap, &
+                                khtr_u, khtr_v, dy_cu, dx_cv, idxCu, idyCv, areaT, cmax)
+      !! Rank-local maximum over PHYSICAL cells of the diffusive CFL
+      !!   CFL_i = 2 * sum_{4 faces f} khdt_f / area_i,
+      !!   khdt_f = KhTr_f * dt * dy_f/dx_f   [m^2]  (capped when `use_cap`).
+      !! Derivation: for forward Euler on the 5-point Laplacian with uniform
+      !! KhTr and square cells, khdt/area = KhTr dt/dx^2 and stability needs
+      !! KhTr dt/dx^2 <= 1/4, i.e. sum_f khdt_f/area = 4 KhTr dt/dx^2 <= 1.
+      !! The factor 2 puts CFL = 1 at half that limit (a factor-2 margin);
+      !! this is the scale on which OM3's `MAX_TR_DIFFUSION_CFL = 2` is read.
+      !! Device reduction; the caller does the cross-rank max.
+      integer, intent(in) :: nx, ny, nghost, nxp, nyp
+      real(wp), intent(in) :: dt, cap
+      logical, intent(in) :: use_cap
+      real(wp), intent(in) :: khtr_u(nx + 1, ny), khtr_v(nx, ny + 1)
+      real(wp), intent(in) :: dy_cu(nx + 1, ny), dx_cv(nx, ny + 1)
+      real(wp), intent(in) :: idxCu(nx + 1, ny), idyCv(nx, ny + 1)
+      real(wp), intent(in) :: areaT(nx, ny)
+      real(wp), intent(out) :: cmax
+
+      integer :: i, j
+      real(wp) :: cw, ce, cs, cn, cfl
+
+      cmax = 0.0_wp
+      !$acc parallel loop collapse(2) reduction(max:cmax) &
+      !$acc    present(khtr_u, khtr_v, dy_cu, dx_cv, idxCu, idyCv, areaT)
+      do j = nghost + 1, nghost + nyp
+         do i = nghost + 1, nghost + nxp
+            cw = redi_limit_coef(dt*khtr_u(i, j)*dy_cu(i, j)*idxCu(i, j), use_cap, cap, &
+                                 areaT(max(i - 1, 1), j), areaT(i, j), 1)
+            ce = redi_limit_coef(dt*khtr_u(i + 1, j)*dy_cu(i + 1, j)*idxCu(i + 1, j), use_cap, cap, &
+                                 areaT(i, j), areaT(min(i + 1, nx), j), 1)
+            cs = redi_limit_coef(dt*khtr_v(i, j)*dx_cv(i, j)*idyCv(i, j), use_cap, cap, &
+                                 areaT(i, max(j - 1, 1)), areaT(i, j), 1)
+            cn = redi_limit_coef(dt*khtr_v(i, j + 1)*dx_cv(i, j + 1)*idyCv(i, j + 1), use_cap, cap, &
+                                 areaT(i, j), areaT(i, min(j + 1, ny)), 1)
+            cfl = 2.0_wp*(cw + ce + cs + cn)/areaT(i, j)
+            cmax = max(cmax, cfl)
+         end do
+      end do
+   end subroutine redi_max_cell_cfl
+
+   subroutine redi_refresh_tracer_halos(grid, ms, bc)
+      !! Refresh every tracer's ghost cells between subcycle passes, by the
+      !! same sequence the stage uses before Phase B (MPI / local-periodic
+      !! halo, then the `bc`-driven periodic wrap with decomposed axes
+      !! skipped, then the tripolar fold).
+      type(hgrid_t), intent(in) :: grid
+      type(multilayer_state_t), intent(inout) :: ms
+      type(ocean_bc_state_t), intent(in), optional :: bc
+      integer :: it
+      logical :: per_x, per_y
+
+      if (ocean_halo_is_init()) then
+         do it = 1, size(ms%tracers)
+            if (.not. allocated(ms%tracers(it)%hTr)) cycle
+            call ocean_halo_centre(ms%tracers(it)%hTr, ms%nz_ml)
+         end do
+      end if
+      if (present(bc)) then
+         per_x = bc%periodic_x
+         per_y = bc%periodic_y
+         if (ocean_halo_is_init()) then
+            per_x = per_x .and. .not. ocean_halo_is_decomposed_x()
+            per_y = per_y .and. .not. ocean_halo_is_decomposed_y()
+         end if
+         if (per_x .or. per_y) then
+            do it = 1, size(ms%tracers)
+               if (.not. allocated(ms%tracers(it)%hTr)) cycle
+               call ocean_periodic_wrap_centre_3d(ms%tracers(it)%hTr, grid%nx_total, &
+                                                  grid%ny_total, ms%nz_ml, grid%nx_phys, &
+                                                  grid%ny_phys, grid%nghost, per_x, per_y)
+            end do
+         end if
+         call ocean_fold_wrap_centre_3d_state(grid, bc, ms)
+      end if
+   end subroutine redi_refresh_tracer_halos
 
    pure subroutine redi_budget_accumulate(nx, ny, nz, hTr, snap, budget)
       !! `budget += hTr - snap` (device-side): book the realised Redi
@@ -1377,7 +1537,7 @@ contains
                                    idxCu, idyCv, areaT, h_layer, hTr_in, hTr, &
                                    uPoL, uPoR, uKoL, uKoR, uhEff, &
                                    vPoL, vPoR, vKoL, vKoR, vhEff, &
-                                   uKb, uKt, vKb, vKt, use_open)
+                                   uKb, uKt, vKb, vKt, use_open, use_cap, cap, n_itt)
       !! Flat-impl Phase-B kernel for ONE tracer.  Cell-centric double-visit
       !! (no-scatter rule on the C-grid): cell (i,j) recomputes the
       !! along-neutral flux on each of its four bounding faces and accumulates
@@ -1386,7 +1546,8 @@ contains
       !!   Face sign: the LEFT (west/south) cell of a face gets +Flx into
       !!   native layer nz+1-KoL; the RIGHT (east/north) cell gets -Flx into
       !!   nz+1-KoR.  The top-down→native flip k=nz+1-Ko is the only k-flip.
-      !!   Flux = dT_layer * hEff * Coef, Coef_u = dt*khtr_u*dy_cu*idxCu;
+      !!   Flux = dT_layer * hEff * Coef, Coef_u = dt*khtr_u*dy_cu*idxCu
+      !!   (capped / split over `n_itt` passes by `redi_limit_coef`);
       !!   divergence hTr(k) += dTr(k)/areaT (conservative).
       integer, intent(in) :: nx, ny, nz, ns
       real(wp), intent(in) :: dt
@@ -1414,6 +1575,12 @@ contains
          !! Phase-A v-face open windows.
       logical, intent(in) :: use_open
          !! z-level closed faces active: re-check window liveness.
+      logical, intent(in) :: use_cap
+         !! Cap each face coefficient at `cap*min(areaT_L, areaT_R)`.
+      real(wp), intent(in) :: cap
+         !! `max_diffusive_cfl/8` (used only when `use_cap`).
+      integer, intent(in) :: n_itt
+         !! Subcycle count: each pass applies `coef/n_itt` (= `dt/n_itt`).
 
       integer :: i, j, k
       integer :: wuf_w, wuf_e, wvf_s, wvf_n
@@ -1441,28 +1608,32 @@ contains
             call redi_face_flux(nz, ns, nx, ny, nx + 1, ny, h_layer, hTr_in, &
                                 i - 1, j, i, j, i, j, uPoL, uPoR, uKoL, uKoR, uhEff, &
                                 uKb(i, j), uKt(i, j), use_open, &
-                                dt*khtr_u(i, j)*dy_cu(i, j)*idxCu(i, j), .false., dTr)
+                                redi_limit_coef(dt*khtr_u(i, j)*dy_cu(i, j)*idxCu(i, j), use_cap, cap, &
+                                                areaT(i - 1, j), areaT(i, j), n_itt), .false., dTr)
          end if
          ! EAST u-face (face i+1): this cell is the LEFT column.
          if (i <= nx - 1 .and. .not. ((wall_w .and. i + 1 == wuf_w) .or. (wall_e .and. i + 1 == wuf_e))) then
             call redi_face_flux(nz, ns, nx, ny, nx + 1, ny, h_layer, hTr_in, &
                                 i, j, i + 1, j, i + 1, j, uPoL, uPoR, uKoL, uKoR, uhEff, &
                                 uKb(i + 1, j), uKt(i + 1, j), use_open, &
-                                dt*khtr_u(i + 1, j)*dy_cu(i + 1, j)*idxCu(i + 1, j), .true., dTr)
+                                redi_limit_coef(dt*khtr_u(i + 1, j)*dy_cu(i + 1, j)*idxCu(i + 1, j), use_cap, cap, &
+                                                areaT(i, j), areaT(i + 1, j), n_itt), .true., dTr)
          end if
          ! SOUTH v-face (face j): this cell is the RIGHT (north) column.
          if (j >= 2 .and. .not. ((wall_s .and. j == wvf_s) .or. (wall_n .and. j == wvf_n))) then
             call redi_face_flux(nz, ns, nx, ny, nx, ny + 1, h_layer, hTr_in, &
                                 i, j - 1, i, j, i, j, vPoL, vPoR, vKoL, vKoR, vhEff, &
                                 vKb(i, j), vKt(i, j), use_open, &
-                                dt*khtr_v(i, j)*dx_cv(i, j)*idyCv(i, j), .false., dTr)
+                                redi_limit_coef(dt*khtr_v(i, j)*dx_cv(i, j)*idyCv(i, j), use_cap, cap, &
+                                                areaT(i, j - 1), areaT(i, j), n_itt), .false., dTr)
          end if
          ! NORTH v-face (face j+1): this cell is the LEFT (south) column.
          if (j <= ny - 1 .and. .not. ((wall_s .and. j + 1 == wvf_s) .or. (wall_n .and. j + 1 == wvf_n))) then
             call redi_face_flux(nz, ns, nx, ny, nx, ny + 1, h_layer, hTr_in, &
                                 i, j, i, j + 1, i, j + 1, vPoL, vPoR, vKoL, vKoR, vhEff, &
                                 vKb(i, j + 1), vKt(i, j + 1), use_open, &
-                                dt*khtr_v(i, j + 1)*dx_cv(i, j + 1)*idyCv(i, j + 1), .true., dTr)
+                                redi_limit_coef(dt*khtr_v(i, j + 1)*dx_cv(i, j + 1)*idyCv(i, j + 1), use_cap, cap, &
+                                                areaT(i, j), areaT(i, j + 1), n_itt), .true., dTr)
          end if
          iaij = 1.0_wp/areaT(i, j)
          do k = 1, nz

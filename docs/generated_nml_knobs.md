@@ -232,6 +232,8 @@ Redi continuous neutral (along-isopycnal) tracer diffusion.
 | `enable` | `.false.` |  | Master switch (default off ⇒ no-op; augments hdiff_tracer) |
 | `continuous` | `.true.` |  | Continuous variant (discontinuous deferred R4; .false. rejected) |
 | `khtr` | `0.0000000000E+00` | m^2/s | Redi neutral diffusivity KhTr (production 1e2-1e3) |
+| `check_diffusive_cfl` | `.false.` |  | Subcycle Redi so the explicit-diffusion CFL stays <= 1 per pass (default off) |
+| `max_diffusive_cfl` | `-0.1000000000E+01` | nondim | Redi: cap face coefficients at this cell CFL (<=0 off; OM3 2.0) |
 
 ### &ocean_varmix_nml
 

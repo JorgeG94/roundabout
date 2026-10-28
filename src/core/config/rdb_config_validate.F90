@@ -786,6 +786,16 @@ contains
             has_error = .true.
          end if
 
+         ! Neutral diffusion REPLACES the along-coordinate tracer Laplacian in
+         ! a single-operator configuration (ACCESS-OM3 runs kappa_h = 0);
+         ! running both double-counts lateral tracer diffusion.  Warn only.
+         if (cfg%ocean%redi%enable .and. cfg%ocean%hdiff%kappa_h > 0.0_wp) then
+            call logger%warning("&ocean_hdiff_nml kappa_h > 0 together with "// &
+                                "&ocean_redi_nml enable: the along-coordinate "// &
+                                "Laplacian AUGMENTS neutral diffusion. Neutral "// &
+                                "diffusion normally replaces it (OM3 parity: kappa_h = 0)")
+         end if
+
          ! VarMix (capability [4]) needs the stored slope + N² (slopes slot)
          ! for the Eady term AND the first-mode cg1 (wavespeed slot) for the
          ! resolution function.  Loud invariant — the kernel is pure/device.

@@ -324,7 +324,7 @@ budget (MEKE).
 | Fox-Kemper ML restratification | opt-in | `&ocean_foxkemper_nml enable` (`.false.`; needs EPBL) | Mixed-layer eddy overturning. | `test_ocean_foxkemper`, `test_ocean_mle_zfixed` |
 | Gent-McWilliams thickness diffusion | opt-in | `&ocean_gm_nml enable` (`.false.`; needs `&ocean_slopes_nml enable`) | Eddy-induced bolus transport. | `test_ocean_gm`, `test_ocean_gm_zfixed`, `test_ocean_slopes_datum` |
 | GM vertical structure of KhTh (MOM6 `KHTH_USE_EBT_STRUCT`) | opt-in | `&ocean_gm_nml use_ebt_struct` (`.false.`; needs GM and `&ocean_wavespeed_nml enable` + `use_ebt`, refused otherwise) | At each interior interface the post-CFL-clamp 2-D face KhTh (base, Visbeck and MEKE together) is multiplied by the mean of the two columns' EBT structure in the layer above the interface (Hallberg 2013; Killworth & Blundell 2003), in the streamfunction and in the `gm_src` that MEKE reads. Structure 0 (degenerate column) gives KhTh 0, not floored. | `test_ocean_gm` |
-| Redi neutral tracer diffusion | opt-in | `&ocean_redi_nml enable` (`.false.`) | Along-isopycnal diffusion. Refused under a cavity. | `test_ocean_redi`, `test_ocean_redi_zfixed` |
+| Redi neutral tracer diffusion | opt-in | `&ocean_redi_nml enable` (`.false.`), `check_diffusive_cfl` (`.false.`), `max_diffusive_cfl` (`-1`, off) | Along-isopycnal diffusion (Griffies et al. 1998; Shao et al. 2020 operator). Refused under a cavity. The two CFL knobs are the OM3 `CHECK_DIFFUSIVE_CFL` / `MAX_TR_DIFFUSION_CFL` (`True` / `2.0`): `max_diffusive_cfl > 0` caps each face coefficient so the cell CFL `2·Σ KhTr·dt·dy/dx / area` stays at or below it, and `check_diffusive_cfl` subcycles the flux `n_itt = ceil(max CFL)` times at `dt/n_itt`. Both off is bit-identical. Neutral diffusion replaces the along-coordinate Laplacian: OM3 parity is `&ocean_hdiff_nml kappa_h = 0`, and `kappa_h > 0` with Redi on warns at configure. | `test_ocean_redi`, `test_ocean_redi_zfixed` |
 | MEKE | opt-in | `&ocean_meke_nml enable` (`.false.`; needs GM) | Prognostic eddy kinetic energy. | `test_ocean_meke` |
 | MEKE backscatter | opt-in | `&ocean_meke_nml backscatter` (`.false.`) with `backscatter_visc_coeff_ku` | Negative-viscosity energy return. Needs a flow-aware closure and a biharmonic backstop. | `test_ocean_meke_backscatter` |
 | Along-coordinate tracer Laplacian | opt-in | `&ocean_hdiff_nml kappa_h` (`0.0`) | Diffusion along the model coordinate, not neutral surfaces. | — |
@@ -767,6 +767,11 @@ looks the way it does. It is not needed to use the tables.
   bit-identical) gives the thickness diffusivity the EBT vertical structure
   of the wave-speed slot; the "Deferred: EBT" item in the GM history is
   closed.  Refused without GM or without `use_ebt`.
+- **2026-10-27** — Redi diffusive-CFL control: `&ocean_redi_nml
+  check_diffusive_cfl` and `max_diffusive_cfl` (OM3 `CHECK_DIFFUSIVE_CFL` /
+  `MAX_TR_DIFFUSION_CFL`). Local face cap, global-max subcycle count,
+  inter-pass tracer halo refresh. Defaults off, bit-identical. Configure now
+  warns on `kappa_h > 0` with Redi on.
 - **2026-10-26** — TEOS-10 PR 3: `&ocean_zinit_nml input_convention`
   (`pot_prac` default | `cons_abs`); file z-init, bulk flux and scalar
   restoring now run under `cons_abs` (their PR 2b refusals are lifted);

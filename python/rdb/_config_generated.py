@@ -1179,6 +1179,22 @@ class OceanRedi(Group):
         default=0.0,
     )
 
+    check_diffusive_cfl = Bool(
+        'check_diffusive_cfl',
+        doc='Subcycle Redi so the explicit-diffusion CFL stays <= 1 per pass (default off)',
+        units='',
+        required=False,
+        default=False,
+    )
+
+    max_diffusive_cfl = Real(
+        'max_diffusive_cfl',
+        doc='Redi: cap face coefficients at this cell CFL (<=0 off; OM3 2.0)',
+        units='nondim',
+        required=False,
+        default=-1.0,
+    )
+
 
 class OceanVarmix(Group):
     """`&ocean_varmix_nml` -- Spatially-varying GM/Redi lateral-diffusivity coefficients."""
@@ -6706,4 +6722,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 62
-N_KNOBS = 735
+N_KNOBS = 737

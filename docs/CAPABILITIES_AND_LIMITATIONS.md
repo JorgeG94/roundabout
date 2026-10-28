@@ -163,7 +163,7 @@ Both schemes wrap the same nonlinear barotropic fast loop. The stability suite r
 | Dynamic wetting and drying | Shipped, narrow envelope | `&ocean_wetdry_nml enable` | Sigma coordinate only, single rank, split solver and `ppm_limit_pos` required. |
 | ALE remap | Shipped | `&vcoord_nml remap_method` | `ppm` (default), `ppm_h4`, `pqm`. Runs at the thermo cadence. |
 | Vertical advection | Shipped | – | Eulerian. `w` is diagnosed from continuity. |
-| Along-coordinate tracer Laplacian | Shipped, opt-in | `&ocean_hdiff_nml kappa_h` | Diffuses along model surfaces, not neutral surfaces. `&ocean_redi_nml` is the neutral path. |
+| Along-coordinate tracer Laplacian | Shipped, opt-in | `&ocean_hdiff_nml kappa_h` | Diffuses along model surfaces, not neutral surfaces. `&ocean_redi_nml` is the neutral path, and replaces this operator in a single-operator setup (OM3 parity is `kappa_h = 0`; both on warns). Redi has opt-in diffusive-CFL control (`check_diffusive_cfl`, `max_diffusive_cfl`): a local face cap plus subcycling. |
 | Passive tracers | Shipped | `&ocean_tracers_nml enable_ideal_age`, `enable_pseudo_salt` | No namelist-declared arbitrary dye, CFC or BGC package yet. |
 | Configure-time stability audit | Shipped | – | Aborts or warns with named numbers. See the archive entry for this section. |
 | Non-hydrostatic pressure | Not implemented | – | Hydrostatic only. |
