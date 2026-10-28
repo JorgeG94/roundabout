@@ -195,7 +195,7 @@ All methods conserve column integrals to round-off and are monotone.
 | Sadourny plus Hollingsworth-Källén guard | available | `form = "sadourny_hk"` | Arakawa-Hsu PV stencil. A pair-floored twin runs on partial-step z-level grids. | `test_ocean_coriolis_hk_vanished` |
 | PV face interpolation | **default** `"centered"` | `pv_adv_scheme` (`"centered"`, or `"weno3"`, `"weno5"`, `"weno7"`) | Corner vorticity to face interpolation in the Sadourny path. WENO is upwind-biased (MOM6 `WENOVI*TH`). `weno5` and `weno7` need `nghost >= 3` and `4`. | `test_coriolis_multilayer` |
 | Mass-consistent CorAdCalc | opt-in | `use_state_fluxes` (`.false.`) | The corrector reuses the predictor continuity's transports. Needs `sadourny_energy` and `pred_corr`. | `test_coriolis_multilayer` |
-| `BOUND_CORIOLIS` clamp | opt-in | `bound_coriolis` (`.false.`) | Clamps the energy scheme's Coriolis term into the `(f+ζ)·v` range. `sadourny_energy` only. Inert on all-wet columns. | — |
+| `BOUND_CORIOLIS` clamp | opt-in | `bound_coriolis` (`.false.`) | Clamps the Coriolis term into the `(f+ζ)·v` range before the KE gradient. `sadourny_energy`, or `sadourny` (enstrophy) with `pv_adv_scheme = "centered"`; `sadourny_hk` and WENO PV fail loud. Inert on all-wet energy-form columns. | `test_coriolis_multilayer` (`bound_coriolis_enstrophy_*`) |
 | PV corner thickness | **default** `"cell_mean"` | `corner_h` (`"mom6_area"` is available) | MOM6's area-weighted form. Algebraically identical above the `H_MIN_PV` floor. `sadourny_energy` only. | — |
 
 The `pv_adv_scheme` and `use_state_fluxes` rows are not in the old table; they

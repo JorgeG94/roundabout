@@ -263,13 +263,14 @@ module rdb_config
          !! (fail-loud otherwise).
       logical :: bound_coriolis = .false.
          !! MOM6 `BOUND_CORIOLIS`: clamp the
-         !! energy-scheme Coriolis acceleration into the range of the four
+         !! Coriolis acceleration into the range of the four
          !! neighbouring VELOCITY-form estimates `(f+ζ)·v` BEFORE the KE-gradient
          !! subtraction.  Kills the thin-layer PV blow-up: `q=(f+ζ)/h_corner`
          !! is huge at a vanishing edge and `q·vh` can inject an acceleration
          !! the local velocity field cannot support; the `(f+ζ)·v` bound caps
-         !! it.  Energy scheme only (`form="sadourny_energy"`, fail-loud
-         !! otherwise) — MOM6's double-gyre control run enables it.  Default
+         !! it.  `form="sadourny_energy"`, or `form="sadourny"` (enstrophy) with
+         !! `pv_adv_scheme="centered"`; `sadourny_hk` and the WENO PV variants
+         !! fail loud.  MOM6's double-gyre control run enables it.  Default
          !! `.false.` ⇒ untaken branch ⇒ bit-identical.
    end type ocean_coriolis_config_t
 

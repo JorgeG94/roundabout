@@ -9,6 +9,7 @@
 module test_ocean_fail_loud_dispatch
    use rdb_constants, only: wp
    use rdb_coriolis_adv, only: parse_pv_variant, pv_variant_is_implemented, &
+                               bound_coriolis_is_supported, PV_ADV_CENTERED, PV_ADV_WENO5, &
                                PV_VARIANT_SADOURNY, PV_VARIANT_SADOURNY_HK, &
                                PV_VARIANT_SADOURNY_ENERGY, PV_VARIANT_AL81, &
                                PV_VARIANT_INVALID
@@ -41,6 +42,7 @@ contains
       type(unittest_type), allocatable, intent(out) :: testsuite(:)
       testsuite = [ &
                   new_unittest("pv_variant_predicate", test_pv_variant_predicate), &
+                  new_unittest("bound_coriolis_predicate", test_bound_coriolis_predicate), &
                   new_unittest("pv_parse_invalid", test_pv_parse_invalid), &
                   new_unittest("bdrag_variant_predicate", test_bdrag_variant_predicate), &
                   new_unittest("vmix_interior_predicate", test_vmix_interior_predicate), &
@@ -52,6 +54,29 @@ contains
                   new_unittest("vcoord_h_min_coherence", test_vcoord_h_min_coherence) &
                   ]
    end subroutine collect_ocean_fail_loud_dispatch_tests
+
+   subroutine test_bound_coriolis_predicate(error)
+      !! bound_coriolis: accepted for the energy form and for enstrophy with
+      !! centred PV interpolation; refused for hk, al81, invalid, and WENO.
+      type(error_type), allocatable, intent(out) :: error
+      call check(error, bound_coriolis_is_supported(PV_VARIANT_SADOURNY_ENERGY, PV_ADV_CENTERED), &
+                 "energy form must accept bound_coriolis")
+      if (allocated(error)) return
+      call check(error, bound_coriolis_is_supported(PV_VARIANT_SADOURNY, PV_ADV_CENTERED), &
+                 "enstrophy + centred must accept bound_coriolis")
+      if (allocated(error)) return
+      call check(error,.not. bound_coriolis_is_supported(PV_VARIANT_SADOURNY, PV_ADV_WENO5), &
+                 "enstrophy + WENO must refuse bound_coriolis")
+      if (allocated(error)) return
+      call check(error,.not. bound_coriolis_is_supported(PV_VARIANT_SADOURNY_HK, PV_ADV_CENTERED), &
+                 "hk must refuse bound_coriolis")
+      if (allocated(error)) return
+      call check(error,.not. bound_coriolis_is_supported(PV_VARIANT_AL81, PV_ADV_CENTERED), &
+                 "al81 must refuse bound_coriolis")
+      if (allocated(error)) return
+      call check(error,.not. bound_coriolis_is_supported(PV_VARIANT_INVALID, PV_ADV_CENTERED), &
+                 "invalid form must refuse bound_coriolis")
+   end subroutine test_bound_coriolis_predicate
 
    subroutine test_pv_variant_predicate(error)
       !! AL81 promises simultaneous energy+enstrophy conservation; the

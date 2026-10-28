@@ -357,8 +357,9 @@ contains
                              "mass fluxes (MOM6 mass-consistent uh/vh)"))
       pl => cfg%ocean%coriolis%bound_coriolis
       call g%add(nml_logical("bound_coriolis", pl, &
-                             "clamp the energy-scheme Coriolis accel to the (f+zeta)*v "// &
-                             "velocity-form range (MOM6 BOUND_CORIOLIS; sadourny_energy only)"))
+                             "clamp the Coriolis accel to the (f+zeta)*v velocity-form "// &
+                             "range (MOM6 BOUND_CORIOLIS; sadourny_energy, or sadourny "// &
+                             "with centred pv_adv_scheme)"))
       ps => cfg%ocean%coriolis%corner_h
       call g%add(nml_enum("corner_h", ps, "PV corner-thickness construction (energy scheme)", &
                           allowed=[character(len=9) :: "cell_mean", "mom6_area"]))

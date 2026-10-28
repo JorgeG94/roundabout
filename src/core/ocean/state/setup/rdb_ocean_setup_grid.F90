@@ -419,8 +419,8 @@ contains
       ! Mass-consistent CorAdCalc (MOM6 parity); config fail-loud
       ! guarantees form="sadourny_energy" + split_scheme="pred_corr".
       ocean_state%coriolis_adv%state_fluxes = cfg%ocean%coriolis%use_state_fluxes
-      ! BOUND_CORIOLIS velocity-form clamp (energy scheme only; config
-      ! fail-loud guarantees form="sadourny_energy").
+      ! BOUND_CORIOLIS velocity-form clamp (energy form, or enstrophy form
+      ! with centred PV interpolation; config fail-loud guarantees it).
       ocean_state%coriolis_adv%bound_coriolis = cfg%ocean%coriolis%bound_coriolis
       ! PV corner-thickness construction (energy scheme only, config fail-loud).
       if (trim(cfg%ocean%coriolis%corner_h) == "mom6_area") then
@@ -435,8 +435,8 @@ contains
                              "in the mom6 corrector (MOM6 uh/vh parity)")
          end if
          if (cfg%ocean%coriolis%bound_coriolis) then
-            call logger%info("Coriolis bound:   BOUND_CORIOLIS ON — energy-scheme accel "// &
-                             "clamped to the (f+zeta)*v velocity-form range (MOM6)")
+            call logger%info("Coriolis bound:   BOUND_CORIOLIS ON — "//trim(cfg%ocean%coriolis%form)// &
+                             " accel clamped to the (f+zeta)*v velocity-form range (MOM6)")
          end if
          if (trim(cfg%ocean%coriolis%corner_h) == "mom6_area") then
             call logger%info("Coriolis corner:  PV corner-h = mom6_area (MOM6 "// &

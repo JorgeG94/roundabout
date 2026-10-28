@@ -23,6 +23,7 @@
 !!     plain Coriolis by the expected factor.
 module test_coriolis_multilayer
    use testdrive, only: new_unittest, unittest_type, error_type, check
+   use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan, ieee_is_finite
    use rdb_constants, only: wp, H_DIV_EPS
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
@@ -31,7 +32,7 @@ module test_coriolis_multilayer
                                coriolis_adv_compute_tendencies_hk, &
                                coriolis_adv_compute_tendencies_sadourny_energy, &
                                coriolis_adv_apply_tendencies, &
-                               PV_VARIANT_SADOURNY_HK, &
+                               PV_VARIANT_SADOURNY, PV_VARIANT_SADOURNY_HK, &
                                PV_VARIANT_SADOURNY_ENERGY, &
                                CORNER_H_CELL_MEAN, CORNER_H_MOM6_AREA, &
                                PV_ADV_CENTERED, PV_ADV_WENO3, PV_ADV_WENO5, PV_ADV_WENO7, &
@@ -90,6 +91,10 @@ contains
                                test_energy_state_fluxes_gate), &
                   new_unittest("bound_coriolis_allwet_inert", &
                                test_bound_coriolis_allwet_inert), &
+                  new_unittest("bound_coriolis_enstrophy_clamps", &
+                               test_bound_coriolis_enstrophy_clamps), &
+                  new_unittest("bound_coriolis_enstrophy_nan", &
+                               test_bound_coriolis_enstrophy_nan), &
                   new_unittest("bound_coriolis_masked_clamps", &
                                test_bound_coriolis_masked_clamps), &
                   new_unittest("bound_coriolis_masked_clamps_mom6_area", &
@@ -1673,6 +1678,225 @@ contains
       call cor%destroy(); call ms%destroy()
       call destroy_cartesian_metrics(metrics)
    end subroutine bound_masked_clamps_case
+
+   subroutine run_enstrophy(grid, metrics, ms, bound, fx, fy, kgx, kgy, qc, fc)
+      !! One enstrophy-form (`PV_VARIANT_SADOURNY`) tendency evaluation; returns
+      !! the u/v tendencies, both KE gradients, and the corner relative
+      !! vorticity + planetary f (the clamp oracle's inputs).
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_metrics_t), intent(in) :: metrics
+      type(multilayer_state_t), intent(inout) :: ms
+      logical, intent(in) :: bound
+      real(wp), intent(out) :: fx(:, :, :), fy(:, :, :), kgx(:, :, :), kgy(:, :, :)
+      real(wp), intent(out) :: qc(:, :, :), fc(:, :)
+      type(coriolis_adv_t) :: cor
+      integer :: i, j, k, nx, ny
+      nx = grid%nx_total
+      ny = grid%ny_total
+      cor%f_0 = 1.0e-4_wp
+      cor%pv_variant = PV_VARIANT_SADOURNY
+      cor%bound_coriolis = bound
+      call cor%init(grid, nz_ml=NZ)
+      !$acc enter data copyin(ms, cor)
+      call ms%enter_data(); call cor%enter_data()
+      call coriolis_adv_compute_tendencies(grid, metrics, cor, ms)
+      !$acc update self(cor%pv_flux_x%data, cor%pv_flux_y%data, cor%ke_centre%data, cor%q_corner%data)
+      fx = cor%pv_flux_x%data
+      fy = cor%pv_flux_y%data
+      qc = cor%q_corner%data
+      fc = cor%f_corner
+      kgx = 0.0_wp
+      kgy = 0.0_wp
+      do k = 1, NZ
+         do j = 1, ny
+            do i = 2, nx
+               kgx(i, j, k) = (cor%ke_centre%data(i, j, k) - cor%ke_centre%data(i - 1, j, k))* &
+                              metrics%idxCu(i, j)
+            end do
+         end do
+         do j = 2, ny
+            do i = 1, nx
+               kgy(i, j, k) = (cor%ke_centre%data(i, j, k) - cor%ke_centre%data(i, j - 1, k))* &
+                              metrics%idyCv(i, j)
+            end do
+         end do
+      end do
+      call cor%exit_data(); call ms%exit_data()
+      !$acc exit data delete(ms, cor)
+      call cor%destroy()
+   end subroutine run_enstrophy
+
+   subroutine enstrophy_state(grid, ms)
+      !! Hand-built, uniform-h, sheared u/v whose absolute vorticity changes
+      !! sign across the patch: the 2-corner-mean x v-mean product then leaves
+      !! the four-estimate range at some faces and stays inside at others.
+      type(hgrid_t), intent(in) :: grid
+      type(multilayer_state_t), intent(inout) :: ms
+      integer :: i, j, k
+      ms%h_layer = 50.0_wp
+      do k = 1, NZ
+         do j = 1, grid%ny_total
+            do i = 1, grid%nx_total + 1
+               ms%u_face_x_layer(i, j, k) = 0.6_wp*sin(1.1_wp*real(i, wp) + 0.7_wp*real(j, wp))
+            end do
+         end do
+         do j = 1, grid%ny_total + 1
+            do i = 1, grid%nx_total
+               ms%v_face_y_layer(i, j, k) = 0.8_wp*cos(1.3_wp*real(i, wp) - 0.9_wp*real(j, wp)) &
+                                            + 0.2_wp*real(k, wp)
+            end do
+         end do
+         ! West block (i <= 6): row-banded vorticity.  u steps by -1 m/s every
+         ! second row (|zeta| ~ 1e-3 on even-j corners, ~0 on odd-j corners) and
+         ! v is 0 on even rows, 1 on odd rows, so the big-zeta corner pairs with
+         ! v = 0 and the small-zeta corner with v = 1: the 2-corner mean times
+         ! the 4-point v mean (~ 1e-3/4) then exceeds every one of the four
+         ! corner*v estimates (<= ~1e-4).
+         do j = 1, grid%ny_total
+            do i = 1, 7
+               ms%u_face_x_layer(i, j, k) = -real(j/2, wp)
+            end do
+         end do
+         do j = 1, grid%ny_total + 1
+            do i = 1, 6
+               ms%v_face_y_layer(i, j, k) = merge(1.0_wp, 0.0_wp, mod(j, 2) == 1)
+            end do
+         end do
+      end do
+   end subroutine enstrophy_state
+
+   subroutine test_bound_coriolis_enstrophy_clamps(error)
+      !! Enstrophy-form BOUND_CORIOLIS.  The oracle uses only the corner
+      !! vorticity + f read back from the kernel and the face velocities, never
+      !! the clamp: at every interior u/v face the bound-OFF Coriolis term p0
+      !! (tendency + KE gradient) is compared with [min fv, max fv].  Outside
+      !! the range, bound-ON must equal the nearest bound (to the round-off of
+      !! adding/subtracting the KE gradient); inside, bound-ON must be
+      !! BIT-IDENTICAL to bound-OFF.  Both populations must be non-empty or
+      !! the test is vacuous and fails.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_metrics_t) :: metrics
+      real(wp), parameter :: DX = 1.0e3_wp
+      integer, parameter :: NX_PHYS = 8, NY_PHYS = 8
+      real(wp), allocatable :: fx0(:, :, :), fy0(:, :, :), kx0(:, :, :), ky0(:, :, :), q0(:, :, :)
+      real(wp), allocatable :: fx1(:, :, :), fy1(:, :, :), kx1(:, :, :), ky1(:, :, :), q1(:, :, :)
+      real(wp), allocatable :: f0(:, :), f1(:, :)
+      integer :: i, j, k, nx, ny, n_out(2), n_in(2), n_bad_out(2), n_bad_in(2)
+      real(wp) :: av_a, av_b, e1, e2, e3, e4, hi, lo, p0, want, sc
+
+      call make_grid(grid, NX_PHYS, NY_PHYS, DX, DX)
+      call make_cartesian_metrics(metrics, grid)
+      ms%nz_ml = NZ
+      call ms%init(grid)
+      nx = grid%nx_total
+      ny = grid%ny_total
+      call enstrophy_state(grid, ms)
+      allocate (fx0(nx + 1, ny, NZ), fy0(nx, ny + 1, NZ), kx0(nx + 1, ny, NZ), ky0(nx, ny + 1, NZ))
+      allocate (fx1(nx + 1, ny, NZ), fy1(nx, ny + 1, NZ), kx1(nx + 1, ny, NZ), ky1(nx, ny + 1, NZ))
+      allocate (q0(nx + 1, ny + 1, NZ), q1(nx + 1, ny + 1, NZ), f0(nx + 1, ny + 1), f1(nx + 1, ny + 1))
+      call run_enstrophy(grid, metrics, ms, .false., fx0, fy0, kx0, ky0, q0, f0)
+      call run_enstrophy(grid, metrics, ms, .true., fx1, fy1, kx1, ky1, q1, f1)
+
+      n_out = 0; n_in = 0; n_bad_out = 0; n_bad_in = 0
+      do k = 1, NZ
+         do j = 2, ny - 1
+            do i = 3, nx - 1
+               ! u-face (i,j): south corner (i,j), north corner (i,j+1).
+               av_a = q0(i, j, k) + f0(i, j)
+               av_b = q0(i, j + 1, k) + f0(i, j + 1)
+               e1 = av_b*ms%v_face_y_layer(i - 1, j + 1, k)
+               e2 = av_b*ms%v_face_y_layer(i, j + 1, k)
+               e3 = av_a*ms%v_face_y_layer(i - 1, j, k)
+               e4 = av_a*ms%v_face_y_layer(i, j, k)
+               hi = max(max(e1, e2), max(e3, e4))
+               lo = min(min(e1, e2), min(e3, e4))
+               p0 = fx0(i, j, k) + kx0(i, j, k)
+               sc = max(abs(hi), abs(lo)) + 1.0e-30_wp
+               if (p0 > hi + 1.0e-9_wp*sc .or. p0 < lo - 1.0e-9_wp*sc) then
+                  n_out(1) = n_out(1) + 1
+                  want = merge(hi, lo, p0 > hi)
+                  if (abs((fx1(i, j, k) + kx1(i, j, k)) - want) > 1.0e-12_wp*sc) &
+                     n_bad_out(1) = n_bad_out(1) + 1
+               else if (p0 >= lo .and. p0 <= hi) then
+                  n_in(1) = n_in(1) + 1
+                  if (fx1(i, j, k) /= fx0(i, j, k)) n_bad_in(1) = n_bad_in(1) + 1
+               end if
+            end do
+         end do
+         do j = 3, ny - 1
+            do i = 2, nx - 1
+               ! v-face (i,j): west corner (i,j), east corner (i+1,j); term is -zeta_a*u.
+               av_a = q0(i, j, k) + f0(i, j)
+               av_b = q0(i + 1, j, k) + f0(i + 1, j)
+               e1 = -av_b*ms%u_face_x_layer(i + 1, j, k)
+               e2 = -av_b*ms%u_face_x_layer(i + 1, j - 1, k)
+               e3 = -av_a*ms%u_face_x_layer(i, j, k)
+               e4 = -av_a*ms%u_face_x_layer(i, j - 1, k)
+               hi = max(max(e1, e2), max(e3, e4))
+               lo = min(min(e1, e2), min(e3, e4))
+               p0 = fy0(i, j, k) + ky0(i, j, k)
+               sc = max(abs(hi), abs(lo)) + 1.0e-30_wp
+               if (p0 > hi + 1.0e-9_wp*sc .or. p0 < lo - 1.0e-9_wp*sc) then
+                  n_out(2) = n_out(2) + 1
+                  want = merge(hi, lo, p0 > hi)
+                  if (abs((fy1(i, j, k) + ky1(i, j, k)) - want) > 1.0e-12_wp*sc) &
+                     n_bad_out(2) = n_bad_out(2) + 1
+               else if (p0 >= lo .and. p0 <= hi) then
+                  n_in(2) = n_in(2) + 1
+                  if (fy1(i, j, k) /= fy0(i, j, k)) n_bad_in(2) = n_bad_in(2) + 1
+               end if
+            end do
+         end do
+      end do
+      call check(error, all(n_out > 0), "enstrophy BOUND_CORIOLIS: no face left the fv range (vacuous)")
+      if (.not. allocated(error)) call check(error, all(n_in > 0), &
+                                             "enstrophy BOUND_CORIOLIS: no face inside the fv range (vacuous)")
+      if (.not. allocated(error)) call check(error, all(n_bad_out == 0), &
+                                             "enstrophy BOUND_CORIOLIS: out-of-range term is not the nearest bound")
+      if (.not. allocated(error)) call check(error, all(n_bad_in == 0), &
+                                             "enstrophy BOUND_CORIOLIS: in-range term changed (not bit-identical)")
+
+      deallocate (fx0, fy0, kx0, ky0, q0, fx1, fy1, kx1, ky1, q1, f0, f1)
+      call ms%destroy()
+      call destroy_cartesian_metrics(metrics)
+   end subroutine test_bound_coriolis_enstrophy_clamps
+
+   subroutine test_bound_coriolis_enstrophy_nan(error)
+      !! A non-finite vorticity must reach the tendency as non-finite with
+      !! BOUND_CORIOLIS ON (min/max would otherwise launder NaN into a bound).
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_metrics_t) :: metrics
+      integer, parameter :: NX_PHYS = 8, NY_PHYS = 8, IP = 5, JP = 5
+      real(wp), allocatable :: fx1(:, :, :), fy1(:, :, :), kx1(:, :, :), ky1(:, :, :), q1(:, :, :), f1(:, :)
+      real(wp) :: nan
+      integer :: nx, ny
+
+      call make_grid(grid, NX_PHYS, NY_PHYS, 1.0e3_wp, 1.0e3_wp)
+      call make_cartesian_metrics(metrics, grid)
+      ms%nz_ml = NZ
+      call ms%init(grid)
+      nx = grid%nx_total
+      ny = grid%ny_total
+      call enstrophy_state(grid, ms)
+      nan = ieee_value(1.0_wp, ieee_quiet_nan)
+      ! NaN u(IP,JP+1) poisons the north corner vorticity of u-face (IP,JP), so
+      ! the unbounded term AND fv1/fv2 are NaN, while that face's KE gradient
+      ! (u(IP,JP), u(IP+1,JP), v) stays finite.  An unguarded min/max clamp
+      ! then returns a finite bound from fv3/fv4 (fails this test).
+      ms%u_face_x_layer(IP, JP + 1, 2) = nan
+      allocate (fx1(nx + 1, ny, NZ), fy1(nx, ny + 1, NZ), kx1(nx + 1, ny, NZ), ky1(nx, ny + 1, NZ))
+      allocate (q1(nx + 1, ny + 1, NZ), f1(nx + 1, ny + 1))
+      call run_enstrophy(grid, metrics, ms, .true., fx1, fy1, kx1, ky1, q1, f1)
+      call check(error,.not. ieee_is_finite(fx1(IP, JP, 2)), &
+                 "enstrophy BOUND_CORIOLIS turned a NaN u-tendency into a finite value")
+      deallocate (fx1, fy1, kx1, ky1, q1, f1)
+      call ms%destroy()
+      call destroy_cartesian_metrics(metrics)
+   end subroutine test_bound_coriolis_enstrophy_nan
 
    ! -----------------------------------------------------------------
    ! corner_h (MOM6 area-weighted PV corner thickness)

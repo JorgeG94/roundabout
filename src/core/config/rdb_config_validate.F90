@@ -33,6 +33,7 @@ contains
                                           OBC_INVALID, OBC_TRIPOLAR_FOLD
       use rdb_coriolis_adv, only: parse_pv_variant, pv_variant_is_implemented, &
                                   parse_pv_adv_scheme, pv_adv_scheme_is_implemented, &
+                                  bound_coriolis_is_supported, &
                                   pv_adv_required_nghost
       use rdb_ocean_bottom_drag, only: parse_bdrag_variant, bdrag_variant_is_implemented
       use rdb_ocean_pressure_force, only: parse_opgf_variant, gprime_nz_is_supported, &
@@ -1044,17 +1045,21 @@ contains
                has_error = .true.
             end if
          end if
-         ! BOUND_CORIOLIS clamps the ENERGY-scheme CAu (q·vh) to the
-         ! (f+ζ)·v velocity-form range; it is wired into the energy impl
-         ! only (MOM6 also applies it to the enstrophy scheme, but Roundabout's
-         ! enstrophy path is a separate kernel — v1 covers the audit target).
-         ! Silently ignoring it on another form would be a positivity-request
-         ! foot-gun, so fail loud.
-         if (cfg%ocean%coriolis%bound_coriolis .and. &
-             trim(cfg%ocean%coriolis%form) /= "sadourny_energy") then
+         ! BOUND_CORIOLIS clamps the Coriolis term into the (f+ζ)·v
+         ! velocity-form range.  Defined for the energy form and for the
+         ! enstrophy form with centred PV interpolation; refused for
+         ! sadourny_hk and for WENO PV interpolation (see
+         ! bound_coriolis_is_supported).  Silently ignoring it would be a
+         ! positivity-request foot-gun, so fail loud.
+         if (cfg%ocean%coriolis%bound_coriolis .and. .not. &
+             bound_coriolis_is_supported( &
+             parse_pv_variant(cfg%ocean%coriolis%form), &
+             parse_pv_adv_scheme(cfg%ocean%coriolis%pv_adv_scheme))) then
             call logger%error("&ocean_coriolis_nml bound_coriolis is implemented for "// &
-                              "form='sadourny_energy' only (the energy-scheme q·vh blow-up "// &
-                              "it cures); got form='"//trim(cfg%ocean%coriolis%form)//"'")
+                              "form='sadourny_energy' and for form='sadourny' with "// &
+                              "pv_adv_scheme='centered' only; got form='"// &
+                              trim(cfg%ocean%coriolis%form)//"', pv_adv_scheme='"// &
+                              trim(cfg%ocean%coriolis%pv_adv_scheme)//"'")
             has_error = .true.
          end if
          ! corner_h="mom6_area" is wired into the energy impl's Pass 2 only

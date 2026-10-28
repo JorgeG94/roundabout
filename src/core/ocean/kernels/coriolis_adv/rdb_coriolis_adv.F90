@@ -21,6 +21,7 @@ module rdb_coriolis_adv
                              scratch_3d_buffer_enter_data_impl, &
                              scratch_3d_buffer_exit_data_impl
    use, intrinsic :: iso_fortran_env, only: int64
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_mem_report, only: arr_bytes
    implicit none
    private
@@ -34,6 +35,7 @@ module rdb_coriolis_adv
    public :: coriolis_adv_compute_tendencies_sadourny_energy
    public :: parse_pv_variant
    public :: pv_variant_is_implemented
+   public :: bound_coriolis_is_supported
    public :: parse_pv_adv_scheme
    public :: pv_adv_scheme_is_implemented
    public :: pv_adv_required_nghost
@@ -191,8 +193,9 @@ module rdb_coriolis_adv
          !! into a local flag in the kernel.
       logical :: bound_coriolis = .false.
          !! MOM6 `BOUND_CORIOLIS`.  When
-         !! `.true.` (energy scheme only — `&ocean_coriolis_nml bound_coriolis`,
-         !! config fail-loud on any other form) the energy-scheme PV flux is
+         !! `.true.` (energy scheme, or enstrophy `sadourny` with centred PV
+         !! interpolation — `&ocean_coriolis_nml bound_coriolis`, config
+         !! fail-loud on any other form) the Coriolis term is
          !! clamped into the range of the four neighbouring `(f+ζ)·v`
          !! velocity-form estimates BEFORE the KE-gradient subtraction, capping
          !! the thin-layer `q·vh` blow-up.  Read host-side into a local flag in
@@ -630,10 +633,15 @@ contains
       real(wp) :: h_uf_SW, h_uf_NW, h_uf_SE, h_uf_NE
       real(wp) :: vh_sum, uh_sum, h_eff_sum
       real(wp) :: ns
+      real(wp) :: av_a, av_b, fv1, fv2, fv3, fv4
+      logical :: do_bound
 
       nx = grid%nx_total
       ny = grid%ny_total
       nz = ms%nz_ml
+      ! BOUND_CORIOLIS host flag (read once; clamp branches untaken when off
+      ! => bit-identical).  Centred PV interpolation only (config-guaranteed).
+      do_bound = this%bound_coriolis
       ! Hoist the loop-invariant PV face-interp scheme to a plain scalar so
       ! the do-concurrent kernels never touch a derived-type component.
       pv_scheme = this%pv_adv_scheme
@@ -687,8 +695,8 @@ contains
       ! ---- Pass 3a: u-face Coriolis-advection term (ζ+f)·v_at_u ----
       ! Writes (ζ+f)·v_at_u into pv_flux_x; the −∇KE term is subtracted
       ! in Pass 3c BELOW.  The split keeps the −∇KE subtraction in one
-      ! place and future-proofs a BOUND_CORIOLIS clip on `CAu` BEFORE
-      ! `−KEx` (mirroring MOM6's MOM_CoriolisAdv ordering — not yet ported).
+      ! place; the optional BOUND_CORIOLIS clip on `CAu` is applied right
+      ! after the term is formed, BEFORE `−KEx`.
       !
       ! This is the classical Sadourny (1975) ENSTROPHY-conserving form
       ! `CAu = (zeta_at_u + f_at_u)·v_at_u` (the default `form="sadourny"`,
@@ -710,7 +718,7 @@ contains
       !       components out until Intel fixes it.
       do concurrent(k=1:nz, j=1:ny, i=2:nx) &
          local(f_at_u, h_vf_SW, h_vf_NW, h_vf_SE, h_vf_NE, &
-               vh_sum, h_eff_sum)
+               vh_sum, h_eff_sum, av_a, av_b, fv1, fv2, fv3, fv4)
          h_vf_SW = 0.5_wp*(h(i - 1, max(1, j - 1), k) + h(i - 1, j, k))
          h_vf_NW = 0.5_wp*(h(i - 1, j, k) + h(i - 1, min(ny, j + 1), k))
          h_vf_SE = 0.5_wp*(h(i, max(1, j - 1), k) + h(i, j, k))
@@ -760,6 +768,28 @@ contains
                         0.5_wp*(this%f_corner(i, j) + this%f_corner(i, j + 1))
          end if
          this%pv_flux_x%data(i, j, k) = zeta_at_u*v_at_u
+         if (do_bound) then
+            ! BOUND_CORIOLIS: clamp the Coriolis term into the range of the
+            ! four neighbouring (f+zeta)*v velocity-form estimates BEFORE the
+            ! KE gradient is subtracted (Pass 3c).  Staggering map: the u-face
+            ! (i,j) is flanked by corners (i,j) [south] and (i,j+1) [north];
+            ! each corner is paired with the two v-faces on its west/east side,
+            ! v(i-1,.) and v(i,.) at the same j -- the same four neighbours as
+            ! the energy-scheme clamp.  Absolute vorticity is read directly
+            ! (q_corner holds zeta here, no h recovery).  Non-finite input
+            ! passes through unclamped: min/max would launder NaN into a bound.
+            if (ieee_is_finite(this%pv_flux_x%data(i, j, k))) then
+               av_a = this%q_corner%data(i, j, k) + this%f_corner(i, j)
+               av_b = this%q_corner%data(i, j + 1, k) + this%f_corner(i, j + 1)
+               fv1 = av_b*v(i - 1, j + 1, k)
+               fv2 = av_b*v(i, j + 1, k)
+               fv3 = av_a*v(i - 1, j, k)
+               fv4 = av_a*v(i, j, k)
+               this%pv_flux_x%data(i, j, k) = max(min(this%pv_flux_x%data(i, j, k), &
+                                                      max(max(fv1, fv2), max(fv3, fv4))), &
+                                                  min(min(fv1, fv2), min(fv3, fv4)))
+            end if
+         end if
       end do
       ! ---- Pass 3c: subtract −∇KE from u-tendency ----
       do concurrent(k=1:nz, j=1:ny, i=2:nx) local(ke_grad_x)
@@ -776,7 +806,7 @@ contains
       ! Mirror of Pass 3a.  Writes −(ζ+f)·u_at_v ONLY; ∇KE handled in 4c.
       do concurrent(k=1:nz, j=2:ny, i=1:nx) &
          local(f_at_v, h_uf_SW, h_uf_NW, h_uf_SE, h_uf_NE, &
-               uh_sum, h_eff_sum)
+               uh_sum, h_eff_sum, av_a, av_b, fv1, fv2, fv3, fv4)
          h_uf_SW = 0.5_wp*(h(max(1, i - 1), j - 1, k) + h(i, j - 1, k))
          h_uf_SE = 0.5_wp*(h(i, j - 1, k) + h(min(nx, i + 1), j - 1, k))
          h_uf_NW = 0.5_wp*(h(max(1, i - 1), j, k) + h(i, j, k))
@@ -823,6 +853,23 @@ contains
                         0.5_wp*(this%f_corner(i, j) + this%f_corner(i + 1, j))
          end if
          this%pv_flux_y%data(i, j, k) = -zeta_at_v*u_at_v
+         if (do_bound) then
+            ! BOUND_CORIOLIS, v-face mirror of Pass 3a: v-face (i,j) is flanked
+            ! by corners (i,j) [west] and (i+1,j) [east]; each pairs with
+            ! -u(.,j) and -u(.,j-1) on its own i-column (u(i,.) west,
+            ! u(i+1,.) east) -- the energy-scheme neighbours.
+            if (ieee_is_finite(this%pv_flux_y%data(i, j, k))) then
+               av_a = this%q_corner%data(i, j, k) + this%f_corner(i, j)
+               av_b = this%q_corner%data(i + 1, j, k) + this%f_corner(i + 1, j)
+               fv1 = -av_b*u(i + 1, j, k)
+               fv2 = -av_b*u(i + 1, j - 1, k)
+               fv3 = -av_a*u(i, j, k)
+               fv4 = -av_a*u(i, j - 1, k)
+               this%pv_flux_y%data(i, j, k) = max(min(this%pv_flux_y%data(i, j, k), &
+                                                      max(max(fv1, fv2), max(fv3, fv4))), &
+                                                  min(min(fv1, fv2), min(fv3, fv4)))
+            end if
+         end if
       end do
 
       ! ---- Pass 4c: subtract −∇KE from v-tendency ----
@@ -1870,6 +1917,22 @@ contains
          code = PV_VARIANT_INVALID
       end select
    end function parse_pv_variant
+
+   pure function bound_coriolis_is_supported(variant, pv_adv) result(ok)
+      !! `.true.` when `bound_coriolis` is defined for the Coriolis form
+      !! `variant` (`PV_VARIANT_*`) with PV interpolation `pv_adv`
+      !! (`PV_ADV_*`): the Sadourny energy form, and the Sadourny enstrophy
+      !! form with the centred 2-corner interpolation.  Refused: `sadourny_hk`
+      !! (3-corner stencil, no velocity-form bracket of its own) and the WENO
+      !! PV variants (an upwind-biased reconstruction legitimately leaves the
+      !! two-corner range, so clamping it to the corner estimates would
+      !! silently strip the scheme).  Single gate `validate_config` consumes.
+      integer, intent(in) :: variant
+      integer, intent(in) :: pv_adv
+      logical :: ok
+      ok = (variant == PV_VARIANT_SADOURNY_ENERGY) .or. &
+           (variant == PV_VARIANT_SADOURNY .and. pv_adv == PV_ADV_CENTERED)
+   end function bound_coriolis_is_supported
 
    pure function pv_variant_is_implemented(code) result(ok)
       !! `.true.` only for a Coriolis-advection variant that has a real

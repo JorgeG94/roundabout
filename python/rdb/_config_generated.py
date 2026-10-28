@@ -2893,7 +2893,7 @@ class OceanCoriolis(Group):
 
     bound_coriolis = Bool(
         'bound_coriolis',
-        doc='clamp the energy-scheme Coriolis accel to the (f+zeta)*v velocity-form range (MOM6 BOUND_CORIOLIS; sadourny_energy only)',
+        doc='clamp the Coriolis accel to the (f+zeta)*v velocity-form range (MOM6 BOUND_CORIOLIS; sadourny_energy, or sadourny with centred pv_adv_scheme)',
         units='',
         required=False,
         default=False,
