@@ -2449,7 +2449,8 @@ contains
    end subroutine tracer_advect_meridional
 
    subroutine continuity_tracer_step_split(grid, metrics, this, ms, dt, uhbt, vhbt, bc, mle, mle_fold_active, &
-                                           tracer_mode, h_min, visc_rem_u, visc_rem_v, u_cor, v_cor)
+                                           tracer_mode, h_min, visc_rem_u, visc_rem_v, u_cor, v_cor, &
+                                           tr_accum_weight)
       !! Production entry point for the directionally-split
       !! continuity + tracer step.  Interleaves the two so the
       !! CWC discrete theorem holds in the split form:
@@ -2520,10 +2521,16 @@ contains
          !! (default, absent) ⇒ the historical fused path: advance h AND
          !! advect tracers each call (bit-identical to pre-6b).
          !! `TR_MODE_ACCUMULATE` ⇒ advance h, accumulate
-         !! `0.5·mass_flux·dt` into `this%uhtr/vhtr` (one += per RK2
-         !! stage, weight 0.5 baked in — closes the reconstruction against
-         !! the RK2-averaged h), and SKIP the per-step tracer advect so
-         !! `hTr` stays frozen until the boundary drain.
+         !! `tr_accum_weight·mass_flux·dt` into `this%uhtr/vhtr` (one +=
+         !! per call; closes the reconstruction against the step-mean h),
+         !! and SKIP the per-step tracer advect so `hTr` stays frozen until
+         !! the boundary drain.
+      real(wp), intent(in), optional :: tr_accum_weight
+         !! Weight of this call's transport in the window accumulator.
+         !! Absent ⇒ 0.5, the `ssp_rk2` per-stage value (bit-identical).
+         !! `pred_corr` passes 1.0: its predictor accumulates nothing
+         !! (`TR_MODE_NONE`), so the single corrector call carries the whole
+         !! step transport.
       real(wp), intent(in), optional :: h_min
          !! Phase-1 Lagrangian minimum-thickness floor (m). When > 0, passed
          !! to `continuity_apply_zonal`/`_meridional` to clamp h_new >= h_min.
@@ -2536,8 +2543,10 @@ contains
       integer :: ii, jj, kk
       integer :: it_cw
       integer :: bc_w_tag, bc_e_tag, bc_s_tag, bc_n_tag
-      real(wp) :: h_min_use
+      real(wp) :: h_min_use, acc_w
 
+      acc_w = 0.5_wp
+      if (present(tr_accum_weight)) acc_w = tr_accum_weight
       mode = TR_MODE_ADVECT
       if (present(tracer_mode)) mode = tracer_mode
 
@@ -2666,7 +2675,7 @@ contains
          ! the RK2 0.5 weight baked in) and SKIP the tracer advect so
          ! hTr stays frozen.  hprev = h^{n+1} + div(uhtr) then closes
          ! the reconstruction against the RK2-averaged h.
-         call accumulate_flux_x(nx + 1, ny, nz, dt, ms%mass_flux_x_layer, this%uhtr)
+         call accumulate_flux_x(nx + 1, ny, nz, dt, acc_w, ms%mass_flux_x_layer, this%uhtr)
       else if (mode /= TR_MODE_NONE .and. present(bc)) then
          call tracer_advect_zonal(grid, metrics, this, ms, dt, bc=bc)
       else if (mode /= TR_MODE_NONE) then
@@ -2796,7 +2805,7 @@ contains
                                                          nx_phys, ny_phys, nghost)
       end if
       if (mode == TR_MODE_ACCUMULATE) then
-         call accumulate_flux_y(nx, ny + 1, nz, dt, ms%mass_flux_y_layer, this%vhtr)
+         call accumulate_flux_y(nx, ny + 1, nz, dt, acc_w, ms%mass_flux_y_layer, this%vhtr)
       else if (mode /= TR_MODE_NONE .and. present(bc)) then
          call tracer_advect_meridional(grid, metrics, this, ms, dt, bc=bc)
       else if (mode /= TR_MODE_NONE) then
@@ -3317,30 +3326,31 @@ contains
       n_limited = n_limited + n_lim
    end subroutine pd_limit_meridional_impl
 
-   pure subroutine accumulate_flux_x(nx_face, ny, nz, dt, mass_flux_x, uhtr)
-      !! Accumulate one RK2 stage's zonal mass flux into the windowed
-      !! accumulator with the ½ RK2 weight baked in:
-      !! `uhtr += 0.5·mass_flux_x·dt`.  `mass_flux_x` is already
+   pure subroutine accumulate_flux_x(nx_face, ny, nz, dt, wgt, mass_flux_x, uhtr)
+      !! Accumulate one stage's zonal mass flux into the windowed
+      !! accumulator: `uhtr += wgt·mass_flux_x·dt`.  `wgt` is the scheme's
+      !! step-mean weight: 0.5 per `ssp_rk2` stage (the two-stage average),
+      !! 1.0 for the single `pred_corr` corrector.  `mass_flux_x` is already
       !! area-weighted (m³/s = u·h_face·dy_cu); the product is m³.
       integer, intent(in) :: nx_face, ny, nz
-      real(wp), intent(in) :: dt
+      real(wp), intent(in) :: dt, wgt
       real(wp), intent(in) :: mass_flux_x(nx_face, ny, nz)
       real(wp), intent(inout) :: uhtr(nx_face, ny, nz)
       integer :: i, j, k
       do concurrent(k=1:nz, j=1:ny, i=1:nx_face)
-         uhtr(i, j, k) = uhtr(i, j, k) + 0.5_wp*mass_flux_x(i, j, k)*dt
+         uhtr(i, j, k) = uhtr(i, j, k) + wgt*mass_flux_x(i, j, k)*dt
       end do
    end subroutine accumulate_flux_x
 
-   pure subroutine accumulate_flux_y(nx, ny_face, nz, dt, mass_flux_y, vhtr)
+   pure subroutine accumulate_flux_y(nx, ny_face, nz, dt, wgt, mass_flux_y, vhtr)
       !! Meridional analogue of `accumulate_flux_x`.
       integer, intent(in) :: nx, ny_face, nz
-      real(wp), intent(in) :: dt
+      real(wp), intent(in) :: dt, wgt
       real(wp), intent(in) :: mass_flux_y(nx, ny_face, nz)
       real(wp), intent(inout) :: vhtr(nx, ny_face, nz)
       integer :: i, j, k
       do concurrent(k=1:nz, j=1:ny_face, i=1:nx)
-         vhtr(i, j, k) = vhtr(i, j, k) + 0.5_wp*mass_flux_y(i, j, k)*dt
+         vhtr(i, j, k) = vhtr(i, j, k) + wgt*mass_flux_y(i, j, k)*dt
       end do
    end subroutine accumulate_flux_y
 
@@ -4060,7 +4070,7 @@ contains
       end if
    end subroutine ppm_limit_pos
 
-   subroutine continuity_tracer_drain(grid, metrics, this, ms, ratio, bc)
+   subroutine continuity_tracer_drain(grid, metrics, this, ms, ratio, bc, post_weight)
       !! Phase-2 (6b) windowed horizontal tracer-advection drain.
       !!
       !! Spends the accumulated face transports `this%uhtr/vhtr` (built
@@ -4095,14 +4105,22 @@ contains
          !! fixed-budget pass count `max_iter = 2·ratio+1` (ratio is an
          !! integer ⇒ ceil(ratio) = ratio).
       type(ocean_bc_state_t), intent(in), optional :: bc
+      real(wp), intent(in), optional :: post_weight
+         !! Budget pre-multiplier for the post-average writes (un-hold +
+         !! drain sub-cycle): `1/ocean_budget_stage_weight(is_pc)`, i.e. 2.0
+         !! under `ssp_rk2` (absent default) and 1.0 under `pred_corr`.
 
       integer :: nx, ny, nz, nx_phys, ny_phys, nghost
+      real(wp) :: post_w
       integer :: max_iter, ipass, it
       integer :: i, j, k
       real(wp) :: cfl_max, denom, fmax
       logical :: per_x, per_y, fold_n
 
       if (.not. allocated(ms%tracers)) return
+
+      post_w = DRAIN_BUDGET_POST_AVERAGE_WEIGHT
+      if (present(post_weight)) post_w = post_weight
 
       nx = grid%nx_total
       ny = grid%ny_total
@@ -4182,11 +4200,11 @@ contains
             select case (ms%tracers(it)%budget_id)
             case (TRACER_BUDGET_HEAT)
                call drain_rescale_hTr_budget(nx, ny, nz, this%h_win_start, ms%h_layer, &
-                                             DRAIN_BUDGET_POST_AVERAGE_WEIGHT, &
+                                             post_w, &
                                              ms%tracers(it)%hTr, ms%heat_budget_horiz_adv)
             case (TRACER_BUDGET_SALT)
                call drain_rescale_hTr_budget(nx, ny, nz, this%h_win_start, ms%h_layer, &
-                                             DRAIN_BUDGET_POST_AVERAGE_WEIGHT, &
+                                             post_w, &
                                              ms%tracers(it)%hTr, ms%salt_budget_horiz_adv)
             case default
                call drain_rescale_hTr(nx, ny, nz, this%h_win_start, ms%h_layer, &
@@ -4307,11 +4325,11 @@ contains
             select case (ms%tracers(it)%budget_id)
             case (TRACER_BUDGET_HEAT)
                call drain_update_tracer_x_budget(nx, ny, nz, metrics%iareaT, this%tr_flux_x, &
-                                                 DRAIN_BUDGET_POST_AVERAGE_WEIGHT, &
+                                                 post_w, &
                                                  ms%tracers(it)%hTr, ms%heat_budget_horiz_adv)
             case (TRACER_BUDGET_SALT)
                call drain_update_tracer_x_budget(nx, ny, nz, metrics%iareaT, this%tr_flux_x, &
-                                                 DRAIN_BUDGET_POST_AVERAGE_WEIGHT, &
+                                                 post_w, &
                                                  ms%tracers(it)%hTr, ms%salt_budget_horiz_adv)
             case default
                call drain_update_tracer_x(nx, ny, nz, metrics%iareaT, this%tr_flux_x, &
@@ -4374,11 +4392,11 @@ contains
             select case (ms%tracers(it)%budget_id)
             case (TRACER_BUDGET_HEAT)
                call drain_update_tracer_y_budget(nx, ny, nz, metrics%iareaT, this%tr_flux_y, &
-                                                 DRAIN_BUDGET_POST_AVERAGE_WEIGHT, &
+                                                 post_w, &
                                                  ms%tracers(it)%hTr, ms%heat_budget_horiz_adv)
             case (TRACER_BUDGET_SALT)
                call drain_update_tracer_y_budget(nx, ny, nz, metrics%iareaT, this%tr_flux_y, &
-                                                 DRAIN_BUDGET_POST_AVERAGE_WEIGHT, &
+                                                 post_w, &
                                                  ms%tracers(it)%hTr, ms%salt_budget_horiz_adv)
             case default
                call drain_update_tracer_y(nx, ny, nz, metrics%iareaT, this%tr_flux_y, &

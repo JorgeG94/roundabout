@@ -871,19 +871,22 @@ module rdb_config
          !! different order.
          !!
          !! `validate_config` refuses `pred_corr` FAIL-LOUD, never silently,
-         !! outside its v1 envelope: `eulerian_z`, `&ocean_wetdry_nml
-         !! enable`, `dt_tracer_advect_ratio > 1`.  Six shipped namelists
-         !! pin `ssp_rk2` for those reasons.
+         !! outside its v1 envelope: `eulerian_z` and `&ocean_wetdry_nml
+         !! enable`.  `dt_tracer_advect_ratio > 1` is supported (single
+         !! rank): the corrector accumulates the whole step transport with
+         !! weight 1.0 and the drain's budget weight follows
+         !! `ocean_budget_stage_weight`.  Shipped namelists pin `ssp_rk2`
+         !! for those reasons.
          !!
          !! `"ssp_rk2"` (**EXPERIMENTAL**) = two identical stages + SSP
          !! average.  Still fully supported and fully tested — experimental
          !! is a label on the ANSWER, not a deprecation of the code path,
          !! and the stability suite runs an `ssp_rk2` twin of every case
          !! whose namelist does not pin a scheme.  It has the widest
-         !! envelope: every vcoord including `eulerian_z`, wet/dry, and
-         !! `dt_tracer_advect_ratio > 1` — and it is the only scheme wired
-         !! through the windowed tracer-advection path, which is why some
-         !! namelists must pin it.
+         !! envelope: every vcoord including `eulerian_z` and wet/dry
+         !! (the only scheme that accepts them), and the windowed
+         !! tracer-advection path (`dt_tracer_advect_ratio > 1`, 0.5 weight
+         !! per stage), which `pred_corr` also supports with weight 1.0.
          !!
          !! **What it costs you, measured.**  The two-stage average
          !! amplifies an internal gravity wave by `√(1 + (ω·dt)⁴/4)` per

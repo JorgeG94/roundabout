@@ -4130,7 +4130,7 @@ class OceanBt(Group):
 
     split_scheme = Enum(
         'split_scheme',
-        doc='Outer split-explicit time scheme: pred_corr (DEFAULT; MOM6 predictor-corrector, slow tendencies on the u_av/h_av step time-means, forward-backward gravity-wave pairing; lifts the internal-wave dt ceiling) or ssp_rk2 (EXPERIMENTAL; two-stage SSP average, widest envelope — the only scheme wired through eulerian_z, wet/dry and dt_tracer_advect_ratio>1 — but it spuriously grows internal gravity waves out of a stratified REST state, En 2.992E-05 vs 1.739E-09 at day 25 on resting_stratified_channel.nml; a (omega*dt)^4 noise floor, so forced viscous runs sit decades above it and quiescent or long spin-up runs do not)',
+        doc='Outer split-explicit time scheme: pred_corr (DEFAULT; MOM6 predictor-corrector, slow tendencies on the u_av/h_av step time-means, forward-backward gravity-wave pairing; lifts the internal-wave dt ceiling) or ssp_rk2 (EXPERIMENTAL; two-stage SSP average, widest envelope — the only scheme wired through eulerian_z and wet/dry — but it spuriously grows internal gravity waves out of a stratified REST state, En 2.992E-05 vs 1.739E-09 at day 25 on resting_stratified_channel.nml; a (omega*dt)^4 noise floor, so forced viscous runs sit decades above it and quiescent or long spin-up runs do not)',
         units='',
         required=False,
         default='pred_corr',

@@ -114,7 +114,7 @@ The ocean path is **not** bound by the gravity-wave CFL. The barotropic (gravity
 
 | Feature | Status | Key knob | Limits |
 |---|---|---|---|
-| Predictor-corrector outer step (MOM6 style) | **Shipped, default since 2026-09-14** | `&ocean_bt_nml split_scheme = "pred_corr"` | Refused with `eulerian_z`, wet/dry and `dt_tracer_advect_ratio > 1`. Slows the resting-state growth about 36 times but does not remove it. |
+| Predictor-corrector outer step (MOM6 style) | **Shipped, default since 2026-09-14** | `&ocean_bt_nml split_scheme = "pred_corr"` | Refused with `eulerian_z` and wet/dry. `dt_tracer_advect_ratio > 1` is supported single-rank (the corrector accumulates the full step transport, weight 1.0). The restart writer flushes the window first, so a checkpoint is window-aligned. Slows the resting-state growth about 36 times but does not remove it. |
 | Two-stage SSP-RK2 outer step | **Experimental** (fully supported and tested) | `split_scheme = "ssp_rk2"` | Makes energy out of a motionless stratified state. Needed for `eulerian_z`, wet/dry and windowed tracer advection. |
 | Fixed outer step | Shipped | `&time_nml dt_fixed > 0` | Required. There is no adaptive-CFL helper on this path. |
 | Barotropic sub-cycling | Shipped | `&ocean_bt_nml auto_n_inner`, `n_inner` | `n_inner` is set once at configure and is never re-derived. CFL truncation is counted, not controlled. |

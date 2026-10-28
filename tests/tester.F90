@@ -89,6 +89,8 @@ program rdb_tests
    use test_ocean_kpp, only: ocean_kpp_collect => collect_ocean_kpp_tests
    use test_ocean_dt_tracer_advect, only: ocean_dt_tracer_advect_collect => &
                                           collect_ocean_dt_tracer_advect_tests
+   use test_ocean_tracer_ratio_pc, only: ocean_tracer_ratio_pc_collect => &
+                                         collect_ocean_tracer_ratio_pc_tests
    use test_ocean_tracer_advect_window, only: ocean_tracer_advect_window_collect => &
                                               collect_ocean_tracer_advect_window_tests
    use test_ocean_tracer_weno, only: ocean_tracer_weno_collect => &
@@ -314,6 +316,7 @@ program rdb_tests
                 new_testsuite("ocean_pgf", ocean_pgf_collect), &
                 new_testsuite("ocean_dt_tracer_advect", ocean_dt_tracer_advect_collect), &
                 new_testsuite("ocean_tracer_advect_window", ocean_tracer_advect_window_collect), &
+                new_testsuite("ocean_tracer_ratio_pc", ocean_tracer_ratio_pc_collect), &
                 new_testsuite("ocean_tracer_weno", ocean_tracer_weno_collect), &
                 new_testsuite("ocean_pgf_fv", ocean_pgf_fv_collect), &
                 new_testsuite("ocean_pgf_grounded", ocean_pgf_grounded_collect), &

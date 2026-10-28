@@ -157,6 +157,7 @@ set(RDB_TESTS
     "test_ocean_dt_therm|test_ocean_dt_therm|collect_ocean_dt_therm_tests|ocean_dt_therm|ocean"
     "test_ocean_dt_tracer_advect|test_ocean_dt_tracer_advect|collect_ocean_dt_tracer_advect_tests|ocean_dt_tracer_advect|ocean"
     "test_ocean_tracer_advect_window|test_ocean_tracer_advect_window|collect_ocean_tracer_advect_window_tests|ocean_tracer_advect_window|ocean"
+    "test_ocean_tracer_ratio_pc|test_ocean_tracer_ratio_pc|collect_ocean_tracer_ratio_pc_tests|ocean_tracer_ratio_pc|ocean"
     "test_ocean_tracer_weno|test_ocean_tracer_weno|collect_ocean_tracer_weno_tests|ocean_tracer_weno|ocean+core"
     "test_ocean_tracer_ppm_h3|test_ocean_tracer_ppm_h3|collect_ocean_tracer_ppm_h3_tests|ocean_tracer_ppm_h3|ocean"
     "test_ocean_tracer_ppm_h3_drain|test_ocean_tracer_ppm_h3_drain|collect_ocean_tracer_ppm_h3_drain_tests|ocean_tracer_ppm_h3_drain|ocean"
@@ -431,6 +432,7 @@ set(NETCDF_TESTS
     test_ocean_driver_diag
     test_ocean_restart
     test_ocean_restart_engine
+    test_ocean_tracer_ratio_pc
     test_ocean_ice_evp
     test_ocean_ice_restart
     test_driver_ocean)
@@ -460,6 +462,7 @@ set(NETCDF_REQUIRED_TESTS
     test_ocean_driver_diag
     test_ocean_restart
     test_ocean_restart_engine
+    test_ocean_tracer_ratio_pc
     test_ocean_ice_restart
     test_driver_ocean)
 

@@ -619,6 +619,15 @@ contains
       end if
    end function ocean_dt_tracer_advect_ratios_ok
 
+   pure function drain_post_weight(dyn) result(w)
+      !! Budget pre-multiplier for the windowed drain's post-average writes:
+      !! the reciprocal of the console stage weight (2.0 ssp_rk2, 1.0
+      !! pred_corr), so `ocean_budget_*` recovers the drain 1:1.
+      class(ocean_dyn_t), intent(in) :: dyn
+      real(wp) :: w
+      w = 1.0_wp/ocean_budget_stage_weight(dyn%split_scheme == SPLIT_SCHEME_PRED_CORR)
+   end function drain_post_weight
+
    subroutine ocean_dyn_flush_tracer_window(grid, metrics, dyn, ct, ms, bc)
       !! Mandatory end-of-segment flush of the windowed tracer-advect
       !! accumulators (spec §(c) — MOM6's `n == n_max`).  Drains any OPEN
@@ -643,9 +652,11 @@ contains
       if (ct%t_dyn_rel_adv <= 0.0_wp) return
 
       if (present(bc)) then
-         call continuity_tracer_drain(grid, metrics, ct, ms, dyn%dt_tracer_advect_ratio, bc=bc)
+         call continuity_tracer_drain(grid, metrics, ct, ms, dyn%dt_tracer_advect_ratio, bc=bc, &
+                                      post_weight=drain_post_weight(dyn))
       else
-         call continuity_tracer_drain(grid, metrics, ct, ms, dyn%dt_tracer_advect_ratio)
+         call continuity_tracer_drain(grid, metrics, ct, ms, dyn%dt_tracer_advect_ratio, &
+                                      post_weight=drain_post_weight(dyn))
       end if
    end subroutine ocean_dyn_flush_tracer_window
 
@@ -1051,9 +1062,11 @@ contains
          ct%t_dyn_rel_adv = ct%t_dyn_rel_adv + dt
          if (dyn%is_tracer_advect_step()) then
             if (present(bc)) then
-               call continuity_tracer_drain(grid, metrics, ct, ms, dyn%dt_tracer_advect_ratio, bc=bc)
+               call continuity_tracer_drain(grid, metrics, ct, ms, dyn%dt_tracer_advect_ratio, bc=bc, &
+                                            post_weight=drain_post_weight(dyn))
             else
-               call continuity_tracer_drain(grid, metrics, ct, ms, dyn%dt_tracer_advect_ratio)
+               call continuity_tracer_drain(grid, metrics, ct, ms, dyn%dt_tracer_advect_ratio, &
+                                            post_weight=drain_post_weight(dyn))
             end if
          end if
       end if
@@ -3498,9 +3511,11 @@ contains
              (present(vcoord) .and. dyn%is_thermo_step() .and. ct%t_dyn_rel_adv > 0.0_wp)) then
             call profiler_start("ocean_tracer_drain")
             if (present(bc)) then
-               call continuity_tracer_drain(grid, metrics, ct, ms, dyn%dt_tracer_advect_ratio, bc=bc)
+               call continuity_tracer_drain(grid, metrics, ct, ms, dyn%dt_tracer_advect_ratio, bc=bc, &
+                                            post_weight=drain_post_weight(dyn))
             else
-               call continuity_tracer_drain(grid, metrics, ct, ms, dyn%dt_tracer_advect_ratio)
+               call continuity_tracer_drain(grid, metrics, ct, ms, dyn%dt_tracer_advect_ratio, &
+                                            post_weight=drain_post_weight(dyn))
             end if
             call profiler_stop("ocean_tracer_drain")
             call probe_dS(grid, ms, "after tracer drain", 3, dyn%outer_step_count + 1)
@@ -3680,7 +3695,7 @@ contains
       type(ocean_mle_t), intent(inout), optional :: mle
 
       integer :: tr_mode
-      real(wp) :: h_min_pass
+      real(wp) :: h_min_pass, acc_wt
 
       ! ---- 5. Ghost fills at open edges (before continuity PPM) ----
       ! Fill h_layer and tracer hTr ghost cells at any open-ish edge
@@ -3730,6 +3745,10 @@ contains
       ! ⇒ TR_MODE_ACCUMULATE (advance h + accumulate ½·flux·dt into
       ! ct%uhtr/vhtr per RK2 stage, hTr frozen).  The boundary drain runs
       ! once per window in ocean_dyn_step_split.
+      ! Window-accumulator weight: ssp_rk2 averages two stages (0.5 each);
+      ! pred_corr accumulates only in its corrector (the predictor is
+      ! TR_MODE_NONE), whose transport IS the whole step mean (1.0).
+      acc_wt = merge(1.0_wp, 0.5_wp, dyn%split_scheme == SPLIT_SCHEME_PRED_CORR)
       if (h_only) then
          ! pred_corr PREDICTOR (SPEC §2 P9): continuity advances h (into the
          ! provisional hp, discarded after the stage) and produces u_av via
@@ -3767,7 +3786,8 @@ contains
                                               h_min=h_min_pass, &
                                               visc_rem_u=dyn%bt_work%visc_rem_u, &
                                               visc_rem_v=dyn%bt_work%visc_rem_v, &
-                                              u_cor=ms%u_av_layer, v_cor=ms%v_av_layer)
+                                              u_cor=ms%u_av_layer, v_cor=ms%v_av_layer, &
+                                              tr_accum_weight=acc_wt)
          else
             call continuity_tracer_step_split(grid, metrics, ct, ms, dt, &
                                               uhbt=dyn%bt_work%bt_uhbt, &
@@ -3777,7 +3797,8 @@ contains
                                               h_min=h_min_pass, &
                                               visc_rem_u=dyn%bt_work%visc_rem_u, &
                                               visc_rem_v=dyn%bt_work%visc_rem_v, &
-                                              u_cor=ms%u_av_layer, v_cor=ms%v_av_layer)
+                                              u_cor=ms%u_av_layer, v_cor=ms%v_av_layer, &
+                                              tr_accum_weight=acc_wt)
          end if
       else if (present(bc)) then
          call continuity_tracer_step_split(grid, metrics, ct, ms, dt, &
@@ -3786,7 +3807,8 @@ contains
                                            mle_fold_active=.true., &
                                            tracer_mode=tr_mode, &
                                            h_min=h_min_pass, &
-                                           u_cor=ms%u_av_layer, v_cor=ms%v_av_layer)
+                                           u_cor=ms%u_av_layer, v_cor=ms%v_av_layer, &
+                                           tr_accum_weight=acc_wt)
       else
          call continuity_tracer_step_split(grid, metrics, ct, ms, dt, &
                                            uhbt=dyn%bt_work%bt_uhbt, &
@@ -3794,7 +3816,8 @@ contains
                                            mle_fold_active=.true., &
                                            tracer_mode=tr_mode, &
                                            h_min=h_min_pass, &
-                                           u_cor=ms%u_av_layer, v_cor=ms%v_av_layer)
+                                           u_cor=ms%u_av_layer, v_cor=ms%v_av_layer, &
+                                           tr_accum_weight=acc_wt)
       end if
       ! MOM6 C9: h_av = 0.5*(h_in + h_out).
       call rk2_average_field_3d(ms%h_layer, ms%h_av_layer, &

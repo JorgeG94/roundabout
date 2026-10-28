@@ -470,7 +470,7 @@ contains
                           "time-means, forward-backward gravity-wave pairing; lifts the "// &
                           "internal-wave dt ceiling) or ssp_rk2 (EXPERIMENTAL; two-stage "// &
                           "SSP average, widest envelope — the only scheme wired through "// &
-                          "eulerian_z, wet/dry and dt_tracer_advect_ratio>1 — but it "// &
+                          "eulerian_z and wet/dry — but it "// &
                           "spuriously grows internal gravity waves out of a stratified "// &
                           "REST state, En 2.992E-05 vs 1.739E-09 at day 25 on "// &
                           "resting_stratified_channel.nml; a (omega*dt)^4 noise floor, "// &

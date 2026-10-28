@@ -32,6 +32,10 @@
 !!       drain (`dt_tracer_advect_ratio > 1`) driven TOGETHER WITH an active
 !!       surface flux, the combination no test covered before 2026-09-12.
 !!       The budget must close mid-window and after the drain.
+!!  (10) `windowed_drain_pred_corr_budget` -- the same under `pred_corr`
+!!       accounting: one accumulate call per step at weight 1.0, drain
+!!       `post_weight` 1.0, console stage weight 1.0.  Fails if the drain
+!!       keeps the ssp_rk2 post-average weight 2.0 (2x double count).
 module test_ocean_conservation_salt_heat
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp, RHO_WATER
@@ -86,7 +90,9 @@ contains
                   new_unittest("prognostic_state_byte_identical", &
                                test_prognostic_byte_identical), &
                   new_unittest("windowed_drain_with_surface_flux", &
-                               test_windowed_drain_with_surface_flux) &
+                               test_windowed_drain_with_surface_flux), &
+                  new_unittest("windowed_drain_pred_corr_budget", &
+                               test_windowed_drain_pc_budget) &
                   ]
    end subroutine collect_ocean_conservation_salt_heat_tests
 
@@ -1455,6 +1461,139 @@ contains
       call destroy_cartesian_metrics(metrics)
    end subroutine test_windowed_drain_with_surface_flux
 
+   subroutine test_windowed_drain_pc_budget(error)
+      !! `pred_corr` twin of `windowed_drain_with_surface_flux`.  Per outer
+      !! step the corrector accumulates ONCE at weight 1.0 (the predictor is
+      !! `TR_MODE_NONE`), the surface flux is applied once, `h`/`hTr` are NOT
+      !! averaged, and the console weight is `ocean_budget_stage_weight(.true.)`
+      !! = 1.0.  The drain must then use `post_weight = 1.0`; with the
+      !! ssp_rk2 default 2.0 the un-hold and drain writes are counted twice
+      !! and the residual is O(1), not round-off.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(continuity_t) :: ct
+      type(ocean_metrics_t) :: metrics
+      type(ocean_surface_flux_t) :: sf
+      real(wp), parameter :: H0 = 50.0_wp
+      real(wp), parameter :: S0 = 35.0_wp
+      real(wp), parameter :: T0 = 15.0_wp
+      real(wp), parameter :: DT = 600.0_wp
+      real(wp), parameter :: Q_HEAT = 200.0_wp   !! W/m² surface heat flux
+      real(wp), parameter :: Q_SALT = 1.0e-4_wp  !! kg/(m²·s) surface salt flux
+      real(wp), parameter :: TOL = 1.0e-10_wp
+      integer, parameter :: NX_PHYS = 8
+      integer, parameter :: NY_PHYS = 6
+      integer, parameter :: RATIO = 2
+      integer :: nx, ny, i, j, k
+      integer :: is, it
+      real(wp) :: ref_salt, ref_heat, total_salt, total_heat
+      real(wp) :: src_salt, src_heat, out_salt, out_heat
+      real(wp) :: res_salt, res_heat, drift_heat
+      real(wp) :: scale_v, area_w, ang
+
+      checks: block
+
+         call make_grid(grid, NX_PHYS, NY_PHYS, 5000.0_wp, 5000.0_wp)
+         call make_cartesian_metrics(metrics, grid)
+         nx = grid%nx_total
+         ny = grid%ny_total
+         ms%nz_ml = NZ
+         call ms%init(grid)
+         ct%windowed_advection = .true.   ! allocates uhtr/vhtr + drain scratch
+         call ct%init(grid, nz_ml=NZ)
+         call sf%init(grid)
+         is = ms%idx_salinity
+         it = ms%idx_temperature
+         area_w = grid%dx*grid%dy
+         scale_v = area_w*RHO_WATER
+
+         ! NON-UNIFORM tracers and a DIVERGENT flow: both are load-bearing.
+         ! A uniform tracer makes the concentration hold exactly
+         ! content-conserving (Σ Tr·δh = Tr·Σ δh = 0) and assertion (b)
+         ! degenerates to 0 > 0.
+         ms%h_layer = H0
+         do k = 1, NZ
+            do j = 1, ny
+               do i = 1, nx
+                  ang = 0.7_wp*real(i, wp) + 0.4_wp*real(j, wp) + 0.3_wp*real(k, wp)
+                  ms%tracers(is)%hTr(i, j, k) = (S0 + 0.8_wp*sin(ang))*H0
+                  ms%tracers(it)%hTr(i, j, k) = (T0 + 2.0_wp*cos(ang))*H0
+                  ms%u_face_x_layer(i, j, k) = 0.05_wp*sin(0.5_wp*real(i, wp))
+                  ms%v_face_y_layer(i, j, k) = 0.04_wp*cos(0.3_wp*real(j, wp))
+               end do
+            end do
+         end do
+         ms%mass_flux_x_layer = 0.0_wp
+         ms%mass_flux_y_layer = 0.0_wp
+
+         call sf%set_surface_flux_const(Q_HEAT, Q_SALT)
+
+         ref_salt = area_sum(ms%tracers(is)%hTr, nx, ny, area_w)*RHO_WATER
+         ref_heat = area_sum(ms%tracers(it)%hTr, nx, ny, area_w)*RHO_WATER
+
+         !$acc enter data copyin(ms, sf, ct)
+         call ms%enter_data()
+         call sf%enter_data()
+         call ct%enter_data()
+
+         ! ---- Outer step 1 of the window (accumulate; no drain) ----
+         call window_outer_step_pc(grid, metrics, ct, ms, sf, DT)
+
+         ! (a)/(b) MID-WINDOW closure: hTr still carries the concentration
+         ! hold, and `uhtr` still carries an unspent window.
+         call window_totals(ms, nx, ny, is, it, area_w, total_salt, total_heat, &
+                            src_salt, src_heat, out_salt, out_heat, 1.0_wp)
+         res_salt = (total_salt - ref_salt) + out_salt - src_salt
+         res_heat = (total_heat - ref_heat) + out_heat - src_heat
+         call check(error, abs(res_salt) <= TOL*abs(ref_salt), &
+                    "mid-window salt residual must close (concentration hold instrumented)")
+         if (allocated(error)) exit checks
+         call check(error, abs(res_heat) <= TOL*abs(ref_heat), &
+                    "mid-window heat residual must close (concentration hold instrumented)")
+         if (allocated(error)) exit checks
+         call check(error, abs(out_heat) > 1.0e3_wp*abs(res_heat), &
+                    "mid-window heat `out` must carry the concentration-hold correction")
+         if (allocated(error)) exit checks
+
+         ! ---- Outer step 2 of the window, then the drain ----
+         call window_outer_step_pc(grid, metrics, ct, ms, sf, DT)
+         call continuity_tracer_drain(grid, metrics, ct, ms, RATIO, post_weight=1.0_wp)
+
+         call window_totals(ms, nx, ny, is, it, area_w, total_salt, total_heat, &
+                            src_salt, src_heat, out_salt, out_heat, 1.0_wp)
+
+         call ct%exit_data()
+         call ms%exit_data()
+         call sf%exit_data()
+         !$acc exit data delete(ms, sf, ct)
+
+         res_salt = (total_salt - ref_salt) + out_salt - src_salt
+         res_heat = (total_heat - ref_heat) + out_heat - src_heat
+         drift_heat = total_heat - ref_heat
+
+         ! (c) The closed budget still closes after the drain has spent the
+         !     window -- with a surface flux running through it.
+         call check(error, abs(res_salt) <= TOL*abs(ref_salt), &
+                    "windowed-drain salt residual must close with a surface flux active")
+         if (allocated(error)) exit checks
+         call check(error, abs(res_heat) <= TOL*abs(ref_heat), &
+                    "windowed-drain heat residual must close with a surface flux active")
+         if (allocated(error)) exit checks
+
+         ! (d) ... and the closure is doing real work: the raw drift the old
+         !     fall-back printed is orders of magnitude larger.  This is the
+         !     shipped-namelist signature (5.6e-5 drift vs 3e-14 residual).
+         call check(error, abs(drift_heat) > 1.0e3_wp*abs(res_heat), &
+                    "raw heat drift must dominate the closed residual (the fall-back was wrong)")
+
+      end block checks
+      call ct%destroy()
+      call sf%destroy()
+      call ms%destroy()
+      call destroy_cartesian_metrics(metrics)
+   end subroutine test_windowed_drain_pc_budget
+
    subroutine window_outer_step(grid, metrics, ct, ms, sf, dt, nx, ny, nz_lev, is, it, &
                                 h_save, hs_save, ht_save)
       !! One faithful RK2 outer step in `TR_MODE_ACCUMULATE` with the surface
@@ -1490,8 +1629,23 @@ contains
       call rk2_avg_3d(nx, ny, nz_lev, ht_save, ms%tracers(it)%hTr)
    end subroutine window_outer_step
 
+   subroutine window_outer_step_pc(grid, metrics, ct, ms, sf, dt)
+      !! One `pred_corr` outer step in accumulate mode: the corrector's single
+      !! continuity call at accumulate weight 1.0, then the surface flux once.
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_metrics_t), intent(in) :: metrics
+      type(continuity_t), intent(inout) :: ct
+      type(multilayer_state_t), intent(inout) :: ms
+      type(ocean_surface_flux_t), intent(inout) :: sf
+      real(wp), intent(in) :: dt
+      call continuity_tracer_step_split(grid, metrics, ct, ms, dt, &
+                                        tracer_mode=TR_MODE_ACCUMULATE, &
+                                        tr_accum_weight=1.0_wp)
+      call ocean_surface_flux_apply_tracers(grid, sf, ms, dt)
+   end subroutine window_outer_step_pc
+
    subroutine window_totals(ms, nx, ny, is, it, area_w, total_salt, total_heat, &
-                            src_salt, src_heat, out_salt, out_heat)
+                            src_salt, src_heat, out_salt, out_heat, stage_weight)
       !! Pull the device state back far enough to form the console's own
       !! `total` / `src` / `out` terms through the PRODUCTION helpers.
       type(multilayer_state_t), intent(inout) :: ms
@@ -1499,6 +1653,8 @@ contains
       real(wp), intent(in) :: area_w
       real(wp), intent(out) :: total_salt, total_heat
       real(wp), intent(out) :: src_salt, src_heat, out_salt, out_heat
+      real(wp), intent(in), optional :: stage_weight
+         !! Console stage weight; absent => the ssp_rk2 default (0.5).
 
       call pull_budgets(ms)
       associate (hs => ms%tracers(is)%hTr, ht => ms%tracers(it)%hTr)
@@ -1507,15 +1663,15 @@ contains
 
       total_salt = area_sum(ms%tracers(is)%hTr, nx, ny, area_w)*RHO_WATER
       total_heat = area_sum(ms%tracers(it)%hTr, nx, ny, area_w)*RHO_WATER
-      src_salt = ocean_budget_src(area_sum(ms%salt_budget_surface, nx, ny, area_w))
+      src_salt = ocean_budget_src(area_sum(ms%salt_budget_surface, nx, ny, area_w), stage_weight)
       src_heat = ocean_budget_src(ocean_heat_src_sum( &
                                   area_sum(ms%heat_budget_surface, nx, ny, area_w), &
                                   area_sum(ms%heat_budget_geothermal, nx, ny, area_w), &
-                                  0.0_wp))
+                                  0.0_wp), stage_weight)
       out_salt = ocean_budget_out(area_sum(ms%salt_budget_horiz_adv, nx, ny, area_w), &
-                                  area_sum(ms%salt_budget_hdiff, nx, ny, area_w))
+                                  area_sum(ms%salt_budget_hdiff, nx, ny, area_w), stage_weight)
       out_heat = ocean_budget_out(area_sum(ms%heat_budget_horiz_adv, nx, ny, area_w), &
-                                  area_sum(ms%heat_budget_hdiff, nx, ny, area_w))
+                                  area_sum(ms%heat_budget_hdiff, nx, ny, area_w), stage_weight)
    end subroutine window_totals
 
 end module test_ocean_conservation_salt_heat

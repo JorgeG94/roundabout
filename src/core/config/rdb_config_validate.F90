@@ -1405,13 +1405,6 @@ contains
                               "this configuration.")
             has_error = .true.
          end if
-         if (cfg%ocean%vmix%dt_tracer_advect_ratio > 1) then
-            call logger%error("&ocean_bt_nml split_scheme='pred_corr' requires "// &
-                              "dt_tracer_advect_ratio = 1 (v1 envelope). pred_corr is "// &
-                              "the DEFAULT, so set split_scheme='ssp_rk2' to keep this "// &
-                              "configuration.")
-            has_error = .true.
-         end if
          ! z-level closed faces need their SOLID WALLS to be walls.  With
          ! `mask_wall_velocity = .false.` a wall face keeps a free per-layer
          ! velocity that carries no mass (continuity zeroes the wall flux)
