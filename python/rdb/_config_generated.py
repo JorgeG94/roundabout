@@ -2497,11 +2497,11 @@ class OceanEpbl(Group):
 
     combine = Enum(
         'combine',
-        doc='Combine vs interior closure kv/kt',
+        doc='Combine vs interior closure kv/kt: add | max | max_shear (bg + max(epbl, kappa-shear))',
         units='',
         required=False,
         default='add',
-        allowed=('add', 'max'),
+        allowed=('add', 'max', 'max_shear'),
     )
 
     tke_diags = Bool(

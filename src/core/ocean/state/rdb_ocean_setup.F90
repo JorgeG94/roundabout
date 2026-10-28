@@ -89,7 +89,8 @@ module rdb_ocean_setup
                                porous_stats_are_ordered, &
                                POROUS_SOURCE_RESOLVED, POROUS_SOURCE_FILE
    use rdb_ocean_epbl, only: parse_epbl_mstar_scheme, parse_epbl_vstar_scheme, &
-                             parse_epbl_combine, parse_epbl_lt_scheme
+                             parse_epbl_combine, parse_epbl_lt_scheme, &
+                             EPBL_COMBINE_MAX_SHEAR
    use rdb_ocean_vmix, only: parse_kpp_sw_method, vmix_resolve_kd_min, &
                              parse_vmix_interior_closure, VMIX_INTERIOR_NONE, &
                              bkgnd_henyey_conflicts_profile, &

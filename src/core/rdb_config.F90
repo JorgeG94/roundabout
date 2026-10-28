@@ -1877,9 +1877,13 @@ module rdb_config
          !! Blend |f| with 2*Omega (MOM6 ML_OMEGA_FRAC).
       real(wp) :: prandtl = 1.0_wp
          !! Kv = prandtl*Kd into the momentum solve (MOM6 EPBL_PRANDTL).
-      character(len=8) :: combine = "add"
+      character(len=10) :: combine = "add"
          !! "add" / "max" vs the interior closure's kv/kt
-         !! (MOM6 EPBL_IS_ADDITIVE).
+         !! (MOM6 EPBL_IS_ADDITIVE), or "max_shear": kappa-shear is merged
+         !! first and ePBL adds only what exceeds it, i.e.
+         !! bg + max(ePBL, kappa-shear) + others (ACCESS-OM3,
+         !! EPBL_IS_ADDITIVE=False).  Identical to "add" when kappa-shear
+         !! is off; refused with use_kpp.
       logical :: tke_diags = .false.
          !! Compute the per-column TKE budget diagnostic terms.
       logical :: use_lt = .false.

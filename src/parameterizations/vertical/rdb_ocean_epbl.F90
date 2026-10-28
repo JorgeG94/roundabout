@@ -57,6 +57,7 @@ module rdb_ocean_epbl
    public :: parse_epbl_mstar_scheme
    public :: parse_epbl_vstar_scheme
    public :: parse_epbl_combine
+   public :: epbl_merge_max_shear
    public :: parse_epbl_lt_scheme
 
    ! mstar (mechanical TKE / u*^3) scheme tags.
@@ -80,6 +81,12 @@ module rdb_ocean_epbl
       !! kt += kd ; kv += prandtl*kd  (MOM6 EPBL_IS_ADDITIVE=.true.)
    integer, parameter, public :: EPBL_COMBINE_MAX = 2
       !! kt = max(kt, kd) ; kv = max(kv, prandtl*kd)
+   integer, parameter, public :: EPBL_COMBINE_MAX_SHEAR = 3
+      !! Kappa-shear and ePBL combine by max, the rest stays additive:
+      !! kt = bg + max(kd_shear, kd_epbl) + others, kv = bg +
+      !! max(kv_shear, prandtl*kd_epbl) + others (MOM6 EPBL_IS_ADDITIVE=.false.
+      !! with a kappa-shear interior).  Needs kappa-shear merged BEFORE
+      !! `epbl_merge_max_shear`; without kappa-shear it is exactly "add".
 
    ! Langmuir-enhancement scheme tags (Reichl & Li 2019 forms).
    integer, parameter, public :: EPBL_LT_NONE = 0
@@ -576,6 +583,8 @@ contains
          tag = EPBL_COMBINE_ADD
       case ("max")
          tag = EPBL_COMBINE_MAX
+      case ("max_shear")
+         tag = EPBL_COMBINE_MAX_SHEAR
       case default
          tag = -1
       end select
@@ -1596,6 +1605,36 @@ contains
          end if
       end do
    end subroutine epbl_merge_into_kv_kt
+
+   pure subroutine epbl_merge_max_shear(this, nx, ny, nzp1, kv, kt, kd_shear, kv_fac)
+      !! `combine = "max_shear"` merge.  `kv`/`kt` ALREADY hold the
+      !! background plus the kappa-shear contribution (kappa-shear is merged
+      !! first, additively, on this branch); this adds only the part of the
+      !! ePBL diffusivity that exceeds it:
+      !!
+      !!   kt += max(kd_epbl - kd_shear, 0)           => bg + max(shear, epbl)
+      !!   kv += max(prandtl*kd_epbl - kv_fac*kd_shear, 0)
+      !!
+      !! `kd_shear` is the persistent `kappa_shear%kd_int` (no copy) and
+      !! `kv_fac` the factor the kappa-shear merge applied to it for kv
+      !! (`prandtl_turb`, or 0 in the vertex form, whose shear viscosity
+      !! reaches momentum through the corner field instead, so there the kv
+      !! combine is additive).  Interior interfaces only.
+      type(ocean_epbl_t), intent(in) :: this
+      integer, intent(in) :: nx, ny, nzp1
+      real(wp), intent(inout) :: kv(nx, ny, nzp1)
+      real(wp), intent(inout) :: kt(nx, ny, nzp1)
+      real(wp), intent(in) :: kd_shear(nx, ny, nzp1)
+      real(wp), intent(in) :: kv_fac
+
+      integer :: i, j, k
+
+      do concurrent(k=2:nzp1 - 1, j=1:ny, i=1:nx)
+         kt(i, j, k) = kt(i, j, k) + max(this%kd_int(i, j, k) - kd_shear(i, j, k), 0.0_wp)
+         kv(i, j, k) = kv(i, j, k) + &
+                       max(this%prandtl*this%kd_int(i, j, k) - kv_fac*kd_shear(i, j, k), 0.0_wp)
+      end do
+   end subroutine epbl_merge_max_shear
 
    pure function ocean_epbl_bytes(this) result(nbytes)
       !! Counted allocatable footprint of the EPBL slot

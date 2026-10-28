@@ -207,6 +207,7 @@ set(RDB_TESTS
     "test_ocean_vmix_assembly|test_ocean_vmix_assembly|collect_ocean_vmix_assembly_tests|ocean_vmix_assembly|ocean"
     "test_ocean_bkgnd_mixing|test_ocean_bkgnd_mixing|collect_ocean_bkgnd_mixing_tests|ocean_bkgnd_mixing|ocean"
     "test_ocean_vmix_no_pp81|test_ocean_vmix_no_pp81|collect_ocean_vmix_no_pp81_tests|ocean_vmix_no_pp81|ocean"
+    "test_ocean_epbl_max_shear|test_ocean_epbl_max_shear|collect_ocean_epbl_max_shear_tests|ocean_epbl_max_shear|ocean"
     "test_ocean_barotropic_substep|test_ocean_barotropic_substep|collect_ocean_barotropic_substep_tests|ocean_barotropic_substep|ocean"
     "test_ocean_bt_cor_ref|test_ocean_bt_cor_ref|collect_ocean_bt_cor_ref_tests|ocean_bt_cor_ref|ocean"
     "test_ocean_bt_substep_zeta_ke|test_ocean_bt_substep_zeta_ke|collect_bt_substep_zeta_ke_tests|ocean_bt_substep_zeta_ke|ocean"

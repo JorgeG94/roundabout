@@ -291,8 +291,8 @@ contains
       pr => cfg%ocean%epbl%prandtl
       call g%add(nml_real("prandtl", pr, "Kv = prandtl*Kd into the momentum solve"))
       ps => cfg%ocean%epbl%combine
-      call g%add(nml_enum("combine", ps, "Combine vs interior closure kv/kt", &
-                          allowed=[character(len=3) :: "add", "max"]))
+      call g%add(nml_enum("combine", ps, "Combine vs interior closure kv/kt: add | max | max_shear (bg + max(epbl, kappa-shear))", &
+                          allowed=[character(len=9) :: "add", "max", "max_shear"]))
       pl => cfg%ocean%epbl%tke_diags
       call g%add(nml_logical("tke_diags", pl, "Compute per-column TKE budget diagnostics"))
       pl => cfg%ocean%epbl%use_lt

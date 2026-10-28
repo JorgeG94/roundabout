@@ -680,7 +680,7 @@ load-bearing dials:
 | `mld_iteration` | `.true.` | Self-consistent MLD root-find (false position, `mld_tol = 1 m`). |
 | `translay_scale` | `0.1` | Transition-layer mixing-length floor. |
 | `prandtl` | `1.0` | `Kv = prandtl · Kd` into the momentum solve. |
-| `combine` | `"add"` | Fold into PP81 kv/kt additively or by `max`. |
+| `combine` | `"add"` | Fold into the interior kv/kt additively (`"add"`), by `max` against the whole interior value (`"max"`), or `"max_shear"`: kappa-shear is merged first and ePBL adds only what exceeds it, `bg + max(ePBL, kappa-shear) + others`, kv likewise with `prandtl_turb`/`prandtl` (ACCESS-OM3, `EPBL_IS_ADDITIVE = False`). `"max_shear"` equals `"add"` when kappa-shear is off, is refused with `use_kpp`, and in the kappa-shear vertex form the cell-centred shear viscosity is zero so kv combines additively. Test `test_ocean_epbl_max_shear`. |
 | `tke_diags` | `.false.` | Per-column TKE budget terms (close to round-off; asserted by `test_ocean_epbl`). |
 | `use_lt` | `.false.` | Langmuir enhancement of mstar — LF17 wind-only statistical waves (one La per column from u* + MLD; no wave model). `lt_scheme = "rescale"\|"additive"`, Reichl & Li (2019) coefficients, `lt_lac1..5` stability modification. |
 
@@ -768,6 +768,11 @@ non-conservative — increment mirrored into the surface heat/salt budget)
 Dated reconciliation log, kept verbatim. Read it for the history of why a row
 looks the way it does. It is not needed to use the tables.
 
+- **2026-10-27** — `&ocean_epbl_nml combine = "max_shear"` (third value, no
+  new knob): kappa-shear runs and merges BEFORE the ePBL merge on this branch
+  only and ePBL adds `max(kd_epbl - kd_shear, 0)` (kv: `max(Pr_epbl kd_epbl -
+  prandtl_turb kd_shear, 0)`), giving `bg + max(ePBL, kappa-shear)`. The
+  `"add"`/`"max"` order is unchanged (bit-identical).
 - **2026-10-27** — `&ocean_vmix_nml interior_closure` (`"pp81"` default |
   `"none"`) and `bkgnd_prandtl` (default `-1`, off). `"none"` runs no PP81
   kernel: the interior `kv`/`kt` are seeded each stage with the background

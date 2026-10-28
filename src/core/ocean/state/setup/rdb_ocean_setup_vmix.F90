@@ -579,7 +579,7 @@ contains
          epbl%combine_mode = parse_epbl_combine(ecfg%combine)
          if (epbl%combine_mode < 0) then
             call fail("ocean_epbl_nml: unknown combine '"// &
-                      trim(ecfg%combine)//"' (add/max)", ierr, OCEAN_STATUS_ERR_SETUP)
+                      trim(ecfg%combine)//"' (add/max/max_shear)", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
 
@@ -678,6 +678,12 @@ contains
              (epbl%translay_scale < 0.0_wp .or. epbl%translay_scale >= 1.0_wp)) then
             call fail("ocean_epbl_nml: translay_scale must be in "// &
                       "[0,1) when mld_iteration is on", ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+         if (epbl%combine_mode == EPBL_COMBINE_MAX_SHEAR .and. cfg%ocean%vmix%use_kpp) then
+            call fail("ocean_epbl_nml: combine='max_shear' is refused with use_kpp=.true. "// &
+                      "(the max-with-kappa-shear combine is defined against the "// &
+                      "ePBL-only surface scheme); set use_kpp=.false.", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          ! KPP mutual exclusion: EPBL replaces the overlay.  use_kpp

@@ -125,7 +125,8 @@ module rdb_ocean_dyn
                              vmix_apply_nonlocal_tendencies, vmix_assemble, &
                              vmix_apply_convection, vmix_split_kd_heat_salt, &
                              VMIX_INTERIOR_PP81, VMIX_INTERIOR_NONE
-   use rdb_ocean_epbl, only: ocean_epbl_t, epbl_compute, epbl_merge_into_kv_kt
+   use rdb_ocean_epbl, only: ocean_epbl_t, epbl_compute, epbl_merge_into_kv_kt, &
+                             epbl_merge_max_shear, EPBL_COMBINE_MAX_SHEAR
    use rdb_ocean_kappa_shear, only: ocean_kappa_shear_t, kappa_shear_compute, &
                                     kappa_shear_merge_into_kv_kt
    use rdb_ocean_tidal_mixing, only: ocean_tidal_mixing_t, tidal_mixing_compute, &
@@ -1513,7 +1514,7 @@ contains
          !! Unread when `do_remnant` is false.
 
       logical :: epbl_active, kshear_active, tidal_active, do_remnant
-      logical :: do_tracers, vertex_kv, split_remnant, request_remnant
+      logical :: do_tracers, vertex_kv, split_remnant, request_remnant, shear_first
 
       do_tracers = .true.
       if (present(apply_tracers)) do_tracers = apply_tracers
@@ -1550,6 +1551,11 @@ contains
       split_remnant = .false.
       if (do_remnant .and. present(dt_remnant)) split_remnant = (dt_remnant /= dt)
       request_remnant = do_remnant .and. .not. split_remnant
+      ! combine="max_shear": kappa-shear must be merged BEFORE the ePBL
+      ! merge so the ePBL step can subtract it (the "add"/"max" order is
+      ! unchanged).  Without kappa-shear the mode is plain "add".
+      shear_first = .false.
+      if (epbl_active .and. kshear_active) shear_first = (epbl%combine_mode == EPBL_COMBINE_MAX_SHEAR)
 
       if (vmix%use_closure) then
          call profiler_start("ocean_vmix_compute")
@@ -1591,10 +1597,17 @@ contains
             if (dyn%enable_thermodynamics .and. dyn%is_thermo_step() .and. stage == 1) then
                call epbl_compute(grid, epbl, ms, ss, dyn%therm_dt(dt), sf)
             end if
-            call epbl_merge_into_kv_kt(epbl, size(vmix%kt, 1), size(vmix%kt, 2), &
-                                       size(vmix%kt, 3), vmix%kv, vmix%kt)
+            if (shear_first) then
+               call kshear_stage_merge(grid, dyn, vmix, ms, kshear, dt, stage, metrics)
+               call epbl_merge_max_shear(epbl, size(vmix%kt, 1), size(vmix%kt, 2), &
+                                         size(vmix%kt, 3), vmix%kv, vmix%kt, &
+                                         kshear%kd_int, merge(0.0_wp, kshear%prandtl_turb, kshear%at_vertex))
+            else
+               call epbl_merge_into_kv_kt(epbl, size(vmix%kt, 1), size(vmix%kt, 2), &
+                                          size(vmix%kt, 3), vmix%kv, vmix%kt)
+            end if
          end if
-         if (kshear_active) then
+         if (kshear_active .and. .not. shear_first) then
             if (dyn%enable_thermodynamics .and. dyn%is_thermo_step() .and. stage == 1) then
                if (kshear%at_vertex) then
                   ! Vertex form needs the halo-valid wet masks for the
@@ -1741,6 +1754,38 @@ contains
          call visc_rem_halo_refresh(grid, bt_work, bc)
       end if
    end subroutine vmix_apply_in_stage
+
+   subroutine kshear_stage_merge(grid, dyn, vmix, ms, kshear, dt, stage, metrics)
+      !! Kappa-shear refresh (thermo cadence, stage 1) + additive merge into
+      !! `vmix%kv/kt`; the `combine="max_shear"` ordering needs it ahead of
+      !! the ePBL merge.  Same operations as the in-line kappa-shear block of
+      !! `vmix_apply_in_stage`, which stays where it is for "add"/"max".
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_dyn_t), intent(in) :: dyn
+      type(ocean_vmix_t), intent(inout) :: vmix
+      type(multilayer_state_t), intent(inout) :: ms
+      type(ocean_kappa_shear_t), intent(inout) :: kshear
+      real(wp), intent(in) :: dt
+      integer, intent(in) :: stage
+      type(ocean_metrics_t), intent(in), optional :: metrics
+
+      if (dyn%enable_thermodynamics .and. dyn%is_thermo_step() .and. stage == 1) then
+         if (kshear%at_vertex) then
+            if (.not. present(metrics)) then
+               call logger%error("kshear_stage_merge: kappa-shear at_vertex "// &
+                                 "requires the metrics slot (wet masks)")
+               error stop "kshear_stage_merge: at_vertex needs metrics"
+            end if
+            call kappa_shear_compute(grid, kshear, ms, dyn%therm_dt(dt), &
+                                     wet_t=metrics%wet_T, wet_u=metrics%wet_u, &
+                                     wet_v=metrics%wet_v)
+         else
+            call kappa_shear_compute(grid, kshear, ms, dyn%therm_dt(dt))
+         end if
+      end if
+      call kappa_shear_merge_into_kv_kt(kshear, size(vmix%kt, 1), size(vmix%kt, 2), &
+                                        size(vmix%kt, 3), vmix%kv, vmix%kt)
+   end subroutine kshear_stage_merge
 
    subroutine visc_rem_precompute(grid, bt_work, vmix, vd, ss, bd, ms, dt, kshear, &
                                   lambda_top_u, lambda_top_v, cover_u, cover_v, bc)

@@ -463,7 +463,7 @@ RH18 energetics-based planetary boundary layer.
 | `omega` | `0.7292100000E-04` | 1/s | Earth rotation rate |
 | `omega_frac` | `0.0000000000E+00` |  | Blend |f| with 2*Omega |
 | `prandtl` | `0.1000000000E+01` |  | Kv = prandtl*Kd into the momentum solve |
-| `combine` | `"add"` |  | Combine vs interior closure kv/kt |
+| `combine` | `"add"` |  | Combine vs interior closure kv/kt: add | max | max_shear (bg + max(epbl, kappa-shear)) |
 | `tke_diags` | `.false.` |  | Compute per-column TKE budget diagnostics |
 | `use_lt` | `.false.` |  | Langmuir-turbulence enhancement (LF17 wind-only) |
 | `lt_scheme` | `"rescale"` |  | Langmuir enhancement scheme |
