@@ -988,6 +988,13 @@ contains
          tm%n2_bot_rough_avg = tcfg%n2_bot_rough_avg
          tm%limiter_reinject = (trim(tcfg%energy_limiter) == "reinject")
          tm%bed_lump = (trim(tcfg%bed_share) == "lump")
+         tm%n2_mean_interfaces = (trim(tcfg%n2_layer_form) == "mean_interfaces")
+         tm%polzin = (trim(tcfg%profile) == "polzin")
+         tm%nu_polzin = tcfg%nu_polzin
+         tm%nbotref_polzin = tcfg%nbotref_polzin
+         tm%polzin_decay_scale_factor = tcfg%polzin_decay_scale_factor
+         tm%polzin_scale_max_factor = tcfg%polzin_scale_max_factor
+         tm%polzin_min_decay_scale = tcfg%polzin_min_decay_scale
 
          ! Validation.
          if (.not. cfg%ocean%vmix%use_closure) then
@@ -1007,6 +1014,23 @@ contains
          end if
          if (tm%prandtl_tidal <= 0.0_wp) then
             call fail("ocean_tidal_mixing_nml: prandtl_tidal must be > 0", ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+
+         if (tm%polzin .and. .not. tm%e_compute) then
+            call fail("ocean_tidal_mixing_nml: profile = 'polzin' requires "// &
+                      "e_compute=.true. (its decay scale needs the tidal "// &
+                      "speed and roughness variance; e_uniform carries "// &
+                      "neither)", ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+         if (tm%polzin .and. (tm%nu_polzin < 0.0_wp .or. &
+                              tm%nbotref_polzin < 0.0_wp .or. &
+                              tm%polzin_decay_scale_factor < 0.0_wp .or. &
+                              tm%polzin_scale_max_factor <= 0.0_wp .or. &
+                              tm%polzin_min_decay_scale < 0.0_wp)) then
+            call fail("ocean_tidal_mixing_nml: polzin constants must be "// &
+                      ">= 0 and polzin_scale_max_factor > 0", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
 

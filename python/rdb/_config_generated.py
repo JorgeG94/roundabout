@@ -1814,6 +1814,64 @@ class OceanTidalMixing(Group):
         allowed=('discard', 'lump'),
     )
 
+    n2_layer_form = Enum(
+        'n2_layer_form',
+        doc='Layer N^2: legacy (interface value) | mean_interfaces (mean of the two bounding jumps; always under polzin) (OM3: mean_interfaces)',
+        units='',
+        required=False,
+        default='legacy',
+        allowed=('legacy', 'mean_interfaces'),
+    )
+
+    profile = Enum(
+        'profile',
+        doc='Vertical structure: stlaurent (exponential) | polzin (WKB-stretched algebraic; needs e_compute) (OM3: polzin)',
+        units='',
+        required=False,
+        default='stlaurent',
+        allowed=('stlaurent', 'polzin'),
+    )
+
+    nu_polzin = Real(
+        'nu_polzin',
+        doc='Polzin decay-scale constant NU_POLZIN',
+        units='',
+        required=False,
+        default=0.0697,
+    )
+
+    nbotref_polzin = Real(
+        'nbotref_polzin',
+        doc='Polzin reference bottom N (NBOTREF_POLZIN)',
+        units='s^-1',
+        required=False,
+        default=0.000961,
+    )
+
+    polzin_decay_scale_factor = Real(
+        'polzin_decay_scale_factor',
+        doc='Multiplier on the Polzin decay scale',
+        units='',
+        required=False,
+        default=1.0,
+    )
+
+    polzin_scale_max_factor = Real(
+        'polzin_scale_max_factor',
+        doc='Polzin stretched scale capped at this multiple of the depth',
+        units='',
+        required=False,
+        default=1.0,
+    )
+
+    polzin_min_decay_scale = Real(
+        'polzin_min_decay_scale',
+        doc='Floor on the unstretched Polzin decay scale',
+        units='m',
+        required=False,
+        default=0.0,
+    )
+
 
 class OceanConv(Group):
     """`&ocean_conv_nml` -- Brunt-Vaisala-triggered convective adjustment (interior closure contributor)."""
@@ -7066,4 +7124,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 62
-N_KNOBS = 776
+N_KNOBS = 783

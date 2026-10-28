@@ -21,7 +21,10 @@ module rdb_ocean_tidal_mixing
    !!     the global implementation that combines the two.
    !!   * Melet, Hallberg, Legg & Polzin (2013), J. Phys. Oceanogr. 43 —
    !!     the near-bed N^2 averaged over the roughness height
-   !!     (`n2_bot_rough_avg`).
+   !!     (`n2_bot_rough_avg`) and the Polzin vertical structure.
+   !!   * Polzin (2009), Ocean Modelling 30, "An abyssal recipe" — the
+   !!     algebraic WKB-stretched profile `eps ~ (1 + z*/z_p*)^-2`
+   !!     (`profile = "polzin"`).
    !! Knob table: `docs/generated_nml_knobs.md`.
    !!
    !! Static fields: `tideamp_source`/`h2_source = "file"` read time-less
@@ -30,6 +33,16 @@ module rdb_ocean_tidal_mixing
    !! into `c_e(x,y)` once at setup.  `energy_limiter = "reinject"` and
    !! `bed_share = "lump"` make the power bookkeeping exact (OM3 parity);
    !! the defaults keep the discarding clamp and the dropped bed share.
+   !!
+   !! Polzin profile (`profile = "polzin"`): the remaining upward flux is
+   !!   Phi(z*) = P_bot * I_p * z_p* / (z_p* + z*),   I_p = 1 + z_p*/H,
+   !! in the WKB-stretched height `z*(z) = int_0^z N^2 dz' / Nbar^2`
+   !! (`Nbar^2` the depth mean of `N^2` over the live column, so
+   !! `z*(H) = H`), with the stretched scale
+   !!   z_p* = f_d*nu*N_ref^2*U / (kappa^2*<h^2>*N_b*Nbar^2),
+   !! capped at `f_max*H`; U = 0, <h^2> = 0, N_b = 0, Nbar^2 = 0 or a
+   !! capped scale give `z_p* = f_max*H`.  The same deposit/limiter sweep
+   !! as the exponential runs on `Phi`; `Phi(0) - Phi(H) = P_bot`.
    !!
    !! Discretization (conservative flux bookkeeping; St Laurent 2002):
    !! a downward TKE flux is tracked and the power dissipated IN each
@@ -77,6 +90,7 @@ module rdb_ocean_tidal_mixing
    public :: tidal_mixing_merge_into_kt
    public :: tidal_mixing_is_inert
    public :: tidal_mixing_fold_static_fields
+   public :: polzin_stretched_scale
 
    integer, parameter :: NZL = NZ_STACK_MAX
       !! Maximum number of layers a single column kernel can solve.
@@ -154,6 +168,30 @@ module rdb_ocean_tidal_mixing
          !! layer is owned by the bottom boundary layer).  OM3 parity
          !! value: `.true.`.
 
+      logical :: n2_mean_interfaces = .false.
+         !! `n2_layer_form = "mean_interfaces"`: each layer's `N^2` is the
+         !! mean of its two bounding interface density jumps over its own
+         !! thickness (zero jump at the bed and surface interfaces, so the
+         !! bed and surface layers get half their one jump).  Default off =
+         !! the interface `N^2` is used as the layer value (bit-identical).
+         !! Always used under `polzin`.
+
+      ! ---- Vertical structure (default St Laurent exponential) ----
+      logical :: polzin = .false.
+         !! `profile = "polzin"`: Polzin (2009) algebraic profile in
+         !! WKB-stretched height instead of the St Laurent exponential.
+         !! Needs `e_compute` (the scale uses U and <h^2>).
+      real(wp) :: nu_polzin = 0.0697_wp
+         !! NU_POLZIN: dimensionless constant in the decay scale.
+      real(wp) :: nbotref_polzin = 9.61e-4_wp
+         !! NBOTREF_POLZIN: reference bottom buoyancy frequency (s^-1).
+      real(wp) :: polzin_decay_scale_factor = 1.0_wp
+         !! POLZIN_DECAY_SCALE_FACTOR `f_d` on the decay scale.
+      real(wp) :: polzin_scale_max_factor = 1.0_wp
+         !! POLZIN_SCALE_MAX_FACTOR `f_max`: scale capped at `f_max*H`.
+      real(wp) :: polzin_min_decay_scale = 0.0_wp
+         !! POLZIN_MIN_DECAY_SCALE: floor on the unstretched scale (m).
+
       ! ---- EOS hookup (shared flat-POD handle from the eos slot) ----
       type(eos_t) :: eos
          !! Value copy of `ocean_state%eos`, set at configure — the
@@ -204,6 +242,34 @@ contains
       logical :: inert
       inert = enable .and. (e_uniform <= 0.0_wp) .and. (.not. e_compute)
    end function tidal_mixing_is_inert
+
+   pure function polzin_stretched_scale(u, h2, n_b, nbar2, h, nu, n_ref, kappa, &
+                                        f_d, f_max, z_min) result(zp_st)
+      !! Polzin (2009) stretched decay scale
+      !!   z_p* = z_p * N_b^2/Nbar^2,
+      !!   z_p  = max(f_d*nu*N_ref^2*U / (kappa^2*<h^2>*N_b^3), z_min),
+      !! capped at `f_max*h` (`h` the live column depth).  A degenerate
+      !! column (U, <h^2>, N_b or Nbar^2 not positive) returns the cap.
+      !! `!$acc routine seq` so the column kernel may call it on device.
+      !$acc routine seq
+      real(wp), intent(in) :: u, h2, n_b, nbar2, h
+         !! RMS tidal speed (m/s), roughness variance (m^2), near-bed N
+         !! (s^-1), column-mean N^2 (s^-2), column depth (m).
+      real(wp), intent(in) :: nu, n_ref, kappa, f_d, f_max, z_min
+         !! NU_POLZIN, NBOTREF_POLZIN, topographic wavenumber, decay-scale
+         !! factor, cap factor, floor on the unstretched scale.
+      real(wp) :: zp_st
+      real(wp) :: zp_max, zp_un
+
+      zp_max = f_max*h
+      zp_st = zp_max
+      if (u > 0.0_wp .and. h2 > 0.0_wp .and. n_b > 0.0_wp .and. nbar2 > 0.0_wp) then
+         zp_un = f_d*nu*n_ref**2*u/(kappa**2*h2*n_b**3)
+         zp_un = max(zp_un, z_min)
+         zp_st = min(zp_un*n_b**2/nbar2, zp_max)
+      end if
+      zp_st = max(zp_st, H_DIV_EPS)
+   end function polzin_stretched_scale
 
    ! =================================================================
    ! Lifecycle
@@ -448,7 +514,11 @@ contains
       real(wp) :: dsv_dt_k, dsv_ds_k, t_int, s_int
       real(wp) :: gamma_l, mu_l, zeta_l, kd_max_l, omega2_l, rho0_l, izeta
       real(wp) :: tke_used, tke_cap, h_amp, sum_db, sum_dz, zc_k, span_k, n2_b
+      real(wp) :: u_col, nbar2, zp_st, i_p, zs_top, zs_max
       integer :: klast
+      logical :: pz_col, mean_if
+      real(wp) :: nb_int
+      real(wp) :: n2_lay(NZL)
 
       nx = grid%nx_total
       ny = grid%ny_total
@@ -467,7 +537,8 @@ contains
                inv_int, hz, tke_bot, tke_rem, z_top, frac_top, tke_lay, &
                dz_eff, denom, kd_lay, h_col, t_col, s_col, n2_col, kd_lay_arr, &
                dbuoy_t, dbuoy_s, p_int, dsv_dt_k, dsv_ds_k, t_int, s_int, &
-               tke_used, tke_cap, h_amp, sum_db, sum_dz, zc_k, span_k, n2_b, klast)
+               tke_used, tke_cap, h_amp, sum_db, sum_dz, zc_k, span_k, n2_b, klast, &
+               u_col, nbar2, zp_st, i_p, zs_top, zs_max, pz_col, mean_if, n2_lay, nb_int)
 
          ! ---- Default output: zero contribution (overwritten if wet) ----
          do k = 1, nz + 1
@@ -523,7 +594,7 @@ contains
             ! so it lands correctly in the rho0*dz*(N^2+Omega^2) Kd divisor.
             ! N_bot = sqrt(N^2) at the bed-most interior interface
             ! (n2_col(kbed), the gradient across the two deepest LIVE layers).
-            if (this%e_compute .or. this%n2_bot_rough_avg) then
+            if (this%e_compute .or. this%n2_bot_rough_avg .or. this%polzin) then
                if (this%use_fields) then
                   h2c = this%h2(i, j)   ! setup-clamped file/uniform field
                else
@@ -541,6 +612,21 @@ contains
             ! bit-identical to the raw gradient; gated by the knob).
             ! N_b^2 = sum jumps / sum spans replaces the layer N^2 over
             ! every interface taken.
+            mean_if = this%polzin .or. this%n2_mean_interfaces
+            if (mean_if) then
+               ! Layer N^2 from the RAW interface jumps (db = n2*span):
+               ! mean of the two bounding jumps over the layer thickness;
+               ! the bed and surface interfaces carry no jump.
+               do k = 1, nz
+                  n2_lay(k) = 0.0_wp
+               end do
+               do k = kbed, nz
+                  sum_db = 0.0_wp
+                  if (k > kbed) sum_db = sum_db + n2_col(k - 1)*0.5_wp*(h_col(k - 1) + h_col(k))
+                  if (k < nz) sum_db = sum_db + n2_col(k)*0.5_wp*(h_col(k) + h_col(k + 1))
+                  n2_lay(k) = 0.5_wp*sum_db/max(h_col(k), H_VANISHED)
+               end do
+            end if
             if (this%n2_bot_rough_avg) then
                h_amp = sqrt(max(h2c, 0.0_wp))
                sum_db = 0.0_wp
@@ -567,6 +653,7 @@ contains
                   n2_b = sum_db/max(sum_dz, H_VANISHED)
                   do k = kbed, klast
                      n2_col(k) = n2_b
+                     if (mean_if) n2_lay(k) = n2_b
                   end do
                end if
             end if
@@ -586,6 +673,14 @@ contains
             end if
             ! Mask off shallow columns (H < min_zbot).
             if (h_tot < this%min_zbot) e_col = 0.0_wp
+            ! Layer-form N^2 feeds the profile and TKE->Kd conversion; the
+            ! interface near-bed value (`nb_int`) already set the energy.
+            nb_int = sqrt(max(n2_col(kbed), 0.0_wp))
+            if (mean_if) then
+               do k = kbed, nz
+                  n2_col(k) = n2_lay(k)
+               end do
+            end if
 
             ! ---- Inv_int normalization (Adcroft reciprocal) ----
             ! L'Hospital degenerate-thin-column guard: H/zeta -> 0 => 1.
@@ -594,6 +689,35 @@ contains
                inv_int = 1.0_wp
             else
                inv_int = 1.0_wp/(1.0_wp - exp(-hz))
+            end if
+
+            ! ---- Polzin (2009) scale: per-column scalars ----
+            ! Replaces `inv_int` by `I_p` and the exponential fraction by
+            ! the stretched algebraic one in the sweep below.  `nbar2` is
+            ! the live-column mean of N^2 (after any near-bed replacement).
+            pz_col = this%polzin
+            if (pz_col) then
+               if (this%use_fields) then
+                  u_col = this%tideamp(i, j)
+               else
+                  u_col = this%utide
+               end if
+               nbar2 = 0.0_wp
+               do k = kbed, nz
+                  nbar2 = nbar2 + n2_col(k)*h_col(k)
+               end do
+               nbar2 = nbar2/max(h_tot, H_DIV_EPS)
+               n_bot = nb_int
+               zp_st = polzin_stretched_scale(u_col, h2c, n_bot, nbar2, h_tot, &
+                                              this%nu_polzin, this%nbotref_polzin, &
+                                              this%kappa_itides, &
+                                              this%polzin_decay_scale_factor, &
+                                              this%polzin_scale_max_factor, &
+                                              this%polzin_min_decay_scale)
+               i_p = 1.0_wp + zp_st/max(h_tot, H_DIV_EPS)
+               zs_max = 1.0e14_wp*max(h_tot, H_DIV_EPS)*nbar2
+               zs_top = 0.0_wp
+               inv_int = i_p
             end if
 
             ! ---- Flux bookkeeping sweep (St-Laurent 2002), bed -> surf ----
@@ -609,7 +733,18 @@ contains
             end do
             do k = kbed, nz
                z_top = z_top + h_col(k)
-               frac_top = inv_int*exp(-z_top*izeta)
+               if (pz_col) then
+                  ! Stretched height: skip the increment when N^2 ~ 0 (the
+                  ! column is then degenerate anyway).
+                  if (nbar2 <= 0.0_wp) then
+                     zs_top = z_top   ! unstratified: z* = z
+                  else if (h_col(k)*n2_col(k) < zs_max) then
+                     zs_top = zs_top + h_col(k)*n2_col(k)/nbar2
+                  end if
+                  frac_top = inv_int*zp_st/(zp_st + zs_top)
+               else
+                  frac_top = inv_int*exp(-z_top*izeta)
+               end if
                tke_lay = tke_rem - tke_bot*frac_top
 
                ! TKE_to_Kd = 1/(rho0*dz*(N^2+Omega^2)).  dz floored at

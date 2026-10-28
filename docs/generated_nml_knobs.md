@@ -329,6 +329,13 @@ St-Laurent/Simmons internal-tide interior diapycnal mixing.
 | `n2_bot_rough_avg` | `.false.` |  | Near-bed N^2 averaged over the roughness height and imposed in that span (OM3: true) |
 | `energy_limiter` | `"clamp"` |  | kd_max handling: clamp (clip Kd, discard power) | reinject (cap layer TKE, pass excess up) (OM3: reinject) |
 | `bed_share` | `"discard"` |  | Bed-layer power share: discard | lump into the first interior layer (OM3: lump) |
+| `n2_layer_form` | `"legacy"` |  | Layer N^2: legacy (interface value) | mean_interfaces (mean of the two bounding jumps; always under polzin) (OM3: mean_interfaces) |
+| `profile` | `"stlaurent"` |  | Vertical structure: stlaurent (exponential) | polzin (WKB-stretched algebraic; needs e_compute) (OM3: polzin) |
+| `nu_polzin` | `0.6970000000E-01` |  | Polzin decay-scale constant NU_POLZIN |
+| `nbotref_polzin` | `0.9610000000E-03` | s^-1 | Polzin reference bottom N (NBOTREF_POLZIN) |
+| `polzin_decay_scale_factor` | `0.1000000000E+01` |  | Multiplier on the Polzin decay scale |
+| `polzin_scale_max_factor` | `0.1000000000E+01` |  | Polzin stretched scale capped at this multiple of the depth |
+| `polzin_min_decay_scale` | `0.0000000000E+00` | m | Floor on the unstretched Polzin decay scale |
 
 ### &ocean_conv_nml
 

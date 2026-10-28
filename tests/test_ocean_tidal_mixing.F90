@@ -22,7 +22,8 @@ module test_ocean_tidal_mixing
    use rdb_ocean_tidal_mixing, only: ocean_tidal_mixing_t, &
                                      tidal_mixing_compute, &
                                      tidal_mixing_merge_into_kt, &
-                                     tidal_mixing_fold_static_fields
+                                     tidal_mixing_fold_static_fields, &
+                                     polzin_stretched_scale
    use rdb_eos, only: EOS_VARIANT_LINEAR
    implicit none
    private
@@ -71,7 +72,14 @@ contains
                   new_unittest("tidal_t1_nbot_rough_avg", test_t1_nbot), &
                   new_unittest("tidal_t1_energy_bed_share", test_t1_energy), &
                   new_unittest("tidal_t1_energy_limiter", test_t1_limiter), &
-                  new_unittest("tidal_t1_defaults_golden", test_t1_defaults) &
+                  new_unittest("tidal_t1_defaults_golden", test_t1_defaults), &
+                  new_unittest("tidal_t2_uniform_n2", test_t2_uniform), &
+                  new_unittest("tidal_t2_zp_value", test_t2_zp_value), &
+                  new_unittest("tidal_t2_degenerate_scale", test_t2_degenerate), &
+                  new_unittest("tidal_t2_wkb_stretch", test_t2_wkb), &
+                  new_unittest("tidal_t2_cap_equals_degenerate", test_t2_cap), &
+                  new_unittest("tidal_t2_stlaurent_unchanged", test_t2_default), &
+                  new_unittest("tidal_t2_n2_layer_form", test_t2_n2_form) &
                   ]
    end subroutine collect_ocean_tidal_mixing_tests
 
@@ -1027,5 +1035,321 @@ contains
       call tm%destroy()
       call ms%destroy()
    end subroutine test_t1_defaults
+
+   ! ------------------------------------------------------------------
+   ! T2: Polzin (2009) profile in WKB-stretched height
+   ! ------------------------------------------------------------------
+
+   pure function pz_zp_formula(u, h2, nb, nbar2, hh, fmax) result(zp)
+      !! Independent evaluation of the stretched Polzin scale
+      !! (nu=0.0697, N_ref=9.61e-4, kappa=6.2832e-4, f_d=1, no floor).
+      real(wp), intent(in) :: u, h2, nb, nbar2, hh, fmax
+      real(wp) :: zp
+      zp = 0.0697_wp*(9.61e-4_wp)**2*u/((6.2832e-4_wp)**2*h2*nb*nbar2)
+      zp = min(zp, fmax*hh)
+   end function pz_zp_formula
+
+   pure function pz_layer_n2(n2h) result(n2f)
+      !! Layer N^2 = mean of the two bounding interface jumps over the layer
+      !! thickness (uniform dz; zero jump at the bed and surface).
+      real(wp), intent(in) :: n2h(NZ_G - 1)
+      real(wp) :: n2f(NZ_G)
+      integer :: k
+      do k = 1, NZ_G
+         n2f(k) = 0.0_wp
+         if (k > 1) n2f(k) = n2f(k) + 0.5_wp*n2h(k - 1)
+         if (k < NZ_G) n2f(k) = n2f(k) + 0.5_wp*n2h(k)
+      end do
+   end function pz_layer_n2
+
+   subroutine pz_oracle(nz, dz, n2, pbot, zp, tke)
+      !! Per-layer deposit `Phi(z*_{k-1}) - Phi(z*_k)` for k = 2..nz-1 with
+      !! the bed share lumped into k = 2 (`bed_share = "lump"`), from
+      !! `Phi(z*) = P I_p zp/(zp + z*)`, `I_p = 1 + zp/H`, `z*_k =
+      !! sum_{m<=k} N_m^2 dz/Nbar^2` (z* = z when Nbar^2 = 0).
+      integer, intent(in) :: nz
+      real(wp), intent(in) :: dz, n2(nz), pbot, zp
+      real(wp), intent(out) :: tke(nz)
+      real(wp) :: hh, nbar2, zs, phi_prev, phi
+      integer :: k
+
+      hh = real(nz, wp)*dz
+      nbar2 = sum(n2)*dz/hh
+      zs = 0.0_wp
+      phi_prev = pbot*(1.0_wp + zp/hh)
+      tke = 0.0_wp
+      do k = 1, nz - 1
+         zs = zs + n2(k)*dz/nbar2
+         phi = pbot*(1.0_wp + zp/hh)*zp/(zp + zs)
+         if (k >= 2) then
+            tke(k) = phi_prev - phi
+            phi_prev = phi
+         end if
+      end do
+   end subroutine pz_oracle
+
+   subroutine pz_run(n2h, use_compute, u, h2, e_uni, tke, kd_int_col, polzin_on)
+      !! Run the kernel on a resting `NZ_G`-layer column with interface
+      !! `N^2 = n2h(k)` (k < nz), no cap, bed share lumped, return the
+      !! recovered per-layer deposit.  `use_compute`: Jayne & St Laurent
+      !! energy from `u`, `h2`; else the prescribed `e_uni`.
+      real(wp), intent(in) :: n2h(NZ_G - 1), u, h2, e_uni
+      logical, intent(in) :: use_compute, polzin_on
+      real(wp), intent(out) :: tke(NZ_G), kd_int_col(NZ_G + 1)
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_tidal_mixing_t) :: tm
+      real(wp) :: n2_full(NZ_G)
+
+      call make_grid(grid, 2, 2)
+      ms%nz_ml = NZ_G
+      call ms%init(grid)
+      call fill_n2_profile(ms, NZ_G, DZ_G, n2h)
+      n2_full = pz_layer_n2(n2h)
+      call setup_tm(tm, grid, NZ_G, e_uni, -1.0_wp)
+      tm%e_compute = use_compute
+      tm%utide = u
+      tm%h2_rough = h2
+      tm%kappa_h2 = 0.84_wp
+      tm%bed_lump = .true.
+      tm%polzin = polzin_on
+      call tidal_mixing_compute(grid, tm, ms, 1800.0_wp)
+      call recover_tke(tm, 3, 3, NZ_G, DZ_G, n2_full, tke)
+      kd_int_col = tm%kd_int(3, 3, :)
+      call tm%destroy()
+      call ms%destroy()
+   end subroutine pz_run
+
+   function pz_pbot(u, h2, nb) result(pbot)
+      real(wp), intent(in) :: u, h2, nb
+      real(wp) :: pbot
+      pbot = GAMMA_G*MU_G*0.5_wp*RHO0_TM*0.84_wp*6.2832e-4_wp*h2*u**2*nb
+   end function pz_pbot
+
+   subroutine pz_compare(error, tke, want, tol, msg)
+      type(error_type), allocatable, intent(out) :: error
+      real(wp), intent(in) :: tke(NZ_G), want(NZ_G), tol
+      character(len=*), intent(in) :: msg
+      real(wp) :: worst
+      integer :: k
+      worst = 0.0_wp
+      do k = 2, NZ_G - 1
+         worst = max(worst, abs(tke(k) - want(k))/want(k))
+      end do
+      call check(error, worst < tol, msg)
+   end subroutine pz_compare
+
+   ! (a) uniform N^2: shares equal the analytic Phi_p differences
+   subroutine test_t2_uniform(error)
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: n2h(NZ_G - 1), n2f(NZ_G), tke(NZ_G), want(NZ_G), kdi(NZ_G + 1)
+      real(wp) :: pbot, zp, nbar2, nb, u, h2, want_sum
+
+      u = 0.02_wp
+      h2 = 1.0e4_wp
+      n2h = 1.0e-6_wp
+      n2f = pz_layer_n2(n2h)
+      nb = sqrt(n2h(1))
+      nbar2 = sum(n2f)*DZ_G/H_G
+      pbot = pz_pbot(u, h2, nb)
+      zp = pz_zp_formula(u, h2, nb, nbar2, H_G, 1.0_wp)
+      call check(error, zp < H_G, "test setup: scale must be uncapped")
+      if (allocated(error)) return
+      call pz_run(n2h, .true., u, h2, 0.0_wp, tke, kdi, .true.)
+      call pz_oracle(NZ_G, DZ_G, n2f, pbot, zp, want)
+      call pz_compare(error, tke, want, 1.0e-9_wp, "uniform N2: layer share != Phi_p difference")
+      if (allocated(error)) return
+      ! column deposit = Phi(0) - Phi(top interior) = P_bot (surface N2 = 0)
+      ! interior deposit = Phi(0) - Phi(z*_top(nz-1)); the surface layer's share is dropped
+      want_sum = pbot*(1.0_wp + zp/H_G)*(1.0_wp - zp/(zp + sum(n2f(1:NZ_G - 1))*DZ_G/nbar2))
+      call check(error, abs(sum(tke) - want_sum)/want_sum < 1.0e-9_wp, "column deposit != Phi(0)-Phi(top)")
+      if (allocated(error)) return
+      call check(error, kdi(1) == 0.0_wp .and. kdi(NZ_G + 1) == 0.0_wp, "end interfaces not zero")
+      if (allocated(error)) return
+      ! not the exponential: deposit differs (the stretched profile is algebraic)
+      call pz_run(n2h, .true., u, h2, 0.0_wp, tke, kdi, .false.)
+      call check(error, abs(tke(NZ_G - 1) - want(NZ_G - 1))/want(NZ_G - 1) > 0.05_wp, &
+                 "polzin off must give the exponential profile")
+   end subroutine test_t2_uniform
+
+   ! (b) z_p* value
+   subroutine test_t2_zp_value(error)
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: zp, want
+
+      zp = polzin_stretched_scale(0.02_wp, 1.0e4_wp, 1.0e-3_wp, 1.0e-6_wp, 1.0e5_wp, &
+                                  0.0697_wp, 9.61e-4_wp, 6.2832e-4_wp, 1.0_wp, 1.0_wp, 0.0_wp)
+      want = 0.0697_wp*(9.61e-4_wp)**2*0.02_wp/((6.2832e-4_wp)**2*1.0e4_wp*1.0e-9_wp)
+      call check(error, abs(zp - want)/want < 1.0e-10_wp, "z_p* != formula")
+      if (allocated(error)) return
+      call check(error, zp > 320.0_wp .and. zp < 332.0_wp, "z_p* not near 326 m")
+      if (allocated(error)) return
+      ! cap at f_max*H
+      zp = polzin_stretched_scale(0.02_wp, 1.0e4_wp, 1.0e-3_wp, 1.0e-6_wp, 200.0_wp, &
+                                  0.0697_wp, 9.61e-4_wp, 6.2832e-4_wp, 1.0_wp, 0.5_wp, 0.0_wp)
+      call check(error, abs(zp - 100.0_wp) < 1.0e-12_wp, "cap f_max*H not applied")
+      if (allocated(error)) return
+      ! floor on the unstretched scale: z_p = max(.., 1000) then * N_b^2/Nbar^2
+      zp = polzin_stretched_scale(0.02_wp, 1.0e4_wp, 1.0e-3_wp, 2.0e-6_wp, 1.0e5_wp, &
+                                  0.0697_wp, 9.61e-4_wp, 6.2832e-4_wp, 1.0_wp, 1.0_wp, 1000.0_wp)
+      call check(error, abs(zp - 500.0_wp) < 1.0e-9_wp, "min decay scale floor not applied")
+   end subroutine test_t2_zp_value
+
+   ! (c) U = 0 or <h^2> = 0: z_p* = H, I_p = 2
+   subroutine test_t2_degenerate(error)
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: n2h(NZ_G - 1), n2f(NZ_G), tke(NZ_G), want(NZ_G), kdi(NZ_G + 1), pbot
+      real(wp) :: nbar2, want_sum
+      integer :: pass
+
+      n2h = 1.0e-6_wp
+      n2f = pz_layer_n2(n2h)
+      pbot = GAMMA_G*MU_G*E_G
+      call pz_oracle(NZ_G, DZ_G, n2f, pbot, H_G, want)
+      do pass = 1, 2
+         if (pass == 1) then
+            call pz_run(n2h, .false., 0.0_wp, 1.0e4_wp, E_G, tke, kdi, .true.)
+         else
+            call pz_run(n2h, .false., 0.02_wp, 0.0_wp, E_G, tke, kdi, .true.)
+         end if
+         call pz_compare(error, tke, want, 1.0e-9_wp, "degenerate: share != P 2H/(H+z*) difference")
+         if (allocated(error)) return
+      end do
+      ! I_p = 2: Phi(0) = 2 P and the first interior share carries the bed share
+      nbar2 = sum(n2f)*DZ_G/H_G
+      want_sum = pbot*2.0_wp*(1.0_wp - H_G/(H_G + sum(n2f(1:NZ_G - 1))*DZ_G/nbar2))
+      call check(error, abs(sum(tke) - want_sum)/want_sum < 1.0e-9_wp, "degenerate: deposit != Phi(0)-Phi(top)")
+   end subroutine test_t2_degenerate
+
+   ! (d) WKB: the 4x-N^2 layers advance z* 4x faster; shares obey Phi_p
+   subroutine test_t2_wkb(error)
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: n2h(NZ_G - 1), n2f(NZ_G), tke(NZ_G), want(NZ_G), kdi(NZ_G + 1)
+      real(wp) :: pbot, zp, nbar2, nb, u, h2, phi(NZ_G), zs(NZ_G), r
+      integer :: k
+
+      u = 0.02_wp
+      h2 = 1.0e4_wp
+      n2h(1:14) = 1.0e-6_wp
+      n2h(15:NZ_G - 1) = 4.0e-6_wp
+      n2f = pz_layer_n2(n2h)
+      nb = sqrt(n2h(1))
+      nbar2 = sum(n2f)*DZ_G/H_G
+      pbot = pz_pbot(u, h2, nb)
+      zp = pz_zp_formula(u, h2, nb, nbar2, H_G, 1.0_wp)
+      call check(error, zp < H_G, "test setup: scale must be uncapped")
+      if (allocated(error)) return
+      call pz_run(n2h, .true., u, h2, 0.0_wp, tke, kdi, .true.)
+      call pz_oracle(NZ_G, DZ_G, n2f, pbot, zp, want)
+      call pz_compare(error, tke, want, 1.0e-9_wp, "WKB column: share != stretched Phi_p difference")
+      if (allocated(error)) return
+      ! Kernel-observable stretch: invert Phi back to z* and compare increments.
+      phi(1) = pbot*(1.0_wp + zp/H_G)
+      do k = 2, NZ_G - 1
+         phi(k) = phi(k - 1) - tke(k)
+         zs(k) = zp*(pbot*(1.0_wp + zp/H_G)/phi(k) - 1.0_wp)
+      end do
+      r = (zs(20) - zs(19))/(zs(5) - zs(4))
+      call check(error, abs(r - 4.0_wp) < 1.0e-6_wp, "4x N2 layer does not advance z* 4x faster")
+   end subroutine test_t2_wkb
+
+   ! (e) cap hit: identical to the degenerate (z_p* = H) column
+   subroutine test_t2_cap(error)
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: n2h(NZ_G - 1), n2f(NZ_G), tke_a(NZ_G), tke_b(NZ_G), kdi(NZ_G + 1)
+      real(wp) :: nbar2, nb, zp_uncapped, e_col
+      real(wp), parameter :: U = 0.02_wp, H2 = 100.0_wp
+
+      n2h = 1.0e-6_wp
+      n2f = pz_layer_n2(n2h)
+      nb = sqrt(n2h(1))
+      nbar2 = sum(n2f)*DZ_G/H_G
+      zp_uncapped = 0.0697_wp*(9.61e-4_wp)**2*U/((6.2832e-4_wp)**2*H2*nb*nbar2)
+      call check(error, zp_uncapped > 5.0_wp*H_G, "test setup: scale must exceed the cap")
+      if (allocated(error)) return
+      call pz_run(n2h, .true., U, H2, 0.0_wp, tke_a, kdi, .true.)
+      e_col = pz_pbot(U, H2, nb)/(GAMMA_G*MU_G)
+      call pz_run(n2h, .false., 0.0_wp, 0.0_wp, e_col, tke_b, kdi, .true.)
+      call pz_compare(error, tke_a, tke_b, 1.0e-9_wp, "cap hit != degenerate column")
+   end subroutine test_t2_cap
+
+   ! (f) profile = stlaurent: Polzin constants are inert, golden unchanged
+   subroutine test_t2_default(error)
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_tidal_mixing_t) :: tm
+      real(wp) :: dz_a(NZ_G), n2_a(NZ_G), kd_lay(NZ_G), tke_lay(NZ_G), kd_ref(NZ_G + 1)
+      real(wp) :: worst
+      integer :: k
+
+      call make_grid(grid, 2, 2)
+      ms%nz_ml = NZ_G
+      call ms%init(grid)
+      call fill_const_n2_column(ms, NZ_G, DZ_G, N2_CONST_G)
+      call setup_tm(tm, grid, NZ_G, E_G, KDMAX_G)
+      tm%polzin = .false.
+      tm%nu_polzin = 5.0_wp
+      tm%nbotref_polzin = 1.0_wp
+      tm%polzin_decay_scale_factor = 7.0_wp
+      tm%polzin_scale_max_factor = 0.01_wp
+      tm%polzin_min_decay_scale = 1.0e6_wp
+      call tidal_mixing_compute(grid, tm, ms, 1800.0_wp)
+      dz_a = DZ_G
+      n2_a = N2_CONST_G
+      n2_a(NZ_G) = 0.0_wp
+      call ref_sweep(NZ_G, dz_a, n2_a, E_G, GAMMA_G, MU_G, ZETA_G, RHO0_TM, &
+                     OMEGA2_GOLD, KDMAX_G, kd_lay, tke_lay)
+      call spread_to_interfaces(NZ_G, kd_lay, kd_ref)
+      worst = 0.0_wp
+      do k = 2, NZ_G
+         worst = max(worst, abs(tm%kd_int(3, 3, k) - kd_ref(k))/max(kd_ref(k), 1.0e-30_wp))
+      end do
+      call check(error, worst < 1.0e-12_wp, "stlaurent profile moved by the polzin constants")
+      call tm%destroy()
+      call ms%destroy()
+   end subroutine test_t2_default
+
+   ! n2_layer_form = "mean_interfaces" on the exponential profile: layer N^2
+   ! is the mean of the two bounding jumps (stepped column), vs the legacy value.
+   subroutine test_t2_n2_form(error)
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_tidal_mixing_t) :: tm
+      real(wp) :: n2h(NZ_G - 1), dz_a(NZ_G), kd_lay(NZ_G), tke_lay(NZ_G), kd_ref(NZ_G + 1)
+      real(wp) :: worst, legacy15
+      integer :: pass, k
+
+      n2h(1:14) = 1.0e-6_wp
+      n2h(15:NZ_G - 1) = 4.0e-6_wp
+      dz_a = DZ_G
+      call make_grid(grid, 2, 2)
+      ms%nz_ml = NZ_G
+      call ms%init(grid)
+      call fill_n2_profile(ms, NZ_G, DZ_G, n2h)
+      do pass = 1, 2
+         call setup_tm(tm, grid, NZ_G, E_G, KDMAX_G)
+         tm%n2_mean_interfaces = (pass == 2)
+         call tidal_mixing_compute(grid, tm, ms, 1800.0_wp)
+         if (pass == 1) then
+            legacy15 = tm%kd_int(3, 3, 15)
+         else
+            call ref_sweep(NZ_G, dz_a, pz_layer_n2(n2h), E_G, GAMMA_G, MU_G, ZETA_G, RHO0_TM, &
+                           OMEGA2_GOLD, KDMAX_G, kd_lay, tke_lay)
+            call spread_to_interfaces(NZ_G, kd_lay, kd_ref)
+            worst = 0.0_wp
+            do k = 2, NZ_G
+               worst = max(worst, abs(tm%kd_int(3, 3, k) - kd_ref(k))/max(kd_ref(k), 1.0e-30_wp))
+            end do
+            call check(error, worst < 1.0e-9_wp, "mean_interfaces: Kd != oracle with mean-of-jumps layer N2")
+            if (allocated(error)) return
+            call check(error, abs(tm%kd_int(3, 3, 15) - legacy15)/legacy15 > 0.05_wp, &
+                       "mean_interfaces must differ from legacy at the N2 step")
+         end if
+         call tm%destroy()
+      end do
+      call ms%destroy()
+   end subroutine test_t2_n2_form
 
 end module test_ocean_tidal_mixing

@@ -2418,6 +2418,32 @@ module rdb_config
          !! `"discard"` (default: owned by the bottom boundary layer, not
          !! deposited) | `"lump"` (carried into the first interior layer).
          !! OM3 parity value: `"lump"`.
+      character(len=16) :: n2_layer_form = "legacy"
+         !! Layer `N^2` used by the profile and the TKE-to-Kd conversion:
+         !! `"legacy"` (default: the interface `N^2` between the layer and
+         !! the one above, zero in the surface layer) | `"mean_interfaces"`
+         !! (mean of the layer's two bounding interface density jumps over
+         !! its thickness; zero jump at the bed and surface, so those
+         !! layers get half their one jump).  Always the latter under
+         !! `profile = "polzin"`.  OM3 parity value: `"mean_interfaces"`.
+      character(len=9) :: profile = "stlaurent"
+         !! Vertical structure of the dissipation: `"stlaurent"` (default,
+         !! exponential with scale `zeta`) | `"polzin"` (Polzin 2009,
+         !! Ocean Modelling 30: algebraic profile in WKB-stretched height,
+         !! `eps ~ (1 + z*/z_p*)^-2`; Melet et al. 2013, JPO 43).  Needs
+         !! `e_compute` (its scale uses `U` and `<h^2>`).  OM3 parity
+         !! value: `"polzin"`.
+      real(wp) :: nu_polzin = 0.0697_wp
+         !! NU_POLZIN: dimensionless constant of the Polzin decay scale.
+      real(wp) :: nbotref_polzin = 9.61e-4_wp
+         !! NBOTREF_POLZIN: reference bottom buoyancy frequency (s^-1).
+      real(wp) :: polzin_decay_scale_factor = 1.0_wp
+         !! POLZIN_DECAY_SCALE_FACTOR: multiplier on the decay scale.
+      real(wp) :: polzin_scale_max_factor = 1.0_wp
+         !! POLZIN_SCALE_MAX_FACTOR: the stretched scale is capped at this
+         !! multiple of the column depth.
+      real(wp) :: polzin_min_decay_scale = 0.0_wp
+         !! POLZIN_MIN_DECAY_SCALE: floor on the unstretched scale (m).
    end type ocean_tidal_mixing_config_t
    type :: ocean_porous_config_t
       !! Porous barriers (`&ocean_porous_nml`): subgrid sill/strait

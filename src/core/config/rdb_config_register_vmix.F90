@@ -166,6 +166,26 @@ contains
       call g%add(nml_enum("bed_share", ps, &
                           "Bed-layer power share: discard | lump into the first interior layer (OM3: lump)", &
                           allowed=[character(len=7) :: "discard", "lump"]))
+      ps => cfg%ocean%tidal_mixing%n2_layer_form
+      call g%add(nml_enum("n2_layer_form", ps, &
+                          "Layer N^2: legacy (interface value) | mean_interfaces (mean of the two bounding jumps; always under polzin) (OM3: mean_interfaces)", &
+                          allowed=[character(len=15) :: "legacy", "mean_interfaces"]))
+      ps => cfg%ocean%tidal_mixing%profile
+      call g%add(nml_enum("profile", ps, &
+                  "Vertical structure: stlaurent (exponential) | polzin (WKB-stretched algebraic; needs e_compute) (OM3: polzin)", &
+                          allowed=[character(len=9) :: "stlaurent", "polzin"]))
+      pr => cfg%ocean%tidal_mixing%nu_polzin
+      call g%add(nml_real("nu_polzin", pr, "Polzin decay-scale constant NU_POLZIN"))
+      pr => cfg%ocean%tidal_mixing%nbotref_polzin
+      call g%add(nml_real("nbotref_polzin", pr, "Polzin reference bottom N (NBOTREF_POLZIN)", &
+                          units="s^-1"))
+      pr => cfg%ocean%tidal_mixing%polzin_decay_scale_factor
+      call g%add(nml_real("polzin_decay_scale_factor", pr, "Multiplier on the Polzin decay scale"))
+      pr => cfg%ocean%tidal_mixing%polzin_scale_max_factor
+      call g%add(nml_real("polzin_scale_max_factor", pr, "Polzin stretched scale capped at this multiple of the depth"))
+      pr => cfg%ocean%tidal_mixing%polzin_min_decay_scale
+      call g%add(nml_real("polzin_min_decay_scale", pr, "Floor on the unstretched Polzin decay scale", &
+                          units="m"))
 
       call schema%add_group(g)
    end subroutine register_tidal_mixing
