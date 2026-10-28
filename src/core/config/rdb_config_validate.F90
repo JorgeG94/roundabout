@@ -3197,6 +3197,17 @@ contains
                              "grid is ice-free.")
          call logger%warning("=====================================================")
       end if
+      if (cfg%ocean%ice%pressure_dependent_frazil .and. .not. cfg%ocean%ice%frazil_column) then
+         call logger%error("&ocean_ice_nml pressure_dependent_frazil=.true. requires "// &
+                           "frazil_column=.true. (the surface-only clamp is at p=0 by "// &
+                           "construction)")
+         has_error = .true.
+      end if
+      if (cfg%ocean%ice%frazil_column .and. .not. cfg%ocean%ice%enable) then
+         call logger%error("&ocean_ice_nml frazil_column=.true. requires enable=.true. "// &
+                           "(frazil is handed to the ice model)")
+         has_error = .true.
+      end if
       ! ---- Sea-ice PR 4b: category ice transport envelope ----
       ! `transport=.true.` is a request to run `ice_transport_step` every
       ! thermo window; the v1 envelope excludes configurations the kernel

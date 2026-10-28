@@ -502,7 +502,8 @@ and no open, tidal, sponge, clamped or Chapman edge.
 | Melt ponds | **not available** | — | `m_pond` is a dead local. | — |
 | Lateral melt and floe size | **not available** | — | Surface and basal melt only. | — |
 | CICE-named diagnostics | with `enable` | `&ocean_diag_nml diags` | Window masses from the column outputs (`congel`, `meltt`/`meltb` ice-only, `snoice`, `frazil`); rates in cm/day. `dvidtt` closes against the actual volume change. `meltl` is a structural zero. | `test_ocean_ice_driver_column` (`window_mass_closure_*`), `test_ocean_ice_diags` |
-| Frazil | with `enable` (no knob) | none | Surface layer only. Virtual salt flux. | `test_ocean_frazil`, `test_ocean_ice_coupling` |
+| Frazil | with `enable`; **default** surface-layer clamp at p = 0 | `&ocean_ice_nml frazil_column`, `pressure_dependent_frazil`, `reclaim_frazil` | `frazil_column` is OM3 `FRAZIL`: a bottom-up sweep with a rising heat carry (cold deep layers freeze, warmer layers above re-melt it, only the surviving carry reaches the bank). `pressure_dependent_frazil` evaluates T_f at the layer-centre pressure g rho0 z. `reclaim_frazil` (default true, used only with `frazil_column`) spends the standing bank on a warm surface first. Virtual salt flux. | `test_ocean_frazil`, `test_ocean_ice_coupling` |
+| Salinity floor | **default** off | `&ocean_ice_nml bound_salinity`, `min_salinity` | OM3 `BOUND_SALINITY`: after the surface salt flux, `S = max(S, min_salinity)` in the top layer. Non-conserving (the created salt is not in the salt budget). | `test_ocean_frazil` |
 | Atmospheric forcing | v1 stub | `air_temp`, `restore_lambda`, `sw_down` (all `0.0`) | Scalar, uniform, slab-restoring. No bulk formulae, fields, files or time dependence. | `test_ocean_ice_driver_column` |
 | Ice to ocean coupling | with `enable` | none | Salt closed (virtual). Heat closed, including transmitted shortwave. Momentum **not conserved** at fractional cover. Freshwater and mass **not coupled**. | `test_ocean_ice_coupling`, `test_ocean_ice_driver_column` |
 | Ice initial condition | **default** `"zero"` | `&ocean_ice_ic_nml conc_config` (`"zero"`, `"uniform"`, `"latitudes"`) | Analytic seeding of a live pack before step one. File-backed ICs are deferred. | `test_ocean_ice_init` |
@@ -837,11 +838,18 @@ looks the way it does. It is not needed to use the tables.
   derived diagnostics `temperature_pt` / `salinity_sp`. Defaults
   bit-identical. Still refused under `cons_abs`: sea ice (PR 4) and cavity
   melt.
+- **2026-10-27** — OM3 frazil: `&ocean_ice_nml frazil_column`,
+  `pressure_dependent_frazil`, `reclaim_frazil` (full-column, pressure-
+  dependent frazil with reclaim; Boussinesq pressure, surface pressure zero)
+  and `bound_salinity` / `min_salinity` (non-conservative salinity floor).
+  All default off (`reclaim_frazil` defaults true but is inert without
+  `frazil_column`), so existing runs are bit-identical. OM3 `HFREEZE` is the
+  coupler's melt-potential depth, not a frazil depth: not implemented.
 - **2026-10-25** — TEOS-10 PR 4: `cons_abs` + `&ocean_ice_nml enable` is no
   longer refused. The ice-ocean boundary converts once (IOC/SCOR/IAPSO 2010;
   McDougall & Barker 2011): the ice stays θ/SP, the ocean heat budget stays
   CT/SA. Frazil and basal-flux heat use `eos%c_p` instead of the fixed 3992
-  (same default, bit-identical). Frazil is evaluated at p = 0 only. No new
+  (same default, bit-identical). Frazil is evaluated at p = 0 only (until the 2026-10-27 `frazil_column` entry). No new
   knobs; `pot_prac` is unchanged.
 - **2026-10-25** — `ts_convention = "cons_abs"`, `tfreeze_form = "teos_poly"`,
   `tfreeze_sat_frac` and `c_p` added (§6). OM3's `MOM_parameter_doc.all`

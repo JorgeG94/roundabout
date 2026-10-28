@@ -767,6 +767,9 @@ contains
       ! once PR 3+ allocates them, so all three latch before init like
       ! the closures above.
       this%ice%enable = cfg%ocean%ice%enable
+      ! OM3 BOUND_SALINITY: host scalars read by the surface-flux apply.
+      this%surface_flux%bound_salinity = cfg%ocean%ice%bound_salinity
+      this%surface_flux%min_salinity = cfg%ocean%ice%min_salinity
       this%ice%ncat = cfg%ocean%ice%ncat
       this%ice%nk_ice = cfg%ocean%ice%nk_ice
       ! PR 4b: transport latches before init too (gates the workspace

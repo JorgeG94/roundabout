@@ -616,6 +616,11 @@ Sea-ice model (SIS2 port) master switch + category/layer counts.
 | `sw_down` | `0.0000000000E+00` | W/m^2 | Downwelling shortwave into the ice top for the v1 filler |
 | `snowfall` | `0.0000000000E+00` | kg/m^2/s | Uniform frozen-precipitation rate onto the ice top for the v1 filler |
 | `snow_ice` | `.false.` |  | Enable Archimedes snow-ice flooding conversion (SIS2 SN2IC; default off => byte-identical) |
+| `frazil_column` | `.false.` |  | Full-column frazil sweep with rising carry instead of the surface-only clamp (OM3 FRAZIL; default off => byte-identical) |
+| `pressure_dependent_frazil` | `.false.` |  | Freezing point at layer-centre hydrostatic pressure (OM3 PRESSURE_DEPENDENT_FRAZIL; needs frazil_column) |
+| `reclaim_frazil` | `.true.` |  | Spend the standing frazil bank on a warm surface layer (OM3 RECLAIM_FRAZIL; default true, used only with frazil_column) |
+| `bound_salinity` | `.false.` |  | Floor top-layer salinity at min_salinity after the ice salt exchange (OM3 BOUND_SALINITY; non-conservative; default off) |
+| `min_salinity` | `0.0000000000E+00` | g/kg | Salinity floor for bound_salinity (OM3 MIN_SALINITY) |
 | `transport` | `.false.` |  | Enable horizontal category ice/snow transport (default off => byte-identical) |
 | `adv_substeps` | `1` |  | Advective sub-iterations per transport call (SIS2 NSTEPS_ADV) |
 | `roll_factor` | `0.1000000000E+01` |  | Thin-ice rolling floor factor (SIS2 SEA_ICE_ROLL_FACTOR); 0 disables rolling |

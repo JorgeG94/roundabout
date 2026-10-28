@@ -424,6 +424,29 @@ module rdb_config
          !! submerged snow mass to ice in the top layer. Default OFF =>
          !! byte-identical.
 
+      ! ---- OM3 FRAZIL / BOUND_SALINITY ----
+      logical :: frazil_column = .false.
+         !! Full-column frazil (OM3 `FRAZIL`): a bottom-up sweep with a
+         !! rising heat carry, instead of clamping the surface layer only
+         !! (`rdb_ice_frazil%ice_frazil_accumulate_column`).  Default OFF
+         !! (surface-only clamp at p = 0) => byte-identical.
+      logical :: pressure_dependent_frazil = .false.
+         !! OM3 `PRESSURE_DEPENDENT_FRAZIL`: evaluate the freezing point at
+         !! the hydrostatic layer-centre pressure `g rho0 z` (surface
+         !! pressure zero).  Used only with `frazil_column`.
+      logical :: reclaim_frazil = .true.
+         !! OM3 `RECLAIM_FRAZIL`: spend the standing frazil bank on a warm
+         !! surface layer before the sweep.  Default `.true.` (the OM3
+         !! value) but USED ONLY with `frazil_column`; inert otherwise.
+      logical :: bound_salinity = .false.
+         !! OM3 `BOUND_SALINITY`: after the surface salt flux (and so the
+         !! ice-ocean salt exchange) is applied each thermo step, set
+         !! `S = max(S, min_salinity)` in the top layer.  NON-CONSERVING:
+         !! it only acts if the ice asks for more salt than the layer
+         !! holds, and the created salt is not in the salt budget.
+      real(wp) :: min_salinity = 0.0_wp
+         !! OM3 `MIN_SALINITY` floor (g/kg or PSU) for `bound_salinity`.
+
       ! ---- PR 4b: category ice transport + compress_ice ----
       logical :: transport = .false.
          !! Enable horizontal category ice/snow transport

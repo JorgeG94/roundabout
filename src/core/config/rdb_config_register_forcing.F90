@@ -319,6 +319,26 @@ contains
       call g%add(nml_logical("snow_ice", pl, &
                              "Enable Archimedes snow-ice flooding conversion "// &
                              "(SIS2 SN2IC; default off => byte-identical)"))
+      pl => cfg%ocean%ice%frazil_column
+      call g%add(nml_logical("frazil_column", pl, &
+                             "Full-column frazil sweep with rising carry instead of the "// &
+                             "surface-only clamp (OM3 FRAZIL; default off => byte-identical)"))
+      pl => cfg%ocean%ice%pressure_dependent_frazil
+      call g%add(nml_logical("pressure_dependent_frazil", pl, &
+                             "Freezing point at layer-centre hydrostatic pressure "// &
+                             "(OM3 PRESSURE_DEPENDENT_FRAZIL; needs frazil_column)"))
+      pl => cfg%ocean%ice%reclaim_frazil
+      call g%add(nml_logical("reclaim_frazil", pl, &
+                             "Spend the standing frazil bank on a warm surface layer "// &
+                             "(OM3 RECLAIM_FRAZIL; default true, used only with frazil_column)"))
+      pl => cfg%ocean%ice%bound_salinity
+      call g%add(nml_logical("bound_salinity", pl, &
+                             "Floor top-layer salinity at min_salinity after the ice salt "// &
+                             "exchange (OM3 BOUND_SALINITY; non-conservative; default off)"))
+      pr => cfg%ocean%ice%min_salinity
+      call g%add(nml_real("min_salinity", pr, &
+                          "Salinity floor for bound_salinity (OM3 MIN_SALINITY)", &
+                          units="g/kg", min=0.0_wp))
       pl => cfg%ocean%ice%transport
       call g%add(nml_logical("transport", pl, &
                              "Enable horizontal category ice/snow transport "// &
