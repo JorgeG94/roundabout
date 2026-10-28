@@ -854,7 +854,8 @@ Vertical-mixing module switches + knobs.
 
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
-| `use_closure` | `.true.` |  | Master switch for the interior closure (PP81) |
+| `use_closure` | `.true.` |  | Master switch for the interior closure (PP81 or interior_closure) and its contributors |
+| `interior_closure` | `"pp81"` |  | Interior closure under use_closure: pp81 (default) | none (background + other schemes only) |
 | `use_kpp` | `.true.` |  | KPP surface-boundary-layer overlay (needs use_closure) |
 | `direct_stress` | `.false.` |  | Spread wind stress over hmix_stress (MOM6 DIRECT_STRESS) |
 | `hmix_stress` | `0.2000000000E+02` | m | Surface-slab thickness for direct_stress |
@@ -873,7 +874,7 @@ Vertical-mixing module switches + knobs.
 | `bkgnd_kd_deep` | `0.1300000000E-03` | m^2/s | Bryan-Lewis deep-asymptote background Kd |
 | `bkgnd_z0` | `0.2500000000E+04` | m | Bryan-Lewis transition-centre depth |
 | `bkgnd_delta` | `0.2220000000E+03` | m | Bryan-Lewis transition half-width |
-| `bkgnd_prandtl` | `0.1000000000E+01` |  | Background Prandtl number Kv_bg=prandtl*Kd_bg |
+| `bkgnd_prandtl` | `-0.1000000000E+01` |  | Background Prandtl number: kv floor = prandtl*Kd_bg + kv_bg; <=0 off |
 | `bkgnd_henyey` | `.false.` |  | Henyey IGW latitude factor on the scalar background (excludes bkgnd_profile; needs a non-cartesian grid) |
 | `bkgnd_kd_min` | `-0.1000000000E+01` | m^2/s | Minimum background Kd under the Henyey scaling (negative = 0.01*kt_bg) |
 | `bkgnd_henyey_n0_2omega` | `0.2000000000E+02` |  | Henyey N0/(2*Omega) reference stratification ratio |

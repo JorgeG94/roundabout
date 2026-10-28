@@ -283,14 +283,14 @@ The solve is implicit (backward-Euler tridiagonal).
 
 | Closure | Status | Knob (default) | What it does | Tests |
 |---|---|---|---|---|
-| PP81 (Pacanowski-Philander) | **default** | `&ocean_vmix_nml use_closure` (`.true.`) | Richardson-number interior mixing. | `test_ocean_pp81` |
+| PP81 (Pacanowski-Philander) | **default** | `&ocean_vmix_nml use_closure` (`.true.`), `interior_closure` (`"pp81"`) | Richardson-number interior mixing (Pacanowski & Philander 1981). `interior_closure = "none"` drops it: the interior `kv`/`kt` are seeded each stage with the background (scalar, Henyey or Bryan-Lewis; `prandtl·kt + kv_bg` for momentum when `bkgnd_prandtl > 0`) and the other contributors add on top, as on the PP81 path (ACCESS-OM3 runs with no PP81). `use_closure` stays the master switch for the whole pipeline. | `test_ocean_pp81`, `test_ocean_vmix_no_pp81` |
 | KPP (Large et al. 1994) | **default** | `&ocean_vmix_nml use_kpp` (`.true.`) | Boundary-layer overlay on PP81 with non-local transport. Shortwave method `&ocean_thermo_nml kpp_sw_method` (`"mxl_sw"`). | `test_ocean_kpp*`, `test_ocean_buoyancy_flux`, `test_ocean_sw_bl_coupling` |
 | EPBL (Reichl & Hallberg 2018) | opt-in; replaces KPP | `&ocean_epbl_nml enable` (`.false.`) | Energetics-based boundary layer with optional Langmuir term. Enabling it logs and disables `use_kpp`. | `test_ocean_epbl`, `test_ocean_sw_bl_coupling` |
 | kappa-shear (Jackson, Hallberg & Legg 2008) | opt-in | `&ocean_kappa_shear_nml enable` (`.false.`) | Prognostic interior shear turbulence, added to the other closures. `at_vertex` selects the corner (MOM6 `VERTEX_SHEAR`) form. | `test_ocean_kappa_shear` |
 | Tidal mixing (St Laurent / Simmons) | opt-in | `&ocean_tidal_mixing_nml enable` (`.false.`) | Bottom-intensified internal-tide diffusivity. | `test_ocean_tidal_mixing`, `test_ocean_zfixed_k_bot` |
 | Convective adjustment | opt-in | `&ocean_conv_nml enable` (`.false.`; `kd_conv` `1.0`, `n2_thresh` `0.0`) | Raises `kt` and `kv` where `N² < n2_thresh`, below the active boundary layer. Never writes `ks`. | `test_ocean_convection` |
 | Double diffusion | opt-in | `&ocean_ddiff_nml enable` (`.false.`) | Salt fingering plus diffusive convection. Folded into the heat/salt split, so `ks` and `kt` differ. | `test_ocean_double_diffusion` |
-| Background mixing | opt-in; the two forms are mutually exclusive | `&ocean_vmix_nml bkgnd_profile` **xor** `bkgnd_henyey` (both `.false.`) | Bryan-Lewis depth profile, or a Henyey latitude factor on the scalar floors. Henyey is refused on a cartesian grid. | `test_ocean_bkgnd_mixing` |
+| Background mixing | opt-in; the two forms are mutually exclusive | `&ocean_vmix_nml bkgnd_profile` **xor** `bkgnd_henyey` (both `.false.`) | Bryan-Lewis depth profile, or a Henyey latitude factor on the scalar floors (Henyey et al. 1986; Harrison & Hallberg 2008). Henyey is refused on a cartesian grid. `bkgnd_prandtl > 0` (default `-1`, off) ties the interior momentum floor to the tracer background in use, `kv ≥ prandtl·kt_background + kv_bg`, so the latitude factor and `bkgnd_kd_min` reach momentum (OM3: `bkgnd_prandtl = 1`, `pp81_nu_bg = 0`). | `test_ocean_bkgnd_mixing`, `test_ocean_vmix_no_pp81` | `test_ocean_bkgnd_mixing` |
 | Assembly gate (`vmix_assemble`) | **default** (inert) | `kv_max`, `kd_max` (`huge`), `kd_smooth_iterations` (`0`), `vmix_guard` (`.false.`) | Single floors, ceilings, smoothing and guard stage. All defaults are bit-identical. | `test_ocean_vmix_assembly`, `test_ocean_vdiff` |
 
 Not built: the two-equation k-ε closure and the Galperin/Canuto stability
@@ -642,6 +642,8 @@ background rather than the type default.
 
 | Knob | Default | Meaning |
 |---|---|---|
+| `interior_closure` | `"pp81"` | `"pp81"` or `"none"` (no shear-driven interior closure; `"large94"`/`"cvmix"` are reserved and fail loud). `"none"` needs `use_closure`. |
+| `bkgnd_prandtl` | `-1` | Background Prandtl number; `> 0` makes the momentum floor `bkgnd_prandtl·kt_background + kv_bg` (`kv_bg` is `pp81_nu_bg`). Under `bkgnd_profile` the floor is `bkgnd_prandtl·kd_bg` and an unset value means 1. |
 | `pp81_nu0` | `1e-2` | PP81 Richardson-dependent viscosity scale (m²/s). |
 | `pp81_nu_bg` | `1e-4` | PP81 background viscosity (m²/s); also seeds `vmix%kv_bg`. |
 | `pp81_kappa_bg` | `1e-5` | PP81 background diffusivity (m²/s); also seeds `vmix%kt_bg`/`ks_bg`. |
@@ -766,6 +768,17 @@ non-conservative — increment mirrored into the surface heat/salt budget)
 Dated reconciliation log, kept verbatim. Read it for the history of why a row
 looks the way it does. It is not needed to use the tables.
 
+- **2026-10-27** — `&ocean_vmix_nml interior_closure` (`"pp81"` default |
+  `"none"`) and `bkgnd_prandtl` (default `-1`, off). `"none"` runs no PP81
+  kernel: the interior `kv`/`kt` are seeded each stage with the background
+  (scalar, Henyey or Bryan-Lewis; additive with the contributors), with
+  ePBL, kappa-shear, tides, convection and double diffusion adding on top
+  (ACCESS-OM3 sets `USE_PP81 = False`). `bkgnd_prandtl > 0` ties the momentum
+  floor to the tracer background in use. `bkgnd_prandtl` was previously a
+  Bryan-Lewis-only knob defaulting to 1; the default is now the off sentinel
+  and an unset value resolves to 1 under `bkgnd_profile`, so every existing
+  configuration is bit-identical. KPP is not refused with `"none"`: its
+  overlay only `max()`es into whatever is in `kv`/`kt`.
 - **2026-10-27** — OM3 lateral-viscosity floors: `&ocean_hvisc_nml`
   `kh_sin_lat` / `kh_pwr_of_sine` (latitude Laplacian floor), `ah_vel_scale`
   (biharmonic velocity-scale floor) and `bound_coriolis_biharm` /

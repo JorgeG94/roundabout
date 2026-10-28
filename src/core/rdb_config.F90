@@ -1546,6 +1546,17 @@ module rdb_config
          !! populates `vmix%kv` / `vmix%kt` from the local Richardson
          !! number and vdiff reads them.  When `.false.`, vdiff uses
          !! its scalar `K_v_*` defaults and vmix kernels never run.
+      character(len=8) :: interior_closure = "pp81"
+         !! Interior mixing closure under `use_closure`: `"pp81"` (default;
+         !! Pacanowski & Philander 1981 Richardson-number closure,
+         !! bit-identical) or `"none"` (no shear-driven interior closure --
+         !! the interior `kv`/`kt` are the background floor (scalar, Henyey
+         !! et al. 1986 / Harrison & Hallberg 2008 latitude factor, or
+         !! Bryan-Lewis) plus whatever ePBL, kappa-shear, tides, convection
+         !! and double diffusion contribute).  `"none"` is how an
+         !! ACCESS-OM3-like run (`USE_PP81 = False`) avoids double-counting
+         !! shear mixing.  Requires `use_closure`.  `large94`/`cvmix` are
+         !! reserved and fail loud.
       logical :: use_kpp = .true.
          !! KPP surface-boundary-layer overlay.  Requires `use_closure`.
          !! Adds the cubic-profile kv overlay plus non-local γ_T/γ_S transport.
@@ -1591,8 +1602,15 @@ module rdb_config
          !! Bryan-Lewis transition-centre depth (m, positive down).
       real(wp) :: bkgnd_delta = 222.0_wp
          !! Bryan-Lewis transition half-width (m).
-      real(wp) :: bkgnd_prandtl = 1.0_wp
-         !! Background Prandtl number: Kv_bg = bkgnd_prandtl * Kd_bg.
+      real(wp) :: bkgnd_prandtl = -1.0_wp
+         !! Background Prandtl number (MOM6 `PRANDTL_BKGND`).  Default -1 =
+         !! off (independent `kv_bg` floor, bit-identical).  `> 0`: the
+         !! interior momentum floor is `bkgnd_prandtl * kt_background +
+         !! kv_bg` with `kt_background` the tracer background in use
+         !! (scalar `kt_bg`, or the Henyey `max(bkgnd_kd_min, kt_bg*L(phi))`).
+         !! ACCESS-OM3 equivalent: `bkgnd_prandtl = 1`, `pp81_nu_bg = 0`.
+         !! Under `bkgnd_profile` the floor is `bkgnd_prandtl * kd_bg` and an
+         !! unset value resolves to 1 (historical behaviour).
       logical :: bkgnd_henyey = .false.
          !! Henyey, Wright & Flatte (1986) JGR 91:8487 latitude-dependent
          !! internal-wave factor (constant-`N0` simplification of Harrison &
@@ -1634,7 +1652,9 @@ module rdb_config
          !! PP81 Richardson-dependent viscosity scale (m^2/s).
       real(wp) :: pp81_nu_bg = 1.0e-4_wp
          !! PP81 background viscosity (m^2/s).  Also seeds `vmix%kv_bg`
-         !! (the assembly floor) — see `vmix_seed_backgrounds`.
+         !! (the assembly floor) — see `vmix_seed_backgrounds` -- and so
+         !! is the additive `kv_bg` term of the `bkgnd_prandtl` floor even
+         !! when `interior_closure = "none"` (set 0 for OM3's `KV = 0`).
       real(wp) :: pp81_kappa_bg = 1.0e-5_wp
          !! PP81 background diffusivity (m^2/s).  Also seeds
          !! `vmix%kt_bg`/`vmix%ks_bg`.

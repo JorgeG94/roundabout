@@ -163,6 +163,23 @@ contains
       ! Vertical mixing: PP81 interior + KPP boundary-layer overlay.
       ocean_state%vmix%use_closure = cfg%ocean%vmix%use_closure
       ocean_state%vmix%use_kpp = cfg%ocean%vmix%use_kpp
+      ! Interior closure tag.  validate_config already rejected unknown
+      ! strings; this is the backstop for a caller that bypassed it.
+      ocean_state%vmix%interior_closure = &
+         parse_vmix_interior_closure(trim(cfg%ocean%vmix%interior_closure))
+      if (ocean_state%vmix%interior_closure < 0) then
+         call fail("ocean_vmix_nml: interior_closure='"// &
+                   trim(cfg%ocean%vmix%interior_closure)// &
+                   "' not recognised; valid: pp81, none", ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+      if (ocean_state%vmix%interior_closure == VMIX_INTERIOR_NONE .and. &
+          .not. cfg%ocean%vmix%use_closure) then
+         call fail("ocean_vmix_nml: interior_closure='none' needs use_closure=.true. "// &
+                   "(it selects the interior of the closure pipeline; with the "// &
+                   "pipeline off there is nothing to select)", ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
       ! Shared EOS handle: KPP B0 reads the surface α/β from here so
       ! it tracks the dyn-core EOS (was a private never-refreshed copy).
       ocean_state%vmix%eos = ocean_state%eos
@@ -328,7 +345,10 @@ contains
       call configure_ocean_meke(cfg, ocean_state, grid)
 
       if (compute_rank == 0) then
-         if (ocean_state%epbl%enable) then
+         if (ocean_state%vmix%interior_closure == VMIX_INTERIOR_NONE) then
+            call logger%info("Vertical mixing: NO PP81 interior (interior_closure=none); "// &
+                             "background floor + the enabled contributors only")
+         else if (ocean_state%epbl%enable) then
             call logger%info("Vertical mixing: PP81 interior + EPBL boundary layer")
          else if (ocean_state%vmix%use_closure .and. ocean_state%vmix%use_kpp) then
             call logger%info("Vertical mixing: PP81 interior + KPP overlay enabled")

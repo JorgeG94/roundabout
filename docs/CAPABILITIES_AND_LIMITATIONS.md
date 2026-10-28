@@ -243,7 +243,7 @@ Every vertical closure adds into the interface diffusivities `kv` and `kt`. `ks`
 
 | Closure | Status | Key knob | Limits |
 |---|---|---|---|
-| PP81 interior (Richardson number) | Shipped | `&ocean_vmix_nml` | Uses one global reference pressure, so thermobaricity is neglected. |
+| PP81 interior (Richardson number) | Shipped, default; can be turned off | `&ocean_vmix_nml interior_closure` (`"pp81"`, or `"none"`) | Uses one global reference pressure, so thermobaricity is neglected. With `"none"` (ACCESS-OM3 has no PP81) the interior mixing is the background plus ePBL, kappa-shear, tides, convection and double diffusion. |
 | KPP boundary layer | **Shipped, on by default** | `&ocean_vmix_nml use_kpp` | Includes the `V_t²` term and the non-local transport. The bottom boundary layer is not implemented. The depth does not respond to a stabilising surface buoyancy flux. Excluded with EPBL. Refused with `z_fixed` under a cavity. |
 | EPBL (Reichl and Hallberg 2018) | Shipped | `&ocean_epbl_nml enable` | Mutually exclusive with KPP. Includes Langmuir enhancement (`use_lt`) and a penetrating-shortwave TKE charge (`epbl_sw_ctke`, on by default). |
 | Kappa-shear (JHL08) | Shipped | `&ocean_kappa_shear_nml enable` | Interior closure, additive with KPP and EPBL. No massless-layer merging yet. Optional vertex form (`at_vertex`). |

@@ -120,10 +120,11 @@ module rdb_ocean_dyn
                               vdiff_apply_tracers, &
                               vdiff_set_viscous_bbl
    use rdb_ocean_vmix, only: ocean_vmix_t, vmix_compute_pp81, &
+                             vmix_seed_interior_none, &
                              vmix_apply_kpp_overlay, vmix_add_kv_ml_invz2, &
                              vmix_apply_nonlocal_tendencies, vmix_assemble, &
                              vmix_apply_convection, vmix_split_kd_heat_salt, &
-                             VMIX_INTERIOR_PP81
+                             VMIX_INTERIOR_PP81, VMIX_INTERIOR_NONE
    use rdb_ocean_epbl, only: ocean_epbl_t, epbl_compute, epbl_merge_into_kv_kt
    use rdb_ocean_kappa_shear, only: ocean_kappa_shear_t, kappa_shear_compute, &
                                     kappa_shear_merge_into_kv_kt
@@ -1554,14 +1555,23 @@ contains
          call profiler_start("ocean_vmix_compute")
          if (vmix%interior_closure == VMIX_INTERIOR_PP81) then
             call vmix_compute_pp81(grid, vmix, ms)
+         else if (vmix%interior_closure == VMIX_INTERIOR_NONE) then
+            ! No shear-driven interior closure (OM3: no PP81): seed the
+            ! interior kv/kt with the background; the other contributors
+            ! add on top, vmix_assemble keeps floors and ceilings.
+            if (present(metrics)) then
+               call vmix_seed_interior_none(grid, vmix, ms, geolat=metrics%geolatT)
+            else
+               call vmix_seed_interior_none(grid, vmix, ms)
+            end if
          else
             ! PR-6 fail-loud: VMIX_INTERIOR_LARGE94 / VMIX_INTERIOR_CVMIX are
             ! reserved-but-unwired (no kernel).  Selecting one would leave
-            ! kv/kt with NO interior mixing.  There is no namelist key for
-            ! interior_closure today, so this is defence-in-depth for the
-            ! next code/config consumer that sets it.
+            ! kv/kt with NO interior mixing.  The `interior_closure`
+            ! namelist parser never returns them, so this
+            ! is defence-in-depth for the next code/config consumer.
             call logger%error("vmix_apply_in_stage: the selected interior closure "// &
-                              "has no kernel (only VMIX_INTERIOR_PP81 is implemented; "// &
+                              "has no kernel (only VMIX_INTERIOR_PP81/NONE are implemented; "// &
                               "VMIX_INTERIOR_LARGE94/CVMIX are reserved-but-unwired) — "// &
                               "running it would leave kv/kt with no interior mixing")
             error stop "vmix_apply_in_stage: unimplemented vmix interior closure"

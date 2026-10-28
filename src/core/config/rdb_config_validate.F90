@@ -43,6 +43,7 @@ contains
                                        pseudo_salt_needs_thermo_warning
       use rdb_ocean_surface_flux, only: sw_source_is_implemented
       use rdb_ocean_vmix, only: kpp_sw_method_is_implemented, &
+                                parse_vmix_interior_closure, VMIX_INTERIOR_NONE, &
                                 bkgnd_henyey_conflicts_profile
       use rdb_eos, only: parse_tfreeze_set, TFREEZE_SET_INVALID, &
                          parse_ts_convention, parse_tfreeze_form, parse_eos_variant, &
@@ -1500,6 +1501,20 @@ contains
       if (cfg%ocean%tides%enable .and. len_trim(cfg%ocean%tides%constituents) == 0) then
          call logger%error("ocean_tides_nml: enable=.true. but constituents "// &
                            "list is empty")
+         has_error = .true.
+      end if
+
+      ! Interior closure selector: unknown/reserved spellings fail loud, and
+      ! "none" selects inside the closure pipeline so it needs use_closure.
+      if (parse_vmix_interior_closure(trim(cfg%ocean%vmix%interior_closure)) < 0) then
+         call logger%error("&ocean_vmix_nml interior_closure='"// &
+                           trim(cfg%ocean%vmix%interior_closure)// &
+                           "' not recognised; valid: pp81, none (large94/cvmix are reserved)")
+         has_error = .true.
+      else if (parse_vmix_interior_closure(trim(cfg%ocean%vmix%interior_closure)) == &
+               VMIX_INTERIOR_NONE .and. .not. cfg%ocean%vmix%use_closure) then
+         call logger%error("&ocean_vmix_nml interior_closure='none' requires "// &
+                           "use_closure=.true.")
          has_error = .true.
       end if
 

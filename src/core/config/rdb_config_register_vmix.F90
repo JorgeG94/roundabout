@@ -638,7 +638,11 @@ contains
       g%name = "ocean_vmix"
       g%doc = "Vertical-mixing module switches + knobs."
       pl => cfg%ocean%vmix%use_closure
-      call g%add(nml_logical("use_closure", pl, "Master switch for the interior closure (PP81)"))
+call g%add(nml_logical("use_closure", pl, "Master switch for the interior closure (PP81 or interior_closure) and its contributors"))
+      ps => cfg%ocean%vmix%interior_closure
+      call g%add(nml_enum("interior_closure", ps, &
+                          "Interior closure under use_closure: pp81 (default) | none (background + other schemes only)", &
+                          allowed=[character(len=8) :: "pp81", "none"]))
       pl => cfg%ocean%vmix%use_kpp
       call g%add(nml_logical("use_kpp", pl, "KPP surface-boundary-layer overlay (needs use_closure)"))
       pl => cfg%ocean%vmix%direct_stress
@@ -684,8 +688,8 @@ contains
       call g%add(nml_real("bkgnd_delta", pr, "Bryan-Lewis transition half-width", &
                           units="m", min=1.0e-6_wp))
       pr => cfg%ocean%vmix%bkgnd_prandtl
-      call g%add(nml_real("bkgnd_prandtl", pr, "Background Prandtl number Kv_bg=prandtl*Kd_bg", &
-                          min=0.0_wp))
+      call g%add(nml_real("bkgnd_prandtl", pr, "Background Prandtl number: kv floor = prandtl*Kd_bg + kv_bg; <=0 off", &
+                          min=-1.0_wp))
       pl => cfg%ocean%vmix%bkgnd_henyey
       call g%add(nml_logical("bkgnd_henyey", pl, &
                              "Henyey IGW latitude factor on the scalar background "// &

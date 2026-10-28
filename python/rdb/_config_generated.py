@@ -4597,10 +4597,19 @@ class OceanVmix(Group):
 
     use_closure = Bool(
         'use_closure',
-        doc='Master switch for the interior closure (PP81)',
+        doc='Master switch for the interior closure (PP81 or interior_closure) and its contributors',
         units='',
         required=False,
         default=True,
+    )
+
+    interior_closure = Enum(
+        'interior_closure',
+        doc='Interior closure under use_closure: pp81 (default) | none (background + other schemes only)',
+        units='',
+        required=False,
+        default='pp81',
+        allowed=('pp81', 'none'),
     )
 
     use_kpp = Bool(
@@ -4758,12 +4767,12 @@ class OceanVmix(Group):
 
     bkgnd_prandtl = Real(
         'bkgnd_prandtl',
-        doc='Background Prandtl number Kv_bg=prandtl*Kd_bg',
+        doc='Background Prandtl number: kv floor = prandtl*Kd_bg + kv_bg; <=0 off',
         units='',
         required=False,
-        default=1.0,
+        default=-1.0,
         has_min=True,
-        vmin=0.0,
+        vmin=-1.0,
     )
 
     bkgnd_henyey = Bool(
@@ -6794,4 +6803,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 62
-N_KNOBS = 746
+N_KNOBS = 747

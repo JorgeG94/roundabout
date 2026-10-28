@@ -95,6 +95,8 @@ module rdb_ocean_vmix
 
    public :: ocean_vmix_t
    public :: vmix_compute_pp81
+   public :: vmix_seed_interior_none
+   public :: parse_vmix_interior_closure
    public :: vmix_apply_kpp_overlay
    public :: vmix_apply_nonlocal_tendencies
    public :: vmix_add_kv_ml_invz2
@@ -102,6 +104,7 @@ module rdb_ocean_vmix
    public :: vmix_assemble
    public :: vmix_bkgnd_fill_impl
    public :: vmix_assemble_clip_henyey_impl
+   public :: vmix_assemble_clip_henyey_pr_impl
    public :: henyey_lat_factor_impl
    public :: vmix_resolve_kd_min
    public :: bkgnd_henyey_conflicts_profile
@@ -125,8 +128,8 @@ module rdb_ocean_vmix
    integer, parameter, public :: KPP_SW_LV1 = 3
       !! `lv1_sw`: subtract the SW that leaks below the top model layer.
 
-   ! Interior-mixing closure tags.  Only `PP81` is implemented;
-   ! `LARGE94` and `CVMIX` are reserved tags for future work.  KPP
+   ! Interior-mixing closure tags.  `PP81` (default) and `NONE` are
+   ! implemented; `LARGE94` and `CVMIX` are reserved tags for future work.  KPP
    ! ships as an overlay on top of PP81 (`vmix_apply_kpp_overlay_*`),
    ! not as a separate interior tag.
    integer, parameter, public :: VMIX_INTERIOR_PP81 = 1
@@ -135,6 +138,12 @@ module rdb_ocean_vmix
       !! Large et al. 1994 interior closure (future; not yet wired).
    integer, parameter, public :: VMIX_INTERIOR_CVMIX = 3
       !! CVMix-compatible (future).
+   integer, parameter, public :: VMIX_INTERIOR_NONE = 4
+      !! No shear-driven interior closure.  The interior `kv`/`kt` are
+      !! seeded with the BACKGROUND each stage by `vmix_seed_interior_none`
+      !! (scalar, Henyey or Bryan-Lewis); the other contributors (ePBL,
+      !! kappa-shear, tides, convection, double diffusion, KPP) then act on
+      !! top, additively where they are additive.
 
    ! Source of the thermal-expansion / haline-contraction pair the KPP
    ! `B_0` and the double-diffusion density ratio consume
@@ -204,7 +213,12 @@ module rdb_ocean_vmix
       logical :: use_kpp = .false.
          !! Enable KPP surface-boundary-layer scheme (future).
       integer :: interior_closure = VMIX_INTERIOR_PP81
-         !! Interior mixing closure tag.
+         !! Interior mixing closure tag (`&ocean_vmix_nml interior_closure`):
+         !! `VMIX_INTERIOR_PP81` (default, bit-identical) runs the
+         !! Pacanowski & Philander (1981) Richardson-number kernel;
+         !! `VMIX_INTERIOR_NONE` runs no shear-driven interior closure —
+         !! `vmix_seed_interior_none` seeds the interior `kv`/`kt` with the
+         !! background, and the other contributors add on top.
 
       ! ---- PP81 constants ----
       ! Default values from Pacanowski & Philander (1981) JPO 11:1443.
@@ -382,10 +396,18 @@ module rdb_ocean_vmix
          !! reaches the (sfc+deep)/2 midpoint.
       real(wp) :: bkgnd_delta = 222.0_wp
          !! Transition half-width (m): atan argument is (|z|-z0)/Delta.
-      real(wp) :: bkgnd_prandtl = 1.0_wp
-         !! Background Prandtl number — Kv_bg = bkgnd_prandtl * Kd_bg
-         !! (MOM6 ties the background viscosity to the background tracer
-         !! diffusivity through a Prandtl factor).  Default 1.0.
+      real(wp) :: bkgnd_prandtl = -1.0_wp
+         !! Background Prandtl number (MOM6 `PRANDTL_BKGND`).  Default
+         !! `-1` = OFF: the scalar/Henyey momentum floor is the independent
+         !! `kv_bg` (bit-identical).  `> 0` ties the interior momentum
+         !! floor to the tracer background actually in use:
+         !! `kv floor = bkgnd_prandtl * kt_background + kv_bg`, where
+         !! `kt_background` is `kt_bg` (scalar), `max(bkgnd_kd_min,
+         !! kt_bg*L(phi))` (Henyey) -- so the latitude factor and
+         !! `bkgnd_kd_min` carry into momentum.  Under `bkgnd_profile` the
+         !! floor is `bkgnd_prandtl * kd_bg` (`kv_bg` is not added there)
+         !! and an unset (`<= 0`) value resolves to 1, the historical
+         !! Bryan-Lewis behaviour.
       logical :: bkgnd_henyey = .false.
          !! Henyey, Wright & Flatte (1986) JGR 91:8487 latitude-dependent
          !! internal-wave factor, scaling the SCALAR background tracer
@@ -583,17 +605,172 @@ module rdb_ocean_vmix
 contains
 
    pure function vmix_interior_closure_is_implemented(code) result(ok)
-      !! `.true.` only for `VMIX_INTERIOR_PP81` — the one interior
-      !! closure with a real kernel today.  `VMIX_INTERIOR_LARGE94` and
-      !! `VMIX_INTERIOR_CVMIX` are declared-but-unimplemented reservations
-      !! (no kernel); selecting one would leave `kv`/`kt` stale (no
-      !! interior mixing at all).  `interior_closure` has no namelist key
-      !! yet, so this is defence-in-depth (PR-6) for the next code/config
-      !! consumer that sets it — the predicate is the gate.
+      !! `.true.` for `VMIX_INTERIOR_PP81` and `VMIX_INTERIOR_NONE` — the
+      !! interior closures with a real code path.  `VMIX_INTERIOR_LARGE94`
+      !! and `VMIX_INTERIOR_CVMIX` are declared-but-unimplemented
+      !! reservations (no kernel); selecting one would leave `kv`/`kt`
+      !! stale (no interior mixing at all), so `parse_vmix_interior_closure`
+      !! never returns them from a namelist string and the dispatch in
+      !! `vmix_apply_in_stage` refuses them.
       integer, intent(in) :: code
       logical :: ok
-      ok = (code == VMIX_INTERIOR_PP81)
+      ok = (code == VMIX_INTERIOR_PP81 .or. code == VMIX_INTERIOR_NONE)
    end function vmix_interior_closure_is_implemented
+
+   pure function parse_vmix_interior_closure(name) result(code)
+      !! `&ocean_vmix_nml interior_closure` string to `VMIX_INTERIOR_*` tag:
+      !! `"pp81"` (Pacanowski & Philander 1981, default) or `"none"`
+      !! (no shear-driven interior closure).  Anything else, including the
+      !! reserved `large94`/`cvmix` spellings, returns `-1` so the caller
+      !! can fail loud.
+      character(len=*), intent(in) :: name
+      integer :: code
+      select case (trim(name))
+      case ("pp81")
+         code = VMIX_INTERIOR_PP81
+      case ("none")
+         code = VMIX_INTERIOR_NONE
+      case default
+         code = -1
+      end select
+   end function parse_vmix_interior_closure
+
+   pure subroutine vmix_seed_interior_none(grid, this, ms, geolat)
+      !! The `interior_closure = "none"` replacement for `vmix_compute_pp81`:
+      !! seeds the interior `kv`/`kt` with the BACKGROUND, so that every
+      !! contributor that follows ADDS to it (final interior value =
+      !! background + sum of contributors, the additive structure of the
+      !! PP81 path).
+      !!
+      !! Derivation.  PP81 writes the background inside its own kernel:
+      !! `kv = pp81_nu_bg + nu0/(1+alpha Ri)^2`, `kt = pp81_kappa_bg +
+      !! nu0/(1+alpha Ri)^3` (Pacanowski & Philander 1981), and by the seed
+      !! invariant `kv_bg == pp81_nu_bg`, `kt_bg == pp81_kappa_bg`.  ePBL's
+      !! additive mode, kappa-shear and tidal mixing then add into that.
+      !! Skipping the PP81 write would leave the previous stage's sum in
+      !! place (accumulation), so the base is rewritten every stage with
+      !! what `vmix_assemble`'s floor would otherwise supply:
+      !!   scalar:    kt = kt_bg,                       kv = kv_bg
+      !!   Henyey:    kt = max(kd_min, kt_bg L(phi)),   kv = kv_bg
+      !!              (Henyey et al. 1986; Harrison & Hallberg 2008)
+      !!   Bryan-Lewis: kt = kd_bg(z),                  kv = prandtl kd_bg
+      !! and, when `bkgnd_prandtl > 0` (scalar/Henyey), `kv = prandtl kt +
+      !! kv_bg`.  The expressions are the ones `vmix_assemble` floors with,
+      !! so the floor is a no-op at the seed and still applies the
+      !! `kv_max`/`kd_max` ceilings.  `ks` is derived from `kt` afterwards
+      !! (`vmix_split_kd_heat_salt`).  Boundary interfaces (k=1 bed,
+      !! k=nz+1 surface) are written zero, exactly as PP81 does.
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_vmix_t), intent(inout) :: this
+      type(multilayer_state_t), intent(in) :: ms
+      real(wp), intent(in), optional :: geolat(grid%nx_total, grid%ny_total)
+         !! T-point latitude (degN); required when `bkgnd_henyey`.
+
+      integer :: nx, ny, nz
+      real(wp) :: pr_bl
+
+      nx = grid%nx_total
+      ny = grid%ny_total
+      nz = ms%nz_ml
+      if (this%bkgnd_profile) then
+         pr_bl = 1.0_wp
+         if (this%bkgnd_prandtl > 0.0_wp) pr_bl = this%bkgnd_prandtl
+         call vmix_bkgnd_fill_impl(nx, ny, nz + 1, this%kd_bg, ms%h_layer, &
+                                   this%bkgnd_kd_sfc, this%bkgnd_kd_deep, &
+                                   this%bkgnd_z0, this%bkgnd_delta)
+         call vmix_seed_none_profile_impl(nx, ny, nz + 1, this%kv, this%kt, &
+                                          this%kd_bg, pr_bl)
+      else if (this%bkgnd_henyey) then
+         if (.not. present(geolat)) then
+            error stop "vmix_seed_interior_none: bkgnd_henyey requires the geolat "// &
+               "argument (thread ocean_metrics_t%geolatT through the caller)"
+         end if
+         call vmix_seed_none_henyey_impl(nx, ny, nz + 1, this%kv, this%kt, &
+                                         this%kv_bg, this%kt_bg, this%bkgnd_prandtl, &
+                                         this%bkgnd_henyey_n0_2omega, &
+                                         this%bkgnd_henyey_max_lat, &
+                                         vmix_resolve_kd_min(this%bkgnd_kd_min, &
+                                                             this%kt_bg), geolat)
+      else if (this%bkgnd_prandtl > 0.0_wp) then
+         call vmix_seed_none_scalar_impl(nx, ny, nz + 1, this%kv, this%kt, &
+                                         this%bkgnd_prandtl*this%kt_bg + this%kv_bg, &
+                                         this%kt_bg)
+      else
+         call vmix_seed_none_scalar_impl(nx, ny, nz + 1, this%kv, this%kt, &
+                                         this%kv_bg, this%kt_bg)
+      end if
+   end subroutine vmix_seed_interior_none
+
+   pure subroutine vmix_seed_none_scalar_impl(nx, ny, nzp1, kv, kt, kv_seed, kt_seed)
+      !! Scalar-background seed; boundaries zero.
+      integer, intent(in) :: nx, ny, nzp1
+      real(wp), intent(inout) :: kv(nx, ny, nzp1)
+      real(wp), intent(inout) :: kt(nx, ny, nzp1)
+      real(wp), intent(in) :: kv_seed, kt_seed
+
+      integer :: i, j, k
+
+      do concurrent(k=1:nzp1, j=1:ny, i=1:nx)
+         if (k == 1 .or. k == nzp1) then
+            kv(i, j, k) = 0.0_wp
+            kt(i, j, k) = 0.0_wp
+         else
+            kv(i, j, k) = kv_seed
+            kt(i, j, k) = kt_seed
+         end if
+      end do
+   end subroutine vmix_seed_none_scalar_impl
+
+   pure subroutine vmix_seed_none_henyey_impl(nx, ny, nzp1, kv, kt, kv_bg, kt_bg, &
+                                              prandtl, n0_2omega, henyey_max_lat, &
+                                              kd_min, geolat)
+      !! Henyey-background seed (see `vmix_seed_interior_none`).
+      integer, intent(in) :: nx, ny, nzp1
+      real(wp), intent(inout) :: kv(nx, ny, nzp1)
+      real(wp), intent(inout) :: kt(nx, ny, nzp1)
+      real(wp), intent(in) :: kv_bg, kt_bg, prandtl, n0_2omega, henyey_max_lat, kd_min
+      real(wp), intent(in) :: geolat(nx, ny)
+
+      integer :: i, j, k
+      real(wp) :: kt_floor, kv_floor
+
+      do concurrent(j=1:ny, i=1:nx) local(kt_floor, kv_floor, k)
+         kt_floor = max(kd_min, kt_bg* &
+                        henyey_lat_factor_impl(geolat(i, j), n0_2omega, henyey_max_lat))
+         kv_floor = kv_bg
+         if (prandtl > 0.0_wp) kv_floor = prandtl*kt_floor + kv_bg
+         do k = 1, nzp1
+            if (k == 1 .or. k == nzp1) then
+               kv(i, j, k) = 0.0_wp
+               kt(i, j, k) = 0.0_wp
+            else
+               kv(i, j, k) = kv_floor
+               kt(i, j, k) = kt_floor
+            end if
+         end do
+      end do
+   end subroutine vmix_seed_none_henyey_impl
+
+   pure subroutine vmix_seed_none_profile_impl(nx, ny, nzp1, kv, kt, kd_bg, prandtl)
+      !! Bryan-Lewis seed: kt = kd_bg, kv = prandtl kd_bg; boundaries zero.
+      integer, intent(in) :: nx, ny, nzp1
+      real(wp), intent(inout) :: kv(nx, ny, nzp1)
+      real(wp), intent(inout) :: kt(nx, ny, nzp1)
+      real(wp), intent(in) :: kd_bg(nx, ny, nzp1)
+      real(wp), intent(in) :: prandtl
+
+      integer :: i, j, k
+
+      do concurrent(k=1:nzp1, j=1:ny, i=1:nx)
+         if (k == 1 .or. k == nzp1) then
+            kv(i, j, k) = 0.0_wp
+            kt(i, j, k) = 0.0_wp
+         else
+            kv(i, j, k) = prandtl*kd_bg(i, j, k)
+            kt(i, j, k) = kd_bg(i, j, k)
+         end if
+      end do
+   end subroutine vmix_seed_none_profile_impl
 
    subroutine ocean_vmix_init(this, grid, nz_ml)
       !! Allocate the kv / kt / ks diffusivity fields at layer
@@ -1908,7 +2085,9 @@ contains
       !!       field, kv floor = `bkgnd_prandtl·kd_bg`) and `bkgnd_henyey`
       !!       (Henyey latitude factor on the scalar tracer floors,
       !!       `max(bkgnd_kd_min, kt_bg·L(phi))`).  Configure refuses both
-      !!       at once, so this dispatch is a three-way `if/else if/else`.
+      !!       at once.  `bkgnd_prandtl > 0` additionally ties the momentum
+      !!       floor to the tracer background in use
+      !!       (`prandtl·kt_background + kv_bg`; see the field docstring).
       !!   (c) ceilings — `kv ≤ kv_max`, `kt,ks ≤ kd_max`.  Defaults
       !!       `huge(1.0)` ⇒ no clip ⇒ bit-identical.
       !!   (d) optional 1-2-1 horizontal smoothing of kv/kt/ks at interfaces
@@ -1946,6 +2125,7 @@ contains
 
       integer :: nx, ny, nz, it
       integer :: bad_count
+      real(wp) :: pr_bl
 
       nx = grid%nx_total
       ny = grid%ny_total
@@ -1976,12 +2156,32 @@ contains
       !     from the current column thicknesses (correct under any vcoord)
       !     and floor with that field; kv floor = bkgnd_prandtl * kd_bg.
       if (this%bkgnd_profile) then
+         ! An unset (<= 0) Prandtl number keeps the historical Bryan-Lewis
+         ! tie `kv floor = 1 * kd_bg`.
+         pr_bl = 1.0_wp
+         if (this%bkgnd_prandtl > 0.0_wp) pr_bl = this%bkgnd_prandtl
          call vmix_bkgnd_fill_impl(nx, ny, nz + 1, this%kd_bg, ms%h_layer, &
                                    this%bkgnd_kd_sfc, this%bkgnd_kd_deep, &
                                    this%bkgnd_z0, this%bkgnd_delta)
          call vmix_assemble_clip_profile_impl(nx, ny, nz + 1, this%kv, this%kt, this%ks, &
-                                              this%kd_bg, this%bkgnd_prandtl, &
+                                              this%kd_bg, pr_bl, &
                                               this%kv_max, this%kd_max)
+      else if (this%bkgnd_henyey .and. this%bkgnd_prandtl > 0.0_wp) then
+         ! Henyey + Prandtl-tied momentum floor (OM3): kv floor =
+         ! prandtl * max(kd_min, kt_bg L(phi)) + kv_bg.  Separate kernel so
+         ! the plain Henyey path below is textually untouched.
+         if (.not. present(geolat)) then
+            error stop "vmix_assemble: bkgnd_henyey requires the geolat "// &
+               "argument (thread ocean_metrics_t%geolatT through the caller)"
+         end if
+         call vmix_assemble_clip_henyey_pr_impl(nx, ny, nz + 1, this%kv, this%kt, this%ks, &
+                                                this%kv_bg, this%kt_bg, this%ks_bg, &
+                                                this%kv_max, this%kd_max, &
+                                                this%bkgnd_henyey_n0_2omega, &
+                                                this%bkgnd_henyey_max_lat, &
+                                                vmix_resolve_kd_min(this%bkgnd_kd_min, &
+                                                                    this%kt_bg), &
+                                                this%bkgnd_prandtl, geolat)
       else if (this%bkgnd_henyey) then
          ! C7 Henyey: the latitude factor scales the SCALAR kt_bg/ks_bg
          ! floors, floored at `bkgnd_kd_min` — see the `bkgnd_henyey`
@@ -2010,6 +2210,13 @@ contains
                                              vmix_resolve_kd_min(this%bkgnd_kd_min, &
                                                                  this%kt_bg), &
                                              geolat)
+      else if (this%bkgnd_prandtl > 0.0_wp) then
+         ! Scalar background with the Prandtl tie: the momentum floor is the
+         ! scalar `prandtl * kt_bg + kv_bg`.
+         call vmix_assemble_clip_impl(nx, ny, nz + 1, this%kv, this%kt, this%ks, &
+                                      this%bkgnd_prandtl*this%kt_bg + this%kv_bg, &
+                                      this%kt_bg, this%ks_bg, &
+                                      this%kv_max, this%kd_max)
       else
          call vmix_assemble_clip_impl(nx, ny, nz + 1, this%kv, this%kt, this%ks, &
                                       this%kv_bg, this%kt_bg, this%ks_bg, &
@@ -2268,6 +2475,49 @@ contains
          end do
       end do
    end subroutine vmix_assemble_clip_henyey_impl
+
+   pure subroutine vmix_assemble_clip_henyey_pr_impl(nx, ny, nzp1, kv, kt, ks, &
+                                                     kv_bg, kt_bg, ks_bg, kv_max, kd_max, &
+                                                     n0_2omega, henyey_max_lat, kd_min, &
+                                                     prandtl, geolat)
+      !! `vmix_assemble_clip_henyey_impl` with the momentum floor tied to the
+      !! Henyey tracer floor through a background Prandtl number:
+      !!
+      !!   kt floor = max(kd_min, kt_bg · L(φ))
+      !!   kv floor = prandtl · kt floor + kv_bg
+      !!
+      !! (background viscosity `PRANDTL_BKGND · Kd_background + KV`).  The
+      !! tracer clip is expression-for-expression the plain Henyey kernel;
+      !! only the `kv` floor differs.  See `vmix_assemble_clip_henyey_impl`
+      !! for the latitude-factor details (Henyey et al. 1986; Harrison &
+      !! Hallberg 2008).
+      integer, intent(in) :: nx, ny, nzp1
+      real(wp), intent(inout) :: kv(nx, ny, nzp1)
+      real(wp), intent(inout) :: kt(nx, ny, nzp1)
+      real(wp), intent(inout) :: ks(nx, ny, nzp1)
+      real(wp), intent(in) :: kv_bg, kt_bg, ks_bg, kv_max, kd_max
+      real(wp), intent(in) :: n0_2omega, henyey_max_lat
+      real(wp), intent(in) :: kd_min
+      real(wp), intent(in) :: prandtl
+         !! Background Prandtl number (> 0).
+      real(wp), intent(in) :: geolat(nx, ny)
+
+      integer :: i, j, k
+      real(wp) :: kt_floor, ks_floor, kv_floor
+
+      do concurrent(j=1:ny, i=1:nx) local(kt_floor, ks_floor, kv_floor, k)
+         kt_floor = max(kd_min, kt_bg* &
+                        henyey_lat_factor_impl(geolat(i, j), n0_2omega, henyey_max_lat))
+         ks_floor = max(kd_min, ks_bg* &
+                        henyey_lat_factor_impl(geolat(i, j), n0_2omega, henyey_max_lat))
+         kv_floor = prandtl*kt_floor + kv_bg
+         do k = 2, nzp1 - 1
+            kv(i, j, k) = min(max(kv(i, j, k), kv_floor), kv_max)
+            kt(i, j, k) = min(max(kt(i, j, k), kt_floor), kd_max)
+            ks(i, j, k) = min(max(ks(i, j, k), ks_floor), kd_max)
+         end do
+      end do
+   end subroutine vmix_assemble_clip_henyey_pr_impl
 
    pure subroutine vmix_assemble_clip_profile_impl(nx, ny, nzp1, kv, kt, ks, &
                                                    kd_bg, prandtl, kv_max, kd_max)

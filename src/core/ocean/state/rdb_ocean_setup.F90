@@ -91,6 +91,7 @@ module rdb_ocean_setup
    use rdb_ocean_epbl, only: parse_epbl_mstar_scheme, parse_epbl_vstar_scheme, &
                              parse_epbl_combine, parse_epbl_lt_scheme
    use rdb_ocean_vmix, only: parse_kpp_sw_method, vmix_resolve_kd_min, &
+                             parse_vmix_interior_closure, VMIX_INTERIOR_NONE, &
                              bkgnd_henyey_conflicts_profile, &
                              parse_buoyancy_coeffs, BUOY_COEFFS_INVALID
    use rdb_ocean_geothermal, only: ocean_geothermal_t
