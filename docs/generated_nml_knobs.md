@@ -913,6 +913,7 @@ Vertical-mixing module switches + knobs.
 | `harmonic_visc` | `.false.` |  | Harmonic-mean face thickness in vdiff (MOM6 HARMONIC_VISC) |
 | `dt_therm_ratio` | `1` |  | Thermo step runs at ratio*dt_dyn (MOM6 DT_THERM) |
 | `dt_tracer_advect_ratio` | `1` |  | Horizontal tracer advect runs at ratio*dt_dyn (MOM6 DT_TRACER_ADVECT) |
+| `tracer_advection_scheme` | `"ppm"` |  | Every-step horizontal tracer-advection edge scheme (ocean): ppm|ppm_h3 |
 | `tracer_recon` | `"ppm"` |  | Windowed tracer-advect drain face reconstruction (ocean): ppm|weno5|weno7|weno9 |
 | `kv_max` | `0.1797693135+309` | m^2/s | Assembly ceiling on kv; huge=off (MOM6 Kd_max momentum) |
 | `kd_max` | `0.1797693135+309` | m^2/s | Assembly ceiling on kt/ks; huge=off (MOM6 Kd_max) |

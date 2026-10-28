@@ -771,6 +771,10 @@ call g%add(nml_logical("use_closure", pl, "Master switch for the interior closur
       pi => cfg%ocean%vmix%dt_tracer_advect_ratio
       call g%add(nml_int("dt_tracer_advect_ratio", pi, &
                          "Horizontal tracer advect runs at ratio*dt_dyn (MOM6 DT_TRACER_ADVECT)", min=1))
+      ps => cfg%ocean%vmix%tracer_advection_scheme
+      call g%add(nml_enum("tracer_advection_scheme", ps, &
+                          "Every-step horizontal tracer-advection edge scheme (ocean): ppm|ppm_h3", &
+                          allowed=[character(len=8) :: "ppm", "ppm_h3"]))
       ps => cfg%ocean%vmix%tracer_recon
       call g%add(nml_enum("tracer_recon", ps, &
                           "Windowed tracer-advect drain face reconstruction (ocean): ppm|weno5|weno7|weno9", &

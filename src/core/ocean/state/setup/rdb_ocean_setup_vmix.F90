@@ -501,6 +501,11 @@ contains
       ! The per-rung nghost minimum is validated fail-loud in validate_config
       ! (cfg%nghost is the ocean grid nghost); here we only map the parsed
       ! code onto the continuity slot.  ppm (default) ⇒ bit-identical.
+      ocean_state%continuity%tracer_h3 = &
+         (trim(cfg%ocean%vmix%tracer_advection_scheme) == "ppm_h3")
+      if (compute_rank == 0 .and. ocean_state%continuity%tracer_h3) then
+         call logger%info("Tracer advection: ppm_h3 (Huynh 3rd-order edges + CW84 limiter)")
+      end if
       ocean_state%continuity%tracer_recon = &
          parse_tracer_recon(trim(cfg%ocean%vmix%tracer_recon))
       if (compute_rank == 0 .and. &

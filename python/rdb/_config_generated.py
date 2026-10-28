@@ -5055,6 +5055,15 @@ class OceanVmix(Group):
         vmin=1,
     )
 
+    tracer_advection_scheme = Enum(
+        'tracer_advection_scheme',
+        doc='Every-step horizontal tracer-advection edge scheme (ocean): ppm|ppm_h3',
+        units='',
+        required=False,
+        default='ppm',
+        allowed=('ppm', 'ppm_h3'),
+    )
+
     tracer_recon = Enum(
         'tracer_recon',
         doc='Windowed tracer-advect drain face reconstruction (ocean): ppm|weno5|weno7|weno9',
@@ -7179,4 +7188,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 63
-N_KNOBS = 789
+N_KNOBS = 790

@@ -213,7 +213,8 @@ separate code paths even when they share a paper.
 
 | Job or modifier | Status | Knob (default) | What it does | Tests |
 |---|---|---|---|---|
-| Horizontal tracer advection | **default**, no knob | hardcoded | PPM; the two cells next to a wall drop to first-order donor. | — |
+| Horizontal tracer advection | **default** `"ppm"` | `&ocean_vmix_nml tracer_advection_scheme` | Van Leer-slope PPM edges, upwind pick, no swept-volume correction; x then y every step; the two cells next to a wall drop to first-order donor. | `test_ocean_tracer_ppm_h3` |
+| Horizontal tracer advection, H3 | opt-in; **refused** with `dt_tracer_advect_ratio > 1` | `tracer_advection_scheme = "ppm_h3"` | Huynh (1997) 3rd-order bounded edges, Colella & Woodward (1984) limiter, swept-volume flux (OM3 `PPM:H3`). Width-3 stencil. | `test_ocean_tracer_ppm_h3` |
 | Vertical (in-z) advection | **default**, no knob | hardcoded | First-order upwind. | — |
 | ALE vertical remap | **default** `"ppm"` | `&vcoord_nml remap_method` | See [section 2](#2-vertical-coordinates-and-ale-remap). | — |
 | Positivity limiter | opt-in | `&ocean_continuity_nml ppm_limit_pos` (`.false.`) | Modifier on the continuity-PPM face values. | — |
@@ -221,7 +222,7 @@ separate code paths even when they share a paper.
 | Consistent barotropic renormalisation | **default** | `renorm_consistent_flux` (`.true.`) | MOM6 `zonal_flux_adjust` behaviour at donor flips. | `test_continuity_multilayer`, `test_ocean_step_bt_mode` |
 
 Two things a reader will get wrong. First, the ocean ALE remap does honour
-`remap_method`; only the horizontal advection is hardcoded. Second, there are two
+`remap_method`; the horizontal advection edge scheme is chosen by `tracer_advection_scheme`, not `remap_method`. Second, there are two
 separate PPM implementations (ALE remap and continuity) on purpose; each fits its
 own loop and conservation constraint.
 

@@ -167,6 +167,18 @@ contains
          end if
       end if
 
+      ! tracer_advection_scheme = ppm_h3 is the every-step path only: the
+      ! windowed drain has its own reconstruction, so a ratio > 1 would
+      ! silently ignore the knob.  Fail loud instead.
+      if (trim(cfg%sim_type) == "ocean") then
+         if (trim(cfg%ocean%vmix%tracer_advection_scheme) == "ppm_h3" .and. &
+             cfg%ocean%vmix%dt_tracer_advect_ratio > 1) then
+            call logger%error("&ocean_vmix_nml tracer_advection_scheme='ppm_h3' requires "// &
+                              "dt_tracer_advect_ratio = 1 (the windowed drain uses tracer_recon)")
+            has_error = .true.
+         end if
+      end if
+
       ! Ocean windowed-drain tracer_recon guard (Q6).  A SEPARATE knob from
       ! the coastal tracer_recon above — it lives in `&ocean_vmix_nml` and
       ! only takes effect on sim_type='ocean' (ignored on coastal, like all

@@ -105,6 +105,7 @@ module rdb_continuity
    public :: ppm_limited_slope
    public :: ppm_cell_limiter
    public :: ppm_limit_pos
+   public :: ppm_h3_face_flux
 
    ! Phase 2 (6b) windowed horizontal tracer advection: accumulate the
    ! per-stage mass fluxes (TR_MODE_ACCUMULATE) over the DT_TRACER_ADVECT
@@ -322,6 +323,15 @@ module rdb_continuity
          !! that is not a pathology.  A healthy zstar/sigma run sits at 0.
          !! int64 (not int32 like `dyn%ntrunc_total`) precisely because that
          !! floored-stack case can accumulate > 2·10⁹ over a long run.
+      logical :: tracer_h3 = .false.
+         !! Horizontal tracer-advection edge scheme of the every-step split
+         !! path (`tracer_advect_{zonal,meridional}_one_impl`, GM bolus
+         !! included).  `.false.` = today's van Leer-slope PPM edge value
+         !! picked by upwind (bit-identical default); `.true.` = `ppm_h3`,
+         !! Huynh (1997) 3rd-order edges + Colella & Woodward (1984) limiter
+         !! + swept-volume (CFL-corrected) flux.  Set at configure from
+         !! `&ocean_vmix_nml tracer_advection_scheme`.  Host control scalar,
+         !! passed as a dummy; never dereferenced in a device loop.
       integer :: tracer_recon = TRACER_RECON_PPM
          !! Face-reconstruction scheme for the WINDOWED tracer-advection
          !! drain (Q6; `dt_tracer_advect_ratio > 1` path only).  0 = CW-PPM
@@ -2329,7 +2339,7 @@ contains
                ms%mass_flux_x_layer, &
                this%h_face_left_x%data, &
                this%h_face_right_x%data, &
-               budget_adv=ms%heat_budget_horiz_adv)
+               budget_adv=ms%heat_budget_horiz_adv, h3=this%tracer_h3)
          case (TRACER_BUDGET_SALT)
             call tracer_advect_zonal_one_impl( &
                grid%nx_total, grid%ny_total, ms%nz_ml, &
@@ -2339,7 +2349,7 @@ contains
                ms%mass_flux_x_layer, &
                this%h_face_left_x%data, &
                this%h_face_right_x%data, &
-               budget_adv=ms%salt_budget_horiz_adv)
+               budget_adv=ms%salt_budget_horiz_adv, h3=this%tracer_h3)
          case default
             call tracer_advect_zonal_one_impl( &
                grid%nx_total, grid%ny_total, ms%nz_ml, &
@@ -2348,7 +2358,7 @@ contains
                ms%tracers(it)%hTr, &
                ms%mass_flux_x_layer, &
                this%h_face_left_x%data, &
-               this%h_face_right_x%data)
+               this%h_face_right_x%data, h3=this%tracer_h3)
          end select
       end do
    end subroutine tracer_advect_zonal
@@ -2412,7 +2422,7 @@ contains
                ms%mass_flux_y_layer, &
                this%h_face_left_y%data, &
                this%h_face_right_y%data, &
-               budget_adv=ms%heat_budget_horiz_adv)
+               budget_adv=ms%heat_budget_horiz_adv, h3=this%tracer_h3)
          case (TRACER_BUDGET_SALT)
             call tracer_advect_meridional_one_impl( &
                grid%nx_total, grid%ny_total, ms%nz_ml, &
@@ -2422,7 +2432,7 @@ contains
                ms%mass_flux_y_layer, &
                this%h_face_left_y%data, &
                this%h_face_right_y%data, &
-               budget_adv=ms%salt_budget_horiz_adv)
+               budget_adv=ms%salt_budget_horiz_adv, h3=this%tracer_h3)
          case default
             call tracer_advect_meridional_one_impl( &
                grid%nx_total, grid%ny_total, ms%nz_ml, &
@@ -2431,7 +2441,7 @@ contains
                ms%tracers(it)%hTr, &
                ms%mass_flux_y_layer, &
                this%h_face_left_y%data, &
-               this%h_face_right_y%data)
+               this%h_face_right_y%data, h3=this%tracer_h3)
          end select
       end do
    end subroutine tracer_advect_meridional
@@ -3086,18 +3096,18 @@ contains
                                               dt, metrics%iareaT, metrics%wet_T, ms%h_layer, &
                                               ms%tracers(it)%hTr, uflux, &
                                               this%h_face_left_x%data, this%h_face_right_x%data, &
-                                              budget_adv=ms%heat_budget_horiz_adv, budget_w=budget_w)
+                                              budget_adv=ms%heat_budget_horiz_adv, budget_w=budget_w, h3=this%tracer_h3)
          case (TRACER_BUDGET_SALT)
             call tracer_advect_zonal_one_impl(grid%nx_total, grid%ny_total, ms%nz_ml, &
                                               dt, metrics%iareaT, metrics%wet_T, ms%h_layer, &
                                               ms%tracers(it)%hTr, uflux, &
                                               this%h_face_left_x%data, this%h_face_right_x%data, &
-                                              budget_adv=ms%salt_budget_horiz_adv, budget_w=budget_w)
+                                              budget_adv=ms%salt_budget_horiz_adv, budget_w=budget_w, h3=this%tracer_h3)
          case default
             call tracer_advect_zonal_one_impl(grid%nx_total, grid%ny_total, ms%nz_ml, &
                                               dt, metrics%iareaT, metrics%wet_T, ms%h_layer, &
                                               ms%tracers(it)%hTr, uflux, &
-                                              this%h_face_left_x%data, this%h_face_right_x%data)
+                                              this%h_face_left_x%data, this%h_face_right_x%data, h3=this%tracer_h3)
          end select
       end do
    end subroutine gm_tracer_advect_x
@@ -3121,18 +3131,18 @@ contains
                                                    dt, metrics%iareaT, metrics%wet_T, ms%h_layer, &
                                                    ms%tracers(it)%hTr, vflux, &
                                                    this%h_face_left_y%data, this%h_face_right_y%data, &
-                                                   budget_adv=ms%heat_budget_horiz_adv, budget_w=budget_w)
+                                                   budget_adv=ms%heat_budget_horiz_adv, budget_w=budget_w, h3=this%tracer_h3)
          case (TRACER_BUDGET_SALT)
             call tracer_advect_meridional_one_impl(grid%nx_total, grid%ny_total, ms%nz_ml, &
                                                    dt, metrics%iareaT, metrics%wet_T, ms%h_layer, &
                                                    ms%tracers(it)%hTr, vflux, &
                                                    this%h_face_left_y%data, this%h_face_right_y%data, &
-                                                   budget_adv=ms%salt_budget_horiz_adv, budget_w=budget_w)
+                                                   budget_adv=ms%salt_budget_horiz_adv, budget_w=budget_w, h3=this%tracer_h3)
          case default
             call tracer_advect_meridional_one_impl(grid%nx_total, grid%ny_total, ms%nz_ml, &
                                                    dt, metrics%iareaT, metrics%wet_T, ms%h_layer, &
                                                    ms%tracers(it)%hTr, vflux, &
-                                                   this%h_face_left_y%data, this%h_face_right_y%data)
+                                                   this%h_face_left_y%data, this%h_face_right_y%data, h3=this%tracer_h3)
          end select
       end do
    end subroutine gm_tracer_advect_y
@@ -3339,7 +3349,7 @@ contains
    pure subroutine tracer_advect_zonal_one_impl(nx, ny, nz, dt, iareaT, wet_T, h, hTr, &
                                                 mass_flux_x, &
                                                 Tr_face_left_x, Tr_face_right_x, &
-                                                budget_adv, budget_w)
+                                                budget_adv, budget_w, h3)
       !! Zonal half of `tracer_advect_one_impl`.  Same three-pass
       !! pattern (PPM reconstruction → upwind pick into tracer mass
       !! flux → forward-Euler update) but only the x-direction half.
@@ -3374,53 +3384,93 @@ contains
          !! bit-identical).  A caller writing OUTSIDE an RK2 stage (the GM
          !! operator, after the stage average) passes the reciprocal of the
          !! console's per-step weight, `1/ocean_budget_stage_weight`.
+      logical, intent(in), optional :: h3
+         !! `.true.` selects the `ppm_h3` flux (see `ppm_h3_face_flux`).
+         !! Absent or `.false.` ⇒ the PPM path below, textually unchanged.
 
       integer :: i, j, k
+      logical :: use_h3
       real(wp) :: Tr_m2, Tr_m1, Tr_0, Tr_p1, Tr_p2
       real(wp) :: dh_m1, dh_0, dh_p1, Tr_left, Tr_right
-      real(wp) :: mass_x, Tr_face, dt_b
+      real(wp) :: mass_x, Tr_face, dt_b, hc, wm
+      integer :: ic
 
-      do concurrent(k=1:nz, j=1:ny, i=3:nx - 2) &
-         local(Tr_m2, Tr_m1, Tr_0, Tr_p1, Tr_p2, &
-               dh_m1, dh_0, dh_p1, Tr_left, Tr_right)
-         Tr_0 = hTr(i, j, k)/h(i, j, k)
-         Tr_m1 = ppm_mirror_h(hTr(i - 1, j, k)/h(i - 1, j, k), Tr_0, wet_T(i - 1, j))
-         Tr_p1 = ppm_mirror_h(hTr(i + 1, j, k)/h(i + 1, j, k), Tr_0, wet_T(i + 1, j))
-         Tr_m2 = ppm_mirror_h(hTr(i - 2, j, k)/h(i - 2, j, k), Tr_m1, wet_T(i - 2, j))
-         Tr_p2 = ppm_mirror_h(hTr(i + 2, j, k)/h(i + 2, j, k), Tr_p1, wet_T(i + 2, j))
-         call ppm_limited_slope(Tr_m2, Tr_m1, Tr_0, dh_m1)
-         call ppm_limited_slope(Tr_m1, Tr_0, Tr_p1, dh_0)
-         call ppm_limited_slope(Tr_0, Tr_p1, Tr_p2, dh_p1)
-         dh_0 = dh_0*wet_T(i - 1, j)*wet_T(i, j)*wet_T(i + 1, j)
-         Tr_left = 0.5_wp*(Tr_m1 + Tr_0) - (dh_0 - dh_m1)/6.0_wp
-         Tr_right = 0.5_wp*(Tr_0 + Tr_p1) - (dh_p1 - dh_0)/6.0_wp
-         call ppm_cell_limiter(Tr_0, Tr_left, Tr_right)
-         Tr_face_right_x(i, j, k) = Tr_left
-         Tr_face_left_x(i + 1, j, k) = Tr_right
-      end do
-      do concurrent(k=1:nz, j=1:ny)
-         Tr_face_left_x(1, j, k) = hTr(1, j, k)/h(1, j, k)
-         Tr_face_right_x(1, j, k) = hTr(1, j, k)/h(1, j, k)
-         Tr_face_left_x(2, j, k) = hTr(1, j, k)/h(1, j, k)
-         Tr_face_right_x(2, j, k) = hTr(2, j, k)/h(2, j, k)
-         Tr_face_left_x(3, j, k) = hTr(2, j, k)/h(2, j, k)
-         Tr_face_right_x(3, j, k) = hTr(2, j, k)/h(2, j, k)
-         Tr_face_right_x(nx - 1, j, k) = hTr(nx - 1, j, k)/h(nx - 1, j, k)
-         Tr_face_left_x(nx, j, k) = hTr(nx - 1, j, k)/h(nx - 1, j, k)
-         Tr_face_right_x(nx, j, k) = hTr(nx, j, k)/h(nx, j, k)
-         Tr_face_left_x(nx + 1, j, k) = hTr(nx, j, k)/h(nx, j, k)
-         Tr_face_right_x(nx + 1, j, k) = hTr(nx, j, k)/h(nx, j, k)
-      end do
+      use_h3 = .false.
+      if (present(h3)) use_h3 = h3
 
-      do concurrent(k=1:nz, j=1:ny, i=1:nx + 1) local(mass_x, Tr_face)
-         mass_x = mass_flux_x(i, j, k)
-         if (mass_x >= 0.0_wp) then
-            Tr_face = Tr_face_left_x(i, j, k)
-         else
-            Tr_face = Tr_face_right_x(i, j, k)
-         end if
-         Tr_face_left_x(i, j, k) = mass_x*Tr_face
-      end do
+      if (use_h3) then
+         ! ppm_h3: Huynh 3rd-order edges, CW84 limiter, swept-volume flux.
+         ! Interior faces need cells i-2..i+1; the two faces next to each
+         ! wall fall back to the first-order upwind cell value.
+         do concurrent(k=1:nz, j=1:ny, i=3:nx - 1) &
+            local(Tr_m1, Tr_0, Tr_p1, mass_x, hc, wm, ic)
+            mass_x = mass_flux_x(i, j, k)
+            if (mass_x >= 0.0_wp) then
+               ic = i - 1
+            else
+               ic = i
+            end if
+            hc = h(ic, j, k)
+            Tr_0 = hTr(ic, j, k)/hc  ! vanished-ok: same hTr/h as ppm path
+            Tr_m1 = ppm_mirror_h(hTr(ic - 1, j, k)/h(ic - 1, j, k), Tr_0, wet_T(ic - 1, j))  ! vanished-ok: same hTr/h as ppm path
+            Tr_p1 = ppm_mirror_h(hTr(ic + 1, j, k)/h(ic + 1, j, k), Tr_0, wet_T(ic + 1, j))  ! vanished-ok: same hTr/h as ppm path
+            wm = wet_T(ic - 1, j)*wet_T(ic, j)*wet_T(ic + 1, j)
+            Tr_face_left_x(i, j, k) = ppm_h3_face_flux(Tr_m1, Tr_0, Tr_p1, wm, &
+                                                       mass_x, abs(mass_x)*dt*iareaT(ic, j)/hc)
+         end do
+         do concurrent(k=1:nz, j=1:ny, i=1:nx + 1, i < 3 .or. i > nx - 1) local(mass_x, ic)
+            mass_x = mass_flux_x(i, j, k)
+            if (mass_x >= 0.0_wp) then
+               ic = i - 1
+            else
+               ic = i
+            end if
+            ic = max(1, min(nx, ic))
+            Tr_face_left_x(i, j, k) = mass_x*(hTr(ic, j, k)/h(ic, j, k))  ! vanished-ok: same hTr/h as ppm path
+         end do
+      else
+         do concurrent(k=1:nz, j=1:ny, i=3:nx - 2) &
+            local(Tr_m2, Tr_m1, Tr_0, Tr_p1, Tr_p2, &
+                  dh_m1, dh_0, dh_p1, Tr_left, Tr_right)
+            Tr_0 = hTr(i, j, k)/h(i, j, k)  ! vanished-ok: same hTr/h as ppm path
+            Tr_m1 = ppm_mirror_h(hTr(i - 1, j, k)/h(i - 1, j, k), Tr_0, wet_T(i - 1, j))  ! vanished-ok: same hTr/h as ppm path
+            Tr_p1 = ppm_mirror_h(hTr(i + 1, j, k)/h(i + 1, j, k), Tr_0, wet_T(i + 1, j))  ! vanished-ok: same hTr/h as ppm path
+            Tr_m2 = ppm_mirror_h(hTr(i - 2, j, k)/h(i - 2, j, k), Tr_m1, wet_T(i - 2, j))  ! vanished-ok: same hTr/h as ppm path
+            Tr_p2 = ppm_mirror_h(hTr(i + 2, j, k)/h(i + 2, j, k), Tr_p1, wet_T(i + 2, j))  ! vanished-ok: same hTr/h as ppm path
+            call ppm_limited_slope(Tr_m2, Tr_m1, Tr_0, dh_m1)
+            call ppm_limited_slope(Tr_m1, Tr_0, Tr_p1, dh_0)
+            call ppm_limited_slope(Tr_0, Tr_p1, Tr_p2, dh_p1)
+            dh_0 = dh_0*wet_T(i - 1, j)*wet_T(i, j)*wet_T(i + 1, j)
+            Tr_left = 0.5_wp*(Tr_m1 + Tr_0) - (dh_0 - dh_m1)/6.0_wp
+            Tr_right = 0.5_wp*(Tr_0 + Tr_p1) - (dh_p1 - dh_0)/6.0_wp
+            call ppm_cell_limiter(Tr_0, Tr_left, Tr_right)
+            Tr_face_right_x(i, j, k) = Tr_left
+            Tr_face_left_x(i + 1, j, k) = Tr_right
+         end do
+         do concurrent(k=1:nz, j=1:ny)
+            Tr_face_left_x(1, j, k) = hTr(1, j, k)/h(1, j, k)  ! vanished-ok: same hTr/h as ppm path
+            Tr_face_right_x(1, j, k) = hTr(1, j, k)/h(1, j, k)  ! vanished-ok: same hTr/h as ppm path
+            Tr_face_left_x(2, j, k) = hTr(1, j, k)/h(1, j, k)  ! vanished-ok: same hTr/h as ppm path
+            Tr_face_right_x(2, j, k) = hTr(2, j, k)/h(2, j, k)  ! vanished-ok: same hTr/h as ppm path
+            Tr_face_left_x(3, j, k) = hTr(2, j, k)/h(2, j, k)  ! vanished-ok: same hTr/h as ppm path
+            Tr_face_right_x(3, j, k) = hTr(2, j, k)/h(2, j, k)  ! vanished-ok: same hTr/h as ppm path
+            Tr_face_right_x(nx - 1, j, k) = hTr(nx - 1, j, k)/h(nx - 1, j, k)  ! vanished-ok: same hTr/h as ppm path
+            Tr_face_left_x(nx, j, k) = hTr(nx - 1, j, k)/h(nx - 1, j, k)  ! vanished-ok: same hTr/h as ppm path
+            Tr_face_right_x(nx, j, k) = hTr(nx, j, k)/h(nx, j, k)  ! vanished-ok: same hTr/h as ppm path
+            Tr_face_left_x(nx + 1, j, k) = hTr(nx, j, k)/h(nx, j, k)  ! vanished-ok: same hTr/h as ppm path
+            Tr_face_right_x(nx + 1, j, k) = hTr(nx, j, k)/h(nx, j, k)  ! vanished-ok: same hTr/h as ppm path
+         end do
+
+         do concurrent(k=1:nz, j=1:ny, i=1:nx + 1) local(mass_x, Tr_face)
+            mass_x = mass_flux_x(i, j, k)
+            if (mass_x >= 0.0_wp) then
+               Tr_face = Tr_face_left_x(i, j, k)
+            else
+               Tr_face = Tr_face_right_x(i, j, k)
+            end if
+            Tr_face_left_x(i, j, k) = mass_x*Tr_face
+         end do
+      end if
 
       do concurrent(k=1:nz, j=1:ny, i=1:nx)
          hTr(i, j, k) = hTr(i, j, k) - dt* &
@@ -3444,7 +3494,7 @@ contains
    pure subroutine tracer_advect_meridional_one_impl(nx, ny, nz, dt, iareaT, wet_T, h, hTr, &
                                                      mass_flux_y, &
                                                      Tr_face_left_y, Tr_face_right_y, &
-                                                     budget_adv, budget_w)
+                                                     budget_adv, budget_w, h3)
       !! Meridional half of `tracer_advect_one_impl`.  Same shape
       !! as the zonal impl, applied to y.  In the split flow, `h`
       !! here is the post-zonal-apply thickness so the Tr = hTr/h
@@ -3473,53 +3523,91 @@ contains
       real(wp), intent(in), optional :: budget_w
          !! Bookkeeping weight on the `budget_adv` increment; see the
          !! zonal impl.  Absent ⇒ 1, bit-identical.
+      logical, intent(in), optional :: h3
+         !! `.true.` selects the `ppm_h3` flux (see `ppm_h3_face_flux`).
+         !! Absent or `.false.` ⇒ the PPM path below, textually unchanged.
 
       integer :: i, j, k
+      logical :: use_h3
       real(wp) :: Tr_m2, Tr_m1, Tr_0, Tr_p1, Tr_p2
       real(wp) :: dh_m1, dh_0, dh_p1, Tr_left, Tr_right
-      real(wp) :: mass_y, Tr_face, dt_b
+      real(wp) :: mass_y, Tr_face, dt_b, hc, wm
+      integer :: jc
 
-      do concurrent(k=1:nz, j=3:ny - 2, i=1:nx) &
-         local(Tr_m2, Tr_m1, Tr_0, Tr_p1, Tr_p2, &
-               dh_m1, dh_0, dh_p1, Tr_left, Tr_right)
-         Tr_0 = hTr(i, j, k)/h(i, j, k)
-         Tr_m1 = ppm_mirror_h(hTr(i, j - 1, k)/h(i, j - 1, k), Tr_0, wet_T(i, j - 1))
-         Tr_p1 = ppm_mirror_h(hTr(i, j + 1, k)/h(i, j + 1, k), Tr_0, wet_T(i, j + 1))
-         Tr_m2 = ppm_mirror_h(hTr(i, j - 2, k)/h(i, j - 2, k), Tr_m1, wet_T(i, j - 2))
-         Tr_p2 = ppm_mirror_h(hTr(i, j + 2, k)/h(i, j + 2, k), Tr_p1, wet_T(i, j + 2))
-         call ppm_limited_slope(Tr_m2, Tr_m1, Tr_0, dh_m1)
-         call ppm_limited_slope(Tr_m1, Tr_0, Tr_p1, dh_0)
-         call ppm_limited_slope(Tr_0, Tr_p1, Tr_p2, dh_p1)
-         dh_0 = dh_0*wet_T(i, j - 1)*wet_T(i, j)*wet_T(i, j + 1)
-         Tr_left = 0.5_wp*(Tr_m1 + Tr_0) - (dh_0 - dh_m1)/6.0_wp
-         Tr_right = 0.5_wp*(Tr_0 + Tr_p1) - (dh_p1 - dh_0)/6.0_wp
-         call ppm_cell_limiter(Tr_0, Tr_left, Tr_right)
-         Tr_face_right_y(i, j, k) = Tr_left
-         Tr_face_left_y(i, j + 1, k) = Tr_right
-      end do
-      do concurrent(k=1:nz, i=1:nx)
-         Tr_face_left_y(i, 1, k) = hTr(i, 1, k)/h(i, 1, k)
-         Tr_face_right_y(i, 1, k) = hTr(i, 1, k)/h(i, 1, k)
-         Tr_face_left_y(i, 2, k) = hTr(i, 1, k)/h(i, 1, k)
-         Tr_face_right_y(i, 2, k) = hTr(i, 2, k)/h(i, 2, k)
-         Tr_face_left_y(i, 3, k) = hTr(i, 2, k)/h(i, 2, k)
-         Tr_face_right_y(i, 3, k) = hTr(i, 2, k)/h(i, 2, k)
-         Tr_face_right_y(i, ny - 1, k) = hTr(i, ny - 1, k)/h(i, ny - 1, k)
-         Tr_face_left_y(i, ny, k) = hTr(i, ny - 1, k)/h(i, ny - 1, k)
-         Tr_face_right_y(i, ny, k) = hTr(i, ny, k)/h(i, ny, k)
-         Tr_face_left_y(i, ny + 1, k) = hTr(i, ny, k)/h(i, ny, k)
-         Tr_face_right_y(i, ny + 1, k) = hTr(i, ny, k)/h(i, ny, k)
-      end do
+      use_h3 = .false.
+      if (present(h3)) use_h3 = h3
 
-      do concurrent(k=1:nz, j=1:ny + 1, i=1:nx) local(mass_y, Tr_face)
-         mass_y = mass_flux_y(i, j, k)
-         if (mass_y >= 0.0_wp) then
-            Tr_face = Tr_face_left_y(i, j, k)
-         else
-            Tr_face = Tr_face_right_y(i, j, k)
-         end if
-         Tr_face_left_y(i, j, k) = mass_y*Tr_face
-      end do
+      if (use_h3) then
+         ! ppm_h3: see the zonal impl.
+         do concurrent(k=1:nz, j=3:ny - 1, i=1:nx) &
+            local(Tr_m1, Tr_0, Tr_p1, mass_y, hc, wm, jc)
+            mass_y = mass_flux_y(i, j, k)
+            if (mass_y >= 0.0_wp) then
+               jc = j - 1
+            else
+               jc = j
+            end if
+            hc = h(i, jc, k)
+            Tr_0 = hTr(i, jc, k)/hc  ! vanished-ok: same hTr/h as ppm path
+            Tr_m1 = ppm_mirror_h(hTr(i, jc - 1, k)/h(i, jc - 1, k), Tr_0, wet_T(i, jc - 1))  ! vanished-ok: same hTr/h as ppm path
+            Tr_p1 = ppm_mirror_h(hTr(i, jc + 1, k)/h(i, jc + 1, k), Tr_0, wet_T(i, jc + 1))  ! vanished-ok: same hTr/h as ppm path
+            wm = wet_T(i, jc - 1)*wet_T(i, jc)*wet_T(i, jc + 1)
+            Tr_face_left_y(i, j, k) = ppm_h3_face_flux(Tr_m1, Tr_0, Tr_p1, wm, &
+                                                       mass_y, abs(mass_y)*dt*iareaT(i, jc)/hc)
+         end do
+         do concurrent(k=1:nz, j=1:ny + 1, i=1:nx, j < 3 .or. j > ny - 1) local(mass_y, jc)
+            mass_y = mass_flux_y(i, j, k)
+            if (mass_y >= 0.0_wp) then
+               jc = j - 1
+            else
+               jc = j
+            end if
+            jc = max(1, min(ny, jc))
+            Tr_face_left_y(i, j, k) = mass_y*(hTr(i, jc, k)/h(i, jc, k))  ! vanished-ok: same hTr/h as ppm path
+         end do
+      else
+         do concurrent(k=1:nz, j=3:ny - 2, i=1:nx) &
+            local(Tr_m2, Tr_m1, Tr_0, Tr_p1, Tr_p2, &
+                  dh_m1, dh_0, dh_p1, Tr_left, Tr_right)
+            Tr_0 = hTr(i, j, k)/h(i, j, k)  ! vanished-ok: same hTr/h as ppm path
+            Tr_m1 = ppm_mirror_h(hTr(i, j - 1, k)/h(i, j - 1, k), Tr_0, wet_T(i, j - 1))  ! vanished-ok: same hTr/h as ppm path
+            Tr_p1 = ppm_mirror_h(hTr(i, j + 1, k)/h(i, j + 1, k), Tr_0, wet_T(i, j + 1))  ! vanished-ok: same hTr/h as ppm path
+            Tr_m2 = ppm_mirror_h(hTr(i, j - 2, k)/h(i, j - 2, k), Tr_m1, wet_T(i, j - 2))  ! vanished-ok: same hTr/h as ppm path
+            Tr_p2 = ppm_mirror_h(hTr(i, j + 2, k)/h(i, j + 2, k), Tr_p1, wet_T(i, j + 2))  ! vanished-ok: same hTr/h as ppm path
+            call ppm_limited_slope(Tr_m2, Tr_m1, Tr_0, dh_m1)
+            call ppm_limited_slope(Tr_m1, Tr_0, Tr_p1, dh_0)
+            call ppm_limited_slope(Tr_0, Tr_p1, Tr_p2, dh_p1)
+            dh_0 = dh_0*wet_T(i, j - 1)*wet_T(i, j)*wet_T(i, j + 1)
+            Tr_left = 0.5_wp*(Tr_m1 + Tr_0) - (dh_0 - dh_m1)/6.0_wp
+            Tr_right = 0.5_wp*(Tr_0 + Tr_p1) - (dh_p1 - dh_0)/6.0_wp
+            call ppm_cell_limiter(Tr_0, Tr_left, Tr_right)
+            Tr_face_right_y(i, j, k) = Tr_left
+            Tr_face_left_y(i, j + 1, k) = Tr_right
+         end do
+         do concurrent(k=1:nz, i=1:nx)
+            Tr_face_left_y(i, 1, k) = hTr(i, 1, k)/h(i, 1, k)  ! vanished-ok: same hTr/h as ppm path
+            Tr_face_right_y(i, 1, k) = hTr(i, 1, k)/h(i, 1, k)  ! vanished-ok: same hTr/h as ppm path
+            Tr_face_left_y(i, 2, k) = hTr(i, 1, k)/h(i, 1, k)  ! vanished-ok: same hTr/h as ppm path
+            Tr_face_right_y(i, 2, k) = hTr(i, 2, k)/h(i, 2, k)  ! vanished-ok: same hTr/h as ppm path
+            Tr_face_left_y(i, 3, k) = hTr(i, 2, k)/h(i, 2, k)  ! vanished-ok: same hTr/h as ppm path
+            Tr_face_right_y(i, 3, k) = hTr(i, 2, k)/h(i, 2, k)  ! vanished-ok: same hTr/h as ppm path
+            Tr_face_right_y(i, ny - 1, k) = hTr(i, ny - 1, k)/h(i, ny - 1, k)  ! vanished-ok: same hTr/h as ppm path
+            Tr_face_left_y(i, ny, k) = hTr(i, ny - 1, k)/h(i, ny - 1, k)  ! vanished-ok: same hTr/h as ppm path
+            Tr_face_right_y(i, ny, k) = hTr(i, ny, k)/h(i, ny, k)  ! vanished-ok: same hTr/h as ppm path
+            Tr_face_left_y(i, ny + 1, k) = hTr(i, ny, k)/h(i, ny, k)  ! vanished-ok: same hTr/h as ppm path
+            Tr_face_right_y(i, ny + 1, k) = hTr(i, ny, k)/h(i, ny, k)  ! vanished-ok: same hTr/h as ppm path
+         end do
+
+         do concurrent(k=1:nz, j=1:ny + 1, i=1:nx) local(mass_y, Tr_face)
+            mass_y = mass_flux_y(i, j, k)
+            if (mass_y >= 0.0_wp) then
+               Tr_face = Tr_face_left_y(i, j, k)
+            else
+               Tr_face = Tr_face_right_y(i, j, k)
+            end if
+            Tr_face_left_y(i, j, k) = mass_y*Tr_face
+         end do
+      end if
 
       do concurrent(k=1:nz, j=1:ny, i=1:nx)
          hTr(i, j, k) = hTr(i, j, k) - dt* &
@@ -3752,6 +3840,63 @@ contains
       real(wp) :: h_out
       h_out = w_nbr*h_nbr + (1.0_wp - w_nbr)*h_loc
    end function ppm_mirror_h
+
+   pure elemental function ppm_h3_face_flux(Tm, Tc, Tp, w3, U, cfl) result(F)
+      !$acc routine seq
+      !! Tracer flux through the face of cell `c` that the flow leaves
+      !! (`U >= 0`: the right face; `U < 0`: the left face), `ppm_h3` scheme.
+      !! `Tm`, `Tc`, `Tp` are the tracer concentrations of the cell and its
+      !! left and right neighbours in the sweep direction (a width-3 stencil;
+      !! the width-2 variant is deliberately not offered).
+      !!
+      !!   1. Huynh (1997) 3rd-order edge values
+      !!      `aL = (5 Tc + 2 Tm - Tp)/6`, `aR = (5 Tc + 2 Tp - Tm)/6`, each
+      !!      bounded to the interval spanned by the two cells it separates.
+      !!   2. Colella & Woodward (1984, J. Comput. Phys. 54) monotonic
+      !!      limiter: piecewise-constant when `c` is a local extremum or
+      !!      `w3 = 0` (a land neighbour); otherwise the parabola is reset so
+      !!      it has no interior extremum.
+      !!   3. Swept-volume integral of the parabola over the Courant number
+      !!      `cfl = |U|*dt/(area*h_prev(c))` (CW84 eq. 1.12-1.13), times the rate `U`.
+      !!
+      !! The Courant number is capped at 1: a face cannot sweep more than the
+      !! donor cell holds, and beyond that the parabola would be extrapolated
+      !! (thin layers, where continuity leaves `|U| > h_prev*area`).  At the
+      !! cap the flux is `U` times the donor-cell mean.
+      !!
+      !! A linear profile reproduces its exact edge values and is never
+      !! limited, so the scheme is exact for it at `cfl -> 0`.
+      real(wp), intent(in) :: Tm, Tc, Tp
+      real(wp), intent(in) :: w3   !! product of the three cell wet masks
+      real(wp), intent(in) :: U    !! volume transport RATE (m^3/s), the same units as the face mass flux
+      real(wp), intent(in) :: cfl  !! |U| / h_prev(upwind cell) / area, >= 0
+      real(wp) :: F
+      real(wp) :: aL, aR, dA, mA, a6, c
+      c = min(cfl, 1.0_wp)
+      aL = (5.0_wp*Tc + 2.0_wp*Tm - Tp)/6.0_wp
+      aL = max(min(Tc, Tm), min(aL, max(Tc, Tm)))
+      aR = (5.0_wp*Tc + 2.0_wp*Tp - Tm)/6.0_wp
+      aR = max(min(Tc, Tp), min(aR, max(Tc, Tp)))
+      if ((Tp - Tc)*(Tc - Tm) <= 0.0_wp .or. w3 < 0.5_wp) then
+         aL = Tc
+         aR = Tc
+      else
+         dA = aR - aL
+         mA = 0.5_wp*(aR + aL)
+         if (dA*(Tc - mA) > dA*dA/6.0_wp) then
+            aL = 3.0_wp*Tc - 2.0_wp*aR
+         else if (dA*(Tc - mA) < -dA*dA/6.0_wp) then
+            aR = 3.0_wp*Tc - 2.0_wp*aL
+         end if
+      end if
+      dA = aR - aL
+      a6 = 6.0_wp*Tc - 3.0_wp*(aR + aL)
+      if (U >= 0.0_wp) then
+         F = U*(aR - 0.5_wp*c*(dA - a6*(1.0_wp - 2.0_wp/3.0_wp*c)))
+      else
+         F = U*(aL + 0.5_wp*c*(dA + a6*(1.0_wp - 2.0_wp/3.0_wp*c)))
+      end if
+   end function ppm_h3_face_flux
 
    pure elemental function volcfl_face(h_edge, dh, curv3, cfl) result(h_face)
       !$acc routine seq

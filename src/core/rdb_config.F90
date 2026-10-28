@@ -1738,6 +1738,14 @@ module rdb_config
          !! its minimum floor; compared against |latitude| so both
          !! hemispheres clamp.  > 90 so inert for any real latitude out of
          !! the box.
+      character(len=8) :: tracer_advection_scheme = "ppm"
+         !! Horizontal tracer-advection edge scheme of the every-step
+         !! (`dt_tracer_advect_ratio = 1`) path: `"ppm"` (default, van Leer
+         !! slope edges, bit-identical) or `"ppm_h3"` (Huynh 1997 3rd-order
+         !! edges + Colella & Woodward 1984 limiter + swept-volume flux; OM3
+         !! `TRACER_ADVECTION_SCHEME = PPM:H3`).  Fail-loud with
+         !! `dt_tracer_advect_ratio > 1` (the windowed drain has its own
+         !! `tracer_recon`).
       character(len=8) :: tracer_recon = "ppm"
          !! Face-reconstruction scheme for the WINDOWED horizontal
          !! tracer-advection drain (`dt_tracer_advect_ratio > 1` path):
