@@ -3394,6 +3394,85 @@ class OceanRestore(Group):
         default=0.0,
     )
 
+    sss_file = Str(
+        'sss_file',
+        doc='File-based SSS restoring (OM3 SALT_RESTORE_FILE): NetCDF field(x,y,time) on the model grid; blank = scalar target',
+        units='',
+        required=False,
+        default='',
+        max_len=256,
+    )
+
+    sss_var = Str(
+        'sss_var',
+        doc='Variable name in sss_file (OM3 SALT_RESTORE_VARIABLE)',
+        units='',
+        required=False,
+        default='salt',
+        max_len=64,
+    )
+
+    sss_time_cyclic = Bool(
+        'sss_time_cyclic',
+        doc='sss_file is a climatology wrapped with sss_cycle_period',
+        units='',
+        required=False,
+        default=True,
+    )
+
+    sss_cycle_period = Real(
+        'sss_cycle_period',
+        doc='Climatology period for sss_time_cyclic',
+        units='s',
+        required=False,
+        default=31536000.0,
+        has_min=True,
+        vmin=0.0,
+    )
+
+    max_delta_sss = Real(
+        'max_delta_sss',
+        doc='Cap on |S_target - S| (OM3 MAX_DELTA_SRESTORE); 999 = no clamp',
+        units='g/kg',
+        required=False,
+        default=999.0,
+        has_min=True,
+        vmin=0.0,
+    )
+
+    sss_adjust_net_zero = Bool(
+        'sss_adjust_net_zero',
+        doc='Remove the global net restoring salt flux (OM3 ADJUST_NET_SRESTORE_TO_ZERO); needs sss_file',
+        units='',
+        required=False,
+        default=False,
+    )
+
+    sss_adjust_by_scaling = Bool(
+        'sss_adjust_by_scaling',
+        doc='Net removal by scaling the larger of the +/- area integrals (OM3 ADJUST_NET_SRESTORE_BY_SCALING); .false. = subtract the mean',
+        units='',
+        required=False,
+        default=False,
+    )
+
+    sss_as_sflux = Bool(
+        'sss_as_sflux',
+        doc='OM3 SRESTORE_AS_SFLUX; the only form here, so required .true. with sss_file',
+        units='',
+        required=False,
+        default=False,
+    )
+
+    sss_convention = Str(
+        'sss_convention',
+        doc='Convention of the file: model (as-is) | practical (SP, converted to SA under ts_convention=cons_abs)',
+        units='',
+        required=False,
+        default='model',
+        max_len=16,
+    )
+
 
 class OceanGeothermal(Group):
     """`&ocean_geothermal_nml` -- Geothermal bottom heat flux (bed-side analogue of the surface heat flux)."""
@@ -6803,4 +6882,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 62
-N_KNOBS = 747
+N_KNOBS = 756

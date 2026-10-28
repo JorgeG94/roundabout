@@ -205,6 +205,27 @@ module rdb_ocean_surface_flux
          !! 2D-field target is the documented A4-v2 follow-up.
       real(wp) :: restore_S_target = 0.0_wp
          !! Scalar target SSS (PSU).
+      logical :: has_restore_S_file = .false.
+         !! True when SSS restoring is FILE-based (`set_restore_file`).
+         !! Mutually exclusive with `has_restore_S` (the scalar content-
+         !! injection gate): the file path is driven by
+         !! `rdb_ocean_sss_restore::ocean_sss_restore_apply`, which owns
+         !! the clamp, the global net-zero adjustment and the deposit.
+      real(wp) :: sss_piston = 0.0_wp
+         !! File-restoring piston velocity (m/s).
+      real(wp) :: sss_max_delta = 999.0_wp
+         !! Cap on `|S_target - S|` (g/kg); 999 = no clamp.
+      integer :: sss_net_mode = 0
+         !! Global net-salt adjustment: 0 none, 1 subtract the wet-area
+         !! mean, 2 scale the larger-magnitude sign (OM3 default).
+      logical :: sss_convert_sp = .false.
+         !! `.true.` ⇒ the file holds Practical Salinity and the model S is
+         !! Absolute/Reference (`cons_abs`): convert per cell, `sr_from_sp`.
+      real(wp), allocatable :: sss_target(:, :)
+         !! File-restoring target salinity [model convention before the
+         !! optional SP conversion], blended each outer step by
+         !! `ocean_data_forcing_apply`.  Allocated only by
+         !! `set_restore_file`; device-mapped only then.
       real(wp), allocatable :: Q_heat(:, :)
          !! 2D net surface heat flux (W/m^2, positive downward),
          !! shape `(nx, ny)`.  Fill via `set_surface_flux_const` for
@@ -378,6 +399,7 @@ module rdb_ocean_surface_flux
       procedure, non_overridable :: set_surface_flux_const => ocean_surfflux_set_const
       procedure, non_overridable :: set_sw_penetration => ocean_surfflux_set_sw
       procedure, non_overridable :: set_restore => ocean_surfflux_set_restore
+      procedure, non_overridable :: set_restore_file => ocean_surfflux_set_restore_file
       procedure, non_overridable :: set_components => ocean_surfflux_set_components
       procedure, non_overridable :: set_p_surf_const => ocean_surfflux_set_p_surf_const
       procedure, non_overridable :: bytes => ocean_surface_flux_bytes
@@ -403,6 +425,7 @@ contains
       this%q_assembled = 0.0_wp
       if (allocated(this%Q_heat)) deallocate (this%Q_heat)
       if (allocated(this%Q_salt)) deallocate (this%Q_salt)
+      if (allocated(this%sss_target)) deallocate (this%sss_target)
       call ocean_surfflux_dealloc_components(this)
    end subroutine ocean_surfflux_destroy
 
@@ -453,6 +476,10 @@ contains
       type(ocean_surface_flux_t), intent(inout) :: this
       !$acc enter data copyin(this%Q_heat, this%Q_salt)
       !$acc update device(this%Q_heat, this%Q_salt)
+      if (allocated(this%sss_target)) then
+         !$acc enter data copyin(this%sss_target)
+         !$acc update device(this%sss_target)
+      end if
       if (this%use_components) then
          !$acc enter data copyin(this%q_sw, this%q_lw, this%q_lat, this%q_sens, &
          !$acc&                  this%heat_added, this%heat_cavity, this%evap, &
@@ -498,6 +525,9 @@ contains
          !$acc&                 this%heat_content_massin, this%heat_content_massout, &
          !$acc&                 this%salt_flux, this%salt_cavity, &
          !$acc&                 this%p_surf_atm, this%p_surf)
+      end if
+      if (allocated(this%sss_target)) then
+         !$acc exit data delete(this%sss_target)
       end if
       !$acc exit data delete(this%Q_heat, this%Q_salt)
    end subroutine ocean_surfflux_exit_data_impl
@@ -580,6 +610,30 @@ contains
       this%has_restore_T = (enable_T .and. this%restore_piston_T /= 0.0_wp)
       this%has_restore_S = (enable_S .and. this%restore_piston_S /= 0.0_wp)
    end subroutine ocean_surfflux_set_restore
+
+   subroutine ocean_surfflux_set_restore_file(this, grid, piston_s_day, max_delta, &
+                                              net_mode, convert_sp)
+      !! Switch the SSS restoring to the FILE-based salt-flux form: sets
+      !! the piston (m/day in, m/s stored), the clamp, the net-zero mode
+      !! and the SP-to-model conversion flag, allocates the target field,
+      !! and turns the scalar content-injection gate OFF
+      !! (`has_restore_S = .false.`) so the two never both act.  Call
+      !! AFTER `set_restore` and BEFORE `enter_data` (the target is
+      !! device-mapped there).  Host only.
+      class(ocean_surface_flux_t), intent(inout) :: this
+      type(hgrid_t), intent(in) :: grid
+      real(wp), intent(in) :: piston_s_day, max_delta
+      integer, intent(in) :: net_mode
+      logical, intent(in) :: convert_sp
+      this%sss_piston = piston_s_day/SECONDS_PER_DAY
+      this%sss_max_delta = max_delta
+      this%sss_net_mode = net_mode
+      this%sss_convert_sp = convert_sp
+      if (allocated(this%sss_target)) deallocate (this%sss_target)
+      allocate (this%sss_target(grid%nx_total, grid%ny_total), source=0.0_wp)
+      this%has_restore_S = .false.
+      this%has_restore_S_file = (this%sss_piston /= 0.0_wp)
+   end subroutine ocean_surfflux_set_restore_file
 
    subroutine ocean_surfflux_set_p_surf_const(this, p_surf_val)
       !! Seed the atmospheric surface-pressure INPUT component
@@ -1357,6 +1411,7 @@ contains
       integer(int64) :: nbytes
       nbytes = arr_bytes(this%Q_heat) &
                + arr_bytes(this%Q_salt) &
+               + arr_bytes(this%sss_target) &
                + arr_bytes(this%q_sw) + arr_bytes(this%q_lw) &
                + arr_bytes(this%q_lat) + arr_bytes(this%q_sens) &
                + arr_bytes(this%heat_added) &

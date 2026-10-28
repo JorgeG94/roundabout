@@ -439,6 +439,7 @@ contains
       type(nml_group_t) :: g
       logical, pointer :: pl
       real(wp), pointer :: pr
+      character(len=:), pointer :: ps
 
       g%name = "ocean_restore"
       g%doc = "Surface buoyancy restoring (MOM6 RESTOREBUOY): "// &
@@ -463,6 +464,39 @@ contains
       pr => cfg%ocean%restore%restore_sss
       call g%add(nml_real("restore_sss", pr, &
                           "Scalar target SSS, in the model S convention (SP or SA)", units="PSU"))
+      ps => cfg%ocean%restore%sss_file
+      call g%add(nml_string("sss_file", ps, &
+                            "File-based SSS restoring (OM3 SALT_RESTORE_FILE): NetCDF "// &
+                            "field(x,y,time) on the model grid; blank = scalar target"))
+      ps => cfg%ocean%restore%sss_var
+      call g%add(nml_string("sss_var", ps, &
+                            "Variable name in sss_file (OM3 SALT_RESTORE_VARIABLE)"))
+      pl => cfg%ocean%restore%sss_time_cyclic
+      call g%add(nml_logical("sss_time_cyclic", pl, &
+                             "sss_file is a climatology wrapped with sss_cycle_period"))
+      pr => cfg%ocean%restore%sss_cycle_period
+      call g%add(nml_real("sss_cycle_period", pr, &
+                          "Climatology period for sss_time_cyclic", units="s", min=0.0_wp))
+      pr => cfg%ocean%restore%max_delta_sss
+      call g%add(nml_real("max_delta_sss", pr, &
+                          "Cap on |S_target - S| (OM3 MAX_DELTA_SRESTORE); 999 = no clamp", &
+                          units="g/kg", min=0.0_wp))
+      pl => cfg%ocean%restore%sss_adjust_net_zero
+      call g%add(nml_logical("sss_adjust_net_zero", pl, &
+                             "Remove the global net restoring salt flux "// &
+                             "(OM3 ADJUST_NET_SRESTORE_TO_ZERO); needs sss_file"))
+      pl => cfg%ocean%restore%sss_adjust_by_scaling
+      call g%add(nml_logical("sss_adjust_by_scaling", pl, &
+                             "Net removal by scaling the larger of the +/- area integrals "// &
+                             "(OM3 ADJUST_NET_SRESTORE_BY_SCALING); .false. = subtract the mean"))
+      pl => cfg%ocean%restore%sss_as_sflux
+      call g%add(nml_logical("sss_as_sflux", pl, &
+                             "OM3 SRESTORE_AS_SFLUX; the only form here, so required "// &
+                             ".true. with sss_file"))
+      ps => cfg%ocean%restore%sss_convention
+      call g%add(nml_string("sss_convention", ps, &
+                            "Convention of the file: model (as-is) | practical "// &
+                            "(SP, converted to SA under ts_convention=cons_abs)"))
       call schema%add_group(g)
    end subroutine register_ocean_restore
 

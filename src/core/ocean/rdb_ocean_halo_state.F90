@@ -37,6 +37,7 @@ module rdb_ocean_halo_state
    public :: ocean_seam_refresh_surface_stress
    public :: ocean_halo_exchange_ice_state
    public :: ocean_halo_exchange_ice_fluxes
+   public :: ocean_halo_exchange_centre_field
    public :: ocean_halo_exchange_ice_transport
 
 contains
@@ -301,6 +302,31 @@ contains
                                           size(ice%sw_thru_diag, 2), 1, device_resident)
       end if
    end subroutine ocean_halo_exchange_ice_fluxes
+
+   subroutine ocean_halo_exchange_centre_field(fld, grid, bc, device_resident)
+      !! Seam ghosts of ONE cell-centred 2-D forcing field a file reader
+      !! filled on physical cells only: a two-pass centre exchange (MPI,
+      !! or the periodic wrap on a single rank) plus the tripolar north
+      !! fold.  Used for the SSS-restoring target, whose deposit kernel
+      !! runs over the full array so a stale ghost would make the seam
+      !! tile disagree with its neighbour (decomposition dependence).
+      !! Single-rank non-periodic: a no-op; requires `ocean_halo_init`.
+      real(wp), intent(inout) :: fld(:, :)
+         !! Cell-centred field `(nx_total, ny_total)`.
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_bc_state_t), intent(in) :: bc
+         !! Supplies `north_fold` + the grid metrics the fold kernels need.
+      logical, intent(in), optional :: device_resident
+         !! Forwarded to the halo primitives.
+
+      call oh_count_suppress_on()
+      call ocean_halo_centre(fld, device_resident)
+      call oh_count_suppress_off()
+      if (bc%north_fold) then
+         call ocean_fold_wrap_centre_flat(grid, bc, fld, size(fld, 1), size(fld, 2), 1, &
+                                          device_resident)
+      end if
+   end subroutine ocean_halo_exchange_centre_field
 
    subroutine ocean_halo_exchange_ice_transport(ice, grid, bc, device_resident)
       !! X4 of the sea-ice MPI plan: the seam ghosts every advective

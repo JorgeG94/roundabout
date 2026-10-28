@@ -244,6 +244,7 @@ set(RDB_TESTS
     "test_ocean_sw_penetration|test_ocean_sw_penetration|collect_ocean_sw_penetration_tests|ocean_sw_penetration|ocean"
     "test_ocean_sw_bl_coupling|test_ocean_sw_bl_coupling|collect_ocean_sw_bl_coupling_tests|ocean_sw_bl_coupling|ocean"
     "test_ocean_restore|test_ocean_restore|collect_ocean_restore_tests|ocean_restore|ocean"
+    "test_ocean_sss_restore|test_ocean_sss_restore|collect_ocean_sss_restore_tests|ocean_sss_restore|ocean"
     "test_ocean_geothermal|test_ocean_geothermal|collect_ocean_geothermal_tests|ocean_geothermal|ocean"
     "test_ocean_kpp_convective|test_ocean_kpp_convective|collect_ocean_kpp_convective_tests|ocean_kpp_convective|ocean"
     "test_ocean_kpp_nonlocal|test_ocean_kpp_nonlocal|collect_ocean_kpp_nonlocal_tests|ocean_kpp_nonlocal|ocean"
@@ -416,6 +417,7 @@ set(NETCDF_TESTS
     test_ocean_zinit
     test_ocean_data_input
     test_ocean_data_forcing
+    test_ocean_sss_restore
     test_ocean_atm_state
     test_ocean_driver_diag
     test_ocean_restart
@@ -441,6 +443,7 @@ set(NETCDF_REQUIRED_TESTS
     test_ocean_zinit
     test_ocean_data_input
     test_ocean_data_forcing
+    test_ocean_sss_restore
     test_ocean_atm_state
     test_ocean_bulk_forcing
     test_ocean_driver_diag

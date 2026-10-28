@@ -105,6 +105,7 @@ module rdb_ocean_dyn
                                      ocean_surface_flux_apply_tracers, &
                                      ocean_surface_flux_apply_sw_penetration, &
                                      ocean_surface_restore_apply_tracers
+   use rdb_ocean_sss_restore, only: ocean_sss_restore_apply
    use rdb_ocean_geothermal, only: ocean_geothermal_t, &
                                    ocean_geothermal_apply_tracers
    use rdb_ocean_cavity_flux, only: ocean_cavity_flux_t, ocean_cavity_mass_step
@@ -1375,6 +1376,13 @@ contains
                                                       active=therm_active)
          call ocean_surface_restore_apply_tracers(grid, sf, ms, therm_dt, &
                                                   active=therm_active)
+      end if
+      ! File-based SSS restoring (salt-flux form): host gate, default off.
+      ! Kept out of the `do concurrent` hosts - this wrapper has none.
+      if (present(sf)) then
+         if (sf%has_restore_S_file) then
+            call ocean_sss_restore_apply(grid, metrics, sf, ms, therm_dt, active=therm_active)
+         end if
       end if
    end subroutine apply_sw_and_restore
 

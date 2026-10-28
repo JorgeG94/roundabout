@@ -502,6 +502,46 @@ module rdb_config
          !! salinity under `ts_convention = "pot_prac"`, Absolute Salinity
          !! under `"cons_abs"` (OM3 restores toward a file variable that is
          !! already Absolute Salinity).  Never converted.
+      character(len=256) :: sss_file = ""
+         !! File-based SSS restoring (OM3 `SALT_RESTORE_FILE`): NetCDF
+         !! `field(x, y, time)` on the model grid, in the convention named by
+         !! `sss_convention`.  Blank (default) keeps the scalar target
+         !! `restore_sss` and the content-injection path, bit-identical.
+         !! Requires `enable_restore_salt` and `piston_s > 0`.  The restoring
+         !! acts as a SALT FLUX `F = rho0 * w * dS` (`w = piston_s/86400`,
+         !! `dS` clamped to `max_delta_sss`) in the `Q_salt` unit
+         !! convention (S in g/kg times kg/m^2/s), deposited in the top layer
+         !! and mirrored into the salt budget contributor.
+      character(len=64) :: sss_var = "salt"
+         !! Variable name in `sss_file` (OM3 `SALT_RESTORE_VARIABLE`).
+      logical :: sss_time_cyclic = .true.
+         !! `.true.` ⇒ the file is a climatology wrapped with period
+         !! `sss_cycle_period` (reader `DATA_TIME_CYCLIC`); `.false.` ⇒
+         !! linear in time, out-of-range model time is fatal.
+      real(wp) :: sss_cycle_period = 31536000.0_wp
+         !! Climatology period (s) for `sss_time_cyclic` (default 365 days).
+      real(wp) :: max_delta_sss = 999.0_wp
+         !! Cap on `|S_target - S|` (OM3 `MAX_DELTA_SRESTORE`, g/kg).  The
+         !! default 999 is "no clamp".  Needs `sss_file`.
+      logical :: sss_adjust_net_zero = .false.
+         !! Remove the global net salt input (OM3
+         !! `ADJUST_NET_SRESTORE_TO_ZERO`).  Needs `sss_file`.
+      logical :: sss_adjust_by_scaling = .false.
+         !! With `sss_adjust_net_zero`: remove the net by SCALING the larger
+         !! of the positive / negative area integrals (OM3
+         !! `ADJUST_NET_SRESTORE_BY_SCALING`; zero contour unmoved).
+         !! `.false.` ⇒ subtract the area-mean flux over wet cells instead.
+      logical :: sss_as_sflux = .false.
+         !! OM3 `SRESTORE_AS_SFLUX`.  The only restoring form this model has
+         !! is the salt-flux form (no virtual-precipitation form), so with
+         !! `sss_file` this MUST be `.true.` (fail-loud otherwise); without a
+         !! file the scalar path is already a salt-flux form and either
+         !! value is accepted.
+      character(len=16) :: sss_convention = "model"
+         !! Salinity convention of the FILE: `"model"` (default; used as-is,
+         !! OM3's `asalt` under `cons_abs`) or `"practical"` (WOA-style SP,
+         !! converted per cell with `sr_from_sp` under `cons_abs`; a no-op
+         !! under `pot_prac`).
    end type ocean_restore_config_t
 
    type :: ocean_geothermal_config_t

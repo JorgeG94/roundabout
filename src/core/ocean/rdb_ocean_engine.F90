@@ -111,6 +111,7 @@ module rdb_ocean_engine
                                        OBC_TRIPOLAR_FOLD, OBC_CHAPMAN
    use rdb_ocean_metrics, only: metrics_assemble_from_supergrid_arrays, metrics_finalize, &
                                 metrics_fold_periodic_ghosts
+   use rdb_eos, only: parse_ts_convention, TS_CONS_ABS
    use rdb_ocean_dyn, only: ocean_dyn_step, ocean_dyn_step_split, ocean_porous_refresh, &
                             ocean_dyn_enable_bt_wide, isopycnal_vanish_tol
    use rdb_ocean_surface_flux, only: ocean_surface_flux_assemble
@@ -146,7 +147,8 @@ module rdb_ocean_engine
 #ifndef RDB_NO_NETCDF
    use rdb_ocean_diag_netcdf, only: open_stream, close_stream
    use rdb_ocean_data_input, only: ocean_data_input_update_all
-   use rdb_ocean_data_forcing, only: ocean_data_forcing_configure, ocean_data_forcing_apply
+   use rdb_ocean_data_forcing, only: ocean_data_forcing_configure, ocean_data_forcing_apply, &
+                                     ocean_data_forcing_register_sss
    use rdb_atm_state, only: atm_state_configure, atm_state_update
    use rdb_ocean_bulk_forcing, only: bulk_forcing_configure, bulk_forcing_apply
    use rdb_io_netcdf, only: output_rank_filename, ensure_directory_exists
@@ -310,8 +312,8 @@ contains
          !! stream is not opened and its directory is not created.
          !! Default `.false.`.
 
-      integer :: rank, csize, mrank
-      logical :: no_output
+      integer :: rank, csize, mrank, sss_net_mode
+      logical :: no_output, sss_conv_sp
       character(len=512) :: restart_filename
       real(wp) :: t_restart_local
       integer :: step_restart_local
@@ -716,6 +718,29 @@ contains
          cfg%ocean%restore%enable_restore_salt, &
          cfg%ocean%restore%piston_t, cfg%ocean%restore%piston_s, &
          cfg%ocean%restore%restore_sst, cfg%ocean%restore%restore_sss)
+      if (len_trim(cfg%ocean%restore%sss_file) > 0 .and. &
+          cfg%ocean%restore%enable_restore_salt) then
+         ! File-based SSS restoring: replaces the scalar content-injection
+         ! gate (`has_restore_S` -> .false.).  The target is registered with
+         ! the reader below, after `ocean_data_forcing_configure`.
+         if (cfg%ocean%restore%sss_adjust_net_zero) then
+            sss_net_mode = merge(2, 1, cfg%ocean%restore%sss_adjust_by_scaling)
+         else
+            sss_net_mode = 0
+         end if
+         sss_conv_sp = (trim(cfg%ocean%restore%sss_convention) == "practical" .and. &
+                        parse_ts_convention(cfg%ocean%eos%ts_convention) == TS_CONS_ABS)
+         call engine%state%surface_flux%set_restore_file( &
+            engine%grid, cfg%ocean%restore%piston_s, cfg%ocean%restore%max_delta_sss, &
+            sss_net_mode, sss_conv_sp)
+         if (rank == 0) then
+            call logger%info("Restore SSS file: piston = "// &
+                             to_string(cfg%ocean%restore%piston_s)//" m/day, max_delta = "// &
+                             to_string(cfg%ocean%restore%max_delta_sss)//" g/kg, net mode = "// &
+                             to_string(sss_net_mode)//", SP->SA = "// &
+                             merge("yes", "no ", sss_conv_sp))
+         end if
+      end if
       if (rank == 0 .and. engine%state%surface_flux%has_restore_T) then
          call logger%info("Restore SST:      piston = "// &
                           to_string(cfg%ocean%restore%piston_t)//" m/day, target = "// &
@@ -832,6 +857,10 @@ contains
       call ocean_data_forcing_configure(cfg%ocean%dataovr, engine%state%data_input, engine%grid, &
                                         engine%state%surface_stress, engine%state%surface_flux, &
                                         engine%state%bc, engine%state%data_forcing, ierr=ierr)
+      if (setup_failed(ierr)) return
+      call ocean_data_forcing_register_sss(cfg%ocean%restore, engine%state%data_input, &
+                                           engine%grid, engine%state%surface_flux, &
+                                           engine%state%data_forcing, ierr=ierr)
       if (setup_failed(ierr)) return
 
       ! JRA55-do-style prescribed atmospheric state (OM3 C2c-2a): registers

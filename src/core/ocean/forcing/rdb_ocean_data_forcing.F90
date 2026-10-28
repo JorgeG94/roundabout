@@ -66,14 +66,16 @@ module rdb_ocean_data_forcing
    !! step, so under components the file must feed a component instead.
    use rdb_constants, only: wp
    use rdb_grid, only: hgrid_t
-   use rdb_config, only: ocean_dataovr_config_t, dataovr_entry_config_t
+   use rdb_config, only: ocean_dataovr_config_t, dataovr_entry_config_t, &
+                         ocean_restore_config_t
    use rdb_ocean_data_input, only: ocean_data_input_t, &
                                    ocean_data_input_register_2d, &
                                    ocean_data_input_update_2d, &
                                    DATA_OOR_ERROR, DATA_OOR_CLAMP
    use rdb_ocean_surface_stress, only: ocean_surface_stress_t
    use rdb_ocean_boundary_types, only: ocean_bc_state_t
-   use rdb_ocean_halo_state, only: ocean_seam_refresh_surface_stress
+   use rdb_ocean_halo_state, only: ocean_seam_refresh_surface_stress, &
+                                   ocean_halo_exchange_centre_field
    use rdb_ocean_surface_flux, only: ocean_surface_flux_t
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_SETUP
    use rdb_error_ring, only: fail
@@ -84,6 +86,7 @@ module rdb_ocean_data_forcing
 
    public :: ocean_data_forcing_t
    public :: ocean_data_forcing_configure
+   public :: ocean_data_forcing_register_sss
    public :: ocean_data_forcing_apply
 
    type :: ocean_data_forcing_t
@@ -100,6 +103,11 @@ module rdb_ocean_data_forcing
       integer :: id_evap = 0
       integer :: id_lprec = 0
       integer :: id_salt = 0
+      integer :: id_sss = 0
+         !! File-based SSS restoring target (`&ocean_restore_nml sss_file`)
+         !! -> `surface_flux%sss_target`; 0 = scalar target.  Registered by
+         !! `ocean_data_forcing_register_sss`, independent of
+         !! `&ocean_dataovr_nml enable`.
       logical :: heat_to_component = .false.
          !! `.true.` => the heat tag blends into `heat_added` (components
          !! on); `.false.` => straight into `Q_heat`.  Resolved once at
@@ -229,6 +237,46 @@ contains
       end if
    end subroutine ocean_data_forcing_configure
 
+   subroutine ocean_data_forcing_register_sss(rcfg, reader, grid, sf, this, ierr)
+      !! Register the SSS-restoring target file (`&ocean_restore_nml
+      !! sss_file`) against the shared reader.  Independent of
+      !! `&ocean_dataovr_nml enable`; call AFTER `ocean_data_forcing_configure`
+      !! (which resets `this`) and after `surface_flux%set_restore_file`
+      !! (which allocates the target).  A blank `sss_file` is a no-op.
+      !! The reader fails loud on a missing file, variable or grid mismatch.
+      type(ocean_restore_config_t), intent(in) :: rcfg
+      type(ocean_data_input_t), intent(inout) :: reader
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_surface_flux_t), intent(in) :: sf
+      type(ocean_data_forcing_t), intent(inout) :: this
+      integer, intent(out), optional :: ierr
+
+      character(len=8) :: tmode
+
+      if (present(ierr)) ierr = OCEAN_STATUS_OK
+      if (len_trim(rcfg%sss_file) == 0) return
+      if (.not. allocated(sf%sss_target)) then
+         call fail("ocean_restore: sss_file is set but surface_flux%set_restore_file "// &
+                   "has not run (no target field)", ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+      tmode = "linear"
+      if (rcfg%sss_time_cyclic) tmode = "cyclic"
+      call ocean_data_input_register_2d(reader, trim(rcfg%sss_file), trim(rcfg%sss_var), &
+                                        grid, grid%nx_total, grid%ny_total, &
+                                        grid%nghost + 1, grid%nghost + 1, this%id_sss, &
+                                        time_mode=trim(tmode), &
+                                        cycle_period=rcfg%sss_cycle_period, &
+                                        oor=DATA_OOR_ERROR, ierr=ierr)
+      if (present(ierr)) then
+         if (ierr /= OCEAN_STATUS_OK) return
+      end if
+      this%active = .true.
+      call logger%info("ocean_restore: SSS target <- '"//trim(rcfg%sss_var)//"' in "// &
+                       trim(rcfg%sss_file)//" (mode "//trim(tmode)//", id "// &
+                       to_string(this%id_sss)//")")
+   end subroutine ocean_data_forcing_register_sss
+
    subroutine check_time_mode(cfg, ierr)
       !! Fail loud on a `cyclic` group with no period.  The reader makes
       !! the same check per field; catching it once here names the
@@ -355,6 +403,13 @@ contains
          ! kernels consume them, and `stress_mag` because KPP/EPBL would
          ! otherwise keep mixing on the configure-time wind.
          call ocean_seam_refresh_surface_stress(ss, grid, bc)
+      end if
+
+      ! --- SSS-restoring target: the deposit kernel runs over the full
+      ! array, so the seam ghosts are EXCHANGED (never extrapolated) ---
+      if (this%id_sss > 0) then
+         call ocean_data_input_update_2d(reader, this%id_sss, t, nx, ny, sf%sss_target)
+         call ocean_halo_exchange_centre_field(sf%sss_target, grid, bc)
       end if
 
       ! --- surface fluxes (column-local; no ghost fill by design) ---

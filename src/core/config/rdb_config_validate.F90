@@ -3006,6 +3006,65 @@ contains
             has_error = .true.
          end if
       end if
+      ! ---- &ocean_restore_nml: file-based SSS restoring ----
+      ! Every sss_* knob is inert without `sss_file`; a knob that would be
+      ! silently ignored is refused instead.
+      if (len_trim(cfg%ocean%restore%sss_file) > 0) then
+#ifdef RDB_NO_NETCDF
+         call logger%error("&ocean_restore_nml sss_file requires a NetCDF build "// &
+                           "(RDB_ENABLE_NETCDF=ON); the reader is compiled out here")
+         has_error = .true.
+#endif
+         if (.not. cfg%ocean%restore%enable_restore_salt) then
+            call logger%error("&ocean_restore_nml sss_file is set but "// &
+                              "enable_restore_salt = .false.")
+            has_error = .true.
+         end if
+         if (cfg%ocean%restore%piston_s <= 0.0_wp) then
+            call logger%error("&ocean_restore_nml sss_file needs piston_s > 0 "// &
+                              "(OM3 FLUXCONST, m/day)")
+            has_error = .true.
+         end if
+         if (len_trim(cfg%ocean%restore%sss_var) == 0) then
+            call logger%error("&ocean_restore_nml sss_file is set but sss_var is blank")
+            has_error = .true.
+         end if
+         if (.not. cfg%ocean%restore%sss_as_sflux) then
+            call logger%error("&ocean_restore_nml sss_file needs sss_as_sflux = .true.: "// &
+                              "the salt-flux form is the only file restoring form "// &
+                              "(there is no virtual-precipitation form)")
+            has_error = .true.
+         end if
+         if (cfg%ocean%restore%sss_time_cyclic .and. &
+             cfg%ocean%restore%sss_cycle_period <= 0.0_wp) then
+            call logger%error("&ocean_restore_nml sss_time_cyclic = .true. needs "// &
+                              "sss_cycle_period > 0")
+            has_error = .true.
+         end if
+         if (cfg%ocean%restore%sss_adjust_by_scaling .and. &
+             .not. cfg%ocean%restore%sss_adjust_net_zero) then
+            call logger%error("&ocean_restore_nml sss_adjust_by_scaling = .true. "// &
+                              "needs sss_adjust_net_zero = .true.")
+            has_error = .true.
+         end if
+         select case (trim(cfg%ocean%restore%sss_convention))
+         case ("model", "practical")
+         case default
+            call logger%error("&ocean_restore_nml sss_convention = '"// &
+                              trim(cfg%ocean%restore%sss_convention)// &
+                              "' is not recognised (allowed: model, practical)")
+            has_error = .true.
+         end select
+      else
+         if (cfg%ocean%restore%sss_adjust_net_zero .or. &
+             cfg%ocean%restore%sss_adjust_by_scaling .or. &
+             cfg%ocean%restore%max_delta_sss < 999.0_wp) then
+            call logger%error("&ocean_restore_nml max_delta_sss / sss_adjust_net_zero / "// &
+                              "sss_adjust_by_scaling act on the file restoring only; "// &
+                              "set sss_file (the scalar target path ignores them)")
+            has_error = .true.
+         end if
+      end if
       ! ---- Pseudo-salt: fail-loud exclusions ----
       ! Pseudo-salt's contract is "receives EXACTLY the operators salinity
       ! receives" (PR-28).  SSS piston restoring and sea-ice frazil/basal

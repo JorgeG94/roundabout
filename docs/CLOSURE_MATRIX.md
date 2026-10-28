@@ -454,7 +454,8 @@ column.
 | Flux component set | opt-in | `&ocean_forcing_nml enable_components` (`.false.`) | Per-component 2D fields (`q_sw`, `q_lw`, mass fluxes, `p_surf`, ...). `Q_heat` and `Q_salt` become derived views. | `test_ocean_surface_forcing_type` |
 | Bulk air-sea fluxes off a prescribed atmosphere (JRA55-do) | opt-in, ocean + sea ice | `&ocean_atm_forcing_nml enable` + `&ocean_bulk_flux_nml enable` (`.false.`, required together) | Large & Yeager (2004, 2009) column kernel over the `atm_state_t` nine-field provider: wind rotated onto the grid axes (`angle_dx`), relative wind against the live surface current, writes `q_sens`/`q_lat`/`evap`/`q_sw`/`q_lw`/`lprec`/`fprec`/`p_surf_atm` as components, open-water-weighted (`ice%part_size(:,:,0)`) when sea ice is enabled; stress averaged onto the C-grid faces and seam-refreshed. Sea-ice seam (`ice_atm_forcing_from_atm`, OM3 C2c-3b): a SEB linearisation at `T_s = 0 degC` with Large & Yeager's constant over-ice transfer coefficients (`C_D = C_H = C_E = 1.63e-3`, no Monin-Obukhov iteration) feeds `atm_sf0`/`atm_dsfdt`; `atm_sw_dn = rsds`, `atm_fprec = prsn`; dispatched instead of `ice_atm_forcing_restoring` whenever atm forcing is on. | `test_ocean_bulk_forcing`, `test_ocean_bulk_flux`, `test_ocean_atm_state`, `test_ocean_atm_state_mpi` |
 | Geothermal bottom heat | opt-in | `&ocean_geothermal_nml enable` (`.false.`), `q_geo` (`0.0` W/m²) | Heat into the lowest massive layer. | `test_ocean_geothermal` |
-| Surface buoyancy restoring | opt-in | `&ocean_restore_nml enable_restore_temp`, `enable_restore_salt` (`.false.`) | Piston-velocity relaxation of top-layer T and S. Non-conservative. | `test_ocean_restore` |
+| Surface buoyancy restoring | opt-in | `&ocean_restore_nml enable_restore_temp`, `enable_restore_salt` (`.false.`) | Piston-velocity relaxation of top-layer T and S toward scalar targets. Non-conservative. | `test_ocean_restore` |
+| File-based SSS restoring (OM3 `RESTORE_SALINITY`, `SALT_RESTORE_FILE`) | opt-in | `&ocean_restore_nml sss_file` (`""`), `sss_var`, `sss_time_cyclic` (`.true.`), `sss_cycle_period`, `max_delta_sss` (`999`), `sss_adjust_net_zero`, `sss_adjust_by_scaling` (`.false.`), `sss_as_sflux` (`.false.`, must be `.true.` with a file), `sss_convention` (`"model"`) | Salt-FLUX form (Griffies et al. 2009, CORE salinity restoring): `F = rho0 w dS` with `dS` clamped to `max_delta_sss`, in the `Q_salt` unit convention (g/kg x kg/m^2/s, i.e. 1e3 x the SI salt mass flux), deposited in the first live layer and mirrored into the salt budget contributor. `sss_adjust_net_zero` removes the global net: with `sss_adjust_by_scaling` the larger-magnitude side of `P = sum A max(F,0)` / `N = sum A min(F,0)` is scaled by `min(P,-N)/max(P,-N)` (zero contour unmoved), otherwise the wet-area mean is subtracted; the sums are EFP fixed point plus one packed allreduce, so they are decomposition independent. The target is blended off the shared reader (cyclic climatology or linear), seam-ghost exchanged, and under `cons_abs` with `sss_convention = "practical"` converted per cell with `sr_from_sp`. Replaces the scalar content-injection gate (no virtual-precipitation form exists; the salt-flux form is the only one). Cells with a non-finite target or a covered (cavity) column do not take part. Refused without `enable_restore_salt` and `piston_s > 0`, with `sss_as_sflux = .false.`, or when the clamp/net knobs are set without a file. | `test_ocean_sss_restore` |
 | Tidal body forcing | opt-in | `&ocean_tides_nml enable` (`.false.`) | Equilibrium tide in the barotropic PGF. Ten constituents. Needs a lat/lon grid. | `test_ocean_tides_astronomy`, `test_ocean_tidal_forcing` |
 | Barotropic linear wave drag | opt-in | `&ocean_bt_nml wave_drag` (`.false.`), `wave_drag_form` (`"uniform"`) | Static per-face piston velocity multiplied into `bt_rem`. Egbert & Ray 2001. | `test_ocean_wave_drag`, `test_ocean_bt_upstream_zfixed`, `test_ocean_bt_substep_drag` |
 | Surface-pressure loading (inverse barometer) | opt-in | `&ocean_psurf_nml enable` (`.false.`) | `η_ib = −p_surf/(ρ₀·g_bt)` on the barotropic `eta_forcing` seam. Split solver only; needs `enable_components`. | `test_ocean_p_surf`, `test_ocean_p_surf_bitident` |
@@ -740,6 +741,13 @@ non-conservative — increment mirrored into the surface heat/salt budget)
 | `piston_s` | `0.0` | SSS piston velocity (m/day, MOM6 `FLUXCONST_S`). |
 | `restore_sst` | `0.0` | Scalar target SST (degC), in the model T convention (θ, or CT under `cons_abs`); never converted. |
 | `restore_sss` | `0.0` | Scalar target SSS (PSU), in the model S convention (SP, or SA under `cons_abs`); never converted. |
+| `sss_file` | `""` | File-based SSS target (OM3 `SALT_RESTORE_FILE`); blank keeps the scalar target. See the file-based restoring row of the forcing table. |
+| `sss_var` | `"salt"` | Variable in `sss_file`. |
+| `sss_time_cyclic` / `sss_cycle_period` | `.true.` / `31536000` s | Climatology wrap (reader `DATA_TIME_CYCLIC`) and its period. |
+| `max_delta_sss` | `999` | Cap on `|S_target - S|` (g/kg); 999 = no clamp. |
+| `sss_adjust_net_zero` / `sss_adjust_by_scaling` | `.false.` / `.false.` | Remove the global net salt flux; by scaling, else by subtracting the wet-area mean. |
+| `sss_as_sflux` | `.false.` | Must be `.true.` with `sss_file` (salt-flux form is the only one). |
+| `sss_convention` | `"model"` | `"practical"`: the file is SP, converted to SA under `cons_abs`. |
 
 **Ocean** dials live in the per-concern `&ocean_<group>_nml` sub-namelists
 (`vmix`, `hvisc`, `bdrag`, `pgf`, `coriolis`, …) — see the working envelope in
@@ -800,6 +808,13 @@ looks the way it does. It is not needed to use the tables.
   bit-identical) gives the thickness diffusivity the EBT vertical structure
   of the wave-speed slot; the "Deferred: EBT" item in the GM history is
   closed.  Refused without GM or without `use_ebt`.
+- **2026-10-27** — File-based SSS restoring (OM3 `RESTORE_SALINITY`,
+  `SALT_RESTORE_FILE`, `MAX_DELTA_SRESTORE`, `ADJUST_NET_SRESTORE_*`,
+  `SRESTORE_AS_SFLUX`): `&ocean_restore_nml sss_file`, `sss_var`,
+  `sss_time_cyclic`, `sss_cycle_period`, `max_delta_sss`,
+  `sss_adjust_net_zero`, `sss_adjust_by_scaling`, `sss_as_sflux`,
+  `sss_convention`. Salt-flux form with a per-cell clamp and a global
+  zero-net adjustment (EFP sums); defaults off, bit-identical.
 - **2026-10-27** — Redi diffusive-CFL control: `&ocean_redi_nml
   check_diffusive_cfl` and `max_diffusive_cfl` (OM3 `CHECK_DIFFUSIVE_CFL` /
   `MAX_TR_DIFFUSION_CFL`). Local face cap, global-max subcycle count,

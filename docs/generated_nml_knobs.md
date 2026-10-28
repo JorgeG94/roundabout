@@ -622,6 +622,15 @@ Surface buoyancy restoring (MOM6 RESTOREBUOY): piston-velocity relaxation of top
 | `piston_s` | `0.0000000000E+00` | m/day | SSS piston velocity (MOM6 FLUXCONST_S) |
 | `restore_sst` | `0.0000000000E+00` | degC | Scalar target SST, in the model T convention (theta or CT) |
 | `restore_sss` | `0.0000000000E+00` | PSU | Scalar target SSS, in the model S convention (SP or SA) |
+| `sss_file` | `""` |  | File-based SSS restoring (OM3 SALT_RESTORE_FILE): NetCDF field(x,y,time) on the model grid; blank = scalar target |
+| `sss_var` | `"salt"` |  | Variable name in sss_file (OM3 SALT_RESTORE_VARIABLE) |
+| `sss_time_cyclic` | `.true.` |  | sss_file is a climatology wrapped with sss_cycle_period |
+| `sss_cycle_period` | `0.3153600000E+08` | s | Climatology period for sss_time_cyclic |
+| `max_delta_sss` | `0.9990000000E+03` | g/kg | Cap on |S_target - S| (OM3 MAX_DELTA_SRESTORE); 999 = no clamp |
+| `sss_adjust_net_zero` | `.false.` |  | Remove the global net restoring salt flux (OM3 ADJUST_NET_SRESTORE_TO_ZERO); needs sss_file |
+| `sss_adjust_by_scaling` | `.false.` |  | Net removal by scaling the larger of the +/- area integrals (OM3 ADJUST_NET_SRESTORE_BY_SCALING); .false. = subtract the mean |
+| `sss_as_sflux` | `.false.` |  | OM3 SRESTORE_AS_SFLUX; the only form here, so required .true. with sss_file |
+| `sss_convention` | `"model"` |  | Convention of the file: model (as-is) | practical (SP, converted to SA under ts_convention=cons_abs) |
 
 ### &ocean_geothermal_nml
 

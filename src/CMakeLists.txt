@@ -63,6 +63,7 @@ set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/vertical/rdb_ocean_top_drag.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/vertical/rdb_ocean_surface_stress.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/vertical/rdb_ocean_surface_flux.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/vertical/rdb_ocean_sss_restore.F90
     # C3 (OM3 forcing plan): Large & Yeager bulk air-sea flux column kernel + 2D
     # driver.  Standalone -- no dependency on the state types above, so it sits
     # wherever alphabetically convenient.

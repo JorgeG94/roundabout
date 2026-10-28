@@ -337,7 +337,7 @@ Other boundary facts:
 | Surface heat and salt flux (scalar) | Shipped | `&ocean_thermo_nml q_heat`, `q_salt` | Stamped into the top layer (`k = nz`). |
 | Surface-flux component set | Shipped, opt-in | `&ocean_forcing_nml enable_components` | Mass fluxes carry enthalpy and salt bookkeeping but do **not** change column mass. `salt_flux` stays virtual. |
 | Shortwave penetration | Shipped | `&ocean_thermo_nml sw_pen_frac`, `sw_source`, `sw_transmission` | Two-band transmission shared by the deposit and both boundary-layer schemes. `sw_source = "q_sw"` needs `enable_components`. Inert at `sw_pen_frac = 0`. |
-| Surface buoyancy restoring | Shipped, opt-in | `&ocean_restore_nml` | – |
+| Surface buoyancy restoring | Shipped, opt-in | `&ocean_restore_nml` | Scalar targets, and file-based SSS restoring (OM3 `RESTORE_SALINITY`): time-varying target on the model grid, salt-flux form `F = rho0 w dS`, per-cell clamp `max_delta_sss`, optional global net-zero by scaling or area-mean subtraction (EFP sums, decomposition independent). Temperature file restoring is not implemented (OM3 has it off). |
 | Time-varying NetCDF forcing | Shipped, opt-in | `&ocean_dataovr_nml enable` | Six tags: `tau_x`, `tau_y`, `heat`, `salt`, `evap`, `lprec`. Files must already be on the model grid. One time mode is shared by all tags. |
 | Atmospheric pressure loading (inverse barometer) | Shipped, opt-in | `&ocean_psurf_nml enable` | The version 1 fill is a uniform scalar, which is inert. Needs `enable_components` and the split solver. Excludes `bt_halo > 0`. |
 | `p_surf` in the in-situ EOS pressure | Shipped, opt-in | `&ocean_psurf_nml in_eos` | The ice-shelf seam. See [section 10](#10-ice-shelf-cavities). |
