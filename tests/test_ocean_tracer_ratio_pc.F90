@@ -61,7 +61,8 @@ contains
                   new_unittest("ratio4_vs_ratio1", test_ratio_vs_one), &
                   new_unittest("restart_at_window_boundary", test_restart), &
                   new_unittest("window_cadence_predicates", test_cadence), &
-                  new_unittest("window_length_exact", test_window_length) &
+                  new_unittest("window_length_exact", test_window_length), &
+                  new_unittest("ideal_age_surface_reset_cadence", test_age_reset) &
                   ]
    end subroutine collect_ocean_tracer_ratio_pc_tests
 
@@ -521,6 +522,72 @@ contains
       call engine_exit_data(e)
       call engine_teardown(e)
    end subroutine test_window_length
+
+   subroutine test_age_reset(error)
+      !! Ideal age: the surface Dirichlet reset sits on the THERMO step (with the
+      !! aging source and the column mixing), for every tracer-advect ratio.
+      !! Run one thermo interval (4 steps) at ratio 4 and ratio 1 on the same
+      !! stratified wind-driven basin.  After step 1 the surface layer is
+      !! exactly zero; after steps 2 and 3 (no column mixing, no reset) it
+      !! stays at the ratio-1 value to horizontal-advection accuracy.  Before
+      !! the fix ratio 4 reset at step 4, leaving the mixed-up subsurface age
+      !! in the surface layer for steps 1-3.
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_engine_t), target :: e4, e1
+      type(config_t) :: c4, c1
+      character(len=:), allocatable :: nml4, nml1
+      real(wp) :: t4, t1, s4, s1, ref
+      integer :: n
+      logical :: ok
+      nml4 = case_nml(4, .false.)//"&ocean_tracers_nml enable_ideal_age = .true. /"//new_line("a")
+      nml1 = case_nml(1, .false.)//"&ocean_tracers_nml enable_ideal_age = .true. /"//new_line("a")
+      call make_engine(e4, c4, nml4, ok)
+      call check(error, ok, "engine (ratio 4) setup failed")
+      if (allocated(error)) return
+      call make_engine(e1, c1, nml1, ok)
+      call check(error, ok, "engine (ratio 1) setup failed")
+      if (allocated(error)) return
+      t4 = 0.0_wp
+      t1 = 0.0_wp
+      do n = 1, 3
+         call advance(e4, c4, t4, 1, ok)
+         if (ok) call advance(e1, c1, t1, 1, ok)
+         call check(error, ok, "engine failed during the age run")
+         if (allocated(error)) exit
+         call surface_age(e4, s4, ref)
+         call surface_age(e1, s1, ref)
+         call check(error, ref > 0.0_wp, "no interior age: test would pass vacuously")
+         if (allocated(error)) exit
+         write (*, '(a,i0,a,es10.2,a,es10.2,a,es10.2)') "  age step ", n, ": surf ratio4=", s4, &
+            " ratio1=", s1, " interior=", ref
+         if (n == 1) call check(error, s4 == 0.0_wp, "ratio 4: surface age not reset on the thermo step")
+         if (.not. allocated(error)) &
+            call check(error, abs(s4 - s1) <= 1.0e-3_wp*ref, &
+                       "ratio 4 surface age departs from ratio 1 within the interval")
+         if (allocated(error)) exit
+      end do
+      call engine_exit_data(e4)
+      call engine_teardown(e4)
+      call engine_exit_data(e1)
+      call engine_teardown(e1)
+   end subroutine test_age_reset
+
+   subroutine surface_age(engine, smax, imax)
+      !! max |age content| in the surface layer and in the layers below, interior cells.
+      type(ocean_engine_t), intent(inout), target :: engine
+      real(wp), intent(out) :: smax, imax
+      real(wp), allocatable :: a(:, :, :)
+      integer :: ng, nz, ia
+      ia = engine%state%multilayer%idx_age
+      associate (ha => engine%state%multilayer%tracers(ia)%hTr)
+         !$acc update self(ha)
+      end associate
+      a = engine%state%multilayer%tracers(ia)%hTr
+      ng = engine%grid%nghost
+      nz = size(a, 3)
+      smax = maxval(abs(a(ng + 1:size(a, 1) - ng, ng + 1:size(a, 2) - ng, nz)))
+      imax = maxval(abs(a(ng + 1:size(a, 1) - ng, ng + 1:size(a, 2) - ng, 1:nz - 1)))
+   end subroutine surface_age
 
    subroutine delete_file(fname)
       character(len=*), intent(in) :: fname

@@ -597,8 +597,8 @@ contains
    end function ocean_dyn_is_tracer_advect_step
 
    pure function ocean_dyn_is_remap_step(this) result(yes)
-      !! `.true.` when the end-of-step ALE remap (and the ideal-age surface
-      !! reset that follows it) fires.  Without windowed tracer advection
+      !! `.true.` when the end-of-step ALE remap fires.  (The ideal-age surface
+      !! reset stays on `is_thermo_step`.)  Without windowed tracer advection
       !! this is `is_thermo_step()` exactly (bit-identical).  With
       !! `dt_tracer_advect_ratio > 1` it fires at the END of the thermo
       !! interval, on steps `N, 2N, ...`, right after the drain that closes
@@ -3590,7 +3590,15 @@ contains
       ! after the ALE remap, before the ghost-SSH refill (SSH-only, doesn't
       ! touch tracers). Thermo-cadence gated to compose with the remap;
       ! self-gates internally on `ms%idx_age <= 0`.
-      if (dyn%is_remap_step()) then
+      !
+      ! The reset stays on the THERMO step (interval START, with the aging
+      ! source and the vertical mixing that carries subsurface age up),
+      ! NOT on the remap step: with `dt_tracer_advect_ratio > 1` the remap
+      ! closes the interval, and resetting there would leave the surface
+      ! layer un-reset for the whole interval (the column mixing runs
+      ! once, at the thermo step), aging the surface by the mixed-up
+      ! subsurface water that the ratio-1 run resets away immediately.
+      if (dyn%is_thermo_step()) then
          t_now = 0.0_wp
          if (present(t)) t_now = t
          call ocean_ideal_age_reset_surface(grid, ms, &
