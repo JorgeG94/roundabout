@@ -5030,7 +5030,7 @@ class OceanVmix(Group):
 
     bkgnd_prandtl = Real(
         'bkgnd_prandtl',
-        doc='Background Prandtl number: kv floor = prandtl*Kd_bg + kv_bg; <=0 off',
+        doc='Background Prandtl number: kv floor = prandtl*Kd_bg + kv_bg; -1 (exact) off, 0 refused',
         units='',
         required=False,
         default=-1.0,

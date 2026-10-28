@@ -52,6 +52,8 @@ module test_ocean_vmix_no_pp81
    use rdb_ocean_hdiff_tracer, only: ocean_hdiff_tracer_t
    use rdb_ocean_vdiff, only: ocean_vdiff_t
    use rdb_ocean_dyn, only: ocean_dyn_t, ocean_dyn_step
+   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_ocean_status, only: OCEAN_STATUS_OK
    implicit none
    private
 
@@ -76,7 +78,8 @@ contains
                   new_unittest("vmix_prandtl_ties_kv_to_kt", test_prandtl), &
                   new_unittest("vmix_none_kappa_shear", test_none_kappa_shear), &
                   new_unittest("vmix_none_seed_henyey", test_seed_henyey), &
-                  new_unittest("vmix_interior_closure_parse", test_parse_and_defaults) &
+                  new_unittest("vmix_interior_closure_parse", test_parse_and_defaults), &
+                  new_unittest("vmix_bkgnd_prandtl_legal_range", test_prandtl_range) &
                   ]
    end subroutine collect_ocean_vmix_no_pp81_tests
 
@@ -567,5 +570,32 @@ contains
          call check(error, vmix%bkgnd_prandtl <= 0.0_wp, "bkgnd_prandtl must default to off (<= 0)")
       end block checks
    end subroutine test_parse_and_defaults
+
+   function validate_prandtl(value) result(ierr)
+      character(len=*), intent(in) :: value
+      integer :: ierr
+      type(config_t) :: cfg
+      ierr = -999
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+         new_line('a')//"&ocean_vmix_nml bkgnd_prandtl = "//value//" /"//new_line('a'), &
+         cfg, ierr=ierr)
+      if (ierr /= OCEAN_STATUS_OK) return
+      call validate_config(cfg, ierr=ierr)
+   end function validate_prandtl
+
+   subroutine test_prandtl_range(error)
+      !! Only the exact sentinel -1 and values > 0 are legal; the old
+      !! "0 = zero momentum floor" spelling (and anything in (-1, 0]) is refused.
+      type(error_type), allocatable, intent(out) :: error
+      call check(error, validate_prandtl("-1.0") == OCEAN_STATUS_OK, "-1 (off) must validate")
+      if (allocated(error)) return
+      call check(error, validate_prandtl("2.0") == OCEAN_STATUS_OK, "a positive Prandtl must validate")
+      if (allocated(error)) return
+      call check(error, validate_prandtl("0.0") /= OCEAN_STATUS_OK, "0 must be refused")
+      if (allocated(error)) return
+      call check(error, validate_prandtl("-0.5") /= OCEAN_STATUS_OK, "-0.5 must be refused")
+   end subroutine test_prandtl_range
 
 end module test_ocean_vmix_no_pp81

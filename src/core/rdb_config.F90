@@ -176,6 +176,8 @@ module rdb_config
    integer, parameter :: MAX_SW_BANDS = 6
       !! Maximum number of penetrating-shortwave bands under
       !! `&ocean_thermo_nml sw_scheme = "manizza05"`.
+   real(wp), parameter :: CFL_BT_SAFETY_DEFAULT = 0.65_wp
+      !! Default `&ocean_bt_nml cfl_bt_safety`; `validate_config` compares against it.
    integer, parameter :: MAX_ICE_HLIM_VALS = 16
       !! Maximum number of `&ocean_ice_nml hlim` entries a user may STATE
       !! (PR-58). Caps how many edges may be listed, not `ncat` (unbounded
@@ -714,7 +716,7 @@ module rdb_config
          !! If `.true.`, derive `n_inner` at setup from the gravity-wave
          !! CFL, evaluated per WET cell (local depth with local cell size,
          !! MOM6 `set_dtbt`; land never limits it).  Default `.false.`.
-      real(wp) :: cfl_bt_safety = 0.65_wp
+      real(wp) :: cfl_bt_safety = CFL_BT_SAFETY_DEFAULT
          !! Safety fraction on the shallow-water CFL bound when
          !! `auto_n_inner = .true.` (typical 0.65-0.7).
       real(wp) :: dtbt = BT_DTBT_UNSET

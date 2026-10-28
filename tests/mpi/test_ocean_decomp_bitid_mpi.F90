@@ -70,6 +70,9 @@
 !!     no flux); with two coordinate twins on the same files:
 !!     `file_readers_zstar_full` and `file_readers_zstar` (MOM6 z* + closed
 !!     faces — the z_fixed staircase dilated per column every regrid);
+!!   * sss_restore - the island basin with FILE sea-surface-salinity restoring
+!!     (per-rank windowed two-record target, halo-exchanged, piston salt flux,
+!!     net-zero shift through the EFP allreduce); needs NetCDF;
 !!   * sea_ice — sea ice on the ocean's decomposition: Winton thermo +
 !!     ITD, EVP dynamics (CFL clip, `project_ci`) and the ice->ocean
 !!     stress blend in a cooled periodic channel, `dt_therm_ratio = 2`;
@@ -164,6 +167,7 @@ program test_ocean_decomp_bitid_mpi
    character(len=*), parameter :: SG_FILE = "bitid_supergrid.nc"
    character(len=*), parameter :: BATHY_FILE = "bitid_bathy.nc"
    character(len=*), parameter :: ZINIT_FILE = "bitid_zinit.nc"
+   character(len=*), parameter :: SSS_FILE = "bitid_sss.nc"
 
    type :: field_t
       !! One compared field: a host copy of the whole local array (2-D
@@ -188,7 +192,7 @@ program test_ocean_decomp_bitid_mpi
    integer :: rank, nprocs, n_fail, total_fail, ic
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(18) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(19) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -199,7 +203,7 @@ program test_ocean_decomp_bitid_mpi
                                                 "file_readers_zstar", "sea_ice", &
                                                 "sea_ice_transport", "tripolar", &
                                                 "visc_rem_chain", "sea_ice_fold", &
-                                                "sea_ice_fold_nodyn"]
+                                                "sea_ice_fold_nodyn", "sss_restore"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -216,6 +220,7 @@ program test_ocean_decomp_bitid_mpi
 #ifdef RDB_NO_NETCDF
       if (trim(CASES(ic)) == "file_readers" .or. &
           trim(CASES(ic)) == "file_readers_zstar_full" .or. &
+          trim(CASES(ic)) == "sss_restore" .or. &
           trim(CASES(ic)) == "file_readers_zstar") cycle
 #endif
       call run_case(trim(CASES(ic)), trim(SCHEMES(1)))
@@ -294,6 +299,24 @@ contains
                "&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, "// &
                "slope_scale = 0.15, wind_config = '2gyre', taux_magnitude = 0.1, "// &
                "coriolis_beta = 2.0e-11 /"//NL// &
+               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+      case ("sss_restore")
+         ! The island basin with FILE sea-surface-salinity restoring: the
+         ! per-rank windowed read of a two-record (t = 0 and 86400 s) target,
+         ! its halo exchange, the piston salt flux, and the net-zero
+         ! (global-mean shift) adjustment through the EFP allreduce.  The
+         ! target varies in both directions so a wrong window cannot match.
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, "// &
+               "slope_scale = 0.15, wind_config = '2gyre', taux_magnitude = 0.1, "// &
+               "coriolis_beta = 2.0e-11 /"//NL// &
+               "&ocean_restore_nml enable_restore_salt = .true., piston_s = 0.5, "// &
+               "sss_file = '"//SSS_FILE//"', sss_var = 'salt', sss_as_sflux = .true., "// &
+               "sss_adjust_net_zero = .true. /"//NL// &
                "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
       case ("visc_rem_chain")
          ! The island basin with the visc_rem chain live end to end: MOM6
@@ -1380,6 +1403,29 @@ contains
       ierr = nf90_put_var(ncid, v1, tt)
       ierr = nf90_put_var(ncid, v2, ss)
       call rdb_put_var_1d(ncid, v3, zs)
+      call nc_close(ncid)
+
+      ! SSS restoring target (x, y, time): two records spanning the run,
+      ! varying in both directions.
+      deallocate (tt)
+      allocate (tt(NX_G, NY_G, 2))
+      do j = 1, NY_G
+         do i = 1, NX_G
+            x = real(i, wp)/real(NX_G, wp)
+            y = real(j, wp)/real(NY_G, wp)
+            tt(i, j, 1) = 34.0_wp + 1.5_wp*y + 0.4_wp*sin(6.2831853_wp*x)
+            tt(i, j, 2) = tt(i, j, 1) + 0.3_wp*x - 0.2_wp*y
+         end do
+      end do
+      call nc_create_file(SSS_FILE, ncid)
+      call nc_def_dim(ncid, "x", NX_G, dx_)
+      call nc_def_dim(ncid, "y", NY_G, dy_)
+      call nc_def_dim(ncid, "time", 2, dz_)
+      call nc_def_var_3d(ncid, "salt", [dx_, dy_, dz_], v1)
+      call rdb_def_var_1d(ncid, "time", dz_, v2)
+      call nc_enddef(ncid)
+      ierr = nf90_put_var(ncid, v1, tt)
+      call rdb_put_var_1d(ncid, v2, [0.0_wp, 86400.0_wp])
       call nc_close(ncid)
    end subroutine write_input_files
 #endif

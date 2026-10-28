@@ -32,7 +32,7 @@ contains
          !! Non-zero on a missing/unreadable file or a dimension mismatch
          !! when present; absent behaves as today (`error stop`).
 
-      call load_2d_core(filename, "", "bathymetry", b, grid, ierr)
+      call load_2d_core(filename, "", "bathymetry", " m", b, grid, ierr)
    end subroutine load_bathymetry_into_array
 
    subroutine load_static_2d_field(filename, varname, b, grid, ierr)
@@ -67,10 +67,10 @@ contains
          end if
          error stop "load_static_2d_field: blank variable name"
       end if
-      call load_2d_core(filename, varname, trim(varname), b, grid, ierr)
+      call load_2d_core(filename, varname, trim(varname), "", b, grid, ierr)
    end subroutine load_static_2d_field
 
-   subroutine load_2d_core(filename, varname, label, b, grid, ierr)
+   subroutine load_2d_core(filename, varname, label, units, b, grid, ierr)
       !! Shared reader.  `varname` blank selects the bathymetry lookup
       !! (`b`, `elevation`, `depth`); `label` names the field in the log.
       !!
@@ -91,13 +91,15 @@ contains
       !! file), and keeps its own columns: every tile is bit-identical to
       !! its slice of the single-rank array, seam ghosts included.
       character(len=*), intent(in) :: filename, varname, label
+      character(len=*), intent(in) :: units
+         !! Unit suffix of the range log line (e.g. `" m"`); blank = none.
       real(wp), intent(inout) :: b(:, :)
       type(hgrid_t), intent(in) :: grid
       integer, intent(out), optional :: ierr
          !! Non-zero on a missing/unreadable file or a dimension mismatch
          !! when present; absent behaves as today (`error stop`).
 
-      integer :: ncid, varid
+      integer :: ncid, varid, file_nx, file_ny
       integer :: ng, i, j, ni, nj, jb0, jb1, nb, jo_b
       type(hgrid_t) :: gband
       real(wp), allocatable :: bband(:, :)
@@ -114,6 +116,12 @@ contains
       if (.not. bathy_io_ok(local_ierr, ierr)) return
 
       if (len_trim(varname) == 0) then
+         ! Bathymetry keeps its historical contract: the file must define
+         ! the logical `x` and `y` dimensions.
+         call nc_get_dim_len(ncid, "x", file_nx, ierr=local_ierr)
+         if (.not. bathy_io_ok(local_ierr, ierr, ncid)) return
+         call nc_get_dim_len(ncid, "y", file_ny, ierr=local_ierr)
+         if (.not. bathy_io_ok(local_ierr, ierr, ncid)) return
          ! Try variable names in order: b, elevation, depth
          call try_get_bathymetry_var(ncid, varid, ierr=local_ierr)
       else
@@ -147,7 +155,10 @@ contains
       ! In Fortran, dim1 is the first array index (varies fastest).
       ! If dim1 is "x" and matches nx, no transpose needed.
       ! If dim1 is "y" (C-order file reversed), we need to transpose.
-      needs_transpose = (trim(dim1_name) == "y" .or. trim(dim1_name) == "ny")
+      ! Bathymetry: first dimension "y" only (historical rule, unchanged).
+      ! Other static fields also accept "ny" (nx/ny-named files).
+      needs_transpose = (trim(dim1_name) == "y")
+      if (len_trim(varname) > 0) needs_transpose = needs_transpose .or. (trim(dim1_name) == "ny")
 
       ! The file describes the WHOLE grid.
       ni = grid%nx_global
@@ -238,10 +249,10 @@ contains
       call logger%info(label//" loaded: min = "// &
                        to_string(minval(b(ng + 1:ng + grid%nx_phys, &
                                           ng + 1:ng + grid%ny_phys)))// &
-                       " m, max = "// &
+                       units//", max = "// &
                        to_string(maxval(b(ng + 1:ng + grid%nx_phys, &
                                           ng + 1:ng + grid%ny_phys)))// &
-                       " m")
+                       units)
 
       if (present(ierr)) ierr = OCEAN_STATUS_OK
    end subroutine load_2d_core

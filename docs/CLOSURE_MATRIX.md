@@ -647,7 +647,7 @@ background rather than the type default.
 | Knob | Default | Meaning |
 |---|---|---|
 | `interior_closure` | `"pp81"` | `"pp81"` or `"none"` (no shear-driven interior closure; `"large94"`/`"cvmix"` are reserved and fail loud). `"none"` needs `use_closure`. |
-| `bkgnd_prandtl` | `-1` | Background Prandtl number; `> 0` makes the momentum floor `bkgnd_prandtl·kt_background + kv_bg` (`kv_bg` is `pp81_nu_bg`). Under `bkgnd_profile` the floor is `bkgnd_prandtl·kd_bg` and an unset value means 1. |
+| `bkgnd_prandtl` | `-1` | Background Prandtl number; `> 0` makes the momentum floor `bkgnd_prandtl·kt_background + kv_bg` (`kv_bg` is `pp81_nu_bg`). Under `bkgnd_profile` the floor is `bkgnd_prandtl·kd_bg` and an unset value means 1. Only `-1` (exact) and `> 0` are legal; `(-1, 0]` is refused at configure (it used to mean a zero momentum floor under Bryan-Lewis). |
 | `pp81_nu0` | `1e-2` | PP81 Richardson-dependent viscosity scale (m²/s). |
 | `pp81_nu_bg` | `1e-4` | PP81 background viscosity (m²/s); also seeds `vmix%kv_bg`. |
 | `pp81_kappa_bg` | `1e-5` | PP81 background diffusivity (m²/s); also seeds `vmix%kt_bg`/`ks_bg`. |

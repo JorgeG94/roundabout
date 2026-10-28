@@ -601,7 +601,7 @@ contains
                call logger%info("dtbt: dt_max = "//to_string(dt_max_glob)// &
                                 " s, dtbt = "//to_string(cfg%ocean%bt%dtbt)// &
                                 " (reset period "//to_string(cfg%ocean%bt%dtbt_reset_period)// &
-                                " s) → n_inner = "//to_string(n_inner_derived)// &
+                                " s) -> n_inner = "//to_string(n_inner_derived)// &
                                 " (was "//to_string(cfg%ocean%bt%n_inner)//")")
             end if
             cfg%ocean%bt%n_inner = n_inner_derived

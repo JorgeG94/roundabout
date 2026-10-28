@@ -232,7 +232,15 @@ program rdb_tests
    use test_ocean_diag_reduce, only: ocean_diag_reduce_collect => collect_ocean_diag_reduce_tests
    use test_ocean_porous, only: ocean_porous_collect => collect_ocean_porous_tests
    use test_ocean_diag_remap, only: ocean_diag_remap_collect => collect_ocean_diag_remap_tests
+   use test_ocean_gm_fgnv, only: ocean_gm_fgnv_collect => collect_ocean_gm_fgnv_tests
+   use test_ocean_hvisc_om3_floors, only: ocean_hvisc_om3_floors_collect => collect_ocean_hvisc_om3_floors_tests
+   use test_ocean_vmix_no_pp81, only: ocean_vmix_no_pp81_collect => collect_ocean_vmix_no_pp81_tests
+   use test_ocean_epbl_max_shear, only: ocean_epbl_max_shear_collect => collect_ocean_epbl_max_shear_tests
+   use test_ocean_gm_work, only: ocean_gm_work_collect => collect_ocean_gm_work_tests
 #ifndef RDB_NO_NETCDF
+   use test_ocean_sss_restore, only: ocean_sss_restore_collect => collect_ocean_sss_restore_tests
+   use test_ocean_sw_chl, only: ocean_sw_chl_collect => collect_ocean_sw_chl_tests
+   use test_static_2d_reader, only: static_2d_reader_collect => collect_static_2d_reader_tests
    use test_ocean_diag_netcdf, only: ocean_diag_netcdf_collect => collect_ocean_diag_netcdf_tests
    use test_ocean_restart, only: ocean_restart_collect => collect_ocean_restart_tests
 #endif
@@ -443,7 +451,15 @@ program rdb_tests
                 new_testsuite("ocean_diag_reduce", ocean_diag_reduce_collect), &
                 new_testsuite("ocean_porous", ocean_porous_collect), &
                 new_testsuite("ocean_diag_remap", ocean_diag_remap_collect), &
+                new_testsuite("ocean_gm_fgnv", ocean_gm_fgnv_collect), &
+                new_testsuite("ocean_hvisc_om3_floors", ocean_hvisc_om3_floors_collect), &
+                new_testsuite("ocean_vmix_no_pp81", ocean_vmix_no_pp81_collect), &
+                new_testsuite("ocean_epbl_max_shear", ocean_epbl_max_shear_collect), &
+                new_testsuite("ocean_gm_work", ocean_gm_work_collect), &
 #ifndef RDB_NO_NETCDF
+                new_testsuite("ocean_sss_restore", ocean_sss_restore_collect), &
+                new_testsuite("ocean_sw_chl", ocean_sw_chl_collect), &
+                new_testsuite("static_2d_reader", static_2d_reader_collect), &
                 new_testsuite("ocean_diag_netcdf", ocean_diag_netcdf_collect), &
                 new_testsuite("ocean_restart", ocean_restart_collect), &
 #endif

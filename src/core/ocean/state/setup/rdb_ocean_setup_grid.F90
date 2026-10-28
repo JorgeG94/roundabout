@@ -435,7 +435,7 @@ contains
                              "in the mom6 corrector (MOM6 uh/vh parity)")
          end if
          if (cfg%ocean%coriolis%bound_coriolis) then
-            call logger%info("Coriolis bound:   BOUND_CORIOLIS ON — "//trim(cfg%ocean%coriolis%form)// &
+            call logger%info("Coriolis bound:   BOUND_CORIOLIS ON - "//trim(cfg%ocean%coriolis%form)// &
                              " accel clamped to the (f+zeta)*v velocity-form range (MOM6)")
          end if
          if (trim(cfg%ocean%coriolis%corner_h) == "mom6_area") then

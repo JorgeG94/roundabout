@@ -359,7 +359,7 @@ contains
       real(wp), intent(in), optional, contiguous :: ebt_struct(:, :, :)
          !! `ocean_wave_speed_t%ebt_struct` `(nx,ny,nz)`; read only when
          !! `this%use_ebt_struct` (required then).
-      real(wp), intent(in), optional :: cg1(:, :)
+      real(wp), intent(in), optional, contiguous :: cg1(:, :)
          !! First-baroclinic wave speed (m/s, cell centres) from the wave-speed
          !! slot; read only when `this%use_fgnv` (required then).
 
@@ -790,31 +790,29 @@ contains
             cgf = 0.5_wp*(cg1(iw, j) + cg1(i, j))
             if (.not. ieee_is_finite(cgf)) cgf = 0.0_wp
             c2 = fgnv_filter_scale*cgf*cgf
-            if (c2 >= 0.0_wp) then
-               fg = .true.
-               do k = 1, ktop
-                  hh(k) = max(2.0_wp*h_layer(iw, j, k)*h_layer(i, j, k)/ &
-                              (h_layer(iw, j, k) + h_layer(i, j, k) + H_DIV_EPS), H_VANISHED)
-               end do
-               psiu(1) = 0.0_wp
-               psiu(ktop + 1) = 0.0_wp
-               n2k(1) = n2_floor
-               n2k(ktop + 1) = n2_floor
-               do k = 2, ktop
-                  slope = slope_x(i, j, k)
-                  if (.not. ieee_is_finite(slope)) slope = 0.0_wp
-                  if (use_struct) then
-                     khk = kh*(0.5_wp*(ebt_struct(iw, j, k) + ebt_struct(i, j, k)))
-                     psiu(k) = gm_block_below_bed(-(khk*dy_cu(i, j))*slope, &
-                                                  eL(k), eL(k - 1), eR(1), eR(k), eR(k - 1), eL(1))
-                  else
-                     psiu(k) = gm_block_below_bed(-(kh*dy_cu(i, j))*slope, &
-                                                  eL(k), eL(k - 1), eR(1), eR(k), eR(k - 1), eL(1))
-                  end if
-                  n2k(k) = gm_fgnv_n2(n2_u(i, j, k), n2_floor)
-               end do
-               call gm_fgnv_solve_column(ktop, c2, 1.0_wp + fgnv_filter_scale, hh, n2k, psiu, psis)
-            end if
+            fg = .true.
+            do k = 1, ktop
+               hh(k) = max(2.0_wp*h_layer(iw, j, k)*h_layer(i, j, k)/ &
+                           (h_layer(iw, j, k) + h_layer(i, j, k) + H_DIV_EPS), H_VANISHED)
+            end do
+            psiu(1) = 0.0_wp
+            psiu(ktop + 1) = 0.0_wp
+            n2k(1) = n2_floor
+            n2k(ktop + 1) = n2_floor
+            do k = 2, ktop
+               slope = slope_x(i, j, k)
+               if (.not. ieee_is_finite(slope)) slope = 0.0_wp
+               if (use_struct) then
+                  khk = kh*(0.5_wp*(ebt_struct(iw, j, k) + ebt_struct(i, j, k)))
+                  psiu(k) = gm_block_below_bed(-(khk*dy_cu(i, j))*slope, &
+                                               eL(k), eL(k - 1), eR(1), eR(k), eR(k - 1), eL(1))
+               else
+                  psiu(k) = gm_block_below_bed(-(kh*dy_cu(i, j))*slope, &
+                                               eL(k), eL(k - 1), eR(1), eR(k), eR(k - 1), eL(1))
+               end if
+               n2k(k) = gm_fgnv_n2(n2_u(i, j, k), n2_floor)
+            end do
+            call gm_fgnv_solve_column(ktop, c2, 1.0_wp + fgnv_filter_scale, hh, n2k, psiu, psis)
          end if
 
          ! Sweep interior interfaces bed-most (Kr=2) -> surface-most (Kr=nz).
@@ -958,31 +956,29 @@ contains
             cgf = 0.5_wp*(cg1(i, js) + cg1(i, j))
             if (.not. ieee_is_finite(cgf)) cgf = 0.0_wp
             c2 = fgnv_filter_scale*cgf*cgf
-            if (c2 >= 0.0_wp) then
-               fg = .true.
-               do k = 1, ktop
-                  hh(k) = max(2.0_wp*h_layer(i, js, k)*h_layer(i, j, k)/ &
-                              (h_layer(i, js, k) + h_layer(i, j, k) + H_DIV_EPS), H_VANISHED)
-               end do
-               psiu(1) = 0.0_wp
-               psiu(ktop + 1) = 0.0_wp
-               n2k(1) = n2_floor
-               n2k(ktop + 1) = n2_floor
-               do k = 2, ktop
-                  slope = slope_y(i, j, k)
-                  if (.not. ieee_is_finite(slope)) slope = 0.0_wp
-                  if (use_struct) then
-                     khk = kh*(0.5_wp*(ebt_struct(i, js, k) + ebt_struct(i, j, k)))
-                     psiu(k) = gm_block_below_bed(-(khk*dx_cv(i, j))*slope, &
-                                                  eS(k), eS(k - 1), eN(1), eN(k), eN(k - 1), eS(1))
-                  else
-                     psiu(k) = gm_block_below_bed(-(kh*dx_cv(i, j))*slope, &
-                                                  eS(k), eS(k - 1), eN(1), eN(k), eN(k - 1), eS(1))
-                  end if
-                  n2k(k) = gm_fgnv_n2(n2_v(i, j, k), n2_floor)
-               end do
-               call gm_fgnv_solve_column(ktop, c2, 1.0_wp + fgnv_filter_scale, hh, n2k, psiu, psis)
-            end if
+            fg = .true.
+            do k = 1, ktop
+               hh(k) = max(2.0_wp*h_layer(i, js, k)*h_layer(i, j, k)/ &
+                           (h_layer(i, js, k) + h_layer(i, j, k) + H_DIV_EPS), H_VANISHED)
+            end do
+            psiu(1) = 0.0_wp
+            psiu(ktop + 1) = 0.0_wp
+            n2k(1) = n2_floor
+            n2k(ktop + 1) = n2_floor
+            do k = 2, ktop
+               slope = slope_y(i, j, k)
+               if (.not. ieee_is_finite(slope)) slope = 0.0_wp
+               if (use_struct) then
+                  khk = kh*(0.5_wp*(ebt_struct(i, js, k) + ebt_struct(i, j, k)))
+                  psiu(k) = gm_block_below_bed(-(khk*dx_cv(i, j))*slope, &
+                                               eS(k), eS(k - 1), eN(1), eN(k), eN(k - 1), eS(1))
+               else
+                  psiu(k) = gm_block_below_bed(-(kh*dx_cv(i, j))*slope, &
+                                               eS(k), eS(k - 1), eN(1), eN(k), eN(k - 1), eS(1))
+               end if
+               n2k(k) = gm_fgnv_n2(n2_v(i, j, k), n2_floor)
+            end do
+            call gm_fgnv_solve_column(ktop, c2, 1.0_wp + fgnv_filter_scale, hh, n2k, psiu, psis)
          end if
 
          vhtot = 0.0_wp

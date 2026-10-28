@@ -58,7 +58,7 @@ module rdb_ocean_sss_restore
    use rdb_ocean_surface_flux, only: ocean_surface_flux_t
    use rdb_ocean_console_stats, only: efp_decompose_impl
    use rdb_efp, only: efp_t, EFP_DIGITS, efp_carry, efp_to_real
-   use rdb_halo, only: halo_allreduce_efp_list, halo_allreduce_max
+   use rdb_halo, only: halo_allreduce_efp_list
    use rdb_teos10_convert, only: sr_from_sp
    use pic_logger, only: logger => global_logger
    use pic_strings, only: to_string
@@ -307,7 +307,7 @@ contains
 
       integer :: nx, ny, nz, ng, idx_S
       logical :: use_cover
-      real(wp) :: coef, p, n, a_open, fpos, fneg, shift, fmax_loc, fmax
+      real(wp) :: coef, p, n, a_open, fpos, fneg, shift, fmax_loc
       type(efp_t) :: loc(3), glob(3)
 
       if (present(active)) then
@@ -348,7 +348,8 @@ contains
 
       n_calls = n_calls + 1
       if (n_calls == 1 .or. mod(n_calls, 500) == 0) then
-         ! Sparse progress line; the max is global, the line is rank-0 only.
+         ! Sparse progress line: rank-0 local max, no collective (a log
+         ! line must never be the only reason for one).
          if (use_cover) then
             fmax_loc = sss_flux_maxabs(nx, ny, nz, ng, ms%tracers(idx_S)%hTr, ms%h_layer, &
                                        sf%sss_target, ms%wet_mask, metrics%cover_frac, &
@@ -360,10 +361,9 @@ contains
                                        .false., ms%k_top, coef, sf%sss_max_delta, sf%h_min, &
                                        sf%sss_convert_sp)
          end if
-         call halo_allreduce_max(fmax_loc, fmax)
          if (grid%i_offset_global == 0 .and. grid%j_offset_global == 0) then
-            call logger%info("sss_restore: call "//to_string(n_calls)//"  max|F| = "// &
-                             to_string(fmax)//"  P = "//to_string(p)//"  N = "// &
+            call logger%info("sss_restore: call "//to_string(n_calls)//"  rank0 max|F| = "// &
+                             to_string(fmax_loc)//"  P = "//to_string(p)//"  N = "// &
                              to_string(n)//"  fpos = "//to_string(fpos)//"  fneg = "// &
                              to_string(fneg))
          end if

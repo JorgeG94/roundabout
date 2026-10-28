@@ -747,7 +747,7 @@ call g%add(nml_logical("use_closure", pl, "Master switch for the interior closur
       call g%add(nml_real("bkgnd_delta", pr, "Bryan-Lewis transition half-width", &
                           units="m", min=1.0e-6_wp))
       pr => cfg%ocean%vmix%bkgnd_prandtl
-      call g%add(nml_real("bkgnd_prandtl", pr, "Background Prandtl number: kv floor = prandtl*Kd_bg + kv_bg; <=0 off", &
+call g%add(nml_real("bkgnd_prandtl", pr, "Background Prandtl number: kv floor = prandtl*Kd_bg + kv_bg; -1 (exact) off, 0 refused", &
                           min=-1.0_wp))
       pl => cfg%ocean%vmix%bkgnd_henyey
       call g%add(nml_logical("bkgnd_henyey", pl, &

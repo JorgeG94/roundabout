@@ -97,6 +97,7 @@ contains
       integer, intent(in) :: net_mode
       real(wp), intent(in) :: max_delta
       logical, intent(in) :: conv
+      call comm_once()
       call grid%init(NXP, NYP, NG, 1.0_wp, 1.0_wp)
       call make_cartesian_metrics(metrics, grid)
       ms%nz_ml = NZ
@@ -381,14 +382,20 @@ contains
       call nc_close(ncid)
    end subroutine write_two_records
 
-   subroutine init_halo()
-      type(decomp_t) :: decomp
+   subroutine comm_once()
+      !! Comms must be up before any apply: the net-adjustment path does a
+      !! global EFP allreduce.
       logical, save :: comm_inited = .false.
       if (.not. comm_inited) then
          call comm_env_init()
          call comm_env_setup_roles(.false.)
          comm_inited = .true.
       end if
+   end subroutine comm_once
+
+   subroutine init_halo()
+      type(decomp_t) :: decomp
+      call comm_once()
       call decomp_init(decomp, NXP, NYP, 1, 1, 0)
       call ocean_halo_init(decomp, NG, .false., .false.)
    end subroutine init_halo

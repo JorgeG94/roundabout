@@ -253,6 +253,13 @@ contains
                call logger%error("&ocean_thermo_nml sw_scheme='manizza05' requires sw_chl_var")
                has_error = .true.
             end if
+            if (cfg%ocean%thermo%sw_nbands < 3 .or. &
+                cfg%ocean%thermo%sw_nbands > MAX_SW_BANDS) then
+               call logger%error("&ocean_thermo_nml sw_scheme='manizza05' needs sw_nbands "// &
+                                 "in 3.."//to_string(MAX_SW_BANDS)//", got "// &
+                                 to_string(cfg%ocean%thermo%sw_nbands))
+               has_error = .true.
+            end if
             if (cfg%ocean%thermo%sw_pen_frac /= 0.0_wp .and. &
                 cfg%ocean%thermo%sw_pen_frac /= 1.0_wp) then
                call logger%error("&ocean_thermo_nml sw_scheme='manizza05' band-absorbs the "// &
@@ -945,12 +952,12 @@ contains
          ! cartesian grid (same stance as `bkgnd_henyey`).
          if (cfg%ocean%hvisc%bound_coriolis_biharm .and. .not. cfg%ocean%hvisc%smag_ah) then
             call logger%error("&ocean_hvisc_nml bound_coriolis_biharm=.true. requires "// &
-                              "smag_ah=.true. — the Coriolis bound is a term of the "// &
+                              "smag_ah=.true. - the Coriolis bound is a term of the "// &
                               "Smagorinsky biharmonic and would be silently ignored")
             has_error = .true.
          end if
          if (cfg%ocean%hvisc%ah_vel_scale > 0.0_wp .and. .not. cfg%ocean%hvisc%smag_ah) then
-            call logger%error("&ocean_hvisc_nml ah_vel_scale > 0 requires smag_ah=.true. — "// &
+            call logger%error("&ocean_hvisc_nml ah_vel_scale > 0 requires smag_ah=.true. - "// &
                               "it is the background floor of the Smagorinsky biharmonic "// &
                               "and would be silently ignored")
             has_error = .true.
@@ -968,7 +975,7 @@ contains
          if (cfg%ocean%hvisc%kh_sin_lat > 0.0_wp .and. &
              trim(cfg%ocean%grid%grid_config) == "cartesian") then
             call logger%error("&ocean_hvisc_nml kh_sin_lat > 0 requires a non-cartesian "// &
-                              "grid_config — geolat is identically zero on cartesian, so "// &
+                              "grid_config - geolat is identically zero on cartesian, so "// &
                               "the |sin(lat)| floor would vanish everywhere")
             has_error = .true.
          end if
@@ -1573,6 +1580,16 @@ contains
                            "tripolar/supergrid) — geolatT is meaningless on cartesian, "// &
                            "so every column would take the equatorial L(0 deg)=0 and "// &
                            "the background would flatten to a uniform bkgnd_kd_min")
+         has_error = .true.
+      end if
+      ! `bkgnd_prandtl`: -1 (the exact sentinel) is off, > 0 is the ratio.  The
+      ! half-open range (-1, 0] used to mean "zero momentum floor under
+      ! Bryan-Lewis" and would now silently resolve to 1 -- refuse it.
+      if (cfg%ocean%vmix%bkgnd_prandtl /= -1.0_wp .and. &
+          cfg%ocean%vmix%bkgnd_prandtl <= 0.0_wp) then
+         call logger%error("&ocean_vmix_nml bkgnd_prandtl = "// &
+                           to_string(cfg%ocean%vmix%bkgnd_prandtl)// &
+                           " is not legal: use -1 (off) or a positive Prandtl number")
          has_error = .true.
       end if
       ! Bryan-Lewis and Henyey are MUTUALLY EXCLUSIVE background schemes,
@@ -3415,7 +3432,7 @@ contains
                               "mutually exclusive: dtbt replaces auto_n_inner/cfl_bt_safety")
             has_error = .true.
          end if
-         if (cfg%ocean%bt%cfl_bt_safety /= 0.65_wp) then
+         if (cfg%ocean%bt%cfl_bt_safety /= CFL_BT_SAFETY_DEFAULT) then
             call logger%error("&ocean_bt_nml dtbt and cfl_bt_safety are mutually "// &
                               "exclusive: dtbt replaces cfl_bt_safety (drop one)")
             has_error = .true.
