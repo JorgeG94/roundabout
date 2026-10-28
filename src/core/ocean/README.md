@@ -190,8 +190,9 @@ assignment after which the two agree.
    `rdb_vl_column_conc(nz, h_col, q_col, c_col)` (every layer's
    concentration, fillers read off their DONOR — never recovered from a
    near-zero divisor; the remap's read side uses it);
-   `rdb_vl_holds_live_conc(hTr, h, c_live)` (THE I1′ test, `1e-12`
-   relative); and `rdb_vl_merge_content(nz, h_col, q_col)` (the pool —
+   `rdb_vl_holds_live_conc(hTr, h, c_live, c_scale)` (THE I1′ test, `1e-12`
+   relative to the column's live concentration scale, so a pool mixing through
+   zero is not flagged for round-off); and `rdb_vl_merge_content(nz, h_col, q_col)` (the pool —
    establish I1′ on a column, column sum preserved). See that directory's
    README.
 2. **One enforcement point** —
