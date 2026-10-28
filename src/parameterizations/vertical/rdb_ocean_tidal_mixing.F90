@@ -91,6 +91,7 @@ module rdb_ocean_tidal_mixing
    public :: tidal_mixing_is_inert
    public :: tidal_mixing_fold_static_fields
    public :: polzin_stretched_scale
+   public :: column_layer_n2
 
    integer, parameter :: NZL = NZ_STACK_MAX
       !! Maximum number of layers a single column kernel can solve.
@@ -466,6 +467,45 @@ contains
                                       ms%tracers(ms%idx_salinity)%hTr)
    end subroutine tidal_mixing_compute
 
+   pure subroutine column_layer_n2(eos, rho0, nz, h_col, t_col, s_col, n2_col)
+      !! Layer-centred squared buoyancy frequency of ONE column, shared by
+      !! the internal-tide kernel and the law-of-the-wall BBL mixing
+      !! (`rdb_ocean_bbl_mixing`) so both read the identical stratification.
+      !! `n2_col(k)` is the buoyancy gradient between the centres of layer
+      !! `k` and the layer above (`k+1`, bottom-up), over their centre
+      !! spacing `0.5*(h(k)+h(k+1))`: it is the N^2 at the TOP interface of
+      !! layer `k` (interface `k+1`).  Pressure accumulates downward from
+      !! the surface for the EOS in-situ derivatives.  The surface layer
+      !! (`k = nz`) has no overlying layer, so `n2_col(nz) = 0`.  Clamped
+      !! `>= 0`.  `h_col` must already be floored at `H_VANISHED`.
+      !$acc routine seq
+      type(eos_t), intent(in) :: eos
+      real(wp), intent(in) :: rho0
+      integer, intent(in) :: nz
+      real(wp), intent(in) :: h_col(nz), t_col(nz), s_col(nz)
+      real(wp), intent(out) :: n2_col(nz)
+
+      integer :: k
+      real(wp) :: p_int, t_int, s_int, dsv_dt_k, dsv_ds_k, dbuoy_t, dbuoy_s, dz_eff
+
+      p_int = 0.0_wp
+      n2_col(nz) = 0.0_wp
+      do k = nz - 1, 1, -1
+         ! Walk pressure down from the surface to the k/k+1 interface.
+         p_int = p_int + GRAVITY*rho0*h_col(k + 1)
+         t_int = 0.5_wp*(t_col(k) + t_col(k + 1))
+         s_int = 0.5_wp*(s_col(k) + s_col(k + 1))
+         call eos_specvol_derivs(eos, t_int, s_int, p_int, dsv_dt_k, dsv_ds_k)
+         dbuoy_t = GRAVITY*rho0*dsv_dt_k
+         dbuoy_s = GRAVITY*rho0*dsv_ds_k
+         dz_eff = 0.5_wp*(h_col(k) + h_col(k + 1))
+         n2_col(k) = (dbuoy_t*(t_col(k + 1) - t_col(k)) + &
+                      dbuoy_s*(s_col(k + 1) - s_col(k)))/ &
+                     max(dz_eff, H_VANISHED)
+         if (n2_col(k) < 0.0_wp) n2_col(k) = 0.0_wp
+      end do
+   end subroutine column_layer_n2
+
    pure subroutine tidal_mixing_column_kernel(grid, this, ms, hT, hS)
       !! Per-column St-Laurent flux-bookkeeping sweep.  One
       !! `do concurrent (j, i)` over owned cells; each column is a serial
@@ -510,8 +550,6 @@ contains
       real(wp) :: dz_eff, denom, kd_lay
       real(wp) :: h_col(NZL), t_col(NZL), s_col(NZL)
       real(wp) :: n2_col(NZL), kd_lay_arr(NZL)
-      real(wp) :: dbuoy_t, dbuoy_s, p_int
-      real(wp) :: dsv_dt_k, dsv_ds_k, t_int, s_int
       real(wp) :: gamma_l, mu_l, zeta_l, kd_max_l, omega2_l, rho0_l, izeta
       real(wp) :: tke_used, tke_cap, h_amp, sum_db, sum_dz, zc_k, span_k, n2_b
       real(wp) :: u_col, nbar2, zp_st, i_p, zs_top, zs_max
@@ -536,7 +574,6 @@ contains
          local(k, kbed, e_col, h_tot, n_bot, tke_coef, h2c, e_cap, &
                inv_int, hz, tke_bot, tke_rem, z_top, frac_top, tke_lay, &
                dz_eff, denom, kd_lay, h_col, t_col, s_col, n2_col, kd_lay_arr, &
-               dbuoy_t, dbuoy_s, p_int, dsv_dt_k, dsv_ds_k, t_int, s_int, &
                tke_used, tke_cap, h_amp, sum_db, sum_dz, zc_k, span_k, n2_b, klast, &
                u_col, nbar2, zp_st, i_p, zs_top, zs_max, pz_col, mean_if, n2_lay, nb_int)
 
@@ -561,28 +598,8 @@ contains
             end do
 
             ! ---- Layer-centred N^2 (St-Laurent #4: N2_lay) ----
-            ! Buoyancy gradient between the centres of layer k and the
-            ! layer above (k+1, bottom-up), over their centre spacing
-            ! 0.5*(h(k)+h(k+1)).  Pressure accumulates downward from the
-            ! surface for the EOS in-situ derivatives.  Surface layer
-            ! (k=nz) has no overlying layer -> N2=0 there.
-            p_int = 0.0_wp
-            n2_col(nz) = 0.0_wp
-            do k = nz - 1, 1, -1
-               ! Walk pressure down from the surface to the k/k+1 interface.
-               p_int = p_int + GRAVITY*rho0_l*h_col(k + 1)
-               t_int = 0.5_wp*(t_col(k) + t_col(k + 1))
-               s_int = 0.5_wp*(s_col(k) + s_col(k + 1))
-               call eos_specvol_derivs(this%eos, t_int, s_int, p_int, &
-                                       dsv_dt_k, dsv_ds_k)
-               dbuoy_t = GRAVITY*rho0_l*dsv_dt_k
-               dbuoy_s = GRAVITY*rho0_l*dsv_ds_k
-               dz_eff = 0.5_wp*(h_col(k) + h_col(k + 1))
-               n2_col(k) = (dbuoy_t*(t_col(k + 1) - t_col(k)) + &
-                            dbuoy_s*(s_col(k + 1) - s_col(k)))/ &
-                           max(dz_eff, H_VANISHED)
-               if (n2_col(k) < 0.0_wp) n2_col(k) = 0.0_wp
-            end do
+            ! Shared producer (also read by the law-of-the-wall BBL mixing).
+            call column_layer_n2(this%eos, rho0_l, nz, h_col, t_col, s_col, n2_col)
 
             ! ---- Energy input E(x,y) ----
             ! v1: prescribed field.  v1.1 (`e_compute`): state-dependent

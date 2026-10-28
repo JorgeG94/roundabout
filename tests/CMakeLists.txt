@@ -195,6 +195,7 @@ set(RDB_TESTS
     "test_ocean_meke|test_ocean_meke|collect_ocean_meke_tests|ocean_meke|ocean"
     "test_ocean_meke_backscatter|test_ocean_meke_backscatter|collect_ocean_meke_backscatter_tests|ocean_meke_backscatter|ocean"
     "test_ocean_tidal_mixing|test_ocean_tidal_mixing|collect_ocean_tidal_mixing_tests|ocean_tidal_mixing|ocean"
+    "test_ocean_bbl_mixing|test_ocean_bbl_mixing|collect_ocean_bbl_mixing_tests|ocean_bbl_mixing|ocean"
     "test_static_2d_reader|test_static_2d_reader|collect_static_2d_reader_tests|static_2d_reader|ocean"
     "test_ocean_convection|test_ocean_convection|collect_ocean_convection_tests|ocean_convection|ocean"
     "test_ocean_double_diffusion|test_ocean_double_diffusion|collect_ocean_double_diffusion_tests|ocean_double_diffusion|ocean"

@@ -190,6 +190,37 @@ contains
       call schema%add_group(g)
    end subroutine register_tidal_mixing
 
+   module subroutine register_bbl_mixing(cfg, schema)
+      !! `&ocean_bbl_mixing` (law-of-the-wall BBL diapycnal mixing).
+      type(config_t), target, intent(in) :: cfg
+      type(nml_schema_t), intent(inout) :: schema
+      type(nml_group_t) :: g
+      logical, pointer :: pl
+      real(wp), pointer :: pr
+
+      g%name = "ocean_bbl_mixing"
+      g%doc = "Law-of-the-wall bottom-boundary-layer diapycnal mixing (tracer diffusivity)."
+
+      pl => cfg%ocean%bbl_mixing%enable
+      call g%add(nml_logical("enable", pl, &
+                             "Master switch (needs the per-face viscous BBL + thermodynamics)"))
+      pr => cfg%ocean%bbl_mixing%effic
+      call g%add(nml_real("effic", pr, "Fraction of the BBL mean-KE loss spent on mixing (BBL_EFFIC; OM3: 0.01)", &
+                          units="nondim"))
+      pr => cfg%ocean%bbl_mixing%max_decay
+      call g%add(nml_real("max_decay", pr, "Upper bound on the upward power decay length (BBL_MIXING_MAX_DECAY)", &
+                          units="m"))
+      pl => cfg%ocean%bbl_mixing%use_omega
+      call g%add(nml_logical("use_omega", pl, "Floor N^2 at Omega^2 in the energy bound (LOTW_BBL_USE_OMEGA)"))
+      pr => cfg%ocean%bbl_mixing%von_karman
+      call g%add(nml_real("von_karman", pr, "Von Karman constant (VON_KARMAN_BBL)"))
+      pr => cfg%ocean%bbl_mixing%kd_max
+      call g%add(nml_real("kd_max", pr, "Cap on the BBL diffusivity and unstratified fill value (KD_MAX)", &
+                          units="m^2/s"))
+
+      call schema%add_group(g)
+   end subroutine register_bbl_mixing
+
    module subroutine register_conv(cfg, schema)
       !! `&ocean_conv` (Brunt-Vaisala-triggered convective adjustment,
       !! CVMix_conv-style).

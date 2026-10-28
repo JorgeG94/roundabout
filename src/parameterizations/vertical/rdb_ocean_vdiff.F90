@@ -48,6 +48,7 @@ module rdb_ocean_vdiff
                              scratch_3d_buffer_exit_data_impl
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_mem_report, only: arr_bytes
+   use rdb_ocean_bbl_mixing, only: ocean_bbl_mixing_t
    use pic_logger, only: logger => global_logger
    implicit none
    private
@@ -262,6 +263,12 @@ module rdb_ocean_vdiff
          !! `vdiff_set_viscous_bbl`; `(1,1,1)` unless `bbl_per_face`.
       real(wp), allocatable :: bbl_conc_s(:, :, :)
          !! Cell salinity concentration, as `bbl_conc_t`.
+      type(ocean_bbl_mixing_t) :: bbl_mix
+         !! Law-of-the-wall BBL diapycnal mixing (`&ocean_bbl_mixing_nml`).
+         !! Lives here because it consumes the per-face BBL (`kv_bbl_*`,
+         !! `bbl_thick_*`, `bbl_cd`) this slot owns and rides every call
+         !! path that already carries `vd`.  Allocated by its configure
+         !! only when enabled (before `enter_data`).
       logical :: zlevel_faces = .false.
          !! `&vcoord_nml zfixed_closed_faces` — z-level partial steps.
          !! Latched by `configure_ocean_closed_faces`, forwarded as a
@@ -385,6 +392,7 @@ contains
       if (allocated(this%bbl_thick_v)) deallocate (this%bbl_thick_v)
       if (allocated(this%bbl_conc_t)) deallocate (this%bbl_conc_t)
       if (allocated(this%bbl_conc_s)) deallocate (this%bbl_conc_s)
+      call this%bbl_mix%destroy()
    end subroutine ocean_vdiff_destroy
 
    subroutine ocean_vdiff_enter_data(this)
@@ -412,6 +420,7 @@ contains
       call scratch_3d_buffer_enter_data_impl(this%kv_scalar_buf)
       !$acc enter data copyin(this%kv_bbl_u, this%kv_bbl_v, this%bbl_thick_u, this%bbl_thick_v)
       !$acc enter data copyin(this%bbl_conc_t, this%bbl_conc_s)
+      if (this%bbl_mix%enable) call this%bbl_mix%enter_data()
    end subroutine ocean_vdiff_enter_data_impl
 
    subroutine ocean_vdiff_exit_data(this)
@@ -438,6 +447,7 @@ contains
       call scratch_3d_buffer_exit_data_impl(this%rhs_v)
       call scratch_3d_buffer_exit_data_impl(this%kv_scalar_buf)
       !$acc exit data delete(this%kv_bbl_u, this%kv_bbl_v, this%bbl_thick_u, this%bbl_thick_v)
+      if (this%bbl_mix%enable) call this%bbl_mix%exit_data()
       !$acc exit data delete(this%bbl_conc_t, this%bbl_conc_s)
    end subroutine ocean_vdiff_exit_data_impl
 
@@ -2188,7 +2198,8 @@ contains
       !! unallocated).
       class(ocean_vdiff_t), intent(in) :: this
       integer(int64) :: nbytes
-      nbytes = this%a_diag_t%bytes() &
+      nbytes = this%bbl_mix%bytes() &
+               + this%a_diag_t%bytes() &
                + this%b_diag_t%bytes() &
                + this%c_diag_t%bytes() &
                + this%rhs_t%bytes() &

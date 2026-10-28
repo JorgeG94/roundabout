@@ -284,6 +284,18 @@ contains
          call configure_ocean_tidal_mixing(cfg, ocean_state, grid, compute_rank)
       end if
 
+      ! Law-of-the-wall BBL mixing — needs the per-face viscous BBL latched
+      ! by `configure_ocean_vmix` (already run).
+      if (present(ierr)) then
+         call configure_ocean_bbl_mixing(cfg, ocean_state, compute_rank, ierr=local_ierr)
+         if (local_ierr /= 0) then
+            ierr = local_ierr
+            return
+         end if
+      else
+         call configure_ocean_bbl_mixing(cfg, ocean_state, compute_rank)
+      end if
+
       ! Convective adjustment — Brunt-Vaisala-triggered INTERIOR closure
       ! CONTRIBUTOR (max() floor on kv/kt).  Coexists with KPP/EPBL (masks
       ! against whichever BL depth is live); no mutual exclusion.

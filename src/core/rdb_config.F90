@@ -72,7 +72,7 @@ module rdb_config
              ocean_kappa_shear_config_t, &
              ocean_gm_config_t, ocean_varmix_config_t, &
              ocean_meke_config_t, &
-             ocean_tidal_mixing_config_t, ocean_conv_config_t, ocean_tides_config_t, &
+             ocean_tidal_mixing_config_t, ocean_bbl_mixing_config_t, ocean_conv_config_t, ocean_tides_config_t, &
              ocean_porous_config_t, &
              ocean_psurf_config_t, &
              ocean_cavity_dyn_config_t, ocean_cavity_melt_config_t, &
@@ -2445,6 +2445,33 @@ module rdb_config
       real(wp) :: polzin_min_decay_scale = 0.0_wp
          !! POLZIN_MIN_DECAY_SCALE: floor on the unstretched scale (m).
    end type ocean_tidal_mixing_config_t
+   type :: ocean_bbl_mixing_config_t
+      !! Law-of-the-wall bottom-boundary-layer diapycnal mixing
+      !! (`&ocean_bbl_mixing_nml`).  The mean-KE the bottom stress removes
+      !! in the viscous BBL, `effic * P_bbl`, mixes the water above the bed
+      !! with a wall-law diffusivity `kappa u*^2 z (D-z)/(u* D + |f| z
+      !! (D-z))` bounded by an upward-decaying energy ledger; ADDED to the
+      !! tracer diffusivity only.  Needs the per-face viscous BBL
+      !! (`&ocean_vdiff_nml bbl_glue` + a bottom drag with `hbbl > 0`) and
+      !! thermodynamics.  Default off => bit-identical.  Knob table:
+      !! `docs/generated_nml_knobs.md`.
+      logical :: enable = .false.
+         !! Master switch.
+      real(wp) :: effic = 0.2_wp
+         !! Fraction of the BBL mean-KE loss spent on mixing
+         !! (BBL_EFFIC; OM3: 0.01).
+      real(wp) :: max_decay = 200.0_wp
+         !! Upper bound on the upward power decay length, m
+         !! (BBL_MIXING_MAX_DECAY).
+      logical :: use_omega = .true.
+         !! Floor `N^2` at `Omega^2` in the energy bound
+         !! (LOTW_BBL_USE_OMEGA).
+      real(wp) :: von_karman = 0.41_wp
+         !! Von Karman constant (VON_KARMAN_BBL).
+      real(wp) :: kd_max = 0.1_wp
+         !! Cap on the BBL diffusivity and unstratified fill value, m^2/s
+         !! (KD_MAX).
+   end type ocean_bbl_mixing_config_t
    type :: ocean_porous_config_t
       !! Porous barriers (`&ocean_porous_nml`): subgrid sill/strait
       !! blocking of the C-grid face widths via the Adcroft (2013)
@@ -3795,6 +3822,7 @@ module rdb_config
       type(ocean_varmix_config_t)     :: varmix
       type(ocean_meke_config_t)       :: meke
       type(ocean_tidal_mixing_config_t) :: tidal_mixing
+      type(ocean_bbl_mixing_config_t) :: bbl_mixing
       type(ocean_conv_config_t)       :: conv
       type(ocean_porous_config_t)     :: porous
       type(ocean_ddiff_config_t)      :: ddiff
@@ -4736,6 +4764,13 @@ module rdb_config
          type(config_t), target, intent(in) :: cfg
          type(nml_schema_t), intent(inout) :: schema
       end subroutine register_tidal_mixing
+
+      module subroutine register_bbl_mixing(cfg, schema)
+            !! See submodule [[rdb_config_register_vmix]].
+         implicit none
+         type(config_t), target, intent(in) :: cfg
+         type(nml_schema_t), intent(inout) :: schema
+      end subroutine register_bbl_mixing
 
       module subroutine register_conv(cfg, schema)
             !! See submodule [[rdb_config_register_vmix]].

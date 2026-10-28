@@ -755,6 +755,7 @@ contains
       this%epbl%enable = cfg%ocean%epbl%enable
       this%kshear%enable = cfg%ocean%kshear%enable
       this%vmix_tidal%enable = cfg%ocean%tidal_mixing%enable
+      this%vdiff%bbl_mix%enable = cfg%ocean%bbl_mixing%enable
       this%slopes%enable = cfg%ocean%slopes%enable
       this%gm%enable = cfg%ocean%gm%enable
       this%redi%enable = cfg%ocean%redi%enable
@@ -908,6 +909,7 @@ contains
          this%meke%cdrag = cfg%ocean%meke%cdrag
       end if
       this%vmix_tidal%enable = cfg%ocean%tidal_mixing%enable
+      this%vdiff%bbl_mix%enable = cfg%ocean%bbl_mixing%enable
       this%tides%enable = cfg%ocean%tides%enable
       this%p_surf%enable = cfg%ocean%psurf%enable
       this%p_surf%in_eos = cfg%ocean%psurf%in_eos

@@ -127,6 +127,7 @@ module rdb_ocean_setup
    public :: configure_ocean_drag
    public :: configure_ocean_hdiff
    public :: configure_ocean_vmix
+   public :: configure_ocean_bbl_mixing
    public :: configure_ocean_tracers
    public :: configure_ocean_lateral
    public :: configure_ocean_reference_density
@@ -339,6 +340,15 @@ module rdb_ocean_setup
          integer, intent(in) :: compute_rank
          integer, intent(out), optional :: ierr
       end subroutine configure_ocean_tidal_mixing
+
+      module subroutine configure_ocean_bbl_mixing(cfg, ocean_state, compute_rank, ierr)
+            !! See submodule [[rdb_ocean_setup_vmix]].
+         implicit none
+         type(config_t), intent(in) :: cfg
+         type(ocean_state_t), intent(inout) :: ocean_state
+         integer, intent(in) :: compute_rank
+         integer, intent(out), optional :: ierr
+      end subroutine configure_ocean_bbl_mixing
 
       module subroutine configure_ocean_conv(cfg, ocean_state, compute_rank, ierr)
             !! See submodule [[rdb_ocean_setup_vmix]].

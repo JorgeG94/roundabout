@@ -38,6 +38,7 @@ contains
       call register_varmix(cfg, schema)
       call register_meke(cfg, schema)
       call register_tidal_mixing(cfg, schema)
+      call register_bbl_mixing(cfg, schema)
       call register_conv(cfg, schema)
       call register_porous(cfg, schema)
       call register_ddiff(cfg, schema)

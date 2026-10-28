@@ -80,7 +80,7 @@ module rdb_ocean_diag_fills
       !! the device `_impl`.  Default `.false.` => below-bottom cells read 0
       !! (bit-identical to the legacy remap).
 
-   integer, parameter :: N_CANONICAL_DIAGS = 36
+   integer, parameter :: N_CANONICAL_DIAGS = 37
    real(wp), parameter :: CM_DAY_PER_M_S = 8.64e6_wp
       !! Unit conversion for the CICE thickness-rate diagnostics: m/s -> cm/day
       !! (86400 s/day x 100 cm/m). CICE writes every thickness-tendency field
@@ -88,7 +88,7 @@ module rdb_ocean_diag_fills
    character(len=16), parameter :: CANONICAL_DIAG_NAMES(N_CANONICAL_DIAGS) = &
                                    [character(len=16) :: &
                                     "SSH", "temperature", "salinity", "age", "u", "v", "KE", &
-                                    "MLD_EPBL", "Kd_EPBL", "Kd_KSHEAR", "Kd_TIDAL", &
+                                    "MLD_EPBL", "Kd_EPBL", "Kd_KSHEAR", "Kd_TIDAL", "Kd_BBL", &
                                     "ice_conc", "ice_thick", &
                                     "aice", "hi", "hs", "Tsfc", &
                                     "congel", "frazil", "snoice", "meltt", "meltb", "meltl", &
@@ -1524,6 +1524,17 @@ contains
       end select
    end subroutine fill_kd_tidal
 
+   subroutine fill_kd_bbl(state_handle, buf)
+      !! Law-of-the-wall BBL diffusivity (m^2/s) at the BOTTOM interface of
+      !! each layer (`kd_int(:, :, k)` convention).
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call fill_kd_epbl_impl(state%vdiff%bbl_mix%kd_int, buf)
+      end select
+   end subroutine fill_kd_bbl
+
    pure subroutine fill_kd_epbl_impl(kd_int, buf)
       ! assumed-shape-ok: diag fill — fires once per output frame (cadence-bounded).
       real(wp), intent(in)    :: kd_int(:, :, :)
@@ -1627,6 +1638,11 @@ contains
          call register_one_canonical(state, specs, dcoord, dtout, "Kd_TIDAL", "m2 s-1", &
                                      fill_kd_tidal, nz, DIAG_OP_MEAN, &
                                      "internal_tide_diffusivity_at_layer_bottom_interface")
+      end if
+      if (state%vdiff%bbl_mix%enable) then
+         call register_one_canonical(state, specs, dcoord, dtout, "Kd_BBL", "m2 s-1", &
+                                     fill_kd_bbl, nz, DIAG_OP_MEAN, &
+                                     "bbl_diffusivity_at_layer_bottom_interface")
       end if
       if (state%ice%enable) then
          ! CICE-named grid-cell means (CICE history names). `aice`/`hi`
@@ -1873,6 +1889,8 @@ contains
          hint = "&ocean_kappa_shear_nml enable"
       case ("Kd_TIDAL")
          hint = "&ocean_tidal_mixing_nml enable"
+      case ("Kd_BBL")
+         hint = "&ocean_bbl_mixing_nml enable"
       case ("ice_conc", "ice_thick", "aice", "hi", "hs", "Tsfc")
          hint = "&ocean_ice_nml enable"
       case ("congel", "frazil", "snoice", "meltt", "meltb", "meltl", "dvidtt")

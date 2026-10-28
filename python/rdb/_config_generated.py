@@ -1873,6 +1873,60 @@ class OceanTidalMixing(Group):
     )
 
 
+class OceanBblMixing(Group):
+    """`&ocean_bbl_mixing_nml` -- Law-of-the-wall bottom-boundary-layer diapycnal mixing (tracer diffusivity)."""
+
+    _nml_name = 'ocean_bbl_mixing'
+
+    enable = Bool(
+        'enable',
+        doc='Master switch (needs the per-face viscous BBL + thermodynamics)',
+        units='',
+        required=False,
+        default=False,
+    )
+
+    effic = Real(
+        'effic',
+        doc='Fraction of the BBL mean-KE loss spent on mixing (BBL_EFFIC; OM3: 0.01)',
+        units='nondim',
+        required=False,
+        default=0.2,
+    )
+
+    max_decay = Real(
+        'max_decay',
+        doc='Upper bound on the upward power decay length (BBL_MIXING_MAX_DECAY)',
+        units='m',
+        required=False,
+        default=200.0,
+    )
+
+    use_omega = Bool(
+        'use_omega',
+        doc='Floor N^2 at Omega^2 in the energy bound (LOTW_BBL_USE_OMEGA)',
+        units='',
+        required=False,
+        default=True,
+    )
+
+    von_karman = Real(
+        'von_karman',
+        doc='Von Karman constant (VON_KARMAN_BBL)',
+        units='',
+        required=False,
+        default=0.41,
+    )
+
+    kd_max = Real(
+        'kd_max',
+        doc='Cap on the BBL diffusivity and unstratified fill value (KD_MAX)',
+        units='m^2/s',
+        required=False,
+        default=0.1,
+    )
+
+
 class OceanConv(Group):
     """`&ocean_conv_nml` -- Brunt-Vaisala-triggered convective adjustment (interior closure contributor)."""
 
@@ -7078,6 +7132,7 @@ GENERATED_GROUPS = {
     'ocean_varmix': OceanVarmix,
     'ocean_meke': OceanMeke,
     'ocean_tidal_mixing': OceanTidalMixing,
+    'ocean_bbl_mixing': OceanBblMixing,
     'ocean_conv': OceanConv,
     'ocean_porous': OceanPorous,
     'ocean_ddiff': OceanDdiff,
@@ -7123,5 +7178,5 @@ GENERATED_GROUPS = {
     'ocean_bc': OceanBc,
 }
 
-N_GROUPS = 62
-N_KNOBS = 783
+N_GROUPS = 63
+N_KNOBS = 789

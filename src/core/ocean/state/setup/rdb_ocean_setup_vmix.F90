@@ -1114,6 +1114,81 @@ contains
       end subroutine load_tide_field
    end subroutine configure_ocean_tidal_mixing
 
+   module subroutine configure_ocean_bbl_mixing(cfg, ocean_state, compute_rank, ierr)
+      !! Copy the `&ocean_bbl_mixing_nml` knobs onto `vdiff%bbl_mix`, allocate
+      !! its fields and validate.  Fails loud when enabled without the
+      !! per-face viscous BBL (no face friction velocity exists), with a
+      !! zero drag coefficient, without thermodynamics or the interior
+      !! closure, or with a non-physical knob.  `enable` is flipped LAST.
+      !! Must run after `configure_ocean_vmix` (which latches
+      !! `vdiff%bbl_per_face` / `bbl_cd`).
+      type(config_t), intent(in) :: cfg
+      type(ocean_state_t), intent(inout) :: ocean_state
+      integer, intent(in) :: compute_rank
+      integer, intent(out), optional :: ierr
+      associate (bm => ocean_state%vdiff%bbl_mix, bcfg => cfg%ocean%bbl_mixing, &
+                 vd => ocean_state%vdiff)
+         if (.not. bcfg%enable) then
+            bm%enable = .false.
+            if (present(ierr)) ierr = OCEAN_STATUS_OK
+            return
+         end if
+         if (.not. (vd%bbl_glue .and. vd%bbl_per_face)) then
+            call fail("ocean_bbl_mixing_nml: enable=.true. requires the per-face "// &
+                      "viscous BBL (ocean_vdiff_nml bbl_glue=.true. and a bottom "// &
+                      "drag with hbbl > 0): the closure reads the face u*", &
+                      ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+         if (.not. (vd%bbl_cd > 0.0_wp)) then
+            call fail("ocean_bbl_mixing_nml: enable=.true. requires a bottom drag "// &
+                      "coefficient c_d > 0 (u* = kv_bbl/(sqrt(c_d) bbl_thick))", &
+                      ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+         if (.not. cfg%ocean%vmix%use_closure) then
+            call fail("ocean_bbl_mixing_nml: enable=.true. requires "// &
+                      "ocean_vmix_nml use_closure=.true. (folds into kt)", &
+                      ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+         if (.not. cfg%ocean%thermo%enable_thermodynamics) then
+            call fail("ocean_bbl_mixing_nml: enable=.true. requires active "// &
+                      "thermodynamics (N^2 from T, S)", ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+         if (bcfg%effic < 0.0_wp .or. bcfg%max_decay <= 0.0_wp .or. &
+             bcfg%von_karman <= 0.0_wp .or. bcfg%kd_max <= 0.0_wp) then
+            call fail("ocean_bbl_mixing_nml: need effic >= 0, max_decay > 0, "// &
+                      "von_karman > 0, kd_max > 0", ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+         if (size(ocean_state%multilayer%h_layer, 3) > NZ_STACK_MAX) then
+            call fail("ocean_bbl_mixing_nml: nz exceeds NZ_STACK_MAX (column stack)", &
+                      ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+         bm%effic = bcfg%effic
+         bm%max_decay = bcfg%max_decay
+         bm%use_omega = bcfg%use_omega
+         bm%von_karman = bcfg%von_karman
+         bm%kd_max = bcfg%kd_max
+         bm%c_d = vd%bbl_cd
+         bm%eos = ocean_state%eos
+         bm%rho0 = ocean_state%eos%rho0
+         call bm%init(size(ocean_state%multilayer%h_layer, 1), &
+                      size(ocean_state%multilayer%h_layer, 2), &
+                      size(ocean_state%multilayer%h_layer, 3))
+         bm%enable = .true.
+         if (compute_rank == 0) then
+            call logger%info("BBL mixing:       law-of-the-wall diffusivity enabled "// &
+                             "(effic="//to_string(bm%effic)//"  max_decay="// &
+                             to_string(bm%max_decay)//"  kd_max="//to_string(bm%kd_max)//")")
+         end if
+      end associate
+      if (present(ierr)) ierr = OCEAN_STATUS_OK
+   end subroutine configure_ocean_bbl_mixing
+
    module subroutine configure_ocean_conv(cfg, ocean_state, compute_rank, ierr)
       !! Copy the `&ocean_conv_nml` knobs onto `ocean_state%vmix` -- every
       !! field, no dead-config gaps.  Convective adjustment adds no new

@@ -337,6 +337,19 @@ St-Laurent/Simmons internal-tide interior diapycnal mixing.
 | `polzin_scale_max_factor` | `0.1000000000E+01` |  | Polzin stretched scale capped at this multiple of the depth |
 | `polzin_min_decay_scale` | `0.0000000000E+00` | m | Floor on the unstretched Polzin decay scale |
 
+### &ocean_bbl_mixing_nml
+
+Law-of-the-wall bottom-boundary-layer diapycnal mixing (tracer diffusivity).
+
+| Knob | Default | Units | Description |
+|------|---------|-------|-------------|
+| `enable` | `.false.` |  | Master switch (needs the per-face viscous BBL + thermodynamics) |
+| `effic` | `0.2000000000E+00` | nondim | Fraction of the BBL mean-KE loss spent on mixing (BBL_EFFIC; OM3: 0.01) |
+| `max_decay` | `0.2000000000E+03` | m | Upper bound on the upward power decay length (BBL_MIXING_MAX_DECAY) |
+| `use_omega` | `.true.` |  | Floor N^2 at Omega^2 in the energy bound (LOTW_BBL_USE_OMEGA) |
+| `von_karman` | `0.4100000000E+00` |  | Von Karman constant (VON_KARMAN_BBL) |
+| `kd_max` | `0.1000000000E+00` | m^2/s | Cap on the BBL diffusivity and unstratified fill value (KD_MAX) |
+
 ### &ocean_conv_nml
 
 Brunt-Vaisala-triggered convective adjustment (interior closure contributor).

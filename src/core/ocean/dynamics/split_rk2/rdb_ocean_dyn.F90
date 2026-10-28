@@ -130,6 +130,8 @@ module rdb_ocean_dyn
                              epbl_merge_max_shear, EPBL_COMBINE_MAX_SHEAR
    use rdb_ocean_kappa_shear, only: ocean_kappa_shear_t, kappa_shear_compute, &
                                     kappa_shear_merge_into_kv_kt
+   use rdb_ocean_bbl_mixing, only: bbl_mixing_set_tke, bbl_mixing_compute, &
+                                   bbl_mixing_merge_into_kt
    use rdb_ocean_tidal_mixing, only: ocean_tidal_mixing_t, tidal_mixing_compute, &
                                      tidal_mixing_merge_into_kt
    use rdb_ocean_tides, only: ocean_tides_t, tides_update_eta_eq, &
@@ -1000,6 +1002,11 @@ contains
       ! vdiff glue reads, once per outer step from the start-of-step
       ! state.  No-op unless the per-face BBL glue is configured.
       call vdiff_set_viscous_bbl(grid, vd, ms, eos, cor%f_corner)
+      ! Law-of-the-wall BBL mixing: cell u*, BBL KE loss and |f| from the
+      ! per-face BBL just refreshed.  No-op unless enabled.
+      call bbl_mixing_set_tke(grid, vd%bbl_mix, ms, vd%kv_bbl_u, vd%kv_bbl_v, &
+                              vd%bbl_thick_u, vd%bbl_thick_v, cor%f_corner, &
+                              metrics%areaT, metrics%areaCu, metrics%areaCv)
 
       ! ---- Stage 1: tendencies at u^n, FE step -> u^(1) ----
       call run_stage(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, va, hd, &
@@ -1641,6 +1648,14 @@ contains
             end if
             call tidal_mixing_merge_into_kt(vmix_tidal, size(vmix%kt, 1), size(vmix%kt, 2), &
                                             size(vmix%kt, 3), vmix%kv, vmix%kt)
+         end if
+         if (vd%bbl_mix%enable) then
+            ! Law-of-the-wall BBL diffusivity: tracer kt only, additive.
+            if (dyn%enable_thermodynamics .and. dyn%is_thermo_step() .and. stage == 1) then
+               call bbl_mixing_compute(grid, vd%bbl_mix, ms)
+            end if
+            call bbl_mixing_merge_into_kt(vd%bbl_mix, size(vmix%kt, 1), size(vmix%kt, 2), &
+                                          size(vmix%kt, 3), vmix%kt)
          end if
          call vmix_add_kv_ml_invz2(grid, vmix, ms)
          if (vmix%conv_enable) then
@@ -3315,6 +3330,11 @@ contains
       ! in both stages / both schemes.  From the start-of-step state.  No-op
       ! unless the per-face BBL glue is configured.
       call vdiff_set_viscous_bbl(grid, vd, ms, eos, cor%f_corner)
+      ! Law-of-the-wall BBL mixing: cell u*, BBL KE loss and |f| from the
+      ! per-face BBL just refreshed.  No-op unless enabled.
+      call bbl_mixing_set_tke(grid, vd%bbl_mix, ms, vd%kv_bbl_u, vd%kv_bbl_v, &
+                              vd%bbl_thick_u, vd%bbl_thick_v, cor%f_corner, &
+                              metrics%areaT, metrics%areaCu, metrics%areaCv)
       do stage = 1, 2
          if (psurf_on .and. pgf%p_top_in_bc) then
             ! The load reaches the slow PGF too (`ms%p_top` in the FV_MOM6
