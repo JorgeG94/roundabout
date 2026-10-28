@@ -832,6 +832,9 @@ contains
       this%gm%khth = cfg%ocean%gm%khth
       this%gm%khth_max_cfl = cfg%ocean%gm%khth_max_cfl
       this%gm%khth_slope_max = cfg%ocean%gm%khth_slope_max
+      this%gm%use_fgnv = cfg%ocean%gm%use_fgnv
+      this%gm%fgnv_filter_scale = cfg%ocean%gm%fgnv_filter_scale
+      this%gm%fgnv_strat_floor = cfg%ocean%gm%fgnv_strat_floor
       this%gm%rho0 = cfg%ocean%ic%rho_0
       this%gm%use_ebt_struct = cfg%ocean%gm%use_ebt_struct
       this%redi%enable = cfg%ocean%redi%enable

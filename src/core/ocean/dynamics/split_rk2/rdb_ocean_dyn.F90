@@ -3874,7 +3874,21 @@ contains
       if (gm%use_ebt_struct .and. .not. present(wavespeed)) then
          error stop "run_gm_step: use_ebt_struct needs the wave-speed slot"
       end if
-      if (gm%use_ebt_struct) then
+      if (gm%use_fgnv .and. .not. present(wavespeed)) then
+         error stop "run_gm_step: use_fgnv needs the wave-speed slot"
+      end if
+      if (gm%use_ebt_struct .and. gm%use_fgnv) then
+         if (use_ext) then
+            call gm_compute_transports(grid, metrics, gm, slopes, ms, dt, &
+                                       khth_ext_u=varmix%khth_u, khth_ext_v=varmix%khth_v, &
+                                       ebt_struct=wavespeed%ebt_struct, &
+                                       cg1=wavespeed%cg1)
+         else
+            call gm_compute_transports(grid, metrics, gm, slopes, ms, dt, &
+                                       ebt_struct=wavespeed%ebt_struct, &
+                                       cg1=wavespeed%cg1)
+         end if
+      else if (gm%use_ebt_struct .and. .not. gm%use_fgnv) then
          if (use_ext) then
             call gm_compute_transports(grid, metrics, gm, slopes, ms, dt, &
                                        khth_ext_u=varmix%khth_u, khth_ext_v=varmix%khth_v, &
@@ -3883,11 +3897,22 @@ contains
             call gm_compute_transports(grid, metrics, gm, slopes, ms, dt, &
                                        ebt_struct=wavespeed%ebt_struct)
          end if
-      else if (use_ext) then
-         call gm_compute_transports(grid, metrics, gm, slopes, ms, dt, &
-                                    khth_ext_u=varmix%khth_u, khth_ext_v=varmix%khth_v)
-      else
-         call gm_compute_transports(grid, metrics, gm, slopes, ms, dt)
+      else if (.not. gm%use_ebt_struct .and. gm%use_fgnv) then
+         if (use_ext) then
+            call gm_compute_transports(grid, metrics, gm, slopes, ms, dt, &
+                                       khth_ext_u=varmix%khth_u, khth_ext_v=varmix%khth_v, &
+                                       cg1=wavespeed%cg1)
+         else
+            call gm_compute_transports(grid, metrics, gm, slopes, ms, dt, &
+                                       cg1=wavespeed%cg1)
+         end if
+      else if (.not. gm%use_ebt_struct .and. .not. gm%use_fgnv) then
+         if (use_ext) then
+            call gm_compute_transports(grid, metrics, gm, slopes, ms, dt, &
+                                       khth_ext_u=varmix%khth_u, khth_ext_v=varmix%khth_v)
+         else
+            call gm_compute_transports(grid, metrics, gm, slopes, ms, dt)
+         end if
       end if
 
       tr_mode = TR_MODE_ADVECT

@@ -1149,6 +1149,38 @@ class OceanGm(Group):
         default=False,
     )
 
+    use_fgnv = Bool(
+        'use_fgnv',
+        doc='Solve the FGNV (2010) vertical BVP for the GM streamfunction (KHTH_USE_FGNV_STREAMFUNCTION; needs wavespeed)',
+        units='',
+        required=False,
+        default=False,
+    )
+
+    fgnv_filter_scale = Real(
+        'fgnv_filter_scale',
+        doc='FGNV smoothing-term scale: c^2 = scale*c^2, psi_unlim amplified by (1+scale) (FGNV_FILTER_SCALE, > 0)',
+        units='nondim',
+        required=False,
+        default=1.0,
+    )
+
+    fgnv_c_min = Real(
+        'fgnv_c_min',
+        doc='FGNV_C_MIN, accepted for parity but not applied (>= 0)',
+        units='m/s',
+        required=False,
+        default=0.0,
+    )
+
+    fgnv_strat_floor = Real(
+        'fgnv_strat_floor',
+        doc='FGNV N^2 floor as a fraction of Omega: N^2 >= (floor*Omega)^2 (FGNV_STRAT_FLOOR, > 0)',
+        units='nondim',
+        required=False,
+        default=1e-15,
+    )
+
 
 class OceanRedi(Group):
     """`&ocean_redi_nml` -- Redi continuous neutral (along-isopycnal) tracer diffusion."""
@@ -6722,4 +6754,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 62
-N_KNOBS = 737
+N_KNOBS = 741

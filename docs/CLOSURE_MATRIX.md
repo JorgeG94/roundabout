@@ -322,7 +322,7 @@ budget (MEKE).
 | Stress-tensor Laplacian | opt-in | `stress_tensor` (`.false.`) | Thickness-weighted stress-divergence form, free-slip walls. Refused with `zfixed_closed_faces`. | — |
 | Per-face harmonic clamp | opt-in | `bound_kh` (`.false.`; `bound_coef` `0.8`) | MOM6 `BOUND_KH`. Load-bearing on the split-explicit path. | `test_ocean_hvisc_kh_bound` |
 | Fox-Kemper ML restratification | opt-in | `&ocean_foxkemper_nml enable` (`.false.`; needs EPBL) | Mixed-layer eddy overturning. | `test_ocean_foxkemper`, `test_ocean_mle_zfixed` |
-| Gent-McWilliams thickness diffusion | opt-in | `&ocean_gm_nml enable` (`.false.`; needs `&ocean_slopes_nml enable`) | Eddy-induced bolus transport. | `test_ocean_gm`, `test_ocean_gm_zfixed`, `test_ocean_slopes_datum` |
+| Gent-McWilliams thickness diffusion | opt-in | `&ocean_gm_nml enable` (`.false.`; needs `&ocean_slopes_nml enable`) | Eddy-induced bolus transport. `use_fgnv` (`.false.`; needs `&ocean_wavespeed_nml enable`) replaces the local streamfunction by the Ferrari, Griffies, Nurser & Vallis (2010) vertical boundary-value solution `c^2 psi'' - N^2 psi = -N^2 psi_unlim`, `psi = 0` at surface and bed, with `psi_unlim` amplified by `(1+fgnv_filter_scale)`, `c^2 = fgnv_filter_scale * cg1^2` (`fgnv_c_min` accepted for parity, not applied) and `N^2 >= (fgnv_strat_floor*Omega)^2`; the limiter chain runs unchanged on the solved psi. `gm_src` stays the local-form PE release. | `test_ocean_gm`, `test_ocean_gm_zfixed`, `test_ocean_slopes_datum`, `test_ocean_gm_fgnv` |
 | GM vertical structure of KhTh (MOM6 `KHTH_USE_EBT_STRUCT`) | opt-in | `&ocean_gm_nml use_ebt_struct` (`.false.`; needs GM and `&ocean_wavespeed_nml enable` + `use_ebt`, refused otherwise) | At each interior interface the post-CFL-clamp 2-D face KhTh (base, Visbeck and MEKE together) is multiplied by the mean of the two columns' EBT structure in the layer above the interface (Hallberg 2013; Killworth & Blundell 2003), in the streamfunction and in the `gm_src` that MEKE reads. Structure 0 (degenerate column) gives KhTh 0, not floored. | `test_ocean_gm` |
 | Redi neutral tracer diffusion | opt-in | `&ocean_redi_nml enable` (`.false.`), `check_diffusive_cfl` (`.false.`), `max_diffusive_cfl` (`-1`, off) | Along-isopycnal diffusion (Griffies et al. 1998; Shao et al. 2020 operator). Refused under a cavity. The two CFL knobs are the OM3 `CHECK_DIFFUSIVE_CFL` / `MAX_TR_DIFFUSION_CFL` (`True` / `2.0`): `max_diffusive_cfl > 0` caps each face coefficient so the cell CFL `2·Σ KhTr·dt·dy/dx / area` stays at or below it, and `check_diffusive_cfl` subcycles the flux `n_itt = ceil(max CFL)` times at `dt/n_itt`. Both off is bit-identical. Neutral diffusion replaces the along-coordinate Laplacian: OM3 parity is `&ocean_hdiff_nml kappa_h = 0`, and `kappa_h > 0` with Redi on warns at configure. | `test_ocean_redi`, `test_ocean_redi_zfixed` |
 | MEKE | opt-in | `&ocean_meke_nml enable` (`.false.`; needs GM) | Prognostic eddy kinetic energy. | `test_ocean_meke` |
@@ -763,6 +763,12 @@ non-conservative — increment mirrored into the surface heat/salt budget)
 Dated reconciliation log, kept verbatim. Read it for the history of why a row
 looks the way it does. It is not needed to use the tables.
 
+- **2026-10-27** — GM PR-4: `&ocean_gm_nml use_fgnv`, `fgnv_filter_scale`,
+  `fgnv_c_min`, `fgnv_strat_floor` (MOM6 `KHTH_USE_FGNV_STREAMFUNCTION`,
+  `FGNV_FILTER_SCALE`, `FGNV_C_MIN`, `FGNV_STRAT_FLOOR`). Ferrari et al.
+  (2010) streamfunction BVP per face column (symmetric tridiagonal, Thomas)
+  on the (EBT-structured when `use_ebt_struct`) unlimited streamfunction,
+  default off, bit-identical. Test: `test_ocean_gm_fgnv`.
 - **2026-10-27** — GM PR-3: `&ocean_gm_nml use_ebt_struct` (default off,
   bit-identical) gives the thickness diffusivity the EBT vertical structure
   of the wave-speed slot; the "Deferred: EBT" item in the GM history is

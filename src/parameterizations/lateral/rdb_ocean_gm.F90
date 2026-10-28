@@ -99,11 +99,43 @@ module rdb_ocean_gm
    !!
    !! Default off (`&ocean_gm_nml enable=.false.`) => slot allocated but
    !! `gm_compute_transports` no-ops => bit-identical.
-   !! Refs: Gent & McWilliams (1990); Gent et al. (1995); Griffies (1998).
+   !!
+   !! ### FGNV streamfunction (`use_fgnv`)
+   !!
+   !! With `use_fgnv` the local `Sfn_unlim` is replaced, per face column, by
+   !! the solution of the Ferrari, Griffies, Nurser & Vallis (2010) vertical
+   !! boundary-value problem
+   !!     c^2 d2(psi)/dz2 - N^2 psi = -N^2 (1+s) psi_unlim,  psi = 0 at surface and bed,
+   !! discretised as a symmetric positive-definite tridiagonal system over
+   !! the interior interfaces and solved by Thomas (`gm_fgnv_solve_column`,
+   !! called from the existing face-column kernels).  `psi_unlim` is the
+   !! (bottom-blocked) local streamfunction, built from the same per-interface
+   !! diffusivity as the local form (so the EBT structure of `use_ebt_struct`
+   !! enters it); the limiter chain then runs unchanged on the SOLVED psi, so
+   !! `Sum_k uhD = 0` still holds by construction.
+   !! `c^2 = s * c_face^2` with `s = fgnv_filter_scale` and
+   !! `c_face = (cg1_L + cg1_R)/2`: the filter scale multiplies the smoothing
+   !! TERM, so the effective speed is `sqrt(s)*cg1` (OM3, 0.1: `0.316 cg1`).
+   !! `psi_unlim` is amplified by `(1 + s)` before the solve, so the small-`c`
+   !! limit is `(1+s)*psi_unlim` and `c^2 = 0` short-circuits to exactly that
+   !! (no solve).  `N^2 >= (fgnv_strat_floor*Omega)^2`.  `fgnv_c_min` is
+   !! accepted for namelist parity but not applied.  Away from the caps
+   !! (`c/N` small against the vertical scale of the slope) psi follows
+   !! psi_unlim; near the surface and bed it is smoothed over the deformation
+   !! depth `c/N` and forced to zero, replacing ad-hoc tapering.
+   !!
+   !! `gm_src` is NOT derived from the final transports: it is the PE
+   !! release `rho0*KH*S^2*N^2*h/4` of the LOCAL form (`gm_pe_release`),
+   !! left unchanged by FGNV (the MEKE source coupling is a separate
+   !! decision), so with FGNV on it overstates the release actually
+   !! performed near the caps.
+   !!
+   !! Refs: Gent & McWilliams (1990); Gent et al. (1995); Griffies (1998);
+   !! Ferrari, Griffies, Nurser & Vallis (2010), Ocean Modelling 32, 143-156.
 #ifdef LFORTRAN_PASSING
-   use rdb_constants, only: wp, H_VANISHED, H_DIV_EPS, GRAVITY
+   use rdb_constants, only: wp, H_VANISHED, H_DIV_EPS, GRAVITY, OMEGA_EARTH
 #else
-   use rdb_constants, only: NZ_STACK_MAX, wp, H_VANISHED, H_DIV_EPS, GRAVITY
+   use rdb_constants, only: NZ_STACK_MAX, wp, H_VANISHED, H_DIV_EPS, GRAVITY, OMEGA_EARTH
 #endif
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
@@ -124,6 +156,7 @@ module rdb_ocean_gm
 
    public :: ocean_gm_t
    public :: gm_compute_transports
+   public :: gm_fgnv_solve_column
 
    type :: ocean_gm_t
       !! Gent-McWilliams thickness-diffusion state.  All fields default to
@@ -148,6 +181,13 @@ module rdb_ocean_gm
          !! blend takes over (`slope_max`).
       real(wp) :: rho0 = 1035.0_wp
          !! Reference density (kg/m^3) for the `gm_src` PE-release scaling.
+      logical :: use_fgnv = .false.
+         !! FGNV streamfunction BVP on (see module docstring).  Needs the
+         !! `cg1` argument of `gm_compute_transports`.
+      real(wp) :: fgnv_filter_scale = 1.0_wp
+         !! Smoothing-term scale `s`: `c^2 = s*c_face^2`, `psi_unlim` gain `1+s`.
+      real(wp) :: fgnv_strat_floor = 1.0e-15_wp
+         !! `N^2 >= (floor*Omega)^2` (fraction of the rotation rate).
       logical :: use_ebt_struct = .false.
          !! Give the thickness diffusivity the vertical shape of the
          !! equivalent-barotropic mode (Hallberg 2013; Killworth & Blundell
@@ -278,7 +318,7 @@ contains
    ! =================================================================
 
    subroutine gm_compute_transports(grid, metrics, this, slopes, ms, dt, &
-                                    khth_ext_u, khth_ext_v, ebt_struct)
+                                    khth_ext_u, khth_ext_v, ebt_struct, cg1)
       !! Fill `uhD`/`vhD` (m^3/s) with the GM bolus thickness transport and
       !! `gm_src` with the PE release, from the CURRENT `ms%h_layer` and the
       !! stored slopes.  Run every outer step AFTER the dynamics, and
@@ -309,9 +349,12 @@ contains
       real(wp), intent(in), optional, contiguous :: ebt_struct(:, :, :)
          !! `ocean_wave_speed_t%ebt_struct` `(nx,ny,nz)`; read only when
          !! `this%use_ebt_struct` (required then).
+      real(wp), intent(in), optional :: cg1(:, :)
+         !! First-baroclinic wave speed (m/s, cell centres) from the wave-speed
+         !! slot; read only when `this%use_fgnv` (required then).
 
       integer :: nx, ny, nz
-      logical :: use_ext, use_open, use_struct
+      logical :: use_ext, use_open, use_struct, use_fg
 
       if (.not. this%is_init) return
       if (.not. this%enable) return
@@ -327,6 +370,10 @@ contains
 
       use_ext = present(khth_ext_u) .and. present(khth_ext_v)
       use_open = metrics%use_closed_faces
+      use_fg = this%use_fgnv
+      if (use_fg .and. .not. present(cg1)) then
+         error stop "gm_compute_transports: use_fgnv requires the cg1 argument"
+      end if
 
       use_struct = this%use_ebt_struct .and. present(ebt_struct)
       if (this%use_ebt_struct .and. .not. present(ebt_struct)) then
@@ -337,19 +384,29 @@ contains
              size(ebt_struct, 3) /= nz) then
             error stop "gm_compute_transports: ebt_struct extent mismatch (needs use_ebt)"
          end if
-         call gm_dispatch(.true., ebt_struct)
+         if (use_fg) then
+            call gm_dispatch(.true., ebt_struct, cg1)
+         else
+            call gm_dispatch(.true., ebt_struct, metrics%areaT)
+         end if
       else
          ! Inert, device-present stand-in with the dummy's shape; never read.
-         call gm_dispatch(.false., ms%h_layer)
+         if (use_fg) then
+            call gm_dispatch(.false., ms%h_layer, cg1)
+         else
+            call gm_dispatch(.false., ms%h_layer, metrics%areaT)
+         end if
       end if
 
    contains
 
-      subroutine gm_dispatch(use_struct_in, ebt)
+      subroutine gm_dispatch(use_struct_in, ebt, cgd)
          !! The four `gm_compute_impl` call shapes (open/ext), with the
          !! structure field handed over as an explicit-shape actual.
          logical, intent(in) :: use_struct_in
          real(wp), intent(in) :: ebt(nx, ny, nz)
+         real(wp), intent(in) :: cgd(nx, ny)
+            !! `cg1` when FGNV is on, else an inert `(nx,ny)` stand-in.
          ! Explicit-shape flat-impl: pass the top-level allocatables so NVHPC
          ! does not descriptor-walk per launch.  When the external VarMix base
          ! is absent, pass `this%khth_u/khth_v` as a harmless placeholder for
@@ -377,7 +434,8 @@ contains
                                     metrics%open_u, metrics%open_v, &
                                     this%khth_u, this%khth_v, &
                                     this%uhD, this%vhD, this%gm_src, &
-                                    use_struct_in, ebt)
+                                    use_struct_in, ebt, &
+                                    use_fg, this%fgnv_filter_scale, this%fgnv_strat_floor, cgd)
             else
                call gm_compute_impl(nx, ny, nz, dt, this%khth, this%khth_max_cfl, &
                                     this%khth_slope_max, this%rho0, use_ext, use_open, &
@@ -389,7 +447,8 @@ contains
                                     metrics%open_u, metrics%open_v, &
                                     this%khth_u, this%khth_v, &
                                     this%uhD, this%vhD, this%gm_src, &
-                                    use_struct_in, ebt)
+                                    use_struct_in, ebt, &
+                                    use_fg, this%fgnv_filter_scale, this%fgnv_strat_floor, cgd)
             end if
          else if (use_ext) then
             call gm_compute_impl(nx, ny, nz, dt, this%khth, this%khth_max_cfl, &
@@ -402,7 +461,8 @@ contains
                                  slopes%slope_x, slopes%slope_y, &
                                  this%khth_u, this%khth_v, &
                                  this%uhD, this%vhD, this%gm_src, &
-                                 use_struct_in, ebt)
+                                 use_struct_in, ebt, &
+                                 use_fg, this%fgnv_filter_scale, this%fgnv_strat_floor, cgd)
          else
             call gm_compute_impl(nx, ny, nz, dt, this%khth, this%khth_max_cfl, &
                                  this%khth_slope_max, this%rho0, use_ext, use_open, &
@@ -414,7 +474,8 @@ contains
                                  slopes%slope_x, slopes%slope_y, &
                                  this%khth_u, this%khth_v, &
                                  this%uhD, this%vhD, this%gm_src, &
-                                 use_struct_in, ebt)
+                                 use_struct_in, ebt, &
+                                 use_fg, this%fgnv_filter_scale, this%fgnv_strat_floor, cgd)
          end if
       end subroutine gm_dispatch
    end subroutine gm_compute_transports
@@ -425,7 +486,8 @@ contains
                               bathy, slope_x, slope_y, &
                               n2_u, n2_v, khth_ext_u, khth_ext_v, open_u, open_v, &
                               khth_u, khth_v, uhD, vhD, gm_src, &
-                              use_struct, ebt_struct)
+                              use_struct, ebt_struct, &
+                              use_fgnv, fgnv_filter_scale, fgnv_strat_floor, cg1)
       !! Flat-impl GM kernel.  Passes: CFL-clamp the 2D face KhTh, the
       !! u-face and v-face column recurrences into `uhD`/`vhD`, the
       !! `gm_src` PE release.  Each face's column sweep is serial in k (the
@@ -466,16 +528,22 @@ contains
       real(wp), intent(out) :: vhD(nx, ny + 1, nz)
       real(wp), intent(out) :: gm_src(nx, ny)
       logical, intent(in) :: use_struct
+      logical, intent(in) :: use_fgnv
+         !! FGNV BVP on.  `.false.` ⇒ `cg1` and the two scalars below are
+         !! never read (`cg1` is then an inert device-present stand-in).
+      real(wp), intent(in) :: fgnv_filter_scale, fgnv_strat_floor
+      real(wp), intent(in) :: cg1(nx, ny)
          !! EBT vertical structure of KhTh on (`&ocean_gm_nml use_ebt_struct`).
       real(wp), intent(in) :: ebt_struct(nx, ny, nz)
          !! T-cell EBT structure; an inert device-present stand-in when
          !! `use_struct = .false.` (never indexed).
 
-      real(wp) :: i_smax2, i4dt
+      real(wp) :: i_smax2, i4dt, n2_floor
       integer :: i, j, k
 
       i_smax2 = 1.0_wp/(slope_max*slope_max)
       i4dt = 1.0_wp/(4.0_wp*dt)
+      n2_floor = (fgnv_strat_floor*OMEGA_EARTH)**2
 
       ! ---- 1. CFL-clamp the constant KhTh onto the 2D face fields, using
       ! native face metrics (idxCu/idyCu at u-faces, idxCv/idyCv at
@@ -491,7 +559,8 @@ contains
       end do
       call gm_column_x(nx, ny, nz, i_smax2, i4dt, use_open, &
                        dy_cu, areaT, h_layer, bathy, slope_x, khth_u, open_u, uhD, &
-                       use_struct, ebt_struct)
+                       use_struct, ebt_struct, &
+                       use_fgnv, fgnv_filter_scale, n2_floor, cg1, n2_u)
 
       ! ---- 3. v-face bolus transport (mirror).
       do concurrent(k=1:nz, i=1:nx)
@@ -500,7 +569,8 @@ contains
       end do
       call gm_column_y(nx, ny, nz, i_smax2, i4dt, use_open, &
                        dx_cv, areaT, h_layer, bathy, slope_y, khth_v, open_v, vhD, &
-                       use_struct, ebt_struct)
+                       use_struct, ebt_struct, &
+                       use_fgnv, fgnv_filter_scale, n2_floor, cg1, n2_v)
 
       ! ---- 4. gm_src PE release (cell centres).
       call gm_pe_release(nx, ny, nz, slope_max, rho0, h_layer, &
@@ -574,7 +644,8 @@ contains
 
    pure subroutine gm_column_x(nx, ny, nz, i_smax2, i4dt, use_open, &
                                dy_cu, areaT, h_layer, bathy, slope_x, khth_u, open_u, uhD, &
-                               use_struct, ebt_struct)
+                               use_struct, ebt_struct, &
+                               use_fgnv, fgnv_filter_scale, n2_floor, cg1, n2_u)
       !! u-face GM streamfunction + bolus-transport column recurrence.
       !! Interior u-face (i=2..nx) pairs columns iw=i-1 (west) and i (east).
       !! Bottom-up sweep: interior interfaces Kr=2 (bed-most) -> nz
@@ -626,6 +697,10 @@ contains
       real(wp), intent(in) :: open_u(nx + 1, ny, nz)
       real(wp), intent(inout) :: uhD(nx + 1, ny, nz)
       logical, intent(in) :: use_struct
+      logical, intent(in) :: use_fgnv
+      real(wp), intent(in) :: fgnv_filter_scale, n2_floor
+      real(wp), intent(in) :: cg1(nx, ny)
+      real(wp), intent(in) :: n2_u(nx + 1, ny, nz + 1)
       real(wp), intent(in) :: ebt_struct(nx, ny, nz)
          !! EBT structure; read only when `use_struct`.  Interior interface
          !! `Kr` (loop index `k`) has layer `ka = Kr` above it, so its
@@ -640,10 +715,15 @@ contains
       logical :: ok(NZ_STACK_MAX)
       real(wp) :: uhtot, slope, s2r, sfn_unlim, sfn_safe, sfn_est, sfn_in_h
       real(wp) :: h_frac_d, uhd_k, kh, khk
+      real(wp) :: hh(NZ_STACK_MAX), n2k(NZ_STACK_MAX + 1)
+      real(wp) :: psiu(NZ_STACK_MAX + 1), psis(NZ_STACK_MAX + 1)
+      real(wp) :: cgf, c2
+      logical :: fg
 
       do concurrent(j=1:ny, i=2:nx) &
          local(k, iw, ka, kb, ktop, havL, havR, rsumL, rsumR, eL, eR, ok, uhtot, slope, &
-               s2r, sfn_unlim, sfn_safe, sfn_est, sfn_in_h, h_frac_d, uhd_k, kh, khk)
+               s2r, sfn_unlim, sfn_safe, sfn_est, sfn_in_h, h_frac_d, uhd_k, kh, khk, &
+               hh, n2k, psiu, psis, cgf, c2, fg)
          iw = i - 1
          kh = khth_u(i, j)
          ! Interface heights (bed-up from z = -D) of the two columns, for
@@ -691,6 +771,42 @@ contains
             rsumR(k) = rsumR(k + 1) + havR(k)
          end do
 
+         ! FGNV: replace the local streamfunction by the BVP solution on the
+         ! open column (interfaces 2..ktop; zero at the bed and above ktop).
+         ! `psiu` is built from the SAME per-interface diffusivity as the
+         ! local form (`khk` under the EBT structure, else `kh`).
+         fg = .false.
+         if (use_fgnv .and. ktop >= 2) then
+            cgf = 0.5_wp*(cg1(iw, j) + cg1(i, j))
+            if (.not. ieee_is_finite(cgf)) cgf = 0.0_wp
+            c2 = fgnv_filter_scale*cgf*cgf
+            if (c2 >= 0.0_wp) then
+               fg = .true.
+               do k = 1, ktop
+                  hh(k) = max(2.0_wp*h_layer(iw, j, k)*h_layer(i, j, k)/ &
+                              (h_layer(iw, j, k) + h_layer(i, j, k) + H_DIV_EPS), H_VANISHED)
+               end do
+               psiu(1) = 0.0_wp
+               psiu(ktop + 1) = 0.0_wp
+               n2k(1) = n2_floor
+               n2k(ktop + 1) = n2_floor
+               do k = 2, ktop
+                  slope = slope_x(i, j, k)
+                  if (.not. ieee_is_finite(slope)) slope = 0.0_wp
+                  if (use_struct) then
+                     khk = kh*(0.5_wp*(ebt_struct(iw, j, k) + ebt_struct(i, j, k)))
+                     psiu(k) = gm_block_below_bed(-(khk*dy_cu(i, j))*slope, &
+                                                  eL(k), eL(k - 1), eR(1), eR(k), eR(k - 1), eL(1))
+                  else
+                     psiu(k) = gm_block_below_bed(-(kh*dy_cu(i, j))*slope, &
+                                                  eL(k), eL(k - 1), eR(1), eR(k), eR(k - 1), eL(1))
+                  end if
+                  n2k(k) = gm_fgnv_n2(n2_u(i, j, k), n2_floor)
+               end do
+               call gm_fgnv_solve_column(ktop, c2, 1.0_wp + fgnv_filter_scale, hh, n2k, psiu, psis)
+            end if
+         end if
+
          ! Sweep interior interfaces bed-most (Kr=2) -> surface-most (Kr=nz).
          uhtot = 0.0_wp
          uhD(i, j, nz) = 0.0_wp
@@ -708,13 +824,17 @@ contains
             ! limiters below (they launder NaN into a bound, CLAUDE.md).
             if (.not. ieee_is_finite(slope)) slope = 0.0_wp
             s2r = slope*slope*i_smax2
-            if (use_struct) then
-               khk = kh*(0.5_wp*(ebt_struct(iw, j, ka) + ebt_struct(i, j, ka)))
-               sfn_unlim = gm_block_below_bed(-(khk*dy_cu(i, j))*slope, &
-                                              eL(k), eL(k - 1), eR(1), eR(k), eR(k - 1), eL(1))
+            if (fg) then
+               sfn_unlim = psis(k)
             else
-               sfn_unlim = gm_block_below_bed(-(kh*dy_cu(i, j))*slope, &
-                                              eL(k), eL(k - 1), eR(1), eR(k), eR(k - 1), eL(1))
+               if (use_struct) then
+                  khk = kh*(0.5_wp*(ebt_struct(iw, j, ka) + ebt_struct(i, j, ka)))
+                  sfn_unlim = gm_block_below_bed(-(khk*dy_cu(i, j))*slope, &
+                                                 eL(k), eL(k - 1), eR(1), eR(k), eR(k - 1), eL(1))
+               else
+                  sfn_unlim = gm_block_below_bed(-(kh*dy_cu(i, j))*slope, &
+                                                 eL(k), eL(k - 1), eR(1), eR(k), eR(k - 1), eL(1))
+               end if
             end if
             if (uhtot <= 0.0_wp) then
                h_frac_d = gm_h_frac(havL(kb), rsumL(kb))
@@ -737,7 +857,8 @@ contains
 
    pure subroutine gm_column_y(nx, ny, nz, i_smax2, i4dt, use_open, &
                                dx_cv, areaT, h_layer, bathy, slope_y, khth_v, open_v, vhD, &
-                               use_struct, ebt_struct)
+                               use_struct, ebt_struct, &
+                               use_fgnv, fgnv_filter_scale, n2_floor, cg1, n2_v)
       !! v-face GM column recurrence — mirror of `gm_column_x` with the
       !! v-stagger.  Interior v-face (j=2..ny) pairs columns js=j-1 (south)
       !! and j (north).  See `gm_column_x` for the open-column (`use_open`)
@@ -754,6 +875,10 @@ contains
       real(wp), intent(in) :: open_v(nx, ny + 1, nz)
       real(wp), intent(inout) :: vhD(nx, ny + 1, nz)
       logical, intent(in) :: use_struct
+      logical, intent(in) :: use_fgnv
+      real(wp), intent(in) :: fgnv_filter_scale, n2_floor
+      real(wp), intent(in) :: cg1(nx, ny)
+      real(wp), intent(in) :: n2_v(nx, ny + 1, nz + 1)
       real(wp), intent(in) :: ebt_struct(nx, ny, nz)
          !! v-face twin of the `gm_column_x` structure field.
 
@@ -764,10 +889,15 @@ contains
       logical :: ok(NZ_STACK_MAX)
       real(wp) :: vhtot, slope, s2r, sfn_unlim, sfn_safe, sfn_est, sfn_in_h
       real(wp) :: h_frac_d, vhd_k, kh, khk
+      real(wp) :: hh(NZ_STACK_MAX), n2k(NZ_STACK_MAX + 1)
+      real(wp) :: psiu(NZ_STACK_MAX + 1), psis(NZ_STACK_MAX + 1)
+      real(wp) :: cgf, c2
+      logical :: fg
 
       do concurrent(j=2:ny, i=1:nx) &
          local(k, js, ka, kb, ktop, havS, havN, rsumS, rsumN, eS, eN, ok, vhtot, slope, &
-               s2r, sfn_unlim, sfn_safe, sfn_est, sfn_in_h, h_frac_d, vhd_k, kh, khk)
+               s2r, sfn_unlim, sfn_safe, sfn_est, sfn_in_h, h_frac_d, vhd_k, kh, khk, &
+               hh, n2k, psiu, psis, cgf, c2, fg)
          js = j - 1
          kh = khth_v(i, j)
          eS(1) = -bathy(i, js)
@@ -809,6 +939,42 @@ contains
             rsumN(k) = rsumN(k + 1) + havN(k)
          end do
 
+         ! FGNV: replace the local streamfunction by the BVP solution on the
+         ! open column (interfaces 2..ktop; zero at the bed and above ktop).
+         ! `psiu` is built from the SAME per-interface diffusivity as the
+         ! local form (`khk` under the EBT structure, else `kh`).
+         fg = .false.
+         if (use_fgnv .and. ktop >= 2) then
+            cgf = 0.5_wp*(cg1(i, js) + cg1(i, j))
+            if (.not. ieee_is_finite(cgf)) cgf = 0.0_wp
+            c2 = fgnv_filter_scale*cgf*cgf
+            if (c2 >= 0.0_wp) then
+               fg = .true.
+               do k = 1, ktop
+                  hh(k) = max(2.0_wp*h_layer(i, js, k)*h_layer(i, j, k)/ &
+                              (h_layer(i, js, k) + h_layer(i, j, k) + H_DIV_EPS), H_VANISHED)
+               end do
+               psiu(1) = 0.0_wp
+               psiu(ktop + 1) = 0.0_wp
+               n2k(1) = n2_floor
+               n2k(ktop + 1) = n2_floor
+               do k = 2, ktop
+                  slope = slope_y(i, j, k)
+                  if (.not. ieee_is_finite(slope)) slope = 0.0_wp
+                  if (use_struct) then
+                     khk = kh*(0.5_wp*(ebt_struct(i, js, k) + ebt_struct(i, j, k)))
+                     psiu(k) = gm_block_below_bed(-(khk*dx_cv(i, j))*slope, &
+                                                  eS(k), eS(k - 1), eN(1), eN(k), eN(k - 1), eS(1))
+                  else
+                     psiu(k) = gm_block_below_bed(-(kh*dx_cv(i, j))*slope, &
+                                                  eS(k), eS(k - 1), eN(1), eN(k), eN(k - 1), eS(1))
+                  end if
+                  n2k(k) = gm_fgnv_n2(n2_v(i, j, k), n2_floor)
+               end do
+               call gm_fgnv_solve_column(ktop, c2, 1.0_wp + fgnv_filter_scale, hh, n2k, psiu, psis)
+            end if
+         end if
+
          vhtot = 0.0_wp
          vhD(i, j, nz) = 0.0_wp
          do k = 2, nz
@@ -821,13 +987,17 @@ contains
             slope = slope_y(i, j, k)
             if (.not. ieee_is_finite(slope)) slope = 0.0_wp
             s2r = slope*slope*i_smax2
-            if (use_struct) then
-               khk = kh*(0.5_wp*(ebt_struct(i, js, ka) + ebt_struct(i, j, ka)))
-               sfn_unlim = gm_block_below_bed(-(khk*dx_cv(i, j))*slope, &
-                                              eS(k), eS(k - 1), eN(1), eN(k), eN(k - 1), eS(1))
+            if (fg) then
+               sfn_unlim = psis(k)
             else
-               sfn_unlim = gm_block_below_bed(-(kh*dx_cv(i, j))*slope, &
-                                              eS(k), eS(k - 1), eN(1), eN(k), eN(k - 1), eS(1))
+               if (use_struct) then
+                  khk = kh*(0.5_wp*(ebt_struct(i, js, ka) + ebt_struct(i, j, ka)))
+                  sfn_unlim = gm_block_below_bed(-(khk*dx_cv(i, j))*slope, &
+                                                 eS(k), eS(k - 1), eN(1), eN(k), eN(k - 1), eS(1))
+               else
+                  sfn_unlim = gm_block_below_bed(-(kh*dx_cv(i, j))*slope, &
+                                                 eS(k), eS(k - 1), eN(1), eN(k), eN(k - 1), eS(1))
+               end if
             end if
             if (vhtot <= 0.0_wp) then
                h_frac_d = gm_h_frac(havS(kb), rsumS(kb))
@@ -844,6 +1014,71 @@ contains
          if (ktop > 0) vhD(i, j, ktop) = -vhtot
       end do
    end subroutine gm_column_y
+
+   pure function gm_fgnv_n2(n2, n2_floor) result(nf)
+      !$acc routine seq
+      !! FGNV stratification: `max(N^2, floor)` with a non-finite `N^2` read
+      !! as the floor (a bare `max` is NaN-blind under relaxed FP).
+      real(wp), intent(in) :: n2, n2_floor
+      real(wp) :: nf
+      nf = n2_floor
+      if (ieee_is_finite(n2)) nf = max(n2, n2_floor)
+   end function gm_fgnv_n2
+
+   pure subroutine gm_fgnv_solve_column(nl, c2, gain, h, n2, psi_unlim, psi)
+      !$acc routine seq
+      !! Ferrari, Griffies, Nurser & Vallis (2010) streamfunction column
+      !! solve.  Interfaces `K = 1..nl+1` are numbered bed -> surface
+      !! (`K = 1` the bed, `K = nl+1` the surface; layer `k` lies between
+      !! interfaces `k` and `k+1`).  Solves
+      !!     c2 d2(psi)/dz2 - N2 psi = -N2 gain psi_unlim,  psi(1) = psi(nl+1) = 0
+      !! at the interior interfaces `K = 2..nl` with the symmetric form
+      !!     -c2/h(K-1) psi(K-1) + [c2/h(K-1) + c2/h(K) + N2(K) dz(K)] psi(K)
+      !!     - c2/h(K) psi(K+1) = N2(K) dz(K) gain psi_unlim(K),
+      !!     dz(K) = (h(K-1) + h(K))/2,
+      !! (second-order accurate, SPD so the Thomas sweep needs no pivoting).
+      !! `gain = 1 + fgnv_filter_scale` amplifies `psi_unlim` before the
+      !! solve, so the small-`c` limit is `gain*psi_unlim` and the large-`c/N`
+      !! (capped) limit is unchanged.  `h` must already be floored
+      !! (`H_VANISHED`) and `n2` floored positive; `c2 >= 0` is the squared
+      !! filter speed (`c2 = 0` returns `psi = gain*psi_unlim` exactly, no
+      !! solve).  `nl <= NZ_STACK_MAX`.
+      integer, intent(in) :: nl
+      real(wp), intent(in) :: c2, gain
+      real(wp), intent(in) :: h(nl)
+      real(wp), intent(in) :: n2(nl + 1)
+      real(wp), intent(in) :: psi_unlim(nl + 1)
+      real(wp), intent(out) :: psi(nl + 1)
+
+      real(wp) :: cp(NZ_STACK_MAX), dp(NZ_STACK_MAX)
+      real(wp) :: lo, up, dz, dg, den
+      integer :: k
+
+      psi(1) = 0.0_wp
+      psi(nl + 1) = 0.0_wp
+      if (nl < 2) return
+      if (c2 <= 0.0_wp) then
+         do k = 2, nl
+            psi(k) = gain*psi_unlim(k)
+         end do
+         return
+      end if
+      cp(1) = 0.0_wp
+      dp(1) = 0.0_wp
+      do k = 2, nl
+         dz = 0.5_wp*(h(k - 1) + h(k))
+         lo = c2/h(k - 1)
+         up = c2/h(k)
+         dg = lo + up + n2(k)*dz
+         den = dg + lo*cp(k - 1)
+         cp(k) = -up/den
+         dp(k) = (n2(k)*dz*gain*psi_unlim(k) + lo*dp(k - 1))/den
+      end do
+      psi(nl) = dp(nl)
+      do k = nl - 1, 2, -1
+         psi(k) = dp(k) - cp(k)*psi(k + 1)
+      end do
+   end subroutine gm_fgnv_solve_column
 
    pure function gm_block_below_bed(sfn, e_top_l, e_bot_l, bed_r, e_top_r, e_bot_r, bed_l) &
       result(sfn_b)

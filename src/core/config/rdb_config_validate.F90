@@ -777,6 +777,34 @@ contains
             has_error = .true.
          end if
 
+         ! FGNV streamfunction (Ferrari et al. 2010): needs GM (it replaces
+         ! its streamfunction) and the first-baroclinic cg1 (wavespeed slot);
+         ! the BVP coefficients must keep the tridiagonal system SPD.
+         if (cfg%ocean%gm%use_fgnv) then
+            if (.not. cfg%ocean%gm%enable) then
+               call logger%error("&ocean_gm_nml use_fgnv=.true. requires "// &
+                                 "&ocean_gm_nml enable=.true. (FGNV replaces the GM streamfunction)")
+               has_error = .true.
+            end if
+            if (.not. cfg%ocean%wavespeed%enable) then
+               call logger%error("&ocean_gm_nml use_fgnv=.true. requires "// &
+                                 "&ocean_wavespeed_nml enable=.true. (FGNV needs cg1)")
+               has_error = .true.
+            end if
+            if (cfg%ocean%gm%fgnv_filter_scale <= 0.0_wp) then
+               call logger%error("&ocean_gm_nml fgnv_filter_scale must be > 0")
+               has_error = .true.
+            end if
+            if (cfg%ocean%gm%fgnv_strat_floor <= 0.0_wp) then
+               call logger%error("&ocean_gm_nml fgnv_strat_floor must be > 0")
+               has_error = .true.
+            end if
+            if (cfg%ocean%gm%fgnv_c_min < 0.0_wp) then
+               call logger%error("&ocean_gm_nml fgnv_c_min must be >= 0")
+               has_error = .true.
+            end if
+         end if
+
          ! Redi (capability [3]) ships the CONTINUOUS variant only; the
          ! discontinuous (regula-falsi) path is deferred (R4).  Loud
          ! invariant — the device kernel cannot fail loud.

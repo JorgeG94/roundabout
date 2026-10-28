@@ -58,6 +58,20 @@ contains
       pl => cfg%ocean%gm%use_ebt_struct
       call g%add(nml_logical("use_ebt_struct", pl, &
                              "EBT vertical structure of KhTh (KHTH_USE_EBT_STRUCT; needs wavespeed use_ebt; default off)"))
+      pl => cfg%ocean%gm%use_fgnv
+      call g%add(nml_logical("use_fgnv", pl, &
+                    "Solve the FGNV (2010) vertical BVP for the GM streamfunction (KHTH_USE_FGNV_STREAMFUNCTION; needs wavespeed)"))
+      pr => cfg%ocean%gm%fgnv_filter_scale
+      call g%add(nml_real("fgnv_filter_scale", pr, &
+                          "FGNV smoothing-term scale: c^2 = scale*c^2, psi_unlim amplified by (1+scale) (FGNV_FILTER_SCALE, > 0)", &
+                          units="nondim"))
+      pr => cfg%ocean%gm%fgnv_c_min
+      call g%add(nml_real("fgnv_c_min", pr, &
+                          "FGNV_C_MIN, accepted for parity but not applied (>= 0)", units="m/s"))
+      pr => cfg%ocean%gm%fgnv_strat_floor
+      call g%add(nml_real("fgnv_strat_floor", pr, &
+                          "FGNV N^2 floor as a fraction of Omega: N^2 >= (floor*Omega)^2 (FGNV_STRAT_FLOOR, > 0)", &
+                          units="nondim"))
 
       call schema%add_group(g)
    end subroutine register_gm

@@ -2007,6 +2007,25 @@ module rdb_config
          !! Blundell 2003).  Requires `&ocean_wavespeed_nml enable` +
          !! `use_ebt` and GM enabled (configure-time errors).  Default off
          !! ⇒ bit-identical.
+      logical :: use_fgnv = .false.
+         !! Solve the Ferrari, Griffies, Nurser & Vallis (2010) vertical
+         !! boundary-value problem for the GM streamfunction
+         !! (MOM6 `KHTH_USE_FGNV_STREAMFUNCTION`).  Default off ⇒ the local
+         !! `-KhTh*S` streamfunction, bit-identical.  Requires GM and
+         !! `&ocean_wavespeed_nml enable` (the first-baroclinic `cg1`).
+      real(wp) :: fgnv_filter_scale = 1.0_wp
+         !! `FGNV_FILTER_SCALE`, > 0.  Scales the SMOOTHING TERM:
+         !! `c^2 = fgnv_filter_scale * c_face^2`, and `psi_unlim` is amplified
+         !! by `(1 + fgnv_filter_scale)` before the solve, so the
+         !! effective filter speed is `sqrt(fgnv_filter_scale) * cg1`
+         !! (OM3: 0.1 ⇒ `0.316 cg1`).  Inert unless `use_fgnv`.
+      real(wp) :: fgnv_c_min = 0.0_wp
+         !! `FGNV_C_MIN`, m/s, >= 0.  Accepted for parity; the reference
+         !! formulation does not apply it, so it is INERT here (OM3 sets 0).
+      real(wp) :: fgnv_strat_floor = 1.0e-15_wp
+         !! `FGNV_STRAT_FLOOR`, > 0.  `N^2` floor as a fraction of the
+         !! rotation rate: `N^2 >= (fgnv_strat_floor * Omega)^2`, keeping the
+         !! tridiagonal system non-degenerate.
    end type ocean_gm_config_t
    type :: ocean_redi_config_t
       !! `&ocean_redi_nml`: Redi continuous neutral (along-isopycnal) tracer

@@ -222,6 +222,10 @@ Gent-McWilliams thickness diffusion (eddy bolus transport).
 | `khth_max_cfl` | `0.1000000000E+00` | nondim | Fraction of the diffusive CFL the face KH may use |
 | `khth_slope_max` | `0.1000000000E-01` | nondim | Slope magnitude above which the safe-streamfunction blend takes over |
 | `use_ebt_struct` | `.false.` |  | EBT vertical structure of KhTh (KHTH_USE_EBT_STRUCT; needs wavespeed use_ebt; default off) |
+| `use_fgnv` | `.false.` |  | Solve the FGNV (2010) vertical BVP for the GM streamfunction (KHTH_USE_FGNV_STREAMFUNCTION; needs wavespeed) |
+| `fgnv_filter_scale` | `0.1000000000E+01` | nondim | FGNV smoothing-term scale: c^2 = scale*c^2, psi_unlim amplified by (1+scale) (FGNV_FILTER_SCALE, > 0) |
+| `fgnv_c_min` | `0.0000000000E+00` | m/s | FGNV_C_MIN, accepted for parity but not applied (>= 0) |
+| `fgnv_strat_floor` | `0.1000000000E-14` | nondim | FGNV N^2 floor as a fraction of Omega: N^2 >= (floor*Omega)^2 (FGNV_STRAT_FLOOR, > 0) |
 
 ### &ocean_redi_nml
 
