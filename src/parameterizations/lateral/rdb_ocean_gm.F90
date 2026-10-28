@@ -124,11 +124,13 @@ module rdb_ocean_gm
    !! psi_unlim; near the surface and bed it is smoothed over the deformation
    !! depth `c/N` and forced to zero, replacing ad-hoc tapering.
    !!
-   !! `gm_src` is NOT derived from the final transports: it is the PE
-   !! release `rho0*KH*S^2*N^2*h/4` of the LOCAL form (`gm_pe_release`),
-   !! left unchanged by FGNV (the MEKE source coupling is a separate
-   !! decision), so with FGNV on it overstates the release actually
-   !! performed near the caps.
+   !! `gm_src` defaults to the PE release `rho0*KH*S^2*N^2*h/4` of the
+   !! LOCAL form (`gm_pe_release`), which does not see FGNV, the EBT
+   !! structure or the limiters, so with FGNV on it overstates the release
+   !! actually performed near the caps.  `src_work`
+   !! (`&ocean_gm_nml gm_src_form = "work"`) instead has `gm_work_source`
+   !! replace it by the rate of potential-energy release of the FINAL
+   !! transports, face by face (see `gm_work_face`).
    !!
    !! Refs: Gent & McWilliams (1990); Gent et al. (1995); Griffies (1998);
    !! Ferrari, Griffies, Nurser & Vallis (2010), Ocean Modelling 32, 143-156.
@@ -141,6 +143,7 @@ module rdb_ocean_gm
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_ocean_isopycnal_slopes, only: ocean_slopes_t
+   use rdb_eos, only: eos_t, eos_density_specvol_derivs
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_mem_report, only: arr_bytes
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
@@ -157,6 +160,8 @@ module rdb_ocean_gm
    public :: ocean_gm_t
    public :: gm_compute_transports
    public :: gm_fgnv_solve_column
+   public :: gm_work_source
+   public :: gm_work_source_impl
 
    type :: ocean_gm_t
       !! Gent-McWilliams thickness-diffusion state.  All fields default to
@@ -196,6 +201,11 @@ module rdb_ocean_gm
          !! columns' `ebt_struct` in the layer just above that interface.
          !! Needs `ebt_struct` passed to `gm_compute_transports`; off ⇒ the
          !! kernels are byte-identical.
+      logical :: src_work = .false.
+         !! `&ocean_gm_nml gm_src_form = "work"`: `gm_work_source` REPLACES
+         !! `gm_src` by the PE-release rate of the final bolus transports
+         !! (MOM6 `MEKE_GM_SRC_ALT = False`).  Off ⇒ the local form,
+         !! bit-identical.
 
       ! ---- Cached extents ----
       integer :: nx_total = 0
@@ -1207,6 +1217,201 @@ contains
          gm_src(i, j) = 0.25_wp*rho0*acc
       end do
    end subroutine gm_pe_release
+
+   subroutine gm_work_source(grid, metrics, eos, this, slopes, ms)
+      !! Replace `gm_src` by the potential-energy release rate of the FINAL
+      !! bolus transports (`&ocean_gm_nml gm_src_form = "work"`).  Run after
+      !! `gm_compute_transports` and BEFORE `continuity_gm_apply`, so
+      !! `uhD`/`vhD` (limited, FGNV, EBT-structured) and `h_layer` are the
+      !! pair the operator will apply.  T/S come from the slopes slot's
+      !! vert-filled copies (refreshed at thermo cadence); interface heights
+      !! are rebuilt from the CURRENT `h_layer`.  No-op unless `src_work`.
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_metrics_t), intent(in) :: metrics
+      type(eos_t), intent(in) :: eos
+      type(ocean_gm_t), intent(inout) :: this
+      type(ocean_slopes_t), intent(in) :: slopes
+      type(multilayer_state_t), intent(in) :: ms
+
+      integer :: nx, ny, nz
+
+      if (.not. this%is_init) return
+      if (.not. this%enable) return
+      if (.not. this%src_work) return
+      if (.not. slopes%is_init) return
+      if (.not. allocated(ms%h_layer)) return
+      if (.not. allocated(slopes%t_fill)) return
+      nx = grid%nx_total
+      ny = grid%ny_total
+      nz = ms%nz_ml
+      if (this%nz_ml /= nz) return
+      if (slopes%nz_ml /= nz) return
+
+      ! The z-level open masks follow `gm_dispatch`: knob off ⇒ the slopes'
+      ! own (nx+1,ny,nz+1) arrays stand in (device-present, never read).
+      if (metrics%use_closed_faces) then
+         call gm_work_source_impl(nx, ny, nz, eos, this%rho0, .true., metrics%areaT, &
+                                  ms%h_layer, slopes%bathy, slopes%t_fill, slopes%s_fill, &
+                                  this%uhD, this%vhD, metrics%open_u, metrics%open_v, this%gm_src)
+      else
+         call gm_work_source_impl(nx, ny, nz, eos, this%rho0, .false., metrics%areaT, &
+                                  ms%h_layer, slopes%bathy, slopes%t_fill, slopes%s_fill, &
+                                  this%uhD, this%vhD, slopes%slope_x, slopes%slope_y, this%gm_src)
+      end if
+   end subroutine gm_work_source
+
+   subroutine gm_work_source_impl(nx, ny, nz, eos, rho0, use_open, areaT, h_layer, bathy, &
+                                  t_fill, s_fill, uhD, vhD, open_u, open_v, gm_src)
+      !! Flat-impl: `gm_src(i,j) = (1/2A) (W_u(i) + W_u(i+1) + W_v(j) + W_v(j+1))`
+      !! (W m^-2), each face's work from `gm_work_face`.  A face is shared by
+      !! its two cells, hence the 1/2.  Wall faces carry no transport.
+      integer, intent(in) :: nx, ny, nz
+      type(eos_t), intent(in) :: eos
+      real(wp), intent(in) :: rho0
+      logical, intent(in) :: use_open
+      real(wp), intent(in) :: areaT(nx, ny)
+      real(wp), intent(in) :: h_layer(nx, ny, nz)
+      real(wp), intent(in) :: bathy(nx, ny)
+      real(wp), intent(in) :: t_fill(nx, ny, nz)
+      real(wp), intent(in) :: s_fill(nx, ny, nz)
+      real(wp), intent(in) :: uhD(nx + 1, ny, nz)
+      real(wp), intent(in) :: vhD(nx, ny + 1, nz)
+      real(wp), intent(in) :: open_u(nx + 1, ny, nz)
+         !! Per-layer u-face open mask, read only when `use_open`.
+      real(wp), intent(in) :: open_v(nx, ny + 1, nz)
+      real(wp), intent(out) :: gm_src(nx, ny)
+
+      integer :: i, j, k
+      real(wp) :: wsum
+      real(wp) :: uc(NZ_STACK_MAX), oc(NZ_STACK_MAX)
+
+      do concurrent(j=1:ny, i=1:nx) local(k, wsum, uc, oc)
+         wsum = 0.0_wp
+         if (i >= 2) then               ! west face, columns (i-1, i)
+            do k = 1, nz
+               uc(k) = uhD(i, j, k)
+               oc(k) = 1.0_wp
+               if (use_open) oc(k) = open_u(i, j, k)
+            end do
+            wsum = wsum + gm_work_face(nx, ny, nz, eos, rho0, h_layer, bathy, t_fill, s_fill, &
+                                       i - 1, j, i, j, uc, oc, use_open)
+         end if
+         if (i + 1 <= nx) then          ! east face, columns (i, i+1)
+            do k = 1, nz
+               uc(k) = uhD(i + 1, j, k)
+               oc(k) = 1.0_wp
+               if (use_open) oc(k) = open_u(i + 1, j, k)
+            end do
+            wsum = wsum + gm_work_face(nx, ny, nz, eos, rho0, h_layer, bathy, t_fill, s_fill, &
+                                       i, j, i + 1, j, uc, oc, use_open)
+         end if
+         if (j >= 2) then               ! south face, columns (j-1, j)
+            do k = 1, nz
+               uc(k) = vhD(i, j, k)
+               oc(k) = 1.0_wp
+               if (use_open) oc(k) = open_v(i, j, k)
+            end do
+            wsum = wsum + gm_work_face(nx, ny, nz, eos, rho0, h_layer, bathy, t_fill, s_fill, &
+                                       i, j - 1, i, j, uc, oc, use_open)
+         end if
+         if (j + 1 <= ny) then          ! north face, columns (j, j+1)
+            do k = 1, nz
+               uc(k) = vhD(i, j + 1, k)
+               oc(k) = 1.0_wp
+               if (use_open) oc(k) = open_v(i, j + 1, k)
+            end do
+            wsum = wsum + gm_work_face(nx, ny, nz, eos, rho0, h_layer, bathy, t_fill, s_fill, &
+                                       i, j, i, j + 1, uc, oc, use_open)
+         end if
+         gm_src(i, j) = 0.5_wp*wsum/areaT(i, j)
+      end do
+   end subroutine gm_work_source_impl
+
+   pure function gm_work_face(nx, ny, nz, eos, rho0, h_layer, bathy, t_fill, s_fill, &
+                              il, jl, ir, jr, uhf, opf, use_open) result(w)
+      !$acc routine seq
+      !! Potential-energy release rate (W) of the bolus transports `uhf(k)`
+      !! (m^3/s, positive from column L to column R, bottom-up layers)
+      !! through one face.  Boussinesq PE per area is
+      !! `g Sum_k rho_k (e_{k+1}^2 - e_k^2)/2`, `e` the geopotential interface
+      !! height (surface datum z = 0, bed at `-bathy`).  The layer mass flux
+      !! `uhD_k` moves the interfaces (`de_K/dt = div U_K`, `U_K = Sum_{k>=K}
+      !! uhD_k` the transport ABOVE interface K, 0 at the bed and the
+      !! surface because `Sum uhD = 0`) and advects layer density at the
+      !! face-mean value, `h_k d rho_k/dt = -q_k . grad rho_k`.  Then
+      !!
+      !!   W = -dPE/dt = g Sum_k uhD_k dRho_k ebar_k + g Sum_{K=2}^{nz} U_K (D_R - D_L)
+      !!
+      !! with `dRho_k = rho_R - rho_L` along layer k, `ebar_k` the mean of the
+      !! four interface heights bounding layer k in both columns and
+      !! `D = (rho_below - rho_above) e_K` per column (the second sum is the
+      !! interface-motion term after one horizontal integration by parts).
+      !! Both sums are positive for GM flattening a tilted front.  Density
+      !! differences use `drho/dT`, `drho/dS` at the face-mean T/S and the
+      !! hydrostatic pressure of the point (`rho0 g` times the water above),
+      !! as the slope builder does.  Layer sweep runs surface -> bed.
+      integer, intent(in) :: nx, ny, nz, il, jl, ir, jr
+      type(eos_t), intent(in) :: eos
+      real(wp), intent(in) :: rho0
+      real(wp), intent(in) :: h_layer(nx, ny, nz)
+      real(wp), intent(in) :: bathy(nx, ny)
+      real(wp), intent(in) :: t_fill(nx, ny, nz)
+      real(wp), intent(in) :: s_fill(nx, ny, nz)
+      real(wp), intent(in) :: uhf(nz)
+      real(wp), intent(in) :: opf(nz)
+      logical, intent(in) :: use_open
+      real(wp) :: w
+
+      integer :: k
+      real(wp) :: el(NZ_STACK_MAX + 1), er(NZ_STACK_MAX + 1)
+      real(wp) :: ubig, p, tm, sm, rho, dsv_dt, dsv_ds, drdt, drds
+      real(wp) :: drl, drr, drho_layer, ebar
+
+      el(1) = -bathy(il, jl)
+      er(1) = -bathy(ir, jr)
+      do k = 1, nz
+         el(k + 1) = el(k) + h_layer(il, jl, k)
+         er(k + 1) = er(k) + h_layer(ir, jr, k)
+      end do
+
+      w = 0.0_wp
+      ubig = 0.0_wp
+      do k = nz, 1, -1
+         if (uhf(k) /= 0.0_wp) then
+            ! Layer term at the layer-mid pressure and face-mean T/S.
+            p = 0.5_wp*GRAVITY*rho0*((el(nz + 1) - 0.5_wp*(el(k) + el(k + 1))) + &
+                                     (er(nz + 1) - 0.5_wp*(er(k) + er(k + 1))))
+            tm = 0.5_wp*(t_fill(il, jl, k) + t_fill(ir, jr, k))
+            sm = 0.5_wp*(s_fill(il, jl, k) + s_fill(ir, jr, k))
+            call eos_density_specvol_derivs(eos, tm, sm, p, rho, dsv_dt, dsv_ds)
+            drdt = -(rho*rho)*dsv_dt
+            drds = -(rho*rho)*dsv_ds
+            drho_layer = drdt*(t_fill(ir, jr, k) - t_fill(il, jl, k)) + &
+                         drds*(s_fill(ir, jr, k) - s_fill(il, jl, k))
+            ebar = 0.25_wp*((el(k) + el(k + 1)) + (er(k) + er(k + 1)))
+            w = w + GRAVITY*uhf(k)*drho_layer*ebar
+         end if
+         ubig = ubig + uhf(k)          ! transport above interface K = k
+         if (k >= 2 .and. ubig /= 0.0_wp) then
+            if ((.not. use_open) .or. (opf(k) > 0.0_wp .and. opf(k - 1) > 0.0_wp)) then
+               ! Interface term: kb = k-1 below, ka = k above.
+               p = 0.5_wp*GRAVITY*rho0*((el(nz + 1) - el(k)) + (er(nz + 1) - er(k)))
+               tm = 0.25_wp*((t_fill(il, jl, k) + t_fill(ir, jr, k)) + &
+                             (t_fill(il, jl, k - 1) + t_fill(ir, jr, k - 1)))
+               sm = 0.25_wp*((s_fill(il, jl, k) + s_fill(ir, jr, k)) + &
+                             (s_fill(il, jl, k - 1) + s_fill(ir, jr, k - 1)))
+               call eos_density_specvol_derivs(eos, tm, sm, p, rho, dsv_dt, dsv_ds)
+               drdt = -(rho*rho)*dsv_dt
+               drds = -(rho*rho)*dsv_ds
+               drl = drdt*(t_fill(il, jl, k - 1) - t_fill(il, jl, k)) + &
+                     drds*(s_fill(il, jl, k - 1) - s_fill(il, jl, k))
+               drr = drdt*(t_fill(ir, jr, k - 1) - t_fill(ir, jr, k)) + &
+                     drds*(s_fill(ir, jr, k - 1) - s_fill(ir, jr, k))
+               w = w + GRAVITY*ubig*(drr*er(k) - drl*el(k))
+            end if
+         end if
+      end do
+   end function gm_work_face
 
    pure function ocean_gm_bytes(this) result(nbytes)
       !! Counted allocatable footprint of the GM slot

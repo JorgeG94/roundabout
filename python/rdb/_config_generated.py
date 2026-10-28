@@ -1181,6 +1181,15 @@ class OceanGm(Group):
         default=1e-15,
     )
 
+    gm_src_form = Enum(
+        'gm_src_form',
+        doc="MEKE's GM energy source: 'local' = rho0/4 KH S^2 N^2 h (default); 'work' = PE release by the final bolus transports (MEKE_GM_SRC_ALT=False)",
+        units='',
+        required=False,
+        default='local',
+        allowed=('local', 'work'),
+    )
+
 
 class OceanRedi(Group):
     """`&ocean_redi_nml` -- Redi continuous neutral (along-isopycnal) tracer diffusion."""
@@ -6882,4 +6891,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 62
-N_KNOBS = 756
+N_KNOBS = 757

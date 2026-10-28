@@ -187,6 +187,7 @@ set(RDB_TESTS
     "test_ocean_gm|test_ocean_gm|collect_ocean_gm_tests|ocean_gm|ocean"
     "test_ocean_gm_zfixed|test_ocean_gm_zfixed|collect_ocean_gm_zfixed_tests|ocean_gm_zfixed|ocean"
     "test_ocean_gm_fgnv|test_ocean_gm_fgnv|collect_ocean_gm_fgnv_tests|ocean_gm_fgnv|ocean"
+    "test_ocean_gm_work|test_ocean_gm_work|collect_ocean_gm_work_tests|ocean_gm_work|ocean"
     "test_ocean_slopes_datum|test_ocean_slopes_datum|collect_ocean_slopes_datum_tests|ocean_slopes_datum|ocean"
     "test_ocean_redi|test_ocean_redi|collect_ocean_redi_tests|ocean_redi|ocean"
     "test_ocean_redi_zfixed|test_ocean_redi_zfixed|collect_ocean_redi_zfixed_tests|ocean_redi_zfixed|ocean"

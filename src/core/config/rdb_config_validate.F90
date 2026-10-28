@@ -779,6 +779,14 @@ contains
             has_error = .true.
          end if
 
+         ! gm_src_form = "work" replaces the GM PE-release source by the work
+         ! of the final bolus transports: needs the GM operator to exist.
+         if (trim(cfg%ocean%gm%gm_src_form) == "work" .and. .not. cfg%ocean%gm%enable) then
+            call logger%error("&ocean_gm_nml gm_src_form='work' requires "// &
+                              "&ocean_gm_nml enable=.true.")
+            has_error = .true.
+         end if
+
          ! FGNV streamfunction (Ferrari et al. 2010): needs GM (it replaces
          ! its streamfunction) and the first-baroclinic cg1 (wavespeed slot);
          ! the BVP coefficients must keep the tridiagonal system SPD.

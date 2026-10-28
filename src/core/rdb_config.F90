@@ -2117,6 +2117,14 @@ module rdb_config
          !! `FGNV_STRAT_FLOOR`, > 0.  `N^2` floor as a fraction of the
          !! rotation rate: `N^2 >= (fgnv_strat_floor * Omega)^2`, keeping the
          !! tridiagonal system non-degenerate.
+      character(len=16) :: gm_src_form = "local"
+         !! Form of the PE-release source `gm_src` that feeds MEKE
+         !! (inverse of MOM6 `MEKE_GM_SRC_ALT`).  `"local"` (default,
+         !! bit-identical): `rho0/4 Sum KH S^2 N^2 h` from the unlimited local
+         !! slope.  `"work"` (OM3, `MEKE_GM_SRC_ALT = False`): the rate of
+         !! potential-energy release by the FINAL bolus transports (FGNV,
+         !! EBT structure, limiters included), per face then averaged to
+         !! cells; needs `&ocean_gm_nml enable`.
    end type ocean_gm_config_t
    type :: ocean_redi_config_t
       !! `&ocean_redi_nml`: Redi continuous neutral (along-isopycnal) tracer

@@ -226,6 +226,7 @@ Gent-McWilliams thickness diffusion (eddy bolus transport).
 | `fgnv_filter_scale` | `0.1000000000E+01` | nondim | FGNV smoothing-term scale: c^2 = scale*c^2, psi_unlim amplified by (1+scale) (FGNV_FILTER_SCALE, > 0) |
 | `fgnv_c_min` | `0.0000000000E+00` | m/s | FGNV_C_MIN, accepted for parity but not applied (>= 0) |
 | `fgnv_strat_floor` | `0.1000000000E-14` | nondim | FGNV N^2 floor as a fraction of Omega: N^2 >= (floor*Omega)^2 (FGNV_STRAT_FLOOR, > 0) |
+| `gm_src_form` | `"local"` |  | MEKE's GM energy source: 'local' = rho0/4 KH S^2 N^2 h (default); 'work' = PE release by the final bolus transports (MEKE_GM_SRC_ALT=False) |
 
 ### &ocean_redi_nml
 

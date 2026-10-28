@@ -85,7 +85,7 @@ module rdb_ocean_dyn
    use rdb_ocean_lateral_mix, only: ocean_lateral_mix_t, ocean_lateral_mix_compute
    use rdb_ocean_isopycnal_slopes, only: ocean_slopes_t, ocean_slopes_compute
    use rdb_ocean_mle, only: ocean_mle_t, mle_compute_transports
-   use rdb_ocean_gm, only: ocean_gm_t, gm_compute_transports
+   use rdb_ocean_gm, only: ocean_gm_t, gm_compute_transports, gm_work_source
    use rdb_ocean_redi, only: ocean_redi_t, redi_calc_coeffs, redi_apply_flux
    use rdb_ocean_varmix, only: ocean_varmix_t, varmix_compute
    use rdb_ocean_meke, only: ocean_meke_t, meke_step, meke_backscatter_apply
@@ -3398,7 +3398,7 @@ contains
       ! ---- Gent-McWilliams thickness diffusion: its OWN sequential operator
       ! on the CURRENT thickness, after the dynamics (MOM6 `thickness_diffuse`),
       ! every outer step.  See `run_gm_step`.
-      call run_gm_step(grid, metrics, dyn, ct, va, ms, dt, gm, slopes, varmix, &
+      call run_gm_step(grid, metrics, dyn, eos, ct, va, ms, dt, gm, slopes, varmix, &
                        wavespeed, vcoord, bc)
 
       ! Phase 2 (6b): advance the windowed-advect clock once per OUTER step
@@ -3880,14 +3880,15 @@ contains
       end if
    end subroutine run_continuity_chain
 
-   subroutine run_gm_step(grid, metrics, dyn, ct, va, ms, dt, gm, slopes, varmix, &
+   subroutine run_gm_step(grid, metrics, dyn, eos, ct, va, ms, dt, gm, slopes, varmix, &
                           wavespeed, vcoord, bc)
       !! Gent-McWilliams thickness diffusion as its OWN sequential operator,
       !! run once per outer step AFTER the dynamics (the stage loop and, under
       !! ssp_rk2, the stage average) — where MOM6 calls `thickness_diffuse`
       !! after `step_MOM_dyn_split_RK2`, every dynamics step:
       !!
-      !!   1. `gm_compute_transports` fills `uhD`/`vhD` + `gm_src` from the
+      !!   1. `gm_compute_transports` fills `uhD`/`vhD` + `gm_src` (replaced by
+      !!      `gm_work_source` under `gm_src_form = "work"`) from the
       !!      thickness the dynamics LEFT, with the stored slopes and the
       !!      VarMix/MEKE base KhTh refreshed at the top of the step;
       !!   2. `continuity_gm_apply` moves `h_layer` and every tracer by them
@@ -3911,6 +3912,7 @@ contains
       type(hgrid_t), intent(in) :: grid
       type(ocean_metrics_t), intent(in) :: metrics
       type(ocean_dyn_t), intent(inout) :: dyn
+      type(eos_t), intent(in) :: eos
       type(continuity_t), intent(inout) :: ct
       type(ocean_vertical_advection_t), intent(inout) :: va
       type(multilayer_state_t), intent(inout) :: ms
@@ -3977,6 +3979,9 @@ contains
             call gm_compute_transports(grid, metrics, gm, slopes, ms, dt)
          end if
       end if
+      ! MEKE's GM source from the work of the FINAL transports (before they
+      ! move `h`): `gm_src_form = "work"`.  Inert otherwise.
+      if (gm%src_work) call gm_work_source(grid, metrics, eos, gm, slopes, ms)
 
       tr_mode = TR_MODE_ADVECT
       if (dyn%dt_tracer_advect_ratio > 1) tr_mode = TR_MODE_ACCUMULATE

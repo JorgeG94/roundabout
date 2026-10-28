@@ -837,6 +837,7 @@ contains
       this%gm%fgnv_strat_floor = cfg%ocean%gm%fgnv_strat_floor
       this%gm%rho0 = cfg%ocean%ic%rho_0
       this%gm%use_ebt_struct = cfg%ocean%gm%use_ebt_struct
+      this%gm%src_work = trim(cfg%ocean%gm%gm_src_form) == "work"
       this%redi%enable = cfg%ocean%redi%enable
       this%redi%continuous = cfg%ocean%redi%continuous
       this%redi%khtr = cfg%ocean%redi%khtr

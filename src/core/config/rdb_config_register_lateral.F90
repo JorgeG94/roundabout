@@ -37,6 +37,7 @@ contains
       type(nml_group_t) :: g
       logical, pointer :: pl
       real(wp), pointer :: pr
+      character(len=:), pointer :: ps
 
       g%name = "ocean_gm"
       g%doc = "Gent-McWilliams thickness diffusion (eddy bolus transport)."
@@ -72,6 +73,11 @@ contains
       call g%add(nml_real("fgnv_strat_floor", pr, &
                           "FGNV N^2 floor as a fraction of Omega: N^2 >= (floor*Omega)^2 (FGNV_STRAT_FLOOR, > 0)", &
                           units="nondim"))
+      ps => cfg%ocean%gm%gm_src_form
+      call g%add(nml_enum("gm_src_form", ps, &
+                          "MEKE's GM energy source: 'local' = rho0/4 KH S^2 N^2 h (default); "// &
+                          "'work' = PE release by the final bolus transports (MEKE_GM_SRC_ALT=False)", &
+                          allowed=[character(len=15) :: "local", "work"]))
 
       call schema%add_group(g)
    end subroutine register_gm
