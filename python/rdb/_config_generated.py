@@ -4955,6 +4955,14 @@ class OceanHvisc(Group):
         default=4.0,
     )
 
+    bound_thin_layer = Bool(
+        'bound_thin_layer',
+        doc='stress_tensor: thin-layer ratio on Kh bound + harmonic corner thickness + T-masked h_u/h_v',
+        units='',
+        required=False,
+        default=False,
+    )
+
     kh_bg_at_points = Bool(
         'kh_bg_at_points',
         doc='stress_tensor: Laplacian floor (vel-scale, sin-lat) built AT T and corner points',
@@ -7246,4 +7254,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 63
-N_KNOBS = 797
+N_KNOBS = 798

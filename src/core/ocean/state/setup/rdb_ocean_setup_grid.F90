@@ -337,6 +337,7 @@ contains
       ocean_state%hvisc%nu_h = cfg%ocean%hvisc%nu_h
       ocean_state%hvisc%nu_4 = cfg%ocean%hvisc%nu_4
       ocean_state%hvisc%stress_tensor = cfg%ocean%hvisc%stress_tensor
+      ocean_state%hvisc%bound_thin_layer = cfg%ocean%hvisc%bound_thin_layer
       ocean_state%hvisc%bound_coef = cfg%ocean%hvisc%bound_coef
       ocean_state%hvisc%bound_kh = cfg%ocean%hvisc%bound_kh
       ocean_state%hvisc%no_slip = cfg%ocean%hvisc%no_slip

@@ -993,6 +993,12 @@ contains
                               "the |sin(lat)| floor would vanish everywhere")
             has_error = .true.
          end if
+         if (cfg%ocean%hvisc%bound_thin_layer .and. .not. cfg%ocean%hvisc%stress_tensor) then
+            call logger%error("&ocean_hvisc_nml bound_thin_layer=.true. requires "// &
+                              "stress_tensor=.true. - the thin-layer ratio and harmonic "// &
+                              "corner thickness act only in the stress-form assembly")
+            has_error = .true.
+         end if
          if (cfg%ocean%hvisc%kh_bg_at_points .and. .not. cfg%ocean%hvisc%stress_tensor) then
             call logger%error("&ocean_hvisc_nml kh_bg_at_points=.true. requires "// &
                               "stress_tensor=.true. - the point statics seed the "// &

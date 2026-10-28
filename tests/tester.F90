@@ -236,6 +236,7 @@ program rdb_tests
    use test_ocean_diag_remap, only: ocean_diag_remap_collect => collect_ocean_diag_remap_tests
    use test_ocean_gm_fgnv, only: ocean_gm_fgnv_collect => collect_ocean_gm_fgnv_tests
    use test_ocean_hvisc_om3_floors, only: ocean_hvisc_om3_floors_collect => collect_ocean_hvisc_om3_floors_tests
+   use test_ocean_hvisc_thin_layer, only: ocean_hvisc_thin_layer_collect => collect_ocean_hvisc_thin_layer_tests
    use test_ocean_hvisc_kh_points, only: ocean_hvisc_kh_points_collect => collect_ocean_hvisc_kh_points_tests
    use test_ocean_vmix_no_pp81, only: ocean_vmix_no_pp81_collect => collect_ocean_vmix_no_pp81_tests
    use test_ocean_epbl_max_shear, only: ocean_epbl_max_shear_collect => collect_ocean_epbl_max_shear_tests
@@ -460,6 +461,7 @@ program rdb_tests
                 new_testsuite("ocean_diag_remap", ocean_diag_remap_collect), &
                 new_testsuite("ocean_gm_fgnv", ocean_gm_fgnv_collect), &
                 new_testsuite("ocean_hvisc_om3_floors", ocean_hvisc_om3_floors_collect), &
+                new_testsuite("ocean_hvisc_thin_layer", ocean_hvisc_thin_layer_collect), &
                 new_testsuite("ocean_hvisc_kh_points", ocean_hvisc_kh_points_collect), &
                 new_testsuite("ocean_vmix_no_pp81", ocean_vmix_no_pp81_collect), &
                 new_testsuite("ocean_epbl_max_shear", ocean_epbl_max_shear_collect), &

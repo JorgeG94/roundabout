@@ -311,6 +311,7 @@ set(RDB_TESTS
     "test_ocean_hvisc_aniso|test_ocean_hvisc_aniso|collect_ocean_hvisc_aniso_tests|ocean_hvisc_aniso|ocean"
     "test_ocean_hvisc_stress_biharm|test_ocean_hvisc_stress_biharm|collect_ocean_hvisc_stress_biharm_tests|ocean_hvisc_stress_biharm|ocean"
     "test_ocean_hvisc_om3_floors|test_ocean_hvisc_om3_floors|collect_ocean_hvisc_om3_floors_tests|ocean_hvisc_om3_floors|ocean"
+    "test_ocean_hvisc_thin_layer|test_ocean_hvisc_thin_layer|collect_ocean_hvisc_thin_layer_tests|ocean_hvisc_thin_layer|ocean"
     "test_ocean_hvisc_kh_points|test_ocean_hvisc_kh_points|collect_ocean_hvisc_kh_points_tests|ocean_hvisc_kh_points|ocean"
     "test_ocean_ideal_age|test_ocean_ideal_age|collect_ocean_ideal_age_tests|ocean_ideal_age|ocean"
     "test_ocean_fail_loud_dispatch|test_ocean_fail_loud_dispatch|collect_ocean_fail_loud_dispatch_tests|ocean_fail_loud_dispatch|ocean"

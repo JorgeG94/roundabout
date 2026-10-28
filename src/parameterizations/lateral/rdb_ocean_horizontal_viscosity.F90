@@ -54,7 +54,7 @@ module rdb_ocean_horizontal_viscosity
    !! (a documented fidelity divergence from MOM6, which sums both into
    !! one stress tensor before differencing — porting the biharmonic
    !! into the stress tensor is a follow-on PR, not this module today).
-   use rdb_constants, only: wp, H_VANISHED, PI
+   use rdb_constants, only: wp, H_VANISHED, H_DIV_EPS, PI
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_multilayer_state, only: multilayer_state_t
@@ -75,6 +75,7 @@ module rdb_ocean_horizontal_viscosity
    public :: ocean_horizontal_viscosity_compute_ke_diss
    public :: ocean_hvisc_set_aniso_direction
    public :: aniso_mode_is_implemented
+   public :: hvisc_hq_harmonic
 
    type :: ocean_horizontal_viscosity_t
       logical :: is_init = .false.
@@ -85,6 +86,15 @@ module rdb_ocean_horizontal_viscosity
          !! Tier-1 default is zero (kernel becomes a no-op); set
          !! positive to enable damping.  Numerical-stability cap:
          !! `nu_h * dt * (1/dx^2 + 1/dy^2) <= 0.5`.
+      logical :: bound_thin_layer = .false.
+         !! Stress-tensor path only.  Thin-layer treatment of the Griffies &
+         !! Hallberg (2000) stress form: (a) the CFL bound on the Laplacian
+         !! coefficient is scaled by `r = min(1, h_min/(h+eps))` at T and Bu
+         !! (`h_min` = the smallest surrounding face thickness), (b) the
+         !! corner thickness is the harmonic-type mean that vanishes when ANY
+         !! one of its four face thicknesses does (instead of the arithmetic
+         !! 4-point mean), (c) face thicknesses are masked by the T wet mask.
+         !! Default `.false.` ⇒ bit-identical.
       logical :: stress_tensor = .false.
          !! When true, the compute step uses the MOM6-faithful
          !! thickness-weighted stress-divergence operator
@@ -562,6 +572,7 @@ contains
             this%ah_t%data, this%ah_q%data, this%bound_coef, dt_local, &
             metrics%idxT, metrics%idyT, metrics%idxCu, metrics%idyCu, &
             metrics%idxCv, metrics%idyCv, metrics%iareaCu, metrics%iareaCv, &
+            h, metrics%wet_T, this%bound_thin_layer, &
             nx, ny, nz)
 
          ! Step B: stress assembly + thickness-weighted divergence.
@@ -581,6 +592,7 @@ contains
             metrics%dy_dxT, metrics%dx_dyT, metrics%dy_dxBu, metrics%dx_dyBu, &
             metrics%iareaCu, metrics%iareaCv, &
             metrics%wet_u, metrics%wet_v, metrics%wet_q, &
+            metrics%wet_T, this%bound_thin_layer, &
             nx, ny, nz)
          ! Outer shim: dereference the multilayer + lateral-mix + this
          ! components on host, then dispatch to a flat-impl with explicit-
@@ -1481,7 +1493,7 @@ contains
 
    pure subroutine hvisc_clamp_A(ah_t, ah_q, bound_coef, dt, &
                                  idxT, idyT, idxCu, idyCu, idxCv, idyCv, &
-                                 iareaCu, iareaCv, nx, ny, nz)
+                                 iareaCu, iareaCv, h_layer, wet_T, thin, nx, ny, nz)
       !! Per-cell CFL viscosity limiter (MOM6 `BOUND_KH`).  Clamps the
       !! T-cell viscosity to `Kh_Max_xx` and the corner viscosity to
       !! `Kh_Max_xy`, each derived from the actual discrete stress
@@ -1496,8 +1508,12 @@ contains
       real(wp), intent(in) :: idxCu(nx + 1, ny), idyCu(nx + 1, ny)
       real(wp), intent(in) :: idxCv(nx, ny + 1), idyCv(nx, ny + 1)
       real(wp), intent(in) :: iareaCu(nx + 1, ny), iareaCv(nx, ny + 1)
+      real(wp), intent(in) :: h_layer(nx, ny, nz), wet_T(nx, ny)
+      logical, intent(in) :: thin
+         !! `bound_thin_layer`: scale the bound by the thin-layer ratio `r`.
       integer :: i, j, k
-      real(wp) :: idt, kh_max, denom, tx, ty, dx2, dy2
+      real(wp) :: idt, kh_max, denom, tx, ty, dx2, dy2, r, hmin, hc, hcw, hce, hcs, hcn
+      real(wp) :: huS, huN, hvW, hvE, hq
       idt = 1.0_wp/dt
       ! T-cell bound: tension stress acts on the two u-faces (i, i+1)
       ! and two v-faces (j, j+1).  dx2/dy2 per cell from the metric
@@ -1506,7 +1522,7 @@ contains
       ! curvilinear metrics are valid in the ghosts, so the bound is
       ! defined everywhere; guard denom>0 for any zeroed land metric.
       do concurrent(k=1:nz, j=1:ny, i=1:nx) &
-         local(kh_max, denom, tx, ty, dx2, dy2)
+         local(kh_max, denom, tx, ty, dx2, dy2, r, hmin, hc, hcw, hce, hcs, hcn)
          dx2 = 1.0_wp/(idxT(i, j)*idxT(i, j))
          dy2 = 1.0_wp/(idyT(i, j)*idyT(i, j))
          tx = dy2*(idyT(i, j)/idxT(i, j))*(idyCu(i + 1, j) + idyCu(i, j))* &
@@ -1516,6 +1532,19 @@ contains
          denom = max(tx, ty)
          if (denom > 0.0_wp) then
             kh_max = bound_coef*0.25_wp*idt/denom
+            if (thin) then
+               ! r_T = min(1, h_min,T/(h_T+eps)); h_min,T = smallest of
+               ! the four T-surrounding face thicknesses (T-masked).
+               hc = hvisc_hm(h_layer, wet_T, i, j, k, nx, ny, nz)
+               hcw = hvisc_hm(h_layer, wet_T, i - 1, j, k, nx, ny, nz)
+               hce = hvisc_hm(h_layer, wet_T, i + 1, j, k, nx, ny, nz)
+               hcs = hvisc_hm(h_layer, wet_T, i, j - 1, k, nx, ny, nz)
+               hcn = hvisc_hm(h_layer, wet_T, i, j + 1, k, nx, ny, nz)
+               hmin = min(min(0.5_wp*(hcw + hc), 0.5_wp*(hc + hce)), &
+                          min(0.5_wp*(hcs + hc), 0.5_wp*(hc + hcn)))
+               r = min(1.0_wp, hmin/(hc + H_DIV_EPS))
+               kh_max = r*kh_max
+            end if
             if (ah_t(i, j, k) > kh_max) ah_t(i, j, k) = kh_max
          end if
       end do
@@ -1525,7 +1554,7 @@ contains
       ! bound differs from the T-cell bound only by which faces it
       ! sums, and on a square grid both collapse to the same value.
       do concurrent(k=1:nz, j=2:ny, i=2:nx) &
-         local(kh_max, denom, tx, ty, dx2, dy2)
+         local(kh_max, denom, tx, ty, dx2, dy2, r, hmin, huS, huN, hvW, hvE, hq)
          dx2 = 1.0_wp/(idxCu(i, j)*idxCu(i, j))
          dy2 = 1.0_wp/(idyCv(i, j)*idyCv(i, j))
          tx = dx2*(idxCu(i, j) + idxCu(i, j - 1))* &
@@ -1535,6 +1564,21 @@ contains
          denom = max(tx, ty)
          if (denom > 0.0_wp) then
             kh_max = bound_coef*0.25_wp*idt/denom
+            if (thin) then
+               ! r_q = min(1, h_min,q/(h_q+eps)) with the harmonic-type h_q.
+               huS = 0.5_wp*(hvisc_hm(h_layer, wet_T, i - 1, j - 1, k, nx, ny, nz) + &
+                             hvisc_hm(h_layer, wet_T, i, j - 1, k, nx, ny, nz))
+               huN = 0.5_wp*(hvisc_hm(h_layer, wet_T, i - 1, j, k, nx, ny, nz) + &
+                             hvisc_hm(h_layer, wet_T, i, j, k, nx, ny, nz))
+               hvW = 0.5_wp*(hvisc_hm(h_layer, wet_T, i - 1, j - 1, k, nx, ny, nz) + &
+                             hvisc_hm(h_layer, wet_T, i - 1, j, k, nx, ny, nz))
+               hvE = 0.5_wp*(hvisc_hm(h_layer, wet_T, i, j - 1, k, nx, ny, nz) + &
+                             hvisc_hm(h_layer, wet_T, i, j, k, nx, ny, nz))
+               hq = hvisc_hq_harmonic(huS, huN, hvW, hvE)
+               hmin = min(min(huS, huN), min(hvW, hvE))
+               r = min(1.0_wp, hmin/(hq + H_DIV_EPS))
+               kh_max = r*kh_max
+            end if
             if (ah_q(i, j, k) > kh_max) ah_q(i, j, k) = kh_max
          end if
       end do
@@ -1602,6 +1646,37 @@ contains
       end if
    end function hvisc_nu4_cfl_bound
 
+   pure function hvisc_hm(h_layer, wet_T, i, j, k, nx, ny, nz) result(hm)
+      !! T-masked layer thickness `wet_T*h` at T cell (i,j), indices clamped
+      !! into the array so edge stencils read the nearest cell.  Building
+      !! block of the masked face thicknesses `h_u = ½(hm_L + hm_R)` used by
+      !! `bound_thin_layer`.  `!$acc routine seq`.
+      !$acc routine seq
+      integer, intent(in) :: i, j, k, nx, ny, nz
+      real(wp), intent(in) :: h_layer(nx, ny, nz), wet_T(nx, ny)
+      real(wp) :: hm
+      integer :: ii, jj
+      ii = min(max(i, 1), nx)
+      jj = min(max(j, 1), ny)
+      hm = wet_T(ii, jj)*h_layer(ii, jj, k)
+   end function hvisc_hm
+
+   pure function hvisc_hq_harmonic(huS, huN, hvW, hvE) result(hq)
+      !! Harmonic-type corner thickness (Griffies & Hallberg 2000 stress
+      !! form, as in MOM6 `h_q`):
+      !!   `h_q = 2·h2uq·h2vq / (eps³ + (h2uq+h2vq)·(huS+huN+hvW+hvE))`,
+      !! `h2uq = 4·huS·huN`, `h2vq = 4·hvW·hvE`.  Reduces to the common
+      !! value for uniform thickness and is exactly 0 if ANY of the four
+      !! face thicknesses is 0.  `!$acc routine seq`.
+      !$acc routine seq
+      real(wp), intent(in) :: huS, huN, hvW, hvE
+      real(wp) :: hq
+      real(wp) :: h2uq, h2vq
+      h2uq = 4.0_wp*huS*huN
+      h2vq = 4.0_wp*hvW*hvE
+      hq = 2.0_wp*h2uq*h2vq/(H_DIV_EPS*H_DIV_EPS*H_DIV_EPS + (h2uq + h2vq)*(huS + huN + hvW + hvE))
+   end function hvisc_hq_harmonic
+
    pure function raw_sh_xx(u_face, v_face, idxCu, idyCu, idxCv, dy_dxT, dx_dyT, &
                            i, j, k, nx, ny, nz) result(sh_xx)
       !! Raw tension strain `sh_xx = du/dx − dv/dy` at T-cell (i,j),
@@ -1642,7 +1717,7 @@ contains
                                         dx2h, dy2h, dx2q, dy2q, &
                                         dy_dxT, dx_dyT, dy_dxBu, dx_dyBu, &
                                         iareaCu, iareaCv, &
-                                        wet_u, wet_v, wet_q, nx, ny, nz)
+                                        wet_u, wet_v, wet_q, wet_T, thin, nx, ny, nz)
       !! MOM6 thickness-weighted stress-divergence operator.  Three
       !! phases: (1) tension `str_xx` at T-cells, (2) shear `str_xy` at
       !! Bu corners, (3) the divergence `(1/(h_u+h_neglect))·∂str`.
@@ -1678,8 +1753,12 @@ contains
       real(wp), intent(in)    :: iareaCu(nx + 1, ny), iareaCv(nx, ny + 1)
       real(wp), intent(in)    :: wet_u(nx + 1, ny), wet_v(nx, ny + 1)
       real(wp), intent(in)    :: wet_q(nx + 1, ny + 1)
+      real(wp), intent(in)    :: wet_T(nx, ny)
+      logical, intent(in)     :: thin
+         !! `bound_thin_layer`: harmonic-type `h_q`, T-masked face thicknesses.
       integer :: i, j, k
-      real(wp) :: dudx, dvdy, dvdx, dudy, h_q, slip
+      real(wp) :: dudx, dvdy, dvdx, dudy, h_q, slip, h_t
+      real(wp) :: huS, huN, hvW, hvE
       real(wp) :: aniso_cross, shxy_at_t, shxx_at_q
       real(wp), parameter :: H_NEGLECT = H_VANISHED
 
@@ -1690,12 +1769,14 @@ contains
       ! face wet masks keeps a land neighbour from contributing strain
       ! (MOM6 masks via reduction_xx + pre-masked metrics; the wet_u/
       ! wet_v product is the equivalent here).  All-wet ⇒ ×1.
-      do concurrent(k=1:nz, j=1:ny, i=1:nx) local(dudx, dvdy)
+      do concurrent(k=1:nz, j=1:ny, i=1:nx) local(dudx, dvdy, h_t)
          dudx = dy_dxT(i, j)*(idyCu(i + 1, j)*wet_u(i + 1, j)*u_face(i + 1, j, k) - &
                               idyCu(i, j)*wet_u(i, j)*u_face(i, j, k))
          dvdy = dx_dyT(i, j)*(idxCv(i, j + 1)*wet_v(i, j + 1)*v_face(i, j + 1, k) - &
                               idxCv(i, j)*wet_v(i, j)*v_face(i, j, k))
-         str_xx(i, j, k) = ah_t(i, j, k)*(dudx - dvdy)*h_layer(i, j, k)
+         h_t = h_layer(i, j, k)
+         if (thin) h_t = hvisc_hm(h_layer, wet_T, i, j, k, nx, ny, nz)
+         str_xx(i, j, k) = ah_t(i, j, k)*(dudx - dvdy)*h_t
       end do
 
       ! ---- Phase 2: shear stress at Bu corners (i,j) = SW of cell (i,j) ----
@@ -1703,11 +1784,22 @@ contains
       ! surrounding cells (no halo issues — only interior corners are
       ! read by the divergence).  Slip factor: free-slip ×wet_q,
       ! no-slip ×(2−wet_q); all-wet ⇒ ×1.
-      do concurrent(k=1:nz, j=2:ny, i=2:nx) local(dvdx, dudy, h_q, slip)
+      do concurrent(k=1:nz, j=2:ny, i=2:nx) local(dvdx, dudy, h_q, slip, huS, huN, hvW, hvE)
          dvdx = dy_dxBu(i, j)*(idyCv(i, j)*v_face(i, j, k) - idyCv(i - 1, j)*v_face(i - 1, j, k))
          dudy = dx_dyBu(i, j)*(idxCu(i, j)*u_face(i, j, k) - idxCu(i, j - 1)*u_face(i, j - 1, k))
          h_q = 0.25_wp*((h_layer(i - 1, j - 1, k) + h_layer(i, j, k)) + &
                         (h_layer(i - 1, j, k) + h_layer(i, j - 1, k)))
+         if (thin) then
+            huS = 0.5_wp*(hvisc_hm(h_layer, wet_T, i - 1, j - 1, k, nx, ny, nz) + &
+                          hvisc_hm(h_layer, wet_T, i, j - 1, k, nx, ny, nz))
+            huN = 0.5_wp*(hvisc_hm(h_layer, wet_T, i - 1, j, k, nx, ny, nz) + &
+                          hvisc_hm(h_layer, wet_T, i, j, k, nx, ny, nz))
+            hvW = 0.5_wp*(hvisc_hm(h_layer, wet_T, i - 1, j - 1, k, nx, ny, nz) + &
+                          hvisc_hm(h_layer, wet_T, i - 1, j, k, nx, ny, nz))
+            hvE = 0.5_wp*(hvisc_hm(h_layer, wet_T, i, j - 1, k, nx, ny, nz) + &
+                          hvisc_hm(h_layer, wet_T, i, j, k, nx, ny, nz))
+            h_q = hvisc_hq_harmonic(huS, huN, hvW, hvE)
+         end if
          slip = (1.0_wp - 2.0_wp*ns)*wet_q(i, j) + 2.0_wp*ns
          str_xy(i, j, k) = ah_q(i, j, k)*(dvdx + dudy)*h_q*slip
       end do
@@ -1748,7 +1840,7 @@ contains
          ! str_xy gains the tension-strain contribution: average sh_xx
          ! from the 4 T-cells around corner (i,j): (i-1,j-1),(i,j-1),
          ! (i-1,j),(i,j).  Slip + h_q reuse Phase-2 forms.
-         do concurrent(k=1:nz, j=2:ny, i=2:nx) local(shxx_at_q, h_q, slip)
+         do concurrent(k=1:nz, j=2:ny, i=2:nx) local(shxx_at_q, h_q, slip, huS, huN, hvW, hvE)
             shxx_at_q = 0.25_wp*( &
                         (raw_sh_xx(u_face, v_face, idxCu, idyCu, idxCv, dy_dxT, dx_dyT, i - 1, j - 1, k, nx, ny, nz) + &
                          raw_sh_xx(u_face, v_face, idxCu, idyCu, idxCv, dy_dxT, dx_dyT, i, j, k, nx, ny, nz)) + &
@@ -1756,6 +1848,17 @@ contains
                          raw_sh_xx(u_face, v_face, idxCu, idyCu, idxCv, dy_dxT, dx_dyT, i - 1, j, k, nx, ny, nz)))
             h_q = 0.25_wp*((h_layer(i - 1, j - 1, k) + h_layer(i, j, k)) + &
                            (h_layer(i - 1, j, k) + h_layer(i, j - 1, k)))
+            if (thin) then
+               huS = 0.5_wp*(hvisc_hm(h_layer, wet_T, i - 1, j - 1, k, nx, ny, nz) + &
+                             hvisc_hm(h_layer, wet_T, i, j - 1, k, nx, ny, nz))
+               huN = 0.5_wp*(hvisc_hm(h_layer, wet_T, i - 1, j, k, nx, ny, nz) + &
+                             hvisc_hm(h_layer, wet_T, i, j, k, nx, ny, nz))
+               hvW = 0.5_wp*(hvisc_hm(h_layer, wet_T, i - 1, j - 1, k, nx, ny, nz) + &
+                             hvisc_hm(h_layer, wet_T, i - 1, j, k, nx, ny, nz))
+               hvE = 0.5_wp*(hvisc_hm(h_layer, wet_T, i, j - 1, k, nx, ny, nz) + &
+                             hvisc_hm(h_layer, wet_T, i, j, k, nx, ny, nz))
+               h_q = hvisc_hq_harmonic(huS, huN, hvW, hvE)
+            end if
             slip = (1.0_wp - 2.0_wp*ns)*wet_q(i, j) + 2.0_wp*ns
             str_xy(i, j, k) = str_xy(i, j, k) + aniso_cross*shxx_at_q*h_q*slip
          end do
@@ -1766,11 +1869,14 @@ contains
       !                      + idxCu·(dx2q·str_xy(i,j+1) − dx2q·str_xy(i,j)) )
       !            / (h_u + h_neglect).   (signs verified to reduce to
       ! +A·∇²u on uniform-h all-wet; see module header.)
-      do concurrent(k=1:nz, j=2:ny - 1, i=2:nx)
+      do concurrent(k=1:nz, j=2:ny - 1, i=2:nx) local(h_t)
+         h_t = 0.5_wp*(h_layer(i - 1, j, k) + h_layer(i, j, k))
+         if (thin) h_t = 0.5_wp*(hvisc_hm(h_layer, wet_T, i - 1, j, k, nx, ny, nz) + &
+                                 hvisc_hm(h_layer, wet_T, i, j, k, nx, ny, nz))
          du_visc(i, j, k) = wet_u(i, j)*iareaCu(i, j)* &
                             (idyCu(i, j)*(dy2h(i, j)*str_xx(i, j, k) - dy2h(i - 1, j)*str_xx(i - 1, j, k)) + &
                              idxCu(i, j)*(dx2q(i, j + 1)*str_xy(i, j + 1, k) - dx2q(i, j)*str_xy(i, j, k)))/ &
-                            (0.5_wp*(h_layer(i - 1, j, k) + h_layer(i, j, k)) + H_NEGLECT)
+                            (h_t + H_NEGLECT)
       end do
       do concurrent(k=1:nz, j=1:ny)
          du_visc(1, j, k) = 0.0_wp
@@ -1786,11 +1892,14 @@ contains
       !                      + idyCv·(dy2q·str_xy(i+1,j) − dy2q·str_xy(i,j)) )
       !            / (h_v + h_neglect).  Tension enters with the
       ! opposite sign on the v-face (MOM6 diffv).
-      do concurrent(k=1:nz, j=2:ny, i=2:nx - 1)
+      do concurrent(k=1:nz, j=2:ny, i=2:nx - 1) local(h_t)
+         h_t = 0.5_wp*(h_layer(i, j - 1, k) + h_layer(i, j, k))
+         if (thin) h_t = 0.5_wp*(hvisc_hm(h_layer, wet_T, i, j - 1, k, nx, ny, nz) + &
+                                 hvisc_hm(h_layer, wet_T, i, j, k, nx, ny, nz))
          dv_visc(i, j, k) = wet_v(i, j)*iareaCv(i, j)* &
                             (idyCv(i, j)*(dy2q(i + 1, j)*str_xy(i + 1, j, k) - dy2q(i, j)*str_xy(i, j, k)) - &
                              idxCv(i, j)*(dx2h(i, j)*str_xx(i, j, k) - dx2h(i, j - 1)*str_xx(i, j - 1, k)))/ &
-                            (0.5_wp*(h_layer(i, j - 1, k) + h_layer(i, j, k)) + H_NEGLECT)
+                            (h_t + H_NEGLECT)
       end do
       do concurrent(k=1:nz, i=1:nx)
          dv_visc(i, 1, k) = 0.0_wp

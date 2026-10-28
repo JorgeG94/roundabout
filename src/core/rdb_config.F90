@@ -1589,6 +1589,15 @@ module rdb_config
       real(wp) :: kh_pwr_of_sine = 4.0_wp
          !! Exponent of `|sin φ|` in the `kh_sin_lat` floor (MOM6
          !! `KH_PWR_OF_SINE`).  Inert while `kh_sin_lat = 0`.
+      logical :: bound_thin_layer = .false.
+         !! Stress-tensor path only (fails loud without `stress_tensor`):
+         !! thin-layer treatment of the stress form.  The Laplacian CFL bound
+         !! is scaled by `r = min(1, h_min/(h+eps))` at T and Bu (`h_min` the
+         !! smallest surrounding face thickness), the corner thickness is the
+         !! harmonic-type mean that vanishes with any one face thickness, and
+         !! the face thicknesses are masked by the T wet mask (Griffies &
+         !! Hallberg 2000).  Required for stress-form viscosity on z* columns
+         !! with vanished layers.  Default `.false.` ⇒ bit-identical.
       logical :: kh_bg_at_points = .false.
          !! Stress-tensor path only (fails loud without `stress_tensor`):
          !! build the static Laplacian floor AT the T centres and AT the Bu
