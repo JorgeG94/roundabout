@@ -452,6 +452,7 @@ module rdb_ocean_dyn
       procedure, non_overridable :: is_thermo_step => ocean_dyn_is_thermo_step
       procedure, non_overridable :: therm_dt => ocean_dyn_therm_dt
       procedure, non_overridable :: is_tracer_advect_step => ocean_dyn_is_tracer_advect_step
+      procedure, non_overridable :: is_remap_step => ocean_dyn_is_remap_step
       procedure, non_overridable :: bytes => ocean_dyn_bytes
    end type ocean_dyn_t
 
@@ -572,30 +573,44 @@ contains
    end function ocean_dyn_therm_dt
 
    pure function ocean_dyn_is_tracer_advect_step(this) result(yes)
-      !! Returns `.true.` when the windowed horizontal tracer-advect drain
-      !! should fire on the current outer step, evaluated with the
-      !! PRE-increment `outer_step_count` so it aligns bit-for-bit with
-      !! `is_thermo_step()` (which gates the ALE remap on the same count).
+      !! `.true.` when the windowed horizontal tracer-advect drain closes a
+      !! window on the current outer step.  Evaluated before the step's own
+      !! `outer_step_count` increment, so the step number is `count + 1` and
+      !! the drain fires on steps `ratio, 2*ratio, ...` counted from the
+      !! start (or restart) -- every window is exactly `ratio` steps long.
+      !! `ratio <= 1` => never (the every-step bypass owns that case).
       !!
-      !! Cadence reasoning: at `outer_step_count = 0` the IC-aligned first
-      !! window has not accumulated yet, so the drain must NOT fire then.
-      !! It fires when `mod(outer_step_count, ratio) == 0 .and.
-      !! outer_step_count > 0` — i.e. exactly `ratio` accumulate-steps have
-      !! completed since the last reset.  Because the config constraint
-      !! forces `dt_therm_ratio` to be an integer multiple of
-      !! `dt_tracer_advect_ratio`, every thermo step (where ALE fires) is
-      !! also a tracer-advect step, so the drain always precedes the ALE
-      !! remap and no accumulation window is ever cut by a remap.
-      !! `ratio <= 1` ⇒ never (the every-step bypass owns that case).
+      !! Ordering with the thermo work: the pre-step thermo kernels
+      !! (`is_thermo_step`, count `mod N == 0`, step `1, N+1, ...`) lead the
+      !! interval they cover; the interval's END (steps `N, 2N, ...`) is
+      !! where the window closes, the drain fires, and `is_remap_step`
+      !! relayers.  The config constraint `mod(dt_therm_ratio,
+      !! dt_tracer_advect_ratio) == 0` makes every remap step a drain step,
+      !! and the drain runs before the remap in the step body.
       class(ocean_dyn_t), intent(in) :: this
       logical :: yes
       if (this%dt_tracer_advect_ratio <= 1) then
          yes = .false.
       else
-         yes = (this%outer_step_count > 0) .and. &
-               (mod(this%outer_step_count, this%dt_tracer_advect_ratio) == 0)
+         yes = (mod(this%outer_step_count + 1, this%dt_tracer_advect_ratio) == 0)
       end if
    end function ocean_dyn_is_tracer_advect_step
+
+   pure function ocean_dyn_is_remap_step(this) result(yes)
+      !! `.true.` when the end-of-step ALE remap (and the ideal-age surface
+      !! reset that follows it) fires.  Without windowed tracer advection
+      !! this is `is_thermo_step()` exactly (bit-identical).  With
+      !! `dt_tracer_advect_ratio > 1` it fires at the END of the thermo
+      !! interval, on steps `N, 2N, ...`, right after the drain that closes
+      !! the last window, so the remap never sees a half-spent window.
+      class(ocean_dyn_t), intent(in) :: this
+      logical :: yes
+      if (this%dt_tracer_advect_ratio <= 1 .or. this%dt_therm_ratio <= 1) then
+         yes = this%is_thermo_step()
+      else
+         yes = (mod(this%outer_step_count + 1, this%dt_therm_ratio) == 0)
+      end if
+   end function ocean_dyn_is_remap_step
 
    pure function ocean_dt_tracer_advect_ratios_ok(dt_therm_ratio, &
                                                   dt_tracer_advect_ratio) result(ok)
@@ -3508,7 +3523,7 @@ contains
       ! the driver for the end-of-run segment (here it is remap-aligned).
       if (dyn%dt_tracer_advect_ratio > 1) then
          if (dyn%is_tracer_advect_step() .or. &
-             (present(vcoord) .and. dyn%is_thermo_step() .and. ct%t_dyn_rel_adv > 0.0_wp)) then
+             (present(vcoord) .and. dyn%is_remap_step() .and. ct%t_dyn_rel_adv > 0.0_wp)) then
             call profiler_start("ocean_tracer_drain")
             if (present(bc)) then
                call continuity_tracer_drain(grid, metrics, ct, ms, dyn%dt_tracer_advect_ratio, bc=bc, &
@@ -3537,7 +3552,7 @@ contains
       ! self-consistent: diag output remaps to fixed-z independent of the
       ! layer grid, and restart checkpoints carry `outer_step_count` so a
       ! mid-Lagrangian resume re-aligns the cadence bit-exactly.
-      if (present(vcoord) .and. dyn%is_thermo_step()) then
+      if (present(vcoord) .and. dyn%is_remap_step()) then
          call profiler_start("ocean_ale_remap")
          ! The grid time-filter relaxes once per thermo interval, so it
          ! must see the aggregate thermo dt (= dt at dt_therm_ratio=1, the
@@ -3575,7 +3590,7 @@ contains
       ! after the ALE remap, before the ghost-SSH refill (SSH-only, doesn't
       ! touch tracers). Thermo-cadence gated to compose with the remap;
       ! self-gates internally on `ms%idx_age <= 0`.
-      if (dyn%is_thermo_step()) then
+      if (dyn%is_remap_step()) then
          t_now = 0.0_wp
          if (present(t)) t_now = t
          call ocean_ideal_age_reset_surface(grid, ms, &

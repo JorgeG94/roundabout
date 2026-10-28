@@ -667,7 +667,13 @@ drain runs a CW-PPM flux-form advection over the accumulated mass flux.
 Single-rank.  Works under both `split_scheme` values: the window accumulates
 0.5 x transport per `ssp_rk2` stage, or 1.0 x the corrector transport under
 `pred_corr` (whose predictor accumulates nothing).  The restart writer flushes
-the window before a checkpoint, so restarts are window-aligned.
+the window before a checkpoint, so restarts are window-aligned.  Cadence:
+windows close on outer steps `ratio, 2*ratio, ...` counted from the start (or
+restart), every window exactly `ratio` steps; the pre-step thermo kernels
+(`dt_therm_ratio`) lead each interval, and the ALE remap fires at the END of
+the interval (steps `dt_therm_ratio, 2*dt_therm_ratio, ...`) right after the
+drain that closes the last window.  Without windowed advection the remap stays
+on the thermo step (unchanged).
 
 `&ocean_vmix_nml tracer_recon` selects the FACE-VALUE reconstruction used
 by that drain — the mass-flux split, the per-layer conservation shell and
