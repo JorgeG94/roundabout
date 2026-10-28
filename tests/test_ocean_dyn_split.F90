@@ -23,14 +23,15 @@
 !!     driver run at the same dt should diverge.
 module test_ocean_dyn_split
    use testdrive, only: new_unittest, unittest_type, error_type, check
-   use rdb_constants, only: wp, GRAVITY
+   use rdb_constants, only: wp, GRAVITY, VCOORD_LAGRANGIAN
+   use rdb_ocean_vcoord, only: ocean_vcoord_t
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
    use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_continuity, only: continuity_t
    use rdb_coriolis_adv, only: coriolis_adv_t
-   use rdb_eos, only: eos_t
+   use rdb_eos, only: eos_t, eos_density_point
    use rdb_ocean_pressure_force, only: ocean_pressure_force_t
    use rdb_ocean_horizontal_viscosity, only: ocean_horizontal_viscosity_t
    use rdb_ocean_bottom_drag, only: ocean_bottom_drag_t
@@ -46,6 +47,8 @@ module test_ocean_dyn_split
                                        ocean_bc_state_destroy, OBC_OPEN, OBC_SPONGE, OBC_TIDAL, &
                                        OBC_CLAMPED, OBC_CHAPMAN, OBC_WALL
    use rdb_ocean_sponge, only: ocean_sponge_apply, ocean_sponge_t
+   use rdb_ocean_epbl, only: ocean_epbl_t
+   use rdb_ocean_mle, only: ocean_mle_t
    use rdb_ocean_budgets, only: ocean_budgets_t, BUDGET_MASS
    implicit none
    private
@@ -84,6 +87,8 @@ contains
                                test_ideal_age_surface_reset_nonzero_ic), &
                   new_unittest("split_ideal_age_thermo_cadence", &
                                test_ideal_age_thermo_cadence), &
+                  new_unittest("split_mle_every_step_independent_of_therm_ratio", &
+                               test_mle_every_step_therm_ratio), &
                   new_unittest("split_sponge_bit_identity_when_disabled", &
                                test_sponge_bit_identity_when_disabled) &
                   ]
@@ -1847,5 +1852,128 @@ contains
       end block checks
       call destroy_all(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, eos, dyn)
    end subroutine test_ideal_age_thermo_cadence
+
+   subroutine run_mle_front(ratio, use_mle, dsurf)
+      !! Four dynamics steps of a resting 3-layer basin with a zonal
+      !! density front (T rises with i), dt_therm_ratio = `ratio`, with or
+      !! without Fox-Kemper MLE (EPBL MLD pinned at 100 m, EPBL disabled
+      !! so it persists).  Returns the surface-layer thickness `dsurf`.
+      integer, intent(in) :: ratio
+      logical, intent(in) :: use_mle
+      real(wp), intent(out) :: dsurf(:, :)
+      type(hgrid_t) :: grid
+      type(ocean_metrics_t) :: metrics
+      type(multilayer_state_t) :: ms
+      type(continuity_t) :: ct
+      type(coriolis_adv_t) :: cor
+      type(ocean_pressure_force_t) :: pgf
+      type(ocean_horizontal_viscosity_t) :: hv
+      type(ocean_bottom_drag_t) :: bd
+      type(ocean_surface_stress_t) :: ss
+      type(ocean_vertical_advection_t) :: va
+      type(ocean_hdiff_tracer_t) :: hd
+      type(ocean_vdiff_t) :: vd
+      type(ocean_vmix_t) :: vmix
+      type(eos_t) :: eos
+      type(ocean_dyn_t) :: dyn
+      type(ocean_epbl_t) :: epbl
+      type(ocean_mle_t) :: mle
+      type(ocean_vcoord_t) :: vc
+      real(wp), parameter :: H0 = 50.0_wp
+      real(wp), parameter :: DT = 60.0_wp
+      integer, parameter :: N_INNER = 5
+      integer, parameter :: N_STEPS = 4
+      integer :: i, k, step
+
+      call make_grid(grid, 8, 6, 5.0e3_wp, 5.0e3_wp)
+      ms%nz_ml = NZ
+      call ms%init(grid)
+      call ct%init(grid, nz_ml=NZ)
+      cor%f_0 = 1.0e-4_wp
+      call cor%init(grid, nz_ml=NZ)
+      call pgf%init(grid, nz_ml=NZ)
+      call hv%init(grid, nz_ml=NZ)
+      call bd%init(grid, nz_ml=NZ)
+      call ss%init(grid, nz_ml=NZ)
+      call va%init(grid, nz_ml=NZ)
+      call hd%init(grid, nz_ml=NZ)
+      call vd%init(grid, nz_ml=NZ)
+      call vmix%init(grid, nz_ml=NZ)
+      call eos%init(grid)
+      call dyn%init(grid, nz_ml=NZ)
+      call epbl%init(grid, nz_ml=NZ)
+      call mle%init(grid, nz_ml=NZ)
+      call vc%init(grid, nz_ml=NZ)
+      vc%coord_type = VCOORD_LAGRANGIAN
+      dyn%dt_therm_ratio = ratio
+      mle%enable = use_mle
+      epbl%rho0 = 1027.0_wp
+      epbl%mld = 2.0_wp*H0
+      epbl%f_centre = 1.0e-4_wp
+
+      ms%h_layer = H0
+      ms%u_face_x_layer = 0.0_wp
+      ms%v_face_y_layer = 0.0_wp
+      do k = 1, NZ
+         do i = 1, grid%nx_total
+            ms%tracers(ms%idx_salinity)%hTr(i, :, k) = (eos%S_ref + 0.5_wp*real(i, wp))*H0
+            ms%tracers(ms%idx_temperature)%hTr(i, :, k) = eos%T_ref*H0
+            ms%rho_layer(i, :, k) = eos_density_point(eos, eos%T_ref, eos%S_ref + 0.5_wp*real(i, wp), 0.0_wp)
+         end do
+      end do
+      dyn%bt_work%bt_H_ref = real(NZ, wp)*H0
+
+      call map_in(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+      !$acc enter data copyin(epbl, mle)
+      call epbl%enter_data()
+      call mle%enter_data()
+      call vc%enter_data()
+      do step = 1, N_STEPS
+         call ocean_dyn_step_split( &
+            grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
+            va, hd, vd, vmix, ms, DT, N_INNER, vcoord=vc, epbl=epbl, mle=mle)
+      end do
+      call vc%exit_data()
+      call mle%exit_data()
+      call epbl%exit_data()
+      !$acc exit data delete(epbl, mle)
+      call map_out(metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+
+      dsurf = ms%h_layer(:, :, NZ)
+      call vc%destroy()
+      call mle%destroy()
+      call epbl%destroy()
+      call destroy_all(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, eos, dyn)
+   end subroutine run_mle_front
+
+   subroutine test_mle_every_step_therm_ratio(error)
+      !! The Fox-Kemper MLE transport is computed and applied on EVERY
+      !! dynamics step (Fox-Kemper et al. 2011), so the restratification
+      !! accumulated over a fixed physical time is independent of
+      !! `dt_therm_ratio`.  The MLE-induced surface-thickness change over
+      !! 4 steps (MLE run minus no-MLE run, which cancels the common
+      !! pressure-gradient adjustment) at ratio 4 must equal the ratio-1
+      !! one.  When the fold fires on 1 of N steps the ratio is 1/N = 0.25
+      !! (measured 0.25000 on the pre-fix code).  VCOORD_LAGRANGIAN so
+      !! `h_layer` is not pinned by Eulerian-z vertical advection or
+      !! relayered by an ALE remap.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp), allocatable :: h1m(:, :), h1n(:, :), h4m(:, :), h4n(:, :)
+      real(wp) :: d1, d4, quot
+      integer, parameter :: NXY(2) = [8 + 2*NGHOST, 6 + 2*NGHOST]
+
+      allocate (h1m(NXY(1), NXY(2)), h1n(NXY(1), NXY(2)), h4m(NXY(1), NXY(2)), h4n(NXY(1), NXY(2)))
+      call run_mle_front(1, .true., h1m)
+      call run_mle_front(1, .false., h1n)
+      call run_mle_front(4, .true., h4m)
+      call run_mle_front(4, .false., h4n)
+      d1 = maxval(abs(h1m - h1n))
+      d4 = maxval(abs(h4m - h4n))
+      call check(error, d1 > 1.0e-9_wp, "MLE every step: ratio-1 MLE signal is not resolved")
+      if (allocated(error)) return
+      quot = d4/d1
+      call check(error, abs(quot - 1.0_wp) < 0.1_wp, &
+                 "MLE every step: ratio-4 restratification must equal ratio-1 (quotient 1, not 1/4)")
+   end subroutine test_mle_every_step_therm_ratio
 
 end module test_ocean_dyn_split

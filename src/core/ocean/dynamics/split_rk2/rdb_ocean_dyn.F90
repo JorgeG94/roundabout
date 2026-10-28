@@ -3140,25 +3140,26 @@ contains
       call probe_dS(grid, ms, "outer step entry", 0, dyn%outer_step_count + 1)
 
       ! Fox-Kemper MLE restratification (B5): compute the ML-confined
-      ! overturning transports ONCE per outer step at THERMO cadence (it
-      ! is a slow buoyancy-driven process; per-stage recompute doubles
-      ! cost for no benefit).  Uses the MLD diagnosed by EPBL at the end
-      ! of the previous step.  `run_stage_split` then folds the same
-      ! uhml/vhml into the mass fluxes in both stages.  No-op when
+      ! overturning transports on EVERY outer step with the dynamics dt and
+      ! the latest EPBL MLD (Fox-Kemper et al. 2011; Bodner et al. 2023),
+      ! independent of `dt_therm_ratio`; `run_stage_split` folds the same
+      ! uhml/vhml into the mass fluxes in both stages, so the windowed
+      ! tracer accumulation sees the transport every step.  No-op when
       ! absent / disabled.
       if (present(mle) .and. present(epbl)) then
-         if (dyn%enable_thermodynamics .and. dyn%is_thermo_step()) then
+         if (dyn%enable_thermodynamics) then
             call profiler_start("ocean_foxkemper")
-            ! Pass the thermo window so the per-layer FK availability cap
-            ! keeps the windowed tracer-drain hprev reconstruction positive
-            ! in thin (EPBL-MLD) surface layers (dt_tracer_advect_ratio > 1).
-            ! At dt_therm_ratio = 1 this is dt — a tighter-but-harmless cap.
+            ! dt_limit = thermo window: the windowed tracer drain sums the
+            ! per-step transport over it, so the per-layer availability cap
+            ! must bound transport*window (hprev positivity in thin
+            ! surface layers).  dt_filter = the call interval (dynamics dt)
+            ! for the MLD running-mean filter.  Both equal dt at ratio 1.
             if (present(bc)) then
                call mle_compute_transports(grid, metrics, mle, ms, epbl, ss=ss, &
-                                           dt_limit=dyn%therm_dt(dt), bc=bc)
+                                           dt_limit=dyn%therm_dt(dt), bc=bc, dt_filter=dt)
             else
                call mle_compute_transports(grid, metrics, mle, ms, epbl, ss=ss, &
-                                           dt_limit=dyn%therm_dt(dt))
+                                           dt_limit=dyn%therm_dt(dt), dt_filter=dt)
             end if
             call profiler_stop("ocean_foxkemper")
          end if
@@ -3721,11 +3722,8 @@ contains
       ! needed afterwards.  Tracer rides the same renormalised
       ! fluxes ⇒ per-column `T = hTr/h` stays exact.
       call profiler_start("ocean_continuity")
-      ! `mle_fold_active = is_thermo_step()` gates the Fox-Kemper fold to
-      ! the thermo cadence: the FK transports are computed once per thermo
-      ! interval (mle_compute_transports, above), so folding them on the
-      ! intervening non-thermo steps would re-apply stale transports.  At
-      ! the default dt_therm_ratio = 1 this is .true. every step ⇒ bit-identical.
+      ! `mle_fold_active` is .true. on every step: the FK transports are
+      ! recomputed every dynamics step, so the fold is too.
       !
       ! Phase 2 (6b) horizontal-tracer-advect cadence: ratio == 1 ⇒
       ! TR_MODE_ADVECT (fused every-step advect, bit-identical); ratio > 1
@@ -3764,7 +3762,7 @@ contains
             call continuity_tracer_step_split(grid, metrics, ct, ms, dt, &
                                               uhbt=dyn%bt_work%bt_uhbt, &
                                               vhbt=dyn%bt_work%bt_vhbt, bc=bc, mle=mle, &
-                                              mle_fold_active=dyn%is_thermo_step(), &
+                                              mle_fold_active=.true., &
                                               tracer_mode=tr_mode, &
                                               h_min=h_min_pass, &
                                               visc_rem_u=dyn%bt_work%visc_rem_u, &
@@ -3774,7 +3772,7 @@ contains
             call continuity_tracer_step_split(grid, metrics, ct, ms, dt, &
                                               uhbt=dyn%bt_work%bt_uhbt, &
                                               vhbt=dyn%bt_work%bt_vhbt, mle=mle, &
-                                              mle_fold_active=dyn%is_thermo_step(), &
+                                              mle_fold_active=.true., &
                                               tracer_mode=tr_mode, &
                                               h_min=h_min_pass, &
                                               visc_rem_u=dyn%bt_work%visc_rem_u, &
@@ -3785,7 +3783,7 @@ contains
          call continuity_tracer_step_split(grid, metrics, ct, ms, dt, &
                                            uhbt=dyn%bt_work%bt_uhbt, &
                                            vhbt=dyn%bt_work%bt_vhbt, bc=bc, mle=mle, &
-                                           mle_fold_active=dyn%is_thermo_step(), &
+                                           mle_fold_active=.true., &
                                            tracer_mode=tr_mode, &
                                            h_min=h_min_pass, &
                                            u_cor=ms%u_av_layer, v_cor=ms%v_av_layer)
@@ -3793,7 +3791,7 @@ contains
          call continuity_tracer_step_split(grid, metrics, ct, ms, dt, &
                                            uhbt=dyn%bt_work%bt_uhbt, &
                                            vhbt=dyn%bt_work%bt_vhbt, mle=mle, &
-                                           mle_fold_active=dyn%is_thermo_step(), &
+                                           mle_fold_active=.true., &
                                            tracer_mode=tr_mode, &
                                            h_min=h_min_pass, &
                                            u_cor=ms%u_av_layer, v_cor=ms%v_av_layer)

@@ -1239,13 +1239,11 @@ contains
       !! static fk_t9 cannot reach:
       !!
       !!   * MULTIPLE accumulation windows (n_win) of `ratio` outer steps;
-      !!   * FK transports RECOMPUTED at each window start from the evolving
+      !!   * FK transports RECOMPUTED at every step from the evolving
       !!     density/MLD (mle_compute_transports), then folded into the
-      !!     mass flux on the thermo step and ACCUMULATED into uhtr/vhtr
+      !!     mass flux on every step and ACCUMULATED into uhtr/vhtr
       !!     via the production continuity_tracer_step_split(ACCUMULATE);
-      !!   * the FK fold thermo-gated to the window-start step only
-      !!     (mle_fold_active=.true. on step 0 of the window, .false. on the
-      !!     rest) — the dt_therm_ratio>1 gating;
+      !!   * the FK fold applied on every dynamics step of the window;
       !!   * a genuine non-zero background zonal flow so the drain runs a
       !!     real multi-pass swept-PPM (not the FK-only degenerate case);
       !!   * `continuity_tracer_drain` at each window close;
@@ -1286,7 +1284,6 @@ contains
       type(ocean_bc_state_t) :: bc
       integer :: i, j, k, nx, ny, i0, i1, j0, j1, win, stp
       real(wp) :: area, mass0, mass1
-      logical :: thermo
 
       checks: block
          call grid%init(NX_PHYS, NY_PHYS, NG, DX, DY)
@@ -1341,17 +1338,17 @@ contains
          call mle%enter_data()
 
          do win = 1, N_WIN
-            ! --- window-start (thermo) step: recompute FK from current state
-            call mle_compute_transports(grid, metrics, mle, ms, epbl, ss=ss, &
-                                        dt_limit=DT_WIN)
             ! Wrap the periodic-x ghosts of the prognostics so the PPM
             ! reconstruction reads the correct cyclic stencil (the real
             ! dyn step does this via ocean_periodic_wrap_state).
             do stp = 1, RATIO
-               thermo = (stp == 1)
+               ! FK recomputed from the current state and folded on EVERY
+               ! dynamics step; the cap is sized by the window.
+               call mle_compute_transports(grid, metrics, mle, ms, epbl, ss=ss, &
+                                           dt_limit=DT_WIN, dt_filter=DT)
                call continuity_tracer_step_split(grid, metrics, ct, ms, DT, &
                                                  bc=bc, mle=mle, &
-                                                 mle_fold_active=thermo, &
+                                                 mle_fold_active=.true., &
                                                  tracer_mode=TR_MODE_ACCUMULATE)
             end do
             ! --- window close: spend the accumulated transport.

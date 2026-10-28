@@ -261,7 +261,7 @@ Every vertical closure adds into the interface diffusivities `kv` and `kt`. `ks`
 |---|---|---|---|
 | Leith, Smagorinsky KH and AH, Leith-biharmonic, constant biharmonic, constant `nu_h` | Shipped | `&ocean_hvisc_nml` | Flow-aware closures give almost no viscosity in a fluid at rest. A quiescent run needs a constant floor. |
 | MEKE, GM, Redi, VarMix, isopycnal slopes | Shipped | `&ocean_meke_nml`, `&ocean_gm_nml`, `&ocean_redi_nml`, `&ocean_varmix_nml`, `&ocean_slopes_nml` | Not detailed on this page. See [`CLOSURE_MATRIX.md`](CLOSURE_MATRIX.md). GM FGNV streamfunction (`&ocean_gm_nml use_fgnv`, Ferrari et al. 2010): opt-in, needs the wave-speed slot; it composes with the EBT vertical structure (`use_ebt_struct`), whose shaped diffusivity enters the unlimited streamfunction; `gm_src` (MEKE source) is the local-form PE release by default; `&ocean_gm_nml gm_src_form = "work"` (OM3 `MEKE_GM_SRC_ALT = False`) uses the PE-release rate of the final bolus transports instead, so FGNV and the EBT structure reach MEKE. |
-| Fox-Kemper mixed-layer eddies | Shipped, opt-in | `&ocean_foxkemper_nml enable` | Needs EPBL to supply the mixed-layer depth. Three refinements are deferred. |
+| Fox-Kemper mixed-layer eddies | Shipped, opt-in | `&ocean_foxkemper_nml enable` | Needs EPBL to supply the mixed-layer depth. Recomputed and applied every dynamics step, also when `dt_therm_ratio > 1`. Three refinements are deferred. |
 | Along-coordinate tracer Laplacian | Shipped, opt-in | `&ocean_hdiff_nml kappa_h` | See [section 4](#4-dynamical-core). |
 
 ### Notes
