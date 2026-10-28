@@ -4001,7 +4001,14 @@ contains
       end if
       ! MEKE's GM source from the work of the FINAL transports (before they
       ! move `h`): `gm_src_form = "work"`.  Inert otherwise.
-      if (gm%src_work) call gm_work_source(grid, metrics, eos, gm, slopes, ms)
+      ! The outermost ghost ring sees only its inward faces, so its work is
+      ! short; MEKE never exchanges its own field, and that short source
+      ! would grow in the ghost MEKE and reach owned faces through the
+      ! geometric-mean `khth` feed.  Refresh the ghosts from their owners.
+      if (gm%src_work) then
+         call gm_work_source(grid, metrics, eos, gm, slopes, ms)
+         call ocean_halo_centre(gm%gm_src, device_resident=.true.)
+      end if
 
       tr_mode = TR_MODE_ADVECT
       if (dyn%dt_tracer_advect_ratio > 1) tr_mode = TR_MODE_ACCUMULATE
