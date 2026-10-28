@@ -41,6 +41,8 @@ module rdb_config
    ! `&ocean_ic_nml` replacement.  The defaults are named here so the
    ! type declaration and the guard can never drift apart.
    ! ------------------------------------------------------------------
+   real(wp), parameter, public :: BT_DTBT_UNSET = -1.0e30_wp
+      !! Sentinel for `&ocean_bt_nml dtbt` "not given".
    real(wp), parameter :: LEGACY_TRACER_S_REF = 0.0_wp
       !! Historical `&tracer_nml S_ref` default (PSU).
    real(wp), parameter :: LEGACY_TRACER_BETA_S = 0.78_wp
@@ -90,6 +92,7 @@ module rdb_config
    public :: dataovr_freshwater_needs_components, dataovr_any_tag_set
    public :: build_rdb_schema
    public :: resolve_bt_halo
+   public :: bt_dtbt_is_set, bt_split_derived
    public :: bt_halo_auto_exclusion
    public :: p_top_has_producer
    public :: substep_drag_ignores_bdrag_form
@@ -714,6 +717,25 @@ module rdb_config
       real(wp) :: cfl_bt_safety = 0.65_wp
          !! Safety fraction on the shallow-water CFL bound when
          !! `auto_n_inner = .true.` (typical 0.65-0.7).
+      real(wp) :: dtbt = BT_DTBT_UNSET
+         !! OM3-style barotropic step definition (MOM6 `DTBT`).  Unset
+         !! (`BT_DTBT_UNSET`, the default) leaves `n_inner` to `n_inner` /
+         !! `auto_n_inner` + `cfl_bt_safety`.  When set it REPLACES them:
+         !! `< 0` is the fraction `|dtbt|` of the largest stable step
+         !! `dt_max` (domain minimum over wet cells of
+         !! `1/dt_max^2 = 1/2 (1 + 2 bebt) [ (1/A_T) sum_faces g D_f dy_f/dx_f
+         !! + sum_corners f^2 ]`), `0` means `-0.98`, and `> 0` is a fixed
+         !! substep in seconds.  `n_inner = ceiling(dt / dtbt_used)` in every
+         !! case.  Fails loud together with `auto_n_inner = .true.` or a
+         !! non-default `cfl_bt_safety`.
+      real(wp) :: dtbt_reset_period = -1.0_wp
+         !! Seconds between recomputations of `dt_max` (and so `n_inner`)
+         !! from the live layer thicknesses, when `dtbt` is set: `0`
+         !! recomputes every dynamics step, `> 0` every that many seconds
+         !! (a mid-period restart re-derives at its first step, so it is not
+         !! bit-identical to the uninterrupted run), `< 0` (default) only at
+         !! initialisation.  Ignored (fails loud if `>= 0`) when `dtbt` is
+         !! unset.
       real(wp) :: bebt = 0.1_wp
          !! BT continuity-flux velocity projection weight (MOM6 `BEBT`).
          !! Default `0.1` = MOM6's own default for that parameter: damps
@@ -5001,5 +5023,23 @@ module rdb_config
          type(nml_schema_t), intent(inout) :: schema
       end subroutine register_ocean_bc
    end interface
+
+contains
+
+   pure function bt_dtbt_is_set(bt) result(is_set)
+      !! `.true.` when `&ocean_bt_nml dtbt` was given (differs from the
+      !! `BT_DTBT_UNSET` sentinel).
+      type(ocean_bt_config_t), intent(in) :: bt
+      logical :: is_set
+      is_set = bt%dtbt > BT_DTBT_UNSET*0.5_wp
+   end function bt_dtbt_is_set
+
+   pure function bt_split_derived(bt) result(derived)
+      !! `.true.` when `n_inner` is resolved at setup rather than read from
+      !! the namelist: `auto_n_inner` or an explicit `dtbt`.
+      type(ocean_bt_config_t), intent(in) :: bt
+      logical :: derived
+      derived = bt%auto_n_inner .or. bt_dtbt_is_set(bt)
+   end function bt_split_derived
 
 end module rdb_config

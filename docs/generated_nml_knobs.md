@@ -696,6 +696,8 @@ Split-explicit barotropic substep controls.
 | `n_inner` | `0` |  | Barotropic substeps per outer step (0 = unsplit) |
 | `auto_n_inner` | `.false.` |  | Derive n_inner from the gravity-wave CFL at setup |
 | `cfl_bt_safety` | `0.6500000000E+00` |  | Safety fraction on the BT CFL when auto_n_inner |
+| `dtbt` | `-0.1000000000E+31` |  | OM3-style BT step (MOM6 DTBT): <0 = fraction of max stable, 0 = -0.98, >0 = seconds; replaces auto_n_inner |
+| `dtbt_reset_period` | `-0.1000000000E+01` |  | Seconds between dtbt recomputes: 0 = every step, >0 = period, <0 = init only |
 | `bebt` | `0.1000000000E+00` |  | Forward-velocity-projection weight (MOM6 BEBT; default 0.1 = MOM6) |
 | `use_cont_type` | `.false.` |  | Use the BT_cont flux-bounded closure (MOM6 USE_BT_CONT_TYPE) |
 | `cont_corr_bounds` | `.false.` |  | Use BT_cont flux limits for the eta-correction bound |

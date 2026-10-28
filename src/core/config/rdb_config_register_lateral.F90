@@ -393,6 +393,12 @@ contains
       pr => cfg%ocean%bt%cfl_bt_safety
       call g%add(nml_real("cfl_bt_safety", pr, &
                           "Safety fraction on the BT CFL when auto_n_inner"))
+      pr => cfg%ocean%bt%dtbt
+      call g%add(nml_real("dtbt", pr, &
+                      "OM3-style BT step (MOM6 DTBT): <0 = fraction of max stable, 0 = -0.98, >0 = seconds; replaces auto_n_inner"))
+      pr => cfg%ocean%bt%dtbt_reset_period
+      call g%add(nml_real("dtbt_reset_period", pr, &
+                          "Seconds between dtbt recomputes: 0 = every step, >0 = period, <0 = init only"))
       pr => cfg%ocean%bt%bebt
       call g%add(nml_real("bebt", pr, &
                           "Forward-velocity-projection weight (MOM6 BEBT; default 0.1 = MOM6)"))

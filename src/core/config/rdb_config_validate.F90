@@ -1602,7 +1602,7 @@ contains
                               "(p_surf is allocated only with the component set)")
             has_error = .true.
          end if
-         if (cfg%ocean%bt%n_inner < 1 .and. .not. cfg%ocean%bt%auto_n_inner) then
+         if (cfg%ocean%bt%n_inner < 1 .and. .not. bt_split_derived(cfg%ocean%bt)) then
             call logger%error("&ocean_psurf_nml enable=.true. requires the "// &
                               "split-explicit solver (&ocean_bt_nml n_inner >= 1 "// &
                               "or auto_n_inner=.true.) — the eta_forcing seam "// &
@@ -2514,7 +2514,7 @@ contains
          ! takes the column-top depth and the seed passes
          ! `metrics%z_draft`, so the two compose and the refusal is gone.
          ! --- solver envelope ---
-         if (cfg%ocean%bt%n_inner < 1 .and. .not. cfg%ocean%bt%auto_n_inner) then
+         if (cfg%ocean%bt%n_inner < 1 .and. .not. bt_split_derived(cfg%ocean%bt)) then
             call logger%error("&ocean_cavity_dyn_nml enable=.true. requires the "// &
                               "SPLIT solver (&ocean_bt_nml n_inner >= 1, or "// &
                               "auto_n_inner): the unsplit driver has neither the "// &
@@ -3007,7 +3007,7 @@ contains
             has_error = .true.
          end if
          ! Wet/dry needs the split solver: the limiter lives in the BT substep.
-         if (cfg%ocean%bt%n_inner < 1 .and. .not. cfg%ocean%bt%auto_n_inner) then
+         if (cfg%ocean%bt%n_inner < 1 .and. .not. bt_split_derived(cfg%ocean%bt)) then
             call logger%error("&ocean_wetdry_nml enable=.true. requires the "// &
                               "split-explicit solver (&ocean_bt_nml n_inner >= 1 "// &
                               "or auto_n_inner=.true.)")
@@ -3368,7 +3368,7 @@ contains
          ! With auto_n_inner=.true. n_inner resolves later at setup, so only
          ! a HARD n_inner < 1 with auto off is an error here (mirrors the
          ! &ocean_wetdry_nml n_inner precedent above).
-         if (cfg%ocean%bt%n_inner < 1 .and. .not. cfg%ocean%bt%auto_n_inner) then
+         if (cfg%ocean%bt%n_inner < 1 .and. .not. bt_split_derived(cfg%ocean%bt)) then
             call logger%error("&ocean_sponge_nml enable=.true. requires the "// &
                               "split-explicit solver (&ocean_bt_nml n_inner >= 1 "// &
                               "or auto_n_inner=.true.) — the sponge is dispatched only "// &
@@ -3407,6 +3407,34 @@ contains
             has_error = .true.
          end if
       end if
+      ! &ocean_bt_nml dtbt: the OM3-style substep definition REPLACES the
+      ! n_inner derivation, so it may not be combined with the other one.
+      if (bt_dtbt_is_set(cfg%ocean%bt)) then
+         if (cfg%ocean%bt%auto_n_inner) then
+            call logger%error("&ocean_bt_nml dtbt and auto_n_inner = .true. are "// &
+                              "mutually exclusive: dtbt replaces auto_n_inner/cfl_bt_safety")
+            has_error = .true.
+         end if
+         if (cfg%ocean%bt%cfl_bt_safety /= 0.65_wp) then
+            call logger%error("&ocean_bt_nml dtbt and cfl_bt_safety are mutually "// &
+                              "exclusive: dtbt replaces cfl_bt_safety (drop one)")
+            has_error = .true.
+         end if
+         if (cfg%dt_fixed <= 0.0_wp) then
+            call logger%error("&ocean_bt_nml dtbt requires a positive fixed time step")
+            has_error = .true.
+         end if
+         if (cfg%ocean%bt%dtbt < -1.0_wp) then
+            call logger%error("&ocean_bt_nml dtbt < -1 would exceed the stable step "// &
+                              "(|dtbt| is a fraction of the largest stable substep)")
+            has_error = .true.
+         end if
+      else if (cfg%ocean%bt%dtbt_reset_period >= 0.0_wp) then
+         call logger%error("&ocean_bt_nml dtbt_reset_period >= 0 has no effect without "// &
+                           "dtbt (set dtbt, or leave dtbt_reset_period < 0)")
+         has_error = .true.
+      end if
+
       ! ---- Barotropic linear wave drag (&ocean_bt_nml wave_drag) ----
       ! `wave_drag_form` is an `nml_enum` (allowed = uniform/roughness_proxy/
       ! file), so a garbage tag is already rejected at nml-apply time; the

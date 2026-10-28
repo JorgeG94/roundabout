@@ -3796,6 +3796,22 @@ class OceanBt(Group):
         default=0.65,
     )
 
+    dtbt = Real(
+        'dtbt',
+        doc='OM3-style BT step (MOM6 DTBT): <0 = fraction of max stable, 0 = -0.98, >0 = seconds; replaces auto_n_inner',
+        units='',
+        required=False,
+        default=-1e+30,
+    )
+
+    dtbt_reset_period = Real(
+        'dtbt_reset_period',
+        doc='Seconds between dtbt recomputes: 0 = every step, >0 = period, <0 = init only',
+        units='',
+        required=False,
+        default=-1.0,
+    )
+
     bebt = Real(
         'bebt',
         doc='Forward-velocity-projection weight (MOM6 BEBT; default 0.1 = MOM6)',
@@ -6970,4 +6986,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 62
-N_KNOBS = 765
+N_KNOBS = 767

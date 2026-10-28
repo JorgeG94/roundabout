@@ -16,7 +16,7 @@ module rdb_ocean_setup
 #endif
    use rdb_constants, only: H_VANISHED, VCOORD_ZSTAR_FULL, VCOORD_ZSTAR
    use rdb_constants, only: FRHAT_ARITHMETIC, FRHAT_HYBRID, parse_frhat_scheme
-   use rdb_config, only: config_t, ocean_bt_forcing_visc_rem_on, &
+   use rdb_config, only: config_t, bt_dtbt_is_set, ocean_bt_forcing_visc_rem_on, &
                          ocean_bt_renorm_visc_rem_on, ocean_bt_rem_from_visc_rem_on, &
                          ocean_bt_visc_rem_producer_on
    use rdb_grid, only: hgrid_t
@@ -106,6 +106,7 @@ module rdb_ocean_setup
                             SPLIT_SCHEME_SSP_RK2, SPLIT_SCHEME_PRED_CORR
    use rdb_recon_weno, only: parse_tracer_recon, TRACER_RECON_PPM
    use rdb_halo, only: halo_allreduce_min, halo_allreduce_sum
+   use rdb_barotropic_dtbt, only: bt_dtbt_dt_max, bt_dtbt_n_inner
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_SETUP
    use rdb_error_ring, only: fail
    use pic_logger, only: logger => global_logger

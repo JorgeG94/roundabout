@@ -138,6 +138,7 @@ Both schemes wrap the same nonlinear barotropic fast loop. The stability suite r
 
 - The default barotropic damping is `&ocean_bt_nml bebt = 0.1` (MOM6 parity). The continuity renormalisation uses the donor-flip-consistent flux (`&ocean_continuity_nml renorm_consistent_flux = .true.`). Together they close the stepped-terrain barotropic grid-scale mode (FINDING B in [section 5](#5-vertical-coordinates)).
 - Coriolis is a closed-form rotation, so it adds no time-step limit.
+- `&ocean_bt_nml dtbt` (OM3 `DTBT`) sets the barotropic substep as a fraction of the largest stable step `dt_max`, taken over wet cells from `1/dt_max² = ½(1+2·bebt)[(1/A_T)Σ g·D·dy/dx + Σ f²_corner]` (so the corner Coriolis term and `bebt` both enter the limit); `dtbt_reset_period = 0` re-derives `n_inner` every step from the live column depths. A positive `dtbt_reset_period` re-derives it on a time grid, so a restart in mid-period re-derives at its first step and is not bit-identical to the uninterrupted run (period `0` and `< 0` are). It replaces `auto_n_inner`/`cfl_bt_safety` and fails loud if combined with them.
 - This is a sub-cycled fast mode, not a semi-implicit free surface. The gravity-wave term is not treated implicitly in the SCHISM or Casulli sense.
 
 **Full notes in the archive:**

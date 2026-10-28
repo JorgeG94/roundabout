@@ -571,6 +571,43 @@ contains
          end block
       end if
 
+      ! `&ocean_bt_nml dtbt`: OM3-style step definition (see
+      ! `rdb_barotropic_dtbt`).  Initial n_inner from the seeded bathymetry
+      ! `b` (Sigma h_layer = b at t = 0); `dtbt_reset_period >= 0` re-derives
+      ! it from the live thicknesses every step / period in `engine_step`.
+      ! Host loop: the state is not device-mapped yet.
+      if (bt_dtbt_is_set(cfg%ocean%bt)) then
+         block
+            integer :: nxb, nyb, ng_, n_inner_derived
+            real(wp), allocatable :: b3(:, :, :)
+            real(wp) :: dt_max_local, dt_max_glob
+            nxb = size(ocean_state%barotropic%b, 1)
+            nyb = size(ocean_state%barotropic%b, 2)
+            ng_ = grid%nghost
+            allocate (b3(nxb, nyb, 1))
+            b3(:, :, 1) = ocean_state%barotropic%b
+            call bt_dtbt_dt_max(nxb, nyb, 1, ng_ + 1, ng_ + grid%nx_phys, &
+                                ng_ + 1, ng_ + grid%ny_phys, b3, &
+                                ocean_state%multilayer%wet_mask, &
+                                ocean_state%metrics%dy_cu_bt, ocean_state%metrics%dx_cv_bt, &
+                                ocean_state%metrics%idxCu, ocean_state%metrics%idyCv, &
+                                ocean_state%metrics%iareaT, &
+                                ocean_state%coriolis_adv%f_corner, &
+                                ocean_state%dyn%bt_work%g_bt, cfg%ocean%bt%bebt, &
+                                .false., dt_max_local)
+            call halo_allreduce_min(dt_max_local, dt_max_glob)
+            n_inner_derived = bt_dtbt_n_inner(cfg%dt_fixed, cfg%ocean%bt%dtbt, dt_max_glob)
+            if (compute_rank == 0) then
+               call logger%info("dtbt: dt_max = "//to_string(dt_max_glob)// &
+                                " s, dtbt = "//to_string(cfg%ocean%bt%dtbt)// &
+                                " (reset period "//to_string(cfg%ocean%bt%dtbt_reset_period)// &
+                                " s) → n_inner = "//to_string(n_inner_derived)// &
+                                " (was "//to_string(cfg%ocean%bt%n_inner)//")")
+            end if
+            cfg%ocean%bt%n_inner = n_inner_derived
+         end block
+      end if
+
       ! Mode-split contract: bt_H_ref is the reference WATER-COLUMN
       ! thickness.  Without an ice shelf that is the seeded bathymetry
       ! (Σh_layer = b); under one it is `b − z_draft`, which is what makes

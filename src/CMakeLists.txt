@@ -46,6 +46,7 @@ set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/dynamics/split_rk2/rdb_ocean_bt_wide.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/dynamics/split_rk2/rdb_ocean_dyn.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/kernels/barotropic/rdb_bt_cont_type.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/kernels/barotropic/rdb_barotropic_dtbt.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/kernels/barotropic/rdb_barotropic_substep.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/kernels/barotropic/rdb_barotropic_coupling.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/kernels/continuity_ppm/rdb_continuity.F90

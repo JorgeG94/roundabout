@@ -85,7 +85,7 @@ module rdb_ocean_engine
    !! contradiction; reachable via the API today).
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_constants, only: wp
-   use rdb_config, only: config_t, resolve_bt_halo, bt_halo_auto_exclusion, &
+   use rdb_config, only: config_t, bt_dtbt_is_set, resolve_bt_halo, bt_halo_auto_exclusion, &
                          BT_HALO_AUTO_SENTINEL
    use rdb_vcoord, only: parse_remap_method
    use rdb_state, only: register_default_tracers
@@ -98,7 +98,8 @@ module rdb_ocean_engine
                              ocean_halo_centre, &
                              ocean_halo_bt_group_2d, ocean_halo_face_x, &
                              ocean_halo_bt_group_2d_wide, ocean_halo_is_decomposed
-   use rdb_halo, only: halo_allreduce_sum_i8
+   use rdb_halo, only: halo_allreduce_sum_i8, halo_allreduce_min
+   use rdb_barotropic_dtbt, only: bt_dtbt_dt_max, bt_dtbt_n_inner
    use rdb_ocean_halo_state, only: ocean_halo_exchange_ml_state, ocean_halo_exchange_ice_state, &
                                    ocean_halo_exchange_ice_fluxes
    use rdb_ocean_fold_exchange, only: ocean_fold_exchange_init, ocean_fold_exchange_reserve, &
@@ -220,6 +221,18 @@ module rdb_ocean_engine
          !! dispatch exactly; `engine_setup` does not itself require
          !! `n_inner >= 1` (a caller wanting that guarantee, such as
          !! the C ABI, checks it after `engine_setup` returns).
+      logical :: dtbt_dynamic = .false.
+         !! `&ocean_bt_nml dtbt` set with `dtbt_reset_period >= 0`: `n_inner`
+         !! is re-derived from the live thicknesses inside `engine_step`.
+      real(wp) :: dtbt = 0.0_wp
+         !! Latched `&ocean_bt_nml dtbt` (only meaningful when `dtbt_dynamic`).
+      real(wp) :: dtbt_reset_period = -1.0_wp
+         !! Latched `&ocean_bt_nml dtbt_reset_period`.
+      real(wp) :: dtbt_bebt = 0.0_wp
+         !! Latched `&ocean_bt_nml bebt` for the `dt_max` formula.
+      real(wp) :: dtbt_next_t = -huge(1.0_wp)
+         !! Simulation time at/after which `n_inner` is re-derived next
+         !! (period > 0); unused for period 0.
       logical :: diag_enabled = .false.
          !! Latched `cfg%ocean%diag%enabled` at setup, so `engine_step`
          !! can gate its `state%diag%step` call without needing `cfg`.
@@ -1305,6 +1318,13 @@ contains
       ! n_inner docstring on ocean_engine_t; a caller wanting the C
       ! ABI's stricter "n_inner must be >= 1" contract checks it itself).
       engine%n_inner = cfg%ocean%bt%n_inner
+      engine%dtbt_dynamic = bt_dtbt_is_set(cfg%ocean%bt) .and. &
+                            cfg%ocean%bt%dtbt_reset_period >= 0.0_wp .and. &
+                            cfg%ocean%bt%n_inner >= 1
+      engine%dtbt = cfg%ocean%bt%dtbt
+      engine%dtbt_reset_period = cfg%ocean%bt%dtbt_reset_period
+      engine%dtbt_bebt = cfg%ocean%bt%bebt
+      engine%dtbt_next_t = -huge(1.0_wp)
 
       ! Phase-3 vanish_tol for console MaxCFL gating.
       engine%cfl_vtol = 0.0_wp
@@ -1542,6 +1562,45 @@ contains
    ! One outer step
    ! ================================================================
 
+   subroutine engine_refresh_n_inner(engine, dt, t)
+      !! Re-derive the barotropic substep count from the LIVE layer
+      !! thicknesses (`&ocean_bt_nml dtbt`, `dtbt_reset_period >= 0`): the
+      !! domain minimum of `rdb_barotropic_dtbt`'s `dt_max` over wet cells,
+      !! reduced across ranks so every rank runs the same count.  Period 0
+      !! recomputes every call; period `P > 0` when `t` reaches the next
+      !! multiple of `P` (and at the first call).  `n_inner` is a pure
+      !! function of the state (`h_layer`, `f`, metrics), so a restart that
+      !! re-derives at its first step reproduces it for period 0.
+      type(ocean_engine_t), intent(inout) :: engine
+      real(wp), intent(in) :: dt
+      real(wp), intent(in) :: t
+      integer :: ng, n_new
+      real(wp) :: dt_loc, dt_glob
+
+      if (engine%dtbt_reset_period > 0.0_wp) then
+         if (t < engine%dtbt_next_t) return
+         engine%dtbt_next_t = (floor(t/engine%dtbt_reset_period) + 1.0_wp)* &
+                              engine%dtbt_reset_period
+      end if
+      ng = engine%grid%nghost
+      call bt_dtbt_dt_max(engine%grid%nx_total, engine%grid%ny_total, &
+                          size(engine%state%multilayer%h_layer, 3), &
+                          ng + 1, ng + engine%grid%nx_phys, ng + 1, ng + engine%grid%ny_phys, &
+                          engine%state%multilayer%h_layer, engine%state%metrics%wet_T, &
+                          engine%state%metrics%dy_cu_bt, engine%state%metrics%dx_cv_bt, &
+                          engine%state%metrics%idxCu, engine%state%metrics%idyCv, &
+                          engine%state%metrics%iareaT, engine%state%coriolis_adv%f_corner, &
+                          engine%state%dyn%bt_work%g_bt, engine%dtbt_bebt, .true., dt_loc)
+      call halo_allreduce_min(dt_loc, dt_glob)
+      n_new = bt_dtbt_n_inner(dt, engine%dtbt, dt_glob)
+      if (n_new /= engine%n_inner) then
+         call logger%info("dtbt: dt_max = "//to_string(dt_glob)//" s at t = "// &
+                          to_string(t)//" -> n_inner "//to_string(engine%n_inner)// &
+                          " -> "//to_string(n_new))
+         engine%n_inner = n_new
+      end if
+   end subroutine engine_refresh_n_inner
+
    subroutine engine_step(engine, dt, t, ierr)
       !! Advance one outer step at fixed `dt`, starting from simulation
       !! time `t` (consumed by tide/astro forcing inside
@@ -1611,6 +1670,8 @@ contains
       ! bit-identical.
       call ocean_sponge_refresh_target(engine%grid, engine%state%sponge, &
                                        engine%state%multilayer)
+
+      if (engine%dtbt_dynamic) call engine_refresh_n_inner(engine, dt, t)
 
       if (engine%n_inner >= 1) then
          call ocean_dyn_step_split(engine%grid, engine%state%metrics, engine%state%dyn, &

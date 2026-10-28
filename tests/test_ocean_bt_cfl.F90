@@ -20,6 +20,9 @@ module test_ocean_bt_cfl
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_ocean_setup, only: bt_auto_n_inner, metrics_bt_cfl_length, &
                               bt_auto_n_inner_from_dt, bt_cfl_dt_wet
+   use rdb_barotropic_dtbt, only: bt_dtbt_dt_max, bt_dtbt_n_inner, bt_dtbt_safe_step
+   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_VALIDATE
    use ocean_test_metrics, only: make_cartesian_metrics, make_anisotropic_metrics, &
                                  destroy_cartesian_metrics
    implicit none
@@ -44,7 +47,15 @@ contains
                                test_wet_coincident_bitwise), &
                   new_unittest("bt_cfl_wet_ignores_land", test_wet_ignores_land), &
                   new_unittest("bt_cfl_wet_is_per_point", test_wet_per_point), &
-                  new_unittest("bt_cfl_wet_no_wet_cell", test_wet_none) &
+                  new_unittest("bt_cfl_wet_no_wet_cell", test_wet_none), &
+                  new_unittest("bt_dtbt_uniform_f0", test_dtbt_uniform_f0), &
+                  new_unittest("bt_dtbt_coriolis_4f2", test_dtbt_coriolis), &
+                  new_unittest("bt_dtbt_anisotropic", test_dtbt_aniso), &
+                  new_unittest("bt_dtbt_n_inner_ceiling", test_dtbt_n_inner), &
+                  new_unittest("bt_dtbt_reset_follows_depth", test_dtbt_depth_change), &
+                  new_unittest("bt_dtbt_land_faces_closed", test_dtbt_land), &
+                  new_unittest("bt_dtbt_device_branch_matches_host", test_dtbt_device), &
+                  new_unittest("bt_dtbt_config_refusals", test_dtbt_refusals) &
                   ]
    end subroutine collect_ocean_bt_cfl_tests
 
@@ -256,5 +267,225 @@ contains
       if (allocated(error)) return
       call check(error, bt_auto_n_inner_from_dt(1200.0_wp, dt_bt) == 1, "all-land n_inner /= 1")
    end subroutine test_wet_none
+
+   subroutine dtbt_grid(nx, ny, dxv, dyv, h, wet, dyc, dxc, idxc, idyc, ia, fc, depth, fval)
+      !! Uniform `nx x ny` grid, `nz = 2` layers of `depth/2`, all wet.
+      integer, intent(in) :: nx, ny
+      real(wp), intent(in) :: dxv, dyv, depth, fval
+      real(wp), intent(out) :: h(nx, ny, 2), wet(nx, ny), dyc(nx + 1, ny), dxc(nx, ny + 1)
+      real(wp), intent(out) :: idxc(nx + 1, ny), idyc(nx, ny + 1), ia(nx, ny)
+      real(wp), intent(out) :: fc(nx + 1, ny + 1)
+      h = 0.5_wp*depth
+      wet = 1.0_wp
+      dyc = dyv
+      dxc = dxv
+      idxc = 1.0_wp/dxv
+      idyc = 1.0_wp/dyv
+      ia = 1.0_wp/(dxv*dyv)
+      fc = fval
+   end subroutine dtbt_grid
+
+   subroutine test_dtbt_uniform_f0(error)
+      !! Flat bottom, f = 0, dx = dy: 1/dt_max^2 = 1/2 (1 + 2 bebt) * 4 g D / dx^2.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NX = 8, NY = 7
+      real(wp), parameter :: DX = 12000.0_wp, D = 3000.0_wp, BEBT = 0.2_wp
+      real(wp) :: h(NX, NY, 2), wet(NX, NY), dyc(NX + 1, NY), dxc(NX, NY + 1)
+      real(wp) :: idxc(NX + 1, NY), idyc(NX, NY + 1), ia(NX, NY), fc(NX + 1, NY + 1)
+      real(wp) :: dt_max, expect
+
+      call dtbt_grid(NX, NY, DX, DX, h, wet, dyc, dxc, idxc, idyc, ia, fc, D, 0.0_wp)
+      call bt_dtbt_dt_max(NX, NY, 2, 2, NX - 1, 2, NY - 1, h, wet, dyc, dxc, idxc, idyc, ia, &
+                          fc, GRAVITY, BEBT, .false., dt_max)
+      expect = 1.0_wp/sqrt(0.7_wp*4.0_wp*GRAVITY*D/DX**2)
+      call check(error, abs(dt_max - expect) <= 1.0e-14_wp*expect, &
+                 "uniform f=0 dt_max /= 1/sqrt(0.7*4*g*D/dx^2)")
+   end subroutine test_dtbt_uniform_f0
+
+   subroutine test_dtbt_coriolis(error)
+      !! The four corner f^2 terms enter as 4 f^2 inside the same 1/2(1+2 bebt).
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NX = 8, NY = 7
+      real(wp), parameter :: DX = 12000.0_wp, D = 3000.0_wp, BEBT = 0.2_wp, F0 = 1.0e-3_wp
+      real(wp) :: h(NX, NY, 2), wet(NX, NY), dyc(NX + 1, NY), dxc(NX, NY + 1)
+      real(wp) :: idxc(NX + 1, NY), idyc(NX, NY + 1), ia(NX, NY), fc(NX + 1, NY + 1)
+      real(wp) :: dt_max, expect
+
+      call dtbt_grid(NX, NY, DX, DX, h, wet, dyc, dxc, idxc, idyc, ia, fc, D, F0)
+      call bt_dtbt_dt_max(NX, NY, 2, 2, NX - 1, 2, NY - 1, h, wet, dyc, dxc, idxc, idyc, ia, &
+                          fc, GRAVITY, BEBT, .false., dt_max)
+      expect = 1.0_wp/sqrt(0.7_wp*(4.0_wp*GRAVITY*D/DX**2 + 4.0_wp*F0**2))
+      call check(error, abs(dt_max - expect) <= 1.0e-14_wp*expect, &
+                 "f-plane dt_max /= 1/sqrt(0.7*(4gD/dx^2 + 4f^2))")
+      if (allocated(error)) return
+      ! Quiescent-pressure limit: f alone (g = 0) gives 1/(f*sqrt(0.7*4)).
+      call bt_dtbt_dt_max(NX, NY, 2, 2, NX - 1, 2, NY - 1, h, wet, dyc, dxc, idxc, idyc, ia, &
+                          fc, 0.0_wp, BEBT, .false., dt_max)
+      expect = 1.0_wp/(F0*sqrt(0.7_wp*4.0_wp))
+      call check(error, abs(dt_max - expect) <= 1.0e-14_wp*expect, "g=0 dt_max /= 1/(2 f sqrt(0.7))")
+   end subroutine test_dtbt_coriolis
+
+   subroutine test_dtbt_aniso(error)
+      !! dx /= dy: E+W faces give 2 g D/dx^2, N+S give 2 g D/dy^2.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NX = 6, NY = 6
+      real(wp), parameter :: DX = 20000.0_wp, DY = 5000.0_wp, D = 800.0_wp, BEBT = 0.2_wp
+      real(wp) :: h(NX, NY, 2), wet(NX, NY), dyc(NX + 1, NY), dxc(NX, NY + 1)
+      real(wp) :: idxc(NX + 1, NY), idyc(NX, NY + 1), ia(NX, NY), fc(NX + 1, NY + 1)
+      real(wp) :: dt_max, expect
+
+      call dtbt_grid(NX, NY, DX, DY, h, wet, dyc, dxc, idxc, idyc, ia, fc, D, 0.0_wp)
+      call bt_dtbt_dt_max(NX, NY, 2, 2, NX - 1, 2, NY - 1, h, wet, dyc, dxc, idxc, idyc, ia, &
+                          fc, GRAVITY, BEBT, .false., dt_max)
+      expect = 1.0_wp/sqrt(0.7_wp*(2.0_wp*GRAVITY*D/DX**2 + 2.0_wp*GRAVITY*D/DY**2))
+      call check(error, abs(dt_max - expect) <= 1.0e-14_wp*expect, &
+                 "anisotropic dt_max /= 1/sqrt(0.7*(2gD/dx^2 + 2gD/dy^2))")
+   end subroutine test_dtbt_aniso
+
+   subroutine test_dtbt_n_inner(error)
+      !! n_inner = ceiling(dt / step); dtbt = 0 means -0.98; dtbt > 0 is seconds.
+      type(error_type), allocatable, intent(out) :: error
+      call check(error, bt_dtbt_n_inner(900.0_wp, -0.9_wp, 100.0_wp) == 10, "step 90 s: 900/90 -> 10")
+      if (allocated(error)) return
+      call check(error, bt_dtbt_n_inner(900.0_wp, -0.9_wp, 99.0_wp) == 11, "step 89.1 s: -> 11")
+      if (allocated(error)) return
+      call check(error, abs(bt_dtbt_safe_step(0.0_wp, 100.0_wp) - 98.0_wp) < 1.0e-12_wp, "dtbt=0 /= -0.98")
+      if (allocated(error)) return
+      call check(error, bt_dtbt_n_inner(900.0_wp, 0.0_wp, 100.0_wp) == 10, "dtbt=0: 900/98 -> 10")
+      if (allocated(error)) return
+      call check(error, bt_dtbt_n_inner(900.0_wp, 300.0_wp, 1.0_wp) == 3, "fixed 300 s: -> 3")
+      if (allocated(error)) return
+      call check(error, bt_dtbt_n_inner(900.0_wp, 250.0_wp, 1.0_wp) == 4, "fixed 250 s: -> 4")
+      if (allocated(error)) return
+      call check(error, bt_dtbt_n_inner(900.0_wp, -0.9_wp, huge(1.0_wp)) == 1, "no wet cell -> 1")
+   end subroutine test_dtbt_n_inner
+
+   subroutine test_dtbt_depth_change(error)
+      !! Period 0 recomputes from the live depths: with f = 0, quadrupling the
+      !! depth halves dt_max exactly (dt_max ~ 1/sqrt(D)).
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NX = 8, NY = 7
+      real(wp), parameter :: DX = 12000.0_wp, BEBT = 0.2_wp
+      real(wp) :: h(NX, NY, 2), wet(NX, NY), dyc(NX + 1, NY), dxc(NX, NY + 1)
+      real(wp) :: idxc(NX + 1, NY), idyc(NX, NY + 1), ia(NX, NY), fc(NX + 1, NY + 1)
+      real(wp) :: dt_a, dt_b
+
+      call dtbt_grid(NX, NY, DX, DX, h, wet, dyc, dxc, idxc, idyc, ia, fc, 1000.0_wp, 0.0_wp)
+      call bt_dtbt_dt_max(NX, NY, 2, 2, NX - 1, 2, NY - 1, h, wet, dyc, dxc, idxc, idyc, ia, &
+                          fc, GRAVITY, BEBT, .false., dt_a)
+      h = 4.0_wp*h
+      call bt_dtbt_dt_max(NX, NY, 2, 2, NX - 1, 2, NY - 1, h, wet, dyc, dxc, idxc, idyc, ia, &
+                          fc, GRAVITY, BEBT, .false., dt_b)
+      call check(error, abs(dt_b - 0.5_wp*dt_a) <= 1.0e-14_wp*dt_a, "4x depth did not halve dt_max")
+      if (allocated(error)) return
+      ! One deep cell sets the domain minimum, and a deep cell's neighbour
+      ! faces carry the average depth.
+      call dtbt_grid(NX, NY, DX, DX, h, wet, dyc, dxc, idxc, idyc, ia, fc, 1000.0_wp, 0.0_wp)
+      h(4, 4, :) = 2500.0_wp
+      call bt_dtbt_dt_max(NX, NY, 2, 2, NX - 1, 2, NY - 1, h, wet, dyc, dxc, idxc, idyc, ia, &
+                          fc, GRAVITY, BEBT, .false., dt_b)
+      ! cell (4,4): four faces of depth (5000+1000)/2 = 3000 each
+      dt_a = 1.0_wp/sqrt(0.7_wp*4.0_wp*GRAVITY*3000.0_wp/DX**2)
+      call check(error, dt_b <= dt_a*(1.0_wp + 1.0e-14_wp), "deep cell does not set the minimum")
+   end subroutine test_dtbt_depth_change
+
+   subroutine test_dtbt_land(error)
+      !! A land neighbour closes the face; an all-land window is inert (huge).
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NX = 6, NY = 6
+      real(wp), parameter :: DX = 10000.0_wp, D = 1000.0_wp, BEBT = 0.2_wp
+      real(wp) :: h(NX, NY, 2), wet(NX, NY), dyc(NX + 1, NY), dxc(NX, NY + 1)
+      real(wp) :: idxc(NX + 1, NY), idyc(NX, NY + 1), ia(NX, NY), fc(NX + 1, NY + 1)
+      real(wp) :: dt_max, expect
+
+      call dtbt_grid(NX, NY, DX, DX, h, wet, dyc, dxc, idxc, idyc, ia, fc, D, 0.0_wp)
+      wet = 0.0_wp
+      wet(3, 3) = 1.0_wp                   ! a lone wet cell: all four faces closed
+      call bt_dtbt_dt_max(NX, NY, 2, 2, NX - 1, 2, NY - 1, h, wet, dyc, dxc, idxc, idyc, ia, &
+                          fc, GRAVITY, BEBT, .false., dt_max)
+      call check(error, dt_max == huge(1.0_wp), "isolated wet cell (no open face, f=0) is not unconstrained")
+      if (allocated(error)) return
+      wet(4, 3) = 1.0_wp                   ! a two-cell pond: one open face each
+      call bt_dtbt_dt_max(NX, NY, 2, 2, NX - 1, 2, NY - 1, h, wet, dyc, dxc, idxc, idyc, ia, &
+                          fc, GRAVITY, BEBT, .false., dt_max)
+      expect = 1.0_wp/sqrt(0.7_wp*GRAVITY*D/DX**2)
+      call check(error, abs(dt_max - expect) <= 1.0e-14_wp*expect, "one open face: dt_max /= 1/sqrt(0.7 g D/dx^2)")
+   end subroutine test_dtbt_land
+
+   subroutine test_dtbt_device(error)
+      !! The `on_device` branch (the `do concurrent` reduction `engine_step`
+      !! runs) must reproduce the host loop on a bathymetry with a deep cell,
+      !! a land block and an f gradient.  Every array is mapped by hand
+      !! (`mem:separate`: no implicit copies); a no-op on host builds.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NX = 12, NY = 10, NZ = 2
+      real(wp), parameter :: DX = 15000.0_wp, DY = 9000.0_wp, BEBT = 0.2_wp
+      real(wp) :: h(NX, NY, NZ), wet(NX, NY), dyc(NX + 1, NY), dxc(NX, NY + 1)
+      real(wp) :: idxc(NX + 1, NY), idyc(NX, NY + 1), ia(NX, NY), fc(NX + 1, NY + 1)
+      real(wp) :: dt_host, dt_dev
+      integer :: i, j
+
+      call dtbt_grid(NX, NY, DX, DY, h, wet, dyc, dxc, idxc, idyc, ia, fc, 2000.0_wp, 0.0_wp)
+      h(5, 4, :) = 2800.0_wp
+      h(6, 4, 1) = 90.0_wp
+      wet(8:9, 5:7) = 0.0_wp
+      do j = 1, NY + 1
+         do i = 1, NX + 1
+            fc(i, j) = 1.0e-5_wp*real(j, wp)
+         end do
+      end do
+      call bt_dtbt_dt_max(NX, NY, NZ, 2, NX - 1, 2, NY - 1, h, wet, dyc, dxc, idxc, idyc, ia, &
+                          fc, GRAVITY, BEBT, .false., dt_host)
+      !$acc enter data copyin(h, wet, dyc, dxc, idxc, idyc, ia, fc)
+      call bt_dtbt_dt_max(NX, NY, NZ, 2, NX - 1, 2, NY - 1, h, wet, dyc, dxc, idxc, idyc, ia, &
+                          fc, GRAVITY, BEBT, .true., dt_dev)
+      !$acc exit data delete(h, wet, dyc, dxc, idxc, idyc, ia, fc)
+      call check(error, abs(dt_dev - dt_host) <= 1.0e-13_wp*dt_host, &
+                 "device dt_max differs from the host loop")
+   end subroutine test_dtbt_device
+
+   subroutine test_dtbt_refusals(error)
+      !! dtbt replaces auto_n_inner/cfl_bt_safety; a reset period needs dtbt.
+      type(error_type), allocatable, intent(out) :: error
+      call expect_dtbt(error, "dtbt = -0.9", .true., "dtbt alone")
+      if (allocated(error)) return
+      call expect_dtbt(error, "dtbt = -0.9, dtbt_reset_period = 0.0", .true., "dtbt + reset 0")
+      if (allocated(error)) return
+      call expect_dtbt(error, "dtbt = -0.9, auto_n_inner = .true.", .false., "dtbt + auto_n_inner")
+      if (allocated(error)) return
+      call expect_dtbt(error, "dtbt = -0.9, cfl_bt_safety = 0.5", .false., "dtbt + cfl_bt_safety")
+      if (allocated(error)) return
+      call expect_dtbt(error, "dtbt = -1.5", .false., "dtbt < -1")
+      if (allocated(error)) return
+      call expect_dtbt(error, "dtbt_reset_period = 0.0", .false., "reset period without dtbt")
+   end subroutine test_dtbt_refusals
+
+   subroutine expect_dtbt(error, bt_body, valid, what)
+      type(error_type), allocatable, intent(inout) :: error
+      character(len=*), intent(in) :: bt_body, what
+      logical, intent(in) :: valid
+      type(config_t) :: cfg
+      character(len=:), allocatable :: nml
+      integer :: ierr
+      nml = "&sim_nml sim_type = 'ocean' /"//new_line("a")// &
+            "&grid_nml nx = 8, ny = 6, nghost = 2, dx = 1000.0, dy = 1000.0 /"//new_line("a")// &
+            "&nonhydrostatic_nml nz_layers = 4 /"//new_line("a")// &
+            "&time_nml t_end = 3600.0, dt_fixed = 60.0 /"//new_line("a")// &
+            "&ocean_topo_nml max_depth = 400.0 /"//new_line("a")// &
+            "&vcoord_nml vcoord_type = 'z_fixed', zfixed_closed_faces = .true. /"//new_line("a")// &
+            "&ocean_bt_nml n_inner = 8, "//bt_body//" /"//new_line("a")// &
+            "&ocean_diag_nml enabled = .false. /"//new_line("a")// &
+            "&output_nml output_to_file = .false. /"//new_line("a")
+      call read_config_from_string(nml, cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "namelist must PARSE: "//what)
+      if (allocated(error)) return
+      ierr = -999
+      call validate_config(cfg, ierr=ierr)
+      if (valid) then
+         call check(error, ierr == OCEAN_STATUS_OK, "must CONFIGURE: "//what)
+      else
+         call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, "must be REFUSED: "//what)
+      end if
+   end subroutine expect_dtbt
 
 end module test_ocean_bt_cfl
