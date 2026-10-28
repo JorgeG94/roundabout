@@ -55,6 +55,9 @@ contains
       call g%add(nml_real("khth_slope_max", pr, &
                           "Slope magnitude above which the safe-streamfunction blend takes over", &
                           units="nondim"))
+      pl => cfg%ocean%gm%use_ebt_struct
+      call g%add(nml_logical("use_ebt_struct", pl, &
+                             "EBT vertical structure of KhTh (KHTH_USE_EBT_STRUCT; needs wavespeed use_ebt; default off)"))
 
       call schema%add_group(g)
    end subroutine register_gm

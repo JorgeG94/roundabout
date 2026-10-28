@@ -3871,7 +3871,19 @@ contains
       call profiler_start("ocean_gm")
       use_ext = .false.
       if (present(varmix) .and. present(wavespeed)) use_ext = varmix%enable
-      if (use_ext) then
+      if (gm%use_ebt_struct .and. .not. present(wavespeed)) then
+         error stop "run_gm_step: use_ebt_struct needs the wave-speed slot"
+      end if
+      if (gm%use_ebt_struct) then
+         if (use_ext) then
+            call gm_compute_transports(grid, metrics, gm, slopes, ms, dt, &
+                                       khth_ext_u=varmix%khth_u, khth_ext_v=varmix%khth_v, &
+                                       ebt_struct=wavespeed%ebt_struct)
+         else
+            call gm_compute_transports(grid, metrics, gm, slopes, ms, dt, &
+                                       ebt_struct=wavespeed%ebt_struct)
+         end if
+      else if (use_ext) then
          call gm_compute_transports(grid, metrics, gm, slopes, ms, dt, &
                                     khth_ext_u=varmix%khth_u, khth_ext_v=varmix%khth_v)
       else

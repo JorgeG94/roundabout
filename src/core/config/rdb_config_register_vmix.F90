@@ -342,7 +342,7 @@ contains
                           "N2-monotonising depth; NOT IMPLEMENTED (refused together with use_ebt); < 0 = off"))
       pl => cfg%ocean%wavespeed%use_ebt
       call g%add(nml_logical("use_ebt", pl, &
-                        "Also compute the equivalent-barotropic speed cg1_ebt + structure ebt_struct (GM does not consume it yet)"))
+   "Also compute the equivalent-barotropic speed cg1_ebt + structure ebt_struct (consumed by GM with ocean_gm_nml use_ebt_struct)"))
       pi => cfg%ocean%wavespeed%n_wavespeed
       call g%add(nml_int("n_wavespeed", pi, "Recompute cadence (every N steps)", min=1))
 

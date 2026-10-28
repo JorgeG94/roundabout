@@ -221,6 +221,7 @@ Gent-McWilliams thickness diffusion (eddy bolus transport).
 | `khth` | `0.0000000000E+00` | m^2/s | Thickness diffusivity KhTh (constant-fill; production 1e2-1e3) |
 | `khth_max_cfl` | `0.1000000000E+00` | nondim | Fraction of the diffusive CFL the face KH may use |
 | `khth_slope_max` | `0.1000000000E-01` | nondim | Slope magnitude above which the safe-streamfunction blend takes over |
+| `use_ebt_struct` | `.false.` |  | EBT vertical structure of KhTh (KHTH_USE_EBT_STRUCT; needs wavespeed use_ebt; default off) |
 
 ### &ocean_redi_nml
 
@@ -478,7 +479,7 @@ First-baroclinic wave speed + Rossby deformation radius (diagnostic).
 |------|---------|-------|-------------|
 | `enable` | `.false.` |  | Master switch (diagnostic; default off) |
 | `mono_n2` | `-0.1000000000E+01` |  | N2-monotonising depth; NOT IMPLEMENTED (refused together with use_ebt); < 0 = off |
-| `use_ebt` | `.false.` |  | Also compute the equivalent-barotropic speed cg1_ebt + structure ebt_struct (GM does not consume it yet) |
+| `use_ebt` | `.false.` |  | Also compute the equivalent-barotropic speed cg1_ebt + structure ebt_struct (consumed by GM with ocean_gm_nml use_ebt_struct) |
 | `n_wavespeed` | `1` |  | Recompute cadence (every N steps) |
 
 ### &ocean_foxkemper_nml

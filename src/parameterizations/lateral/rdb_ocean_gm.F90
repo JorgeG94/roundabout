@@ -148,6 +148,14 @@ module rdb_ocean_gm
          !! blend takes over (`slope_max`).
       real(wp) :: rho0 = 1035.0_wp
          !! Reference density (kg/m^3) for the `gm_src` PE-release scaling.
+      logical :: use_ebt_struct = .false.
+         !! Give the thickness diffusivity the vertical shape of the
+         !! equivalent-barotropic mode (Hallberg 2013; Killworth & Blundell
+         !! 2003): at each interior interface the 2-D face KhTh (after the
+         !! CFL clamp) is multiplied by the mean of the two straddling
+         !! columns' `ebt_struct` in the layer just above that interface.
+         !! Needs `ebt_struct` passed to `gm_compute_transports`; off ⇒ the
+         !! kernels are byte-identical.
 
       ! ---- Cached extents ----
       integer :: nx_total = 0
@@ -270,7 +278,7 @@ contains
    ! =================================================================
 
    subroutine gm_compute_transports(grid, metrics, this, slopes, ms, dt, &
-                                    khth_ext_u, khth_ext_v)
+                                    khth_ext_u, khth_ext_v, ebt_struct)
       !! Fill `uhD`/`vhD` (m^3/s) with the GM bolus thickness transport and
       !! `gm_src` with the PE release, from the CURRENT `ms%h_layer` and the
       !! stored slopes.  Run every outer step AFTER the dynamics, and
@@ -284,6 +292,12 @@ contains
       !! KhTh face field from VarMix.  When present the per-face CFL clamp
       !! uses it instead of the scalar `khth`; when absent, falls back to
       !! the constant `khth` (byte-identical to the pre-VarMix path).
+      !!
+      !! `ebt_struct` (with `this%use_ebt_struct`): the vertical shape of
+      !! KhTh.  At interior interface `K` of a face the 2-D face KhTh is
+      !! multiplied by `½(ebt_struct(L,ka) + ebt_struct(R,ka))`, `ka = K`
+      !! the layer just ABOVE the interface (bottom-up: layer `k` lies
+      !! between interfaces `k` and `k+1`).
       type(hgrid_t), intent(in) :: grid
       type(ocean_metrics_t), intent(in) :: metrics
       type(ocean_gm_t), intent(inout) :: this
@@ -292,9 +306,12 @@ contains
       real(wp), intent(in) :: dt
       real(wp), intent(in), optional :: khth_ext_u(:, :)
       real(wp), intent(in), optional :: khth_ext_v(:, :)
+      real(wp), intent(in), optional, contiguous :: ebt_struct(:, :, :)
+         !! `ocean_wave_speed_t%ebt_struct` `(nx,ny,nz)`; read only when
+         !! `this%use_ebt_struct` (required then).
 
       integer :: nx, ny, nz
-      logical :: use_ext, use_open
+      logical :: use_ext, use_open, use_struct
 
       if (.not. this%is_init) return
       if (.not. this%enable) return
@@ -311,23 +328,70 @@ contains
       use_ext = present(khth_ext_u) .and. present(khth_ext_v)
       use_open = metrics%use_closed_faces
 
-      ! Explicit-shape flat-impl: pass the top-level allocatables so NVHPC
-      ! does not descriptor-walk per launch.  When the external VarMix base
-      ! is absent, pass `this%khth_u/khth_v` as a harmless placeholder for
-      ! the `khth_ext_*` dummy and gate it off with `use_ext`.
-      !
-      ! The z-level open masks follow the continuity convention (the
-      ! `open_f` dummy of the barotropic renormaliser): with the knob OFF
-      ! they are `(1,1,1)` placeholders, and NVHPC derives an explicit-shape
-      ! dummy's present-check extent from its DECLARED bounds, so handing
-      ! over the placeholder aborts `mem:separate` ("partially present")
-      ! even though `use_open = .false.` never indexes it.  The knob-off
-      ! calls therefore pass the slopes' own read-only `slope_x`/`slope_y`
-      ! as the inert stand-in: `(nx+1,ny,nz+1)`/`(nx,ny+1,nz+1)`, i.e. at
-      ! least the `(..,nz)` the dummy declares, already device-mapped, and
-      ! only ever read here.
-      if (use_open) then
-         if (use_ext) then
+      use_struct = this%use_ebt_struct .and. present(ebt_struct)
+      if (this%use_ebt_struct .and. .not. present(ebt_struct)) then
+         error stop "gm_compute_transports: use_ebt_struct needs the ebt_struct field"
+      end if
+      if (use_struct) then
+         if (size(ebt_struct, 1) /= nx .or. size(ebt_struct, 2) /= ny .or. &
+             size(ebt_struct, 3) /= nz) then
+            error stop "gm_compute_transports: ebt_struct extent mismatch (needs use_ebt)"
+         end if
+         call gm_dispatch(.true., ebt_struct)
+      else
+         ! Inert, device-present stand-in with the dummy's shape; never read.
+         call gm_dispatch(.false., ms%h_layer)
+      end if
+
+   contains
+
+      subroutine gm_dispatch(use_struct_in, ebt)
+         !! The four `gm_compute_impl` call shapes (open/ext), with the
+         !! structure field handed over as an explicit-shape actual.
+         logical, intent(in) :: use_struct_in
+         real(wp), intent(in) :: ebt(nx, ny, nz)
+         ! Explicit-shape flat-impl: pass the top-level allocatables so NVHPC
+         ! does not descriptor-walk per launch.  When the external VarMix base
+         ! is absent, pass `this%khth_u/khth_v` as a harmless placeholder for
+         ! the `khth_ext_*` dummy and gate it off with `use_ext`.
+         !
+         ! The z-level open masks follow the continuity convention (the
+         ! `open_f` dummy of the barotropic renormaliser): with the knob OFF
+         ! they are `(1,1,1)` placeholders, and NVHPC derives an explicit-shape
+         ! dummy's present-check extent from its DECLARED bounds, so handing
+         ! over the placeholder aborts `mem:separate` ("partially present")
+         ! even though `use_open = .false.` never indexes it.  The knob-off
+         ! calls therefore pass the slopes' own read-only `slope_x`/`slope_y`
+         ! as the inert stand-in: `(nx+1,ny,nz+1)`/`(nx,ny+1,nz+1)`, i.e. at
+         ! least the `(..,nz)` the dummy declares, already device-mapped, and
+         ! only ever read here.
+         if (use_open) then
+            if (use_ext) then
+               call gm_compute_impl(nx, ny, nz, dt, this%khth, this%khth_max_cfl, &
+                                    this%khth_slope_max, this%rho0, use_ext, use_open, &
+                                    metrics%dy_cu, metrics%dx_cv, metrics%idxCu, &
+                                    metrics%idyCv, metrics%idyCu, metrics%idxCv, &
+                                    metrics%areaT, metrics%wet_u, metrics%wet_v, &
+                                    ms%h_layer, slopes%bathy, slopes%slope_x, slopes%slope_y, &
+                                    slopes%n2_u, slopes%n2_v, khth_ext_u, khth_ext_v, &
+                                    metrics%open_u, metrics%open_v, &
+                                    this%khth_u, this%khth_v, &
+                                    this%uhD, this%vhD, this%gm_src, &
+                                    use_struct_in, ebt)
+            else
+               call gm_compute_impl(nx, ny, nz, dt, this%khth, this%khth_max_cfl, &
+                                    this%khth_slope_max, this%rho0, use_ext, use_open, &
+                                    metrics%dy_cu, metrics%dx_cv, metrics%idxCu, &
+                                    metrics%idyCv, metrics%idyCu, metrics%idxCv, &
+                                    metrics%areaT, metrics%wet_u, metrics%wet_v, &
+                                    ms%h_layer, slopes%bathy, slopes%slope_x, slopes%slope_y, &
+                                    slopes%n2_u, slopes%n2_v, this%khth_u, this%khth_v, &
+                                    metrics%open_u, metrics%open_v, &
+                                    this%khth_u, this%khth_v, &
+                                    this%uhD, this%vhD, this%gm_src, &
+                                    use_struct_in, ebt)
+            end if
+         else if (use_ext) then
             call gm_compute_impl(nx, ny, nz, dt, this%khth, this%khth_max_cfl, &
                                  this%khth_slope_max, this%rho0, use_ext, use_open, &
                                  metrics%dy_cu, metrics%dx_cv, metrics%idxCu, &
@@ -335,9 +399,10 @@ contains
                                  metrics%areaT, metrics%wet_u, metrics%wet_v, &
                                  ms%h_layer, slopes%bathy, slopes%slope_x, slopes%slope_y, &
                                  slopes%n2_u, slopes%n2_v, khth_ext_u, khth_ext_v, &
-                                 metrics%open_u, metrics%open_v, &
+                                 slopes%slope_x, slopes%slope_y, &
                                  this%khth_u, this%khth_v, &
-                                 this%uhD, this%vhD, this%gm_src)
+                                 this%uhD, this%vhD, this%gm_src, &
+                                 use_struct_in, ebt)
          else
             call gm_compute_impl(nx, ny, nz, dt, this%khth, this%khth_max_cfl, &
                                  this%khth_slope_max, this%rho0, use_ext, use_open, &
@@ -346,33 +411,12 @@ contains
                                  metrics%areaT, metrics%wet_u, metrics%wet_v, &
                                  ms%h_layer, slopes%bathy, slopes%slope_x, slopes%slope_y, &
                                  slopes%n2_u, slopes%n2_v, this%khth_u, this%khth_v, &
-                                 metrics%open_u, metrics%open_v, &
+                                 slopes%slope_x, slopes%slope_y, &
                                  this%khth_u, this%khth_v, &
-                                 this%uhD, this%vhD, this%gm_src)
+                                 this%uhD, this%vhD, this%gm_src, &
+                                 use_struct_in, ebt)
          end if
-      else if (use_ext) then
-         call gm_compute_impl(nx, ny, nz, dt, this%khth, this%khth_max_cfl, &
-                              this%khth_slope_max, this%rho0, use_ext, use_open, &
-                              metrics%dy_cu, metrics%dx_cv, metrics%idxCu, &
-                              metrics%idyCv, metrics%idyCu, metrics%idxCv, &
-                              metrics%areaT, metrics%wet_u, metrics%wet_v, &
-                              ms%h_layer, slopes%bathy, slopes%slope_x, slopes%slope_y, &
-                              slopes%n2_u, slopes%n2_v, khth_ext_u, khth_ext_v, &
-                              slopes%slope_x, slopes%slope_y, &
-                              this%khth_u, this%khth_v, &
-                              this%uhD, this%vhD, this%gm_src)
-      else
-         call gm_compute_impl(nx, ny, nz, dt, this%khth, this%khth_max_cfl, &
-                              this%khth_slope_max, this%rho0, use_ext, use_open, &
-                              metrics%dy_cu, metrics%dx_cv, metrics%idxCu, &
-                              metrics%idyCv, metrics%idyCu, metrics%idxCv, &
-                              metrics%areaT, metrics%wet_u, metrics%wet_v, &
-                              ms%h_layer, slopes%bathy, slopes%slope_x, slopes%slope_y, &
-                              slopes%n2_u, slopes%n2_v, this%khth_u, this%khth_v, &
-                              slopes%slope_x, slopes%slope_y, &
-                              this%khth_u, this%khth_v, &
-                              this%uhD, this%vhD, this%gm_src)
-      end if
+      end subroutine gm_dispatch
    end subroutine gm_compute_transports
 
    subroutine gm_compute_impl(nx, ny, nz, dt, khth, khth_max_cfl, slope_max, &
@@ -380,7 +424,8 @@ contains
                               idyCv, idyCu, idxCv, areaT, wet_u, wet_v, h_layer, &
                               bathy, slope_x, slope_y, &
                               n2_u, n2_v, khth_ext_u, khth_ext_v, open_u, open_v, &
-                              khth_u, khth_v, uhD, vhD, gm_src)
+                              khth_u, khth_v, uhD, vhD, gm_src, &
+                              use_struct, ebt_struct)
       !! Flat-impl GM kernel.  Passes: CFL-clamp the 2D face KhTh, the
       !! u-face and v-face column recurrences into `uhD`/`vhD`, the
       !! `gm_src` PE release.  Each face's column sweep is serial in k (the
@@ -420,6 +465,11 @@ contains
       real(wp), intent(out) :: uhD(nx + 1, ny, nz)
       real(wp), intent(out) :: vhD(nx, ny + 1, nz)
       real(wp), intent(out) :: gm_src(nx, ny)
+      logical, intent(in) :: use_struct
+         !! EBT vertical structure of KhTh on (`&ocean_gm_nml use_ebt_struct`).
+      real(wp), intent(in) :: ebt_struct(nx, ny, nz)
+         !! T-cell EBT structure; an inert device-present stand-in when
+         !! `use_struct = .false.` (never indexed).
 
       real(wp) :: i_smax2, i4dt
       integer :: i, j, k
@@ -440,7 +490,8 @@ contains
          uhD(nx + 1, j, k) = 0.0_wp
       end do
       call gm_column_x(nx, ny, nz, i_smax2, i4dt, use_open, &
-                       dy_cu, areaT, h_layer, bathy, slope_x, khth_u, open_u, uhD)
+                       dy_cu, areaT, h_layer, bathy, slope_x, khth_u, open_u, uhD, &
+                       use_struct, ebt_struct)
 
       ! ---- 3. v-face bolus transport (mirror).
       do concurrent(k=1:nz, i=1:nx)
@@ -448,11 +499,13 @@ contains
          vhD(i, ny + 1, k) = 0.0_wp
       end do
       call gm_column_y(nx, ny, nz, i_smax2, i4dt, use_open, &
-                       dx_cv, areaT, h_layer, bathy, slope_y, khth_v, open_v, vhD)
+                       dx_cv, areaT, h_layer, bathy, slope_y, khth_v, open_v, vhD, &
+                       use_struct, ebt_struct)
 
       ! ---- 4. gm_src PE release (cell centres).
       call gm_pe_release(nx, ny, nz, slope_max, rho0, h_layer, &
-                         slope_x, slope_y, n2_u, n2_v, khth_u, khth_v, gm_src)
+                         slope_x, slope_y, n2_u, n2_v, khth_u, khth_v, gm_src, &
+                         use_struct, ebt_struct)
    end subroutine gm_compute_impl
 
    pure subroutine gm_clamp_khth(nx, ny, dt, khth, khth_max_cfl, use_ext, &
@@ -520,7 +573,8 @@ contains
    end function gm_h_frac
 
    pure subroutine gm_column_x(nx, ny, nz, i_smax2, i4dt, use_open, &
-                               dy_cu, areaT, h_layer, bathy, slope_x, khth_u, open_u, uhD)
+                               dy_cu, areaT, h_layer, bathy, slope_x, khth_u, open_u, uhD, &
+                               use_struct, ebt_struct)
       !! u-face GM streamfunction + bolus-transport column recurrence.
       !! Interior u-face (i=2..nx) pairs columns iw=i-1 (west) and i (east).
       !! Bottom-up sweep: interior interfaces Kr=2 (bed-most) -> nz
@@ -571,6 +625,13 @@ contains
       logical, intent(in) :: use_open
       real(wp), intent(in) :: open_u(nx + 1, ny, nz)
       real(wp), intent(inout) :: uhD(nx + 1, ny, nz)
+      logical, intent(in) :: use_struct
+      real(wp), intent(in) :: ebt_struct(nx, ny, nz)
+         !! EBT structure; read only when `use_struct`.  Interior interface
+         !! `Kr` (loop index `k`) has layer `ka = Kr` above it, so its
+         !! diffusivity is `kh*½(ebt_struct(iw,j,ka) + ebt_struct(i,j,ka))`
+         !! (Hallberg 2013).  `use_struct = .false.` ⇒ the original
+         !! expression, byte for byte.
 
       integer :: i, j, k, iw, ka, kb, ktop
       real(wp) :: havL(NZ_STACK_MAX), havR(NZ_STACK_MAX)
@@ -578,11 +639,11 @@ contains
       real(wp) :: eL(NZ_STACK_MAX + 1), eR(NZ_STACK_MAX + 1)
       logical :: ok(NZ_STACK_MAX)
       real(wp) :: uhtot, slope, s2r, sfn_unlim, sfn_safe, sfn_est, sfn_in_h
-      real(wp) :: h_frac_d, uhd_k, kh
+      real(wp) :: h_frac_d, uhd_k, kh, khk
 
       do concurrent(j=1:ny, i=2:nx) &
          local(k, iw, ka, kb, ktop, havL, havR, rsumL, rsumR, eL, eR, ok, uhtot, slope, &
-               s2r, sfn_unlim, sfn_safe, sfn_est, sfn_in_h, h_frac_d, uhd_k, kh)
+               s2r, sfn_unlim, sfn_safe, sfn_est, sfn_in_h, h_frac_d, uhd_k, kh, khk)
          iw = i - 1
          kh = khth_u(i, j)
          ! Interface heights (bed-up from z = -D) of the two columns, for
@@ -647,8 +708,14 @@ contains
             ! limiters below (they launder NaN into a bound, CLAUDE.md).
             if (.not. ieee_is_finite(slope)) slope = 0.0_wp
             s2r = slope*slope*i_smax2
-            sfn_unlim = gm_block_below_bed(-(kh*dy_cu(i, j))*slope, &
-                                           eL(k), eL(k - 1), eR(1), eR(k), eR(k - 1), eL(1))
+            if (use_struct) then
+               khk = kh*(0.5_wp*(ebt_struct(iw, j, ka) + ebt_struct(i, j, ka)))
+               sfn_unlim = gm_block_below_bed(-(khk*dy_cu(i, j))*slope, &
+                                              eL(k), eL(k - 1), eR(1), eR(k), eR(k - 1), eL(1))
+            else
+               sfn_unlim = gm_block_below_bed(-(kh*dy_cu(i, j))*slope, &
+                                              eL(k), eL(k - 1), eR(1), eR(k), eR(k - 1), eL(1))
+            end if
             if (uhtot <= 0.0_wp) then
                h_frac_d = gm_h_frac(havL(kb), rsumL(kb))
             else
@@ -669,7 +736,8 @@ contains
    end subroutine gm_column_x
 
    pure subroutine gm_column_y(nx, ny, nz, i_smax2, i4dt, use_open, &
-                               dx_cv, areaT, h_layer, bathy, slope_y, khth_v, open_v, vhD)
+                               dx_cv, areaT, h_layer, bathy, slope_y, khth_v, open_v, vhD, &
+                               use_struct, ebt_struct)
       !! v-face GM column recurrence — mirror of `gm_column_x` with the
       !! v-stagger.  Interior v-face (j=2..ny) pairs columns js=j-1 (south)
       !! and j (north).  See `gm_column_x` for the open-column (`use_open`)
@@ -685,6 +753,9 @@ contains
       logical, intent(in) :: use_open
       real(wp), intent(in) :: open_v(nx, ny + 1, nz)
       real(wp), intent(inout) :: vhD(nx, ny + 1, nz)
+      logical, intent(in) :: use_struct
+      real(wp), intent(in) :: ebt_struct(nx, ny, nz)
+         !! v-face twin of the `gm_column_x` structure field.
 
       integer :: i, j, k, js, ka, kb, ktop
       real(wp) :: havS(NZ_STACK_MAX), havN(NZ_STACK_MAX)
@@ -692,11 +763,11 @@ contains
       real(wp) :: eS(NZ_STACK_MAX + 1), eN(NZ_STACK_MAX + 1)
       logical :: ok(NZ_STACK_MAX)
       real(wp) :: vhtot, slope, s2r, sfn_unlim, sfn_safe, sfn_est, sfn_in_h
-      real(wp) :: h_frac_d, vhd_k, kh
+      real(wp) :: h_frac_d, vhd_k, kh, khk
 
       do concurrent(j=2:ny, i=1:nx) &
          local(k, js, ka, kb, ktop, havS, havN, rsumS, rsumN, eS, eN, ok, vhtot, slope, &
-               s2r, sfn_unlim, sfn_safe, sfn_est, sfn_in_h, h_frac_d, vhd_k, kh)
+               s2r, sfn_unlim, sfn_safe, sfn_est, sfn_in_h, h_frac_d, vhd_k, kh, khk)
          js = j - 1
          kh = khth_v(i, j)
          eS(1) = -bathy(i, js)
@@ -750,8 +821,14 @@ contains
             slope = slope_y(i, j, k)
             if (.not. ieee_is_finite(slope)) slope = 0.0_wp
             s2r = slope*slope*i_smax2
-            sfn_unlim = gm_block_below_bed(-(kh*dx_cv(i, j))*slope, &
-                                           eS(k), eS(k - 1), eN(1), eN(k), eN(k - 1), eS(1))
+            if (use_struct) then
+               khk = kh*(0.5_wp*(ebt_struct(i, js, ka) + ebt_struct(i, j, ka)))
+               sfn_unlim = gm_block_below_bed(-(khk*dx_cv(i, j))*slope, &
+                                              eS(k), eS(k - 1), eN(1), eN(k), eN(k - 1), eS(1))
+            else
+               sfn_unlim = gm_block_below_bed(-(kh*dx_cv(i, j))*slope, &
+                                              eS(k), eS(k - 1), eN(1), eN(k), eN(k - 1), eS(1))
+            end if
             if (vhtot <= 0.0_wp) then
                h_frac_d = gm_h_frac(havS(kb), rsumS(kb))
             else
@@ -830,7 +907,8 @@ contains
 
    pure subroutine gm_pe_release(nx, ny, nz, slope_max, rho0, h_layer, &
                                  slope_x, slope_y, n2_u, n2_v, &
-                                 khth_u, khth_v, gm_src)
+                                 khth_u, khth_v, gm_src, &
+                                 use_struct, ebt_struct)
       !! GM potential-energy release at cell centres for the MEKE seam:
       !!   gm_src = 1/4 * Sum_k rho0 * (KH*Slope^2*N^2) * h
       !! over the four straddling faces, summed over interior interfaces;
@@ -847,14 +925,27 @@ contains
       real(wp), intent(in) :: khth_u(nx + 1, ny)
       real(wp), intent(in) :: khth_v(nx, ny + 1)
       real(wp), intent(out) :: gm_src(nx, ny)
+      logical, intent(in) :: use_struct
+      real(wp), intent(in) :: ebt_struct(nx, ny, nz)
+         !! EBT structure; with `use_struct` each face KhTh at interface
+         !! `Kr` is scaled by the mean structure of its two columns in the
+         !! layer above (`ka = Kr`), exactly as in `gm_column_x/y`, so MEKE
+         !! sees the structured diffusivity.  A domain-edge face has one
+         !! real column: its structure is that column's own (its `khth` is
+         !! the wall value 0 anyway).
 
-      integer :: i, j, k, kb
+      integer :: i, j, k, kb, iw0, ie0, js0, jn0
       real(wp) :: acc, fsum, sx_w, sx_e, sy_s, sy_n
-      real(wp) :: n2w, n2e, n2s, n2n
+      real(wp) :: n2w, n2e, n2s, n2n, kuw, kue, kvs, kvn
 
       do concurrent(j=1:ny, i=1:nx) &
-         local(k, kb, acc, fsum, sx_w, sx_e, sy_s, sy_n, n2w, n2e, n2s, n2n)
+         local(k, kb, acc, fsum, sx_w, sx_e, sy_s, sy_n, n2w, n2e, n2s, n2n, &
+               kuw, kue, kvs, kvn, iw0, ie0, js0, jn0)
          acc = 0.0_wp
+         iw0 = max(i - 1, 1)
+         ie0 = min(i + 1, nx)
+         js0 = max(j - 1, 1)
+         jn0 = min(j + 1, ny)
          do k = 2, nz                 ! interior interface index Kr
             kb = k - 1                 ! layer below the interface
             sx_w = gm_clamp_slope(slope_x(i, j, k), slope_max)
@@ -865,8 +956,17 @@ contains
             n2e = gm_pos_n2(n2_u(i + 1, j, k))
             n2s = gm_pos_n2(n2_v(i, j, k))
             n2n = gm_pos_n2(n2_v(i, j + 1, k))
-            fsum = (khth_u(i, j)*sx_w*sx_w*n2w + khth_u(i + 1, j)*sx_e*sx_e*n2e) + &
-                   (khth_v(i, j)*sy_s*sy_s*n2s + khth_v(i, j + 1)*sy_n*sy_n*n2n)
+            if (use_struct) then
+               kuw = khth_u(i, j)*(0.5_wp*(ebt_struct(iw0, j, k) + ebt_struct(i, j, k)))
+               kue = khth_u(i + 1, j)*(0.5_wp*(ebt_struct(i, j, k) + ebt_struct(ie0, j, k)))
+               kvs = khth_v(i, j)*(0.5_wp*(ebt_struct(i, js0, k) + ebt_struct(i, j, k)))
+               kvn = khth_v(i, j + 1)*(0.5_wp*(ebt_struct(i, j, k) + ebt_struct(i, jn0, k)))
+               fsum = (kuw*sx_w*sx_w*n2w + kue*sx_e*sx_e*n2e) + &
+                      (kvs*sy_s*sy_s*n2s + kvn*sy_n*sy_n*n2n)
+            else
+               fsum = (khth_u(i, j)*sx_w*sx_w*n2w + khth_u(i + 1, j)*sx_e*sx_e*n2e) + &
+                      (khth_v(i, j)*sy_s*sy_s*n2s + khth_v(i, j + 1)*sy_n*sy_n*n2n)
+            end if
             acc = acc + fsum*h_layer(i, j, kb)
          end do
          gm_src(i, j) = 0.25_wp*rho0*acc

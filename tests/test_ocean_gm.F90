@@ -25,6 +25,13 @@
 !!                             the neighbours (the 1-degree Southern Ocean
 !!                             step) MOM6's bottom-blocking keeps GM from
 !!                             draining it below their bed at all.
+!!  7-10. gm_ebt_*          — EBT vertical structure of KhTh
+!!                             (`use_ebt_struct`): struct = 1 is bit-identical
+!!                             to off; a 1/0 step zeroes the transport below
+!!                             it and still closes; `gm_src` equals the 2-D
+!!                             value times the h-weighted struct factor;
+!!                             tracer/mass conserved with a varying struct;
+!!                             configure refuses without GM / `use_ebt`.
 module test_ocean_gm
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp, GRAVITY, H_VANISHED
@@ -36,6 +43,8 @@ module test_ocean_gm
    use rdb_ocean_gm, only: ocean_gm_t, gm_compute_transports
    use rdb_continuity, only: continuity_t, continuity_gm_apply, TR_MODE_ADVECT
    use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
+   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_VALIDATE
    implicit none
    private
 
@@ -60,7 +69,12 @@ contains
                   new_unittest("gm_wall_no_leak", test_wall_no_leak), &
                   new_unittest("gm_slope_limiter", test_slope_limiter), &
                   new_unittest("gm_gm_src_sign", test_gm_src_sign), &
-                  new_unittest("gm_sequential_partial_cell", test_sequential_partial_cell) &
+                  new_unittest("gm_sequential_partial_cell", test_sequential_partial_cell), &
+                  new_unittest("gm_ebt_unity_bit_identical", test_ebt_unity), &
+                  new_unittest("gm_ebt_step_structure", test_ebt_step), &
+                  new_unittest("gm_ebt_gm_src_analytic", test_ebt_gm_src), &
+                  new_unittest("gm_ebt_conserves", test_ebt_conserves), &
+                  new_unittest("gm_ebt_config_refusals", test_ebt_config_refusals) &
                   ]
    end subroutine collect_ocean_gm_tests
 
@@ -738,6 +752,346 @@ contains
       call ms%destroy()
       call destroy_cartesian_metrics(metrics)
    end subroutine test_sequential_partial_cell
+
+   ! ------------------------------------------------------------------
+   ! EBT vertical structure of KhTh (`use_ebt_struct`)
+   ! ------------------------------------------------------------------
+   subroutine run_struct(grid, metrics, gm, sl, ms, on, ebt)
+      !! One `gm_compute_transports` with the structure on/off (host flag).
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_metrics_t), intent(in) :: metrics
+      type(ocean_gm_t), intent(inout) :: gm
+      type(ocean_slopes_t), intent(in) :: sl
+      type(multilayer_state_t), intent(in) :: ms
+      logical, intent(in) :: on
+      real(wp), intent(in) :: ebt(:, :, :)
+      gm%use_ebt_struct = on
+      if (on) then
+         call gm_compute_transports(grid, metrics, gm, sl, ms, DT, ebt_struct=ebt)
+      else
+         call gm_compute_transports(grid, metrics, gm, sl, ms, DT)
+      end if
+      !$acc update self(gm%uhD, gm%vhD, gm%gm_src)
+   end subroutine run_struct
+
+   subroutine test_ebt_unity(error)
+      !! struct == 1 everywhere: multiplying by exactly 1 is exact, so the
+      !! structured and plain paths must agree BIT FOR BIT.  (The "off"
+      !! reference is the original expression; the "on" path is the new one.)
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_metrics_t) :: metrics
+      type(ocean_slopes_t) :: sl
+      type(ocean_gm_t) :: gm
+      type(eos_t) :: eos
+      integer, parameter :: NX = 6, NY = 5, NZ = 8
+      real(wp), allocatable :: ebt(:, :, :), u0(:, :, :), v0(:, :, :), g0(:, :)
+      checks: block
+         call make_grid(grid, NX, NY, 2000.0_wp)
+         ms%nz_ml = NZ
+         call ms%init(grid)
+         call make_cartesian_metrics(metrics, grid)
+         call setup_slopes(sl, grid, NZ)
+         call setup_gm(gm, grid, NZ)
+         call make_eos(eos)
+         call fill_tilted_TS(ms, grid, NZ, 50.0_wp, 1.0e-4_wp)
+         allocate (ebt(grid%nx_total, grid%ny_total, NZ), source=1.0_wp)
+         call map_in(ms, sl, gm)
+         !$acc enter data copyin(ebt)
+         call ocean_slopes_compute(grid, metrics, eos, sl, ms, DT)
+         call run_struct(grid, metrics, gm, sl, ms, .false., ebt)
+         u0 = gm%uhD
+         v0 = gm%vhD
+         g0 = gm%gm_src
+         call run_struct(grid, metrics, gm, sl, ms, .true., ebt)
+         !$acc exit data delete(ebt)
+         call map_out(ms, sl, gm)
+         call check(error, maxval(abs(u0)) > 0.0_wp, "unity: reference transport must be non-trivial")
+         if (allocated(error)) exit checks
+         call check(error, all(gm%uhD == u0), "struct==1: uhD must be bit-identical")
+         if (allocated(error)) exit checks
+         call check(error, all(gm%vhD == v0), "struct==1: vhD must be bit-identical")
+         if (allocated(error)) exit checks
+         call check(error, all(gm%gm_src == g0), "struct==1: gm_src must be bit-identical")
+      end block checks
+      call gm%destroy()
+      call sl%destroy()
+      call ms%destroy()
+      call destroy_cartesian_metrics(metrics)
+   end subroutine test_ebt_unity
+
+   subroutine test_ebt_step(error)
+      !! struct = 0 for layers k <= K0, 1 above.  Interface Kr (fills layer
+      !! Kr-1) uses the structure of the layer above it (ka = Kr), so every
+      !! interface Kr <= K0 has KhTh = 0 and layers 1..K0-1 get EXACTLY zero
+      !! transport; the column still closes and the layers above move.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_metrics_t) :: metrics
+      type(ocean_slopes_t) :: sl
+      type(ocean_gm_t) :: gm
+      type(eos_t) :: eos
+      integer, parameter :: NX = 6, NY = 5, NZ = 8, K0 = 4
+      real(wp), allocatable :: ebt(:, :, :)
+      real(wp) :: mx, csum, ub, vb
+      integer :: i, j, k
+      checks: block
+         call make_grid(grid, NX, NY, 2000.0_wp)
+         ms%nz_ml = NZ
+         call ms%init(grid)
+         call make_cartesian_metrics(metrics, grid)
+         call setup_slopes(sl, grid, NZ)
+         call setup_gm(gm, grid, NZ)
+         call make_eos(eos)
+         call fill_tilted_TS(ms, grid, NZ, 50.0_wp, 1.0e-4_wp)
+         allocate (ebt(grid%nx_total, grid%ny_total, NZ), source=1.0_wp)
+         ebt(:, :, 1:K0) = 0.0_wp
+         call map_in(ms, sl, gm)
+         !$acc enter data copyin(ebt)
+         call ocean_slopes_compute(grid, metrics, eos, sl, ms, DT)
+         call run_struct(grid, metrics, gm, sl, ms, .true., ebt)
+         !$acc exit data delete(ebt)
+         call map_out(ms, sl, gm)
+         ub = maxval(abs(gm%uhD(:, :, K0:NZ)))
+         vb = maxval(abs(gm%vhD(:, :, K0:NZ)))
+         call check(error, ub > 0.0_wp, "step: transport above the step must be non-zero")
+         if (allocated(error)) exit checks
+         ! Layer K0 is filled by interface K0+1, whose layer above (K0+1) has
+         ! structure 1: it MUST move (pins ka = Kr, not kb = Kr-1).
+         call check(error, maxval(abs(gm%uhD(:, :, K0))) > 0.0_wp, &
+                    "step: layer just under the step is fed by a structured interface")
+         if (allocated(error)) exit checks
+         call check(error, all(gm%uhD(:, :, 1:K0 - 1) == 0.0_wp), &
+                    "step: uhD below the step must be exactly 0")
+         if (allocated(error)) exit checks
+         call check(error, all(gm%vhD(:, :, 1:K0 - 1) == 0.0_wp), &
+                    "step: vhD below the step must be exactly 0")
+         if (allocated(error)) exit checks
+         mx = 0.0_wp
+         do j = 1, grid%ny_total
+            do i = 1, grid%nx_total + 1
+               csum = 0.0_wp
+               do k = 1, NZ
+                  csum = csum + gm%uhD(i, j, k)
+               end do
+               mx = max(mx, abs(csum))
+            end do
+         end do
+         call check(error, mx <= 1.0e-12_wp*max(ub, 1.0e-30_wp)*real(NZ, wp), &
+                    "step: Sum_k uhD must close to round-off")
+         if (allocated(error)) exit checks
+         mx = 0.0_wp
+         do j = 1, grid%ny_total + 1
+            do i = 1, grid%nx_total
+               csum = 0.0_wp
+               do k = 1, NZ
+                  csum = csum + gm%vhD(i, j, k)
+               end do
+               mx = max(mx, abs(csum))
+            end do
+         end do
+         call check(error, mx <= 1.0e-12_wp*max(vb, ub, 1.0e-30_wp)*real(NZ, wp), &
+                    "step: Sum_k vhD must close to round-off")
+      end block checks
+      call gm%destroy()
+      call sl%destroy()
+      call ms%destroy()
+      call destroy_cartesian_metrics(metrics)
+   end subroutine test_ebt_step
+
+   subroutine test_ebt_gm_src(error)
+      !! `gm_src = 1/4 rho0 Sum_{k=2}^{nz} e_face(k) F_k h(k-1)` with
+      !! `F_k` the 2-D release of interface k (`KH S^2 N^2`, summed over the
+      !! four faces) and `e_face(k)` the structure of the layer ABOVE it.
+      !! For a layer-only profile `e(k)` on a uniform-thickness column
+      !! `e_face(k) = e(k)`, so `gm_src` is LINEAR in `e`:
+      !!   gm_src[e] = Sum_{k=2}^{nz} e(k) G_k,   G_k = gm_src[delta_{k,.}].
+      !! `G_k` is measured with unit impulses (one interface switched on at
+      !! a time), which makes the check independent of how `F_k` varies in
+      !! k: (a) the impulses must sum to the plain (struct-off) `gm_src`,
+      !! and (b) a smooth profile must equal its impulse expansion, both to
+      !! 1e-12 relative.  A mis-indexed layer (ka vs kb) breaks (b).
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_metrics_t) :: metrics
+      type(ocean_slopes_t) :: sl
+      type(ocean_gm_t) :: gm
+      type(eos_t) :: eos
+      integer, parameter :: NX = 8, NY = 7, NZ = 8
+      real(wp), allocatable :: ebt(:, :, :), g0(:, :), gsum(:, :), gexp(:, :), gk(:, :, :)
+      real(wp) :: prof(NZ), rel_a, rel_b, gmax
+      integer :: i, j, k, m
+      checks: block
+         call make_grid(grid, NX, NY, 2000.0_wp)
+         ms%nz_ml = NZ
+         call ms%init(grid)
+         call make_cartesian_metrics(metrics, grid)
+         call setup_slopes(sl, grid, NZ)
+         call setup_gm(gm, grid, NZ)
+         call make_eos(eos)
+         call fill_tilted_TS(ms, grid, NZ, 50.0_wp, 1.0e-4_wp)
+         allocate (ebt(grid%nx_total, grid%ny_total, NZ), source=0.0_wp)
+         allocate (gk(grid%nx_total, grid%ny_total, NZ), source=0.0_wp)
+         do k = 1, NZ
+            prof(k) = 0.2_wp + 0.1_wp*real(k*k, wp)/real(NZ, wp)
+         end do
+         call map_in(ms, sl, gm)
+         !$acc enter data copyin(ebt)
+         call ocean_slopes_compute(grid, metrics, eos, sl, ms, DT)
+         call run_struct(grid, metrics, gm, sl, ms, .false., ebt)
+         g0 = gm%gm_src
+         do m = 2, NZ
+            ebt = 0.0_wp
+            ebt(:, :, m) = 1.0_wp
+            !$acc update device(ebt)
+            call run_struct(grid, metrics, gm, sl, ms, .true., ebt)
+            gk(:, :, m) = gm%gm_src
+         end do
+         do k = 1, NZ
+            ebt(:, :, k) = prof(k)
+         end do
+         !$acc update device(ebt)
+         call run_struct(grid, metrics, gm, sl, ms, .true., ebt)
+         !$acc exit data delete(ebt)
+         call map_out(ms, sl, gm)
+         gsum = sum(gk, dim=3)
+         allocate (gexp(grid%nx_total, grid%ny_total), source=0.0_wp)
+         do m = 2, NZ
+            gexp = gexp + prof(m)*gk(:, :, m)
+         end do
+         rel_a = 0.0_wp
+         rel_b = 0.0_wp
+         do j = 1, grid%ny_total
+            do i = 1, grid%nx_total
+               rel_a = max(rel_a, abs(gsum(i, j) - g0(i, j)))
+               rel_b = max(rel_b, abs(gm%gm_src(i, j) - gexp(i, j)))
+            end do
+         end do
+         gmax = maxval(g0)
+         call check(error, gmax > 0.0_wp, "gm_src: plain release must be non-trivial")
+         if (allocated(error)) exit checks
+         call check(error, maxval(gk(:, :, 2)) > 0.0_wp .and. maxval(gk(:, :, NZ)) > 0.0_wp, &
+                    "gm_src: each interface impulse must contribute")
+         if (allocated(error)) exit checks
+         call check(error, rel_a <= 1.0e-12_wp*gmax, "gm_src: interface impulses sum to the plain release")
+         if (allocated(error)) exit checks
+         call check(error, rel_b <= 1.0e-12_wp*gmax, "gm_src: smooth profile equals its impulse expansion")
+      end block checks
+      call gm%destroy()
+      call sl%destroy()
+      call ms%destroy()
+      call destroy_cartesian_metrics(metrics)
+   end subroutine test_ebt_gm_src
+
+   subroutine test_ebt_conserves(error)
+      !! Mass and T/S content through `continuity_gm_apply` with a struct
+      !! that varies in x, y and z and has a zero (degenerate) column.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_metrics_t) :: metrics
+      type(ocean_slopes_t) :: sl
+      type(ocean_gm_t) :: gm
+      type(continuity_t) :: ct
+      type(eos_t) :: eos
+      integer, parameter :: NX = 6, NY = 5, NZ = 6
+      real(wp), allocatable :: ebt(:, :, :), u0(:, :, :)
+      real(wp) :: hsum0, hsum, tsum0, tsum, ssum0, ssum
+      integer :: i, j, k, ni, nj
+      checks: block
+         call make_grid(grid, NX, NY, 2000.0_wp)
+         ms%nz_ml = NZ
+         call ms%init(grid)
+         call ct%init(grid, nz_ml=NZ)
+         call make_cartesian_metrics(metrics, grid)
+         call setup_slopes(sl, grid, NZ)
+         call setup_gm(gm, grid, NZ)
+         call make_eos(eos)
+         call fill_tilted_TS(ms, grid, NZ, 50.0_wp, 1.0e-4_wp)
+         ni = grid%nx_total
+         nj = grid%ny_total
+         allocate (ebt(ni, nj, NZ))
+         do k = 1, NZ
+            do j = 1, nj
+               do i = 1, ni
+                  ebt(i, j, k) = 0.05_wp + 0.95_wp*(real(k, wp)/real(NZ, wp))**2* &
+                                 (0.5_wp + 0.5_wp*real(i, wp)/real(ni, wp))
+               end do
+            end do
+         end do
+         ebt(4, 3, :) = 0.0_wp
+         hsum0 = sum(ms%h_layer)
+         tsum0 = sum(ms%tracers(ms%idx_temperature)%hTr)
+         ssum0 = sum(ms%tracers(ms%idx_salinity)%hTr)
+         call map_in_ct(ms, sl, gm, ct)
+         !$acc enter data copyin(ebt)
+         call ocean_slopes_compute(grid, metrics, eos, sl, ms, DT)
+         gm%use_ebt_struct = .true.
+         call gm_compute_transports(grid, metrics, gm, sl, ms, DT, ebt_struct=ebt)
+         !$acc update self(gm%uhD)
+         u0 = gm%uhD
+         call continuity_gm_apply(grid, metrics, ct, ms, gm, DT, 1.0_wp, TR_MODE_ADVECT)
+         !$acc exit data delete(ebt)
+         call map_out_ct(ms, sl, gm, ct)
+         hsum = sum(ms%h_layer)
+         tsum = sum(ms%tracers(ms%idx_temperature)%hTr)
+         ssum = sum(ms%tracers(ms%idx_salinity)%hTr)
+         call check(error, maxval(abs(u0)) > 0.0_wp, "ebt conserve: transport must be non-trivial")
+         if (allocated(error)) exit checks
+         call check(error, abs(hsum - hsum0)/abs(hsum0) < 1.0e-10_wp, "ebt GM: mass conserved")
+         if (allocated(error)) exit checks
+         call check(error, abs(tsum - tsum0)/abs(tsum0) < 1.0e-10_wp, "ebt GM: temperature conserved")
+         if (allocated(error)) exit checks
+         call check(error, abs(ssum - ssum0)/abs(ssum0) < 1.0e-10_wp, "ebt GM: salinity conserved")
+      end block checks
+      call ct%destroy()
+      call gm%destroy()
+      call sl%destroy()
+      call ms%destroy()
+      call destroy_cartesian_metrics(metrics)
+   end subroutine test_ebt_conserves
+
+   function validate_gm_struct(gm_body, ws_body) result(ierr)
+      character(len=*), intent(in) :: gm_body, ws_body
+      integer :: ierr
+      type(config_t) :: cfg
+      ierr = -999
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+         new_line('a')// &
+         "&ocean_slopes enable = .true. /"//new_line('a')// &
+         "&ocean_gm "//gm_body//" /"//new_line('a')// &
+         "&ocean_wavespeed "//ws_body//" /"//new_line('a'), cfg, ierr=ierr)
+      if (ierr /= OCEAN_STATUS_OK) return
+      call validate_config(cfg, ierr=ierr)
+   end function validate_gm_struct
+
+   subroutine test_ebt_config_refusals(error)
+      type(error_type), allocatable, intent(out) :: error
+      integer :: ierr
+      ierr = validate_gm_struct("enable = .true., use_ebt_struct = .true.", &
+                                "enable = .true.")
+      call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
+                 "use_ebt_struct without wavespeed use_ebt must be refused")
+      if (allocated(error)) return
+      ierr = validate_gm_struct("enable = .true., use_ebt_struct = .true.", &
+                                "enable = .false., use_ebt = .true.")
+      call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
+                 "use_ebt_struct without the wave-speed slot enabled must be refused")
+      if (allocated(error)) return
+      ierr = validate_gm_struct("enable = .false., use_ebt_struct = .true.", &
+                                "enable = .true., use_ebt = .true.")
+      call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
+                 "use_ebt_struct without GM enabled must be refused")
+      if (allocated(error)) return
+      ierr = validate_gm_struct("enable = .true., use_ebt_struct = .true.", &
+                                "enable = .true., use_ebt = .true.")
+      call check(error, ierr == OCEAN_STATUS_OK, "the full combination must be accepted")
+   end subroutine test_ebt_config_refusals
 
    subroutine fill_layers(ms, h, ni, nj, nz)
       !! Set `h_layer` and T/S content (T warm over cold, S uniform; a

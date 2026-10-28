@@ -833,6 +833,7 @@ contains
       this%gm%khth_max_cfl = cfg%ocean%gm%khth_max_cfl
       this%gm%khth_slope_max = cfg%ocean%gm%khth_slope_max
       this%gm%rho0 = cfg%ocean%ic%rho_0
+      this%gm%use_ebt_struct = cfg%ocean%gm%use_ebt_struct
       this%redi%enable = cfg%ocean%redi%enable
       this%redi%continuous = cfg%ocean%redi%continuous
       this%redi%khtr = cfg%ocean%redi%khtr

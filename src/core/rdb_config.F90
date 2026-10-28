@@ -1869,7 +1869,7 @@ module rdb_config
       logical :: use_ebt = .false.
          !! Also compute the equivalent-barotropic speed `cg1_ebt` and
          !! vertical structure `ebt_struct` (`cg1` stays first-baroclinic).
-         !! GM does not consume the structure yet.
+         !! GM consumes the structure with `&ocean_gm_nml use_ebt_struct`.
       integer :: n_wavespeed = 1
          !! Recompute cadence (every N steps); slow diagnostic.
    end type ocean_wave_speed_config_t
@@ -2000,6 +2000,13 @@ module rdb_config
       real(wp) :: khth_slope_max = 0.01_wp
          !! Slope magnitude above which the safe-streamfunction blend takes
          !! over (MOM6 `slope_max`).
+      logical :: use_ebt_struct = .false.
+         !! MOM6 `KHTH_USE_EBT_STRUCT`: multiply the 2-D face KhTh (base +
+         !! Visbeck + MEKE, after the CFL clamp) by the equivalent-barotropic
+         !! mode structure at each interface (Hallberg 2013; Killworth &
+         !! Blundell 2003).  Requires `&ocean_wavespeed_nml enable` +
+         !! `use_ebt` and GM enabled (configure-time errors).  Default off
+         !! ⇒ bit-identical.
    end type ocean_gm_config_t
    type :: ocean_redi_config_t
       !! `&ocean_redi_nml`: Redi continuous neutral (along-isopycnal) tracer

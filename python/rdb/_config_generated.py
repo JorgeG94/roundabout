@@ -1141,6 +1141,14 @@ class OceanGm(Group):
         default=0.01,
     )
 
+    use_ebt_struct = Bool(
+        'use_ebt_struct',
+        doc='EBT vertical structure of KhTh (KHTH_USE_EBT_STRUCT; needs wavespeed use_ebt; default off)',
+        units='',
+        required=False,
+        default=False,
+    )
+
 
 class OceanRedi(Group):
     """`&ocean_redi_nml` -- Redi continuous neutral (along-isopycnal) tracer diffusion."""
@@ -2569,7 +2577,7 @@ class OceanWavespeed(Group):
 
     use_ebt = Bool(
         'use_ebt',
-        doc='Also compute the equivalent-barotropic speed cg1_ebt + structure ebt_struct (GM does not consume it yet)',
+        doc='Also compute the equivalent-barotropic speed cg1_ebt + structure ebt_struct (consumed by GM with ocean_gm_nml use_ebt_struct)',
         units='',
         required=False,
         default=False,
@@ -6698,4 +6706,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 62
-N_KNOBS = 734
+N_KNOBS = 735

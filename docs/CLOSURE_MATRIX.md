@@ -323,6 +323,7 @@ budget (MEKE).
 | Per-face harmonic clamp | opt-in | `bound_kh` (`.false.`; `bound_coef` `0.8`) | MOM6 `BOUND_KH`. Load-bearing on the split-explicit path. | `test_ocean_hvisc_kh_bound` |
 | Fox-Kemper ML restratification | opt-in | `&ocean_foxkemper_nml enable` (`.false.`; needs EPBL) | Mixed-layer eddy overturning. | `test_ocean_foxkemper`, `test_ocean_mle_zfixed` |
 | Gent-McWilliams thickness diffusion | opt-in | `&ocean_gm_nml enable` (`.false.`; needs `&ocean_slopes_nml enable`) | Eddy-induced bolus transport. | `test_ocean_gm`, `test_ocean_gm_zfixed`, `test_ocean_slopes_datum` |
+| GM vertical structure of KhTh (MOM6 `KHTH_USE_EBT_STRUCT`) | opt-in | `&ocean_gm_nml use_ebt_struct` (`.false.`; needs GM and `&ocean_wavespeed_nml enable` + `use_ebt`, refused otherwise) | At each interior interface the post-CFL-clamp 2-D face KhTh (base, Visbeck and MEKE together) is multiplied by the mean of the two columns' EBT structure in the layer above the interface (Hallberg 2013; Killworth & Blundell 2003), in the streamfunction and in the `gm_src` that MEKE reads. Structure 0 (degenerate column) gives KhTh 0, not floored. | `test_ocean_gm` |
 | Redi neutral tracer diffusion | opt-in | `&ocean_redi_nml enable` (`.false.`) | Along-isopycnal diffusion. Refused under a cavity. | `test_ocean_redi`, `test_ocean_redi_zfixed` |
 | MEKE | opt-in | `&ocean_meke_nml enable` (`.false.`; needs GM) | Prognostic eddy kinetic energy. | `test_ocean_meke` |
 | MEKE backscatter | opt-in | `&ocean_meke_nml backscatter` (`.false.`) with `backscatter_visc_coeff_ku` | Negative-viscosity energy return. Needs a flow-aware closure and a biharmonic backstop. | `test_ocean_meke_backscatter` |
@@ -572,7 +573,7 @@ Diagnostics have no feedback on the dynamics.
 
 | Diagnostic | Status | Knob (default) | What it does | Test |
 |---|---|---|---|---|
-| First-baroclinic wave speed and Rossby radius | opt-in | `&ocean_wavespeed_nml enable` (`.false.`) | Per-column rigid-lid eigensolve, once per outer step. Feeds the resolution scaling of GM, Redi and MEKE. Opt-in `use_ebt` (`.false.`) also computes the equivalent-barotropic speed `cg1_ebt` and the surface-normalised pressure-mode structure `ebt_struct` (surface Neumann, bed Dirichlet; PLM-remapped from the merged stack); nothing consumes it yet (GM structure is the next PR) and `mono_n2` stays unimplemented (refused with `use_ebt`). | `test_ocean_wave_speed` |
+| First-baroclinic wave speed and Rossby radius | opt-in | `&ocean_wavespeed_nml enable` (`.false.`) | Per-column rigid-lid eigensolve, once per outer step. Feeds the resolution scaling of GM, Redi and MEKE. Opt-in `use_ebt` (`.false.`) also computes the equivalent-barotropic speed `cg1_ebt` and the surface-normalised pressure-mode structure `ebt_struct` (surface Neumann, bed Dirichlet; PLM-remapped from the merged stack); GM consumes it with `&ocean_gm_nml use_ebt_struct`, and `mono_n2` stays unimplemented (refused with `use_ebt`). | `test_ocean_wave_speed` |
 | Cavity diagnostics (13) | opt-in | see [section 13](#13-ice-shelf-cavity) | Melt rate, driving terms, exchange velocities, geometry. | `test_ocean_cavity_diags` |
 
 **Full notes in the archive:** [wave-speed diagnostic (original cells)](CLOSURE_MATRIX_ARCHIVE.md#a25)
@@ -762,6 +763,10 @@ non-conservative — increment mirrored into the surface heat/salt budget)
 Dated reconciliation log, kept verbatim. Read it for the history of why a row
 looks the way it does. It is not needed to use the tables.
 
+- **2026-10-27** — GM PR-3: `&ocean_gm_nml use_ebt_struct` (default off,
+  bit-identical) gives the thickness diffusivity the EBT vertical structure
+  of the wave-speed slot; the "Deferred: EBT" item in the GM history is
+  closed.  Refused without GM or without `use_ebt`.
 - **2026-10-26** — TEOS-10 PR 3: `&ocean_zinit_nml input_convention`
   (`pot_prac` default | `cons_abs`); file z-init, bulk flux and scalar
   restoring now run under `cons_abs` (their PR 2b refusals are lifted);

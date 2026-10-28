@@ -753,6 +753,22 @@ contains
                               "&ocean_slopes_nml enable=.true. (GM reads the stored slope)")
             has_error = .true.
          end if
+         ! The EBT vertical structure of KhTh (`use_ebt_struct`) is read from
+         ! the wave-speed slot's `ebt_struct`, which exists only with
+         ! `use_ebt`; and it is a GM option.  Refused loud, never ignored.
+         if (cfg%ocean%gm%use_ebt_struct) then
+            if (.not. cfg%ocean%gm%enable) then
+               call logger%error("&ocean_gm_nml use_ebt_struct=.true. requires "// &
+                                 "&ocean_gm_nml enable=.true. (it shapes the GM thickness diffusivity)")
+               has_error = .true.
+            end if
+            if (.not. cfg%ocean%wavespeed%enable .or. .not. cfg%ocean%wavespeed%use_ebt) then
+               call logger%error("&ocean_gm_nml use_ebt_struct=.true. requires "// &
+                                 "&ocean_wavespeed_nml enable=.true. and use_ebt=.true. "// &
+                                 "(the structure is the wave-speed slot's ebt_struct)")
+               has_error = .true.
+            end if
+         end if
          ! khth_slope_max enters as 1/slope_max^2 in the safe-streamfunction
          ! limiter; a zero/negative value divides by zero.
          if (cfg%ocean%gm%enable .and. cfg%ocean%gm%khth_slope_max <= 0.0_wp) then
