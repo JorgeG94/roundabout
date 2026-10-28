@@ -66,23 +66,36 @@
       end if
    end function rdb_vl_conc
 
-   pure logical function rdb_vl_holds_live_conc(hTr, h, c_live)
+   pure logical function rdb_vl_holds_live_conc(hTr, h, c_live, c_scale)
       !$acc routine seq
       !! THE I1′ test on one vanished layer: does it hold `h·c_live` to
-      !! round-off?  Relative tolerance `1e-12` on `|h·c_live|`.  The pooled
-      !! merge (`rdb_vl_merge_content`) leaves a few ulp times the number of
-      !! layers in the pool, so `1e-12` is loose enough for any
-      !! `nz <= NZ_STACK_MAX` and tight enough to catch any real violation
-      !! (a 0 °C filler under 15 °C water is off by 100 %).  `c_live = 0` (a
-      !! column with no live layer, or a genuinely zero tracer) demands
-      !! `hTr == 0`.
+      !! round-off?  Tolerance `1e-12·h·max(|c_live|, c_scale)`.
+      !!
+      !! **Why `c_scale` and not just `|h·c_live|`.**  The pooled merge
+      !! (`rdb_vl_merge_content`) rounds at the magnitude of the pool's
+      !! TERMS (the donor's content `h·c` is subtracted from and added to
+      !! numbers of that size), not of the pool's RESULT.  Where the mixed
+      !! concentration passes through zero — a potential temperature near
+      !! 0 °C, a tracer changing sign — the result is a difference of two
+      !! O(1) quantities, so its absolute error is a few ulp of the
+      !! column's concentration scale while `|h·c_live|` itself may be
+      !! 1e-20 or exactly 0.  A tolerance relative to `|h·c_live|` alone
+      !! then flags round-off as a violation (the OM3 1° z* run:
+      !! `|hTr − h·c_live| = 5e-20` on 36 cells of temperature).  `c_scale`
+      !! is the largest `|c|` among the column's live layers; a REAL
+      !! violation (a 0 °C filler under 15 °C water) is off by order
+      !! `h·c_scale` and stays ~12 orders above the tolerance.  A column
+      !! whose live layers are all exactly zero still demands `hTr == 0`.
       real(wp), intent(in) :: hTr
          !! The vanished layer's content.
       real(wp), intent(in) :: h
          !! The vanished layer's thickness (m).
       real(wp), intent(in) :: c_live
          !! Its donor's concentration (`0` for a column with no live layer).
-      rdb_vl_holds_live_conc = abs(hTr - h*c_live) <= 1.0e-12_wp*abs(h*c_live)
+      real(wp), intent(in) :: c_scale
+         !! Largest `|c|` among the column's live layers (`0` if none).
+      rdb_vl_holds_live_conc = abs(hTr - h*c_live) <= &
+                               1.0e-12_wp*h*max(abs(c_live), c_scale)
    end function rdb_vl_holds_live_conc
 
    pure subroutine rdb_vl_column_conc(nz, h_col, q_col, c_col)

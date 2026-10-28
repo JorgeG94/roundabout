@@ -69,6 +69,7 @@ contains
                   new_unittest("remap_budget_telescopes_with_fillers", test_budget_telescopes), &
                   new_unittest("state_enforcement_point_establishes_i1", test_enforcement_point), &
                   new_unittest("state_scan_detects_and_clears", test_i1_scan), &
+                  new_unittest("state_scan_zero_crossing_roundoff", test_i1_scan_zero_crossing), &
                   new_unittest("uniform_column_stays_uniform_through_remap", test_remap_constancy), &
                   new_unittest("cavity_top_fillers_take_k_top", test_top_fillers_k_top), &
                   new_unittest("host_enforcement_matches_device_sweep", test_host_twin), &
@@ -669,6 +670,63 @@ contains
 
       call ms%destroy()
    end subroutine test_i1_scan
+
+   subroutine test_i1_scan_zero_crossing(error)
+      !! The tripwire must not flag ROUND-OFF where the pooled concentration
+      !! passes through zero.  Bed filler + live layer pool to a mixed
+      !! temperature of ~1e-17 degC out of terms of magnitude 1 (the OM3 1 deg
+      !! z* run tripped on exactly this: |hTr - h*c_live| = 5e-20, tolerance
+      !! relative to |h*c_live| ~ 0).  After the sweep the scan must be clean
+      !! while a REAL violation (filler at 0 under a 1 degC donor) is still seen.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      integer, parameter :: NX = 3, NY = 3, NZ = 4
+      integer :: nx_tot, ny_tot, i, j, k, n_bad
+      real(wp) :: worst
+
+      call grid%init(NX, NY, 1, 1.0_wp, 1.0_wp)
+      ms%nz_ml = NZ
+      call ms%init(grid)
+      nx_tot = grid%nx_total
+      ny_tot = grid%ny_total
+      do j = 1, ny_tot
+         do i = 1, nx_tot
+            do k = 1, NZ
+               ms%h_layer(i, j, k) = 10.0_wp
+               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = 345.0_wp
+               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = 10.0_wp
+            end do
+            ms%h_layer(i, j, 1) = 1.0e-4_wp
+            ms%tracers(ms%idx_salinity)%hTr(i, j, 1) = 1.0e-4_wp*34.5_wp
+            ! Pool {k=1 filler, k=2 live} sums to one ulp of 1 (~1.1e-16).
+            ms%tracers(ms%idx_temperature)%hTr(i, j, 2) = 1.0_wp
+            ms%tracers(ms%idx_temperature)%hTr(i, j, 1) = &
+               -(1.0_wp - epsilon(1.0_wp)/2.0_wp)
+         end do
+      end do
+
+      checks: block
+         call ms%enforce_vanished_content(nx_tot, ny_tot)
+         call ms%scan_vanished_content(nx_tot, ny_tot, n_bad, worst)
+         call check(error, n_bad == 0, &
+                    "a pool mixing through zero must pass the scan after the sweep")
+         if (allocated(error)) exit checks
+
+         ! A real violation under the same column scale is still caught.
+         do j = 1, ny_tot
+            do i = 1, nx_tot
+               ms%tracers(ms%idx_temperature)%hTr(i, j, 1) = 0.0_wp
+               ms%tracers(ms%idx_temperature)%hTr(i, j, 2) = 1.0e1_wp
+            end do
+         end do
+         call ms%scan_vanished_content(nx_tot, ny_tot, n_bad, worst)
+         call check(error, n_bad == nx_tot*ny_tot, &
+                    "an empty filler under a 1 degC donor must still fail the scan")
+      end block checks
+
+      call ms%destroy()
+   end subroutine test_i1_scan_zero_crossing
 
    subroutine test_remap_constancy(error)
       !! THE property I1′ exists for, at the level of one remap: a UNIFORM

@@ -538,8 +538,8 @@ contains
    pure subroutine multilayer_scan_vanished_content(this, nx, ny, n_bad, worst)
       !! Pure I1′ TRIPWIRE scan — counts the vanished cells that do NOT hold
       !! their donor's concentration (`rdb_vl_holds_live_conc`: `|hTr −
-      !! h·c_live| > 1e-12·|h·c_live|`, i.e. `hTr ≠ 0` in a column with no
-      !! live layer) and reports the largest offending `|hTr − h·c_live|`,
+      !! h·c_live| > 1e-12·h·max(|c_live|, c_scale)`, `c_scale` = the column's
+      !! largest live `|c|`; `hTr ≠ 0` in a column with no live layer) and reports the largest offending `|hTr − h·c_live|`,
       !! without touching anything.  Two device reductions per tracer, two
       !! scalars out; no H←D copy on the healthy path.
       !!
@@ -580,7 +580,7 @@ contains
       integer, intent(out) :: n_bad
       real(wp), intent(out) :: worst
       integer :: i, j, k, k_top, k_don
-      real(wp) :: c_live
+      real(wp) :: c_live, c_scale
 
       n_bad = 0
       worst = 0.0_wp
@@ -589,7 +589,7 @@ contains
       ! `enter_data`) and still correct for a host-only unit test.  `present(...)`
       ! here would make the test abort with a present-table lookup failure.
       ! acc-kept: nested `!$acc loop seq` early-exit scan inside (no do-concurrent twin)
-      !$acc parallel loop collapse(2) private(k, k_top, k_don, c_live) &
+      !$acc parallel loop collapse(2) private(k, k_top, k_don, c_live, c_scale) &
       !$acc   reduction(+:n_bad) reduction(max:worst)
       do j = 1, ny
          do i = 1, nx
@@ -602,6 +602,13 @@ contains
                end if
             end do
             k_don = k_top
+            c_scale = 0.0_wp
+            !$acc loop seq
+            do k = nz, 1, -1
+               if (rdb_vl_is_live(h_layer(i, j, k))) then
+                  c_scale = max(c_scale, abs(hTr(i, j, k)/h_layer(i, j, k)))
+               end if
+            end do
             !$acc loop seq
             do k = nz, 1, -1
                if (rdb_vl_is_live(h_layer(i, j, k))) then
@@ -609,7 +616,7 @@ contains
                else
                   c_live = 0.0_wp
                   if (k_don > 0) c_live = hTr(i, j, k_don)/h_layer(i, j, k_don)
-                  if (.not. rdb_vl_holds_live_conc(hTr(i, j, k), h_layer(i, j, k), c_live)) then
+                  if (.not. rdb_vl_holds_live_conc(hTr(i, j, k), h_layer(i, j, k), c_live, c_scale)) then
                      n_bad = n_bad + 1
                      worst = max(worst, abs(hTr(i, j, k) - h_layer(i, j, k)*c_live))
                   end if
