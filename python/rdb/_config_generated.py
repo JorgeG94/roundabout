@@ -4913,6 +4913,14 @@ class OceanHvisc(Group):
         default=4.0,
     )
 
+    kh_bg_at_points = Bool(
+        'kh_bg_at_points',
+        doc='stress_tensor: Laplacian floor (vel-scale, sin-lat) built AT T and corner points',
+        units='',
+        required=False,
+        default=False,
+    )
+
     ah_vel_scale = Real(
         'ah_vel_scale',
         doc='Biharmonic velocity-scale floor Ah>=U*Delta^3 under smag_ah (0=off; MOM6 AH_VEL_SCALE)',
@@ -7188,4 +7196,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 63
-N_KNOBS = 790
+N_KNOBS = 791

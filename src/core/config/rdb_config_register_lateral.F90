@@ -658,6 +658,9 @@ contains
                           units="m^2/s"))
       pr => cfg%ocean%hvisc%kh_pwr_of_sine
       call g%add(nml_real("kh_pwr_of_sine", pr, "Exponent of |sin(lat)| in the kh_sin_lat floor (MOM6 KH_PWR_OF_SINE)"))
+      pl => cfg%ocean%hvisc%kh_bg_at_points
+      call g%add(nml_logical("kh_bg_at_points", pl, &
+                             "stress_tensor: Laplacian floor (vel-scale, sin-lat) built AT T and corner points"))
       pr => cfg%ocean%hvisc%ah_vel_scale
       call g%add(nml_real("ah_vel_scale", pr, &
                           "Biharmonic velocity-scale floor Ah>=U*Delta^3 under smag_ah (0=off; MOM6 AH_VEL_SCALE)", &

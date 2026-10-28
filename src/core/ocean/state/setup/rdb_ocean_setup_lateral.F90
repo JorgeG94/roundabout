@@ -51,6 +51,15 @@ contains
          call ocean_state%lateral_mix%build_statics(ocean_state%metrics%geolatBu, &
                                                     ocean_state%coriolis_adv%f_corner)
       end if
+      ! Stress-path point statics (T and corner), built before enter_data.
+      if (cfg%ocean%hvisc%kh_bg_at_points) then
+         call ocean_state%hvisc%build_kh_bg_points( &
+            ocean_state%metrics%geolatT, ocean_state%metrics%geolatBu, &
+            ocean_state%metrics%dx2h, ocean_state%metrics%dy2h, &
+            ocean_state%metrics%dx2q, ocean_state%metrics%dy2q, &
+            cfg%ocean%hvisc%kh_vel_scale, cfg%ocean%hvisc%kh_sin_lat, &
+            cfg%ocean%hvisc%kh_pwr_of_sine)
+      end if
       ocean_state%lateral_mix%c_leith_bi = cfg%ocean%hvisc%c_leith_bi
       ocean_state%lateral_mix%nu4_bg = cfg%ocean%hvisc%nu_4_bg
       ocean_state%lateral_mix%nu4_max = cfg%ocean%hvisc%nu_4_max
