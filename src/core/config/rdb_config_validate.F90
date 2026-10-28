@@ -167,14 +167,16 @@ contains
          end if
       end if
 
-      ! tracer_advection_scheme = ppm_h3 is the every-step path only: the
-      ! windowed drain has its own reconstruction, so a ratio > 1 would
-      ! silently ignore the knob.  Fail loud instead.
+      ! tracer_advection_scheme = ppm_h3 also drives the windowed drain
+      ! (ratio > 1), where it REPLACES the drain reconstruction; combining
+      ! it with a WENO tracer_recon would silently ignore one of the two.
       if (trim(cfg%sim_type) == "ocean") then
          if (trim(cfg%ocean%vmix%tracer_advection_scheme) == "ppm_h3" .and. &
-             cfg%ocean%vmix%dt_tracer_advect_ratio > 1) then
-            call logger%error("&ocean_vmix_nml tracer_advection_scheme='ppm_h3' requires "// &
-                              "dt_tracer_advect_ratio = 1 (the windowed drain uses tracer_recon)")
+             cfg%ocean%vmix%dt_tracer_advect_ratio > 1 .and. &
+             trim(cfg%ocean%vmix%tracer_recon) /= "ppm") then
+            call logger%error("&ocean_vmix_nml tracer_advection_scheme='ppm_h3' with "// &
+                              "dt_tracer_advect_ratio > 1 requires tracer_recon = 'ppm' "// &
+                              "(the drain uses ONE reconstruction)")
             has_error = .true.
          end if
       end if

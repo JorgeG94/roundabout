@@ -5057,7 +5057,7 @@ class OceanVmix(Group):
 
     tracer_advection_scheme = Enum(
         'tracer_advection_scheme',
-        doc='Every-step horizontal tracer-advection edge scheme (ocean): ppm|ppm_h3',
+        doc='Horizontal tracer-advection scheme (ocean, every-step and windowed drain): ppm|ppm_h3',
         units='',
         required=False,
         default='ppm',

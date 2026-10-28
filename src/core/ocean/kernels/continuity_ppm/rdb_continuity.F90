@@ -173,6 +173,8 @@ module rdb_continuity
    public :: drain_fill_conc
    public :: drain_swept_flux_x_weno
    public :: drain_swept_flux_y_weno
+   public :: drain_swept_flux_x_h3
+   public :: drain_swept_flux_y_h3
 #endif
 
    type :: continuity_t
@@ -4241,7 +4243,16 @@ contains
          do it = 1, size(ms%tracers)
             if (.not. allocated(ms%tracers(it)%hTr)) cycle
             if (.not. ms%tracers(it)%do_horizontal_advection) cycle
-            if (this%tracer_recon == TRACER_RECON_PPM) then
+            if (this%tracer_h3) then
+               ! ppm_h3: Huynh edges + CW84 limiter on Tr = hTr/hprev; uhh is
+               ! a volume so the flux below is a tracer volume.
+               call drain_fill_conc(nx, ny, nz, ms%tracers(it)%hTr, this%hprev_work, this%tr_work)
+               call drain_wrap_centre(this%tr_work, nx, ny, nz, nx_phys, ny_phys, nghost, &
+                                      per_x, per_y, fold_n)
+               call drain_swept_flux_x_h3(nx, ny, nz, metrics%areaT, this%uhh_x, &
+                                          this%hprev_work, this%tr_work, metrics%wet_T, &
+                                          this%tr_flux_x)
+            else if (this%tracer_recon == TRACER_RECON_PPM) then
                call drain_parabola_x(nx, ny, nz, metrics%wet_T, ms%tracers(it)%hTr, this%hprev_work, &
                                      this%tr_work, this%pal, this%par, this%pa6)
                ! Wrap the parabola coefficients so a seam-face donor that lands
@@ -4307,7 +4318,16 @@ contains
          do it = 1, size(ms%tracers)
             if (.not. allocated(ms%tracers(it)%hTr)) cycle
             if (.not. ms%tracers(it)%do_horizontal_advection) cycle
-            if (this%tracer_recon == TRACER_RECON_PPM) then
+            if (this%tracer_h3) then
+               ! ppm_h3: Huynh edges + CW84 limiter on Tr = hTr/hprev; uhh is
+               ! a volume so the flux below is a tracer volume.
+               call drain_fill_conc(nx, ny, nz, ms%tracers(it)%hTr, this%hprev_work, this%tr_work)
+               call drain_wrap_centre(this%tr_work, nx, ny, nz, nx_phys, ny_phys, nghost, &
+                                      per_y, per_y, fold_n)
+               call drain_swept_flux_y_h3(nx, ny, nz, metrics%areaT, this%uhh_y, &
+                                          this%hprev_work, this%tr_work, metrics%wet_T, &
+                                          this%tr_flux_y)
+            else if (this%tracer_recon == TRACER_RECON_PPM) then
                call drain_parabola_y(nx, ny, nz, metrics%wet_T, ms%tracers(it)%hTr, this%hprev_work, &
                                      this%tr_work, this%pal, this%par, this%pa6)
                ! Wrap the meridional parabola coefficients (see the zonal note).
@@ -5177,6 +5197,81 @@ contains
          end if
       end do
    end subroutine drain_swept_flux_y_weno
+
+   pure subroutine drain_swept_flux_x_h3(nx, ny, nz, areaT, uhh, hprev, tr, wet_T, F)
+      !! `ppm_h3` analogue of `drain_swept_flux_x`: swept-average zonal face
+      !! flux VOLUME (`uhh` is a per-pass volume, not a rate) from the
+      !! concentration field `tr = hTr/hprev`.  The donor Courant number is
+      !! `uhh/(areaT*hprev)` and `ppm_h3_face_flux` returns `uhh` times the
+      !! swept mean, so `F` has the units `drain_update_tracer_x` expects.
+      !! Stencil is donor +-1 (Huynh 1997 edges, Colella & Woodward 1984
+      !! limiter); a donor at the array edge has no neighbour and is
+      !! treated as a local extremum (piecewise constant).
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in) :: areaT(nx, ny)
+      real(wp), intent(in) :: uhh(nx + 1, ny, nz)
+      real(wp), intent(in) :: hprev(nx, ny, nz)
+      real(wp), intent(in) :: tr(nx, ny, nz)
+      real(wp), intent(in) :: wet_T(nx, ny)
+      real(wp), intent(inout) :: F(nx + 1, ny, nz)
+      integer :: i, j, k, ic, im, ip
+      real(wp) :: u, vol, t0, tm, tp, w3
+      do concurrent(k=1:nz, j=1:ny)
+         F(1, j, k) = 0.0_wp
+         F(nx + 1, j, k) = 0.0_wp
+      end do
+      do concurrent(k=1:nz, j=1:ny, i=2:nx) local(u, vol, t0, tm, tp, w3, ic, im, ip)
+         u = uhh(i, j, k)
+         if (u > 0.0_wp) then
+            ic = i - 1
+         else
+            ic = i
+         end if
+         im = max(ic - 1, 1)
+         ip = min(ic + 1, nx)
+         vol = max(areaT(ic, j)*hprev(ic, j, k), DRAIN_MIN_VOL)
+         t0 = tr(ic, j, k)
+         tm = ppm_mirror_h(tr(im, j, k), t0, wet_T(im, j))
+         tp = ppm_mirror_h(tr(ip, j, k), t0, wet_T(ip, j))
+         w3 = wet_T(im, j)*wet_T(ic, j)*wet_T(ip, j)
+         if (ic - 1 < 1 .or. ic + 1 > nx) w3 = 0.0_wp
+         F(i, j, k) = ppm_h3_face_flux(tm, t0, tp, w3, u, abs(u)/vol)
+      end do
+   end subroutine drain_swept_flux_x_h3
+
+   pure subroutine drain_swept_flux_y_h3(nx, ny, nz, areaT, uhh, hprev, tr, wet_T, F)
+      !! Meridional analogue of `drain_swept_flux_x_h3`.
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in) :: areaT(nx, ny)
+      real(wp), intent(in) :: uhh(nx, ny + 1, nz)
+      real(wp), intent(in) :: hprev(nx, ny, nz)
+      real(wp), intent(in) :: tr(nx, ny, nz)
+      real(wp), intent(in) :: wet_T(nx, ny)
+      real(wp), intent(inout) :: F(nx, ny + 1, nz)
+      integer :: i, j, k, jc, jm, jp
+      real(wp) :: u, vol, t0, tm, tp, w3
+      do concurrent(k=1:nz, i=1:nx)
+         F(i, 1, k) = 0.0_wp
+         F(i, ny + 1, k) = 0.0_wp
+      end do
+      do concurrent(k=1:nz, j=2:ny, i=1:nx) local(u, vol, t0, tm, tp, w3, jc, jm, jp)
+         u = uhh(i, j, k)
+         if (u > 0.0_wp) then
+            jc = j - 1
+         else
+            jc = j
+         end if
+         jm = max(jc - 1, 1)
+         jp = min(jc + 1, ny)
+         vol = max(areaT(i, jc)*hprev(i, jc, k), DRAIN_MIN_VOL)
+         t0 = tr(i, jc, k)
+         tm = ppm_mirror_h(tr(i, jm, k), t0, wet_T(i, jm))
+         tp = ppm_mirror_h(tr(i, jp, k), t0, wet_T(i, jp))
+         w3 = wet_T(i, jm)*wet_T(i, jc)*wet_T(i, jp)
+         if (jc - 1 < 1 .or. jc + 1 > ny) w3 = 0.0_wp
+         F(i, j, k) = ppm_h3_face_flux(tm, t0, tp, w3, u, abs(u)/vol)
+      end do
+   end subroutine drain_swept_flux_y_h3
 
    pure subroutine drain_update_tracer_x(nx, ny, nz, iareaT, F, hTr)
       !! hTr(i) -= (F(i+1) - F(i))·iareaT  (zonal flux divergence; dt is

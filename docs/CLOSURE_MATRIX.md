@@ -214,7 +214,7 @@ separate code paths even when they share a paper.
 | Job or modifier | Status | Knob (default) | What it does | Tests |
 |---|---|---|---|---|
 | Horizontal tracer advection | **default** `"ppm"` | `&ocean_vmix_nml tracer_advection_scheme` | Van Leer-slope PPM edges, upwind pick, no swept-volume correction; x then y every step; the two cells next to a wall drop to first-order donor. | `test_ocean_tracer_ppm_h3` |
-| Horizontal tracer advection, H3 | opt-in; **refused** with `dt_tracer_advect_ratio > 1` | `tracer_advection_scheme = "ppm_h3"` | Huynh (1997) 3rd-order bounded edges, Colella & Woodward (1984) limiter, swept-volume flux (OM3 `PPM:H3`). Width-3 stencil. | `test_ocean_tracer_ppm_h3` |
+| Horizontal tracer advection, H3 | opt-in; also drives the windowed drain (`dt_tracer_advect_ratio > 1`, requires `tracer_recon = "ppm"`) | `tracer_advection_scheme = "ppm_h3"` | Huynh (1997) 3rd-order bounded edges, Colella & Woodward (1984) limiter, swept-volume flux (OM3 `PPM:H3`). Width-3 stencil. In the drain it replaces the CW parabola / WENO face value and is fed per-pass volumes. | `test_ocean_tracer_ppm_h3`, `test_ocean_tracer_ppm_h3_drain` |
 | Vertical (in-z) advection | **default**, no knob | hardcoded | First-order upwind. | — |
 | ALE vertical remap | **default** `"ppm"` | `&vcoord_nml remap_method` | See [section 2](#2-vertical-coordinates-and-ale-remap). | — |
 | Positivity limiter | opt-in | `&ocean_continuity_nml ppm_limit_pos` (`.false.`) | Modifier on the continuity-PPM face values. | — |

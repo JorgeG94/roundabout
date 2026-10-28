@@ -239,6 +239,7 @@ program rdb_tests
    use test_ocean_gm_work, only: ocean_gm_work_collect => collect_ocean_gm_work_tests
    use test_ocean_bbl_mixing, only: ocean_bbl_mixing_collect => collect_ocean_bbl_mixing_tests
    use test_ocean_tracer_ppm_h3, only: ocean_tracer_ppm_h3_collect => collect_ocean_tracer_ppm_h3_tests
+   use test_ocean_tracer_ppm_h3_drain, only: ocean_tracer_ppm_h3_drain_collect => collect_ocean_tracer_ppm_h3_drain_tests
 #ifndef RDB_NO_NETCDF
    use test_ocean_sss_restore, only: ocean_sss_restore_collect => collect_ocean_sss_restore_tests
    use test_ocean_sw_chl, only: ocean_sw_chl_collect => collect_ocean_sw_chl_tests
@@ -460,6 +461,7 @@ program rdb_tests
                 new_testsuite("ocean_gm_work", ocean_gm_work_collect), &
                 new_testsuite("ocean_bbl_mixing", ocean_bbl_mixing_collect), &
                 new_testsuite("ocean_tracer_ppm_h3", ocean_tracer_ppm_h3_collect), &
+                new_testsuite("ocean_tracer_ppm_h3_drain", ocean_tracer_ppm_h3_drain_collect), &
 #ifndef RDB_NO_NETCDF
                 new_testsuite("ocean_sss_restore", ocean_sss_restore_collect), &
                 new_testsuite("ocean_sw_chl", ocean_sw_chl_collect), &
