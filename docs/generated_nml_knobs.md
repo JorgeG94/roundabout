@@ -320,6 +320,15 @@ St-Laurent/Simmons internal-tide interior diapycnal mixing.
 | `h2_rough` | `0.0000000000E+00` | m^2 | Sub-grid topographic roughness variance <h^2> |
 | `frac_rough` | `0.1000000000E+00` |  | Roughness clamp <h^2> <= (frac_rough*H)^2 |
 | `e_max` | `0.1000000000E+04` | W m-2 | TKE_itide_max cap on E |
+| `tideamp_source` | `"uniform"` |  | Tidal speed source: uniform (utide) | file (static 2-D field; needs e_compute) |
+| `tideamp_file` | `""` |  | NetCDF file with the tidal-amplitude field |
+| `tideamp_var` | `"tideamp"` |  | Variable name in tideamp_file (m/s) |
+| `h2_source` | `"uniform"` |  | Roughness-variance source: uniform (h2_rough) | file (static 2-D field; needs e_compute) |
+| `h2_file` | `""` |  | NetCDF file with the roughness-variance field |
+| `h2_var` | `"h2"` |  | Variable name in h2_file (m^2) |
+| `n2_bot_rough_avg` | `.false.` |  | Near-bed N^2 averaged over the roughness height and imposed in that span (OM3: true) |
+| `energy_limiter` | `"clamp"` |  | kd_max handling: clamp (clip Kd, discard power) | reinject (cap layer TKE, pass excess up) (OM3: reinject) |
+| `bed_share` | `"discard"` |  | Bed-layer power share: discard | lump into the first interior layer (OM3: lump) |
 
 ### &ocean_conv_nml
 

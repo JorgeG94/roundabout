@@ -1734,6 +1734,86 @@ class OceanTidalMixing(Group):
         default=1000.0,
     )
 
+    tideamp_source = Enum(
+        'tideamp_source',
+        doc='Tidal speed source: uniform (utide) | file (static 2-D field; needs e_compute)',
+        units='',
+        required=False,
+        default='uniform',
+        allowed=('uniform', 'file'),
+    )
+
+    tideamp_file = Str(
+        'tideamp_file',
+        doc='NetCDF file with the tidal-amplitude field',
+        units='',
+        required=False,
+        default='',
+        max_len=256,
+    )
+
+    tideamp_var = Str(
+        'tideamp_var',
+        doc='Variable name in tideamp_file (m/s)',
+        units='',
+        required=False,
+        default='tideamp',
+        max_len=64,
+    )
+
+    h2_source = Enum(
+        'h2_source',
+        doc='Roughness-variance source: uniform (h2_rough) | file (static 2-D field; needs e_compute)',
+        units='',
+        required=False,
+        default='uniform',
+        allowed=('uniform', 'file'),
+    )
+
+    h2_file = Str(
+        'h2_file',
+        doc='NetCDF file with the roughness-variance field',
+        units='',
+        required=False,
+        default='',
+        max_len=256,
+    )
+
+    h2_var = Str(
+        'h2_var',
+        doc='Variable name in h2_file (m^2)',
+        units='',
+        required=False,
+        default='h2',
+        max_len=64,
+    )
+
+    n2_bot_rough_avg = Bool(
+        'n2_bot_rough_avg',
+        doc='Near-bed N^2 averaged over the roughness height and imposed in that span (OM3: true)',
+        units='',
+        required=False,
+        default=False,
+    )
+
+    energy_limiter = Enum(
+        'energy_limiter',
+        doc='kd_max handling: clamp (clip Kd, discard power) | reinject (cap layer TKE, pass excess up) (OM3: reinject)',
+        units='',
+        required=False,
+        default='clamp',
+        allowed=('clamp', 'reinject'),
+    )
+
+    bed_share = Enum(
+        'bed_share',
+        doc='Bed-layer power share: discard | lump into the first interior layer (OM3: lump)',
+        units='',
+        required=False,
+        default='discard',
+        allowed=('discard', 'lump'),
+    )
+
 
 class OceanConv(Group):
     """`&ocean_conv_nml` -- Brunt-Vaisala-triggered convective adjustment (interior closure contributor)."""
@@ -6986,4 +7066,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 62
-N_KNOBS = 767
+N_KNOBS = 776

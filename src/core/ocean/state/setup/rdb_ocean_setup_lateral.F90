@@ -275,13 +275,13 @@ contains
       ! Coexists with KPP/EPBL and PP81/background/kappa-shear (no mutual
       ! exclusion); its Kd is added to the interior diffusivities.
       if (present(ierr)) then
-         call configure_ocean_tidal_mixing(cfg, ocean_state, compute_rank, ierr=local_ierr)
+         call configure_ocean_tidal_mixing(cfg, ocean_state, grid, compute_rank, ierr=local_ierr)
          if (local_ierr /= 0) then
             ierr = local_ierr
             return
          end if
       else
-         call configure_ocean_tidal_mixing(cfg, ocean_state, compute_rank)
+         call configure_ocean_tidal_mixing(cfg, ocean_state, grid, compute_rank)
       end if
 
       ! Convective adjustment — Brunt-Vaisala-triggered INTERIOR closure

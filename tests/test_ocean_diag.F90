@@ -697,18 +697,18 @@ contains
    end subroutine test_typo_routes_to_derived
 
    subroutine test_gate_hint_coverage(error)
-      !! PR-64 §9 case 5 — the anti-drift lock. Each of the eighteen
+      !! PR-64 §9 case 5 — the anti-drift lock. Each of the nineteen
       !! conditionally-registered canonical names has a non-empty
       !! `canonical_diag_gate_hint`; each of the four unconditional names
       !! (SSH/u/v/KE) has an empty one. The count of non-empty hints across
-      !! this canonical subset must equal 18 — so a future PR that adds a
+      !! this canonical subset must equal 19 — so a future PR that adds a
       !! further gated canonical diagnostic to `register_default_diags`
       !! without adding its hint here fails THIS test (§13's lock-step
       !! contract). (OM3 C2c-2b added the ten `atm_*` names.)
       type(error_type), allocatable, intent(out) :: error
       character(len=16), parameter :: gated(*) = [character(len=16) :: &
                                                   "temperature", "salinity", "age", &
-                                                  "MLD_EPBL", "Kd_EPBL", "Kd_KSHEAR", &
+                                                  "MLD_EPBL", "Kd_EPBL", "Kd_KSHEAR", "Kd_TIDAL", &
                                                   "ice_conc", "ice_thick", &
                                                   "atm_tas", "atm_huss", "atm_uas", &
                                                   "atm_vas", "atm_psl", "atm_rlds", &
@@ -718,7 +718,7 @@ contains
       character(len=16), parameter :: all_canonical(*) = [character(len=16) :: &
                                                           "SSH", "temperature", "salinity", &
                                                           "age", "u", "v", "KE", &
-                                                          "MLD_EPBL", "Kd_EPBL", "Kd_KSHEAR", &
+                                                          "MLD_EPBL", "Kd_EPBL", "Kd_KSHEAR", "Kd_TIDAL", &
                                                           "ice_conc", "ice_thick", &
                                                           "atm_tas", "atm_huss", "atm_uas", &
                                                           "atm_vas", "atm_psl", "atm_rlds", &
@@ -743,8 +743,8 @@ contains
                n_hinted = n_hinted + 1
             end if
          end do
-         call check(error, n_hinted == 18, &
-                    "exactly 18 of the 22 canonical names checked should carry a gate hint")
+         call check(error, n_hinted == 19, &
+                    "exactly 19 of the 23 canonical names checked should carry a gate hint")
       end block checks
    end subroutine test_gate_hint_coverage
 

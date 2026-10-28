@@ -195,6 +195,7 @@ set(RDB_TESTS
     "test_ocean_meke|test_ocean_meke|collect_ocean_meke_tests|ocean_meke|ocean"
     "test_ocean_meke_backscatter|test_ocean_meke_backscatter|collect_ocean_meke_backscatter_tests|ocean_meke_backscatter|ocean"
     "test_ocean_tidal_mixing|test_ocean_tidal_mixing|collect_ocean_tidal_mixing_tests|ocean_tidal_mixing|ocean"
+    "test_static_2d_reader|test_static_2d_reader|collect_static_2d_reader_tests|static_2d_reader|ocean"
     "test_ocean_convection|test_ocean_convection|collect_ocean_convection_tests|ocean_convection|ocean"
     "test_ocean_double_diffusion|test_ocean_double_diffusion|collect_ocean_double_diffusion_tests|ocean_double_diffusion|ocean"
     "test_ocean_tides_astronomy|test_ocean_tides_astronomy|collect_ocean_tides_astronomy_tests|ocean_tides_astronomy|ocean"
@@ -410,6 +411,7 @@ set(RDB_STATIC_CORE_TESTS test_remap_pqm)
 # built thread-safe (OMP_NUM_THREADS=1 prevents crashes when the OpenMP runtime
 # is active via -mp=multicore or -fopenmp).
 set(NETCDF_TESTS
+    test_static_2d_reader
     test_ocean_cavity_draft_file
     test_ocean_periodic_seam_file
     test_ocean_diag_netcdf
@@ -433,6 +435,7 @@ set(NETCDF_TESTS
 # rdb_gauges, rdb_output, ...).  Skipped when -DRDB_ENABLE_NETCDF=OFF because
 # those modules aren't built.
 set(NETCDF_REQUIRED_TESTS
+    test_static_2d_reader
     test_ocean_cavity_draft_file
     test_ocean_periodic_seam_file
     test_ocean_diag_netcdf

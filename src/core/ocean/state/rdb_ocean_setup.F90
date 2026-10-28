@@ -330,11 +330,12 @@ module rdb_ocean_setup
          integer, intent(out), optional :: ierr
       end subroutine configure_ocean_kappa_shear
 
-      module subroutine configure_ocean_tidal_mixing(cfg, ocean_state, compute_rank, ierr)
+      module subroutine configure_ocean_tidal_mixing(cfg, ocean_state, grid, compute_rank, ierr)
             !! See submodule [[rdb_ocean_setup_vmix]].
          implicit none
          type(config_t), intent(in) :: cfg
          type(ocean_state_t), intent(inout) :: ocean_state
+         type(hgrid_t), intent(in) :: grid
          integer, intent(in) :: compute_rank
          integer, intent(out), optional :: ierr
       end subroutine configure_ocean_tidal_mixing

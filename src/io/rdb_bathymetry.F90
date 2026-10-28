@@ -15,24 +15,70 @@ module rdb_bathymetry
    private
 
    public :: load_bathymetry_into_array
+   public :: load_static_2d_field
    public :: fill_bathymetry_ghosts_array
 
 contains
 
    subroutine load_bathymetry_into_array(filename, b, grid, ierr)
       !! Load bathymetry from a NetCDF file into a target 2D array
-      !! shaped `(grid%nx_total, grid%ny_total)`.
+      !! shaped `(grid%nx_total, grid%ny_total)`.  Thin wrapper over
+      !! `load_static_2d_field` that looks the variable up as `b`, then
+      !! `elevation`, then `depth`.
+      character(len=*), intent(in) :: filename
+      real(wp), intent(inout) :: b(:, :)
+      type(hgrid_t), intent(in) :: grid
+      integer, intent(out), optional :: ierr
+         !! Non-zero on a missing/unreadable file or a dimension mismatch
+         !! when present; absent behaves as today (`error stop`).
+
+      call load_2d_core(filename, "", "bathymetry", b, grid, ierr)
+   end subroutine load_bathymetry_into_array
+
+   subroutine load_static_2d_field(filename, varname, b, grid, ierr)
+      !! Load a time-less 2-D field `varname` from a NetCDF file into a
+      !! target array shaped `(grid%nx_total, grid%ny_total)` (e.g. the
+      !! internal-tide `tideamp` and `h2` fields).
       !!
-      !! The file must contain:
-      !!   - Dimensions: x (nx_phys), y (ny_phys)
-      !!   - Variable: b(x, y) or elevation(x, y) or depth(x, y)
+      !! The variable is a 2-D `(x, y)` field over the WHOLE grid.  A file
+      !! written in C order (Fortran sees `(y, x)`) is detected from the
+      !! name of the variable's first dimension (`y` or `ny`) and
+      !! transposed on read; any other first-dimension name is taken as
+      !! the x axis.  Dimension names are otherwise free (`x`/`y`,
+      !! `nx`/`ny`, ...); only the lengths are validated.
+      !!
+      !! Same band, ghost and transposition semantics as the bathymetry
+      !! reader: the interior is the file, ghosts are filled by constant
+      !! extrapolation from the nearest interior cell, and a decomposed
+      !! tile reads only the rows its storage covers.
+      character(len=*), intent(in) :: filename
+      character(len=*), intent(in) :: varname
+      real(wp), intent(inout) :: b(:, :)
+      type(hgrid_t), intent(in) :: grid
+      integer, intent(out), optional :: ierr
+         !! Non-zero on a missing file/variable or a dimension mismatch
+         !! when present; absent behaves as `error stop`.
+
+      if (len_trim(varname) == 0) then
+         call logger%error("load_static_2d_field: blank variable name")
+         if (present(ierr)) then
+            ierr = OCEAN_STATUS_ERR_IO
+            return
+         end if
+         error stop "load_static_2d_field: blank variable name"
+      end if
+      call load_2d_core(filename, varname, trim(varname), b, grid, ierr)
+   end subroutine load_static_2d_field
+
+   subroutine load_2d_core(filename, varname, label, b, grid, ierr)
+      !! Shared reader.  `varname` blank selects the bathymetry lookup
+      !! (`b`, `elevation`, `depth`); `label` names the field in the log.
       !!
       !! Handles NetCDF C/Fortran dimension reversal: files written by
       !! Python/C store b(x,y) in C order, which Fortran reads as b(y,x).
-      !! If the direct dimensions don't match but the transposed ones do,
-      !! we read transposed and copy correctly.
+      !! The reversed layout is read transposed and copied correctly.
       !!
-      !! Bathymetry lands in the interior; ghost cells are filled by
+      !! Values land in the interior; ghost cells are filled by
       !! constant extrapolation from the nearest interior cell via
       !! `fill_bathymetry_ghosts_array`.
       !!
@@ -44,14 +90,14 @@ contains
       !! elsewhere the band's rows ARE the tile's ghost rows, read from the
       !! file), and keeps its own columns: every tile is bit-identical to
       !! its slice of the single-rank array, seam ghosts included.
-      character(len=*), intent(in) :: filename
+      character(len=*), intent(in) :: filename, varname, label
       real(wp), intent(inout) :: b(:, :)
       type(hgrid_t), intent(in) :: grid
       integer, intent(out), optional :: ierr
          !! Non-zero on a missing/unreadable file or a dimension mismatch
          !! when present; absent behaves as today (`error stop`).
 
-      integer :: ncid, varid, file_nx, file_ny
+      integer :: ncid, varid
       integer :: ng, i, j, ni, nj, jb0, jb1, nb, jo_b
       type(hgrid_t) :: gband
       real(wp), allocatable :: bband(:, :)
@@ -62,19 +108,19 @@ contains
       logical :: needs_transpose
       real(wp), allocatable :: b_interior(:, :)
 
-      call logger%info("Loading bathymetry from: "//trim(filename))
+      call logger%info("Loading "//label//" from: "//trim(filename))
 
       call nc_open_read(filename, ncid, ierr=local_ierr)
       if (.not. bathy_io_ok(local_ierr, ierr)) return
 
-      ! Read grid dimensions (by name — these are the logical sizes)
-      call nc_get_dim_len(ncid, "x", file_nx, ierr=local_ierr)
-      if (.not. bathy_io_ok(local_ierr, ierr, ncid)) return
-      call nc_get_dim_len(ncid, "y", file_ny, ierr=local_ierr)
-      if (.not. bathy_io_ok(local_ierr, ierr, ncid)) return
-
-      ! Try variable names in order: b, elevation, depth
-      call try_get_bathymetry_var(ncid, varid, ierr=local_ierr)
+      if (len_trim(varname) == 0) then
+         ! Try variable names in order: b, elevation, depth
+         call try_get_bathymetry_var(ncid, varid, ierr=local_ierr)
+      else
+         call nc_get_varid(ncid, trim(varname), varid, ierr=local_ierr)
+         if (local_ierr /= 0) call logger%error("Variable '"//trim(varname)// &
+                                                "' not found in "//trim(filename))
+      end if
       if (.not. bathy_io_ok(local_ierr, ierr, ncid)) return
 
       ! Query the variable's actual dimension order in the file.
@@ -83,7 +129,7 @@ contains
       ! in Fortran. We detect this by checking the first dimension name.
       call nc_check(nf90_inquire_variable(ncid, varid, ndims=var_ndims, &
                                           dimids=var_dimids), &
-                    "querying bathymetry variable", local_ierr)
+                    "querying "//label//" variable", local_ierr)
       if (.not. bathy_io_ok(local_ierr, ierr, ncid)) return
       call nc_check(nf90_inquire_dimension(ncid, var_dimids(1), &
                                            name=dim1_name, len=dim1_len), &
@@ -94,14 +140,14 @@ contains
                     "querying dim 2", local_ierr)
       if (.not. bathy_io_ok(local_ierr, ierr, ncid)) return
 
-      call logger%info("Bathymetry variable: "//trim(dim1_name)//"="// &
+      call logger%info(label//" variable: "//trim(dim1_name)//"="// &
                        to_string(dim1_len)//" x "//trim(dim2_name)//"="// &
                        to_string(dim2_len)//" (Fortran order)")
 
       ! In Fortran, dim1 is the first array index (varies fastest).
       ! If dim1 is "x" and matches nx, no transpose needed.
       ! If dim1 is "y" (C-order file reversed), we need to transpose.
-      needs_transpose = (trim(dim1_name) == "y")
+      needs_transpose = (trim(dim1_name) == "y" .or. trim(dim1_name) == "ny")
 
       ! The file describes the WHOLE grid.
       ni = grid%nx_global
@@ -110,7 +156,7 @@ contains
       ! Validate dimensions
       if (needs_transpose) then
          if (dim1_len /= nj .or. dim2_len /= ni) then
-            call logger%error("Bathymetry grid mismatch: file has "// &
+            call logger%error(label//" grid mismatch: file has "// &
                               to_string(dim2_len)//" x "//to_string(dim1_len)// &
                               " but simulation expects "// &
                               to_string(ni)//" x "// &
@@ -120,11 +166,11 @@ contains
                ierr = OCEAN_STATUS_ERR_IO
                return
             end if
-            error stop "Bathymetry grid mismatch"
+            error stop "Static 2-D field grid mismatch"
          end if
       else
          if (dim1_len /= ni .or. dim2_len /= nj) then
-            call logger%error("Bathymetry grid mismatch: file has "// &
+            call logger%error(label//" grid mismatch: file has "// &
                               to_string(dim1_len)//" x "//to_string(dim2_len)// &
                               " but simulation expects "// &
                               to_string(ni)//" x "// &
@@ -134,7 +180,7 @@ contains
                ierr = OCEAN_STATUS_ERR_IO
                return
             end if
-            error stop "Bathymetry grid mismatch"
+            error stop "Static 2-D field grid mismatch"
          end if
       end if
 
@@ -189,7 +235,7 @@ contains
       end do
       deallocate (bband)
 
-      call logger%info("Bathymetry loaded: min = "// &
+      call logger%info(label//" loaded: min = "// &
                        to_string(minval(b(ng + 1:ng + grid%nx_phys, &
                                           ng + 1:ng + grid%ny_phys)))// &
                        " m, max = "// &
@@ -198,7 +244,7 @@ contains
                        " m")
 
       if (present(ierr)) ierr = OCEAN_STATUS_OK
-   end subroutine load_bathymetry_into_array
+   end subroutine load_2d_core
 
    subroutine try_get_bathymetry_var(ncid, varid, ierr)
       !! Try to find the bathymetry variable by common names

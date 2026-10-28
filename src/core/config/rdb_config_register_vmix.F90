@@ -93,6 +93,7 @@ contains
       type(nml_group_t) :: g
       logical, pointer :: pl
       real(wp), pointer :: pr
+      character(len=:), pointer :: ps
 
       g%name = "ocean_tidal_mixing"
       g%doc = "St-Laurent/Simmons internal-tide interior diapycnal mixing."
@@ -138,6 +139,33 @@ contains
       call g%add(nml_real("frac_rough", pr, "Roughness clamp <h^2> <= (frac_rough*H)^2"))
       pr => cfg%ocean%tidal_mixing%e_max
       call g%add(nml_real("e_max", pr, "TKE_itide_max cap on E", units="W m-2"))
+      ps => cfg%ocean%tidal_mixing%tideamp_source
+      call g%add(nml_enum("tideamp_source", ps, &
+                          "Tidal speed source: uniform (utide) | file (static 2-D field; needs e_compute)", &
+                          allowed=[character(len=7) :: "uniform", "file"]))
+      ps => cfg%ocean%tidal_mixing%tideamp_file
+      call g%add(nml_string("tideamp_file", ps, "NetCDF file with the tidal-amplitude field"))
+      ps => cfg%ocean%tidal_mixing%tideamp_var
+      call g%add(nml_string("tideamp_var", ps, "Variable name in tideamp_file (m/s)"))
+      ps => cfg%ocean%tidal_mixing%h2_source
+      call g%add(nml_enum("h2_source", ps, &
+                          "Roughness-variance source: uniform (h2_rough) | file (static 2-D field; needs e_compute)", &
+                          allowed=[character(len=7) :: "uniform", "file"]))
+      ps => cfg%ocean%tidal_mixing%h2_file
+      call g%add(nml_string("h2_file", ps, "NetCDF file with the roughness-variance field"))
+      ps => cfg%ocean%tidal_mixing%h2_var
+      call g%add(nml_string("h2_var", ps, "Variable name in h2_file (m^2)"))
+      pl => cfg%ocean%tidal_mixing%n2_bot_rough_avg
+      call g%add(nml_logical("n2_bot_rough_avg", pl, &
+                             "Near-bed N^2 averaged over the roughness height and imposed in that span (OM3: true)"))
+      ps => cfg%ocean%tidal_mixing%energy_limiter
+      call g%add(nml_enum("energy_limiter", ps, &
+                     "kd_max handling: clamp (clip Kd, discard power) | reinject (cap layer TKE, pass excess up) (OM3: reinject)", &
+                          allowed=[character(len=8) :: "clamp", "reinject"]))
+      ps => cfg%ocean%tidal_mixing%bed_share
+      call g%add(nml_enum("bed_share", ps, &
+                          "Bed-layer power share: discard | lump into the first interior layer (OM3: lump)", &
+                          allowed=[character(len=7) :: "discard", "lump"]))
 
       call schema%add_group(g)
    end subroutine register_tidal_mixing

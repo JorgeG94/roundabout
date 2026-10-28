@@ -2,6 +2,11 @@ submodule(rdb_ocean_setup) rdb_ocean_setup_vmix
    !! R2 split: vmix-group configure_ocean_* bodies, moved verbatim
    !! from rdb_ocean_setup.F90 (host-only configure code; see
    !! src/core/ocean/state/rdb_ocean_setup.F90 for the public interface).
+#ifndef RDB_NO_NETCDF
+   use rdb_bathymetry, only: load_static_2d_field
+#endif
+   use rdb_ocean_tidal_mixing, only: tidal_mixing_fold_static_fields
+   use rdb_ocean_status, only: OCEAN_STATUS_ERR_IO
    implicit none
 
 contains
@@ -928,7 +933,7 @@ contains
       if (present(ierr)) ierr = OCEAN_STATUS_OK
    end subroutine configure_ocean_kappa_shear
 
-   module subroutine configure_ocean_tidal_mixing(cfg, ocean_state, compute_rank, ierr)
+   module subroutine configure_ocean_tidal_mixing(cfg, ocean_state, grid, compute_rank, ierr)
       !! Copy the `&ocean_tidal_mixing_nml` knobs onto the tidal-mixing
       !! slot — every field, end to end (no dead-config gaps).  Seeds the
       !! prescribed bottom energy field `e_in` (v1 uniform path), copies
@@ -937,10 +942,12 @@ contains
       !! closure that coexists with KPP / EPBL / PP81 / kappa-shear.
       type(config_t), intent(in) :: cfg
       type(ocean_state_t), intent(inout) :: ocean_state
+      type(hgrid_t), intent(in) :: grid
       integer, intent(in) :: compute_rank
       integer, intent(out), optional :: ierr
          !! Non-zero on a tidal-mixing configuration conflict when present;
          !! absent behaves as today (`error stop`).
+      integer :: local_ierr
 
       associate (tm => ocean_state%vmix_tidal, tcfg => cfg%ocean%tidal_mixing)
          ! `enable` is flipped LAST, only once every validation below has
@@ -977,6 +984,11 @@ contains
          ! Seed the prescribed bottom energy field (v1 uniform path).
          call tm%set_e_uniform(tm%e_uniform)
 
+         ! OM3 refinements (all default to the legacy behaviour).
+         tm%n2_bot_rough_avg = tcfg%n2_bot_rough_avg
+         tm%limiter_reinject = (trim(tcfg%energy_limiter) == "reinject")
+         tm%bed_lump = (trim(tcfg%bed_share) == "lump")
+
          ! Validation.
          if (.not. cfg%ocean%vmix%use_closure) then
             call fail("ocean_tidal_mixing_nml: enable=.true. requires "// &
@@ -998,6 +1010,45 @@ contains
             return
          end if
 
+         ! Static 2-D tide fields.  "uniform" spreads the scalar; "file"
+         ! reads the time-less 2-D variable (all ranks read their band).
+         tm%tideamp(:, :) = tm%utide
+         tm%h2(:, :) = tm%h2_rough
+         tm%use_fields = (trim(tcfg%tideamp_source) == "file") .or. &
+                         (trim(tcfg%h2_source) == "file")
+         if (tm%use_fields .and. .not. tm%e_compute) then
+            call fail("ocean_tidal_mixing_nml: tideamp_source/h2_source = 'file' "// &
+                      "requires e_compute=.true. (the fields feed the "// &
+                      "state-dependent energy input only)", ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+         if (trim(tcfg%tideamp_source) == "file") then
+            call load_tide_field(tcfg%tideamp_file, tcfg%tideamp_var, tm%tideamp, &
+                                 "tideamp_source", local_ierr)
+            if (local_ierr /= OCEAN_STATUS_OK) then
+               if (present(ierr)) ierr = local_ierr
+               if (.not. present(ierr)) error stop "ocean_tidal_mixing_nml: tideamp load failed"
+               return
+            end if
+         end if
+         if (trim(tcfg%h2_source) == "file") then
+            call load_tide_field(tcfg%h2_file, tcfg%h2_var, tm%h2, "h2_source", local_ierr)
+            if (local_ierr /= OCEAN_STATUS_OK) then
+               if (present(ierr)) ierr = local_ierr
+               if (.not. present(ierr)) error stop "ocean_tidal_mixing_nml: h2 load failed"
+               return
+            end if
+         end if
+         if (tm%use_fields) then
+            block
+               real(wp), allocatable :: depth(:, :)
+               allocate (depth(size(tm%h2, 1), size(tm%h2, 2)))
+               depth(:, :) = sum(ocean_state%multilayer%h_layer, dim=3)
+               call tidal_mixing_fold_static_fields(tm, size(tm%h2, 1), size(tm%h2, 2), &
+                                                    depth, ocean_state%multilayer%wet_mask)
+            end block
+         end if
+
          if (compute_rank == 0) then
             call logger%info("Tidal mixing:     interior closure enabled "// &
                              "(zeta="//to_string(tcfg%zeta)//" m  "// &
@@ -1006,6 +1057,37 @@ contains
          tm%enable = .true.
       end associate
       if (present(ierr)) ierr = OCEAN_STATUS_OK
+   contains
+
+      subroutine load_tide_field(fname, vname, arr, what, lierr)
+         !! Read one static 2-D tide field into `arr`; fail loud (via the
+         !! error ring) on a blank path, a missing variable or a grid
+         !! mismatch.
+         character(len=*), intent(in) :: fname, vname, what
+         real(wp), intent(inout) :: arr(:, :)
+         integer, intent(out) :: lierr
+
+         lierr = OCEAN_STATUS_OK
+         if (len_trim(fname) == 0) then
+            call fail("ocean_tidal_mixing_nml: "//what//" = 'file' needs the "// &
+                      "matching *_file path", lierr, OCEAN_STATUS_ERR_SETUP)
+            lierr = OCEAN_STATUS_ERR_SETUP
+            return
+         end if
+#ifndef RDB_NO_NETCDF
+         call load_static_2d_field(trim(fname), trim(vname), arr, grid, ierr=lierr)
+         if (lierr /= OCEAN_STATUS_OK) then
+            call fail("ocean_tidal_mixing_nml: could not read '"//trim(vname)// &
+                      "' from '"//trim(fname)//"' (missing file/variable or "// &
+                      "grid mismatch)", lierr, OCEAN_STATUS_ERR_IO)
+            lierr = OCEAN_STATUS_ERR_IO
+         end if
+#else
+         call fail("ocean_tidal_mixing_nml: "//what//" = 'file' needs "// &
+                   "RDB_ENABLE_NETCDF=ON", lierr, OCEAN_STATUS_ERR_IO)
+         lierr = OCEAN_STATUS_ERR_IO
+#endif
+      end subroutine load_tide_field
    end subroutine configure_ocean_tidal_mixing
 
    module subroutine configure_ocean_conv(cfg, ocean_state, compute_rank, ierr)

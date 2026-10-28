@@ -2379,6 +2379,43 @@ module rdb_config
          !! Roughness clamp <h^2> <= (frac_rough*H)^2.
       real(wp) :: e_max = 1.0e3_wp
          !! TKE_itide_max cap on E, W m-2.
+      character(len=8) :: tideamp_source = "uniform"
+         !! RMS barotropic tidal speed source: `"uniform"` (the scalar
+         !! `utide`, bit-identical default) | `"file"` (the static 2-D
+         !! `tideamp_var` of `tideamp_file`; needs `e_compute`).  File
+         !! fields are masked and roughness-clamped ONCE at setup with the
+         !! resting column depth D = sum of `h_layer`.
+      character(len=256) :: tideamp_file = ""
+         !! NetCDF file holding the tidal-amplitude field (`tideamp_source
+         !! = "file"`).
+      character(len=64) :: tideamp_var = "tideamp"
+         !! Variable name in `tideamp_file`, m/s (OM3: `tideamp`).
+      character(len=8) :: h2_source = "uniform"
+         !! Sub-grid roughness variance source: `"uniform"` (the scalar
+         !! `h2_rough`) | `"file"` (the static 2-D `h2_var` of `h2_file`;
+         !! needs `e_compute`).
+      character(len=256) :: h2_file = ""
+         !! NetCDF file holding the roughness-variance field (`h2_source =
+         !! "file"`).
+      character(len=64) :: h2_var = "h2"
+         !! Variable name in `h2_file`, m^2 (OM3: `h2`).
+      logical :: n2_bot_rough_avg = .false.
+         !! Near-bed stratification averaged over the roughness height
+         !! `sqrt(<h^2>)` (Melet et al. 2013): the bed-most interfaces up
+         !! to that height give one `N_b^2`, which also REPLACES the layer
+         !! `N^2` inside the span.  Default off = the raw two-deepest-layer
+         !! gradient (bit-identical).  OM3 parity value: `.true.`.
+      character(len=8) :: energy_limiter = "clamp"
+         !! Per-layer cap `kd_max` handling: `"clamp"` (default: clip the
+         !! layer Kd, DISCARD the clipped power) | `"reinject"` (cap the
+         !! layer TKE at `rho0*h*(N^2+Omega^2)*kd_max`, offer the excess to
+         !! the layer above; energy-conserving).  OM3 parity value:
+         !! `"reinject"` with `kd_max = 0.1`.
+      character(len=8) :: bed_share = "discard"
+         !! Fate of the bed layer's share of the dissipated power:
+         !! `"discard"` (default: owned by the bottom boundary layer, not
+         !! deposited) | `"lump"` (carried into the first interior layer).
+         !! OM3 parity value: `"lump"`.
    end type ocean_tidal_mixing_config_t
    type :: ocean_porous_config_t
       !! Porous barriers (`&ocean_porous_nml`): subgrid sill/strait

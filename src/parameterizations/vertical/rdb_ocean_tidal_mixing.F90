@@ -19,7 +19,17 @@ module rdb_ocean_tidal_mixing
    !!     structure F(z) with decay scale `zeta`.
    !!   * Simmons, Jayne, St Laurent & Weaver (2004), Ocean Modelling 6 —
    !!     the global implementation that combines the two.
+   !!   * Melet, Hallberg, Legg & Polzin (2013), J. Phys. Oceanogr. 43 —
+   !!     the near-bed N^2 averaged over the roughness height
+   !!     (`n2_bot_rough_avg`).
    !! Knob table: `docs/generated_nml_knobs.md`.
+   !!
+   !! Static fields: `tideamp_source`/`h2_source = "file"` read time-less
+   !! 2-D fields (`load_static_2d_field`); `tidal_mixing_fold_static_fields`
+   !! folds the wet mask, `min_zbot` and the `(frac_rough*D)^2` roughness cap
+   !! into `c_e(x,y)` once at setup.  `energy_limiter = "reinject"` and
+   !! `bed_share = "lump"` make the power bookkeeping exact (OM3 parity);
+   !! the defaults keep the discarding clamp and the dropped bed share.
    !!
    !! Discretization (conservative flux bookkeeping; St Laurent 2002):
    !! a downward TKE flux is tracked and the power dissipated IN each
@@ -66,6 +76,7 @@ module rdb_ocean_tidal_mixing
    public :: tidal_mixing_compute
    public :: tidal_mixing_merge_into_kt
    public :: tidal_mixing_is_inert
+   public :: tidal_mixing_fold_static_fields
 
    integer, parameter :: NZL = NZ_STACK_MAX
       !! Maximum number of layers a single column kernel can solve.
@@ -121,6 +132,28 @@ module rdb_ocean_tidal_mixing
       real(wp) :: e_max = 1.0e3_wp
          !! TKE_itide_max cap on E (W m-2).
 
+      ! ---- Static 2-D tide fields and OM3 refinements (all default off) ----
+      logical :: use_fields = .false.
+         !! True when `tideamp` and/or `h2` come from a file.  Then the
+         !! `e_compute` coefficient is read from the setup-folded `c_e`
+         !! (and the clamped `h2`) instead of the scalars; false keeps the
+         !! scalar path bit-identical.
+      logical :: n2_bot_rough_avg = .false.
+         !! Near-bed N^2 = roughness-height average, imposed over that span
+         !! (Melet et al. 2013).  Default off = raw two-deepest-layer
+         !! gradient.  OM3 parity value: `.true.`.
+      logical :: limiter_reinject = .false.
+         !! `energy_limiter = "reinject"`: cap each interior layer's TKE at
+         !! `rho0*h*(N^2+Omega^2)*kd_max` and offer the excess to the layer
+         !! above (energy-conserving).  Default off = clip Kd and DISCARD
+         !! the clipped power.  OM3 parity value: `.true.` (`kd_max = 0.1`).
+      logical :: bed_lump = .false.
+         !! `bed_share = "lump"`: the bed layer's share of the dissipated
+         !! power stays in the upward flux and is deposited in the first
+         !! interior layer.  Default off = the share is discarded (the bed
+         !! layer is owned by the bottom boundary layer).  OM3 parity
+         !! value: `.true.`.
+
       ! ---- EOS hookup (shared flat-POD handle from the eos slot) ----
       type(eos_t) :: eos
          !! Value copy of `ocean_state%eos`, set at configure — the
@@ -131,6 +164,18 @@ module rdb_ocean_tidal_mixing
       ! ---- Persistent fields ----
       real(wp), allocatable :: e_in(:, :)
          !! Bottom internal-tide energy input E (W m-2), (nx,ny).
+      real(wp), allocatable :: tideamp(:, :)
+         !! RMS barotropic tidal speed U (m/s), (nx,ny): the file field, or
+         !! the scalar `utide` spread uniformly.  Filled at setup.
+      real(wp), allocatable :: h2(:, :)
+         !! Sub-grid roughness variance <h^2> (m^2), (nx,ny): the file field
+         !! (after the `(frac_rough*D)^2` clamp, zeroed on dry cells) or the
+         !! scalar `h2_rough` spread uniformly.  Filled at setup.
+      real(wp), allocatable :: c_e(:, :)
+         !! Folded Jayne & St Laurent coefficient `0.5*rho0*kappa_h2*
+         !! kappa_itides*<h^2>*U^2` (kg s-2), (nx,ny), zero on dry cells and
+         !! where the resting depth is below `min_zbot`.  Read by the kernel
+         !! only when `use_fields`; the per-step energy is `c_e*N_b`.
       real(wp), allocatable :: kd_int(:, :, :)
          !! Tidal diffusivity at interfaces (m^2/s), (nx,ny,nz+1),
          !! global bottom-up: zero at bed (K=1) and surface (K=nz+1).
@@ -179,6 +224,9 @@ contains
       if (present(nz_ml)) nz = nz_ml
 
       allocate (this%e_in(nx, ny), source=0.0_wp)
+      allocate (this%tideamp(nx, ny), source=0.0_wp)
+      allocate (this%h2(nx, ny), source=0.0_wp)
+      allocate (this%c_e(nx, ny), source=0.0_wp)
       allocate (this%kd_int(nx, ny, nz + 1), source=0.0_wp)
 
       this%is_init = .true.
@@ -188,6 +236,9 @@ contains
       class(ocean_tidal_mixing_t), intent(inout) :: this
       this%is_init = .false.
       if (allocated(this%e_in)) deallocate (this%e_in)
+      if (allocated(this%tideamp)) deallocate (this%tideamp)
+      if (allocated(this%h2)) deallocate (this%h2)
+      if (allocated(this%c_e)) deallocate (this%c_e)
       if (allocated(this%kd_int)) deallocate (this%kd_int)
    end subroutine ocean_tidal_mixing_destroy
 
@@ -203,6 +254,15 @@ contains
       type(ocean_tidal_mixing_t), intent(inout) :: this
       if (allocated(this%e_in)) then
          !$acc enter data copyin(this%e_in)
+      end if
+      if (allocated(this%tideamp)) then
+         !$acc enter data copyin(this%tideamp)
+      end if
+      if (allocated(this%h2)) then
+         !$acc enter data copyin(this%h2)
+      end if
+      if (allocated(this%c_e)) then
+         !$acc enter data copyin(this%c_e)
       end if
       if (allocated(this%kd_int)) then
          !$acc enter data copyin(this%kd_int)
@@ -222,6 +282,15 @@ contains
       if (allocated(this%kd_int)) then
          !$acc exit data delete(this%kd_int)
       end if
+      if (allocated(this%c_e)) then
+         !$acc exit data delete(this%c_e)
+      end if
+      if (allocated(this%h2)) then
+         !$acc exit data delete(this%h2)
+      end if
+      if (allocated(this%tideamp)) then
+         !$acc exit data delete(this%tideamp)
+      end if
       if (allocated(this%e_in)) then
          !$acc exit data delete(this%e_in)
       end if
@@ -240,6 +309,42 @@ contains
          end do
       end do
    end subroutine ocean_tidal_mixing_set_e_uniform
+
+   pure subroutine tidal_mixing_fold_static_fields(this, nx, ny, depth, wet)
+      !! Fold the setup-time masks and clamps into the static 2-D fields.
+      !! Call once on the host after `tideamp` and `h2` hold the raw
+      !! (file or uniform) values and BEFORE `enter_data`.  Per cell, with
+      !! `D` the resting column depth:
+      !!   * `U = tideamp` where wet and `D >= min_zbot`, else 0;
+      !!   * `<h^2> <- min(<h^2>, (frac_rough*D)^2)`, 0 on dry cells
+      !!     (Jayne & St Laurent 2001 roughness cap);
+      !!   * `c_e = 0.5*rho0*kappa_h2*kappa_itides*<h^2>*U^2`  [kg s-2],
+      !!     so the energy input is `E = min(c_e*N_b, e_max)`.
+      type(ocean_tidal_mixing_t), intent(inout) :: this
+      integer, intent(in) :: nx, ny
+      real(wp), intent(in) :: depth(nx, ny)
+         !! Resting column depth D (m), positive.
+      real(wp), intent(in) :: wet(nx, ny)
+         !! Wet mask (1 wet, 0 land).
+      integer :: i, j
+      real(wp) :: dd, h2c, u
+
+      do j = 1, ny
+         do i = 1, nx
+            dd = max(depth(i, j), 0.0_wp)
+            u = this%tideamp(i, j)
+            h2c = this%h2(i, j)
+            if (wet(i, j) <= 0.0_wp .or. dd < this%min_zbot) then
+               u = 0.0_wp
+               h2c = 0.0_wp
+            end if
+            h2c = min(h2c, (this%frac_rough*dd)**2)
+            this%tideamp(i, j) = u
+            this%h2(i, j) = h2c
+            this%c_e(i, j) = 0.5_wp*this%rho0*this%kappa_h2*this%kappa_itides*h2c*u**2
+         end do
+      end do
+   end subroutine tidal_mixing_fold_static_fields
 
    ! =================================================================
    ! Merge into the vmix interface fields
@@ -342,6 +447,8 @@ contains
       real(wp) :: dbuoy_t, dbuoy_s, p_int
       real(wp) :: dsv_dt_k, dsv_ds_k, t_int, s_int
       real(wp) :: gamma_l, mu_l, zeta_l, kd_max_l, omega2_l, rho0_l, izeta
+      real(wp) :: tke_used, tke_cap, h_amp, sum_db, sum_dz, zc_k, span_k, n2_b
+      integer :: klast
 
       nx = grid%nx_total
       ny = grid%ny_total
@@ -359,7 +466,8 @@ contains
          local(k, kbed, e_col, h_tot, n_bot, tke_coef, h2c, e_cap, &
                inv_int, hz, tke_bot, tke_rem, z_top, frac_top, tke_lay, &
                dz_eff, denom, kd_lay, h_col, t_col, s_col, n2_col, kd_lay_arr, &
-               dbuoy_t, dbuoy_s, p_int, dsv_dt_k, dsv_ds_k, t_int, s_int)
+               dbuoy_t, dbuoy_s, p_int, dsv_dt_k, dsv_ds_k, t_int, s_int, &
+               tke_used, tke_cap, h_amp, sum_db, sum_dz, zc_k, span_k, n2_b, klast)
 
          ! ---- Default output: zero contribution (overwritten if wet) ----
          do k = 1, nz + 1
@@ -415,9 +523,60 @@ contains
             ! so it lands correctly in the rho0*dz*(N^2+Omega^2) Kd divisor.
             ! N_bot = sqrt(N^2) at the bed-most interior interface
             ! (n2_col(kbed), the gradient across the two deepest LIVE layers).
+            if (this%e_compute .or. this%n2_bot_rough_avg) then
+               if (this%use_fields) then
+                  h2c = this%h2(i, j)   ! setup-clamped file/uniform field
+               else
+                  h2c = min(this%h2_rough, (this%frac_rough*h_tot)**2)
+               end if
+            end if
+
+            ! ---- Near-bed N^2: roughness-height average (opt-in) ----
+            ! Melet et al. (2013).  Walk up from the bed interface by
+            ! interface, accumulating the buoyancy jump and the centre
+            ! spacing; z is the centre height of the layer above the
+            ! interface just taken.  Once z exceeds h_amp = sqrt(<h^2>),
+            ! ONE MORE interface (if any) is accumulated and the walk stops,
+            ! so even h_amp = 0 averages two interfaces (hence not
+            ! bit-identical to the raw gradient; gated by the knob).
+            ! N_b^2 = sum jumps / sum spans replaces the layer N^2 over
+            ! every interface taken.
+            if (this%n2_bot_rough_avg) then
+               h_amp = sqrt(max(h2c, 0.0_wp))
+               sum_db = 0.0_wp
+               sum_dz = 0.0_wp
+               zc_k = 0.5_wp*h_col(kbed)
+               klast = kbed - 1
+               do k = kbed, nz - 1
+                  span_k = 0.5_wp*(h_col(k) + h_col(k + 1))
+                  sum_db = sum_db + n2_col(k)*span_k
+                  sum_dz = sum_dz + span_k
+                  klast = k
+                  zc_k = zc_k + span_k
+                  if (zc_k > h_amp) then
+                     if (k + 1 <= nz - 1) then
+                        span_k = 0.5_wp*(h_col(k + 1) + h_col(k + 2))
+                        sum_db = sum_db + n2_col(k + 1)*span_k
+                        sum_dz = sum_dz + span_k
+                        klast = k + 1
+                     end if
+                     exit
+                  end if
+               end do
+               if (klast >= kbed) then
+                  n2_b = sum_db/max(sum_dz, H_VANISHED)
+                  do k = kbed, klast
+                     n2_col(k) = n2_b
+                  end do
+               end if
+            end if
+
             if (this%e_compute) then
-               h2c = min(this%h2_rough, (this%frac_rough*h_tot)**2)
-               tke_coef = 0.5_wp*rho0_l*this%kappa_h2*this%kappa_itides*h2c*this%utide**2
+               if (this%use_fields) then
+                  tke_coef = this%c_e(i, j)
+               else
+                  tke_coef = 0.5_wp*rho0_l*this%kappa_h2*this%kappa_itides*h2c*this%utide**2
+               end if
                n_bot = sqrt(max(n2_col(kbed), 0.0_wp))
                e_col = tke_coef*n_bot
                e_cap = this%e_max
@@ -452,7 +611,6 @@ contains
                z_top = z_top + h_col(k)
                frac_top = inv_int*exp(-z_top*izeta)
                tke_lay = tke_rem - tke_bot*frac_top
-               tke_rem = tke_rem - tke_lay
 
                ! TKE_to_Kd = 1/(rho0*dz*(N^2+Omega^2)).  dz floored at
                ! H_VANISHED (the vdiff vanishing-layer mass-drop
@@ -460,14 +618,34 @@ contains
                dz_eff = max(h_col(k), H_VANISHED)
                denom = rho0_l*dz_eff*(n2_col(k) + omega2_l)
                denom = max(denom, H_DIV_EPS)
-               kd_lay = tke_lay/denom
-               ! Per-layer physical cap (St-Laurent).  DIVERGENCE D3:
-               ! MOM6's max_TKE limiter re-injects the un-used power into
-               ! the layer above (energy-conserving under clipping); this
-               ! bare Kd_max clamp DISCARDS the clipped power.  v1 accepts
-               ! the discard — it is a rarely-active safety cap, not the
-               ! deposition mechanism.  The energy-conservation invariant
-               ! is asserted on the PRE-clip TKE_lay accordingly.
+
+               ! Power taken out of the upward flux by this layer.  Default:
+               ! the whole natural share.  `bed_lump`: the bed layer takes
+               ! none (its share rides up into the first interior layer).
+               ! `limiter_reinject`: an interior layer takes at most
+               ! `denom*kd_max` (the TKE that gives exactly Kd = kd_max); the
+               ! excess stays in the flux for the layer above, and a
+               ! vanished layer takes nothing.
+               tke_used = tke_lay
+               if (this%bed_lump .and. k == kbed) then
+                  tke_used = 0.0_wp
+               else if (this%limiter_reinject .and. k > kbed .and. k < nz) then
+                  ! vanished-ok: a vanished layer is skipped (takes no power)
+                  if (ms%h_layer(i, j, k) <= H_VANISHED) then
+                     tke_used = 0.0_wp
+                  else if (kd_max_l >= 0.0_wp) then
+                     tke_cap = denom*kd_max_l
+                     if (tke_used > tke_cap) tke_used = tke_cap
+                  end if
+               end if
+               tke_rem = tke_rem - tke_used
+               kd_lay = tke_used/denom
+               ! Per-layer physical cap (St-Laurent).  Default
+               ! (`energy_limiter = "clamp"`): a bare Kd_max clip that
+               ! DISCARDS the clipped power; the energy-conservation
+               ! invariant is asserted on the PRE-clip TKE_lay accordingly.
+               ! Under `reinject` the layer TKE is already capped above, so
+               ! this clip only guards round-off.
                if (kd_max_l >= 0.0_wp .and. kd_lay > kd_max_l) kd_lay = kd_max_l
                kd_lay_arr(k) = kd_lay
             end do
@@ -508,10 +686,8 @@ contains
             ! above, interface K=kbed+1 receives nothing from k=kbed (only
             ! k=kbed+1's bed half)
             ! and interface K=nz nothing from k=nz (only k=nz-1's top half) —
-            ! the full MOM6 endpoint exclusion.  DIVERGENCE D4
-            ! (BBL N^2 override): MOM6 replaces the near-bed N^2 with a
-            ! roughness-height BBL average; v1 uses the raw per-layer N^2
-            ! (a v1.1 refinement).
+            ! the full endpoint exclusion.  The near-bed N^2 is the
+            ! raw per-layer value unless `n2_bot_rough_avg` (above).
             this%kd_int(i, j, kbed) = 0.0_wp
             this%kd_int(i, j, nz + 1) = 0.0_wp
          end if
@@ -525,6 +701,9 @@ contains
       class(ocean_tidal_mixing_t), intent(in) :: this
       integer(int64) :: nbytes
       nbytes = arr_bytes(this%e_in) &
+               + arr_bytes(this%tideamp) &
+               + arr_bytes(this%h2) &
+               + arr_bytes(this%c_e) &
                + arr_bytes(this%kd_int)
    end function ocean_tidal_mixing_bytes
 

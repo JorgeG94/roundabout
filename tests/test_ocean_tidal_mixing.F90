@@ -21,7 +21,8 @@ module test_ocean_tidal_mixing
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_ocean_tidal_mixing, only: ocean_tidal_mixing_t, &
                                      tidal_mixing_compute, &
-                                     tidal_mixing_merge_into_kt
+                                     tidal_mixing_merge_into_kt, &
+                                     tidal_mixing_fold_static_fields
    use rdb_eos, only: EOS_VARIANT_LINEAR
    implicit none
    private
@@ -64,7 +65,13 @@ contains
                   new_unittest("tidal_energy_conservation", test_energy_conservation), &
                   new_unittest("tidal_decay_anchoring", test_decay_anchoring), &
                   new_unittest("tidal_n2_zero_robust", test_n2_zero_robust), &
-                  new_unittest("tidal_merge_additive", test_merge) &
+                  new_unittest("tidal_merge_additive", test_merge), &
+                  new_unittest("tidal_t1_fold_clamp_mask", test_t1_fold_clamp), &
+                  new_unittest("tidal_t1_fields_vs_scalar", test_t1_fields_kernel), &
+                  new_unittest("tidal_t1_nbot_rough_avg", test_t1_nbot), &
+                  new_unittest("tidal_t1_energy_bed_share", test_t1_energy), &
+                  new_unittest("tidal_t1_energy_limiter", test_t1_limiter), &
+                  new_unittest("tidal_t1_defaults_golden", test_t1_defaults) &
                   ]
    end subroutine collect_ocean_tidal_mixing_tests
 
@@ -602,5 +609,423 @@ contains
       call tm%destroy()
       call ms%destroy()
    end subroutine test_merge
+
+   ! ------------------------------------------------------------------
+   ! T1 helpers
+   ! ------------------------------------------------------------------
+
+   subroutine fill_n2_profile(ms, nz, dz, n2)
+      !! Resting uniform-`dz` column whose kernel layer N^2 is `n2(k)`
+      !! between layers k and k+1 (T steps chosen from the linear EOS).
+      type(multilayer_state_t), intent(inout) :: ms
+      integer, intent(in) :: nz
+      real(wp), intent(in) :: dz, n2(nz - 1)
+      integer :: k
+      real(wp) :: dbuoy_t, t_k
+
+      dbuoy_t = GRAVITY*ALPHA_LIN_TM/RHO0_TM
+      ms%h_layer = dz
+      ms%u_face_x_layer = 0.0_wp
+      ms%v_face_y_layer = 0.0_wp
+      t_k = 10.0_wp
+      do k = 1, nz
+         ms%tracers(ms%idx_temperature)%hTr(:, :, k) = t_k*dz
+         ms%tracers(ms%idx_salinity)%hTr(:, :, k) = 35.0_wp*dz
+         if (k < nz) t_k = t_k + n2(k)*dz/dbuoy_t
+      end do
+   end subroutine fill_n2_profile
+
+   subroutine recover_tke(tm, i, j, nz, dz, n2, tke)
+      !! Per-layer deposited power from the kernel's interface field:
+      !! `kd_int(K) = 0.5*(kd_lay(K-1) + kd_lay(K))` with the bed and
+      !! surface layers zero, so `kd_lay` follows by forward recursion;
+      !! then `TKE = kd_lay*rho0*dz*(N^2+Omega^2)`.
+      type(ocean_tidal_mixing_t), intent(in) :: tm
+      integer, intent(in) :: i, j, nz
+      real(wp), intent(in) :: dz, n2(nz)
+      real(wp), intent(out) :: tke(nz)
+      integer :: k
+      real(wp) :: kd_lay(nz)
+
+      kd_lay = 0.0_wp
+      do k = 2, nz - 1
+         kd_lay(k) = 2.0_wp*tm%kd_int(i, j, k) - kd_lay(k - 1)
+      end do
+      tke = 0.0_wp
+      do k = 2, nz - 1
+         tke(k) = kd_lay(k)*RHO0_TM*dz*(n2(k) + OMEGA2_GOLD)
+      end do
+   end subroutine recover_tke
+
+   pure function phi_exp(z) result(phi)
+      !! Remaining upward flux of the golden column at height `z` above
+      !! the bed: `q*mu*E * e^{-z/zeta} / (1 - e^{-H/zeta})`.
+      real(wp), intent(in) :: z
+      real(wp) :: phi
+      phi = GAMMA_G*MU_G*E_G*exp(-z/ZETA_G)/(1.0_wp - exp(-H_G/ZETA_G))
+   end function phi_exp
+
+   ! ------------------------------------------------------------------
+   ! T1 (b): setup fold -- roughness clamp, wet and min_zbot masks
+   ! ------------------------------------------------------------------
+
+   subroutine test_t1_fold_clamp(error)
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_tidal_mixing_t) :: tm
+      real(wp), allocatable :: depth(:, :), wet(:, :)
+      real(wp) :: coef, want
+      integer :: nx, ny
+
+      call make_grid(grid, 2, 2)
+      call setup_tm(tm, grid, NZ_G, 0.0_wp, -1.0_wp)
+      nx = grid%nx_total
+      ny = grid%ny_total
+      allocate (depth(nx, ny), wet(nx, ny))
+      depth = 1000.0_wp
+      wet = 1.0_wp
+      tm%frac_rough = 0.1_wp
+      tm%min_zbot = 50.0_wp
+      tm%kappa_h2 = 0.84_wp
+      tm%kappa_itides = 6.28319e-4_wp
+      tm%tideamp = 0.3_wp
+      tm%h2 = 25.0_wp
+      ! (1,1): file value far above (0.1*100)^2 = 100  -> clamped
+      depth(1, 1) = 100.0_wp
+      tm%h2(1, 1) = 1.0e6_wp
+      ! (2,1): below the clamp -> untouched
+      depth(2, 1) = 100.0_wp
+      tm%h2(2, 1) = 50.0_wp
+      ! (3,1): dry
+      wet(3, 1) = 0.0_wp
+      tm%h2(3, 1) = 1.0e6_wp
+      ! (4,1): shallower than min_zbot
+      depth(4, 1) = 40.0_wp
+      tm%h2(4, 1) = 1.0e6_wp
+
+      call tidal_mixing_fold_static_fields(tm, nx, ny, depth, wet)
+
+      coef = 0.5_wp*RHO0_TM*0.84_wp*6.28319e-4_wp*0.3_wp**2
+      call check(error, abs(tm%h2(1, 1) - 100.0_wp) < 1.0e-12_wp, "clamp: h2 != (0.1 D)^2")
+      if (allocated(error)) return
+      call check(error, abs(tm%h2(2, 1) - 50.0_wp) < 1.0e-12_wp, "clamp: below-cap h2 changed")
+      if (allocated(error)) return
+      call check(error, tm%h2(3, 1) == 0.0_wp .and. tm%c_e(3, 1) == 0.0_wp, "dry cell not zeroed")
+      if (allocated(error)) return
+      call check(error, tm%h2(4, 1) == 0.0_wp .and. tm%c_e(4, 1) == 0.0_wp .and. &
+                 tm%tideamp(4, 1) == 0.0_wp, "min_zbot cell not masked")
+      if (allocated(error)) return
+      want = coef*100.0_wp
+      call check(error, abs(tm%c_e(1, 1) - want) < 1.0e-12_wp*want, "c_e(1,1) wrong")
+      if (allocated(error)) return
+      want = coef*50.0_wp
+      call check(error, abs(tm%c_e(2, 1) - want) < 1.0e-12_wp*want, "c_e(2,1) wrong")
+      if (allocated(error)) return
+      ! Deep cell: (0.1*1000)^2 = 1e4 > 25, untouched.
+      want = coef*25.0_wp
+      call check(error, abs(tm%c_e(5, 5) - want) < 1.0e-12_wp*want, "c_e deep cell wrong")
+      call tm%destroy()
+   end subroutine test_t1_fold_clamp
+
+   ! ------------------------------------------------------------------
+   ! T1 (f, part): file-field path == scalar path when the fields are
+   ! uniform, and Kd scales linearly with the cell's c_e.
+   ! ------------------------------------------------------------------
+
+   subroutine test_t1_fields_kernel(error)
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_tidal_mixing_t) :: tm_a, tm_b
+      real(wp), allocatable :: depth(:, :), wet(:, :)
+      real(wp) :: worst, ratio
+      integer :: k, nx, ny
+
+      call make_grid(grid, 2, 2)
+      ms%nz_ml = NZ_G
+      call ms%init(grid)
+      call fill_const_n2_column(ms, NZ_G, DZ_G, N2_CONST_G)
+      nx = grid%nx_total
+      ny = grid%ny_total
+
+      ! A: scalar path
+      call setup_tm(tm_a, grid, NZ_G, 0.0_wp, -1.0_wp)
+      tm_a%e_compute = .true.
+      tm_a%kappa_h2 = 0.84_wp
+      tm_a%utide = 0.3_wp
+      tm_a%h2_rough = 100.0_wp
+      tm_a%frac_rough = 1.0_wp
+      call tidal_mixing_compute(grid, tm_a, ms, 1800.0_wp)
+
+      ! B: field path, uniform contents, plus one cell with U doubled
+      call setup_tm(tm_b, grid, NZ_G, 0.0_wp, -1.0_wp)
+      tm_b%e_compute = .true.
+      tm_b%kappa_h2 = 0.84_wp
+      tm_b%frac_rough = 1.0_wp
+      tm_b%use_fields = .true.
+      tm_b%tideamp = 0.3_wp
+      tm_b%tideamp(4, 3) = 0.6_wp
+      tm_b%h2 = 100.0_wp
+      allocate (depth(nx, ny), wet(nx, ny))
+      depth = H_G
+      wet = 1.0_wp
+      call tidal_mixing_fold_static_fields(tm_b, nx, ny, depth, wet)
+      call tidal_mixing_compute(grid, tm_b, ms, 1800.0_wp)
+
+      worst = 0.0_wp
+      do k = 2, NZ_G
+         worst = max(worst, abs(tm_b%kd_int(3, 3, k) - tm_a%kd_int(3, 3, k)) &
+                     /max(tm_a%kd_int(3, 3, k), 1.0e-30_wp))
+      end do
+      call check(error, tm_a%kd_int(3, 3, 3) > 0.0_wp, "scalar path deposited nothing")
+      if (allocated(error)) return
+      call check(error, worst < 1.0e-12_wp, "field path != scalar path for uniform fields")
+      if (allocated(error)) return
+
+      ! U doubled => c_e x4 => Kd x4 (cap off, e_max not binding).
+      ratio = tm_b%kd_int(4, 3, 5)/tm_b%kd_int(3, 3, 5)
+      call check(error, abs(ratio - 4.0_wp) < 1.0e-12_wp, "Kd does not scale with U^2 cell by cell")
+      call tm_a%destroy()
+      call tm_b%destroy()
+      call ms%destroy()
+   end subroutine test_t1_fields_kernel
+
+   ! ------------------------------------------------------------------
+   ! T1 (c): near-bed N^2 roughness-height average
+   ! ------------------------------------------------------------------
+
+   subroutine run_nbot_case(error, h_amp, n_int)
+      !! 4 layers of 1000 m (centres 500/1500/2500/3500 m) with distinct
+      !! interface N^2 = 1, 4, 9 e-6 s^-2.  The first `n_int` interfaces
+      !! are averaged (uniform spans => arithmetic mean) and imposed.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp), intent(in) :: h_amp
+      integer, intent(in) :: n_int
+      integer, parameter :: NZ4 = 4
+      real(wp), parameter :: DZ4 = 1000.0_wp
+      real(wp), parameter :: N2_RAW(3) = [1.0e-6_wp, 4.0e-6_wp, 9.0e-6_wp]
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_tidal_mixing_t) :: tm, tm_off
+      real(wp) :: n2_a(NZ4), dz_a(NZ4), kd_lay(NZ4), tke_lay(NZ4), kd_ref(NZ4 + 1)
+      real(wp) :: nb2, e_col, coef, worst, diff_off
+      integer :: k
+
+      call make_grid(grid, 2, 2)
+      ms%nz_ml = NZ4
+      call ms%init(grid)
+      call fill_n2_profile(ms, NZ4, DZ4, N2_RAW)
+
+      nb2 = sum(N2_RAW(1:n_int))/real(n_int, wp)
+      n2_a = [N2_RAW, 0.0_wp]
+      n2_a(1:n_int) = nb2
+      dz_a = DZ4
+      coef = 0.5_wp*RHO0_TM*1.0_wp*6.2832e-4_wp*h_amp**2*0.3_wp**2
+      e_col = coef*sqrt(nb2)
+
+      call setup_tm(tm, grid, NZ4, 0.0_wp, -1.0_wp)
+      tm%e_compute = .true.
+      tm%utide = 0.3_wp
+      tm%h2_rough = h_amp**2
+      tm%frac_rough = 10.0_wp
+      tm%n2_bot_rough_avg = .true.
+      call tidal_mixing_compute(grid, tm, ms, 1800.0_wp)
+
+      call ref_sweep(NZ4, dz_a, n2_a, e_col, GAMMA_G, MU_G, ZETA_G, RHO0_TM, &
+                     OMEGA2_GOLD, -1.0_wp, kd_lay, tke_lay)
+      call spread_to_interfaces(NZ4, kd_lay, kd_ref)
+      worst = 0.0_wp
+      do k = 2, NZ4
+         worst = max(worst, abs(tm%kd_int(3, 3, k) - kd_ref(k))/max(kd_ref(k), 1.0e-30_wp))
+      end do
+      call check(error, kd_ref(3) > 0.0_wp, "N_b case: oracle Kd is zero")
+      if (allocated(error)) return
+      call check(error, worst < 1.0e-9_wp, "N_b average over wrong interface set")
+      if (allocated(error)) return
+
+      ! Non-vacuity: with the knob off the same column gives a different Kd
+      ! whenever the average is not just the bed interface.
+      if (n_int > 1) then
+         call setup_tm(tm_off, grid, NZ4, 0.0_wp, -1.0_wp)
+         tm_off%e_compute = .true.
+         tm_off%utide = 0.3_wp
+         tm_off%h2_rough = h_amp**2
+         tm_off%frac_rough = 10.0_wp
+         call tidal_mixing_compute(grid, tm_off, ms, 1800.0_wp)
+         diff_off = abs(tm_off%kd_int(3, 3, 3) - tm%kd_int(3, 3, 3))/tm%kd_int(3, 3, 3)
+         call check(error, diff_off > 0.05_wp, "N_b average changed nothing")
+         call tm_off%destroy()
+      end if
+      call tm%destroy()
+      call ms%destroy()
+   end subroutine run_nbot_case
+
+   subroutine test_t1_nbot(error)
+      type(error_type), allocatable, intent(out) :: error
+      ! Rule: take interfaces upward; once the centre of the layer above the
+      ! last one taken exceeds h_amp, take ONE more and stop.  Centres of
+      ! layers 2,3,4 are 1500, 2500, 3500 m.
+      ! h_amp ~ 0: 1500 > h_amp at once -> bed + next = two interfaces.
+      call run_nbot_case(error, 1.0_wp, 2)
+      if (allocated(error)) return
+      ! 1500 > 1400 -> two.
+      call run_nbot_case(error, 1400.0_wp, 2)
+      if (allocated(error)) return
+      ! 1500 <= 1600, then 2500 > 1600 -> third interface -> three.
+      call run_nbot_case(error, 1600.0_wp, 3)
+      if (allocated(error)) return
+      ! 2500 <= 3000, 3500 > 3000 but no further interface exists -> three.
+      call run_nbot_case(error, 3000.0_wp, 3)
+   end subroutine test_t1_nbot
+
+   ! ------------------------------------------------------------------
+   ! T1 (d): exact energy bookkeeping, with and without bed_share="lump"
+   ! ------------------------------------------------------------------
+
+   subroutine test_t1_energy(error)
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_tidal_mixing_t) :: tm
+      real(wp) :: n2_a(NZ_G), tke(NZ_G), want, rel
+      integer :: pass
+
+      call make_grid(grid, 2, 2)
+      ms%nz_ml = NZ_G
+      call ms%init(grid)
+      call fill_const_n2_column(ms, NZ_G, DZ_G, N2_CONST_G)
+      n2_a = N2_CONST_G
+      n2_a(NZ_G) = 0.0_wp
+
+      do pass = 1, 2
+         call setup_tm(tm, grid, NZ_G, E_G, -1.0_wp)
+         tm%bed_lump = (pass == 2)
+         call tidal_mixing_compute(grid, tm, ms, 1800.0_wp)
+         call recover_tke(tm, 3, 3, NZ_G, DZ_G, n2_a, tke)
+         if (pass == 1) then
+            ! discard: bed share (Phi(0) - Phi(dz)) is NOT deposited
+            want = phi_exp(DZ_G) - phi_exp(real(NZ_G - 1, wp)*DZ_G)
+         else
+            ! lump: Phi(0) - Phi(top interior) lands in the interior
+            want = phi_exp(0.0_wp) - phi_exp(real(NZ_G - 1, wp)*DZ_G)
+         end if
+         rel = abs(sum(tke) - want)/want
+         call check(error, rel < 1.0e-12_wp, "Sum(TKE_lay) != Phi(bottom) - Phi(top)")
+         if (allocated(error)) return
+         if (pass == 2) then
+            ! The first interior layer carries the bed share on top of its own.
+            want = phi_exp(0.0_wp) - phi_exp(2.0_wp*DZ_G)
+            rel = abs(tke(2) - want)/want
+            call check(error, rel < 1.0e-12_wp, "lump: layer kbed+1 != bed share + own share")
+            if (allocated(error)) return
+         end if
+         call tm%destroy()
+      end do
+      call ms%destroy()
+   end subroutine test_t1_energy
+
+   ! ------------------------------------------------------------------
+   ! T1 (e): energy-conserving limiter ("reinject")
+   ! ------------------------------------------------------------------
+
+   subroutine test_t1_limiter(error)
+      type(error_type), allocatable, intent(out) :: error
+      real(wp), parameter :: KD_CAP = 1.0e-3_wp
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_tidal_mixing_t) :: tm
+      real(wp) :: n2_a(NZ_G), tke(NZ_G), tke_nat, tke_cap, rem, used
+      real(wp) :: tot_reinject, tot_clamp, kd_lay_max, worst
+      integer :: k, n_capped
+
+      call make_grid(grid, 2, 2)
+      ms%nz_ml = NZ_G
+      call ms%init(grid)
+      call fill_const_n2_column(ms, NZ_G, DZ_G, N2_CONST_G)
+      n2_a = N2_CONST_G
+      n2_a(NZ_G) = 0.0_wp
+
+      ! Default "clamp": clip Kd, discard the clipped power.
+      call setup_tm(tm, grid, NZ_G, E_G, KD_CAP)
+      call tidal_mixing_compute(grid, tm, ms, 1800.0_wp)
+      call recover_tke(tm, 3, 3, NZ_G, DZ_G, n2_a, tke)
+      tot_clamp = sum(tke)
+      call tm%destroy()
+
+      ! "reinject"
+      call setup_tm(tm, grid, NZ_G, E_G, KD_CAP)
+      tm%limiter_reinject = .true.
+      call tidal_mixing_compute(grid, tm, ms, 1800.0_wp)
+      call recover_tke(tm, 3, 3, NZ_G, DZ_G, n2_a, tke)
+      tot_reinject = sum(tke)
+
+      ! Layerwise oracle from the closed-form flux.
+      rem = phi_exp(DZ_G)
+      worst = 0.0_wp
+      n_capped = 0
+      kd_lay_max = 0.0_wp
+      do k = 2, NZ_G - 1
+         tke_nat = rem - phi_exp(real(k, wp)*DZ_G)
+         tke_cap = KD_CAP*RHO0_TM*DZ_G*(n2_a(k) + OMEGA2_GOLD)
+         used = min(tke_nat, tke_cap)
+         if (tke_nat > tke_cap) n_capped = n_capped + 1
+         rem = rem - used
+         worst = max(worst, abs(tke(k) - used)/used)
+         kd_lay_max = max(kd_lay_max, tke(k)/(RHO0_TM*DZ_G*(n2_a(k) + OMEGA2_GOLD)))
+      end do
+      call check(error, n_capped >= 3, "limiter never engaged (test not exercising it)")
+      if (allocated(error)) return
+      call check(error, worst < 1.0e-9_wp, "reinject: layer TKE != capped carry-over oracle")
+      if (allocated(error)) return
+      call check(error, kd_lay_max <= KD_CAP*(1.0_wp + 1.0e-9_wp), "a layer exceeds kd_max")
+      if (allocated(error)) return
+      ! Energy-conserving: strictly more power deposited than the discarding clamp,
+      ! and never more than the natural column total.
+      call check(error, tot_reinject > 1.05_wp*tot_clamp, "reinject did not recover clipped power")
+      if (allocated(error)) return
+      call check(error, tot_reinject <= phi_exp(DZ_G) - phi_exp(real(NZ_G - 1, wp)*DZ_G) + 1.0e-15_wp, &
+                 "reinject deposited more than the available power")
+      call tm%destroy()
+      call ms%destroy()
+   end subroutine test_t1_limiter
+
+   ! ------------------------------------------------------------------
+   ! T1 (f): every new knob at its default == the golden St-Laurent profile
+   ! ------------------------------------------------------------------
+
+   subroutine test_t1_defaults(error)
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_tidal_mixing_t) :: tm
+      real(wp) :: dz_a(NZ_G), n2_a(NZ_G), kd_lay(NZ_G), tke_lay(NZ_G), kd_ref(NZ_G + 1)
+      real(wp) :: worst
+      integer :: k
+
+      call make_grid(grid, 2, 2)
+      ms%nz_ml = NZ_G
+      call ms%init(grid)
+      call fill_const_n2_column(ms, NZ_G, DZ_G, N2_CONST_G)
+      call setup_tm(tm, grid, NZ_G, E_G, KDMAX_G)
+      tm%use_fields = .false.
+      tm%n2_bot_rough_avg = .false.
+      tm%limiter_reinject = .false.
+      tm%bed_lump = .false.
+      call tidal_mixing_compute(grid, tm, ms, 1800.0_wp)
+
+      dz_a = DZ_G
+      n2_a = N2_CONST_G
+      n2_a(NZ_G) = 0.0_wp
+      call ref_sweep(NZ_G, dz_a, n2_a, E_G, GAMMA_G, MU_G, ZETA_G, RHO0_TM, &
+                     OMEGA2_GOLD, KDMAX_G, kd_lay, tke_lay)
+      call spread_to_interfaces(NZ_G, kd_lay, kd_ref)
+      worst = 0.0_wp
+      do k = 2, NZ_G
+         worst = max(worst, abs(tm%kd_int(3, 3, k) - kd_ref(k))/max(kd_ref(k), 1.0e-30_wp))
+      end do
+      call check(error, worst < 1.0e-12_wp, "default knobs drifted from the golden profile")
+      call tm%destroy()
+      call ms%destroy()
+   end subroutine test_t1_defaults
 
 end module test_ocean_tidal_mixing
