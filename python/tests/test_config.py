@@ -18,15 +18,11 @@ from rdb._knob import RdbDeadKnobWarning
 
 
 def test_group_and_knob_counts():
-    # 62 groups / 741 knobs total, i.e. exactly what `rdb_nml_json` +
-    # `tools/gen_python_config.py` report for the live schema (the last
-    # bumps: &ocean_eos_nml ts_convention, tfreeze_form, tfreeze_sat_frac,
-    # c_p -- TEOS-10 PR 2b, 4 knobs; &ocean_gm_nml use_ebt_struct, 1 knob;
-    # &ocean_redi_nml check_diffusive_cfl, max_diffusive_cfl, 2 knobs;
-    # &ocean_gm_nml use_fgnv, fgnv_filter_scale, fgnv_c_min, fgnv_strat_floor,
-    # 4 knobs).
+    # 62 groups / 746 knobs total: exactly what `rdb_nml_json` +
+    # `tools/gen_python_config.py` report for the live schema (bumped by
+    # each OM3-parity PR in the wave-4 stack).
     assert N_GROUPS == 62
-    assert N_KNOBS == 741
+    assert N_KNOBS == 746
     assert "ocean_bc" in ALL_GROUPS
 
 

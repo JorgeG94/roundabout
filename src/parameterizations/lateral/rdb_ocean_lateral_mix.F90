@@ -9,7 +9,7 @@ module rdb_ocean_lateral_mix
    !! defaults to Leith, which scales with vorticity gradient and avoids
    !! over-damping coherent eddies.  Leith (1968); Smagorinsky (1963);
    !! Fox-Kemper & Menemenlis (2008); Griffies & Hallberg (2000).
-   use rdb_constants, only: wp, PI
+   use rdb_constants, only: wp, PI, DEG2RAD
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_multilayer_state, only: multilayer_state_t
@@ -25,6 +25,7 @@ module rdb_ocean_lateral_mix
    public :: ocean_lateral_mix_compute_leith
    public :: ocean_lateral_mix_compute_smag
    public :: ocean_lateral_mix_compute_smag_ah
+   public :: ocean_lateral_mix_compute_lat_floor
    public :: ocean_lateral_mix_compute_leith_biharm
    public :: ocean_lateral_mix_compute_vel_scale
    public :: ocean_lateral_mix_compute
@@ -75,6 +76,8 @@ module rdb_ocean_lateral_mix
          !! Upper clip on harmonic viscosity (m^2/s).  Caps Leith spikes
          !! and enforces the viscous-CFL bound (nu·dt/dx² ≤ 0.5).
 
+      real(wp) :: kh_pwr_of_sine = 4.0_wp
+         !! Exponent of `|sin φ|` in the `kh_sin_lat` floor.
       real(wp) :: kh_vel_scale_live = 0.0_wp
          !! Live velocity-scale viscosity coefficient (m/s).  When
          !! positive, `A_vel = kh_vel_scale_live · L_grid · |u|`
@@ -111,6 +114,26 @@ module rdb_ocean_lateral_mix
          !! The true stability guard is the per-cell biharmonic-CFL clamp
          !! applied downstream in the biharmonic kernel.
 
+      ! ---- OM3 viscosity floors + Coriolis bound (all default off) ----
+      real(wp) :: kh_sin_lat = 0.0_wp
+         !! Latitude Laplacian floor amplitude (m²/s); > 0 engages the
+         !! `kh_floor_x/y` max-combine into `ah_face_*`.
+      real(wp) :: ah_vel_scale = 0.0_wp
+         !! Biharmonic velocity-scale floor (m/s): per-face background
+         !! `max(nu4_bg, ah_vel_scale·(Δ²)^(3/2))` under Smagorinsky_AH.
+      logical  :: bound_coriolis_biharm = .false.
+         !! Add the Coriolis term `Δ⁶·f_max·|S|²/(5V²)` to Smagorinsky_AH.
+      real(wp) :: bound_coriolis_vel = 6.0_wp
+         !! `V` (m/s) of the Coriolis bound.
+      real(wp), allocatable :: kh_floor_x(:, :)
+         !! Static latitude floor `kh_sin_lat·|sin φ|^p` at u-faces,
+         !! `(nx+1, ny)`; allocated only when `kh_sin_lat > 0`.
+      real(wp), allocatable :: kh_floor_y(:, :)
+         !! Same at v-faces, `(nx, ny+1)`.
+      real(wp), allocatable :: f_max_T(:, :)
+         !! Largest `|f|` of the four corners of each T cell, `(nx, ny)`;
+         !! allocated only when `bound_coriolis_biharm`.
+
       ! ---- Cached extents ----
       integer :: nx_total = 0
       integer :: ny_total = 0
@@ -141,6 +164,7 @@ module rdb_ocean_lateral_mix
          !! Relative vorticity at C-grid corners.
    contains
       procedure, non_overridable :: init => ocean_lateral_mix_init
+      procedure, non_overridable :: build_statics => ocean_lateral_mix_build_statics
       procedure, non_overridable :: destroy => ocean_lateral_mix_destroy
       procedure, non_overridable :: enter_data => ocean_lateral_mix_enter_data
       procedure, non_overridable :: exit_data => ocean_lateral_mix_exit_data
@@ -175,6 +199,56 @@ contains
       this%is_init = .true.
    end subroutine ocean_lateral_mix_init
 
+   subroutine ocean_lateral_mix_build_statics(this, geolatBu, f_corner)
+      !! Host-side, once at configure and BEFORE `enter_data`: build the
+      !! static per-face latitude floor (`kh_sin_lat > 0`) and the per-T-cell
+      !! `f_max_T` (`bound_coriolis_biharm`) from the corner latitudes
+      !! `geolatBu` (degrees) and the corner Coriolis parameter `f_corner`
+      !! (both `(nx+1, ny+1)`).  The floor at a face is evaluated at the
+      !! face-centre latitude, the mean of the face's two corner latitudes.
+      !! Reads `kh_sin_lat`, `kh_pwr_of_sine` and `bound_coriolis_biharm`
+      !! from `this`, so set those first.
+      class(ocean_lateral_mix_t), intent(inout) :: this
+      real(wp), intent(in) :: geolatBu(:, :)
+      real(wp), intent(in) :: f_corner(:, :)
+      integer :: i, j, nx, ny
+      real(wp) :: lat
+
+      nx = this%nx_total
+      ny = this%ny_total
+      if (size(geolatBu, 1) < nx + 1 .or. size(geolatBu, 2) < ny + 1 .or. &
+          size(f_corner, 1) < nx + 1 .or. size(f_corner, 2) < ny + 1) then
+         error stop "ocean_lateral_mix_build_statics: corner arrays smaller than (nx+1, ny+1)"
+      end if
+      if (this%kh_sin_lat > 0.0_wp) then
+         if (.not. allocated(this%kh_floor_x)) allocate (this%kh_floor_x(nx + 1, ny))
+         if (.not. allocated(this%kh_floor_y)) allocate (this%kh_floor_y(nx, ny + 1))
+         do j = 1, ny
+            do i = 1, nx + 1
+               lat = 0.5_wp*(geolatBu(i, j) + geolatBu(i, j + 1))
+               this%kh_floor_x(i, j) = this%kh_sin_lat* &
+                                       abs(sin(lat*DEG2RAD))**this%kh_pwr_of_sine
+            end do
+         end do
+         do j = 1, ny + 1
+            do i = 1, nx
+               lat = 0.5_wp*(geolatBu(i, j) + geolatBu(i + 1, j))
+               this%kh_floor_y(i, j) = this%kh_sin_lat* &
+                                       abs(sin(lat*DEG2RAD))**this%kh_pwr_of_sine
+            end do
+         end do
+      end if
+      if (this%bound_coriolis_biharm) then
+         if (.not. allocated(this%f_max_T)) allocate (this%f_max_T(nx, ny))
+         do j = 1, ny
+            do i = 1, nx
+               this%f_max_T(i, j) = max(abs(f_corner(i, j)), abs(f_corner(i + 1, j)), &
+                                        abs(f_corner(i, j + 1)), abs(f_corner(i + 1, j + 1)))
+            end do
+         end do
+      end if
+   end subroutine ocean_lateral_mix_build_statics
+
    subroutine ocean_lateral_mix_destroy(this)
       class(ocean_lateral_mix_t), intent(inout) :: this
       this%is_init = .false.
@@ -182,6 +256,9 @@ contains
       if (allocated(this%ah_face_y)) deallocate (this%ah_face_y)
       if (allocated(this%nu4_face_x)) deallocate (this%nu4_face_x)
       if (allocated(this%nu4_face_y)) deallocate (this%nu4_face_y)
+      if (allocated(this%kh_floor_x)) deallocate (this%kh_floor_x)
+      if (allocated(this%kh_floor_y)) deallocate (this%kh_floor_y)
+      if (allocated(this%f_max_T)) deallocate (this%f_max_T)
       call this%vort_corner%destroy()
       this%nx_total = 0
       this%ny_total = 0
@@ -206,6 +283,12 @@ contains
       if (.not. this%is_init) return
       !$acc enter data copyin(this%ah_face_x, this%ah_face_y)
       !$acc enter data copyin(this%nu4_face_x, this%nu4_face_y)
+      if (allocated(this%kh_floor_x)) then
+         !$acc enter data copyin(this%kh_floor_x, this%kh_floor_y)
+      end if
+      if (allocated(this%f_max_T)) then
+         !$acc enter data copyin(this%f_max_T)
+      end if
       call scratch_3d_buffer_enter_data_impl(this%vort_corner)
    end subroutine ocean_lateral_mix_enter_data_impl
 
@@ -221,6 +304,12 @@ contains
       type(ocean_lateral_mix_t), intent(inout) :: this
       if (.not. this%is_init) return
       call scratch_3d_buffer_exit_data_impl(this%vort_corner)
+      if (allocated(this%f_max_T)) then
+         !$acc exit data delete(this%f_max_T)
+      end if
+      if (allocated(this%kh_floor_x)) then
+         !$acc exit data delete(this%kh_floor_y, this%kh_floor_x)
+      end if
       !$acc exit data delete(this%nu4_face_y, this%nu4_face_x)
       !$acc exit data delete(this%ah_face_y, this%ah_face_x)
    end subroutine ocean_lateral_mix_exit_data_impl
@@ -536,7 +625,8 @@ contains
 
       integer :: i, j, k, nx, ny, nz
       real(wp) :: smag_bi_const_local, smag_bi_scale, nu4_bg_local, nu4_max_local
-      real(wp) :: dx2, dy2, grid_sp_h2
+      real(wp) :: dx2, dy2, grid_sp_h2, nu4_bg_c, ah_vel_scale_local, cor_coef
+      logical :: use_ah_vel, use_cor
       real(wp) :: D_T_W, D_T_E, D_T_S, D_T_N, D_T_face
       real(wp) :: D_S_S, D_S_N, D_S_W, D_S_E, D_S_face
       real(wp) :: strain_mag, A_raw, ns
@@ -562,15 +652,23 @@ contains
       nu4_bg_local = this%nu4_bg
       nu4_max_local = this%nu4_max
       smag_bi_const_local = this%smag_bi_const
+      ! OM3 extras (default off ⇒ the expressions below are the unchanged
+      ! ones).  `use_cor` needs `f_max_T`, built by `build_statics`.
+      ah_vel_scale_local = this%ah_vel_scale
+      use_ah_vel = ah_vel_scale_local > 0.0_wp
+      use_cor = this%bound_coriolis_biharm .and. allocated(this%f_max_T)
+      cor_coef = 1.0_wp/(5.0_wp*this%bound_coriolis_vel*this%bound_coriolis_vel)
 
       ! ---- u-face viscosity (i-1/2, j) ----
       do concurrent(k=1:nz, j=2:ny - 1, i=2:nx) &
          local(D_T_W, D_T_E, D_S_S, D_S_N, D_T_face, D_S_face, &
-               strain_mag, A_raw, dx2, dy2, grid_sp_h2, smag_bi_scale)
+               strain_mag, A_raw, dx2, dy2, grid_sp_h2, smag_bi_scale, nu4_bg_c)
          dx2 = metrics%dx2h(i, j)
          dy2 = metrics%dy2h(i, j)
          grid_sp_h2 = (2.0_wp*dx2*dy2)/(dx2 + dy2)
          smag_bi_scale = smag_bi_const_local*(grid_sp_h2*grid_sp_h2)
+         nu4_bg_c = nu4_bg_local
+         if (use_ah_vel) nu4_bg_c = max(nu4_bg_local, ah_vel_scale_local*grid_sp_h2*sqrt(grid_sp_h2))
          D_T_W = (ms%u_face_x_layer(i, j, k) - ms%u_face_x_layer(i - 1, j, k))*metrics%idxT(i - 1, j) &
                  - (ms%v_face_y_layer(i - 1, j + 1, k) - ms%v_face_y_layer(i - 1, j, k))*metrics%idyT(i - 1, j)
          D_T_E = (ms%u_face_x_layer(i + 1, j, k) - ms%u_face_x_layer(i, j, k))*metrics%idxT(i, j) &
@@ -597,7 +695,12 @@ contains
          D_S_face = 0.5_wp*(D_S_S + D_S_N)
          strain_mag = sqrt(D_T_face*D_T_face + D_S_face*D_S_face)
          A_raw = smag_bi_scale*strain_mag
-         this%nu4_face_x(i, j, k) = min(nu4_max_local, max(nu4_bg_local, A_raw))
+         if (use_cor) then
+            ! Coriolis bound: + Δ⁶·f_max·|S|²/(5V²) on top of C_b·Δ⁴·|S|.
+            A_raw = A_raw + (grid_sp_h2*grid_sp_h2*grid_sp_h2)*this%f_max_T(i, j)* &
+                    cor_coef*strain_mag*strain_mag
+         end if
+         this%nu4_face_x(i, j, k) = min(nu4_max_local, max(nu4_bg_c, A_raw))
       end do
       do concurrent(k=1:nz, i=2:nx)
          this%nu4_face_x(i, 1, k) = this%nu4_face_x(i, 2, k)
@@ -611,11 +714,13 @@ contains
       ! ---- v-face viscosity (i, j-1/2) ----
       do concurrent(k=1:nz, j=2:ny, i=2:nx - 1) &
          local(D_T_S, D_T_N, D_S_W, D_S_E, D_T_face, D_S_face, &
-               strain_mag, A_raw, dx2, dy2, grid_sp_h2, smag_bi_scale)
+               strain_mag, A_raw, dx2, dy2, grid_sp_h2, smag_bi_scale, nu4_bg_c)
          dx2 = metrics%dx2h(i, j)
          dy2 = metrics%dy2h(i, j)
          grid_sp_h2 = (2.0_wp*dx2*dy2)/(dx2 + dy2)
          smag_bi_scale = smag_bi_const_local*(grid_sp_h2*grid_sp_h2)
+         nu4_bg_c = nu4_bg_local
+         if (use_ah_vel) nu4_bg_c = max(nu4_bg_local, ah_vel_scale_local*grid_sp_h2*sqrt(grid_sp_h2))
          D_T_S = (ms%u_face_x_layer(i + 1, j - 1, k) - ms%u_face_x_layer(i, j - 1, k))*metrics%idxT(i, j - 1) &
                  - (ms%v_face_y_layer(i, j, k) - ms%v_face_y_layer(i, j - 1, k))*metrics%idyT(i, j - 1)
          D_T_N = (ms%u_face_x_layer(i + 1, j, k) - ms%u_face_x_layer(i, j, k))*metrics%idxT(i, j) &
@@ -641,7 +746,12 @@ contains
          D_S_face = 0.5_wp*(D_S_W + D_S_E)
          strain_mag = sqrt(D_T_face*D_T_face + D_S_face*D_S_face)
          A_raw = smag_bi_scale*strain_mag
-         this%nu4_face_y(i, j, k) = min(nu4_max_local, max(nu4_bg_local, A_raw))
+         if (use_cor) then
+            ! Coriolis bound: + Δ⁶·f_max·|S|²/(5V²) on top of C_b·Δ⁴·|S|.
+            A_raw = A_raw + (grid_sp_h2*grid_sp_h2*grid_sp_h2)*this%f_max_T(i, j)* &
+                    cor_coef*strain_mag*strain_mag
+         end if
+         this%nu4_face_y(i, j, k) = min(nu4_max_local, max(nu4_bg_c, A_raw))
       end do
       do concurrent(k=1:nz, j=2:ny)
          this%nu4_face_y(1, j, k) = this%nu4_face_y(2, j, k)
@@ -791,6 +901,45 @@ contains
       end do
    end subroutine ocean_lateral_mix_compute_leith_biharm
 
+   pure subroutine ocean_lateral_mix_compute_lat_floor(this, seed_bg)
+      !! Public only for the unit-test suite; ignore in production code.
+      !! Latitude Laplacian floor (`kh_sin_lat·|sin φ|^kh_pwr_of_sine`):
+      !! `max`-combine the static `kh_floor_x/y` into `ah_face_*`, so it
+      !! floors — never reduces — the active closure.  `seed_bg = .true.`
+      !! first takes `max(ah_bg, floor)` (no closure and no live
+      !! velocity-scale floor filled the field this step).  No-op when
+      !! `kh_sin_lat <= 0` or the floor arrays were not built.
+      type(ocean_lateral_mix_t), intent(inout) :: this
+      logical, intent(in) :: seed_bg
+
+      integer :: i, j, k, nx, ny, nz
+      real(wp) :: ah_bg_local
+
+      if (.not. this%is_init) return
+      if (this%kh_sin_lat <= 0.0_wp) return
+      if (.not. allocated(this%kh_floor_x)) return
+
+      nx = this%nx_total
+      ny = this%ny_total
+      nz = this%nz_ml
+      ah_bg_local = this%ah_bg
+
+      do concurrent(k=1:nz, j=1:ny, i=1:nx + 1)
+         if (seed_bg) then
+            this%ah_face_x(i, j, k) = max(ah_bg_local, this%kh_floor_x(i, j))
+         else
+            this%ah_face_x(i, j, k) = max(this%ah_face_x(i, j, k), this%kh_floor_x(i, j))
+         end if
+      end do
+      do concurrent(k=1:nz, j=1:ny + 1, i=1:nx)
+         if (seed_bg) then
+            this%ah_face_y(i, j, k) = max(ah_bg_local, this%kh_floor_y(i, j))
+         else
+            this%ah_face_y(i, j, k) = max(this%ah_face_y(i, j, k), this%kh_floor_y(i, j))
+         end if
+      end do
+   end subroutine ocean_lateral_mix_compute_lat_floor
+
    pure subroutine ocean_lateral_mix_compute_vel_scale(grid, metrics, this, ms, seed_bg)
       !! Public only for the unit-test suite; ignore in production code.
       !! Live velocity-scale viscosity (MOM6 `KH_VEL_SCALE`, Kh = U·Δ):
@@ -913,6 +1062,12 @@ contains
       if (this%kh_vel_scale_live > 0.0_wp) then
          call ocean_lateral_mix_compute_vel_scale(grid, metrics, this, ms, &
                                                   seed_bg=.not. ran_closure)
+      end if
+      ! Latitude floor — last of the harmonic floors; seeds only when
+      ! neither a closure nor the live velocity floor filled the field.
+      if (this%kh_sin_lat > 0.0_wp) then
+         call ocean_lateral_mix_compute_lat_floor( &
+            this, seed_bg=.not. (ran_closure .or. this%kh_vel_scale_live > 0.0_wp))
       end if
       if (this%smag_ah_active) then
          call ocean_lateral_mix_compute_smag_ah(grid, metrics, this, ms)
@@ -1043,6 +1198,9 @@ contains
                + arr_bytes(this%ah_face_y) &
                + arr_bytes(this%nu4_face_x) &
                + arr_bytes(this%nu4_face_y) &
+               + arr_bytes(this%kh_floor_x) &
+               + arr_bytes(this%kh_floor_y) &
+               + arr_bytes(this%f_max_T) &
                + this%vort_corner%bytes()
    end function ocean_lateral_mix_bytes
 

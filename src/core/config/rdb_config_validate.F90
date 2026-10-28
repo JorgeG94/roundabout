@@ -903,6 +903,40 @@ contains
                               "Leith-biharmonic fill; enable only one")
             has_error = .true.
          end if
+         ! OM3 viscosity floors + Coriolis bound (all default off).  The
+         ! biharmonic knobs live inside the Smagorinsky biharmonic kernel, so
+         ! without `smag_ah` they would be silently ignored.  The latitude
+         ! floor needs real latitudes: `geolat` is identically zero on a
+         ! cartesian grid (same stance as `bkgnd_henyey`).
+         if (cfg%ocean%hvisc%bound_coriolis_biharm .and. .not. cfg%ocean%hvisc%smag_ah) then
+            call logger%error("&ocean_hvisc_nml bound_coriolis_biharm=.true. requires "// &
+                              "smag_ah=.true. — the Coriolis bound is a term of the "// &
+                              "Smagorinsky biharmonic and would be silently ignored")
+            has_error = .true.
+         end if
+         if (cfg%ocean%hvisc%ah_vel_scale > 0.0_wp .and. .not. cfg%ocean%hvisc%smag_ah) then
+            call logger%error("&ocean_hvisc_nml ah_vel_scale > 0 requires smag_ah=.true. — "// &
+                              "it is the background floor of the Smagorinsky biharmonic "// &
+                              "and would be silently ignored")
+            has_error = .true.
+         end if
+         if (cfg%ocean%hvisc%ah_vel_scale < 0.0_wp .or. cfg%ocean%hvisc%kh_sin_lat < 0.0_wp) then
+            call logger%error("&ocean_hvisc_nml ah_vel_scale and kh_sin_lat must be >= 0")
+            has_error = .true.
+         end if
+         if (cfg%ocean%hvisc%bound_coriolis_biharm .and. &
+             .not. (cfg%ocean%hvisc%bound_coriolis_vel > 0.0_wp)) then
+            call logger%error("&ocean_hvisc_nml bound_coriolis_vel must be > 0 "// &
+                              "when bound_coriolis_biharm=.true.")
+            has_error = .true.
+         end if
+         if (cfg%ocean%hvisc%kh_sin_lat > 0.0_wp .and. &
+             trim(cfg%ocean%grid%grid_config) == "cartesian") then
+            call logger%error("&ocean_hvisc_nml kh_sin_lat > 0 requires a non-cartesian "// &
+                              "grid_config — geolat is identically zero on cartesian, so "// &
+                              "the |sin(lat)| floor would vanish everywhere")
+            has_error = .true.
+         end if
          ! Only anisotropy mode 0 (grid-relative `aniso_dir`) has an
          ! implemented direction tensor; a requested-but-unimplemented mode
          ! must abort, not silently fall back to the grid-i default.

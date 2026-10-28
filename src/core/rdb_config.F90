@@ -1444,6 +1444,32 @@ module rdb_config
          !! a state-dependent `A_vel = kh_vel_scale_live·dx·|u|` is
          !! max-combined into the per-face harmonic viscosity every step.
          !! Default 0 ⇒ off, bit-identical.
+      real(wp) :: kh_sin_lat = 0.0_wp
+         !! Latitude-dependent Laplacian viscosity floor amplitude (m²/s):
+         !! the background Laplacian becomes
+         !! `max(existing, kh_sin_lat·|sin φ|^kh_pwr_of_sine)` (MOM6
+         !! `KH_SIN_LAT`).  φ is the face-centre latitude (mean of the two
+         !! `geolatBu` corners of the face).  It is a FLOOR under the dynamic
+         !! closures (max-combined into the per-face `ah_face_*`, like
+         !! `kh_vel_scale_live`).  Default 0 ⇒ off, bit-identical.  Fails
+         !! loud on a `cartesian` grid (`geolat ≡ 0`).
+      real(wp) :: kh_pwr_of_sine = 4.0_wp
+         !! Exponent of `|sin φ|` in the `kh_sin_lat` floor (MOM6
+         !! `KH_PWR_OF_SINE`).  Inert while `kh_sin_lat = 0`.
+      real(wp) :: ah_vel_scale = 0.0_wp
+         !! Biharmonic velocity-scale floor (m/s): the background that the
+         !! Smagorinsky biharmonic is `max`ed against becomes
+         !! `max(nu_4_bg, ah_vel_scale·(Δ²)^(3/2))`, `Δ²` the harmonic mean
+         !! of the squared T-cell spacings (MOM6 `AH_VEL_SCALE`).  Requires
+         !! `smag_ah`.  Default 0 ⇒ off, bit-identical.
+      logical :: bound_coriolis_biharm = .false.
+         !! Coriolis bound on the Smagorinsky biharmonic (MOM6
+         !! `BOUND_CORIOLIS_BIHARM`): `A = |S|·(C_b·Δ⁴ + Δ⁶·f_max·|S|/(5V²))`
+         !! with `V = bound_coriolis_vel` and `f_max` the largest `|f|` of the
+         !! T cell's four corners.  Requires `smag_ah`.  Default off.
+      real(wp) :: bound_coriolis_vel = 6.0_wp
+         !! Velocity scale `V` (m/s, > 0) of the `bound_coriolis_biharm`
+         !! term (MOM6 `BOUND_CORIOLIS_VEL`, whose default is `MAXVEL`).
       real(wp) :: kh_aniso = 0.0_wp
          !! Anisotropic Laplacian viscosity magnitude (m²/s; Smith &
          !! McWilliams 2003).  When positive AND `stress_tensor = .true.`,

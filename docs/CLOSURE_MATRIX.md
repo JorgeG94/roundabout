@@ -317,6 +317,9 @@ budget (MEKE).
 | Smagorinsky biharmonic | opt-in | `smag_ah` (`.false.`) | Flow-aware biharmonic. | `test_ocean_smag_ah`, `test_ocean_hvisc_biharm_zfixed` |
 | Leith biharmonic | opt-in | `lateral_closure = "leith_biharm"` (`c_leith_bi` `0.0`) | MOM6 `LEITH_AH`. | `test_ocean_hvisc_leith_biharm` |
 | Resolution-scaled viscosity | opt-in | `resoln_scaled_visc` (`.false.`; needs `&ocean_varmix_nml enable`) | Hallberg 2013 scaling. | `test_ocean_hvisc_resoln` |
+| Latitude ν_h floor | opt-in | `kh_sin_lat` (`0.0`), `kh_pwr_of_sine` (`4.0`) | `max(floor, kh_sin_lat·\|sin φ\|^p)` at face-centre latitude, max-combined into `ah_face_*` under the closures (MOM6 `KH_SIN_LAT`). Refused on a cartesian grid. | `test_ocean_hvisc_om3_floors` |
+| Biharmonic velocity-scale floor | opt-in | `ah_vel_scale` (`0.0`; needs `smag_ah`) | Background `max(nu_4_bg, U·(Δ²)^(3/2))`, `Δ²` the harmonic mean of the T-cell dx², dy² (MOM6 `AH_VEL_SCALE`). | `test_ocean_hvisc_om3_floors` |
+| Coriolis bound on Smagorinsky biharmonic | opt-in | `bound_coriolis_biharm` (`.false.`; needs `smag_ah`), `bound_coriolis_vel` (`6.0`) | `A = \|S\|(C_b·Δ⁴ + Δ⁶·f_max·\|S\|/(5V²))`, `f_max` the largest `\|f\|` of the T cell's four corners (MOM6 `BOUND_CORIOLIS_BIHARM`; Griffies & Hallberg 2000). | `test_ocean_hvisc_om3_floors` |
 | Live velocity-scale ν_h | opt-in | `kh_vel_scale_live` (`0.0`) | `Kh = U·dx·\|u\|`. | `test_ocean_hvisc_aniso` |
 | Anisotropic ν_h | opt-in | `kh_aniso` (`0.0`) with `aniso_dir`; stress-tensor path only | Smith & McWilliams 2003. | `test_ocean_hvisc_aniso` |
 | Stress-tensor Laplacian | opt-in | `stress_tensor` (`.false.`) | Thickness-weighted stress-divergence form, free-slip walls. Refused with `zfixed_closed_faces`. | — |
@@ -763,6 +766,12 @@ non-conservative — increment mirrored into the surface heat/salt budget)
 Dated reconciliation log, kept verbatim. Read it for the history of why a row
 looks the way it does. It is not needed to use the tables.
 
+- **2026-10-27** — OM3 lateral-viscosity floors: `&ocean_hvisc_nml`
+  `kh_sin_lat` / `kh_pwr_of_sine` (latitude Laplacian floor), `ah_vel_scale`
+  (biharmonic velocity-scale floor) and `bound_coriolis_biharm` /
+  `bound_coriolis_vel` (Coriolis bound on Smagorinsky_AH). All default off,
+  bit-identical; the biharmonic knobs require `smag_ah`, `kh_sin_lat`
+  requires a non-cartesian grid.
 - **2026-10-27** — GM PR-4: `&ocean_gm_nml use_fgnv`, `fgnv_filter_scale`,
   `fgnv_c_min`, `fgnv_strat_floor` (MOM6 `KHTH_USE_FGNV_STREAMFUNCTION`,
   `FGNV_FILTER_SCALE`, `FGNV_C_MIN`, `FGNV_STRAT_FLOOR`). Ferrari et al.

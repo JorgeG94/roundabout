@@ -4522,6 +4522,46 @@ class OceanHvisc(Group):
         default=0.0,
     )
 
+    kh_sin_lat = Real(
+        'kh_sin_lat',
+        doc='Latitude Laplacian viscosity floor kh_sin_lat*|sin(lat)|^kh_pwr_of_sine (0=off; MOM6 KH_SIN_LAT)',
+        units='m^2/s',
+        required=False,
+        default=0.0,
+    )
+
+    kh_pwr_of_sine = Real(
+        'kh_pwr_of_sine',
+        doc='Exponent of |sin(lat)| in the kh_sin_lat floor (MOM6 KH_PWR_OF_SINE)',
+        units='',
+        required=False,
+        default=4.0,
+    )
+
+    ah_vel_scale = Real(
+        'ah_vel_scale',
+        doc='Biharmonic velocity-scale floor Ah>=U*Delta^3 under smag_ah (0=off; MOM6 AH_VEL_SCALE)',
+        units='m/s',
+        required=False,
+        default=0.0,
+    )
+
+    bound_coriolis_biharm = Bool(
+        'bound_coriolis_biharm',
+        doc='Coriolis bound on the Smagorinsky biharmonic (needs smag_ah; MOM6 BOUND_CORIOLIS_BIHARM)',
+        units='',
+        required=False,
+        default=False,
+    )
+
+    bound_coriolis_vel = Real(
+        'bound_coriolis_vel',
+        doc='Velocity scale of the bound_coriolis_biharm term (MOM6 BOUND_CORIOLIS_VEL)',
+        units='m/s',
+        required=False,
+        default=6.0,
+    )
+
     kh_aniso = Real(
         'kh_aniso',
         doc='Anisotropic Laplacian viscosity magnitude (MOM6 KH_ANISO; stress_tensor path only)',
@@ -6754,4 +6794,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 62
-N_KNOBS = 741
+N_KNOBS = 746

@@ -39,6 +39,18 @@ contains
       ocean_state%lateral_mix%kh_vel_scale_live = cfg%ocean%hvisc%kh_vel_scale_live
       ocean_state%lateral_mix%smag_ah_active = cfg%ocean%hvisc%smag_ah
       ocean_state%lateral_mix%smag_bi_const = cfg%ocean%hvisc%smag_bi_const
+      ocean_state%lateral_mix%kh_sin_lat = cfg%ocean%hvisc%kh_sin_lat
+      ocean_state%lateral_mix%kh_pwr_of_sine = cfg%ocean%hvisc%kh_pwr_of_sine
+      ocean_state%lateral_mix%ah_vel_scale = cfg%ocean%hvisc%ah_vel_scale
+      ocean_state%lateral_mix%bound_coriolis_biharm = cfg%ocean%hvisc%bound_coriolis_biharm
+      ocean_state%lateral_mix%bound_coriolis_vel = cfg%ocean%hvisc%bound_coriolis_vel
+      ! Static per-face latitude floor + per-T f_max (no-ops while both knobs
+      ! are off); built before the slot's enter_data.
+      if (ocean_state%lateral_mix%is_init .and. &
+          (cfg%ocean%hvisc%kh_sin_lat > 0.0_wp .or. cfg%ocean%hvisc%bound_coriolis_biharm)) then
+         call ocean_state%lateral_mix%build_statics(ocean_state%metrics%geolatBu, &
+                                                    ocean_state%coriolis_adv%f_corner)
+      end if
       ocean_state%lateral_mix%c_leith_bi = cfg%ocean%hvisc%c_leith_bi
       ocean_state%lateral_mix%nu4_bg = cfg%ocean%hvisc%nu_4_bg
       ocean_state%lateral_mix%nu4_max = cfg%ocean%hvisc%nu_4_max

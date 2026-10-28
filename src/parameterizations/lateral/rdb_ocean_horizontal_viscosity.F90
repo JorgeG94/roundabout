@@ -449,7 +449,8 @@ contains
          if (lateral_mix%is_init .and. &
              (lateral_mix%closure == LMIX_LEITH .or. &
               lateral_mix%closure == LMIX_SMAGORINSKY .or. &
-              lateral_mix%kh_vel_scale_live > 0.0_wp)) then
+              lateral_mix%kh_vel_scale_live > 0.0_wp .or. &
+              lateral_mix%kh_sin_lat > 0.0_wp)) then
             use_face_visc = .true.
          end if
       end if

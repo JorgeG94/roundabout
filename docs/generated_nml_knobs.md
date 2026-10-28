@@ -839,6 +839,11 @@ Lateral-viscosity closure + coefficients.
 | `bound_kh` | `.false.` |  | Per-face harmonic viscosity CFL clamp on the velocity-Laplacian paths (MOM6 BOUND_KH) |
 | `resoln_scaled_visc` | `.false.` |  | Scale dynamic LAPLACIAN viscosity (Leith/Smag_KH A_h, not biharmonic) by VarMix Res_fn (MOM6 RESOLN_SCALED_KH) |
 | `kh_vel_scale_live` | `0.0000000000E+00` | m/s | Live velocity-scale viscosity Kh=U*dx*|u| (0=off; distinct from kh_vel_scale floor) |
+| `kh_sin_lat` | `0.0000000000E+00` | m^2/s | Latitude Laplacian viscosity floor kh_sin_lat*|sin(lat)|^kh_pwr_of_sine (0=off; MOM6 KH_SIN_LAT) |
+| `kh_pwr_of_sine` | `0.4000000000E+01` |  | Exponent of |sin(lat)| in the kh_sin_lat floor (MOM6 KH_PWR_OF_SINE) |
+| `ah_vel_scale` | `0.0000000000E+00` | m/s | Biharmonic velocity-scale floor Ah>=U*Delta^3 under smag_ah (0=off; MOM6 AH_VEL_SCALE) |
+| `bound_coriolis_biharm` | `.false.` |  | Coriolis bound on the Smagorinsky biharmonic (needs smag_ah; MOM6 BOUND_CORIOLIS_BIHARM) |
+| `bound_coriolis_vel` | `0.6000000000E+01` | m/s | Velocity scale of the bound_coriolis_biharm term (MOM6 BOUND_CORIOLIS_VEL) |
 | `kh_aniso` | `0.0000000000E+00` | m^2/s | Anisotropic Laplacian viscosity magnitude (MOM6 KH_ANISO; stress_tensor path only) |
 | `aniso_mode` | `0` |  | Anisotropy direction mode (0=grid-relative aniso_dir; MOM6 ANISOTROPIC_MODE) |
 | `aniso_dir` | `0.1000000000E+01, 0.0000000000E+00` |  | Anisotropy direction (n1,n2) in grid i,j components (MOM6 ANISO_GRID_DIR) |

@@ -639,6 +639,23 @@ contains
       call g%add(nml_real("kh_vel_scale_live", pr, &
                           "Live velocity-scale viscosity Kh=U*dx*|u| (0=off; distinct from kh_vel_scale floor)", &
                           units="m/s"))
+      pr => cfg%ocean%hvisc%kh_sin_lat
+      call g%add(nml_real("kh_sin_lat", pr, &
+                          "Latitude Laplacian viscosity floor kh_sin_lat*|sin(lat)|^kh_pwr_of_sine (0=off; MOM6 KH_SIN_LAT)", &
+                          units="m^2/s"))
+      pr => cfg%ocean%hvisc%kh_pwr_of_sine
+      call g%add(nml_real("kh_pwr_of_sine", pr, "Exponent of |sin(lat)| in the kh_sin_lat floor (MOM6 KH_PWR_OF_SINE)"))
+      pr => cfg%ocean%hvisc%ah_vel_scale
+      call g%add(nml_real("ah_vel_scale", pr, &
+                          "Biharmonic velocity-scale floor Ah>=U*Delta^3 under smag_ah (0=off; MOM6 AH_VEL_SCALE)", &
+                          units="m/s"))
+      pl => cfg%ocean%hvisc%bound_coriolis_biharm
+      call g%add(nml_logical("bound_coriolis_biharm", pl, &
+                             "Coriolis bound on the Smagorinsky biharmonic (needs smag_ah; MOM6 BOUND_CORIOLIS_BIHARM)"))
+      pr => cfg%ocean%hvisc%bound_coriolis_vel
+      call g%add(nml_real("bound_coriolis_vel", pr, &
+                          "Velocity scale of the bound_coriolis_biharm term (MOM6 BOUND_CORIOLIS_VEL)", &
+                          units="m/s"))
       pr => cfg%ocean%hvisc%kh_aniso
       call g%add(nml_real("kh_aniso", pr, &
                           "Anisotropic Laplacian viscosity magnitude (MOM6 KH_ANISO; stress_tensor path only)", &
