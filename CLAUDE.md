@@ -172,9 +172,15 @@ they differ in what they cost you.
   stronger: max|v| ×2074 over 60 days vs ×1480), and costs ~7 % more wall time
   per step than `ssp_rk2` (`coriolis_coast`, 20 simulated days: 70.3 s vs
   65.9 s on one V100) — not a different order. `validate_config` refuses it
-  **fail-loud** outside its v1 envelope (`eulerian_z`, wet/dry,
-  `dt_tracer_advect_ratio > 1`); six shipped namelists pin `ssp_rk2` for that
-  reason. It shipped as `"mom6_pc"`, then briefly as `"split_rk2"` — which
+  **fail-loud** outside its v1 envelope (`eulerian_z`, wet/dry). Six shipped
+  namelists still pin `ssp_rk2` from when it also refused
+  `dt_tracer_advect_ratio > 1`. It now drives the windowed tracer
+  advection (`dt_tracer_advect_ratio > 1`, single rank). At
+  `dt_therm_ratio > 1`, `&ocean_vmix_nml diabatic_first = .false.` runs the
+  OM3 interval order (pred_corr only; multi-rank safe): drain, lateral
+  tracer diffusion, then the mixing coefficients, the tracer applies and the
+  ALE remap at the interval end, with that `kv` carried through the next
+  interval. It shipped as `"mom6_pc"`, then briefly as `"split_rk2"` — which
   collided with `dynamics/split_rk2/`, the directory holding the outer-loop
   machinery of BOTH schemes. Both dead spellings now fail loud naming
   `pred_corr`. **Residual limit:** it does not eliminate the
@@ -182,8 +188,7 @@ they differ in what they cost you.
   `resting_stratified_channel` stays a scoped XFAIL on the *settle* gate.
 - **`"ssp_rk2"` — EXPERIMENTAL.** Two identical stages + SSP average. Widest
   envelope: every vcoord including `eulerian_z`, wet/dry, and
-  `dt_tracer_advect_ratio > 1`; the only scheme wired through the windowed
-  tracer-advection path. **Fully supported and fully tested** — experimental
+  `dt_tracer_advect_ratio > 1`. **Fully supported and fully tested** — experimental
   labels the ANSWER, not the code path. **What it costs, measured:** the
   two-stage average amplifies an internal gravity wave by `√(1+(ω·dt)⁴/4)` per
   step, so it *manufactures* energy from a motionless stratified state. On
