@@ -79,6 +79,7 @@ module rdb_ocean_redi
    use rdb_ocean_boundary_types, only: ocean_bc_state_t, OBC_WALL, ocean_bc_outer_face_tag
    use rdb_tracer, only: TRACER_BUDGET_HEAT, TRACER_BUDGET_SALT
    use, intrinsic :: iso_fortran_env, only: int64
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_mem_report, only: arr_bytes
    use rdb_halo, only: halo_allreduce_max
    use rdb_ocean_halo, only: ocean_halo_centre, ocean_halo_is_init, &
@@ -96,6 +97,20 @@ module rdb_ocean_redi
       !! PURE call becomes an impure getter under LFortran). Keep in sync (=64).
 #endif
 
+   integer, parameter :: REDI_N_ITT_WARN = 100
+      !! A Redi step that needs more than this many diffusive-CFL passes logs
+      !! one warning (the answer is not changed): the diffusivity is then far
+      !! beyond the explicit limit and each pass is a full tracer sweep.
+   real(wp), parameter :: REDI_CAP_CFL_DIVISOR = 8.0_wp
+      !! Converts the cell-level `max_diffusive_cfl` to the per-face cap on
+      !! `khdt/area`: a cell has four faces and `redi_max_cell_cfl` carries a
+      !! factor 2 (`CFL_i = 2 sum_f khdt_f/area`), so a face coefficient of
+      !! `(max_diffusive_cfl/8) * area` keeps the cell CFL at or below it.
+   real(wp), parameter :: REDI_ROUNDOFF_EPS_FACTOR = 4.0_wp
+      !! `redi_iteration_count` subtracts this many machine epsilons from the
+      !! CFL before `ceiling`, so a CFL that is an exact integer up to
+      !! round-off (a few ulp from `khdt/area` sums) does not buy an extra pass.
+
    public :: redi_interface_scalar
    public :: redi_interpolate_position
    public :: redi_neutral_positions_continuous
@@ -107,6 +122,8 @@ module rdb_ocean_redi
    public :: redi_max_cell_cfl
    public :: redi_iteration_count
    public :: redi_limit_coef
+   public :: redi_cfl_is_usable
+   public :: REDI_N_ITT_WARN
 
    ! =====================================================================
    ! R2 — neutral-diffusion slot + two-phase GPU flux kernel
@@ -142,6 +159,8 @@ module rdb_ocean_redi
          !! Diagnostic: the number of Phase-B passes of the last apply.
       logical :: n_itt_logged = .false.
          !! The first `n_itt > 1` is logged once at info level.
+      logical :: n_itt_warned = .false.
+         !! The first `n_itt > REDI_N_ITT_WARN` is warned once.
 
       ! ---- Cached extents ----
       integer :: nx_total = 0
@@ -1194,7 +1213,8 @@ contains
       integer :: nghost, nxp, nyp
       logical :: use_ext, wall_w, wall_e, wall_s, wall_n, use_cap
       real(wp) :: cfl_cap, cfl_loc, cfl_max
-      character(len=160) :: msg
+      character(len=:), allocatable :: msg
+      character(len=16) :: sn
 
       if (.not. this%is_init) return
       if (.not. this%enable) return
@@ -1245,7 +1265,7 @@ contains
       ! single-pass kernel with unchanged arithmetic (bit-identical).
       use_cap = this%max_diffusive_cfl > 0.0_wp
       cfl_cap = 0.0_wp
-      if (use_cap) cfl_cap = this%max_diffusive_cfl/8.0_wp
+      if (use_cap) cfl_cap = this%max_diffusive_cfl/REDI_CAP_CFL_DIVISOR
       n_itt = 1
       if (this%check_diffusive_cfl) then
          call redi_max_cell_cfl(nx, ny, nghost, nxp, nyp, dt, use_cap, cfl_cap, &
@@ -1253,16 +1273,32 @@ contains
                                 metrics%dy_cu, metrics%dx_cv, &
                                 metrics%idxCu, metrics%idyCv, metrics%areaT, cfl_loc)
          call halo_allreduce_max(cfl_loc, cfl_max)
+         ! A non-finite cell CFL (NaN diffusivity or metric) would feed
+         ! `ceiling` below, which is undefined; fail loud rather than pick
+         ! a pass count from garbage.
+         if (.not. redi_cfl_is_usable(cfl_max)) then
+            call logger%error("Redi neutral diffusion: the diffusive CFL is not finite "// &
+                              "(NaN or Inf in khtr, the metrics or the cap); refusing to derive n_itt")
+            error stop "redi_apply_flux: non-finite diffusive CFL"
+         end if
          n_itt = redi_iteration_count(cfl_max)
       else if (use_cap) then
          n_itt = redi_iteration_count(this%max_diffusive_cfl)
       end if
       this%n_itt = n_itt
+      if (n_itt > 1) write (sn, "(i0)") n_itt
       if (n_itt > 1 .and. .not. this%n_itt_logged) then
          this%n_itt_logged = .true.
-         write (msg, "(a,i0,a)") "Redi neutral diffusion: diffusive-CFL control "// &
-            "subcycles the tracer flux n_itt = ", n_itt, " passes"
-         call logger%info(trim(msg))
+         msg = "Redi neutral diffusion: diffusive-CFL control subcycles the tracer "// &
+               "flux n_itt = "//trim(sn)//" passes"
+         call logger%info(msg)
+      end if
+      if (n_itt > REDI_N_ITT_WARN .and. .not. this%n_itt_warned) then
+         this%n_itt_warned = .true.
+         msg = "Redi neutral diffusion: n_itt = "//trim(sn)//" passes exceeds the "// &
+               "advisory limit; khtr is far above the explicit diffusion limit at "// &
+               "this dt (each pass is a full tracer sweep)"
+         call logger%warning(msg)
       end if
 
       do pass = 1, n_itt
@@ -1312,8 +1348,19 @@ contains
       !! not buy an extra pass.
       real(wp), intent(in) :: cfl
       integer :: n
-      n = max(1, ceiling(cfl - 4.0_wp*epsilon(cfl)))
+      n = max(1, ceiling(cfl - REDI_ROUNDOFF_EPS_FACTOR*epsilon(cfl)))
    end function redi_iteration_count
+
+   pure function redi_cfl_is_usable(cfl) result(ok)
+      !! `.true.` when `cfl` can feed `redi_iteration_count`: finite and below
+      !! `huge`.  `redi_max_cell_cfl` reports a non-finite cell CFL as `huge`
+      !! (a max reduction is NaN-blind), so both a NaN/Inf and a poisoned
+      !! cell fail this test.
+      real(wp), intent(in) :: cfl
+      logical :: ok
+      ok = ieee_is_finite(cfl)
+      if (ok) ok = cfl < huge(cfl)
+   end function redi_cfl_is_usable
 
    pure function redi_limit_coef(c, use_cap, cap, aL, aR, n_itt) result(r)
       !! The face coefficient Phase B multiplies by `dTr*hEff`: the full-step
@@ -1368,6 +1415,9 @@ contains
             cn = redi_limit_coef(dt*khtr_v(i, j + 1)*dx_cv(i, j + 1)*idyCv(i, j + 1), use_cap, cap, &
                                  areaT(i, j), areaT(i, min(j + 1, ny)), 1)
             cfl = 2.0_wp*(cw + ce + cs + cn)/areaT(i, j)
+            ! A max reduction is NaN-blind: report a non-finite cell as huge
+            ! so the caller's `redi_cfl_is_usable` catches it.
+            if (.not. ieee_is_finite(cfl)) cfl = huge(cfl)
             cmax = max(cmax, cfl)
          end do
       end do

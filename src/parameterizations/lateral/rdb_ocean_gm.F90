@@ -1375,6 +1375,13 @@ contains
       do k = nz, 1, -1
          if (uhf(k) /= 0.0_wp) then
             ! Layer term at the layer-mid pressure and face-mean T/S.
+            ! Same hydrostatic pressure as the slope builder's
+            ! `pressure_above_x/y` (`rho0 g` times the water above, face
+            ! mean), here at the layer MIDPOINT and written from the
+            ! interface heights `el/er` this function already holds.  Kept
+            ! inline, not shared: the slope builder sums `h` from the
+            ! surface, and routing it through one helper would re-associate
+            ! its default-path arithmetic.  Keep the two in step.
             p = 0.5_wp*GRAVITY*rho0*((el(nz + 1) - 0.5_wp*(el(k) + el(k + 1))) + &
                                      (er(nz + 1) - 0.5_wp*(er(k) + er(k + 1))))
             tm = 0.5_wp*(t_fill(il, jl, k) + t_fill(ir, jr, k))

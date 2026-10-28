@@ -161,7 +161,10 @@ module rdb_ocean_tidal_mixing
          !! `energy_limiter = "reinject"`: cap each interior layer's TKE at
          !! `rho0*h*(N^2+Omega^2)*kd_max` and offer the excess to the layer
          !! above (energy-conserving).  Default off = clip Kd and DISCARD
-         !! the clipped power.  OM3 parity value: `.true.` (`kd_max = 0.1`).
+         !! the clipped power.  Only layers `kbed < k < nz` are limited and
+         !! re-offered, and the surface layer `k = nz` takes no deposit, so
+         !! the excess handed up from `k = nz - 1` is still DISCARDED.  OM3
+         !! parity value: `.true.` (`kd_max = 0.1`).
       logical :: bed_lump = .false.
          !! `bed_share = "lump"`: the bed layer's share of the dissipated
          !! power stays in the upward flux and is deposited in the first
@@ -390,7 +393,10 @@ contains
       type(ocean_tidal_mixing_t), intent(inout) :: this
       integer, intent(in) :: nx, ny
       real(wp), intent(in) :: depth(nx, ny)
-         !! Resting column depth D (m), positive.
+         !! Column depth D (m), positive.  Setup passes the layer-thickness
+         !! sum `sum(h_layer)`, which equals the resting depth on a cold
+         !! start but INCLUDES the free-surface displacement eta on a warm
+         !! restart (so `min_zbot` and the `frac_rough*D` cap see D + eta).
       real(wp), intent(in) :: wet(nx, ny)
          !! Wet mask (1 wet, 0 land).
       integer :: i, j

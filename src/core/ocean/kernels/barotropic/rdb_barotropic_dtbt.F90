@@ -19,8 +19,12 @@ module rdb_barotropic_dtbt
    !! Mapping onto the BT arrays: `D_f dy_f` is the BT continuity face AREA the
    !! substep itself uses -- the face thickness `0.5 (D_a + D_b)` of the two
    !! adjacent column depths `D = sum_k h_layer` times `dy_cu_bt` / `dx_cv_bt`
-   !! (so porous narrowing is included) -- divided by the centre-to-centre
-   !! distance `1/idxCu` / `1/idyCv`.  A face is open only when BOTH adjacent
+   !! -- divided by the centre-to-centre distance `1/idxCu` / `1/idyCv`.
+   !! Porous narrowing enters only through the `_bt` widths the caller passes:
+   !! the PER-STEP re-derivation (`dtbt_reset_period`) sees the narrowing the
+   !! porous refresh applied, but the SETUP-time value is formed before that
+   !! refresh, from the un-narrowed widths -- the smaller, conservative
+   !! `dt_max`.  A face is open only when BOTH adjacent
    !! cells are wet.  `g` is the substep gravity `bt_work%g_bt` (full gravity
    !! unless a reduced-gravity / SAL correction was configured).
    !!
@@ -142,6 +146,10 @@ contains
       if (on_device) then
          do concurrent(j=j0:j1, i=i0:i1) local(k, v, dc, de, dw, dn, ds, cE, cW, cN, cS) &
             reduce(max:inv2_max)
+            ! Cell body inlined on purpose: calling the `!$acc routine seq`
+            ! helper `bt_dtbt_cell_inv2` from inside this device reduction
+            ! gave a wrong (too large) `dt_max` on nvfortran -stdpar=gpu.
+            ! The host branch below still uses the helper.
             v = 0.0_wp
             if (wet(i, j) > 0.5_wp) then
                dc = 0.0_wp

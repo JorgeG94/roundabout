@@ -24,7 +24,9 @@ module test_ocean_redi
    use rdb_ocean_redi, only: redi_interface_scalar, redi_interpolate_position, &
                              redi_neutral_positions_continuous, &
                              ocean_redi_t, redi_calc_coeffs, redi_apply_flux, &
-                             redi_max_cell_cfl, redi_limit_coef
+                             redi_max_cell_cfl, redi_limit_coef, redi_cfl_is_usable, &
+                             redi_iteration_count, REDI_N_ITT_WARN
+   use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan, ieee_positive_inf
    use rdb_decomp, only: decomp_t, decomp_init
    use rdb_ocean_halo, only: ocean_halo_init, ocean_halo_destroy, ocean_halo_centre
    use rdb_comm_env, only: comm_env_init, comm_env_setup_roles
@@ -61,6 +63,7 @@ contains
                   new_unittest("redi_varmix_khtr_consumed", test_varmix_khtr), &
                   new_unittest("redi_wall_no_leak", test_wall_no_leak), &
                   new_unittest("redi_cfl_iteration_count", test_cfl_iteration_count), &
+                  new_unittest("redi_cfl_nonfinite_refused", test_cfl_nonfinite_refused), &
                   new_unittest("redi_cfl_local_limit", test_cfl_local_limit), &
                   new_unittest("redi_cfl_subcycle_equivalence", test_cfl_subcycle_equiv), &
                   new_unittest("redi_cfl_subcycle_conserves", test_cfl_subcycle_conserves), &
@@ -835,6 +838,34 @@ contains
       call rd%destroy()
       call ms%destroy()
    end subroutine test_cfl_iteration_count
+
+   ! ------------------------------------------------------------------
+   ! The pass count is derived from a cross-rank CFL max.  A NaN / Inf (or
+   ! the `huge` the cell kernel reports for a non-finite cell) must be
+   ! REFUSED by `redi_cfl_is_usable` -- `ceiling` of it is undefined -- while
+   ! every finite CFL passes and keeps its pass count.  (`redi_apply_flux`
+   ! turns a refusal into `error stop`, which a unit test cannot catch; the
+   ! predicate is the testable seam.)
+   ! ------------------------------------------------------------------
+   subroutine test_cfl_nonfinite_refused(error)
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: nan, inf
+      nan = ieee_value(1.0_wp, ieee_quiet_nan)
+      inf = ieee_value(1.0_wp, ieee_positive_inf)
+      call check(error,.not. redi_cfl_is_usable(nan), "NaN CFL refused")
+      if (allocated(error)) return
+      call check(error,.not. redi_cfl_is_usable(inf), "Inf CFL refused")
+      if (allocated(error)) return
+      call check(error,.not. redi_cfl_is_usable(huge(1.0_wp)), "huge (poisoned cell) CFL refused")
+      if (allocated(error)) return
+      call check(error, redi_cfl_is_usable(0.0_wp) .and. redi_cfl_is_usable(3.4_wp) .and. &
+                 redi_cfl_is_usable(1.0e6_wp), "finite CFLs accepted")
+      if (allocated(error)) return
+      call check(error, redi_iteration_count(3.4_wp) == 4 .and. redi_iteration_count(2.0_wp) == 2 &
+                 .and. redi_iteration_count(0.3_wp) == 1, "finite CFLs keep their pass count")
+      if (allocated(error)) return
+      call check(error, REDI_N_ITT_WARN > 1, "the warn limit is a real subcycle count")
+   end subroutine test_cfl_nonfinite_refused
 
    ! ------------------------------------------------------------------
    ! Local limit: with a large uniform KhTr every capped cell has

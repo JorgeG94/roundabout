@@ -542,7 +542,10 @@ contains
 
          ! Interface pressure: accumulate from the surface (k=nz) down to
          ! the layer above this interface.  Surface-relative hydrostatic
-         ! pressure at the interface = g·ρ₀·Σ_{above} h.
+         ! pressure at the interface = g·ρ₀·Σ_{above} h.  (The GM-work
+         ! integral `gm_work_face` in rdb_ocean_gm evaluates the same
+         ! pressure at layer midpoints from interface heights; it is kept
+         ! separate so this default-path sum is not re-associated.)
          presL = pressure_above_x(nx, ny, nz, h_layer, iw, j, ka, rho0)
          presR = pressure_above_x(nx, ny, nz, h_layer, i, j, ka, rho0)
          pres_u = 0.5_wp*(presL + presR)

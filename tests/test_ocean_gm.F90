@@ -28,8 +28,10 @@
 !!  7-10. gm_ebt_*          — EBT vertical structure of KhTh
 !!                             (`use_ebt_struct`): struct = 1 is bit-identical
 !!                             to off; a 1/0 step zeroes the transport below
-!!                             it and still closes; `gm_src` equals the 2-D
-!!                             value times the h-weighted struct factor;
+!!                             it and still closes; `gm_src` is LINEAR in the
+!!                             layer structure (impulse responses sum to the
+!!                             struct-off value and reproduce a smooth
+!!                             profile), which catches a mis-indexed layer;
 !!                             tracer/mass conserved with a varying struct;
 !!                             configure refuses without GM / `use_ebt`.
 module test_ocean_gm

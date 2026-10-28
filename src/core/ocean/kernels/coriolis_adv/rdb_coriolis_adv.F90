@@ -1750,8 +1750,13 @@ contains
             fv2 = av_b*v(i, j + 1, k)
             fv3 = av_a*v(i - 1, j, k)
             fv4 = av_a*v(i, j, k)
-            pv_part = min(pv_part, max(max(fv1, fv2), max(fv3, fv4)))
-            pv_part = max(pv_part, min(min(fv1, fv2), min(fv3, fv4)))
+            ! Non-finite pv_part passes through unclamped: nvfortran -fast
+            ! lowers min/max to a NaN-blind select that would launder it
+            ! into one of the bounds (the velocity-form clamp guards alike).
+            if (ieee_is_finite(pv_part)) then
+               pv_part = min(pv_part, max(max(fv1, fv2), max(fv3, fv4)))
+               pv_part = max(pv_part, min(min(fv1, fv2), min(fv3, fv4)))
+            end if
          end if
          this%pv_flux_x%data(i, j, k) = pv_part - ke_grad_x
       end do
@@ -1819,8 +1824,13 @@ contains
             fv2 = -av_b*u(i + 1, j - 1, k)
             fv3 = -av_a*u(i, j, k)
             fv4 = -av_a*u(i, j - 1, k)
-            pv_part = min(pv_part, max(max(fv1, fv2), max(fv3, fv4)))
-            pv_part = max(pv_part, min(min(fv1, fv2), min(fv3, fv4)))
+            ! Non-finite pv_part passes through unclamped: nvfortran -fast
+            ! lowers min/max to a NaN-blind select that would launder it
+            ! into one of the bounds (the velocity-form clamp guards alike).
+            if (ieee_is_finite(pv_part)) then
+               pv_part = min(pv_part, max(max(fv1, fv2), max(fv3, fv4)))
+               pv_part = max(pv_part, min(min(fv1, fv2), min(fv3, fv4)))
+            end if
          end if
          this%pv_flux_y%data(i, j, k) = pv_part - ke_grad_y
       end do

@@ -2411,8 +2411,9 @@ module rdb_config
          !! Per-layer cap `kd_max` handling: `"clamp"` (default: clip the
          !! layer Kd, DISCARD the clipped power) | `"reinject"` (cap the
          !! layer TKE at `rho0*h*(N^2+Omega^2)*kd_max`, offer the excess to
-         !! the layer above; energy-conserving).  OM3 parity value:
-         !! `"reinject"` with `kd_max = 0.1`.
+         !! the layer above; energy-conserving except that the excess handed
+         !! up from `k = nz - 1` is still discarded, the surface layer taking
+         !! no deposit).  OM3 parity value: `"reinject"` with `kd_max = 0.1`.
       character(len=8) :: bed_share = "discard"
          !! Fate of the bed layer's share of the dissipated power:
          !! `"discard"` (default: owned by the bottom boundary layer, not
