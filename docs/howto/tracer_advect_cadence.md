@@ -86,7 +86,7 @@ Only matters at `dt_therm_ratio > 1`.  Both settings give the same answer at
 | Work | `diabatic_first = .true.` (default) | `.false.` (ACCESS-OM3 `DIABATIC_FIRST = False`) |
 |---|---|---|
 | surface heat/salt fluxes, shortwave, restoring, geothermal, ideal-age source, vertical tracer diffusion + KPP nonlocal | first step of the interval (`1, N+1, ...`), inside the stage chain | last step (`N, 2N, ...`), AFTER that step's tracer-window drain (and for ratio 1 after the stage loop), BEFORE the remap: they act on the advected tracers |
-| mixing coefficients (EPBL / KPP / kappa-shear / tidal / convective kt, ks, kv) | thermo step, stage chain | thermo step (N), stage chain, i.e. from the pre-drain state |
+| mixing coefficients (EPBL / KPP / kappa-shear / tidal / BBL / convective kt, ks, kv) | thermo step, stage chain (rebuilt every stage) | assembled once, at the interval end (`N`), from the post-drain, post-diffusion state with the fluxes assembled after step `N-1`, before the surface/vertical-diffusion applies; the next interval's dynamics CARRY that kv (no in-stage rebuild after the first step; the first interval runs on the step-1 coefficients with zero slow-solve `kd_int`, as a cold OM3 start) |
 | lateral tracer diffusion (hdiff), Redi coefficients + apply | thermo step, stage chain | last step (`N`), after the window drain and a tracer-ghost refresh, once with the full tracer dt (Redi subcycles on that dt); the Redi coefficients are built from the post-advection T/S/h |
 | vertical tracer advection | thermo step | unreachable (Eulerian-z is ssp_rk2-only) |
 | ice thermo block, ice transport, flux assembly (engine, post-step) | after the last step of the interval, applied by the next interval's first step | after step `N-1`, applied by step `N` |
@@ -97,9 +97,8 @@ Only matters at `dt_therm_ratio > 1`.  Both settings give the same answer at
 
 `diabatic_first = .false.` needs `split_scheme = "pred_corr"` and no
 `&ocean_cavity_melt_nml` (both fail-loud at configure when `dt_therm_ratio > 1`).
-Known limit: the diffusivities and the EPBL/KPP boundary-layer solve are
-computed in the stage chain from the pre-drain state; only the tracer-changing
-applies and the lateral tracer diffusion are deferred.  The tidal and
+The coefficient chain is `vmix_build_coefficients` (one routine, called in
+the stage chain by default and at the interval end by `apply_deferred_thermo`).  The tidal and
 law-of-the-wall BBL `kd_int` are checkpointed (`tidal_kd_int`, `bbl_kd_int`),
 since under `.false.` a resume always falls between their refreshes.  With
 `&ocean_hdiff_nml kappa_h > 0` the single full-dt explicit step is checked at

@@ -49,6 +49,12 @@ module test_ocean_tracer_ratio_pc
    character(len=*), parameter :: FN = "test_ocean_tracer_ratio_pc_rt.nc"
    integer, parameter :: NSTEP = 12
       !! Three 4-step windows: the drain closes a window on steps 4, 8, 12.
+   character(len=*), parameter :: KD_NML = "&ocean_tidal_mixing_nml enable = .true., e_uniform = 1.0e-3 /"// &
+                                  new_line("a")// &
+                                  "&ocean_bdrag_nml form = 'quadratic', cd = 3.0e-3, hbbl = 10.0, bg_vel = 0.1 /"// &
+                                  new_line("a")// &
+                                  "&ocean_bbl_mixing_nml enable = .true. /"
+      !! Tidal + law-of-the-wall BBL mixing: two persistent `kd_int` fields.
    logical :: comm_inited = .false.
 
 contains
@@ -69,7 +75,8 @@ contains
                   new_unittest("diabatic_last_ice_restart", test_df_ice_restart), &
                   new_unittest("diabatic_last_hdiff_dose_once", test_df_hdiff), &
                   new_unittest("diabatic_last_redi_full_dt_subcycling", test_df_redi), &
-                  new_unittest("diabatic_last_restart_tidal_bbl_kd", test_df_restart_kd) &
+                  new_unittest("diabatic_last_restart_tidal_bbl_kd", test_df_restart_kd), &
+                  new_unittest("diabatic_last_coeffs_at_interval_end", test_df_coeffs) &
                   ]
    end subroutine collect_ocean_tracer_ratio_pc_tests
 
@@ -1021,17 +1028,112 @@ contains
       !! (their refresh is the interval's last step), so 8 + 4 steps with a
       !! warm restart is bit-identical to 12 straight, ratio 4 and 1.
       type(error_type), allocatable, intent(out) :: error
-      character(len=*), parameter :: X = "&ocean_tidal_mixing_nml enable = .true., e_uniform = 1.0e-3 /"// &
-                                     new_line("a")// &
-                                     "&ocean_bdrag_nml form = 'quadratic', cd = 3.0e-3, hbbl = 10.0, bg_vel = 0.1 /"// &
-                                     new_line("a")// &
-                                     "&ocean_bbl_mixing_nml enable = .true. /"
       integer :: r
       do r = 1, 4, 3
-         call restart_at(error, r, dfirst=.false., extra=X)
+         call restart_at(error, r, dfirst=.false., extra=KD_NML)
          if (allocated(error)) return
       end do
    end subroutine test_df_restart_kd
+
+   subroutine pull_kd_kv(engine, kt, kb, kv)
+      !! Host copies of the tidal and BBL `kd_int` and of the assembled `kv`.
+      type(ocean_engine_t), intent(inout), target :: engine
+      real(wp), allocatable, intent(out) :: kt(:, :, :), kb(:, :, :), kv(:, :, :)
+      associate (a_ => engine%state%vmix_tidal%kd_int, b_ => engine%state%vdiff%bbl_mix%kd_int, &
+                 c_ => engine%state%vmix%kv)
+         !$acc update self(a_, b_, c_)
+      end associate
+      kt = engine%state%vmix_tidal%kd_int
+      kb = engine%state%vdiff%bbl_mix%kd_int
+      kv = engine%state%vmix%kv
+   end subroutine pull_kd_kv
+
+   subroutine test_df_coeffs(error)
+      !! `diabatic_first = .false.`: the mixing coefficients are assembled ONCE
+      !! per interval, at its end, after the drain, and carried by the next
+      !! interval's dynamics.  Tidal + BBL mixing on a stratified wind-driven
+      !! basin, steps 1..8: the slow-solve `kd_int` fields are exactly zero
+      !! through steps 1-3 (no in-stage refresh), appear on step 4, are
+      !! bit-identical through steps 5-7 and change on step 8; the assembled
+      !! `kv` of steps 5-7 is bit-identical to the one assembled at the end of
+      !! step 4 (max-abs difference 0) and is rebuilt on step 8.  The deferred
+      !! call ran after the drain closed the window (window clock 0).
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_engine_t), target :: e, ed
+      type(config_t) :: c, cd
+      real(wp), allocatable :: kt(:, :, :), kb(:, :, :), kv(:, :, :)
+      real(wp), allocatable :: kt4(:, :, :), kb4(:, :, :), kv4(:, :, :)
+      real(wp) :: t, dkv(8), dkt(8), dkb(8), kvmax4
+      integer :: n
+      logical :: ok
+      call make_engine(e, c, case_nml(4, .false., dfirst=.false., extra=KD_NML), ok)
+      call check(error, ok, "engine setup failed")
+      if (allocated(error)) return
+      t = 0.0_wp
+      dkv = 0.0_wp
+      dkt = 0.0_wp
+      dkb = 0.0_wp
+      kvmax4 = 0.0_wp
+      do n = 1, 8
+         call advance(e, c, t, 1, ok)
+         call check(error, ok, "engine step failed")
+         if (allocated(error)) exit
+         call pull_kd_kv(e, kt, kb, kv)
+         if (n == 4) then
+            kt4 = kt
+            kb4 = kb
+            kv4 = kv
+            kvmax4 = maxval(abs(kv))
+         end if
+         if (n >= 5) then
+            dkt(n) = maxval(abs(kt - kt4))
+            dkb(n) = maxval(abs(kb - kb4))
+            dkv(n) = maxval(abs(kv - kv4))
+         else
+            dkt(n) = maxval(abs(kt))
+            dkb(n) = maxval(abs(kb))
+         end if
+      end do
+      if (.not. allocated(error)) then
+         write (*, '(a,8es9.1)') "  tidal kd: |kd| at 1-4, then max|kd-kd(4)|: ", dkt
+         write (*, '(a,8es9.1)') "  bbl   kd: |kd| at 1-4, then max|kd-kd(4)|: ", dkb
+         write (*, '(a,8es9.1)') "  max|kv - kv(4)|                          : ", dkv
+         call check(error, all(dkt(1:3) == 0.0_wp) .and. all(dkb(1:3) == 0.0_wp), &
+                    "slow solves refreshed before the interval end")
+         if (.not. allocated(error)) &
+            call check(error, dkt(4) > 0.0_wp .and. dkb(4) > 0.0_wp .and. kvmax4 > 0.0_wp, &
+                       "no tidal/BBL diffusivity after the interval-end build")
+         if (.not. allocated(error)) &
+            call check(error, all(dkt(5:7) == 0.0_wp) .and. all(dkb(5:7) == 0.0_wp), &
+                       "kd_int moved inside the interval")
+         if (.not. allocated(error)) &
+            call check(error, all(dkv(5:7) == 0.0_wp), &
+                       "kv used by the next interval differs from the one assembled at step N")
+         if (.not. allocated(error)) &
+            call check(error, dkt(8) > 0.0_wp .and. dkv(8) > 0.0_wp, &
+                       "coefficients not rebuilt at the next interval end")
+         if (.not. allocated(error)) &
+            call check(error, e%state%dyn%deferred_thermo_clock == 0.0_wp, &
+                       "coefficient build ran before the window drain")
+      end if
+      call engine_exit_data(e)
+      call engine_teardown(e)
+      if (allocated(error)) return
+      ! control: the default ordering rebuilds kv inside the interval
+      call make_engine(ed, cd, case_nml(4, .false., extra=KD_NML), ok)
+      call check(error, ok, "control engine setup failed")
+      if (allocated(error)) return
+      t = 0.0_wp
+      call advance(ed, cd, t, 1, ok)
+      call pull_kd_kv(ed, kt, kb, kv)
+      kv4 = kv
+      call advance(ed, cd, t, 1, ok)
+      call pull_kd_kv(ed, kt, kb, kv)
+      call check(error, maxval(abs(kv - kv4)) > 0.0_wp, &
+                 "control (diabatic_first) kv never changes: the carried-kv check is vacuous")
+      call engine_exit_data(ed)
+      call engine_teardown(ed)
+   end subroutine test_df_coeffs
 
    subroutine delete_file(fname)
       character(len=*), intent(in) :: fname
