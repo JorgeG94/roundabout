@@ -460,6 +460,7 @@ contains
 
       ! DT_THERM ratio — thermo/tracer kernels fire every Nth outer step.
       ocean_state%dyn%dt_therm_ratio = max(1, cfg%ocean%vmix%dt_therm_ratio)
+      ocean_state%dyn%diabatic_first = cfg%ocean%vmix%diabatic_first
       if (compute_rank == 0) then
          if (ocean_state%dyn%dt_therm_ratio > 1) then
             call logger%info("Thermo ratio:     "// &

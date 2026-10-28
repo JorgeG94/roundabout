@@ -77,3 +77,26 @@ entirely.
 - Known divergence from MOM6 (tracked): the drain falls back to PCM in the
   2 cells nearest a true wall, where MOM6 keeps full PPM (periodic seams are
   unaffected). See the `TODO(MOM6-fidelity)` in `drain_parabola_x`.
+
+## Ordering inside a thermo interval: `&ocean_vmix_nml diabatic_first`
+
+Only matters at `dt_therm_ratio > 1`.  Both settings give the same answer at
+`dt_therm_ratio = 1`.
+
+| Work | `diabatic_first = .true.` (default) | `.false.` (ACCESS-OM3 `DIABATIC_FIRST = False`) |
+|---|---|---|
+| surface heat/salt fluxes, shortwave, restoring, geothermal, ideal-age source, vertical tracer diffusion + KPP nonlocal | first step of the interval (`1, N+1, ...`), inside the stage chain | last step (`N, 2N, ...`), AFTER that step's tracer-window drain (and for ratio 1 after the stage loop), BEFORE the remap: they act on the advected tracers |
+| mixing coefficients (EPBL / KPP / kappa-shear / tidal / convective kt, ks, kv) | thermo step, stage chain | thermo step (N), stage chain, i.e. from the pre-drain state |
+| lateral tracer diffusion, vertical tracer advection, Redi apply | thermo step, stage chain | thermo step (N), stage chain (unchanged) |
+| ice thermo block, ice transport, flux assembly (engine, post-step) | after the last step of the interval, applied by the next interval's first step | after step `N-1`, applied by step `N` |
+| Fox-Kemper MLE transports | thermo step | thermo step (reads the MLD of the previous EPBL call) |
+| Redi coefficients | thermo step | thermo step (with the tracer apply) |
+| wave speed, isopycnal slopes, VarMix, MEKE (GM coefficient chain) | thermo step | first step of the interval (`1, N+1, ...`): thickness diffusion before the dynamics, OM3 `THICKNESSDIFFUSE_FIRST = True` |
+| ALE remap | first step (no windowed advection) or last step (`dt_tracer_advect_ratio > 1`) | last step, after the drain that closes the last window |
+| horizontal tracer window drain | steps `R, 2R, ...` | steps `R, 2R, ...` |
+
+`diabatic_first = .false.` needs `split_scheme = "pred_corr"` and no
+`&ocean_cavity_melt_nml` (both fail-loud at configure when `dt_therm_ratio > 1`).
+Known limit: the diffusivities and the EPBL/KPP boundary-layer solve are
+computed in the stage chain from the pre-drain state; only the tracer-changing
+applies are deferred.

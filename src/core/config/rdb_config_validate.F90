@@ -1432,6 +1432,24 @@ contains
             has_error = .true.
          end if
       end if
+      ! diabatic_first = .false. (thermo work after the tracer drain): the
+      ! deferred tracer applies are single (per outer step) and weighted 1.0 in
+      ! the console budget, which is the pred_corr convention; the real-mass
+      ! cavity coupling is interleaved with the in-stage surface-flux apply.
+      if (.not. cfg%ocean%vmix%diabatic_first .and. cfg%ocean%vmix%dt_therm_ratio > 1) then
+         if (trim(cfg%ocean%bt%split_scheme) /= "pred_corr") then
+            call logger%error("&ocean_vmix_nml diabatic_first=.false. with dt_therm_ratio > 1 "// &
+                              "requires split_scheme='pred_corr' (the deferred thermo applies "// &
+                              "run once per outer step; the ssp_rk2 budget weight assumes two).")
+            has_error = .true.
+         end if
+         if (cfg%ocean%cavity_melt%enable) then
+            call logger%error("&ocean_vmix_nml diabatic_first=.false. with dt_therm_ratio > 1 "// &
+                              "is not supported with &ocean_cavity_melt_nml enable (the cavity "// &
+                              "mass step is coupled to the in-stage surface-flux apply).")
+            has_error = .true.
+         end if
+      end if
       ! RETIRED `accel_visc_rem`: PR-3's audit found no MOM6 state-update
       ! equivalent — `btstep_layer_accel` and the split-explicit RK2
       ! corrector's `up`/`vp` update both apply the depth-mean

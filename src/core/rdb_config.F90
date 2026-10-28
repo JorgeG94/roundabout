@@ -1719,6 +1719,17 @@ module rdb_config
       integer :: dt_therm_ratio = 1
          !! Thermodynamic + tracer-advection step runs at `ratio · dt_dynamic`.
          !! Default 1.
+      logical :: diabatic_first = .true.
+         !! Ordering of the thermo interval when `dt_therm_ratio > 1`.
+         !! `.true.` (default, bit-identical to the pre-existing behaviour):
+         !! the thermo-cadence work leads the interval (outer steps
+         !! `1, N+1, ...`) and, with `dt_tracer_advect_ratio > 1`, the ALE
+         !! remap closes it.  `.false.` (ACCESS-OM3 `DIABATIC_FIRST = False`):
+         !! the interval is dynamics, then tracer advection, then the thermo
+         !! step and the ALE remap together at the END of the interval (outer
+         !! steps `N, 2N, ...`); the GM/VarMix/MEKE refresh keeps leading the
+         !! interval (`THICKNESSDIFFUSE_FIRST`).  No effect at
+         !! `dt_therm_ratio = 1`.
       integer :: dt_tracer_advect_ratio = 1
          !! Horizontal tracer advection runs every `ratio · dt_dynamic` via
          !! accumulated mass fluxes drained in one windowed advect.  1

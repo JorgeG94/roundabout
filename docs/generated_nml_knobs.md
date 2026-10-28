@@ -918,6 +918,7 @@ Vertical-mixing module switches + knobs.
 | `hmix_fixed` | `0.2000000000E+02` | m | Mixed-layer thickness for the KV_ML_INVZ2 profile |
 | `harmonic_visc` | `.false.` |  | Harmonic-mean face thickness in vdiff (MOM6 HARMONIC_VISC) |
 | `dt_therm_ratio` | `1` |  | Thermo step runs at ratio*dt_dyn (MOM6 DT_THERM) |
+| `diabatic_first` | `.true.` |  | Thermo step + ALE remap lead (T) or close (F, OM3) each dt_therm interval (MOM6 DIABATIC_FIRST) |
 | `dt_tracer_advect_ratio` | `1` |  | Horizontal tracer advect runs at ratio*dt_dyn (MOM6 DT_TRACER_ADVECT) |
 | `tracer_advection_scheme` | `"ppm"` |  | Horizontal tracer-advection scheme (ocean, every-step and windowed drain): ppm|ppm_h3 |
 | `tracer_recon` | `"ppm"` |  | Windowed tracer-advect drain face reconstruction (ocean): ppm|weno5|weno7|weno9 |

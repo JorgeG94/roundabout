@@ -5095,6 +5095,14 @@ class OceanVmix(Group):
         vmin=1,
     )
 
+    diabatic_first = Bool(
+        'diabatic_first',
+        doc='Thermo step + ALE remap lead (T) or close (F, OM3) each dt_therm interval (MOM6 DIABATIC_FIRST)',
+        units='',
+        required=False,
+        default=True,
+    )
+
     dt_tracer_advect_ratio = Int(
         'dt_tracer_advect_ratio',
         doc='Horizontal tracer advect runs at ratio*dt_dyn (MOM6 DT_TRACER_ADVECT)',
@@ -7238,4 +7246,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 63
-N_KNOBS = 796
+N_KNOBS = 797

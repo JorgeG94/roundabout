@@ -675,6 +675,12 @@ the interval (steps `dt_therm_ratio, 2*dt_therm_ratio, ...`) right after the
 drain that closes the last window.  Without windowed advection the remap stays
 on the thermo step (unchanged).
 
+`&ocean_vmix_nml diabatic_first` (default `.true.`, unchanged behaviour)
+orders the interval at `dt_therm_ratio > 1`; `.false.` is ACCESS-OM3
+(`DIABATIC_FIRST = False`): the thermo work and the ALE remap close the
+interval (steps `N, 2N, ...`) while the GM coefficient chain keeps leading it.
+Per-item placement table: `docs/howto/tracer_advect_cadence.md`.
+
 `&ocean_vmix_nml tracer_recon` selects the FACE-VALUE reconstruction used
 by that drain — the mass-flux split, the per-layer conservation shell and
 the downstream clamp are unchanged, only the upwind face value swaps:

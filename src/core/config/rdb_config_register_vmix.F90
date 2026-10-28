@@ -768,6 +768,9 @@ call g%add(nml_logical("use_closure", pl, "Master switch for the interior closur
       call g%add(nml_logical("harmonic_visc", pl, "Harmonic-mean face thickness in vdiff (MOM6 HARMONIC_VISC)"))
       pi => cfg%ocean%vmix%dt_therm_ratio
       call g%add(nml_int("dt_therm_ratio", pi, "Thermo step runs at ratio*dt_dyn (MOM6 DT_THERM)", min=1))
+      pl => cfg%ocean%vmix%diabatic_first
+      call g%add(nml_logical("diabatic_first", pl, &
+                             "Thermo step + ALE remap lead (T) or close (F, OM3) each dt_therm interval (MOM6 DIABATIC_FIRST)"))
       pi => cfg%ocean%vmix%dt_tracer_advect_ratio
       call g%add(nml_int("dt_tracer_advect_ratio", pi, &
                          "Horizontal tracer advect runs at ratio*dt_dyn (MOM6 DT_TRACER_ADVECT)", min=1))

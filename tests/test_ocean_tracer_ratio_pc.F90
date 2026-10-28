@@ -62,7 +62,11 @@ contains
                   new_unittest("restart_at_window_boundary", test_restart), &
                   new_unittest("window_cadence_predicates", test_cadence), &
                   new_unittest("window_length_exact", test_window_length), &
-                  new_unittest("ideal_age_surface_reset_cadence", test_age_reset) &
+                  new_unittest("ideal_age_surface_reset_cadence", test_age_reset), &
+                  new_unittest("diabatic_last_cadence_predicates", test_df_cadence), &
+                  new_unittest("diabatic_last_thermo_at_interval_end", test_df_ordering), &
+                  new_unittest("diabatic_first_knob_inert_at_ratio1", test_df_ratio1), &
+                  new_unittest("diabatic_last_ice_restart", test_df_ice_restart) &
                   ]
    end subroutine collect_ocean_tracer_ratio_pc_tests
 
@@ -74,20 +78,31 @@ contains
       end if
    end subroutine ensure_comm
 
-   function case_nml(ratio, uniform, vcoord) result(nml)
+   function case_nml(ratio, uniform, vcoord, dfirst, therm) result(nml)
       !! Closed wind-driven basin with an island (divergent flow, real `h`
       !! motion), `pred_corr` (default), `dt_therm_ratio = 4`.
       integer, intent(in) :: ratio
       logical, intent(in) :: uniform
       character(len=*), intent(in), optional :: vcoord
+      logical, intent(in), optional :: dfirst
+         !! `&ocean_vmix_nml diabatic_first` (default: leave unset = `.true.`).
+      integer, intent(in), optional :: therm
+         !! `dt_therm_ratio` (default 4).
       character(len=:), allocatable :: nml
-      character(len=:), allocatable :: vc
+      character(len=:), allocatable :: vc, df
+      character(len=16) :: ts
       character(len=*), parameter :: NL = new_line("a")
       character(len=16) :: rs
       character(len=:), allocatable :: tr
       write (rs, '(i0)') ratio
       vc = 'zstar'
       if (present(vcoord)) vc = vcoord
+      df = ""
+      if (present(dfirst)) then
+         if (.not. dfirst) df = ", diabatic_first = .false."
+      end if
+      write (ts, '(i0)') 4
+      if (present(therm)) write (ts, '(i0)') therm
       if (uniform) then
          tr = "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0 /"//NL
       else
@@ -101,7 +116,7 @@ contains
             "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
             "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
             "smag_ah = .true. /"//NL// &
-            "&ocean_vmix_nml dt_therm_ratio = 4, dt_tracer_advect_ratio = "//trim(rs)//" /"//NL// &
+            "&ocean_vmix_nml dt_therm_ratio = "//trim(ts)//", dt_tracer_advect_ratio = "//trim(rs)//df//" /"//NL// &
             "&ocean_diag_nml enabled = .false. /"//NL// &
             "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 10000.0, dy = 10000.0 /"//NL// &
             "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.08 /"//NL// &
@@ -409,20 +424,23 @@ contains
       do r = 1, 4, 3
          call restart_at(error, r)
          if (allocated(error)) return
+         call restart_at(error, r, dfirst=.false.)
+         if (allocated(error)) return
       end do
    end subroutine test_restart
 
-   subroutine restart_at(error, ratio)
+   subroutine restart_at(error, ratio, dfirst)
       !! Straight 12 steps vs 8 steps + (flush, checkpoint) + warm restart +
       !! 4 steps.  8 = two whole windows, so the checkpoint is window-aligned.
       type(error_type), allocatable, intent(out) :: error
       integer, intent(in) :: ratio
+      logical, intent(in), optional :: dfirst
       type(ocean_engine_t), target :: ea, eb, ec
       type(config_t) :: ca, cb, cc
       real(wp) :: ta, tb, tc
       integer :: ierr, step_c
       logical :: ok
-      call make_engine(ea, ca, case_nml(ratio, .false.), ok)
+      call make_engine(ea, ca, case_nml(ratio, .false., dfirst=dfirst), ok)
       call check(error, ok, "straight engine setup failed")
       if (allocated(error)) return
       ta = 0.0_wp
@@ -430,7 +448,7 @@ contains
       call check(error, ok, "straight run failed")
       if (allocated(error)) return
 
-      call make_engine(eb, cb, case_nml(ratio, .false.), ok)
+      call make_engine(eb, cb, case_nml(ratio, .false., dfirst=dfirst), ok)
       call check(error, ok, "writer engine setup failed")
       if (allocated(error)) return
       tb = 0.0_wp
@@ -447,7 +465,7 @@ contains
       call engine_exit_data(eb)
       call engine_teardown(eb)
 
-      call make_engine(ec, cc, case_nml(ratio, .false.), ok, restart_file=FN, t0=tc, step0=step_c)
+      call make_engine(ec, cc, case_nml(ratio, .false., dfirst=dfirst), ok, restart_file=FN, t0=tc, step0=step_c)
       call check(error, ok, "warm restart setup failed")
       if (allocated(error)) return
       call check(error, step_c == 8, "restart step count not restored")
@@ -571,6 +589,207 @@ contains
       call engine_exit_data(e1)
       call engine_teardown(e1)
    end subroutine test_age_reset
+
+   subroutine test_df_cadence(error)
+      !! `diabatic_first = .false.`: thermo and remap fire together on steps
+      !! N, 2N, ... (once per interval, on a drain step); the GM chain keeps
+      !! leading the interval (steps 1, N+1, ...).  `diabatic_first = .true.`
+      !! keeps its legacy cadence (thermo leads; remap at the end only when
+      !! windowed advection is on).
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_dyn_t) :: d
+      integer :: n, r
+      logical :: ok
+      do r = 1, 4, 1
+         if (mod(4, r) /= 0) cycle
+         d%dt_therm_ratio = 4
+         d%dt_tracer_advect_ratio = r
+         d%diabatic_first = .false.
+         ok = .true.
+         do n = 1, 16
+            d%outer_step_count = n - 1
+            if (d%is_thermo_step() .neqv. (mod(n, 4) == 0)) ok = .false.
+            if (d%is_remap_step() .neqv. (mod(n, 4) == 0)) ok = .false.
+            if (d%is_gm_refresh_step() .neqv. (mod(n, 4) == 1)) ok = .false.
+            if (r > 1 .and. d%is_remap_step() .and. .not. d%is_tracer_advect_step()) ok = .false.
+         end do
+         call check(error, ok, "diabatic_first=F cadence wrong")
+         if (allocated(error)) return
+      end do
+      ! legacy cadence (default) is untouched
+      d%dt_tracer_advect_ratio = 1
+      d%diabatic_first = .true.
+      ok = .true.
+      do n = 1, 16
+         d%outer_step_count = n - 1
+         if (d%is_thermo_step() .neqv. (mod(n, 4) == 1)) ok = .false.
+         if (d%is_remap_step() .neqv. (mod(n, 4) == 1)) ok = .false.
+         if (d%is_gm_refresh_step() .neqv. (mod(n, 4) == 1)) ok = .false.
+      end do
+      call check(error, ok, "diabatic_first=T legacy cadence changed")
+   end subroutine test_df_cadence
+
+   subroutine test_df_ordering(error)
+      !! Through the engine, ratio 4, one thermo interval = 4 steps.  The
+      !! ideal-age source is a thermo-cadence kernel (`+therm_dt*h` below the
+      !! surface): with `diabatic_first = .false.` it is exactly 0 after steps
+      !! 1-3, appears on step 4 (the interval end, with the drain and the
+      !! remap), is unchanged over steps 5-7 and doubles on step 8.  The
+      !! default fires it on step 1.
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_engine_t), target :: e, ed
+      type(config_t) :: c, cd
+      character(len=:), allocatable :: nml
+      real(wp) :: t, td, s, a(8), ad1
+      integer :: n
+      logical :: ok
+      nml = case_nml(4, .false., dfirst=.false.)//"&ocean_tracers_nml enable_ideal_age = .true. /"//new_line("a")
+      call make_engine(e, c, nml, ok)
+      call check(error, ok, "engine setup failed")
+      if (allocated(error)) return
+      t = 0.0_wp
+      do n = 1, 8
+         call advance(e, c, t, 1, ok)
+         call check(error, ok, "engine step failed")
+         if (allocated(error)) exit
+         call surface_age(e, s, a(n))
+      end do
+      if (.not. allocated(error)) then
+         write (*, '(a,8es10.2)') "  interior age after steps 1..8: ", a
+         call check(error, all(a(1:3) == 0.0_wp), "thermo work ran before the interval end")
+         if (.not. allocated(error)) call check(error, a(4) > 0.0_wp, "no thermo work on step 4")
+         if (.not. allocated(error)) &
+            call check(error, all(abs(a(5:7) - a(4)) <= 0.02_wp*a(4)), "thermo work ran mid-interval")
+         if (.not. allocated(error)) &
+            call check(error, abs(a(8) - 2.0_wp*a(4)) <= 0.1_wp*a(4), "thermo did not fire exactly once on step 8")
+      end if
+      if (.not. allocated(error)) then
+         ! the deferred thermo ran exactly twice (steps 4 and 8), each time
+         ! AFTER the drain had closed the window (window clock 0; it would
+         ! read 3*DT if the thermo still ran before the step-4 drain)
+         call check(error, e%state%dyn%n_deferred_thermo == 2, "deferred thermo call count")
+         if (.not. allocated(error)) &
+            call check(error, e%state%dyn%deferred_thermo_clock == 0.0_wp, &
+                       "deferred thermo ran before the window drain")
+      end if
+      call engine_exit_data(e)
+      call engine_teardown(e)
+      if (allocated(error)) return
+      nml = case_nml(4, .false.)//"&ocean_tracers_nml enable_ideal_age = .true. /"//new_line("a")
+      call make_engine(ed, cd, nml, ok)
+      call check(error, ok, "default engine setup failed")
+      if (allocated(error)) return
+      td = 0.0_wp
+      call advance(ed, cd, td, 1, ok)
+      call surface_age(ed, s, ad1)
+      call check(error, ad1 > 0.0_wp, "default (diabatic_first) no longer fires thermo on step 1")
+      call engine_exit_data(ed)
+      call engine_teardown(ed)
+   end subroutine test_df_ordering
+
+   function polar_ice_nml(ratio, dfirst) result(nml)
+      !! The polar freeze-up case (validation_examples/ocean/sea_ice/
+      !! polar_freezeup_thermo.nml, shrunk): frazil nucleates in the first
+      !! steps, so the ice state is live across the checkpoint.
+      integer, intent(in) :: ratio
+      logical, intent(in) :: dfirst
+      character(len=:), allocatable :: nml
+      character(len=*), parameter :: NL = new_line("a")
+      character(len=8) :: rs
+      write (rs, '(i0)') ratio
+      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
+            "&grid_nml nx = 20, ny = 16, dx = 10000.0, dy = 10000.0, nghost = 3 /"//NL// &
+            "&time_nml t_end = 86400.0, dt_fixed = 600.0 /"//NL// &
+            "&physics_nml coriolis_f = 1.435e-4 /"//NL// &
+            "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
+            "&tracer_nml initial_salinity = 34.0, initial_temperature = -1.80 /"//NL// &
+            "&ocean_ic_nml alpha_T = 1.7e-4, rho_0 = 1027.0 /"//NL// &
+            "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -60.0 /"//NL// &
+            "&ocean_topo_nml topo_config = 'flat', max_depth = 50.0 /"//NL// &
+            "&ocean_hvisc_nml nu_h = 500.0 /"//NL// &
+            "&ocean_vmix_nml kv_ml_invz2 = 0.01, hmix_fixed = 20.0, dt_therm_ratio = 4, "// &
+      "dt_tracer_advect_ratio = "//trim(rs)//merge("                          ", ", diabatic_first = .false.", dfirst)//" /"//NL// &
+            "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+            "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
+            "&ocean_ice_nml enable = .true., ncat = 5, nk_ice = 2, air_temp = -20.0, "// &
+            "restore_lambda = 20.0, sw_down = 0.0, transport = .false., dynamics = .false. /"//NL// &
+            "&ocean_diag_nml enabled = .false. /"//NL// &
+            "&output_nml output_to_file = .false. /"//NL
+   end function polar_ice_nml
+
+   subroutine test_df_ice_restart(error)
+      !! Ice ON, diabatic_first = .false., windowed advection: 8 steps +
+      !! checkpoint at the interval boundary + 4 resumed steps equals 12
+      !! straight steps bit for bit (the ice/flux block prepares the fluxes
+      !! of the interval-end thermo step after step N-1, so a checkpoint at
+      !! step 8 must not strand them).  Frazil must have formed (live ice).
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_engine_t), target :: ea, eb, ec
+      type(config_t) :: ca, cb, cc
+      real(wp) :: ta, tb, tc
+      integer :: ierr, step_c
+      logical :: ok
+      call make_engine(ea, ca, polar_ice_nml(4, .false.), ok)
+      call check(error, ok, "straight engine setup failed")
+      if (allocated(error)) return
+      ta = 0.0_wp
+      call advance(ea, ca, ta, 12, ok)
+      call check(error, ok, "straight run failed")
+      if (allocated(error)) return
+      call make_engine(eb, cb, polar_ice_nml(4, .false.), ok)
+      call check(error, ok, "writer engine setup failed")
+      if (allocated(error)) return
+      tb = 0.0_wp
+      call advance(eb, cb, tb, 8, ok)
+      call check(error, ok, "writer run failed")
+      if (allocated(error)) return
+      call ocean_dyn_flush_tracer_window(eb%grid, eb%state%metrics, eb%state%dyn, &
+                                         eb%state%continuity, eb%state%multilayer, &
+                                         bc=eb%state%bc)
+      call ocean_state_restart_write(eb%state, eb%grid, eb%decomp, FN, tb, 8, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "checkpoint write failed")
+      if (allocated(error)) return
+      call engine_exit_data(eb)
+      call engine_teardown(eb)
+      call make_engine(ec, cc, polar_ice_nml(4, .false.), ok, restart_file=FN, t0=tc, step0=step_c)
+      call check(error, ok, "warm restart setup failed")
+      if (allocated(error)) return
+      call advance(ec, cc, tc, 4, ok)
+      call check(error, ok, "resumed run failed")
+      if (.not. allocated(error)) call compare_registries(error, ea, ec, "ice on, diabatic_first=F")
+      call engine_exit_data(ea)
+      call engine_teardown(ea)
+      call engine_exit_data(ec)
+      call engine_teardown(ec)
+      call delete_file(FN)
+   end subroutine test_df_ice_restart
+
+   subroutine test_df_ratio1(error)
+      !! At `dt_therm_ratio = 1` (every step a thermo step) the knob changes
+      !! nothing: 6 steps with each setting are bit-identical, with and
+      !! without windowed-free ratio-1 tracers.
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_engine_t), target :: ea, eb
+      type(config_t) :: ca, cb
+      real(wp) :: ta, tb
+      logical :: ok
+      call make_engine(ea, ca, case_nml(1, .false., therm=1), ok)
+      call check(error, ok, "engine (default) setup failed")
+      if (allocated(error)) return
+      call make_engine(eb, cb, case_nml(1, .false., dfirst=.false., therm=1), ok)
+      call check(error, ok, "engine (diabatic_first=F) setup failed")
+      if (allocated(error)) return
+      ta = 0.0_wp
+      tb = 0.0_wp
+      call advance(ea, ca, ta, 6, ok)
+      if (ok) call advance(eb, cb, tb, 6, ok)
+      call check(error, ok, "run failed")
+      if (.not. allocated(error)) call compare_registries(error, ea, eb, "across diabatic_first at ratio 1")
+      call engine_exit_data(ea)
+      call engine_teardown(ea)
+      call engine_exit_data(eb)
+      call engine_teardown(eb)
+   end subroutine test_df_ratio1
 
    subroutine surface_age(engine, smax, imax)
       !! max |age content| in the surface layer and in the layers below, interior cells.

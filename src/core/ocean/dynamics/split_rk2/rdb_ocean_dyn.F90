@@ -344,6 +344,16 @@ module rdb_ocean_dyn
          !! Tracer/thermo step runs every `dt_therm_ratio` outer steps
          !! with effective dt = ratio · dt.  1 (default) = every step
          !! (bit-identical).  Applies only when `enable_thermodynamics`.
+      integer :: n_deferred_thermo = 0
+         !! Diagnostic: number of `apply_deferred_thermo` calls so far (not
+         !! restarted).
+      real(wp) :: deferred_thermo_clock = -1.0_wp
+         !! Diagnostic: the tracer-window clock `t_dyn_rel_adv` (s) at the
+         !! last deferred-thermo call.  0 = the window had just been drained.
+      logical :: diabatic_first = .true.
+         !! `&ocean_vmix_nml diabatic_first`.  `.false.` moves the thermo
+         !! kernels and the ALE remap to the END of the thermo interval
+         !! (see `is_thermo_step`); no effect at `dt_therm_ratio <= 1`.
       integer :: dt_tracer_advect_ratio = 1
          !! MOM6 DT_TRACER_ADVECT analogue.  Horizontal tracer advection
          !! fires every `dt_tracer_advect_ratio` outer steps over the
@@ -453,6 +463,8 @@ module rdb_ocean_dyn
       procedure, non_overridable :: therm_dt => ocean_dyn_therm_dt
       procedure, non_overridable :: is_tracer_advect_step => ocean_dyn_is_tracer_advect_step
       procedure, non_overridable :: is_remap_step => ocean_dyn_is_remap_step
+      procedure, non_overridable :: is_gm_refresh_step => ocean_dyn_is_gm_refresh_step
+      procedure, non_overridable :: thermo_deferred => ocean_dyn_thermo_deferred
       procedure, non_overridable :: bytes => ocean_dyn_bytes
    end type ocean_dyn_t
 
@@ -547,15 +559,50 @@ contains
       !! fire on this outer step.  `dt_therm_ratio <= 1` (default) →
       !! always true (every step is a thermo step, bit-identical to
       !! prior behaviour).  `ratio >= 2` → fires every Nth step,
-      !! aligned to `outer_step_count = 0` for the IC snapshot.
+      !! aligned to `outer_step_count = 0` for the IC snapshot
+      !! (`diabatic_first`, default) or, with `diabatic_first = .false.`,
+      !! on the LAST step of each interval (`outer_step_count + 1` a
+      !! multiple of N: steps `N, 2N, ...`).  The same function of the
+      !! counter is read post-increment by the engine's ice/flux block, so
+      !! there the fluxes for the interval-end thermo step are prepared
+      !! after step `N-1`.
       class(ocean_dyn_t), intent(in) :: this
       logical :: yes
       if (this%dt_therm_ratio <= 1) then
          yes = .true.
+      else if (this%diabatic_first) then
+         yes = (mod(this%outer_step_count, this%dt_therm_ratio) == 0)
+      else
+         yes = (mod(this%outer_step_count + 1, this%dt_therm_ratio) == 0)
+      end if
+   end function ocean_dyn_is_thermo_step
+
+   pure function ocean_dyn_thermo_deferred(this) result(yes)
+      !! `.true.` when the tracer-changing thermo applies (surface fluxes,
+      !! shortwave, restoring, geothermal, ideal-age source, vertical tracer
+      !! diffusion) leave the stage chain and run once per thermo interval in
+      !! `apply_deferred_thermo`, AFTER the tracer-window drain and BEFORE
+      !! the ALE remap: `diabatic_first = .false.` at `dt_therm_ratio > 1`.
+      class(ocean_dyn_t), intent(in) :: this
+      logical :: yes
+      yes = (this%dt_therm_ratio > 1) .and. .not. this%diabatic_first
+   end function ocean_dyn_thermo_deferred
+
+   pure function ocean_dyn_is_gm_refresh_step(this) result(yes)
+      !! `.true.` on the step where the thickness-diffusion coefficient
+      !! chain (wave speed, isopycnal slopes, VarMix, MEKE) refreshes.  It
+      !! equals `is_thermo_step()` except with `diabatic_first = .false.`
+      !! and `dt_therm_ratio > 1`, where it keeps LEADING the interval
+      !! (steps `1, N+1, ...`): thickness diffusion before the dynamics
+      !! (OM3 `THICKNESSDIFFUSE_FIRST = True`).
+      class(ocean_dyn_t), intent(in) :: this
+      logical :: yes
+      if (this%dt_therm_ratio <= 1 .or. this%diabatic_first) then
+         yes = this%is_thermo_step()
       else
          yes = (mod(this%outer_step_count, this%dt_therm_ratio) == 0)
       end if
-   end function ocean_dyn_is_thermo_step
+   end function ocean_dyn_is_gm_refresh_step
 
    pure function ocean_dyn_therm_dt(this, dt) result(dt_th)
       !! Effective `dt` for the thermo / tracer kernels.  When
@@ -605,7 +652,10 @@ contains
       !! the last window, so the remap never sees a half-spent window.
       class(ocean_dyn_t), intent(in) :: this
       logical :: yes
-      if (this%dt_tracer_advect_ratio <= 1 .or. this%dt_therm_ratio <= 1) then
+      if (this%dt_tracer_advect_ratio <= 1 .or. this%dt_therm_ratio <= 1 &
+          .or. .not. this%diabatic_first) then
+         ! (`diabatic_first = .false.`: thermo and remap close the interval
+         ! together, so the remap IS the thermo step at every tracer ratio.)
          yes = this%is_thermo_step()
       else
          yes = (mod(this%outer_step_count + 1, this%dt_therm_ratio) == 0)
@@ -3211,7 +3261,7 @@ contains
       ! profiler wrapper lives here, not inside it.
       if (present(wavespeed)) then
          if (wavespeed%is_init .and. wavespeed%enable) then
-            if (dyn%enable_thermodynamics .and. dyn%is_thermo_step() .and. &
+            if (dyn%enable_thermodynamics .and. dyn%is_gm_refresh_step() .and. &
                 mod(dyn%outer_step_count, wavespeed%n_wavespeed) == 0) then
                call profiler_start("ocean_wavespeed")
                call wavespeed_compute(grid, metrics, wavespeed, ms)
@@ -3233,7 +3283,7 @@ contains
       if (present(varmix) .and. present(wavespeed) .and. &
           present(lateral_mix) .and. present(slopes)) then
          if (varmix%enable .and. lateral_mix%resoln_scaled_visc) then
-            if (dyn%enable_thermodynamics .and. dyn%is_thermo_step()) then
+            if (dyn%enable_thermodynamics .and. dyn%is_gm_refresh_step()) then
                if (.not. gm_refreshes_varmix(gm, slopes, dyn)) then
                   ! `slopes` is guaranteed present here; `varmix_compute`
                   ! self-gates on `slopes%is_init` (the configure invariant
@@ -3257,7 +3307,7 @@ contains
       ! call `ocean_slopes_compute`, so GM owns the slope refresh.  No-op
       ! when absent / disabled.
       if (present(gm)) then
-         if (dyn%enable_thermodynamics .and. dyn%is_thermo_step()) then
+         if (dyn%enable_thermodynamics .and. dyn%is_gm_refresh_step()) then
             if (gm%enable .and. present(slopes)) then
                call profiler_start("ocean_gm")
                call ocean_slopes_compute(grid, metrics, eos, slopes, ms, dyn%therm_dt(dt))
@@ -3537,6 +3587,20 @@ contains
          end if
       end if
 
+      ! diabatic_first = .false. (ACCESS-OM3 ordering): the thermodynamic
+      ! tracer applies of the interval run HERE, on the tracers the window
+      ! drain just advected, and before the ALE remap.  (Mixing coefficients
+      ! and the GM / Redi / MLE terms are computed in the stage chain.)
+      if (dyn%thermo_deferred() .and. dyn%enable_thermodynamics .and. dyn%is_thermo_step()) then
+         call profiler_start("ocean_deferred_thermo")
+         dyn%n_deferred_thermo = dyn%n_deferred_thermo + 1
+         dyn%deferred_thermo_clock = ct%t_dyn_rel_adv
+         call apply_deferred_thermo(grid, metrics, dyn, vd, vmix, ms, dt, sf, geo)
+         call refresh_tracer_ghosts(grid, ms, bc)
+         call profiler_stop("ocean_deferred_thermo")
+         call probe_dS(grid, ms, "after deferred thermo", 3, dyn%outer_step_count + 1)
+      end if
+
       ! Lagrangian-then-remap: dynamics has advanced on the existing
       ! grid; now relayer onto vcoord%target_h.  Orchestrator no-ops
       ! for VCOORD_EULERIAN_Z, so the call is bit-safe when vcoord
@@ -3641,6 +3705,44 @@ contains
 
       dyn%outer_step_count = dyn%outer_step_count + 1
    end subroutine ocean_dyn_step_split
+
+   subroutine apply_deferred_thermo(grid, metrics, dyn, vd, vmix, ms, dt, sf, geo)
+      !! The tracer-changing thermo applies of one thermo interval, run once
+      !! after the window drain (see `ocean_dyn_thermo_deferred`): surface
+      !! heat/salt fluxes, shortwave + restoring, geothermal, ideal-age
+      !! source, then the backward-Euler vertical tracer diffusion (+ KPP
+      !! non-local tendencies) with the diffusivities of the stage chain.
+      !! Same order as the in-stage path (fluxes, then mixing).
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_metrics_t), intent(in) :: metrics
+      type(ocean_dyn_t), intent(in) :: dyn
+      type(ocean_vdiff_t), intent(inout) :: vd
+      type(ocean_vmix_t), intent(inout) :: vmix
+      type(multilayer_state_t), intent(inout) :: ms
+      real(wp), intent(in) :: dt
+      type(ocean_surface_flux_t), intent(in), optional :: sf
+      type(ocean_geothermal_t), intent(in), optional :: geo
+      real(wp) :: therm_dt
+
+      therm_dt = dyn%therm_dt(dt)
+      if (dyn%bt_work%wetdry_enable) then
+         call ocean_surface_flux_apply_tracers(grid, sf, ms, therm_dt, active=.true., &
+                                               wet_dyn=dyn%bt_work%wd_wet_dyn)
+      else
+         call ocean_surface_flux_apply_tracers(grid, sf, ms, therm_dt, active=.true.)
+      end if
+      call apply_sw_and_restore(grid, metrics, sf, ms, therm_dt, .true.)
+      call ocean_geothermal_apply_tracers(grid, geo, ms, therm_dt, active=.true.)
+      call ocean_ideal_age_apply(grid, ms, therm_dt, active=.true.)
+      if (vmix%use_closure) then
+         call vdiff_apply_tracers(grid, vd, ms, therm_dt, kt_source=vmix%kt, ks_source=vmix%ks)
+         if (vmix%use_kpp) then
+            call vmix_apply_nonlocal_tendencies(grid, vmix, ms, therm_dt)
+         end if
+      else
+         call vdiff_apply_tracers(grid, vd, ms, therm_dt)
+      end if
+   end subroutine apply_deferred_thermo
 
    subroutine check_vanished_invariant_or_die(grid, vcoord, ms, outer_step)
       !! Fail-loud TRIPWIRE for invariant I1′ — `h_layer <= H_VANISHED ⇒
@@ -4134,7 +4236,7 @@ contains
       if (.not. present(gm)) return
       if (.not. present(slopes)) return
       if (.not. gm%enable) return
-      refreshes = dyn%enable_thermodynamics .and. dyn%is_thermo_step()
+      refreshes = dyn%enable_thermodynamics .and. dyn%is_gm_refresh_step()
    end function gm_refreshes_varmix
 
    pure function lateral_mix_uses_resoln(lateral_mix, varmix) result(uses)
@@ -4556,7 +4658,7 @@ contains
       logical :: has_w_drv, has_e_drv, has_s_drv, has_n_drv
          !! Physical-edge flags for the transport wall-zeroing.  .true. = physical
          !! domain edge (WALL zero applies); .false. = MPI seam (halo owns it, O0).
-      logical :: is_lagrangian, therm_active
+      logical :: is_lagrangian, therm_active, flux_active
       logical :: is_pc, is_pred
          !! pred_corr stage roles (SPEC §2/§4 S4): `is_pred` = the predictor
          !! (stage 1 under pred_corr) — provisional `up = u + BE·dt·accel`,
@@ -4608,6 +4710,9 @@ contains
       therm_active = dyn%enable_thermodynamics .and. dyn%is_thermo_step() &
                      .and. .not. is_pred
       therm_dt = dyn%therm_dt(dt)
+      ! Deferred thermo (diabatic_first = .false.): the tracer-changing thermo
+      ! applies below are skipped here and run in `apply_deferred_thermo`.
+      flux_active = therm_active .and. .not. dyn%thermo_deferred()
       ! Velocity-apply dt: the predictor's provisional velocity advances
       ! to dt_pred = BE·dt (SPEC §2 P8); everything else (substep,
       ! continuity) stays at the full dt as MOM6 does.
@@ -5386,10 +5491,10 @@ contains
       ! main deposit); knob off ⇒ the original call, byte-identical.
       if (dyn%bt_work%wetdry_enable) then
          call ocean_surface_flux_apply_tracers(grid, sf, ms, therm_dt, &
-                                               active=therm_active, &
+                                               active=flux_active, &
                                                wet_dyn=dyn%bt_work%wd_wet_dyn)
       else
-         call ocean_surface_flux_apply_tracers(grid, sf, ms, therm_dt, active=therm_active)
+         call ocean_surface_flux_apply_tracers(grid, sf, ms, therm_dt, active=flux_active)
       end if
       ! Ice-shelf real freshwater MASS -- see the identical block in
       ! `run_stage`.  `chain_weight` is the SAME per-stage weight the
@@ -5401,8 +5506,8 @@ contains
          call ocean_cavity_mass_step(grid, metrics, cav, ms, therm_dt, chain_weight, &
                                      active=therm_active)
       end if
-      call apply_sw_and_restore(grid, metrics, sf, ms, therm_dt, therm_active)
-      call ocean_geothermal_apply_tracers(grid, geo, ms, therm_dt, active=therm_active)
+      call apply_sw_and_restore(grid, metrics, sf, ms, therm_dt, flux_active)
+      call ocean_geothermal_apply_tracers(grid, geo, ms, therm_dt, active=flux_active)
       call probe_dS(grid, ms, "after surface flux", stage_id, step_id)
       ! Ideal-age tracer: interior aging only (1 s/s), thermo-cadence
       ! gated (PR-7).  The surface Dirichlet reset runs once per outer
@@ -5420,7 +5525,8 @@ contains
       ! outer step, which is the same +therm_dt.  ssp_rk2 is unaffected:
       ! `is_pred` is false on both of its stages.
       call ocean_ideal_age_apply(grid, ms, therm_dt, &
-                                 active=dyn%is_thermo_step() .and. .not. is_pred)
+                                 active=dyn%is_thermo_step() .and. .not. is_pred &
+                                 .and. .not. dyn%thermo_deferred())
 
       ! ---- 9. Vertical mixing (implicit, stable under any dt) ----
       ! `bt_work=dyn%bt_work` is the visc_rem PRODUCER call: when
@@ -5462,13 +5568,13 @@ contains
          if (fold_top) then
             call vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt, stage, sf, epbl=epbl, &
                                      kshear=kshear, vmix_tidal=vmix_tidal, bt_work=dyn%bt_work, &
-                                     metrics=metrics, &
+                                     metrics=metrics, apply_tracers=.not. dyn%thermo_deferred(), &
                                      lambda_top_u=td%lambda_top_u, lambda_top_v=td%lambda_top_v, &
                                      cover_u=td%cover_u, cover_v=td%cover_v, bc=bc)
          else
             call vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt, stage, sf, epbl=epbl, &
                                      kshear=kshear, vmix_tidal=vmix_tidal, bt_work=dyn%bt_work, &
-                                     metrics=metrics, bc=bc)
+                                     metrics=metrics, apply_tracers=.not. dyn%thermo_deferred(), bc=bc)
          end if
       end if
       ! KE attribution: implicit vertical friction (+ folded drag/stress
