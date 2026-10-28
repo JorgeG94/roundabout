@@ -50,6 +50,7 @@ module rdb_config
    real(wp), parameter :: LEGACY_TRACER_ALPHA_T = 0.17_wp
       !! Historical `&tracer_nml alpha_T` default (kg/m^3 per degC).
 
+   public :: MAX_SW_BANDS
    public :: config_t
    public :: ocean_config_t, ocean_grid_config_t, &
              ocean_coriolis_config_t, ocean_thermo_config_t, &
@@ -169,6 +170,9 @@ module rdb_config
    integer, parameter :: MAX_Z_FIXED_DZ = 128
       !! Maximum number of `&vcoord_nml z_fixed_dz` entries (nominal
       !! `z_fixed` layer thicknesses).
+   integer, parameter :: MAX_SW_BANDS = 6
+      !! Maximum number of penetrating-shortwave bands under
+      !! `&ocean_thermo_nml sw_scheme = "manizza05"`.
    integer, parameter :: MAX_ICE_HLIM_VALS = 16
       !! Maximum number of `&ocean_ice_nml hlim` entries a user may STATE
       !! (PR-58). Caps how many edges may be listed, not `ncat` (unbounded
@@ -310,6 +314,44 @@ module rdb_config
          !! (PR-21) Charge the EPBL TKE ledger for penetrating shortwave
          !! (the in-layer PE-cost `Phi(tau)` shape).  Inert at
          !! `sw_pen_frac = 0` ⇒ bit-identical.
+      character(len=16) :: sw_scheme = "default"
+         !! Penetrating-shortwave scheme.  `"default"` (bit-identical): the
+         !! two-band Paulson & Simpson (1977) decay above (`sw_pen_frac`,
+         !! `sw_band_ratio`, `sw_zeta1/2`).  `"manizza05"`: the
+         !! chlorophyll-dependent N-band scheme of Manizza et al. (2005,
+         !! GRL 32, L05603) -- the WHOLE shortwave is split into bands at
+         !! the surface and each band decays as `exp(-kappa_n z)` with a
+         !! per-column `kappa_n(chl)`.  Requires `sw_chl_file`; `sw_pen_frac`
+         !! must stay 0 (or 1) because the scheme has no separate
+         !! penetrating fraction; `validate_config` refuses anything else.
+         !! The deposition kernel, the KPP `B_0` coupling and the EPBL SW
+         !! TKE ledger all consume the same per-column band opacities.
+      integer :: sw_nbands = 3
+         !! Number of bands under `"manizza05"` (3 .. MAX_SW_BANDS).  Band
+         !! 1 = blue, 2 = red, the near-infrared share is split evenly over
+         !! bands 3..n.  Bands beyond 3 need their own `sw_opacity_coef` /
+         !! `sw_chl_power` entries.
+      real(wp) :: sw_blue_frac = 0.5_wp
+         !! Blue share of the visible band (MOM6 `BLUE_FRAC_SW`).  The
+         !! visible band is `0.42` of the total shortwave.
+      character(len=256) :: sw_chl_file = ""
+         !! NetCDF climatology of surface chlorophyll (mg m-3) on the model
+         !! horizontal grid, read monthly-cyclic over a 365-day year whose
+         !! day 0 is model `t = 0`.  Required under `"manizza05"`.
+      character(len=64) :: sw_chl_var = "CHL"
+         !! Variable name of the chlorophyll field in `sw_chl_file`.
+      real(wp) :: sw_opacity_coef(2*MAX_SW_BANDS) = [0.0232_wp, 0.074_wp, 0.225_wp, &
+                                                     0.037_wp, 2.86_wp, 0.0_wp, &
+                                                     0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, &
+                                                     0.0_wp, 0.0_wp]
+         !! Manizza (2005) opacity coefficients `(a_n, b_n)` pairs, m-1:
+         !! `kappa_n = a_n + b_n * chl**p_n`.  Defaults are the three-band
+         !! values (MOM6 `OPACITY_VALUES_MANIZZA`).
+      real(wp) :: sw_chl_power(MAX_SW_BANDS) = [0.674_wp, 0.629_wp, 0.0_wp, &
+                                                0.0_wp, 0.0_wp, 0.0_wp]
+         !! Chlorophyll exponents `p_n` (MOM6 `CHOROPHYLL_POWER_MANIZZA`).
+      real(wp) :: sw_opacity_land = 10.0_wp
+         !! Opacity assigned to land columns, m-1 (`OPACITY_LAND_VALUE`).
    end type ocean_thermo_config_t
 
    type :: ocean_forcing_config_t

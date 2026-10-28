@@ -890,6 +890,7 @@ contains
                                  sf%Q_salt, 1.0_wp/this%rho0, &
                                  sf%q_sw, sw_ctke_active, sf%sw_pen_frac, &
                                  sf%sw_band_ratio, sf%sw_zeta1, sf%sw_zeta2, &
+                                 sf%sw_chl, sf%sw_nb, sf%sw_frac, sf%sw_kappa, &
                                  ms%wet_mask, this%in_eos, nx, ny)
       else
          call epbl_column_kernel(grid, this, ms, &
@@ -900,6 +901,7 @@ contains
                                  sf%Q_salt, 1.0_wp/this%rho0, &
                                  sf%Q_heat, sw_ctke_active, sf%sw_pen_frac, &
                                  sf%sw_band_ratio, sf%sw_zeta1, sf%sw_zeta2, &
+                                 sf%sw_chl, sf%sw_nb, sf%sw_frac, sf%sw_kappa, &
                                  ms%wet_mask, this%in_eos, nx, ny)
       end if
    end subroutine epbl_compute
@@ -908,7 +910,8 @@ contains
                                       Q_heat_field, inv_rho0_cp, &
                                       Q_salt_field, inv_rho0, &
                                       sw_src_field, sw_ctke_active, sw_pen_frac, &
-                                      sw_R, sw_zeta1, sw_zeta2, wet_mask_field, &
+                                      sw_R, sw_zeta1, sw_zeta2, &
+                                      sw_chl, sw_nb, sw_frac, sw_kappa, wet_mask_field, &
                                       p_top_in_eos, nx_arg, ny_arg)
       !! Per-column EPBL solve.  One `do concurrent (j, i)` with the
       !! serial work in k inside (j -> i -> k ordering); ALL sweep
@@ -965,6 +968,13 @@ contains
          !! energetics + sweep run the unmodified legacy lines.
       real(wp), intent(in) :: sw_pen_frac, sw_R, sw_zeta1, sw_zeta2
          !! (PR-21) Two-band SW parameters (from sf), by value.
+      logical, intent(in) :: sw_chl
+         !! Chlorophyll N-band scheme gate (`sf%sw_chl`): the ledger then
+         !! uses `sw_frac`/`sw_kappa` (Manizza et al. 2005) instead of the
+         !! two-band parameters, exactly as the deposition kernel does.
+      integer, intent(in) :: sw_nb
+      real(wp), intent(in) :: sw_frac(:)   ! assumed-shape-ok: outer-shim pass; thermo cadence
+      real(wp), intent(in) :: sw_kappa(:, :, :)   ! assumed-shape-ok: outer-shim pass; thermo cadence
       real(wp), intent(in) :: wet_mask_field(:, :)   ! assumed-shape-ok: outer-shim pass; thermo cadence
          !! (PR-21) Wet mask — mirrors the deposition kernel's I0 gate so
          !! the ledger and the tracer field account the same heat.
@@ -1008,7 +1018,8 @@ contains
       real(wp) :: d_wind, d_conv, d_forcing, d_mixing, d_mdecay, d_cdecay
       ! (PR-21) penetrating-SW TKE ledger locals
       real(wp) :: i0_col, d_top_sw, d_bot_sw, heat_sw1, heat_sw2, q_nonpen_kin
-      real(wp) :: ctke_sw_kb, r_sw
+      real(wp) :: ctke_sw_kb, r_sw, heat_nb, phi_sum, ea, eb
+      integer :: nb_i
 
       nx = grid%nx_total
       ny = grid%ny_total
@@ -1035,7 +1046,7 @@ contains
                d_wind, d_conv, d_forcing, d_mixing, d_mdecay, d_cdecay, &
                q_t_kin, q_s_kin, &
                i0_col, d_top_sw, d_bot_sw, heat_sw1, heat_sw2, q_nonpen_kin, &
-               ctke_sw_kb, r_sw)
+               ctke_sw_kb, r_sw, heat_nb, phi_sum, ea, eb, nb_i)
 
          ! ---- Column prep: T0/S0 + PE/steric weights (downward) ----
          ! (E3) The top of this column.  0 Pa at a free surface; the
@@ -1092,7 +1103,27 @@ contains
             ! cost of homogenising that exponentially-distributed heating
             ! is `Phi(h/zeta) <= 1` of the skin cost; the skin identity
             ! `rho0²·h·dsv_dt ≡ rho0·dcolht_t` makes this division-free.
-            if (sw_ctke_active) then
+            if (sw_ctke_active .and. sw_chl) then
+               ! Chlorophyll N-band ledger: per-band absorbed heat (same
+               ! difference form + opaque bed as the deposition kernel) and
+               ! the in-layer PE-cost shape at that band's optical depth.
+               d_bot_sw = d_top_sw + hk
+               phi_sum = 0.0_wp
+               do nb_i = 1, sw_nb
+                  ea = exp(-sw_kappa(i, j, nb_i)*d_top_sw)
+                  if (k > ms%k_bot(i, j)) then
+                     eb = exp(-sw_kappa(i, j, nb_i)*d_bot_sw)
+                  else
+                     eb = 0.0_wp   ! opaque bed: absorb the remainder
+                  end if
+                  heat_nb = i0_col*sw_frac(nb_i)*inv_rho0_cp*dt*(ea - eb)
+                  phi_sum = phi_sum + heat_nb*sw_pe_cost_shape(hk*sw_kappa(i, j, nb_i))
+               end do
+               this%ctke_sw%data(i, j, k) = &
+                  -0.5_wp*GRAVITY*this%rho0*this%dcolht_t%data(i, j, k)*phi_sum
+               if (k < ms%k_bot(i, j)) this%ctke_sw%data(i, j, k) = 0.0_wp
+               d_top_sw = d_bot_sw
+            else if (sw_ctke_active) then
                d_bot_sw = d_top_sw + hk
                if (k > ms%k_bot(i, j)) then
                   heat_sw1 = i0_col*sw_R*inv_rho0_cp*dt* &

@@ -66,6 +66,7 @@ module rdb_ocean_state
                                    ocean_restart_metadata_t
    use rdb_ocean_data_input, only: ocean_data_input_t, ocean_data_input_load_static_2d
    use rdb_ocean_data_forcing, only: ocean_data_forcing_t
+   use rdb_ocean_sw_chl, only: ocean_sw_chl_t
    use rdb_atm_state, only: atm_state_t
    use rdb_ocean_bulk_forcing, only: bulk_forcing_t
 #endif
@@ -342,6 +343,11 @@ module rdb_ocean_state
          !! `ocean_state_enter_data`: there is nothing to map.  The
          !! arrays it writes are mapped by `surface_stress` /
          !! `surface_flux`.
+      type(ocean_sw_chl_t) :: sw_chl
+         !! Chlorophyll-dependent shortwave optics (Manizza et al. 2005):
+         !! registration id + opacity coefficients, all host-side, so like
+         !! `data_forcing` it adds NO `enter_data` term -- the arrays it
+         !! fills live on `surface_flux`.
       type(atm_state_t) :: atm
          !! JRA55-do-style prescribed atmospheric state (OM3 C2c-2a) --
          !! `tas, huss, uas, vas, psl, rlds, rsds, prra, prsn` on the

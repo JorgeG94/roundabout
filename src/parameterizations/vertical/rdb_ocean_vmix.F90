@@ -86,7 +86,7 @@ module rdb_ocean_vmix
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_ocean_surface_stress, only: ocean_surface_stress_t
    use rdb_ocean_surface_flux, only: ocean_surface_flux_t, SEAWATER_CP, &
-                                     sw_transmission
+                                     sw_transmission, sw_transmission_nb
    use rdb_eos, only: eos_t, eos_buoyancy_coeffs
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_mem_report, only: arr_bytes
@@ -1082,14 +1082,16 @@ contains
                                     ms%tracers(ms%idx_temperature)%hTr, &
                                     ms%tracers(ms%idx_salinity)%hTr, &
                                     sf%has_sw, sf%sw_pen_frac, sf%sw_band_ratio, &
-                                    sf%sw_zeta1, sf%sw_zeta2, this%kpp_sw_method)
+                                    sf%sw_zeta1, sf%sw_zeta2, this%kpp_sw_method, &
+                                    sf%sw_chl, sf%sw_nb, sf%sw_frac, sf%sw_kappa)
       else
          call vmix_kpp_overlay_impl(grid, this, ms, ss, sf, &
                                     grid%nx_total, grid%ny_total, ms%nz_ml, sf%Q_heat, &
                                     ms%tracers(ms%idx_temperature)%hTr, &
                                     ms%tracers(ms%idx_salinity)%hTr, &
                                     sf%has_sw, sf%sw_pen_frac, sf%sw_band_ratio, &
-                                    sf%sw_zeta1, sf%sw_zeta2, this%kpp_sw_method)
+                                    sf%sw_zeta1, sf%sw_zeta2, this%kpp_sw_method, &
+                                    sf%sw_chl, sf%sw_nb, sf%sw_frac, sf%sw_kappa)
       end if
    end subroutine vmix_apply_kpp_overlay
 
@@ -1097,7 +1099,7 @@ contains
                                          nx_arg, ny_arg, nz_arg, sw_src, &
                                          temp_h, salt_h, sw_active, &
                                          sw_pen_frac, sw_R, sw_zeta1, sw_zeta2, &
-                                         sw_method)
+                                         sw_method, sw_chl, sw_nb, sw_frac, sw_kappa)
       !! KPP boundary-layer overlay on top of the interior closure
       !! already in `this%kv` / `this%kt`.  Phase 1 was shear-driven
       !! only; Phase 2 added the convective velocity scale `w_*` and
@@ -1198,6 +1200,12 @@ contains
          !! Two-band SW parameters (from `sf`), by value.
       integer, intent(in) :: sw_method
          !! `KPP_SW_ALL` | `KPP_SW_MXL` | `KPP_SW_LV1`.
+      logical, intent(in) :: sw_chl
+         !! Host-side `sf%sw_chl` gate -- true selects the N-band
+         !! transmission (`sw_frac`/`sw_kappa`), false the two-band line.
+      integer, intent(in) :: sw_nb
+      real(wp), intent(in) :: sw_frac(sw_nb)
+      real(wp), intent(in) :: sw_kappa(nx_arg, ny_arg, sw_nb)
 
       integer :: i, j, k, nx, ny, nz
       real(wp) :: tau_mag, u_star
@@ -1286,7 +1294,18 @@ contains
          !   sw_pen_frac=0 keeps the unmodified legacy source line.
          if (sw_active) then
             q_bl = sf%Q_heat(i, j)
-            if (sw_method == KPP_SW_MXL) then
+            if (sw_chl) then
+               ! Chlorophyll N-band scheme (Manizza et al. 2005): the same
+               ! per-column band opacities the deposition kernel uses.
+               if (sw_method == KPP_SW_MXL) then
+                  q_bl = q_bl - sw_pen_frac*sw_src(i, j)* &
+                         sw_transmission_nb(h_b_lagged, i, j, nx_arg, ny_arg, sw_nb, sw_kappa, sw_frac)
+               else if (sw_method == KPP_SW_LV1) then
+                  q_bl = q_bl - sw_pen_frac*sw_src(i, j)* &
+                         sw_transmission_nb(ms%h_layer(i, j, nz), i, j, nx_arg, ny_arg, sw_nb, &
+                                            sw_kappa, sw_frac)
+               end if
+            else if (sw_method == KPP_SW_MXL) then
                q_bl = q_bl - sw_pen_frac*sw_src(i, j)* &
                       sw_transmission(h_b_lagged, sw_R, sw_zeta1, sw_zeta2)
             else if (sw_method == KPP_SW_LV1) then
@@ -1393,7 +1412,18 @@ contains
          !   sw_active so sw_pen_frac=0 keeps the legacy source line.
          if (sw_active) then
             q_bl = sf%Q_heat(i, j)
-            if (sw_method == KPP_SW_MXL) then
+            if (sw_chl) then
+               ! Chlorophyll N-band scheme (Manizza et al. 2005): the same
+               ! per-column band opacities the deposition kernel uses.
+               if (sw_method == KPP_SW_MXL) then
+                  q_bl = q_bl - sw_pen_frac*sw_src(i, j)* &
+                         sw_transmission_nb(h_b, i, j, nx_arg, ny_arg, sw_nb, sw_kappa, sw_frac)
+               else if (sw_method == KPP_SW_LV1) then
+                  q_bl = q_bl - sw_pen_frac*sw_src(i, j)* &
+                         sw_transmission_nb(ms%h_layer(i, j, nz), i, j, nx_arg, ny_arg, sw_nb, &
+                                            sw_kappa, sw_frac)
+               end if
+            else if (sw_method == KPP_SW_MXL) then
                q_bl = q_bl - sw_pen_frac*sw_src(i, j)* &
                       sw_transmission(h_b, sw_R, sw_zeta1, sw_zeta2)
             else if (sw_method == KPP_SW_LV1) then

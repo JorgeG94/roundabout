@@ -3005,6 +3005,85 @@ class OceanThermo(Group):
         default=23.0,
     )
 
+    sw_scheme = Enum(
+        'sw_scheme',
+        doc='Penetrating-SW scheme: default (two-band) | manizza05 (chlorophyll-dependent N-band, Manizza et al. 2005)',
+        units='',
+        required=False,
+        default='default',
+        allowed=('default', 'manizza05'),
+    )
+
+    sw_nbands = Int(
+        'sw_nbands',
+        doc='manizza05: number of bands (3..6); NIR split evenly over bands 3..n',
+        units='',
+        required=False,
+        default=3,
+        has_min=True,
+        vmin=3,
+        has_max=True,
+        vmax=6,
+    )
+
+    sw_blue_frac = Real(
+        'sw_blue_frac',
+        doc='manizza05: blue share of the visible (0.42 of total) shortwave',
+        units='',
+        required=False,
+        default=0.5,
+        has_min=True,
+        vmin=0.0,
+        has_max=True,
+        vmax=1.0,
+    )
+
+    sw_chl_file = Str(
+        'sw_chl_file',
+        doc='manizza05: NetCDF chlorophyll climatology (mg/m^3), monthly cyclic',
+        units='',
+        required=False,
+        default='',
+        max_len=256,
+    )
+
+    sw_chl_var = Str(
+        'sw_chl_var',
+        doc='manizza05: variable name of the chlorophyll field',
+        units='',
+        required=False,
+        default='CHL',
+        max_len=64,
+    )
+
+    sw_opacity_coef = RealArray(
+        'sw_opacity_coef',
+        doc='manizza05: (a_n, b_n) pairs, kappa_n = a_n + b_n*chl**p_n',
+        units='1/m',
+        required=False,
+        default=(0.0232, 0.074, 0.225, 0.037, 2.86, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+        size=12,
+    )
+
+    sw_chl_power = RealArray(
+        'sw_chl_power',
+        doc='manizza05: chlorophyll exponents p_n',
+        units='',
+        required=False,
+        default=(0.674, 0.629, 0.0, 0.0, 0.0, 0.0),
+        size=6,
+    )
+
+    sw_opacity_land = Real(
+        'sw_opacity_land',
+        doc='manizza05: opacity of land columns',
+        units='1/m',
+        required=False,
+        default=10.0,
+        has_min=True,
+        vmin=0.0,
+    )
+
 
 class OceanForcing(Group):
     """`&ocean_forcing_nml` -- Surface-flux component-set gate (PR-12): allocate the q_sw/evap/heat_content_*/... set and derive Q_heat/Q_salt from it every thermo step."""
@@ -6891,4 +6970,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 62
-N_KNOBS = 757
+N_KNOBS = 765

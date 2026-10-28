@@ -239,6 +239,31 @@ contains
                                 "sw_source='q_sw' with &ocean_forcing_nml "// &
                                 "enable_components=.true.")
          end if
+         ! Chlorophyll-dependent N-band shortwave (Manizza et al. 2005): the
+         ! scheme band-absorbs the WHOLE shortwave, so it has no separate
+         ! penetrating fraction -- refuse a conflicting `sw_pen_frac`
+         ! rather than silently mixing the two formulations.
+         if (trim(cfg%ocean%thermo%sw_scheme) == "manizza05") then
+            if (len_trim(cfg%ocean%thermo%sw_chl_file) == 0) then
+               call logger%error("&ocean_thermo_nml sw_scheme='manizza05' requires "// &
+                                 "sw_chl_file (surface chlorophyll climatology)")
+               has_error = .true.
+            end if
+            if (len_trim(cfg%ocean%thermo%sw_chl_var) == 0) then
+               call logger%error("&ocean_thermo_nml sw_scheme='manizza05' requires sw_chl_var")
+               has_error = .true.
+            end if
+            if (cfg%ocean%thermo%sw_pen_frac /= 0.0_wp .and. &
+                cfg%ocean%thermo%sw_pen_frac /= 1.0_wp) then
+               call logger%error("&ocean_thermo_nml sw_scheme='manizza05' band-absorbs the "// &
+                                 "whole shortwave: sw_pen_frac must be 0 (unset) or 1, got "// &
+                                 to_string(cfg%ocean%thermo%sw_pen_frac))
+               has_error = .true.
+            end if
+         else if (len_trim(cfg%ocean%thermo%sw_chl_file) > 0) then
+            call logger%warning("&ocean_thermo_nml sw_chl_file is set but "// &
+                                "sw_scheme='default': the chlorophyll file is ignored")
+         end if
       end if
 
       ! Sponge width

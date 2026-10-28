@@ -356,6 +356,8 @@ contains
       type(nml_group_t) :: g
       logical, pointer :: pl
       real(wp), pointer :: pr
+      real(wp), pointer :: pra(:)
+      integer, pointer :: pi
       character(len=:), pointer :: ps
 
       g%name = "ocean_thermo"
@@ -392,6 +394,35 @@ contains
       pr => cfg%ocean%thermo%sw_zeta2
       call g%add(nml_real("sw_zeta2", pr, &
                           "Shortwave band-2 e-folding depth", units="m"))
+      ps => cfg%ocean%thermo%sw_scheme
+      call g%add(nml_enum("sw_scheme", ps, &
+                          "Penetrating-SW scheme: default (two-band) | manizza05 "// &
+                          "(chlorophyll-dependent N-band, Manizza et al. 2005)", &
+                          allowed=[character(len=9) :: "default", "manizza05"]))
+      pi => cfg%ocean%thermo%sw_nbands
+      call g%add(nml_int("sw_nbands", pi, &
+                         "manizza05: number of bands (3..6); NIR split evenly over bands 3..n", &
+                         min=3, max=MAX_SW_BANDS))
+      pr => cfg%ocean%thermo%sw_blue_frac
+      call g%add(nml_real("sw_blue_frac", pr, &
+                          "manizza05: blue share of the visible (0.42 of total) shortwave", &
+                          min=0.0_wp, max=1.0_wp))
+      ps => cfg%ocean%thermo%sw_chl_file
+      call g%add(nml_string("sw_chl_file", ps, &
+                            "manizza05: NetCDF chlorophyll climatology (mg/m^3), monthly cyclic"))
+      ps => cfg%ocean%thermo%sw_chl_var
+      call g%add(nml_string("sw_chl_var", ps, &
+                            "manizza05: variable name of the chlorophyll field"))
+      pra => cfg%ocean%thermo%sw_opacity_coef
+      call g%add(nml_real_array("sw_opacity_coef", pra, &
+                                "manizza05: (a_n, b_n) pairs, kappa_n = a_n + b_n*chl**p_n", &
+                                units="1/m"))
+      pra => cfg%ocean%thermo%sw_chl_power
+      call g%add(nml_real_array("sw_chl_power", pra, &
+                                "manizza05: chlorophyll exponents p_n"))
+      pr => cfg%ocean%thermo%sw_opacity_land
+      call g%add(nml_real("sw_opacity_land", pr, &
+                          "manizza05: opacity of land columns", units="1/m", min=0.0_wp))
       call schema%add_group(g)
    end subroutine register_ocean_thermo
 

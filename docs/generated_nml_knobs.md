@@ -555,6 +555,14 @@ Thermodynamics master switch + scalar surface fluxes.
 | `sw_band_ratio` | `0.5800000000E+00` |  | Two-band shortwave band-1 weight R (Jerlov type I) |
 | `sw_zeta1` | `0.3500000000E+00` | m | Shortwave band-1 e-folding depth |
 | `sw_zeta2` | `0.2300000000E+02` | m | Shortwave band-2 e-folding depth |
+| `sw_scheme` | `"default"` |  | Penetrating-SW scheme: default (two-band) | manizza05 (chlorophyll-dependent N-band, Manizza et al. 2005) |
+| `sw_nbands` | `3` |  | manizza05: number of bands (3..6); NIR split evenly over bands 3..n |
+| `sw_blue_frac` | `0.5000000000E+00` |  | manizza05: blue share of the visible (0.42 of total) shortwave |
+| `sw_chl_file` | `""` |  | manizza05: NetCDF chlorophyll climatology (mg/m^3), monthly cyclic |
+| `sw_chl_var` | `"CHL"` |  | manizza05: variable name of the chlorophyll field |
+| `sw_opacity_coef` | `0.2320000000E-01, 0.7400000000E-01, 0.2250000000E+00, 0.3700000000E-01, 0.2860000000E+01, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00` | 1/m | manizza05: (a_n, b_n) pairs, kappa_n = a_n + b_n*chl**p_n |
+| `sw_chl_power` | `0.6740000000E+00, 0.6290000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00, 0.0000000000E+00` |  | manizza05: chlorophyll exponents p_n |
+| `sw_opacity_land` | `0.1000000000E+02` | 1/m | manizza05: opacity of land columns |
 
 ### &ocean_forcing_nml
 

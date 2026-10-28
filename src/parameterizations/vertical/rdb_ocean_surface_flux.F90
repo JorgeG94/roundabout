@@ -99,8 +99,15 @@ module rdb_ocean_surface_flux
    public :: ocean_surface_flux_assemble
    public :: ocean_surface_flux_apply_cover_const
    public :: sw_transmission
+   public :: sw_transmission_nb
+   public :: sw_band_fractions
+   public :: sw_opacity_manizza
    public :: sw_pe_cost_shape
    public :: sw_source_is_implemented
+
+   ! Visible share of the total shortwave when only the total is carried
+   ! (Manizza et al. 2005): SW_vis = 0.42*SW, SW_nir = SW - SW_vis.
+   real(wp), parameter, public :: SW_VIS_FRAC = 0.42_wp
 
    ! Seconds per day — converts the MOM6 `FLUXCONST` piston velocity
    ! (specified in m/day) to MKS m/s at the seed call.
@@ -182,6 +189,27 @@ module rdb_ocean_surface_flux
       real(wp) :: sw_zeta2 = 23.0_wp
          !! Band-2 e-folding depth (m) — the slowly-absorbed
          !! blue/green band.
+      logical :: sw_chl = .false.
+         !! `.true.` under `&ocean_thermo_nml sw_scheme = "manizza05"`: the
+         !! deposition kernel, the KPP `B_0` coupling and the EPBL SW ledger
+         !! then use the N-band `sw_frac`/`sw_kappa` instead of the two-band
+         !! `sw_band_ratio`/`sw_zeta1/2`.  Set by `set_sw_chl`; host-side
+         !! gate only (passed to the kernels by value).
+      integer :: sw_nb = 1
+         !! Number of bands carried in `sw_frac`/`sw_kappa` (1 = inert
+         !! placeholder when `sw_chl = .false.`).
+      real(wp), allocatable :: sw_frac(:)
+         !! `(sw_nb)` share of the total shortwave in each band; sums to 1.
+         !! Always allocated (size-1 placeholder when off) and always
+         !! device-mapped, so the kernels can take it as an explicit-shape
+         !! dummy on every path.
+      real(wp), allocatable :: sw_kappa(:, :, :)
+         !! `(nx, ny, sw_nb)` per-column band opacity (m-1), uniform in
+         !! depth within a column.  Refreshed once per outer step from the
+         !! chlorophyll climatology (`rdb_ocean_sw_chl`).
+      real(wp), allocatable :: sw_chl_field(:, :)
+         !! `(nx, ny)` time-interpolated surface chlorophyll (mg m-3), the
+         !! reader's destination.
       logical :: has_restore_T = .false.
          !! True when SST restoring is active (`enable_restore_temp .and.
          !! restore_piston_T /= 0`).  Host-side gate only —
@@ -398,6 +426,7 @@ module rdb_ocean_surface_flux
       procedure, non_overridable :: exit_data => ocean_surfflux_exit_data
       procedure, non_overridable :: set_surface_flux_const => ocean_surfflux_set_const
       procedure, non_overridable :: set_sw_penetration => ocean_surfflux_set_sw
+      procedure, non_overridable :: set_sw_chl => ocean_surfflux_set_sw_chl
       procedure, non_overridable :: set_restore => ocean_surfflux_set_restore
       procedure, non_overridable :: set_restore_file => ocean_surfflux_set_restore_file
       procedure, non_overridable :: set_components => ocean_surfflux_set_components
@@ -415,6 +444,9 @@ contains
       ny = grid%ny_total
       allocate (this%Q_heat(nx, ny), source=0.0_wp)
       allocate (this%Q_salt(nx, ny), source=0.0_wp)
+      allocate (this%sw_frac(1), source=1.0_wp)
+      allocate (this%sw_kappa(nx, ny, 1), source=1.0_wp)
+      allocate (this%sw_chl_field(nx, ny), source=0.0_wp)
       this%q_assembled = 0.0_wp
       this%is_init = .true.
    end subroutine ocean_surfflux_init
@@ -426,6 +458,9 @@ contains
       if (allocated(this%Q_heat)) deallocate (this%Q_heat)
       if (allocated(this%Q_salt)) deallocate (this%Q_salt)
       if (allocated(this%sss_target)) deallocate (this%sss_target)
+      if (allocated(this%sw_frac)) deallocate (this%sw_frac)
+      if (allocated(this%sw_kappa)) deallocate (this%sw_kappa)
+      if (allocated(this%sw_chl_field)) deallocate (this%sw_chl_field)
       call ocean_surfflux_dealloc_components(this)
    end subroutine ocean_surfflux_destroy
 
@@ -480,6 +515,8 @@ contains
          !$acc enter data copyin(this%sss_target)
          !$acc update device(this%sss_target)
       end if
+      !$acc enter data copyin(this%sw_frac, this%sw_kappa, this%sw_chl_field)
+      !$acc update device(this%sw_frac, this%sw_kappa, this%sw_chl_field)
       if (this%use_components) then
          !$acc enter data copyin(this%q_sw, this%q_lw, this%q_lat, this%q_sens, &
          !$acc&                  this%heat_added, this%heat_cavity, this%evap, &
@@ -529,6 +566,7 @@ contains
       if (allocated(this%sss_target)) then
          !$acc exit data delete(this%sss_target)
       end if
+      !$acc exit data delete(this%sw_frac, this%sw_kappa, this%sw_chl_field)
       !$acc exit data delete(this%Q_heat, this%Q_salt)
    end subroutine ocean_surfflux_exit_data_impl
 
@@ -574,6 +612,78 @@ contains
       this%sw_from_qsw = .false.
       if (present(sw_source)) this%sw_from_qsw = (trim(sw_source) == "q_sw")
    end subroutine ocean_surfflux_set_sw
+
+   subroutine ocean_surfflux_set_sw_chl(this, nbands, blue_frac)
+      !! Switch the penetrating shortwave to the chlorophyll-dependent
+      !! N-band scheme of Manizza et al. (2005): the WHOLE shortwave is
+      !! band-absorbed, so the penetrating fraction is pinned to 1 and the
+      !! `has_sw` gate opened.  (re)allocates `sw_frac`/`sw_kappa` for
+      !! `nbands`; `kappa` is seeded with 1 m-1 until the first
+      !! `sw_chl_apply`.  Host only, and BEFORE `enter_data` -- the arrays
+      !! are device-mapped there.  Call after `set_sw_penetration`.
+      class(ocean_surface_flux_t), intent(inout) :: this
+      integer, intent(in) :: nbands
+      real(wp), intent(in) :: blue_frac
+      integer :: nx, ny
+      nx = size(this%Q_heat, 1)
+      ny = size(this%Q_heat, 2)
+      if (allocated(this%sw_frac)) deallocate (this%sw_frac)
+      if (allocated(this%sw_kappa)) deallocate (this%sw_kappa)
+      allocate (this%sw_frac(nbands))
+      this%sw_frac = sw_band_fractions(nbands, blue_frac)
+      allocate (this%sw_kappa(nx, ny, nbands), source=1.0_wp)
+      this%sw_nb = nbands
+      this%sw_chl = .true.
+      this%sw_pen_frac = 1.0_wp
+      this%has_sw = .true.
+   end subroutine ocean_surfflux_set_sw_chl
+
+   pure function sw_band_fractions(nbands, blue_frac) result(frac)
+      !! Share of the TOTAL shortwave carried by each band (Manizza et al.
+      !! 2005): visible `SW_vis = 0.42*SW`, split into blue
+      !! (`blue_frac*SW_vis`) and red (`(1-blue_frac)*SW_vis`); the
+      !! near-infrared remainder `SW - SW_vis` is split evenly over bands
+      !! `3..nbands`.  Sums to 1.
+      integer, intent(in) :: nbands
+      real(wp), intent(in) :: blue_frac
+      real(wp) :: frac(nbands)
+      integer :: n
+      frac(1) = blue_frac*SW_VIS_FRAC
+      frac(2) = (1.0_wp - blue_frac)*SW_VIS_FRAC
+      do n = 3, nbands
+         frac(n) = (1.0_wp - SW_VIS_FRAC)/real(nbands - 2, wp)
+      end do
+   end function sw_band_fractions
+
+   pure function sw_opacity_manizza(chl, a, b, p, chl_floor) result(kappa)
+      !! Band opacity (m-1) `kappa = a + b*chl**p` (Manizza et al. 2005),
+      !! with the chlorophyll floored at `chl_floor` so the power is
+      !! defined for zero / fill-value input.  `!$acc routine seq` for the
+      !! device fill kernel.
+      !$acc routine seq
+      real(wp), intent(in) :: chl, a, b, p, chl_floor
+      real(wp) :: kappa
+      kappa = a + b*max(chl, chl_floor)**p
+   end function sw_opacity_manizza
+
+   pure function sw_transmission_nb(d, i, j, nx, ny, nb, kappa, frac) result(trans)
+      !! N-band normalised downward irradiance transmission at depth `d`
+      !! in column `(i, j)`: `T(d) = sum_n frac_n*exp(-kappa_n(i,j)*d)`,
+      !! `T(0) = sum(frac) = 1`.  The chlorophyll-scheme twin of
+      !! `sw_transmission`, shared by the deposition kernel and both
+      !! boundary-layer consumers.
+      !$acc routine seq
+      integer, intent(in) :: i, j, nx, ny, nb
+      real(wp), intent(in) :: d
+      real(wp), intent(in) :: kappa(nx, ny, nb)
+      real(wp), intent(in) :: frac(nb)
+      real(wp) :: trans
+      integer :: n
+      trans = 0.0_wp
+      do n = 1, nb
+         trans = trans + frac(n)*exp(-kappa(i, j, n)*d)
+      end do
+   end function sw_transmission_nb
 
    pure function sw_source_is_implemented(name) result(ok)
       !! Fail-loud predicate for the `&ocean_thermo_nml sw_source`
@@ -1023,6 +1133,36 @@ contains
       if (present(cover_frac)) then
          masked = (size(cover_frac, 1) == nx .and. size(cover_frac, 2) == ny)
       end if
+      if (sf%sw_chl) then
+         ! Chlorophyll-dependent N-band path (Manizza et al. 2005): own
+         ! kernels; the two-band calls below stay untouched.
+         if (masked) then
+            if (sf%sw_from_qsw) then
+               call apply_sw_penetration_nb_cover_impl(ms%tracers(idx_T)%hTr, &
+                                                       ms%heat_budget_surface, ms%h_layer, ms%k_bot, &
+                                                       ms%wet_mask, cover_frac, sf%q_sw, dt/(sf%rho0*sf%cp), &
+                                                       sf%sw_nb, sf%sw_frac, sf%sw_kappa, nz, nx, ny)
+            else
+               call apply_sw_penetration_nb_cover_impl(ms%tracers(idx_T)%hTr, &
+                                                       ms%heat_budget_surface, ms%h_layer, ms%k_bot, &
+                                                       ms%wet_mask, cover_frac, sf%Q_heat, dt/(sf%rho0*sf%cp), &
+                                                       sf%sw_nb, sf%sw_frac, sf%sw_kappa, nz, nx, ny)
+            end if
+         else
+            if (sf%sw_from_qsw) then
+               call apply_sw_penetration_nb_impl(ms%tracers(idx_T)%hTr, &
+                                                 ms%heat_budget_surface, ms%h_layer, ms%k_bot, &
+                                                 ms%wet_mask, sf%q_sw, dt/(sf%rho0*sf%cp), &
+                                                 sf%sw_nb, sf%sw_frac, sf%sw_kappa, nz, nx, ny)
+            else
+               call apply_sw_penetration_nb_impl(ms%tracers(idx_T)%hTr, &
+                                                 ms%heat_budget_surface, ms%h_layer, ms%k_bot, &
+                                                 ms%wet_mask, sf%Q_heat, dt/(sf%rho0*sf%cp), &
+                                                 sf%sw_nb, sf%sw_frac, sf%sw_kappa, nz, nx, ny)
+            end if
+         end if
+         return
+      end if
       if (masked) then
          if (sf%sw_from_qsw) then
             call apply_sw_penetration_cover_impl(ms%tracers(idx_T)%hTr, &
@@ -1216,6 +1356,90 @@ contains
          end do
       end do
    end subroutine apply_sw_penetration_cover_impl
+
+   pure subroutine apply_sw_penetration_nb_impl(hTr, budget, h_layer, k_bot, wet_mask, &
+                                                sw_src, inv_scale, nb, frac, kappa, nz, nx, ny)
+      !! N-band (Manizza et al. 2005) twin of `apply_sw_penetration_impl`:
+      !! the whole irradiance `I0 = sw_src*wet_mask` is split by `frac` into
+      !! bands that decay as `exp(-kappa_n*d)` with the per-column `kappa`.
+      !! Same difference form, same opaque-bed residual in the first live
+      !! layer, same removal of the surface lump at `k = nz`, so the net
+      !! column change is zero for any `kappa`.
+      integer, intent(in)    :: nz, nx, ny, nb
+      real(wp), intent(inout) :: hTr(nx, ny, nz)
+      real(wp), intent(inout) :: budget(nx, ny, nz)
+      real(wp), intent(in)    :: h_layer(nx, ny, nz)
+      integer, intent(in)     :: k_bot(nx, ny)
+      real(wp), intent(in)    :: wet_mask(nx, ny)
+      real(wp), intent(in)    :: sw_src(nx, ny)
+      real(wp), intent(in)    :: inv_scale
+      real(wp), intent(in)    :: frac(nb)
+      real(wp), intent(in)    :: kappa(nx, ny, nb)
+      integer :: i, j, k
+      real(wp) :: i0col, d_top, d_bot, trans_top, trans_bot, absorbed, add
+
+      do concurrent(j=1:ny, i=1:nx) local(i0col, d_top, d_bot, trans_top, &
+                                          trans_bot, absorbed, add, k)
+         i0col = sw_src(i, j)*wet_mask(i, j)
+         d_top = 0.0_wp
+         do k = nz, k_bot(i, j), -1
+            d_bot = d_top + h_layer(i, j, k)
+            trans_top = sw_transmission_nb(d_top, i, j, nx, ny, nb, kappa, frac)
+            if (k > k_bot(i, j)) then
+               trans_bot = sw_transmission_nb(d_bot, i, j, nx, ny, nb, kappa, frac)
+            else
+               trans_bot = 0.0_wp   ! bed opaque: column absorbs all of I0
+            end if
+            absorbed = i0col*(trans_top - trans_bot)
+            add = inv_scale*absorbed
+            if (k == nz) add = add - inv_scale*i0col   ! remove the surface lump
+            hTr(i, j, k) = hTr(i, j, k) + add
+            budget(i, j, k) = budget(i, j, k) + add
+            d_top = d_bot
+         end do
+      end do
+   end subroutine apply_sw_penetration_nb_impl
+
+   pure subroutine apply_sw_penetration_nb_cover_impl(hTr, budget, h_layer, k_bot, wet_mask, &
+                                                      cover_frac, sw_src, inv_scale, nb, frac, &
+                                                      kappa, nz, nx, ny)
+      !! Ice-shelf-cover twin of `apply_sw_penetration_nb_impl`:
+      !! `I0 = sw_src*wet_mask*(1 - cover_frac)`.
+      integer, intent(in)    :: nz, nx, ny, nb
+      real(wp), intent(inout) :: hTr(nx, ny, nz)
+      real(wp), intent(inout) :: budget(nx, ny, nz)
+      real(wp), intent(in)    :: h_layer(nx, ny, nz)
+      integer, intent(in)     :: k_bot(nx, ny)
+      real(wp), intent(in)    :: wet_mask(nx, ny)
+      real(wp), intent(in)    :: cover_frac(nx, ny)
+      real(wp), intent(in)    :: sw_src(nx, ny)
+      real(wp), intent(in)    :: inv_scale
+      real(wp), intent(in)    :: frac(nb)
+      real(wp), intent(in)    :: kappa(nx, ny, nb)
+      integer :: i, j, k
+      real(wp) :: i0col, d_top, d_bot, trans_top, trans_bot, absorbed, add
+
+      do concurrent(j=1:ny, i=1:nx) local(i0col, d_top, d_bot, trans_top, &
+                                          trans_bot, absorbed, add, k)
+         i0col = sw_src(i, j)*wet_mask(i, j)*(1.0_wp - cover_frac(i, j))
+         d_top = 0.0_wp
+         do k = nz, k_bot(i, j), -1
+            d_bot = d_top + h_layer(i, j, k)
+            trans_top = sw_transmission_nb(d_top, i, j, nx, ny, nb, kappa, frac)
+            if (k > k_bot(i, j)) then
+               trans_bot = sw_transmission_nb(d_bot, i, j, nx, ny, nb, kappa, frac)
+            else
+               trans_bot = 0.0_wp
+            end if
+            absorbed = i0col*(trans_top - trans_bot)
+            add = inv_scale*absorbed
+            if (k == nz) add = add - inv_scale*i0col
+            hTr(i, j, k) = hTr(i, j, k) + add
+            budget(i, j, k) = budget(i, j, k) + add
+            d_top = d_bot
+         end do
+      end do
+   end subroutine apply_sw_penetration_nb_cover_impl
 
    subroutine ocean_surface_restore_apply_tracers(grid, sf, ms, dt, active, cover_frac)
       !! Surface buoyancy restoring (MOM6 `RESTOREBUOY`): relax the
@@ -1412,6 +1636,8 @@ contains
       nbytes = arr_bytes(this%Q_heat) &
                + arr_bytes(this%Q_salt) &
                + arr_bytes(this%sss_target) &
+               + arr_bytes(this%sw_frac) + arr_bytes(this%sw_kappa) &
+               + arr_bytes(this%sw_chl_field) &
                + arr_bytes(this%q_sw) + arr_bytes(this%q_lw) &
                + arr_bytes(this%q_lat) + arr_bytes(this%q_sens) &
                + arr_bytes(this%heat_added) &

@@ -149,6 +149,7 @@ module rdb_ocean_engine
    use rdb_ocean_data_input, only: ocean_data_input_update_all
    use rdb_ocean_data_forcing, only: ocean_data_forcing_configure, ocean_data_forcing_apply, &
                                      ocean_data_forcing_register_sss
+   use rdb_ocean_sw_chl, only: sw_chl_configure, sw_chl_apply
    use rdb_atm_state, only: atm_state_configure, atm_state_update
    use rdb_ocean_bulk_forcing, only: bulk_forcing_configure, bulk_forcing_apply
    use rdb_io_netcdf, only: output_rank_filename, ensure_directory_exists
@@ -861,6 +862,14 @@ contains
       call ocean_data_forcing_register_sss(cfg%ocean%restore, engine%state%data_input, &
                                            engine%grid, engine%state%surface_flux, &
                                            engine%state%data_forcing, ierr=ierr)
+      if (setup_failed(ierr)) return
+
+      ! Chlorophyll-dependent N-band shortwave (Manizza et al. 2005):
+      ! registers the chl climatology + seeds the band state on
+      ! `surface_flux`.  After `set_sw_penetration`, before enter_data.
+      ! No-op unless `&ocean_thermo_nml sw_scheme = "manizza05"`.
+      call sw_chl_configure(cfg%ocean%thermo, engine%state%data_input, engine%grid, &
+                            engine%state%surface_flux, engine%state%sw_chl, ierr=ierr)
       if (setup_failed(ierr)) return
 
       ! JRA55-do-style prescribed atmospheric state (OM3 C2c-2a): registers
@@ -1576,6 +1585,9 @@ contains
       ! refreshed, and neither writes a slot the other reads.
       call atm_state_update(engine%state%atm, engine%state%data_input, &
                             engine%state%metrics, t)
+      ! Chlorophyll -> per-band opacities (no-op unless sw_scheme="manizza05").
+      call sw_chl_apply(engine%state%sw_chl, engine%state%data_input, engine%grid, &
+                        engine%state%multilayer%wet_mask, engine%state%surface_flux, t)
 
       ! Ocean bulk-flux consumer (OM3 C2c-3a): no-op unless
       ! `&ocean_bulk_flux_nml enable = .true.` (which `validate_config`
