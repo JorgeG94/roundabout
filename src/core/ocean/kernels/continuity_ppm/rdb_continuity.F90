@@ -2604,11 +2604,7 @@ contains
       end if
       ! FK MLE fold (B5): add uhml into the zonal mass flux so it advects
       ! both h and tracers and enters the divergence.  No-op if absent.
-      ! NOTE: this fold runs every dynamics call; `mle_compute_transports`
-      ! runs only at thermo cadence.  When dt_therm_ratio > 1 the stale
-      ! uhml/vhml are re-folded on non-thermo steps (over-applies FK at
-      ! dynamics cadence — known limitation, safe/conservative via
-      ! sum_k a(k) = 0; to be gated when sub-thermo cadence is exercised).
+      ! NOTE: uhml/vhml are recomputed every dynamics step, so this fold is fresh.
       if (present(mle) .and. do_mle_fold) then
          call mle_fold_x(mle, ms%mass_flux_x_layer, nx + 1, ny, nz)
       end if

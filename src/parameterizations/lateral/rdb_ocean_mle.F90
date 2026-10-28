@@ -160,13 +160,11 @@ module rdb_ocean_mle
       ! k=1 bed, k=nz surface.  These are added to the continuity mass
       ! fluxes before the divergence; sum_k over each face is ~0.
       real(wp), allocatable :: uhml(:, :, :)
-         !! FK x-face transport (m^3/s), `(nx+1,ny,nz_ml)`.  Filled once per
-         !! outer step at thermo cadence, then folded into continuity every
-         !! dynamics call via `mle_fold_x`.  At `dt_therm_ratio > 1` the
-         !! stale values are re-folded on non-thermo steps (over-applies FK;
-         !! still conservative since sum_k a(k) = 0).
+         !! FK x-face transport (m^3/s), `(nx+1,ny,nz_ml)`.  Recomputed on
+         !! EVERY outer step (dynamics dt, latest MLD) and folded into
+         !! continuity via `mle_fold_x`, also when `dt_therm_ratio > 1`.
       real(wp), allocatable :: vhml(:, :, :)
-         !! FK y-face transport (m^3/s), `(nx,ny+1,nz_ml)`; same limitation.
+         !! FK y-face transport (m^3/s), `(nx,ny+1,nz_ml)`; same cadence.
    contains
       procedure :: init => ocean_mle_init
       procedure :: destroy => ocean_mle_destroy
@@ -352,9 +350,9 @@ contains
    ! Compute kernel
    ! =================================================================
 
-   subroutine mle_compute_transports(grid, metrics, this, ms, epbl, ss, dt_limit, bc)
+   subroutine mle_compute_transports(grid, metrics, this, ms, epbl, ss, dt_limit, bc, dt_filter)
       !! Fill `uhml`/`vhml` (m^3/s) with the FK MLE overturning transport.
-      !! Run once per outer step at thermo cadence, before the continuity
+      !! Run on EVERY outer step (dynamics dt), before the continuity
       !! divergence.  Steps: (1) b_ml + htot_ml at cell centres (surface→bed
       !! band to mld, partial-weight the straddling layer); (2) uDml/vDml at
       !! faces from grad b_bar, timescale, H_vel²; (2b) optional per-layer
@@ -368,7 +366,8 @@ contains
       type(ocean_epbl_t), intent(in) :: epbl
       type(ocean_surface_stress_t), intent(in), optional :: ss
       real(wp), intent(in), optional :: dt_limit
-         !! Window (s) the FK transport is integrated over (= `dt_therm`).
+         !! Thermo window (s) over which the windowed tracer drain accumulates
+         !! the per-step FK transport (= `dt_therm`); sizes the availability cap.
          !! When present and > 0, the per-layer availability cap bounds the
          !! transport so the windowed drain's `hprev` reconstruction stays
          !! non-negative in thin surface layers.  Absent / ≤ 0 ⇒ no cap.
@@ -383,6 +382,10 @@ contains
          !! Per-edge OBC tags.  Masks the FK transport on closed
          !! (non-periodic) physical wall faces so no MLE overturning crosses
          !! a land boundary.  Absent ⇒ array-edge zeroing only.
+      real(wp), intent(in), optional :: dt_filter
+         !! Interval (s) between successive calls = the dynamics `dt`; the
+         !! MLD running-mean filter advances by this.  Absent / <= 0 ⇒ it
+         !! falls back to `dt_limit` (identical when dt_therm_ratio = 1).
 
       integer :: i, j, k, nx, ny, nz, nghost, nx_phys, ny_phys
       real(wp) :: ce_l, f_floor_l, rho0_l, g_over_rho0
@@ -392,7 +395,7 @@ contains
       real(wp) :: h_remain, w, htot, rho_int
       real(wp) :: db, h_vel, f_abs, ustar, ts, uDml, vDml, i4dt, h_av, h_open
       real(wp) :: a_stack(NZ_STACK_MAX), hf_stack(NZ_STACK_MAX)
-      real(wp) :: a_fac, b_fac, mld_inst, mld_use
+      real(wp) :: a_fac, b_fac, mld_inst, mld_use, dt_flt
 
       if (.not. this%is_init) return
       if (.not. this%enable) return
@@ -447,15 +450,18 @@ contains
       ! deeper MLD but decays over `mld_decay_time` when it retreats:
       !     aFac = T/(dt+T),  bFac = dt/(dt+T)
       !     MLD_filt = max( MLD, bFac*MLD + aFac*MLD_filt )
-      ! `dt` = the FK call cadence (= `dt_limit`).  Filter off (default)
+      ! `dt` = the FK call cadence (the dynamics dt, `dt_filter`).  Filter off (default)
       ! reads the instantaneous MLD ⇒ bit-identical.  Fox-Kemper et al. (2011).
       do_filter = .false.
-      if (this%mld_decay_time > 0.0_wp .and. present(dt_limit)) then
-         if (dt_limit > 0.0_wp) do_filter = .true.
+      dt_flt = 0.0_wp
+      if (present(dt_limit)) dt_flt = dt_limit
+      if (present(dt_filter)) then
+         if (dt_filter > 0.0_wp) dt_flt = dt_filter
       end if
+      if (this%mld_decay_time > 0.0_wp .and. dt_flt > 0.0_wp) do_filter = .true.
       if (do_filter) then
-         a_fac = this%mld_decay_time/(dt_limit + this%mld_decay_time)
-         b_fac = dt_limit/(dt_limit + this%mld_decay_time)
+         a_fac = this%mld_decay_time/(dt_flt + this%mld_decay_time)
+         b_fac = dt_flt/(dt_flt + this%mld_decay_time)
          do concurrent(j=1:ny, i=1:nx) local(mld_inst)
             mld_inst = epbl%mld(i, j)
             if (this%mld_filtered(i, j) < 0.0_wp) then
