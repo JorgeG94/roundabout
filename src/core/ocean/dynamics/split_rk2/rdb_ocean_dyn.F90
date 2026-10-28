@@ -1471,6 +1471,169 @@ contains
       end if
    end subroutine apply_sw_and_restore
 
+   subroutine vmix_build_coefficients(grid, dyn, vmix, vd, ss, ms, dt, refresh_slow, sf, epbl, kshear, vmix_tidal, metrics)
+      !! Assemble the vertical-mixing coefficients `vmix%kv/kt/ks`: interior
+      !! seed (PP81 / none) -> KPP overlay or EPBL merge -> kappa-shear
+      !! merge -> tidal merge -> law-of-the-wall BBL merge -> KV_ML_INVZ2
+      !! -> convective adjustment -> heat/salt split -> `vmix_assemble`
+      !! (see `vmix_apply_in_stage` for the contributor rules).  Extracted
+      !! verbatim from the stage chain so the SAME code runs in-stage
+      !! (`diabatic_first = .true.` / ratio 1) and at the interval end
+      !! (`diabatic_first = .false.`, from `apply_deferred_thermo`).
+      !!
+      !! `refresh_slow` fires the slow column solves (`epbl_compute`,
+      !! `kappa_shear_compute`, `tidal_mixing_compute`, `bbl_mixing_compute`)
+      !! that refresh their persistent `kd_int` before the merges; the merges
+      !! themselves run on every call.  Requires `vmix%use_closure`.
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_dyn_t), intent(in) :: dyn
+      type(ocean_vmix_t), intent(inout) :: vmix
+      type(ocean_vdiff_t), intent(inout) :: vd
+      type(ocean_surface_stress_t), intent(in) :: ss
+      type(multilayer_state_t), intent(inout) :: ms
+      real(wp), intent(in) :: dt
+      logical, intent(in) :: refresh_slow
+      type(ocean_surface_flux_t), intent(in), optional :: sf
+      type(ocean_epbl_t), intent(inout), optional :: epbl
+      type(ocean_kappa_shear_t), intent(inout), optional :: kshear
+      type(ocean_tidal_mixing_t), intent(inout), optional :: vmix_tidal
+      type(ocean_metrics_t), intent(in), optional :: metrics
+
+      logical :: epbl_active, kshear_active, tidal_active, shear_first
+
+      epbl_active = .false.
+      if (present(epbl)) epbl_active = epbl%enable
+      kshear_active = .false.
+      if (present(kshear)) kshear_active = kshear%enable
+      tidal_active = .false.
+      if (present(vmix_tidal)) tidal_active = vmix_tidal%enable
+      ! combine="max_shear": kappa-shear must be merged BEFORE the ePBL
+      ! merge so the ePBL step can subtract it (the "add"/"max" order is
+      ! unchanged).  Without kappa-shear the mode is plain "add".
+      shear_first = .false.
+      if (epbl_active .and. kshear_active) shear_first = (epbl%combine_mode == EPBL_COMBINE_MAX_SHEAR)
+
+      call profiler_start("ocean_vmix_compute")
+      if (vmix%interior_closure == VMIX_INTERIOR_PP81) then
+         call vmix_compute_pp81(grid, vmix, ms)
+      else if (vmix%interior_closure == VMIX_INTERIOR_NONE) then
+         ! No shear-driven interior closure (OM3: no PP81): seed the
+         ! interior kv/kt with the background; the other contributors
+         ! add on top, vmix_assemble keeps floors and ceilings.
+         if (present(metrics)) then
+            call vmix_seed_interior_none(grid, vmix, ms, geolat=metrics%geolatT)
+         else
+            call vmix_seed_interior_none(grid, vmix, ms)
+         end if
+      else
+         ! PR-6 fail-loud: VMIX_INTERIOR_LARGE94 / VMIX_INTERIOR_CVMIX are
+         ! reserved-but-unwired (no kernel).  Selecting one would leave
+         ! kv/kt with NO interior mixing.  The `interior_closure`
+         ! namelist parser never returns them, so this
+         ! is defence-in-depth for the next code/config consumer.
+         call logger%error("vmix_apply_in_stage: the selected interior closure "// &
+                           "has no kernel (only VMIX_INTERIOR_PP81/NONE are implemented; "// &
+                           "VMIX_INTERIOR_LARGE94/CVMIX are reserved-but-unwired) — "// &
+                           "running it would leave kv/kt with no interior mixing")
+         error stop "vmix_apply_in_stage: unimplemented vmix interior closure"
+      end if
+      if (vmix%use_kpp .and. .not. epbl_active) then
+         if (.not. present(sf)) then
+            call logger%error("vmix_apply_in_stage: KPP requires the surface-flux slot (sf)")
+            error stop "vmix_apply_in_stage: use_kpp requires the surface-flux slot (sf)"
+         end if
+         call vmix_apply_kpp_overlay(grid, vmix, ms, ss, sf)
+      end if
+      if (epbl_active) then
+         if (.not. present(sf)) then
+            call logger%error("vmix_apply_in_stage: EPBL requires the surface-flux slot (sf)")
+            error stop "vmix_apply_in_stage: EPBL requires the surface-flux slot (sf)"
+         end if
+         if (refresh_slow) then
+            call epbl_compute(grid, epbl, ms, ss, dyn%therm_dt(dt), sf)
+         end if
+         if (shear_first) then
+            call kshear_stage_merge(grid, dyn, vmix, ms, kshear, dt, refresh_slow, metrics)
+            call epbl_merge_max_shear(epbl, size(vmix%kt, 1), size(vmix%kt, 2), &
+                                      size(vmix%kt, 3), vmix%kv, vmix%kt, &
+                                      kshear%kd_int, merge(0.0_wp, kshear%prandtl_turb, kshear%at_vertex))
+         else
+            call epbl_merge_into_kv_kt(epbl, size(vmix%kt, 1), size(vmix%kt, 2), &
+                                       size(vmix%kt, 3), vmix%kv, vmix%kt)
+         end if
+      end if
+      if (kshear_active .and. .not. shear_first) then
+         if (refresh_slow) then
+            if (kshear%at_vertex) then
+               ! Vertex form needs the halo-valid wet masks for the
+               ! corner gather; fail-loud inside if metrics is absent.
+               if (.not. present(metrics)) then
+                  call logger%error("vmix_apply_in_stage: kappa-shear at_vertex "// &
+                                    "requires the metrics slot (wet masks)")
+                  error stop "vmix_apply_in_stage: at_vertex needs metrics"
+               end if
+               call kappa_shear_compute(grid, kshear, ms, dyn%therm_dt(dt), &
+                                        wet_t=metrics%wet_T, wet_u=metrics%wet_u, &
+                                        wet_v=metrics%wet_v)
+            else
+               call kappa_shear_compute(grid, kshear, ms, dyn%therm_dt(dt))
+            end if
+         end if
+         call kappa_shear_merge_into_kv_kt(kshear, size(vmix%kt, 1), size(vmix%kt, 2), &
+                                           size(vmix%kt, 3), vmix%kv, vmix%kt)
+      end if
+      if (tidal_active) then
+         if (refresh_slow) then
+            call tidal_mixing_compute(grid, vmix_tidal, ms, dyn%therm_dt(dt))
+         end if
+         call tidal_mixing_merge_into_kt(vmix_tidal, size(vmix%kt, 1), size(vmix%kt, 2), &
+                                         size(vmix%kt, 3), vmix%kv, vmix%kt)
+      end if
+      if (vd%bbl_mix%enable) then
+         ! Law-of-the-wall BBL diffusivity: tracer kt only, additive.
+         if (refresh_slow) then
+            call bbl_mixing_compute(grid, vd%bbl_mix, ms)
+         end if
+         call bbl_mixing_merge_into_kt(vd%bbl_mix, size(vmix%kt, 1), size(vmix%kt, 2), &
+                                       size(vmix%kt, 3), vmix%kt)
+      end if
+      call vmix_add_kv_ml_invz2(grid, vmix, ms)
+      if (vmix%conv_enable) then
+         ! Brunt-Vaisala-triggered convective adjustment.  A CONTRIBUTOR
+         ! (max() floor), so it must run BEFORE vmix_assemble -- see the
+         ! rdb_ocean_vmix module docstring for the D1-D4 divergences from
+         ! MOM6's MOM_CVMix_conv.  Masks against the live BL depth of
+         ! whichever surface scheme is active this stage.
+         if (epbl_active) then
+            call vmix_apply_convection(grid, vmix, ms, epbl%mld)
+         else
+            call vmix_apply_convection(grid, vmix, ms, vmix%bl_depth)
+         end if
+      end if
+      ! `vmix_split_kd_heat_salt` is NOT a contributor -- it must be
+      ! the LAST statement before `vmix_assemble`, always.  Any future
+      ! PR adding a kv/kt contributor (e.g. convective adjustment)
+      ! inserts ABOVE this line, never below it -- ks is derived from
+      ! whatever kt holds at this point, so a contributor placed after
+      ! the split silently never reaches ks.
+      call vmix_split_kd_heat_salt(grid, vmix, ms)
+      ! Single downstream assembly gate: background floors, kv_max/kd_max
+      ! ceilings, optional 1-2-1 smoothing, optional negative/NaN guard.
+      ! Defaults reproduce the pre-assembly chain bit-for-bit.  Gates kv,
+      ! kt, AND ks.  `geolat` rides on the optional metrics slot (the C7
+      ! Henyey latitude factor's only spatial input) — forwarded when the
+      ! caller threaded metrics through, omitted otherwise.  Omitting it
+      ! is safe: vmix_assemble fails loud if `bkgnd_henyey` is on and
+      ! geolat is absent, so a caller that forgot cannot silently lose
+      ! the latitude factor.
+      if (present(metrics)) then
+         call vmix_assemble(grid, vmix, ms, geolat=metrics%geolatT)
+      else
+         call vmix_assemble(grid, vmix, ms)
+      end if
+      call profiler_stop("ocean_vmix_compute")
+   end subroutine vmix_build_coefficients
+
    subroutine vmix_apply_in_stage(grid, dyn, vmix, vd, ss, bd, ms, dt, stage, sf, epbl, kshear, vmix_tidal, bt_work, &
                                   lambda_top_u, lambda_top_v, cover_u, cover_v, &
                                   apply_tracers, metrics, dt_remnant, bc)
@@ -1606,13 +1769,11 @@ contains
          !! can re-wrap `bt_work%visc_rem_u/v`'s ghosts after production.
          !! Unread when `do_remnant` is false.
 
-      logical :: epbl_active, kshear_active, tidal_active, do_remnant
-      logical :: do_tracers, vertex_kv, split_remnant, request_remnant, shear_first
+      logical :: kshear_active, do_remnant
+      logical :: do_tracers, vertex_kv, split_remnant, request_remnant
 
       do_tracers = .true.
       if (present(apply_tracers)) do_tracers = apply_tracers
-      epbl_active = .false.
-      if (present(epbl)) epbl_active = epbl%enable
       kshear_active = .false.
       if (present(kshear)) kshear_active = kshear%enable
       ! Vertex kappa-shear routes its viscosity corner->face: the
@@ -1622,8 +1783,6 @@ contains
       ! Kv_shear when VERTEX_SHEAR is on — no double-count).
       vertex_kv = .false.
       if (present(kshear)) vertex_kv = kshear_active .and. kshear%at_vertex
-      tidal_active = .false.
-      if (present(vmix_tidal)) tidal_active = vmix_tidal%enable
       ! D1 follow-up: the producer must run whenever ANY consumer needs
       ! visc_rem_u/v fresh, not only the (retired) weighted BT-correction
       ! fold — read the decoupled `bt_visc_rem_producer` gate (set by
@@ -1644,132 +1803,17 @@ contains
       split_remnant = .false.
       if (do_remnant .and. present(dt_remnant)) split_remnant = (dt_remnant /= dt)
       request_remnant = do_remnant .and. .not. split_remnant
-      ! combine="max_shear": kappa-shear must be merged BEFORE the ePBL
-      ! merge so the ePBL step can subtract it (the "add"/"max" order is
-      ! unchanged).  Without kappa-shear the mode is plain "add".
-      shear_first = .false.
-      if (epbl_active .and. kshear_active) shear_first = (epbl%combine_mode == EPBL_COMBINE_MAX_SHEAR)
 
       if (vmix%use_closure) then
-         call profiler_start("ocean_vmix_compute")
-         if (vmix%interior_closure == VMIX_INTERIOR_PP81) then
-            call vmix_compute_pp81(grid, vmix, ms)
-         else if (vmix%interior_closure == VMIX_INTERIOR_NONE) then
-            ! No shear-driven interior closure (OM3: no PP81): seed the
-            ! interior kv/kt with the background; the other contributors
-            ! add on top, vmix_assemble keeps floors and ceilings.
-            if (present(metrics)) then
-               call vmix_seed_interior_none(grid, vmix, ms, geolat=metrics%geolatT)
-            else
-               call vmix_seed_interior_none(grid, vmix, ms)
-            end if
-         else
-            ! PR-6 fail-loud: VMIX_INTERIOR_LARGE94 / VMIX_INTERIOR_CVMIX are
-            ! reserved-but-unwired (no kernel).  Selecting one would leave
-            ! kv/kt with NO interior mixing.  The `interior_closure`
-            ! namelist parser never returns them, so this
-            ! is defence-in-depth for the next code/config consumer.
-            call logger%error("vmix_apply_in_stage: the selected interior closure "// &
-                              "has no kernel (only VMIX_INTERIOR_PP81/NONE are implemented; "// &
-                              "VMIX_INTERIOR_LARGE94/CVMIX are reserved-but-unwired) — "// &
-                              "running it would leave kv/kt with no interior mixing")
-            error stop "vmix_apply_in_stage: unimplemented vmix interior closure"
+         ! diabatic_first = .false.: the coefficients are assembled once per
+         ! interval, at its end (`apply_deferred_thermo`), and carried; every
+         ! dynamics stage after the very first step reuses them.
+         if (.not. (dyn%thermo_deferred() .and. dyn%outer_step_count > 0)) then
+            call vmix_build_coefficients(grid, dyn, vmix, vd, ss, ms, dt, &
+                                         dyn%enable_thermodynamics .and. dyn%is_thermo_step() &
+                                         .and. stage == 1 .and. .not. dyn%thermo_deferred(), &
+                                         sf, epbl, kshear, vmix_tidal, metrics)
          end if
-         if (vmix%use_kpp .and. .not. epbl_active) then
-            if (.not. present(sf)) then
-               call logger%error("vmix_apply_in_stage: KPP requires the surface-flux slot (sf)")
-               error stop "vmix_apply_in_stage: use_kpp requires the surface-flux slot (sf)"
-            end if
-            call vmix_apply_kpp_overlay(grid, vmix, ms, ss, sf)
-         end if
-         if (epbl_active) then
-            if (.not. present(sf)) then
-               call logger%error("vmix_apply_in_stage: EPBL requires the surface-flux slot (sf)")
-               error stop "vmix_apply_in_stage: EPBL requires the surface-flux slot (sf)"
-            end if
-            if (dyn%enable_thermodynamics .and. dyn%is_thermo_step() .and. stage == 1) then
-               call epbl_compute(grid, epbl, ms, ss, dyn%therm_dt(dt), sf)
-            end if
-            if (shear_first) then
-               call kshear_stage_merge(grid, dyn, vmix, ms, kshear, dt, stage, metrics)
-               call epbl_merge_max_shear(epbl, size(vmix%kt, 1), size(vmix%kt, 2), &
-                                         size(vmix%kt, 3), vmix%kv, vmix%kt, &
-                                         kshear%kd_int, merge(0.0_wp, kshear%prandtl_turb, kshear%at_vertex))
-            else
-               call epbl_merge_into_kv_kt(epbl, size(vmix%kt, 1), size(vmix%kt, 2), &
-                                          size(vmix%kt, 3), vmix%kv, vmix%kt)
-            end if
-         end if
-         if (kshear_active .and. .not. shear_first) then
-            if (dyn%enable_thermodynamics .and. dyn%is_thermo_step() .and. stage == 1) then
-               if (kshear%at_vertex) then
-                  ! Vertex form needs the halo-valid wet masks for the
-                  ! corner gather; fail-loud inside if metrics is absent.
-                  if (.not. present(metrics)) then
-                     call logger%error("vmix_apply_in_stage: kappa-shear at_vertex "// &
-                                       "requires the metrics slot (wet masks)")
-                     error stop "vmix_apply_in_stage: at_vertex needs metrics"
-                  end if
-                  call kappa_shear_compute(grid, kshear, ms, dyn%therm_dt(dt), &
-                                           wet_t=metrics%wet_T, wet_u=metrics%wet_u, &
-                                           wet_v=metrics%wet_v)
-               else
-                  call kappa_shear_compute(grid, kshear, ms, dyn%therm_dt(dt))
-               end if
-            end if
-            call kappa_shear_merge_into_kv_kt(kshear, size(vmix%kt, 1), size(vmix%kt, 2), &
-                                              size(vmix%kt, 3), vmix%kv, vmix%kt)
-         end if
-         if (tidal_active) then
-            if (dyn%enable_thermodynamics .and. dyn%is_thermo_step() .and. stage == 1) then
-               call tidal_mixing_compute(grid, vmix_tidal, ms, dyn%therm_dt(dt))
-            end if
-            call tidal_mixing_merge_into_kt(vmix_tidal, size(vmix%kt, 1), size(vmix%kt, 2), &
-                                            size(vmix%kt, 3), vmix%kv, vmix%kt)
-         end if
-         if (vd%bbl_mix%enable) then
-            ! Law-of-the-wall BBL diffusivity: tracer kt only, additive.
-            if (dyn%enable_thermodynamics .and. dyn%is_thermo_step() .and. stage == 1) then
-               call bbl_mixing_compute(grid, vd%bbl_mix, ms)
-            end if
-            call bbl_mixing_merge_into_kt(vd%bbl_mix, size(vmix%kt, 1), size(vmix%kt, 2), &
-                                          size(vmix%kt, 3), vmix%kt)
-         end if
-         call vmix_add_kv_ml_invz2(grid, vmix, ms)
-         if (vmix%conv_enable) then
-            ! Brunt-Vaisala-triggered convective adjustment.  A CONTRIBUTOR
-            ! (max() floor), so it must run BEFORE vmix_assemble -- see the
-            ! rdb_ocean_vmix module docstring for the D1-D4 divergences from
-            ! MOM6's MOM_CVMix_conv.  Masks against the live BL depth of
-            ! whichever surface scheme is active this stage.
-            if (epbl_active) then
-               call vmix_apply_convection(grid, vmix, ms, epbl%mld)
-            else
-               call vmix_apply_convection(grid, vmix, ms, vmix%bl_depth)
-            end if
-         end if
-         ! `vmix_split_kd_heat_salt` is NOT a contributor -- it must be
-         ! the LAST statement before `vmix_assemble`, always.  Any future
-         ! PR adding a kv/kt contributor (e.g. convective adjustment)
-         ! inserts ABOVE this line, never below it -- ks is derived from
-         ! whatever kt holds at this point, so a contributor placed after
-         ! the split silently never reaches ks.
-         call vmix_split_kd_heat_salt(grid, vmix, ms)
-         ! Single downstream assembly gate: background floors, kv_max/kd_max
-         ! ceilings, optional 1-2-1 smoothing, optional negative/NaN guard.
-         ! Defaults reproduce the pre-assembly chain bit-for-bit.  Gates kv,
-         ! kt, AND ks.  `geolat` rides on the optional metrics slot (the C7
-         ! Henyey latitude factor's only spatial input) — forwarded when the
-         ! caller threaded metrics through, omitted otherwise.  Omitting it
-         ! is safe: vmix_assemble fails loud if `bkgnd_henyey` is on and
-         ! geolat is absent, so a caller that forgot cannot silently lose
-         ! the latitude factor.
-         if (present(metrics)) then
-            call vmix_assemble(grid, vmix, ms, geolat=metrics%geolatT)
-         else
-            call vmix_assemble(grid, vmix, ms)
-         end if
-         call profiler_stop("ocean_vmix_compute")
          call profiler_start("ocean_vdiff_apply")
          if (vertex_kv) then
             ! Corner Kv seam: same calls + the corner viscosity source.
@@ -1856,7 +1900,7 @@ contains
       end if
    end subroutine vmix_apply_in_stage
 
-   subroutine kshear_stage_merge(grid, dyn, vmix, ms, kshear, dt, stage, metrics)
+   subroutine kshear_stage_merge(grid, dyn, vmix, ms, kshear, dt, refresh_slow, metrics)
       !! Kappa-shear refresh (thermo cadence, stage 1) + additive merge into
       !! `vmix%kv/kt`; the `combine="max_shear"` ordering needs it ahead of
       !! the ePBL merge.  Same operations as the in-line kappa-shear block of
@@ -1867,10 +1911,10 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_kappa_shear_t), intent(inout) :: kshear
       real(wp), intent(in) :: dt
-      integer, intent(in) :: stage
+      logical, intent(in) :: refresh_slow
       type(ocean_metrics_t), intent(in), optional :: metrics
 
-      if (dyn%enable_thermodynamics .and. dyn%is_thermo_step() .and. stage == 1) then
+      if (refresh_slow) then
          if (kshear%at_vertex) then
             if (.not. present(metrics)) then
                call logger%error("kshear_stage_merge: kappa-shear at_vertex "// &
@@ -3603,7 +3647,7 @@ contains
          call profiler_start("ocean_deferred_thermo")
          dyn%n_deferred_thermo = dyn%n_deferred_thermo + 1
          dyn%deferred_thermo_clock = ct%t_dyn_rel_adv
-         call apply_deferred_thermo(grid, metrics, dyn, vd, vmix, ms, dt, sf, geo)
+         call apply_deferred_thermo(grid, metrics, dyn, vd, vmix, ss, ms, dt, sf, geo, epbl, kshear, vmix_tidal)
          call refresh_tracer_ghosts(grid, ms, bc)
          call profiler_stop("ocean_deferred_thermo")
          call probe_dS(grid, ms, "after deferred thermo", 3, dyn%outer_step_count + 1)
@@ -3755,25 +3799,41 @@ contains
       end if
    end subroutine apply_deferred_tracer_step
 
-   subroutine apply_deferred_thermo(grid, metrics, dyn, vd, vmix, ms, dt, sf, geo)
+   subroutine apply_deferred_thermo(grid, metrics, dyn, vd, vmix, ss, ms, dt, sf, geo, epbl, kshear, vmix_tidal)
       !! The tracer-changing thermo applies of one thermo interval, run once
       !! after the window drain (see `ocean_dyn_thermo_deferred`): surface
       !! heat/salt fluxes, shortwave + restoring, geothermal, ideal-age
       !! source, then the backward-Euler vertical tracer diffusion (+ KPP
-      !! non-local tendencies) with the diffusivities of the stage chain.
-      !! Same order as the in-stage path (fluxes, then mixing).
+      !! non-local tendencies).  The mixing coefficients are assembled FIRST
+      !! (`vmix_build_coefficients`, slow solves refreshed) from the
+      !! post-advection state and carried into the next interval's dynamics.
+      !! Same order as the in-stage path otherwise (fluxes, then mixing).
       type(hgrid_t), intent(in) :: grid
       type(ocean_metrics_t), intent(in) :: metrics
       type(ocean_dyn_t), intent(in) :: dyn
       type(ocean_vdiff_t), intent(inout) :: vd
       type(ocean_vmix_t), intent(inout) :: vmix
+      type(ocean_surface_stress_t), intent(in) :: ss
       type(multilayer_state_t), intent(inout) :: ms
       real(wp), intent(in) :: dt
       type(ocean_surface_flux_t), intent(in), optional :: sf
       type(ocean_geothermal_t), intent(in), optional :: geo
+      type(ocean_epbl_t), intent(inout), optional :: epbl
+      type(ocean_kappa_shear_t), intent(inout), optional :: kshear
+      type(ocean_tidal_mixing_t), intent(inout), optional :: vmix_tidal
       real(wp) :: therm_dt
 
       therm_dt = dyn%therm_dt(dt)
+      ! Mixing coefficients FIRST, from the post-advection (drained,
+      ! diffused) state: the slow column solves refresh here, and the kv
+      ! assembled is what the next interval's dynamics carry (the stage
+      ! chain no longer rebuilds it).  The EPBL sees the surface fluxes
+      ! assembled after step N-1 -- the coupling-interval mean (Reichl &
+      ! Hallberg 2018).
+      if (vmix%use_closure) then
+         call vmix_build_coefficients(grid, dyn, vmix, vd, ss, ms, dt, dyn%enable_thermodynamics, &
+                                      sf, epbl, kshear, vmix_tidal, metrics)
+      end if
       if (dyn%bt_work%wetdry_enable) then
          call ocean_surface_flux_apply_tracers(grid, sf, ms, therm_dt, active=.true., &
                                                wet_dyn=dyn%bt_work%wd_wet_dyn)
