@@ -84,7 +84,7 @@
 !!       registered (derived-field rule, `ocean_state_build_restart_registry`
 !!       in `ocean_state/rdb_ocean_state_restart.F90`).
 module rdb_ocean_surface_flux
-   use rdb_constants, only: wp, SEAWATER_CP_DEFAULT
+   use rdb_constants, only: wp, SEAWATER_CP_DEFAULT, H_DIV_EPS
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use, intrinsic :: iso_fortran_env, only: int64
@@ -94,6 +94,7 @@ module rdb_ocean_surface_flux
 
    public :: ocean_surface_flux_t
    public :: ocean_surface_flux_apply_tracers
+   public :: bound_salinity_top_impl
    public :: ocean_surface_flux_apply_sw_penetration
    public :: ocean_surface_restore_apply_tracers
    public :: ocean_surface_flux_assemble
@@ -127,6 +128,12 @@ module rdb_ocean_surface_flux
          !! MUST set `has_heat = .true.` after writing into `Q_heat`
          !! so the apply-tracers kernel fires.  Host-side flag only
          !! (early-return guard in `ocean_surface_flux_apply_tracers`).
+      logical :: bound_salinity = .false.
+         !! OM3 `BOUND_SALINITY` (`&ocean_ice_nml bound_salinity`): after
+         !! the surface salt flux, floor the top-layer salinity at
+         !! `min_salinity`.  Host-side scalar latched at configure.
+      real(wp) :: min_salinity = 0.0_wp
+         !! Floor for `bound_salinity` (same units as the S tracer).
       logical :: has_salt = .false.
          !! True when `Q_salt` carries a non-zero fill (set by
          !! `set_surface_flux_const` when `q_salt_val /= 0`).
@@ -908,6 +915,10 @@ contains
                                                         ms%wet_mask, wet_dyn, sf%Q_salt, &
                                                         dt/sf%rho0, ms%k_top, nz, nx, ny)
          end if
+         if (sf%bound_salinity .and. idx_S > 0) then
+            call bound_salinity_top_impl(ms%tracers(idx_S)%hTr, ms%h_layer, ms%wet_mask, &
+                                         sf%min_salinity, ms%k_top, nz, nx, ny)
+         end if
          return
       end if
       if (idx_T > 0 .and. sf%has_heat) then
@@ -928,7 +939,33 @@ contains
                                                  ms%wet_mask, sf%Q_salt, &
                                                  dt/sf%rho0, ms%k_top, nz, nx, ny)
       end if
+      ! OM3 BOUND_SALINITY: once per thermo step, after the salt deposit.
+      if (sf%bound_salinity .and. idx_S > 0) then
+         call bound_salinity_top_impl(ms%tracers(idx_S)%hTr, ms%h_layer, ms%wet_mask, &
+                                      sf%min_salinity, ms%k_top, nz, nx, ny)
+      end if
    end subroutine ocean_surface_flux_apply_tracers
+
+   pure subroutine bound_salinity_top_impl(hTr, h_layer, wet_mask, s_min, k_top, nz, nx, ny)
+      !! `S <- max(S, s_min)` on the first live layer of every wet column,
+      !! in `hTr = S h` space.  NON-CONSERVING: the salt it creates is not
+      !! mirrored into `salt_budget_surface`, and it acts only where the
+      !! ice-ocean salt exchange (or anything else) drove S below the floor.
+      !! A vanished layer (`h <= H_DIV_EPS`) is skipped.
+      integer, intent(in) :: nz, nx, ny
+      real(wp), intent(inout) :: hTr(nx, ny, nz)
+      real(wp), intent(in) :: h_layer(nx, ny, nz)
+      real(wp), intent(in) :: wet_mask(nx, ny)
+      real(wp), intent(in) :: s_min
+      integer, intent(in) :: k_top(nx, ny)
+      integer :: i, j
+      do concurrent(j=1:ny, i=1:nx)
+         if (wet_mask(i, j) > 0.5_wp .and. h_layer(i, j, k_top(i, j)) > H_DIV_EPS) then
+            hTr(i, j, k_top(i, j)) = max(hTr(i, j, k_top(i, j)), &
+                                         s_min*h_layer(i, j, k_top(i, j)))
+         end if
+      end do
+   end subroutine bound_salinity_top_impl
 
    pure subroutine apply_surface_src_2d_impl(hTr, budget, wet_mask, Q_field, &
                                              inv_scale, k_top, nz, nx, ny)

@@ -3379,6 +3379,48 @@ class OceanIce(Group):
         default=False,
     )
 
+    frazil_column = Bool(
+        'frazil_column',
+        doc='Full-column frazil sweep with rising carry instead of the surface-only clamp (OM3 FRAZIL; default off => byte-identical)',
+        units='',
+        required=False,
+        default=False,
+    )
+
+    pressure_dependent_frazil = Bool(
+        'pressure_dependent_frazil',
+        doc='Freezing point at layer-centre hydrostatic pressure (OM3 PRESSURE_DEPENDENT_FRAZIL; needs frazil_column)',
+        units='',
+        required=False,
+        default=False,
+    )
+
+    reclaim_frazil = Bool(
+        'reclaim_frazil',
+        doc='Spend the standing frazil bank on a warm surface layer (OM3 RECLAIM_FRAZIL; default true, used only with frazil_column)',
+        units='',
+        required=False,
+        default=True,
+    )
+
+    bound_salinity = Bool(
+        'bound_salinity',
+        doc='Floor top-layer salinity at min_salinity after the ice salt exchange (OM3 BOUND_SALINITY; non-conservative; default off)',
+        units='',
+        required=False,
+        default=False,
+    )
+
+    min_salinity = Real(
+        'min_salinity',
+        doc='Salinity floor for bound_salinity (OM3 MIN_SALINITY)',
+        units='g/kg',
+        required=False,
+        default=0.0,
+        has_min=True,
+        vmin=0.0,
+    )
+
     transport = Bool(
         'transport',
         doc='Enable horizontal category ice/snow transport (default off => byte-identical)',
@@ -7196,4 +7238,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 63
-N_KNOBS = 791
+N_KNOBS = 796

@@ -21,7 +21,7 @@
 !!   * Idempotence — a second call on the clamped state is a no-op.
 module test_ocean_frazil
    use testdrive, only: new_unittest, unittest_type, error_type, check
-   use rdb_constants, only: wp, RHO_WATER
+   use rdb_constants, only: wp, RHO_WATER, GRAVITY
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_eos, only: eos_t, eos_freezing_point, eos_apply_ts_convention, &
@@ -29,7 +29,8 @@ module test_ocean_frazil
    use rdb_teos10_convert, only: ct_freezing_poly
    use rdb_ocean_surface_flux, only: SEAWATER_CP
    use rdb_ice_state, only: ocean_sea_ice_t
-   use rdb_ice_frazil, only: ice_frazil_accumulate
+   use rdb_ice_frazil, only: ice_frazil_accumulate, ice_frazil_accumulate_column
+   use rdb_ocean_surface_flux, only: bound_salinity_top_impl
    implicit none
    private
 
@@ -61,7 +62,12 @@ contains
                   new_unittest("frazil_skips_ghosts_and_dry", test_ghost_dry), &
                   new_unittest("frazil_second_call_idempotent", test_idempotent), &
                   new_unittest("frazil_pot_prac_bit_identical", test_pot_prac_bits), &
-                  new_unittest("frazil_cons_abs_onset_and_cp", test_cons_abs_onset) &
+                  new_unittest("frazil_cons_abs_onset_and_cp", test_cons_abs_onset), &
+                  new_unittest("frazil_column_pressure_dependence", test_col_pressure), &
+                  new_unittest("frazil_column_carry_up", test_col_carry_up), &
+                  new_unittest("frazil_column_no_absorber_hands_off", test_col_no_absorber), &
+                  new_unittest("frazil_column_reclaim_branches", test_col_reclaim), &
+                  new_unittest("frazil_bound_salinity", test_bound_salinity) &
                   ]
    end subroutine collect_ocean_frazil_tests
 
@@ -419,5 +425,248 @@ contains
       end block checks
       call teardown(ms, eos, ice)
    end subroutine test_cons_abs_onset
+
+   subroutine run_column(grid, eos, ms, ice, pdep, reclaim)
+      !! Device-wrapped `ice_frazil_accumulate_column` (same mapping as
+      !! `run_frazil`); `ice%frazil_heat` set on the host beforehand rides
+      !! the `copyin` of `ice%enter_data`.
+      type(hgrid_t), intent(in) :: grid
+      type(eos_t), intent(in) :: eos
+      type(multilayer_state_t), intent(inout) :: ms
+      type(ocean_sea_ice_t), intent(inout) :: ice
+      logical, intent(in) :: pdep, reclaim
+
+      !$acc enter data copyin(ms)
+      call ms%enter_data()
+      call ice%enter_data()
+      call ice_frazil_accumulate_column(grid, eos, ms, ice%frazil_heat, &
+                                        ice%heat_budget_frazil, pdep, reclaim)
+      associate (hT => ms%tracers(ms%idx_temperature)%hTr, &
+                 fz => ice%frazil_heat, fb => ice%heat_budget_frazil)
+         !$acc update self(hT, fz, fb)
+      end associate
+      call ice%exit_data()
+      call ms%exit_data()
+      !$acc exit data delete(ms)
+   end subroutine run_column
+
+   subroutine test_col_pressure(error)
+      !! Linear liquidus T_f = -0.054 S - 7.53e-8 p (the `seaice` set) falls
+      !! with depth, so a uniform T between T_f(layer 3 centre) and
+      !! T_f(layer 2 centre) is supercooled ONLY in the surface layer when
+      !! pressure dependence is on (3 x 300 m layers, centres at 150, 450,
+      !! 750 m).  With it off (p = 0, T_f = -1.89) all three freeze.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(eos_t) :: eos
+      type(ocean_sea_ice_t) :: ice
+      real(wp), parameter :: HL = 300.0_wp
+      real(wp) :: gr, tf3, tf2, t0, expected
+      integer :: ip, jp
+      checks: block
+         call setup_state(grid, ms, eos, ice, T_DEEP)
+         gr = GRAVITY*eos%rho0
+         tf3 = eos_freezing_point(eos, S_INIT, 0.5_wp*gr*HL)
+         tf2 = eos_freezing_point(eos, S_INIT, 0.5_wp*gr*HL + 0.5_wp*gr*(HL + HL))
+         t0 = 0.5_wp*(tf3 + tf2)
+         ms%h_layer = HL
+         ms%tracers(ms%idx_salinity)%hTr = S_INIT*HL
+         ms%tracers(ms%idx_temperature)%hTr = t0*HL
+         ip = grid%nx_total/2
+         jp = grid%ny_total/2
+         call run_column(grid, eos, ms, ice, .true., .true.)
+         call check(error, abs(ms%tracers(ms%idx_temperature)%hTr(ip, jp, NZ)/HL - tf3) &
+                    < 1.0e-12_wp, "pressure-dependent: surface layer must reach T_f(p_3)")
+         if (allocated(error)) exit checks
+         call check(error, ms%tracers(ms%idx_temperature)%hTr(ip, jp, 2) == t0*HL .and. &
+                    ms%tracers(ms%idx_temperature)%hTr(ip, jp, 1) == t0*HL, &
+                    "pressure-dependent: deeper layers (T_f lower than T) must NOT freeze")
+         if (allocated(error)) exit checks
+         expected = RHO_WATER*eos%c_p*HL*(tf3 - t0)
+         call check(error, abs(ice%frazil_heat(ip, jp) - expected) <= 1.0e-12_wp*expected, &
+                    "pressure-dependent: F = rho c_p h (T_f(p_3) - T0), surface layer only")
+         if (allocated(error)) exit checks
+         call teardown(ms, eos, ice)
+
+         ! Control: pressure dependence OFF => p = 0, all three layers freeze.
+         call setup_state(grid, ms, eos, ice, T_DEEP)
+         ms%h_layer = HL
+         ms%tracers(ms%idx_salinity)%hTr = S_INIT*HL
+         ms%tracers(ms%idx_temperature)%hTr = t0*HL
+         call run_column(grid, eos, ms, ice, .false., .true.)
+         expected = 3.0_wp*RHO_WATER*eos%c_p*HL*(eos_freezing_point(eos, S_INIT, 0.0_wp) - t0)
+         call check(error, abs(ice%frazil_heat(ip, jp) - expected) <= 1.0e-12_wp*expected, &
+                    "p = 0 control: all three layers freeze at T_f(S, 0)")
+      end block checks
+      call teardown(ms, eos, ice)
+   end subroutine test_col_pressure
+
+   subroutine test_col_carry_up(error)
+      !! Bed layer at -4 degC (supercooled), a warm layer (+1) above it,
+      !! a warmer surface (+2).  The bed freezes to T_f and carries
+      !! c = hc (T_f + 4) upward; the warm layer absorbs it and cools by
+      !! exactly c/hc.  F stays 0, the surface is untouched, and the column
+      !! heat sum(hTr) is unchanged.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(eos_t) :: eos
+      type(ocean_sea_ice_t) :: ice
+      real(wp) :: tf, c_over_hc, tot0, tot1
+      integer :: ip, jp, k
+      checks: block
+         call setup_state(grid, ms, eos, ice, 2.0_wp)
+         ms%tracers(ms%idx_temperature)%hTr(:, :, 1) = -4.0_wp*H_LAYER
+         ms%tracers(ms%idx_temperature)%hTr(:, :, 2) = 1.0_wp*H_LAYER
+         tf = eos_freezing_point(eos, S_INIT, 0.0_wp)
+         c_over_hc = tf + 4.0_wp
+         ip = grid%nx_total/2
+         jp = grid%ny_total/2
+         tot0 = 0.0_wp
+         do k = 1, NZ
+            tot0 = tot0 + ms%tracers(ms%idx_temperature)%hTr(ip, jp, k)
+         end do
+         call run_column(grid, eos, ms, ice, .false., .true.)
+         tot1 = 0.0_wp
+         do k = 1, NZ
+            tot1 = tot1 + ms%tracers(ms%idx_temperature)%hTr(ip, jp, k)
+         end do
+         call check(error, abs(ms%tracers(ms%idx_temperature)%hTr(ip, jp, 1)/H_LAYER - tf) &
+                    < 1.0e-14_wp, "bed layer clamped to T_f")
+         if (allocated(error)) exit checks
+         call check(error, abs(ms%tracers(ms%idx_temperature)%hTr(ip, jp, 2)/H_LAYER &
+                               - (1.0_wp - c_over_hc)) < 1.0e-14_wp, &
+                    "warm layer cooled by exactly c/hc")
+         if (allocated(error)) exit checks
+         call check(error, ms%tracers(ms%idx_temperature)%hTr(ip, jp, NZ) == 2.0_wp*H_LAYER, &
+                    "surface layer above the absorber is untouched")
+         if (allocated(error)) exit checks
+         call check(error, ice%frazil_heat(ip, jp) == 0.0_wp, "nothing reaches the ice: F = 0")
+         if (allocated(error)) exit checks
+         call check(error, abs(tot1 - tot0) <= 1.0e-14_wp*abs(tot0) + 1.0e-14_wp, &
+                    "column heat sum(hTr) unchanged by the carry")
+         if (allocated(error)) exit checks
+         call check(error, abs(ice%heat_budget_frazil(ip, jp, 1)) < 1.0e-12_wp, &
+                    "budget accumulator sees no net heat")
+      end block checks
+      call teardown(ms, eos, ice)
+   end subroutine test_col_carry_up
+
+   subroutine test_col_no_absorber(error)
+      !! Same bed deficit but every layer above is already at T_f: the
+      !! carry cannot be absorbed (c + hc*0 > 0) and reaches the top.
+      !! F = hc (T_f + 4) and the budget accumulator equals h (T_f + 4).
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(eos_t) :: eos
+      type(ocean_sea_ice_t) :: ice
+      real(wp) :: tf, expected
+      integer :: ip, jp
+      checks: block
+         call setup_state(grid, ms, eos, ice, T_DEEP)
+         tf = eos_freezing_point(eos, S_INIT, 0.0_wp)
+         ms%tracers(ms%idx_temperature)%hTr(:, :, 1) = -4.0_wp*H_LAYER
+         ms%tracers(ms%idx_temperature)%hTr(:, :, 2) = tf*H_LAYER
+         ms%tracers(ms%idx_temperature)%hTr(:, :, NZ) = tf*H_LAYER
+         ip = grid%nx_total/2
+         jp = grid%ny_total/2
+         call run_column(grid, eos, ms, ice, .false., .true.)
+         expected = RHO_WATER*eos%c_p*H_LAYER*(tf + 4.0_wp)
+         call check(error, abs(ice%frazil_heat(ip, jp) - expected) <= 1.0e-12_wp*expected, &
+                    "unabsorbed carry is handed to the ice: F = hc (T_f + 4)")
+         if (allocated(error)) exit checks
+         call check(error, abs(ice%heat_budget_frazil(ip, jp, 1) - H_LAYER*(tf + 4.0_wp)) &
+                    < 1.0e-12_wp, "budget accumulator = h (T_f + 4)")
+      end block checks
+      call teardown(ms, eos, ice)
+   end subroutine test_col_no_absorber
+
+   subroutine test_col_reclaim(error)
+      !! Standing bank F on a warm surface (T = 2): (a) F < hc (T - T_f)
+      !! cools the surface by F/hc and zeroes F; (b) F > hc (T - T_f)
+      !! clamps the surface to T_f and leaves F - hc (T - T_f); (c) with
+      !! reclaim off the bank is untouched.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(eos_t) :: eos
+      type(ocean_sea_ice_t) :: ice
+      real(wp) :: tf, hc, room
+      integer :: ip, jp
+      checks: block
+         call setup_state(grid, ms, eos, ice, 2.0_wp)
+         tf = eos_freezing_point(eos, S_INIT, 0.0_wp)
+         hc = RHO_WATER*eos%c_p*H_LAYER
+         room = hc*(2.0_wp - tf)
+         ip = grid%nx_total/2
+         jp = grid%ny_total/2
+         ice%frazil_heat = 0.25_wp*room
+         call run_column(grid, eos, ms, ice, .false., .true.)
+         call check(error, ice%frazil_heat(ip, jp) == 0.0_wp, "(a) bank fully reclaimed")
+         if (allocated(error)) exit checks
+         call check(error, abs(ms%tracers(ms%idx_temperature)%hTr(ip, jp, NZ)/H_LAYER &
+                               - (2.0_wp - 0.25_wp*room/hc)) < 1.0e-14_wp, &
+                    "(a) surface cooled by exactly F/hc")
+         if (allocated(error)) exit checks
+         call check(error, abs(ice%heat_budget_frazil(ip, jp, 1) &
+                               + 0.25_wp*room/(RHO_WATER*eos%c_p)) < 1.0e-12_wp, &
+                    "(a) budget accumulator = -F/(rho c_p)")
+         if (allocated(error)) exit checks
+         call teardown(ms, eos, ice)
+
+         call setup_state(grid, ms, eos, ice, 2.0_wp)
+         ice%frazil_heat = 3.0_wp*room
+         call run_column(grid, eos, ms, ice, .false., .true.)
+         call check(error, abs(ice%frazil_heat(ip, jp) - 2.0_wp*room) <= 1.0e-12_wp*room, &
+                    "(b) bank left with F - hc (T - T_f)")
+         if (allocated(error)) exit checks
+         call check(error, abs(ms%tracers(ms%idx_temperature)%hTr(ip, jp, NZ)/H_LAYER - tf) &
+                    < 1.0e-14_wp, "(b) surface clamped to T_f")
+         if (allocated(error)) exit checks
+         call teardown(ms, eos, ice)
+
+         call setup_state(grid, ms, eos, ice, 2.0_wp)
+         ice%frazil_heat = 3.0_wp*room
+         call run_column(grid, eos, ms, ice, .false., .false.)
+         call check(error, ice%frazil_heat(ip, jp) == 3.0_wp*room .and. &
+                    ms%tracers(ms%idx_temperature)%hTr(ip, jp, NZ) == 2.0_wp*H_LAYER, &
+                    "(c) reclaim off: bank and surface untouched")
+      end block checks
+      call teardown(ms, eos, ice)
+   end subroutine test_col_reclaim
+
+   subroutine test_bound_salinity(error)
+      !! A negative top-layer S is raised to `min_salinity`; positive S and
+      !! every sub-surface layer are untouched.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NX = 3, NY = 2, NK = 2
+      real(wp) :: hTr(NX, NY, NK), h(NX, NY, NK), wet(NX, NY)
+      integer :: kt(NX, NY)
+      real(wp), parameter :: SMIN = 0.5_wp
+      h = 4.0_wp
+      wet = 1.0_wp
+      kt = NK
+      hTr = 30.0_wp*4.0_wp
+      hTr(1, 1, NK) = -2.0_wp*4.0_wp
+      hTr(2, 1, NK) = 35.0_wp*4.0_wp
+      hTr(1, 2, 1) = -1.0_wp
+      wet(3, 2) = 0.0_wp
+      hTr(3, 2, NK) = -8.0_wp
+      !$acc enter data copyin(hTr, h, wet, kt)
+      call bound_salinity_top_impl(hTr, h, wet, SMIN, kt, NK, NX, NY)
+      !$acc update self(hTr)
+      !$acc exit data delete(hTr, h, wet, kt)
+      call check(error, abs(hTr(1, 1, NK)/4.0_wp - SMIN) < 1.0e-14_wp, &
+                 "negative S raised to min_salinity")
+      if (allocated(error)) return
+      call check(error, hTr(2, 1, NK) == 140.0_wp .and. hTr(1, 2, NK) == 120.0_wp, &
+                 "positive S untouched")
+      if (allocated(error)) return
+      call check(error, hTr(1, 2, 1) == -1.0_wp, "sub-surface layer untouched")
+      if (allocated(error)) return
+      call check(error, hTr(3, 2, NK) == -8.0_wp, "dry column untouched")
+   end subroutine test_bound_salinity
 
 end module test_ocean_frazil

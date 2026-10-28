@@ -161,7 +161,7 @@ module rdb_ocean_engine
    use rdb_ice_ocean_coupler, only: ice_ocean_stress_resume_apply, ice_ocean_stress_cleanup, &
                                     ice_ocean_brine_flux, ice_ocean_heat_flux, &
                                     ice_ocean_sw_flux, ice_ocean_stress_flux
-   use rdb_ice_frazil, only: ice_frazil_accumulate
+   use rdb_ice_frazil, only: ice_frazil_accumulate, ice_frazil_accumulate_column
    use rdb_ice_frazil_uptake, only: ice_frazil_uptake
    use rdb_ice_atm_forcing, only: ice_atm_forcing_restoring
 #ifndef RDB_NO_NETCDF
@@ -1798,10 +1798,19 @@ contains
       ! so T(k=nz) >= T_f(S) holds at every step boundary the ice model
       ! observes.
       call profiler_start("ice_frazil")
-      call ice_frazil_accumulate(engine%grid, engine%state%eos, &
-                                 engine%state%multilayer, &
-                                 engine%state%ice%frazil_heat, &
-                                 engine%state%ice%heat_budget_frazil)
+      if (cfg%ocean%ice%frazil_column) then
+         call ice_frazil_accumulate_column(engine%grid, engine%state%eos, &
+                                           engine%state%multilayer, &
+                                           engine%state%ice%frazil_heat, &
+                                           engine%state%ice%heat_budget_frazil, &
+                                           cfg%ocean%ice%pressure_dependent_frazil, &
+                                           cfg%ocean%ice%reclaim_frazil)
+      else
+         call ice_frazil_accumulate(engine%grid, engine%state%eos, &
+                                    engine%state%multilayer, &
+                                    engine%state%ice%frazil_heat, &
+                                    engine%state%ice%heat_budget_frazil)
+      end if
       call profiler_stop("ice_frazil")
 
       ! Sea-ice PR 5: C-grid EVP dynamics, every outer step (NOT
