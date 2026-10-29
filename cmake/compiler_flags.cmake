@@ -144,6 +144,14 @@ elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   set_source_files_properties(
     ${PROJECT_SOURCE_DIR}/src/core/ocean/kernels/barotropic/rdb_barotropic_coupling.F90
     PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+  # The horizontal-viscosity kernels, the GNU twin of the NVHPC `-Mnofma` line
+  # above: under `-O3 -march=x86-64-v3` the stress-form path with
+  # `bound_thin_layer` left `v_face_y_layer` / `u_face_x_layer` 1 ulp apart
+  # between splits (test_ocean_decomp_bitid_mpi `hvisc_thin_layer/ssp_rk2`, 2x1
+  # and 4x1).
+  set_source_files_properties(
+    ${PROJECT_SOURCE_DIR}/src/parameterizations/lateral/rdb_ocean_horizontal_viscosity.F90
+    PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
   if(RDB_ENABLE_COVERAGE)
     # gcov instrumentation: disable optimisation so line counts map cleanly,
     # apply --coverage to both compile and link (gcc driver expands it to
