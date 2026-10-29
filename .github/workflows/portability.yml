@@ -123,7 +123,7 @@ jobs:
                 -DCMAKE_Fortran_COMPILER="$RDB_FC" \
                 -DRDB_ENABLE_NETCDF=OFF -DRDB_ENABLE_MPI=OFF \
                 -DRDB_ENABLE_GPU=OFF -DRDB_ENABLE_TESTING=OFF > cfg.log 2>&1
-          cmake --build build --parallel > build.log 2>&1
+          cmake --build build --parallel 2 > build.log 2>&1
           rc=$?
           set -e
           if [ $rc -eq 0 ]; then
@@ -171,8 +171,15 @@ jobs:
           -DRDB_ENABLE_GPU=OFF
           -DRDB_ENABLE_TESTING=ON
 
+      # `--parallel 2`, never a bare `--parallel`: with the Makefile generator a
+      # bare `--parallel` is an unbounded `make -j`, and once the library is
+      # built the ~190 test programs have no dependencies on each other, so make
+      # starts every one at once. Under ifx the job then died mid-build on 7 of
+      # 9 intel 2025.0 runs on 2026-10-29 ("Terminated" on every compile, Build
+      # step cancelled, no compiler diagnostic) -- by all appearances the 16 GB
+      # runner running out of memory.
       - name: Build
-        run: cmake --build build --parallel
+        run: cmake --build build --parallel 2
 
       # No `-j`: several tests share process-global state, and the suite is
       # fast enough serially that parallelism buys nothing but flakiness.
@@ -310,7 +317,7 @@ jobs:
 
       - name: Build
         if: '!matrix.expect_configure_failure'
-        run: cmake --build build --parallel
+        run: cmake --build build --parallel 2
 
       - name: Test
         if: matrix.testing == 'ON'
