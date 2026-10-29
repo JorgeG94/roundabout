@@ -112,6 +112,17 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     set_source_files_properties(
       ${PROJECT_SOURCE_DIR}/src/core/ocean/kernels/barotropic/rdb_barotropic_coupling.F90
       PROPERTIES COMPILE_OPTIONS "-Mnofma")
+    # Third file, same class (2026-10): the ALE column remap.  Under `-fast
+    # -tp=haswell` the remapped `v_face_y_layer` of one face in the first owned
+    # column of the 4x1 split's last tile came out 1 ulp off the 2x2 / 1x4
+    # value; fields re-converged, but the ulp reached the mass flux and the EFP
+    # `mass_out` budget kept it (test_ocean_decomp_bitid_mpi
+    # `gm_ebt_struct/ssp_rk2`, 4 ranks).  A per-file bisection of `-Mnofma` over
+    # every source isolates this file alone; the Debug build and the GPU build
+    # are bitwise without it.
+    set_source_files_properties(
+      ${PROJECT_SOURCE_DIR}/src/ALE/rdb_remap_column.F90
+      PROPERTIES COMPILE_OPTIONS "-Mnofma")
   endif()
 
 elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
