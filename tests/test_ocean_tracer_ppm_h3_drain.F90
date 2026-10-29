@@ -10,13 +10,25 @@
 !!   * a 1-D sine translated one revolution converges at better than 1.7
 !!     order and beats the legacy drain reconstruction (`drain_parabola_x`
 !!     + `drain_swept_flux_x`) on L1 (both reported);
-!!   * a step profile under a divergent flow creates no new extrema.
+!!   * a step profile under a divergent flow creates no new extrema;
+!!   * (through the PRODUCTION `continuity_tracer_drain`) a periodic-x,
+!!     diagonal-flow drain is translation-covariant in x: the same field
+!!     shifted by half a period gives the shifted result, and the interior
+!!     mass is conserved.  (The meridional centre-wrap argument slip
+!!     `per_y, per_y` was verified INERT for this observable: `tr_work` is
+!!     rebuilt from already-wrapped `hTr`/`hprev`, so its x ghosts agree
+!!     either way and the interior answer is bit-identical.)
 module test_ocean_tracer_ppm_h3_drain
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use, intrinsic :: iso_fortran_env, only: output_unit
    use rdb_constants, only: wp
    use rdb_continuity, only: drain_swept_flux_x_h3, drain_swept_flux_x, drain_parabola_x, &
-                             drain_fill_conc
+                             drain_fill_conc, continuity_t, continuity_tracer_drain
+   use rdb_grid, only: hgrid_t
+   use rdb_multilayer_state, only: multilayer_state_t
+   use rdb_ocean_metrics, only: ocean_metrics_t
+   use rdb_ocean_boundary_types, only: ocean_bc_state_t, ocean_bc_state_init
+   use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
    implicit none
    private
 
@@ -33,7 +45,8 @@ contains
       testsuite = [ &
                   new_unittest("drain_uniform_stays_uniform", test_uniform), &
                   new_unittest("drain_sine_translation_order", test_sine), &
-                  new_unittest("drain_step_no_new_extrema", test_step) &
+                  new_unittest("drain_step_no_new_extrema", test_step), &
+                  new_unittest("drain_periodic_x_seam_halo", test_periodic_x_seam) &
                   ]
    end subroutine collect_ocean_tracer_ppm_h3_drain_tests
 
@@ -198,5 +211,104 @@ contains
       write (output_unit, '(a,2es11.3)') '  [drain h3] step min/max excursion = ', cmin, cmax - 1.0_wp
       call check(error, cmin > -1.0e-12_wp .and. cmax < 1.0_wp + 1.0e-12_wp, "no new extrema")
    end subroutine test_step
+
+   subroutine run_periodic_drain(shift, hTr_out, mass0, mass1)
+      !! Production windowed drain (ppm_h3, ratio 2) on a periodic-x,
+      !! wall-y channel under a diagonal flow whose x-structure is shifted
+      !! by `shift` cells.  Returns the interior salinity hTr (layer 1).
+      integer, intent(in) :: shift
+      real(wp), allocatable, intent(out) :: hTr_out(:, :)
+      real(wp), intent(out) :: mass0, mass1
+      integer, parameter :: NXP = 24, NYP = 8, NZ = 2, RATIO = 2
+      real(wp), parameter :: H0 = 5.0_wp
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(continuity_t) :: ct
+      type(ocean_metrics_t) :: metrics
+      type(ocean_bc_state_t) :: bc
+      integer :: nx, ny, i, j, k, i0, j0, j1
+      real(wp) :: ph
+      call grid%init(NXP, NYP, NG, 1.0_wp, 1.0_wp)
+      call make_cartesian_metrics(metrics, grid)
+      nx = grid%nx_total
+      ny = grid%ny_total
+      i0 = NG + 1
+      j0 = NG + 1
+      j1 = NG + NYP
+      ms%nz_ml = NZ
+      call ms%init(grid)
+      ct%windowed_advection = .true.
+      ct%tracer_h3 = .true.
+      call ct%init(grid, nz_ml=NZ)
+      call ocean_bc_state_init(bc, grid, NZ, n_tracers=size(ms%tracers))
+      bc%periodic_x = .true.
+      bc%periodic_y = .false.
+      bc%north_fold = .false.
+      ms%h_layer = H0
+      do k = 1, NZ
+         do j = 1, ny
+            do i = 1, nx
+               ph = 2.0_wp*PI*real(modulo(i - i0 + shift, NXP), wp)/real(NXP, wp)
+               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = H0*(2.0_wp + sin(ph) + 0.4_wp*cos(3.0_wp*ph) &
+                                                              + 0.05_wp*real(j - j0, wp))
+               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = 10.0_wp*H0
+            end do
+         end do
+      end do
+      ! Zonal uniform + meridional x-structured transport (zero on walls).
+      ct%uhtr = 1.0_wp
+      ct%vhtr = 0.0_wp
+      do j = j0 + 1, j1
+         do i = 1, nx
+            ph = 2.0_wp*PI*real(modulo(i - i0 + shift, NXP), wp)/real(NXP, wp)
+            ct%vhtr(i, j, :) = 0.8_wp*(1.0_wp + 0.5_wp*sin(ph))
+         end do
+      end do
+      mass0 = sum(ms%tracers(ms%idx_salinity)%hTr(i0:NG + NXP, j0:j1, :))
+      !$acc enter data copyin(ms)
+      call ms%enter_data()
+      !$acc enter data copyin(ct)
+      call ct%enter_data()
+      !$acc enter data copyin(metrics)
+      call metrics%enter_data()
+      !$acc enter data copyin(bc)
+      call continuity_tracer_drain(grid, metrics, ct, ms, RATIO, bc=bc)
+      !$acc exit data delete(bc)
+      call metrics%exit_data()
+      !$acc exit data delete(metrics)
+      call ct%exit_data()
+      !$acc exit data delete(ct)
+      call ms%exit_data()
+      !$acc exit data delete(ms)
+      mass1 = sum(ms%tracers(ms%idx_salinity)%hTr(i0:NG + NXP, j0:j1, :))
+      allocate (hTr_out(NXP, NYP))
+      hTr_out = ms%tracers(ms%idx_salinity)%hTr(i0:NG + NXP, j0:j1, 1)
+      call ct%destroy()
+      call ms%destroy()
+      call destroy_cartesian_metrics(metrics)
+   end subroutine run_periodic_drain
+
+   subroutine test_periodic_x_seam(error)
+      !! Periodic-x, windowed ppm_h3 drain, diagonal flow: translating the
+      !! initial field and the flow by s cells must translate the answer,
+      !! and the interior mass must close.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NXP = 24, NYP = 8, S = 7
+      real(wp), allocatable :: a(:, :), b(:, :)
+      real(wp) :: m0a, m1a, m0b, m1b, dmax, rel
+      integer :: m
+      call run_periodic_drain(0, a, m0a, m1a)
+      call run_periodic_drain(S, b, m0b, m1b)
+      dmax = 0.0_wp
+      do m = 1, NXP
+         dmax = max(dmax, maxval(abs(a(modulo(m - 1 + S, NXP) + 1, :) - b(m, :))))
+      end do
+      rel = max(abs(m1a - m0a)/m0a, abs(m1b - m0b)/m0b)
+      write (output_unit, '(a,es10.3,a,es10.3)') '  [drain h3 periodic-x] shift mismatch = ', dmax, &
+         '  mass rel err = ', rel
+      call check(error, dmax < 1.0e-11_wp, "periodic-x drain must be translation covariant")
+      if (allocated(error)) return
+      call check(error, rel < 1.0e-12_wp, "periodic-x drain must conserve interior mass")
+   end subroutine test_periodic_x_seam
 
 end module test_ocean_tracer_ppm_h3_drain
