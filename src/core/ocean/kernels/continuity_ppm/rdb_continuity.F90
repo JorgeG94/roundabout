@@ -3420,7 +3420,19 @@ contains
             Tr_face_left_x(i, j, k) = ppm_h3_face_flux(Tr_m1, Tr_0, Tr_p1, wm, &
                                                        mass_x, abs(mass_x)*dt*iareaT(ic, j)/hc)
          end do
-         do concurrent(k=1:nz, j=1:ny, i=1:nx + 1, i < 3 .or. i > nx - 1) local(mass_x, ic)
+         ! Upwind faces next to each wall: 1:2 and nx:nx+1, disjoint from the
+         ! interior 3:nx-1 (and together the whole 1:nx+1 when nx <= 3).
+         do concurrent(k=1:nz, j=1:ny, i=1:min(2, nx + 1)) local(mass_x, ic)
+            mass_x = mass_flux_x(i, j, k)
+            if (mass_x >= 0.0_wp) then
+               ic = i - 1
+            else
+               ic = i
+            end if
+            ic = max(1, min(nx, ic))
+            Tr_face_left_x(i, j, k) = mass_x*(hTr(ic, j, k)/h(ic, j, k))  ! vanished-ok: same hTr/h as ppm path
+         end do
+         do concurrent(k=1:nz, j=1:ny, i=max(3, nx):nx + 1) local(mass_x, ic)
             mass_x = mass_flux_x(i, j, k)
             if (mass_x >= 0.0_wp) then
                ic = i - 1
@@ -3557,7 +3569,18 @@ contains
             Tr_face_left_y(i, j, k) = ppm_h3_face_flux(Tr_m1, Tr_0, Tr_p1, wm, &
                                                        mass_y, abs(mass_y)*dt*iareaT(i, jc)/hc)
          end do
-         do concurrent(k=1:nz, j=1:ny + 1, i=1:nx, j < 3 .or. j > ny - 1) local(mass_y, jc)
+         ! Upwind faces next to each wall: 1:2 and ny:ny+1 (see the zonal impl).
+         do concurrent(k=1:nz, j=1:min(2, ny + 1), i=1:nx) local(mass_y, jc)
+            mass_y = mass_flux_y(i, j, k)
+            if (mass_y >= 0.0_wp) then
+               jc = j - 1
+            else
+               jc = j
+            end if
+            jc = max(1, min(ny, jc))
+            Tr_face_left_y(i, j, k) = mass_y*(hTr(i, jc, k)/h(i, jc, k))  ! vanished-ok: same hTr/h as ppm path
+         end do
+         do concurrent(k=1:nz, j=max(3, ny):ny + 1, i=1:nx) local(mass_y, jc)
             mass_y = mass_flux_y(i, j, k)
             if (mass_y >= 0.0_wp) then
                jc = j - 1
