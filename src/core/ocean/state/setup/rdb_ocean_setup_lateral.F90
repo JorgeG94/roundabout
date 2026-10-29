@@ -21,6 +21,7 @@ contains
          !! rejects the resolved configuration, when present; absent
          !! behaves as today (`error stop`).
       integer :: local_ierr
+      real(wp) :: dx_min_loc, dx_min_glob
 
       ! Lateral closure + background/cap coefficients.  ah_bg defaults to the
       ! MOM6 floor max(nu_h, kh_vel_scale·dx) when cfg leaves it negative.
@@ -31,9 +32,19 @@ contains
       if (cfg%ocean%hvisc%ah_bg >= 0.0_wp) then
          ocean_state%lateral_mix%ah_bg = cfg%ocean%hvisc%ah_bg
       else
+         ! The tile-local minimum is decomposition dependent (a y-split tile
+         ! away from the pole has a larger dxT): reduce to the global minimum.
+         ! A tile that IS the whole domain already holds it, so the collective
+         ! is skipped there.  The guard reads the grid's own extents, not
+         ! `ocean_halo_is_decomposed()`: this runs before `ocean_halo_init`,
+         ! where that query is still false on every rank count.
+         dx_min_loc = metrics_dx_min(ocean_state%metrics, grid)
+         dx_min_glob = dx_min_loc
+         if (grid%nx_phys /= grid%nx_global .or. grid%ny_phys /= grid%ny_global) then
+            call halo_allreduce_min(dx_min_loc, dx_min_glob)
+         end if
          ocean_state%lateral_mix%ah_bg = &
-            max(cfg%ocean%hvisc%nu_h, cfg%ocean%hvisc%kh_vel_scale* &
-                metrics_dx_min(ocean_state%metrics, grid))
+            max(cfg%ocean%hvisc%nu_h, cfg%ocean%hvisc%kh_vel_scale*dx_min_glob)
       end if
       ocean_state%lateral_mix%ah_max = cfg%ocean%hvisc%ah_max
       ocean_state%lateral_mix%kh_vel_scale_live = cfg%ocean%hvisc%kh_vel_scale_live
