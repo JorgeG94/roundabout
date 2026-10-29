@@ -152,6 +152,14 @@ elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   set_source_files_properties(
     ${PROJECT_SOURCE_DIR}/src/parameterizations/lateral/rdb_ocean_horizontal_viscosity.F90
     PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+  # The ALE column remap, the GNU twin of the NVHPC `-Mnofma` line above. Compat
+  # cell c023 (sigma, ssp_rk2, EPBL + tidal + Bryan-Lewis, Leith, MLE, OBC, ...)
+  # was bitwise across splits only by luck: once the hvisc line above moved
+  # Leith's rounding, the 4x1 split's `bt_visc_rem_u/v` and `epbl_kd_int` came
+  # out a few ulp off the 1-rank run (2x1, 1x2, 2x2 still bitwise).  A per-file
+  # bisection of `-ffp-contract=off` over every source isolates this file alone.
+  set_source_files_properties(${PROJECT_SOURCE_DIR}/src/ALE/rdb_remap_column.F90
+                              PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
   if(RDB_ENABLE_COVERAGE)
     # gcov instrumentation: disable optimisation so line counts map cleanly,
     # apply --coverage to both compile and link (gcc driver expands it to
