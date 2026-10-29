@@ -4323,7 +4323,7 @@ contains
                ! a volume so the flux below is a tracer volume.
                call drain_fill_conc(nx, ny, nz, ms%tracers(it)%hTr, this%hprev_work, this%tr_work)
                call drain_wrap_centre(this%tr_work, nx, ny, nz, nx_phys, ny_phys, nghost, &
-                                      per_y, per_y, fold_n)
+                                      per_x, per_y, fold_n)
                call drain_swept_flux_y_h3(nx, ny, nz, metrics%areaT, this%uhh_y, &
                                           this%hprev_work, this%tr_work, metrics%wet_T, &
                                           this%tr_flux_y)

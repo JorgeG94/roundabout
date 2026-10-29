@@ -73,6 +73,8 @@
 !!   * sss_restore - the island basin with FILE sea-surface-salinity restoring
 !!     (per-rank windowed two-record target, halo-exchanged, piston salt flux,
 !!     net-zero shift through the EFP allreduce); needs NetCDF;
+!!   * tracer_ppm_h3 - re-entrant channel (periodic x) with
+!!     `tracer_advection_scheme = 'ppm_h3'` on the per-step path;
 !!   * the OM3-parity feature cases, each the spherical spoon basin plus ONE
 !!     feature: `gm_ebt_struct` (EBT vertical structure of KhTh), `gm_fgnv`
 !!     (FGNV streamfunction), `meke_gm_work` (MEKE source from the GM work),
@@ -203,7 +205,7 @@ program test_ocean_decomp_bitid_mpi
    integer :: rank, nprocs, n_fail, total_fail, ic
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(28) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(29) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -218,7 +220,7 @@ program test_ocean_decomp_bitid_mpi
                                                 "gm_ebt_struct", "gm_fgnv", "meke_gm_work", &
                                                 "hvisc_om3_floors", "vmix_no_interior", &
                                                 "redi_cfl_fold", "tidal_files", &
-                                                "tidal_polzin", "bbl_lotw"]
+                                                "tidal_polzin", "bbl_lotw", "tracer_ppm_h3"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -425,6 +427,22 @@ contains
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'sponge', sponge_width = 3, sponge_strength = 1.0e-2, "// &
                "sponge_relax_tracers = .true. /"//NL
+      case ("tracer_ppm_h3")
+         ! Re-entrant channel (periodic west/east) over a seamount, sigma, with
+         ! the ppm_h3 horizontal tracer advection (Huynh edges + limiter, a
+         ! 4-point stencil: radius 2 < nghost 3).  Periodic x makes the
+         ! per-step path read tracer ghosts across the seam on every tile
+         ! boundary and across the wrap.
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.2 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+               "edge_depth = 1500.0, slope_scale = 60000.0 /"//NL// &
+               "&ocean_vmix_nml tracer_advection_scheme = 'ppm_h3' /"//NL// &
+               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+               "north = 'wall' /"//NL
       case ("open_obc")
          ! Tidal west edge (eta target) + Flather open east edge.
          nml = common// &
