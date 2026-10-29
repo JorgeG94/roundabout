@@ -78,6 +78,8 @@
 !!   * the OM3-parity feature cases, each the spherical spoon basin plus ONE
 !!     feature: `gm_ebt_struct` (EBT vertical structure of KhTh), `gm_fgnv`
 !!     (FGNV streamfunction), `meke_gm_work` (MEKE source from the GM work),
+!!     `hvisc_thin_layer` (stress-form viscosity with the thin-layer ratio,
+!!     harmonic corner thickness and T/corner-point Laplacian floors),
 !!     `hvisc_om3_floors` (latitude / velocity-scale / Coriolis-bounded
 !!     viscosity), `vmix_no_interior` (`interior_closure = 'none'`),
 !!     `redi_cfl_fold` (Redi diffusive-CFL subcycling, `n_itt > 1`, on the
@@ -210,7 +212,7 @@ program test_ocean_decomp_bitid_mpi
    integer :: rank, nprocs, n_fail, total_fail, ic
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(31) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(32) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -226,7 +228,8 @@ program test_ocean_decomp_bitid_mpi
                                                 "hvisc_om3_floors", "vmix_no_interior", &
                                                 "redi_cfl_fold", "tidal_files", &
                                                 "tidal_polzin", "bbl_lotw", "tracer_ppm_h3", &
-                                                "hvisc_kh_points", "diabatic_end"]
+                                                "hvisc_kh_points", "diabatic_end", &
+                                                "hvisc_thin_layer"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -307,6 +310,11 @@ contains
          ! centres and Bu corners (local latitude, local harmonic length).
          hv_extra = ", stress_tensor = .true., kh_bg_at_points = .true., "// &
                     "kh_vel_scale = 0.01, kh_sin_lat = 2000.0, kh_pwr_of_sine = 4.0"
+      end if
+      if (label == "hvisc_thin_layer") then
+         hv_extra = ", stress_tensor = .true., bound_thin_layer = .true., "// &
+                    "kh_bg_at_points = .true., kh_vel_scale = 0.01, "// &
+                    "kh_sin_lat = 2000.0, kh_pwr_of_sine = 4.0"
       end if
       write (spx, '(i0)') px
       write (spy, '(i0)') py
@@ -502,7 +510,7 @@ contains
          end if
       case ("spherical", "closures", "gm_ebt_struct", "gm_fgnv", "meke_gm_work", &
             "hvisc_om3_floors", "vmix_no_interior", "tidal_files", "tidal_polzin", &
-            "bbl_lotw", "hvisc_kh_points", "diabatic_end")
+            "bbl_lotw", "hvisc_kh_points", "diabatic_end", "hvisc_thin_layer")
          ! Lon-lat sector, spoon basin, Wright EOS.  "closures" adds the
          ! lateral and vertical parameterisation set on top (EPBL instead of
          ! KPP, Fox-Kemper MLE, GM + MEKE, Redi, kappa-shear, tidal mixing,

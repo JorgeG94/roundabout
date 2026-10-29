@@ -1664,7 +1664,8 @@ contains
    pure function hvisc_hq_harmonic(huS, huN, hvW, hvE) result(hq)
       !! Harmonic-type corner thickness (Griffies & Hallberg 2000 stress
       !! form, as in MOM6 `h_q`):
-      !!   `h_q = 2·h2uq·h2vq / (eps³ + (h2uq+h2vq)·(huS+huN+hvW+hvE))`,
+      !!   `h_q = 2·h2uq·h2vq / (eps³ + (h2uq+h2vq)·(huS+huN+hvW+hvE))`
+      !! (eps³ floored at `tiny(wp)` for single precision),
       !! `h2uq = 4·huS·huN`, `h2vq = 4·hvW·hvE`.  Reduces to the common
       !! value for uniform thickness and is exactly 0 if ANY of the four
       !! face thicknesses is 0.  `!$acc routine seq`.
@@ -1674,7 +1675,10 @@ contains
       real(wp) :: h2uq, h2vq
       h2uq = 4.0_wp*huS*huN
       h2vq = 4.0_wp*hvW*hvE
-      hq = 2.0_wp*h2uq*h2vq/(H_DIV_EPS*H_DIV_EPS*H_DIV_EPS + (h2uq + h2vq)*(huS + huN + hvW + hvE))
+      ! eps^3 = 1e-60 underflows to 0 in real32; floor it at tiny() so the 1/0
+      ! armour survives single precision (real64: 1e-60 > tiny, bit-identical).
+      hq = 2.0_wp*h2uq*h2vq/(max(H_DIV_EPS*H_DIV_EPS*H_DIV_EPS, tiny(1.0_wp)) &
+                             + (h2uq + h2vq)*(huS + huN + hvW + hvE))
    end function hvisc_hq_harmonic
 
    pure function raw_sh_xx(u_face, v_face, idxCu, idyCu, idxCv, dy_dxT, dx_dyT, &
