@@ -83,7 +83,9 @@
 !!     `redi_cfl_fold` (Redi diffusive-CFL subcycling, `n_itt > 1`, on the
 !!     tripolar fold), `tidal_files` (tidal `tideamp`/`h2` read from a file),
 !!     `tidal_polzin` (the Polzin vertical profile) and `bbl_lotw` (the
-!!     law-of-the-wall bottom-boundary-layer tracer mixing); the two tidal
+!!     law-of-the-wall bottom-boundary-layer tracer mixing) and
+!!     `hvisc_kh_points` (stress-tensor viscosity with the static Laplacian
+!!     floors built at the T centres and Bu corners); the two tidal
 !!     cases need NetCDF;
 !!   * sea_ice — sea ice on the ocean's decomposition: Winton thermo +
 !!     ITD, EVP dynamics (CFL clip, `project_ci`) and the ice->ocean
@@ -205,7 +207,7 @@ program test_ocean_decomp_bitid_mpi
    integer :: rank, nprocs, n_fail, total_fail, ic
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(29) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(30) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -220,7 +222,8 @@ program test_ocean_decomp_bitid_mpi
                                                 "gm_ebt_struct", "gm_fgnv", "meke_gm_work", &
                                                 "hvisc_om3_floors", "vmix_no_interior", &
                                                 "redi_cfl_fold", "tidal_files", &
-                                                "tidal_polzin", "bbl_lotw", "tracer_ppm_h3"]
+                                                "tidal_polzin", "bbl_lotw", "tracer_ppm_h3", &
+                                                "hvisc_kh_points"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -293,6 +296,12 @@ contains
       if (label == "hvisc_om3_floors") then
          hv_extra = ", kh_sin_lat = 2000.0, kh_pwr_of_sine = 4.0, ah_vel_scale = 0.01, "// &
                     "bound_coriolis_biharm = .true., bound_coriolis_vel = 6.0"
+      end if
+      if (label == "hvisc_kh_points") then
+         ! Stress-tensor path with the static Laplacian floors built AT the T
+         ! centres and Bu corners (local latitude, local harmonic length).
+         hv_extra = ", stress_tensor = .true., kh_bg_at_points = .true., "// &
+                    "kh_vel_scale = 0.01, kh_sin_lat = 2000.0, kh_pwr_of_sine = 4.0"
       end if
       write (spx, '(i0)') px
       write (spy, '(i0)') py
@@ -488,7 +497,7 @@ contains
          end if
       case ("spherical", "closures", "gm_ebt_struct", "gm_fgnv", "meke_gm_work", &
             "hvisc_om3_floors", "vmix_no_interior", "tidal_files", "tidal_polzin", &
-            "bbl_lotw")
+            "bbl_lotw", "hvisc_kh_points")
          ! Lon-lat sector, spoon basin, Wright EOS.  "closures" adds the
          ! lateral and vertical parameterisation set on top (EPBL instead of
          ! KPP, Fox-Kemper MLE, GM + MEKE, Redi, kappa-shear, tidal mixing,
