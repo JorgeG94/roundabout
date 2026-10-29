@@ -80,6 +80,9 @@
 !!     (FGNV streamfunction), `meke_gm_work` (MEKE source from the GM work),
 !!     `hvisc_thin_layer` (stress-form viscosity with the thin-layer ratio,
 !!     harmonic corner thickness and T/corner-point Laplacian floors),
+!!     `hvisc_biharm_stress` (the biharmonic folded into the stress tensor
+!!     with the joint Laplacian + biharmonic bound; a second strain stencil
+!!     on top of the Laplacian's),
 !!     `hvisc_om3_floors` (latitude / velocity-scale / Coriolis-bounded
 !!     viscosity), `vmix_no_interior` (`interior_closure = 'none'`),
 !!     `redi_cfl_fold` (Redi diffusive-CFL subcycling, `n_itt > 1`, on the
@@ -212,7 +215,7 @@ program test_ocean_decomp_bitid_mpi
    integer :: rank, nprocs, n_fail, total_fail, ic
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(32) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(33) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -229,7 +232,7 @@ program test_ocean_decomp_bitid_mpi
                                                 "redi_cfl_fold", "tidal_files", &
                                                 "tidal_polzin", "bbl_lotw", "tracer_ppm_h3", &
                                                 "hvisc_kh_points", "diabatic_end", &
-                                                "hvisc_thin_layer"]
+                                                "hvisc_thin_layer", "hvisc_biharm_stress"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -282,7 +285,7 @@ contains
       integer, intent(in) :: px, py
       character(len=:), allocatable :: nml
       character(len=*), parameter :: NL = new_line("a")
-      character(len=16) :: spx, spy, snx, sny
+      character(len=16) :: spx, spy, snx, sny, sng
       character(len=:), allocatable :: common, bt_extra, ice_dyn, hv_extra
 
       ! The visc_rem chain rides on the common &ocean_bt_nml group (one
@@ -316,6 +319,12 @@ contains
                     "kh_bg_at_points = .true., kh_vel_scale = 0.01, "// &
                     "kh_sin_lat = 2000.0, kh_pwr_of_sine = 4.0"
       end if
+      if (label == "hvisc_biharm_stress") then
+         hv_extra = ", stress_tensor = .true., biharm_stress = .true., nu_4 = 1.0e9"
+      end if
+      ! biharm_stress chains four stencil levels: validate_config needs nghost >= 4.
+      sng = "3"
+      if (label == "hvisc_biharm_stress") sng = "4"
       write (spx, '(i0)') px
       write (spy, '(i0)') py
       write (snx, '(i0)') NX_G
@@ -510,7 +519,8 @@ contains
          end if
       case ("spherical", "closures", "gm_ebt_struct", "gm_fgnv", "meke_gm_work", &
             "hvisc_om3_floors", "vmix_no_interior", "tidal_files", "tidal_polzin", &
-            "bbl_lotw", "hvisc_kh_points", "diabatic_end", "hvisc_thin_layer")
+            "bbl_lotw", "hvisc_kh_points", "diabatic_end", "hvisc_thin_layer", &
+            "hvisc_biharm_stress")
          ! Lon-lat sector, spoon basin, Wright EOS.  "closures" adds the
          ! lateral and vertical parameterisation set on top (EPBL instead of
          ! KPP, Fox-Kemper MLE, GM + MEKE, Redi, kappa-shear, tidal mixing,
@@ -518,7 +528,7 @@ contains
          ! OM3-parity labels (the `select case` after the block below) each
          ! add ONE feature to this basin.
          nml = common// &
-               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = "//trim(sng)//", "// &
                "dx = 1.0, dy = 1.0 /"//NL// &
                "&ocean_grid_nml grid_config = 'spherical', lon_west = 0.0, lat_south = 20.0, "// &
                "rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//NL// &

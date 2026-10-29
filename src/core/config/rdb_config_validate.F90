@@ -1000,6 +1000,14 @@ contains
             has_error = .true.
          end if
          if (cfg%ocean%hvisc%biharm_stress) then
+            if (cfg%nghost < 4) then
+               call logger%error("&ocean_hvisc_nml biharm_stress=.true. needs nghost >= 4 "// &
+                                 "(got "//to_string(cfg%nghost)//"): the stress-form biharmonic "// &
+                                 "chains strain -> Laplacian -> strain -> divergence, a stencil "// &
+                                 "four cells deep; with fewer ghost rows a decomposed run reads "// &
+                                 "stale halo data and the answer depends on the process grid")
+               has_error = .true.
+            end if
             if (.not. cfg%ocean%hvisc%stress_tensor) then
                call logger%error("&ocean_hvisc_nml biharm_stress=.true. requires "// &
                                  "stress_tensor=.true. - the biharmonic is folded into "// &

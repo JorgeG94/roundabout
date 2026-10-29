@@ -1601,7 +1601,10 @@ module rdb_config
       logical :: biharm_stress = .false.
          !! Stress-tensor path only (fails loud without `stress_tensor`, with
          !! `no_slip`, with `lateral_closure='leith_biharm'`, or with no
-         !! biharmonic coefficient configured): fold the biharmonic into the
+         !! biharmonic coefficient configured, or with `nghost < 4`: the strain ->
+         !! Laplacian -> strain -> divergence chain is four cells deep, so a
+         !! decomposed run needs four ghost rows to stay decomposition-invariant):
+         !! fold the biharmonic into the
          !! stress tensor (Griffies & Hallberg 2000) -
          !! `sigma_xx = h_T(Kh e - Ah e2)`, `sigma_xy = h_q wet_q (Kh s - Ah s2)` with
          !! `e2`/`s2` the strains of the stress-form Laplacian - so it is
