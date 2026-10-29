@@ -85,8 +85,11 @@
 !!     `tidal_polzin` (the Polzin vertical profile) and `bbl_lotw` (the
 !!     law-of-the-wall bottom-boundary-layer tracer mixing) and
 !!     `hvisc_kh_points` (stress-tensor viscosity with the static Laplacian
-!!     floors built at the T centres and Bu corners); the two tidal
-!!     cases need NetCDF;
+!!     floors built at the T centres and Bu corners), `diabatic_end`
+!!     (`diabatic_first = .false.`, `dt_therm_ratio = 2`: the thermo tracer
+!!     applies + ALE remap close the interval, pred_corr only; the windowed
+!!     drain is refused on multi-rank by the engine); the two tidal cases
+!!     need NetCDF;
 !!   * sea_ice — sea ice on the ocean's decomposition: Winton thermo +
 !!     ITD, EVP dynamics (CFL clip, `project_ci`) and the ice->ocean
 !!     stress blend in a cooled periodic channel, `dt_therm_ratio = 2`;
@@ -207,7 +210,7 @@ program test_ocean_decomp_bitid_mpi
    integer :: rank, nprocs, n_fail, total_fail, ic
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(30) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(31) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -223,7 +226,7 @@ program test_ocean_decomp_bitid_mpi
                                                 "hvisc_om3_floors", "vmix_no_interior", &
                                                 "redi_cfl_fold", "tidal_files", &
                                                 "tidal_polzin", "bbl_lotw", "tracer_ppm_h3", &
-                                                "hvisc_kh_points"]
+                                                "hvisc_kh_points", "diabatic_end"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -246,6 +249,8 @@ program test_ocean_decomp_bitid_mpi
           trim(CASES(ic)) == "file_readers_zstar") cycle
 #endif
       call run_case(trim(CASES(ic)), trim(SCHEMES(1)))
+      ! diabatic_first = .false. is refused under ssp_rk2 (validate_config).
+      if (trim(CASES(ic)) == "diabatic_end") cycle
       call run_case(trim(CASES(ic)), trim(SCHEMES(2)))
    end do
 
@@ -497,7 +502,7 @@ contains
          end if
       case ("spherical", "closures", "gm_ebt_struct", "gm_fgnv", "meke_gm_work", &
             "hvisc_om3_floors", "vmix_no_interior", "tidal_files", "tidal_polzin", &
-            "bbl_lotw", "hvisc_kh_points")
+            "bbl_lotw", "hvisc_kh_points", "diabatic_end")
          ! Lon-lat sector, spoon basin, Wright EOS.  "closures" adds the
          ! lateral and vertical parameterisation set on top (EPBL instead of
          ! KPP, Fox-Kemper MLE, GM + MEKE, Redi, kappa-shear, tidal mixing,
@@ -509,7 +514,8 @@ contains
                "dx = 1.0, dy = 1.0 /"//NL// &
                "&ocean_grid_nml grid_config = 'spherical', lon_west = 0.0, lat_south = 20.0, "// &
                "rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&vcoord_nml vcoord_type = '"//merge("zstar", "sigma", label == "diabatic_end")// &
+               "' /"//NL// &
                "&ocean_eos_nml eos = 'wright' /"//NL// &
                "&ocean_topo_nml topo_config = 'spoon', max_depth = 3000.0, "// &
                "edge_depth = 300.0, slope_scale = 300000.0, wind_config = '2gyre', "// &
@@ -581,6 +587,13 @@ contains
                   "&ocean_bdrag_nml form = 'quadratic', cd = 3.0e-3, hbbl = 10.0, "// &
                   "bg_vel = 0.1 /"//NL// &
                   "&ocean_bbl_mixing_nml enable = .true. /"//NL
+         case ("diabatic_end")
+            ! OM3 ordering of the thermo interval: surface heat flux +
+            ! KPP vertical tracer diffusion applied at the interval end,
+            ! then the ALE remap (pred_corr only; the loop skips ssp_rk2).
+            nml = nml// &
+                  "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -100.0 /"//NL// &
+                  "&ocean_vmix_nml dt_therm_ratio = 2, diabatic_first = .false. /"//NL
          end select
       case ("obc_radiation_sponge")
          ! Orlanski-radiating open south edge with tracer reservoirs, a
