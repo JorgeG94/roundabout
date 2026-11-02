@@ -84,6 +84,8 @@
 !!     + diabatic_first = .false.) on a periodic channel, >1 sub-cycle pass;
 !!   * drain_ratio_weno5 / _weno7 / _weno9 - the same drain with the WENO swept
 !!     reconstruction at nghost 3 / 4 / 5 (rung ladder keyed on global edges);
+!!   * drain_ratio_fold / drain_ratio_fold_h3 - the same drain across the tripolar fold
+!!     (distributed fold exchange for px > 1);
 !!   * tracer_ppm_h3 - re-entrant channel (periodic x) with
 !!     `tracer_advection_scheme = 'ppm_h3'` on the per-step path;
 !!   * the OM3-parity feature cases, each the spherical spoon basin plus ONE
@@ -232,7 +234,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(40) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(42) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -251,8 +253,10 @@ program test_ocean_decomp_bitid_mpi
                                                 "hvisc_kh_points", "diabatic_end", &
                                                 "hvisc_thin_layer", "hvisc_biharm_stress", &
                                                 "balanced_vortex_t0", "balanced_vortex", &
-                                                "drain_ratio", "drain_ratio_h3", "drain_ratio_weno5", &
-                                                "drain_ratio_weno7", "drain_ratio_weno9"]
+                                                "drain_ratio", "drain_ratio_h3", &
+                                                "drain_ratio_weno5", "drain_ratio_weno7", &
+                                                "drain_ratio_weno9", "drain_ratio_fold", &
+                                                "drain_ratio_fold_h3"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -282,7 +286,8 @@ program test_ocean_decomp_bitid_mpi
       call run_case(trim(CASES(ic)), trim(SCHEMES(1)))
       ! diabatic_first = .false. is refused under ssp_rk2 (validate_config).
       ! (drain_ratio_h3 pins it too.)
-      if (trim(CASES(ic)) == "diabatic_end" .or. trim(CASES(ic)) == "drain_ratio_h3") cycle
+      if (trim(CASES(ic)) == "diabatic_end" .or. trim(CASES(ic)) == "drain_ratio_h3" .or. &
+          trim(CASES(ic)) == "drain_ratio_fold_h3") cycle
       call run_case(trim(CASES(ic)), trim(SCHEMES(2)))
    end do
 
@@ -313,6 +318,7 @@ contains
       character(len=*), parameter :: NL = new_line("a")
       character(len=16) :: spx, spy, snx, sny, sng
       character(len=:), allocatable :: common, bt_extra, ice_dyn, hv_extra, drain_extra
+      character(len=16) :: rad_earth_s, wind_s, wind_y_s
 
       ! The visc_rem chain rides on the common &ocean_bt_nml group (one
       ! group per namelist).  D1 follow-up (2026-10): the weighted
@@ -331,12 +337,20 @@ contains
       end if
       hv_extra = ""
       ! dx = 250 m puts the fixed nu_h = 200 far past the viscous CFL: clamp it.
-      if (label(1:5) == "drain") hv_extra = ", bound_kh = .true."
+      if (index(label, "drain") == 1) hv_extra = ", bound_kh = .true."
       drain_extra = ""
       if (index(label, "drain_ratio_weno") == 1) then
          drain_extra = ", tracer_recon = '"//label(len_trim(label) - 4:len_trim(label))//"'"
       end if
-      if (label == "drain_ratio_h3") then
+      rad_earth_s = "6.378e6"
+      wind_s = "0.05"
+      wind_y_s = "0.0"
+      if (index(label, "drain_ratio_fold") == 1) then
+         rad_earth_s = "2.0e4"
+         wind_s = "0.3"
+         wind_y_s = "0.3"   ! meridional stress drives flow INTO the fold row
+      end if
+      if (label == "drain_ratio_h3" .or. label == "drain_ratio_fold_h3") then
          drain_extra = ", tracer_advection_scheme = 'ppm_h3', diabatic_first = .false."
       end if
       if (label == "hvisc_om3_floors") then
@@ -572,7 +586,7 @@ contains
                "&ocean_bc_nml west = 'tidal', east = 'open', south = 'wall', north = 'wall', "// &
                "west_n_tidal = 1, west_tidal_amp = 0.5, west_tidal_phase = 0.0, "// &
                "west_tidal_omega = 1.4051890e-4 /"//NL
-      case ("tripolar", "redi_cfl_fold")
+      case ("tripolar", "redi_cfl_fold", "drain_ratio_fold", "drain_ratio_fold_h3")
          ! Analytic tripolar cap (59N-83N, phi_join 74N) closed by the north
          ! fold, periodic in x, under a constant wind, with the double-Drake
          ! land walls reaching the fold line at asymmetric columns (1 and
@@ -584,14 +598,23 @@ contains
          nml = common// &
                "&grid_nml nx = 30, ny = 24, nghost = 3, dx = 12.0, dy = 1.0 /"//NL// &
                "&ocean_grid_nml grid_config = 'tripolar', lon_west = 0.0, lat_south = 59.0, "// &
-               "phi_join = 74.0, lon_pole = 0.0, rad_earth = 6.378e6, "// &
+               "phi_join = 74.0, lon_pole = 0.0, rad_earth = "//trim(rad_earth_s)//", "// &
                "coriolis_scheme = 'planetary' /"//NL// &
-               "&physics_nml wind_stress_x = 0.05 /"//NL// &
+               "&physics_nml wind_stress_x = "//trim(wind_s)//", wind_stress_y = "//trim(wind_y_s)//" /"//NL// &
                "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
                "&ocean_topo_nml topo_config = 'double_drake', max_depth = 1000.0, "// &
                "slope_scale = 0.2 /"//NL// &
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'tripolar_fold' /"//NL
+         if (label == "drain_ratio_fold" .or. label == "drain_ratio_fold_h3") then
+            ! Windowed tracer drain (ratio 4) across the tripolar fold.  A
+            ! 1/100-size planet (rad_earth) brings the accumulated window
+            ! Courant number above 0.5 so the sub-cycle runs >1 pass, and
+            ! the cap rows (fold seam) carry the flow; thermodynamics on.
+            nml = nml// &
+                  "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -100.0 /"//NL// &
+                  "&ocean_vmix_nml dt_therm_ratio = 4, dt_tracer_advect_ratio = 4 /"//NL
+         end if
          if (label == "redi_cfl_fold") then
             ! Redi at a diffusivity far above the explicit-diffusion limit
             ! with `check_diffusive_cfl`: the cell CFL (a cross-rank max) sets
@@ -1311,7 +1334,8 @@ contains
                end if
             end if
             ! A7: the fold-exchange reserve must cover every ice group.
-            if (is_ice_fold_case(label)) nbad = nbad + dec%ngrow
+            if (is_ice_fold_case(label) .or. index(label, "drain_ratio_fold") == 1) &
+               nbad = nbad + dec%ngrow
             glob = [nbad, nfin, 0]
 #ifndef RDB_NO_NETCDF
             if ((label == "sea_ice" .or. label == "sea_ice_transport" .or. &

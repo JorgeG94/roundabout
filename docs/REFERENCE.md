@@ -664,8 +664,8 @@ test.
 `&ocean_vmix_nml dt_tracer_advect_ratio > 1` decouples the horizontal
 tracer drain from the per-step dynamics (MOM6 `DT_TRACER_ADVECT`); the
 drain runs a CW-PPM flux-form advection over the accumulated mass flux.
-Multi-rank (halo-exchanged drain fields, global pass count; refused only
-under a tripolar north fold).  Works under both `split_scheme` values: the window accumulates
+Multi-rank (halo-exchanged drain fields, global pass count; the tripolar
+north fold goes through the px-aware fold dispatch).  Works under both `split_scheme` values: the window accumulates
 0.5 x transport per `ssp_rk2` stage, or 1.0 x the corrector transport under
 `pred_corr` (whose predictor accumulates nothing).  The restart writer flushes
 the window before a checkpoint, so restarts are window-aligned.  Cadence:

@@ -31,8 +31,8 @@ module rdb_continuity
                                  ocean_periodic_wrap_face_x_3d, &
                                  ocean_periodic_wrap_face_y_3d
    use rdb_ocean_fold_apply, only: ocean_fold_wrap_centre_3d_state
-   use rdb_ocean_fold, only: fold_north_centre, fold_north_u_face, fold_north_v_face
-   use rdb_ocean_fold_exchange, only: ocean_fold_north_v_face
+   use rdb_ocean_fold_exchange, only: ocean_fold_north_v_face, ocean_fold_north_centre, &
+                                      ocean_fold_north_u_face
    use rdb_ocean_mle, only: ocean_mle_t, mle_fold_x, mle_fold_y
    use rdb_ocean_gm, only: ocean_gm_t
    use rdb_ocean_halo, only: ocean_halo_centre, ocean_halo_face_x, ocean_halo_face_y, &
@@ -4490,7 +4490,7 @@ contains
          call ocean_periodic_wrap_centre_3d(fld, nx, ny, nz, &
                                             nx_phys, ny_phys, nghost, per_x, per_y, no_wait=nw)
       end if
-      if (fold_n) call fold_north_centre(fld, nx, ny, nz, nx_phys, ny_phys, nghost)
+      if (fold_n) call ocean_fold_north_centre(fld, nx, ny, nz, nx_phys, ny_phys, nghost)
    end subroutine drain_wrap_centre
 
    subroutine drain_wrap_face_x(fld, nx, ny, nz, nx_phys, ny_phys, nghost, &
@@ -4506,7 +4506,7 @@ contains
          call ocean_periodic_wrap_face_x_3d(fld, nx + 1, ny, nz, &
                                             nx_phys, ny_phys, nghost, per_x, per_y)
       end if
-      if (fold_n) call fold_north_u_face(fld, nx + 1, ny, nz, nx_phys, ny_phys, nghost)
+      if (fold_n) call ocean_fold_north_u_face(fld, nx + 1, ny, nz, nx_phys, ny_phys, nghost)
    end subroutine drain_wrap_face_x
 
    subroutine drain_wrap_face_y(fld, nx, ny, nz, nx_phys, ny_phys, nghost, &
@@ -4522,7 +4522,7 @@ contains
          call ocean_periodic_wrap_face_y_3d(fld, nx, ny + 1, nz, &
                                             nx_phys, ny_phys, nghost, per_x, per_y)
       end if
-      if (fold_n) call fold_north_v_face(fld, nx, ny + 1, nz, nx_phys, ny_phys, nghost)
+      if (fold_n) call ocean_fold_north_v_face(fld, nx, ny + 1, nz, nx_phys, ny_phys, nghost)
    end subroutine drain_wrap_face_y
 
    ! ====================================================================

@@ -1763,8 +1763,8 @@ module rdb_config
          !! accumulated mass fluxes drained in one windowed advect.  1
          !! (default) ⇒ every step, bit-identical.  `dt_therm_ratio` must be
          !! an integer multiple of this (configure-time check).  Multi-rank
-         !! safe (drain fields halo-exchanged, pass count is a global max)
-         !! except under a tripolar north fold (refused at configure).
+         !! safe (drain fields halo-exchanged, pass count is a global max,
+         !! tripolar fold through the px-aware fold dispatch).
       real(wp) :: kv_max = huge(1.0_wp)
          !! Ceiling on momentum viscosity kv (m^2/s).  Default `huge` = no clip.
       real(wp) :: kd_max = huge(1.0_wp)

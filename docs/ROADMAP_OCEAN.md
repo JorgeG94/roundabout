@@ -50,7 +50,7 @@ Cross-cutting numerics and engineering (WENO, SSP-RK3, IMEX, mixed precision, DA
 | Sea ice | `src/core/ice/`: Winton thermodynamics, multi-category ITD, ITD-aware transport, C-grid EVP, frazil, ice-ocean couplers. All under `&ocean_ice_nml` (default off). |
 | Sea ice on many ranks | Thermo, EVP and stress blend on the ocean decomposition (`84ddefc87`); category transport across ranks and periodic seams (`313a8c0c1`); restart round trip (`9df1c5b90`). |
 | Sea ice under the tripolar fold | Category state (`cc75df88f`) and EVP dynamics (A6, `e1ae86fa7`); multi-rank with the `sea_ice_fold` bit-identity cases (A7, #143). |
-| Windowed tracer advection | `dt_tracer_advect_ratio`; multi-rank and decomposition-bit-identical (`drain_ratio*` cases), except under a tripolar north fold, which stays single-rank. |
+| Windowed tracer advection | `dt_tracer_advect_ratio`; multi-rank and decomposition-bit-identical, tripolar north fold included (`drain_ratio*`, `drain_ratio_fold*` cases). |
 
 ### Parallelism and reproducibility
 
@@ -120,7 +120,7 @@ Cross-cutting numerics and engineering (WENO, SSP-RK3, IMEX, mixed precision, DA
 |---|---|
 | `[E]` **Song-Haidvogel `dsig` stretch** | Expose ROMS stretching as `stretch_type="song_haidvogel"` feeding the sigma path (`dsig` builder, about 30 lines). The dead `VCOORD_SCOORD` enum is gone (D7). Not in `src/` today. *Validate:* generated `dsig` matches the S&H formula for given `(θ_s, θ_b, h_c)`. |
 | `[H]` **Adaptive barotropic Orlanski radiation** | Per-layer implicit-upwind Orlanski on the baroclinic normal velocity ships (`&ocean_bc_nml radiation_scheme = "orlanski"`, `RAD_ORLANSKI` in `rdb_ocean_obc_baroclinic.F90`; default `"anomaly"`). Still missing: a per-cell adaptive phase speed for the barotropic eta (Chapman uses one edge-mean value, `rdb_barotropic_substep.F90`), and restart state for the radiation memory (`rx`, `u_prev`). |
-| `[M]` **Remaining single-rank features** | Ice-shelf cavity, wet/dry, Chapman edges, `dt_tracer_advect_ratio > 1` with a tripolar fold, in-memory geometry injection. Each fails loud on more than one rank. |
+| `[M]` **Remaining single-rank features** | Ice-shelf cavity, wet/dry, Chapman edges, in-memory geometry injection. Each fails loud on more than one rank. |
 | `[M]` **Restarts across a rank-count change** | Restarts resume on the same decomposition only. |
 | `[M]` **Strong-scaling characterisation** | Multi-GPU strong scaling is not yet measured. |
 | `[M]` **Large-rank-count reproducibility re-run** | The decomposition bit-identity test covers 1, 2 and 4 ranks. A 104 vs 208 rank comparison of the console time series (`En`, `MaxCFL`) has not been re-run on this tree. *Validate:* identical time series at 104 and 208 ranks. |
@@ -208,7 +208,7 @@ The `Phase N` anchors the ocean source cites (about 152 comments). Tier-1 dyn-co
 - **Phase 5g** — Vertical coord + ALE remap on the ocean path (originally six VCOORD families; ten ship today — PPM remap, centre + face). **shipped**
 - **Phase 6** — Diagnostics manager + ocean validation suite. **partial**
 - **Phase 6a** — Diag registry + cadence + log sink (SSH / T / S / u / v / KE default fills). **shipped**
-- **Phase 6b** — Windowed flux-accumulated tracer advection (`dt_tracer_advect_ratio` knob, `&ocean_vmix_nml`): `uhtr`/`vhtr` face-transport accumulators + `t_dyn_rel_adv` in `continuity_t`; swept-average CW-PPM drain with fixed-budget CFL sub-cycling; mandatory flush before output/restart/remap; MOM6 `DT_TRACER_ADVECT` cadence (Adcroft & Hallberg 2006). Multi-rank since E1: every off-tile drain field is halo-exchanged per pass and the pass count is a global max, bit-identical to one rank (`drain_ratio*` cases); a tripolar north fold stays single-rank. **shipped** (default cadence stays `dt_tracer_advect_ratio=1` fused per-stage; the windowed drain is the opt-in `ratio>1` path — see `docs/howto/tracer_advect_cadence.md`).
+- **Phase 6b** — Windowed flux-accumulated tracer advection (`dt_tracer_advect_ratio` knob, `&ocean_vmix_nml`): `uhtr`/`vhtr` face-transport accumulators + `t_dyn_rel_adv` in `continuity_t`; swept-average CW-PPM drain with fixed-budget CFL sub-cycling; mandatory flush before output/restart/remap; MOM6 `DT_TRACER_ADVECT` cadence (Adcroft & Hallberg 2006). Multi-rank since E1: every off-tile drain field is halo-exchanged per pass and the pass count is a global max, bit-identical to one rank (`drain_ratio*` cases), across the tripolar fold too, `px > 1` included (`drain_ratio_fold*`). **shipped** (default cadence stays `dt_tracer_advect_ratio=1` fused per-stage; the windowed drain is the opt-in `ratio>1` path — see `docs/howto/tracer_advect_cadence.md`).
 - **Phase 6c** — Land/ocean mask + layer→fixed-z diag vremap + time-mean ops; budgets path. **shipped**
 - **Phase 6d** — Serial NetCDF emit (per-rank, CF-1.8). **shipped** (the MPI I/O-server rank was coastal-path machinery and left with the carve-out; the ocean path emits per-rank directly)
 - **Phase 7** — Multi-GPU C-grid MPI halo (face/centre/corner); single-GPU perf characterised. **shipped** (halo + decomp-invariance gate; multi-GPU strong scaling not yet characterised)
@@ -243,7 +243,7 @@ Tier-1 operational: double-gyre stable to day 580; 2 km Tasman eddy-resolving at
 
 The C-grid MPI multi-rank halo ships and is gated by a decomposition-invariance suite (1 rank vs N, same answer) plus the `tests/mpi/` set. OBC dispatch is wired; file-backed nesting data is the remaining regional-enabling gap (tidal forcing ships; its validation campaign does not).
 
-Several individual features remain single-rank: the ice-shelf cavity, wet/dry, and the windowed tracer-advection drain under a tripolar fold. (The windowed drain elsewhere, porous barriers, sea ice, sea ice under the tripolar fold and the tripolar north fold with `px > 1` have since gone multi-rank; see §1.)
+Several individual features remain single-rank: the ice-shelf cavity and wet/dry. (The windowed tracer-advection drain, porous barriers, sea ice, sea ice under the tripolar fold and the tripolar north fold with `px > 1` have since gone multi-rank; see §1.)
 
 The user guide is a Sphinx site under `rdb_docs/` (theory, discretisation, coordinates, PGF, closures, running simulations, the Python driver, validation). Per-procedure reference comes from the FORD `!!` docstrings and is built separately.
 
