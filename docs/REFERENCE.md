@@ -686,6 +686,11 @@ Lateral tracer diffusion (hdiff + Redi, full tracer dt) runs at the interval end
 by that drain — the mass-flux split, the per-layer conservation shell and
 the downstream clamp are unchanged, only the upwind face value swaps:
 
+Multi-rank: the rung ladder degrades only toward a PHYSICAL wall (a periodic
+axis or an inter-rank seam reads the full stencil), so every decomposition
+picks the same rung at the same face; `drain_ratio_weno5/7/9` in
+`test_ocean_decomp_bitid_mpi` gate it bitwise.
+
 | `tracer_recon` | scheme | nghost | full-period L1 order | notes |
 |---|---|---|---|---|
 | `ppm` (default) | Colella-Woodward 1984 parabola | 2 | 2 | bit-identical to the pre-existing path |

@@ -23,6 +23,9 @@
 !!      rho, the OBC reservoirs — plus the BT end-of-step eta, against the
 !!      matching window of the reference.
 !!
+!! Dev filter: `RDB_BITID_CASES=<substring>` runs only the cases whose label
+!! contains it (e.g. `RDB_BITID_CASES=drain`).
+!!
 !! Cases (each under `pred_corr` AND `ssp_rk2`, 48 steps):
 !!   * island_basin — closed Cartesian basin with an interior land block
 !!     (static land mask), beta plane, `2gyre` wind, sigma;
@@ -79,6 +82,8 @@
 !!     seeded state itself (incl. ghosts) is compared;
 !!   * drain_ratio / drain_ratio_h3 - windowed tracer drain (ratio 4, ppm / ppm_h3
 !!     + diabatic_first = .false.) on a periodic channel, >1 sub-cycle pass;
+!!   * drain_ratio_weno5 / _weno7 / _weno9 - the same drain with the WENO swept
+!!     reconstruction at nghost 3 / 4 / 5 (rung ladder keyed on global edges);
 !!   * tracer_ppm_h3 - re-entrant channel (periodic x) with
 !!     `tracer_advection_scheme = 'ppm_h3'` on the per-step path;
 !!   * the OM3-parity feature cases, each the spherical spoon basin plus ONE
@@ -210,9 +215,9 @@ program test_ocean_decomp_bitid_mpi
       type(field_t) :: f(MAXF)
       integer :: io = 0, jo = 0, nxl = 0, nyl = 0, ng = 0
       integer :: ngrow = 0
+         !! Mid-run regrows of the fold-exchange buffers (must stay 0).
       integer :: drain_iter = 0
          !! Largest windowed-drain pass count used (0 when the drain never ran).
-         !! Mid-run regrows of the fold-exchange buffers (must stay 0).
       type(conservation_budget_t) :: bud
          !! Closed-budget mass/salt/heat out+src totals at the final step —
          !! EFP-reduced (`reproducing_sums`, default on), so these must be
@@ -227,7 +232,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(37) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(40) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -246,7 +251,8 @@ program test_ocean_decomp_bitid_mpi
                                                 "hvisc_kh_points", "diabatic_end", &
                                                 "hvisc_thin_layer", "hvisc_biharm_stress", &
                                                 "balanced_vortex_t0", "balanced_vortex", &
-                                                "drain_ratio", "drain_ratio_h3"]
+                                                "drain_ratio", "drain_ratio_h3", "drain_ratio_weno5", &
+                                                "drain_ratio_weno7", "drain_ratio_weno9"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -327,6 +333,9 @@ contains
       ! dx = 250 m puts the fixed nu_h = 200 far past the viscous CFL: clamp it.
       if (label(1:5) == "drain") hv_extra = ", bound_kh = .true."
       drain_extra = ""
+      if (index(label, "drain_ratio_weno") == 1) then
+         drain_extra = ", tracer_recon = '"//label(len_trim(label) - 4:len_trim(label))//"'"
+      end if
       if (label == "drain_ratio_h3") then
          drain_extra = ", tracer_advection_scheme = 'ppm_h3', diabatic_first = .false."
       end if
@@ -351,10 +360,19 @@ contains
       ! biharm_stress chains four stencil levels: validate_config needs nghost >= 4.
       sng = "3"
       if (label == "hvisc_biharm_stress") sng = "4"
+      ! WENO drain rungs need nghost >= 3 / 4 / 5 (weno5 / 7 / 9).
+      if (label == "drain_ratio_weno7") sng = "4"
+      if (label == "drain_ratio_weno9") sng = "5"
       write (spx, '(i0)') px
       write (spy, '(i0)') py
       write (snx, '(i0)') NX_G
       write (sny, '(i0)') NY_G
+      ! weno9 needs nghost = 5: widen the grid so the np = 4 layouts (1x4 ->
+      ! ny/4 rows, 4x1 -> nx/4 columns) stay at least nghost wide.
+      if (label == "drain_ratio_weno9") then
+         snx = "32"
+         sny = "24"
+      end if
       common = "&sim_nml sim_type = 'ocean' /"//NL// &
                "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
                "&time_nml t_end = 86400.0, dt_fixed = 900.0 /"//NL// &
@@ -505,7 +523,8 @@ contains
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'sponge', sponge_width = 3, sponge_strength = 1.0e-2, "// &
                "sponge_relax_tracers = .true. /"//NL
-      case ("drain_ratio", "drain_ratio_h3")
+      case ("drain_ratio", "drain_ratio_h3", "drain_ratio_weno5", "drain_ratio_weno7", &
+            "drain_ratio_weno9")
          ! Windowed tracer-advection drain (`dt_tracer_advect_ratio = 4`, 12
          ! windows in N_STEPS) on a re-entrant seamount channel (periodic
          ! x: the drain reads tile and wrap ghosts), a small dx so the
@@ -514,7 +533,7 @@ contains
          ! `ppm_h3` drain reconstruction and the OM3 interval order
          ! (`diabatic_first = .false.`, pred_corr only).
          nml = common// &
-               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = "//trim(sng)//", "// &
                "dx = 250.0, dy = 250.0 /"//NL// &
                "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 1.0 /"//NL// &
                "&vcoord_nml vcoord_type = 'sigma' /"//NL// &

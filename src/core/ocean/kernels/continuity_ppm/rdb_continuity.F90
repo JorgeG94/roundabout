@@ -328,7 +328,8 @@ module rdb_continuity
          !! floored-stack case can accumulate > 2·10⁹ over a long run.
       integer :: drain_iter_max = 0
          !! Largest sub-cycle pass count any windowed-drain call has used
-         !! (host diagnostic; the post-reduction value when decomposed).
+         !! (test diagnostic only -- nothing in the solver reads it; the
+         !! post-reduction value when decomposed).
       logical :: tracer_h3 = .false.
          !! Horizontal tracer-advection edge scheme of the every-step split
          !! path (`tracer_advect_{zonal,meridional}_one_impl`, GM bolus
@@ -4123,6 +4124,7 @@ contains
       integer :: i, j, k
       real(wp) :: cfl_max, cfl_loc, denom, fmax
       logical :: per_x, per_y, fold_n
+      logical :: open_w, open_e, open_s, open_n
 
       if (.not. allocated(ms%tracers)) return
 
@@ -4143,6 +4145,20 @@ contains
          per_x = bc%periodic_x .and. .not. ocean_halo_is_decomposed_x()
          per_y = bc%periodic_y .and. .not. ocean_halo_is_decomposed_y()
          fold_n = bc%north_fold
+      end if
+      ! WENO rung ladder: a side that continues into more domain (periodic
+      ! axis, or an inter-rank neighbour) reads the full stencil; only a
+      ! physical wall side degrades.  Keyed on the GLOBAL geometry so every
+      ! decomposition picks the same rung at the same face.
+      open_w = .false.
+      open_e = .false.
+      open_s = .false.
+      open_n = .false.
+      if (present(bc)) then
+         open_w = bc%periodic_x .or. .not. bc%has_west
+         open_e = bc%periodic_x .or. .not. bc%has_east
+         open_s = bc%periodic_y .or. .not. bc%has_south
+         open_n = bc%periodic_y .or. .not. bc%has_north
       end if
 
       ! ---- Halo of the accumulators (single-rank seams) ----
@@ -4332,7 +4348,7 @@ contains
                call drain_fill_conc(nx, ny, nz, ms%tracers(it)%hTr, this%hprev_work, this%tr_work)
                call drain_wrap_centre(this%tr_work, nx, ny, nz, nx_phys, ny_phys, nghost, &
                                       per_x, per_y, fold_n, skip_halo=.true.)
-               call drain_swept_flux_x_weno(nx, ny, nz, nghost, per_x, metrics%areaT, &
+               call drain_swept_flux_x_weno(nx, ny, nz, nghost, open_w, open_e, metrics%areaT, &
                                             this%uhh_x, this%hprev_work, this%tr_work, &
                                             metrics%wet_T, this%tracer_recon, this%tr_flux_x)
             end if
@@ -4399,7 +4415,7 @@ contains
                call drain_fill_conc(nx, ny, nz, ms%tracers(it)%hTr, this%hprev_work, this%tr_work)
                call drain_wrap_centre(this%tr_work, nx, ny, nz, nx_phys, ny_phys, nghost, &
                                       per_x, per_y, fold_n, skip_halo=.true.)
-               call drain_swept_flux_y_weno(nx, ny, nz, nghost, per_y, metrics%areaT, &
+               call drain_swept_flux_y_weno(nx, ny, nz, nghost, open_s, open_n, metrics%areaT, &
                                             this%uhh_y, this%hprev_work, this%tr_work, &
                                             metrics%wet_T, this%tracer_recon, this%tr_flux_y)
             end if
@@ -5154,7 +5170,7 @@ contains
       conc = weno9_face_swept(qm4, qm3, qm2, qm1, q0, qp1, qp2, qp3, qp4, cfl)
    end function weno_face_conc_y
 
-   pure subroutine drain_swept_flux_x_weno(nx, ny, nz, nghost, periodic, areaT, uhh, &
+   pure subroutine drain_swept_flux_x_weno(nx, ny, nz, nghost, open_lo, open_hi, areaT, uhh, &
                                            hprev, tr, wet_T, recon, F)
       !! WENO analogue of drain_swept_flux_x: swept-average zonal face flux
       !! from the concentration field `tr` using the WENO rung ladder.
@@ -5171,7 +5187,11 @@ contains
       !! position ladder degrades toward the array edge; wall faces carry no
       !! transport, so a reduced-rung reconstruction there costs no accuracy.
       integer, intent(in) :: nx, ny, nz, nghost, recon
-      logical, intent(in) :: periodic
+      logical, intent(in) :: open_lo, open_hi
+         !! The low/high side of the array continues into more domain (a
+         !! periodic axis or an inter-rank neighbour): the full-rung stencil
+         !! is valid there, so no position-based degradation.  Only a
+         !! physical wall side degrades through the rung ladder.
       real(wp), intent(in) :: areaT(nx, ny)
       real(wp), intent(in) :: uhh(nx + 1, ny, nz)
       real(wp), intent(in) :: hprev(nx, ny, nz)
@@ -5191,13 +5211,8 @@ contains
             ! donor = cell i-1, downwind = +i
             vol = max(areaT(i - 1, j)*hprev(i - 1, j, k), DRAIN_MIN_VOL)
             cfl = min(u/vol, 1.0_wp)
-            if (periodic) then
-               avail_up = nx
-               avail_down = nx
-            else
-               avail_up = i - nghost
-               avail_down = nx - nghost - i + 2
-            end if
+            avail_up = merge(nx, i - nghost, open_lo)
+            avail_down = merge(nx, nx - nghost - i + 2, open_hi)
             conc = weno_face_conc_x(nx, ny, nz, tr, wet_T, i - 1, j, k, 1, &
                                     avail_up, avail_down, rung_max, cfl)
             F(i, j, k) = u*conc
@@ -5205,13 +5220,8 @@ contains
             ! donor = cell i, downwind = -i
             vol = max(areaT(i, j)*hprev(i, j, k), DRAIN_MIN_VOL)
             cfl = min(-u/vol, 1.0_wp)
-            if (periodic) then
-               avail_up = nx
-               avail_down = nx
-            else
-               avail_up = nx - nghost - i + 2
-               avail_down = i - nghost
-            end if
+            avail_up = merge(nx, nx - nghost - i + 2, open_hi)
+            avail_down = merge(nx, i - nghost, open_lo)
             conc = weno_face_conc_x(nx, ny, nz, tr, wet_T, i, j, k, -1, &
                                     avail_up, avail_down, rung_max, cfl)
             F(i, j, k) = u*conc
@@ -5221,11 +5231,15 @@ contains
       end do
    end subroutine drain_swept_flux_x_weno
 
-   pure subroutine drain_swept_flux_y_weno(nx, ny, nz, nghost, periodic, areaT, uhh, &
+   pure subroutine drain_swept_flux_y_weno(nx, ny, nz, nghost, open_lo, open_hi, areaT, uhh, &
                                            hprev, tr, wet_T, recon, F)
       !! Meridional analogue of drain_swept_flux_x_weno.
       integer, intent(in) :: nx, ny, nz, nghost, recon
-      logical, intent(in) :: periodic
+      logical, intent(in) :: open_lo, open_hi
+         !! The low/high side of the array continues into more domain (a
+         !! periodic axis or an inter-rank neighbour): the full-rung stencil
+         !! is valid there, so no position-based degradation.  Only a
+         !! physical wall side degrades through the rung ladder.
       real(wp), intent(in) :: areaT(nx, ny)
       real(wp), intent(in) :: uhh(nx, ny + 1, nz)
       real(wp), intent(in) :: hprev(nx, ny, nz)
@@ -5244,26 +5258,16 @@ contains
          if (u > 0.0_wp) then
             vol = max(areaT(i, j - 1)*hprev(i, j - 1, k), DRAIN_MIN_VOL)
             cfl = min(u/vol, 1.0_wp)
-            if (periodic) then
-               avail_up = ny
-               avail_down = ny
-            else
-               avail_up = j - nghost
-               avail_down = ny - nghost - j + 2
-            end if
+            avail_up = merge(ny, j - nghost, open_lo)
+            avail_down = merge(ny, ny - nghost - j + 2, open_hi)
             conc = weno_face_conc_y(nx, ny, nz, tr, wet_T, i, j - 1, k, 1, &
                                     avail_up, avail_down, rung_max, cfl)
             F(i, j, k) = u*conc
          else if (u < 0.0_wp) then
             vol = max(areaT(i, j)*hprev(i, j, k), DRAIN_MIN_VOL)
             cfl = min(-u/vol, 1.0_wp)
-            if (periodic) then
-               avail_up = ny
-               avail_down = ny
-            else
-               avail_up = ny - nghost - j + 2
-               avail_down = j - nghost
-            end if
+            avail_up = merge(ny, ny - nghost - j + 2, open_hi)
+            avail_down = merge(ny, j - nghost, open_lo)
             conc = weno_face_conc_y(nx, ny, nz, tr, wet_T, i, j, k, -1, &
                                     avail_up, avail_down, rung_max, cfl)
             F(i, j, k) = u*conc
