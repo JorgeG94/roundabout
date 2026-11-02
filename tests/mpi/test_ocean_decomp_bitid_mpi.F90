@@ -77,6 +77,8 @@
 !!     vortex IC (`ic_config = 'balanced_vortex'`) on a closed beta-plane, centred
 !!     on the 2x1/1x2 seams and the 2x2 corner; `_t0` takes zero steps so the
 !!     seeded state itself (incl. ghosts) is compared;
+!!   * drain_ratio / drain_ratio_h3 - windowed tracer drain (ratio 4, ppm / ppm_h3
+!!     + diabatic_first = .false.) on a periodic channel, >1 sub-cycle pass;
 !!   * tracer_ppm_h3 - re-entrant channel (periodic x) with
 !!     `tracer_advection_scheme = 'ppm_h3'` on the per-step path;
 !!   * the OM3-parity feature cases, each the spherical spoon basin plus ONE
@@ -97,7 +99,7 @@
 !!     floors built at the T centres and Bu corners), `diabatic_end`
 !!     (`diabatic_first = .false.`, `dt_therm_ratio = 2`: the thermo tracer
 !!     applies + ALE remap close the interval, pred_corr only; the windowed
-!!     drain is refused on multi-rank by the engine); the two tidal cases
+!!     drain is not in play there); the two tidal cases
 !!     need NetCDF;
 !!   * sea_ice — sea ice on the ocean's decomposition: Winton thermo +
 !!     ITD, EVP dynamics (CFL clip, `project_ci`) and the ice->ocean
@@ -208,6 +210,8 @@ program test_ocean_decomp_bitid_mpi
       type(field_t) :: f(MAXF)
       integer :: io = 0, jo = 0, nxl = 0, nyl = 0, ng = 0
       integer :: ngrow = 0
+      integer :: drain_iter = 0
+         !! Largest windowed-drain pass count used (0 when the drain never ran).
          !! Mid-run regrows of the fold-exchange buffers (must stay 0).
       type(conservation_budget_t) :: bud
          !! Closed-budget mass/salt/heat out+src totals at the final step —
@@ -223,7 +227,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(35) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(37) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -241,7 +245,8 @@ program test_ocean_decomp_bitid_mpi
                                                 "tidal_polzin", "bbl_lotw", "tracer_ppm_h3", &
                                                 "hvisc_kh_points", "diabatic_end", &
                                                 "hvisc_thin_layer", "hvisc_biharm_stress", &
-                                                "balanced_vortex_t0", "balanced_vortex"]
+                                                "balanced_vortex_t0", "balanced_vortex", &
+                                                "drain_ratio", "drain_ratio_h3"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -254,6 +259,7 @@ program test_ocean_decomp_bitid_mpi
    call comm%barrier()
 #endif
 
+   ! Dev filter: RDB_BITID_CASES=<substring> runs only matching case labels.
    call get_environment_variable("RDB_BITID_CASES", case_filter)
    do ic = 1, size(CASES)
       if (len_trim(case_filter) > 0) then
@@ -269,7 +275,8 @@ program test_ocean_decomp_bitid_mpi
 #endif
       call run_case(trim(CASES(ic)), trim(SCHEMES(1)))
       ! diabatic_first = .false. is refused under ssp_rk2 (validate_config).
-      if (trim(CASES(ic)) == "diabatic_end") cycle
+      ! (drain_ratio_h3 pins it too.)
+      if (trim(CASES(ic)) == "diabatic_end" .or. trim(CASES(ic)) == "drain_ratio_h3") cycle
       call run_case(trim(CASES(ic)), trim(SCHEMES(2)))
    end do
 
@@ -299,7 +306,7 @@ contains
       character(len=:), allocatable :: nml
       character(len=*), parameter :: NL = new_line("a")
       character(len=16) :: spx, spy, snx, sny, sng
-      character(len=:), allocatable :: common, bt_extra, ice_dyn, hv_extra
+      character(len=:), allocatable :: common, bt_extra, ice_dyn, hv_extra, drain_extra
 
       ! The visc_rem chain rides on the common &ocean_bt_nml group (one
       ! group per namelist).  D1 follow-up (2026-10): the weighted
@@ -317,6 +324,12 @@ contains
          bt_extra = ", visc_rem_chain = .true., frhat_scheme = 'hybrid'"
       end if
       hv_extra = ""
+      ! dx = 250 m puts the fixed nu_h = 200 far past the viscous CFL: clamp it.
+      if (label(1:5) == "drain") hv_extra = ", bound_kh = .true."
+      drain_extra = ""
+      if (label == "drain_ratio_h3") then
+         drain_extra = ", tracer_advection_scheme = 'ppm_h3', diabatic_first = .false."
+      end if
       if (label == "hvisc_om3_floors") then
          hv_extra = ", kh_sin_lat = 2000.0, kh_pwr_of_sine = 4.0, ah_vel_scale = 0.01, "// &
                     "bound_coriolis_biharm = .true., bound_coriolis_vel = 6.0"
@@ -492,6 +505,26 @@ contains
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'sponge', sponge_width = 3, sponge_strength = 1.0e-2, "// &
                "sponge_relax_tracers = .true. /"//NL
+      case ("drain_ratio", "drain_ratio_h3")
+         ! Windowed tracer-advection drain (`dt_tracer_advect_ratio = 4`, 12
+         ! windows in N_STEPS) on a re-entrant seamount channel (periodic
+         ! x: the drain reads tile and wrap ghosts), a small dx so the
+         ! accumulated window Courant number exceeds 0.5 and the sub-cycle
+         ! runs more than one pass.  `drain_ratio_h3` swaps in the
+         ! `ppm_h3` drain reconstruction and the OM3 interval order
+         ! (`diabatic_first = .false.`, pred_corr only).
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 250.0, dy = 250.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 1.0 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+               "edge_depth = 1500.0, slope_scale = 1000.0 /"//NL// &
+               "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -100.0 /"//NL// &
+               "&ocean_vmix_nml dt_therm_ratio = 4, dt_tracer_advect_ratio = 4"// &
+               ""//trim(drain_extra)//" /"//NL// &
+               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+               "north = 'wall' /"//NL
       case ("tracer_ppm_h3")
          ! Re-entrant channel (periodic west/east) over a seamount, sigma, with
          ! the ppm_h3 horizontal tracer advection (Huynh edges + limiter, a
@@ -895,6 +928,7 @@ contains
             call self_comm%finalize()
          end if
          call take_snapshot(engine, snap)
+         snap%drain_iter = engine%state%continuity%drain_iter_max
          ok = .true.
       end if
       call engine_exit_data(engine)
@@ -1245,6 +1279,18 @@ contains
             glob = [1, 0, 1]
          else
             call compare(dec, ref, nbad, nfin, trim(tag))
+            ! Windowed-drain cases: the sub-cycle must run >1 pass (else the
+            ! pass-count reduction is never exercised) and every layout must
+            ! have used the same count as the serial reference.
+            if (index(case_nml(label, scheme, 1, 1), "dt_tracer_advect_ratio") > 0) then
+               if (ref%drain_iter < 2 .or. dec%drain_iter /= ref%drain_iter) then
+                  write (*, '(3a,i0,a,i0)') "FAIL ", trim(tag), ": drain passes ref=", &
+                     ref%drain_iter, " dec=", dec%drain_iter
+                  nbad = nbad + 1
+               else if (rank == 0) then
+                  write (*, '(3a,i0,a)') "case ", trim(tag), ": drain max_iter=", ref%drain_iter, " (ok)"
+               end if
+            end if
             ! A7: the fold-exchange reserve must cover every ice group.
             if (is_ice_fold_case(label)) nbad = nbad + dec%ngrow
             glob = [nbad, nfin, 0]
