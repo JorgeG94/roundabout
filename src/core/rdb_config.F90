@@ -872,8 +872,8 @@ module rdb_config
          !!
          !! `validate_config` refuses `pred_corr` FAIL-LOUD, never silently,
          !! outside its v1 envelope: `eulerian_z` and `&ocean_wetdry_nml
-         !! enable`.  `dt_tracer_advect_ratio > 1` is supported (single
-         !! rank): the corrector accumulates the whole step transport with
+         !! enable`.  `dt_tracer_advect_ratio > 1` is supported (also
+         !! multi-rank): the corrector accumulates the whole step transport with
          !! weight 1.0 and the drain's budget weight follows
          !! `ocean_budget_stage_weight`.  Shipped namelists pin `ssp_rk2`
          !! for those reasons.
@@ -1762,7 +1762,9 @@ module rdb_config
          !! Horizontal tracer advection runs every `ratio · dt_dynamic` via
          !! accumulated mass fluxes drained in one windowed advect.  1
          !! (default) ⇒ every step, bit-identical.  `dt_therm_ratio` must be
-         !! an integer multiple of this (configure-time check).
+         !! an integer multiple of this (configure-time check).  Multi-rank
+         !! safe (drain fields halo-exchanged, pass count is a global max)
+         !! except under a tripolar north fold (refused at configure).
       real(wp) :: kv_max = huge(1.0_wp)
          !! Ceiling on momentum viscosity kv (m^2/s).  Default `huge` = no clip.
       real(wp) :: kd_max = huge(1.0_wp)

@@ -35,8 +35,9 @@ module rdb_continuity
    use rdb_ocean_fold_exchange, only: ocean_fold_north_v_face
    use rdb_ocean_mle, only: ocean_mle_t, mle_fold_x, mle_fold_y
    use rdb_ocean_gm, only: ocean_gm_t
-   use rdb_ocean_halo, only: ocean_halo_centre, &
+   use rdb_ocean_halo, only: ocean_halo_centre, ocean_halo_face_x, ocean_halo_face_y, &
                              ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y
+   use rdb_halo, only: halo_allreduce_max
    use rdb_profiler, only: profiler_start, profiler_stop
    ! WENO tracer-face reconstruction ladder — reused verbatim from the
    ! coastal multilayer path (Q6).  Only the pure `!$acc routine seq`
@@ -325,6 +326,9 @@ module rdb_continuity
          !! that is not a pathology.  A healthy zstar/sigma run sits at 0.
          !! int64 (not int32 like `dyn%ntrunc_total`) precisely because that
          !! floored-stack case can accumulate > 2·10⁹ over a long run.
+      integer :: drain_iter_max = 0
+         !! Largest sub-cycle pass count any windowed-drain call has used
+         !! (host diagnostic; the post-reduction value when decomposed).
       logical :: tracer_h3 = .false.
          !! Horizontal tracer-advection edge scheme of the every-step split
          !! path (`tracer_advect_{zonal,meridional}_one_impl`, GM bolus
@@ -4093,9 +4097,12 @@ contains
       !! `uhh` per pass; the swept-average parabola sets the concentration
       !! multiplying it — the two are orthogonal.
       !!
-      !! Single-rank scope: periodic-x / north-fold seams are handled via
-      !! the existing ocean periodic/fold ghost wraps.  Multi-rank C-grid
-      !! halos ride E1; gated behind the TODO(E1) note below.
+      !! Decomposition: every field the passes read off-tile is exchanged
+      !! through `rdb_ocean_halo` (then the single-rank periodic/fold wrap),
+      !! and the pass count is the global max of the tile CFL.  Fields whose
+      !! ghost band is a pure local function of already-exchanged inputs
+      !! (`tr_work`, parabola coefficients, limited per-pass transport
+      !! `uhh`, availability scale) skip the exchange (`skip_halo`).
       type(hgrid_t), intent(in) :: grid
       type(ocean_metrics_t), intent(in) :: metrics
       type(continuity_t), intent(inout) :: this
@@ -4114,7 +4121,7 @@ contains
       real(wp) :: post_w
       integer :: max_iter, ipass, it
       integer :: i, j, k
-      real(wp) :: cfl_max, denom, fmax
+      real(wp) :: cfl_max, cfl_loc, denom, fmax
       logical :: per_x, per_y, fold_n
 
       if (.not. allocated(ms%tracers)) return
@@ -4140,8 +4147,7 @@ contains
 
       ! ---- Halo of the accumulators (single-rank seams) ----
       ! hprev reads neighbour uhtr/vhtr across the ghost, so wrap them
-      ! first.  TODO(E1): the multi-rank C-grid face halo of uhtr/vhtr
-      ! rides the MPI halo work; single-rank periodic/fold is in scope.
+      ! first (inter-rank face halo when decomposed, else the seam wrap).
       call drain_wrap_face_x(this%uhtr, nx, ny, nz, nx_phys, ny_phys, nghost, &
                              per_x, per_y, fold_n)
       call drain_wrap_face_y(this%vhtr, nx, ny, nz, nx_phys, ny_phys, nghost, &
@@ -4262,9 +4268,17 @@ contains
       ! cfl < 0.5 ⇒ ONE pass (was 3 — two full-grid no-op passes).  Still
       ! grid-uniform (one reduction, no per-pass divergence) and capped at the
       ! worst case `2*ratio+1`.
+      ! Decomposed: every rank must run the SAME pass count (each pass holds
+      ! collective halo exchanges), so take the global max of the tile CFL.
+      ! A max is exact in FP, hence layout-independent.  Identity on one rank.
+      if (ocean_halo_is_decomposed_x() .or. ocean_halo_is_decomposed_y()) then
+         cfl_loc = cfl_max
+         call halo_allreduce_max(cfl_loc, cfl_max)
+      end if
       max_iter = ceiling(2.0_wp*cfl_max)
       if (max_iter > 2*ratio + 1) max_iter = 2*ratio + 1
       if (max_iter < 1) max_iter = 1
+      this%drain_iter_max = max(this%drain_iter_max, max_iter)
       do ipass = 1, max_iter
          ! Zonal sub-pass --------------------------------------------------
          call drain_limit_x(nx, ny, nz, metrics%areaT, this%h_min, &
@@ -4276,7 +4290,7 @@ contains
          ! seam face disagree ⇒ the flux divergence does not telescope and
          ! Σ(areaT·hTr) leaks at the seam).  No-op on non-periodic walls.
          call drain_wrap_face_x(this%uhh_x, nx, ny, nz, nx_phys, ny_phys, nghost, &
-                                per_x, per_y, fold_n)
+                                per_x, per_y, fold_n, skip_halo=.true.)
          do it = 1, size(ms%tracers)
             if (.not. allocated(ms%tracers(it)%hTr)) cycle
             if (.not. ms%tracers(it)%do_horizontal_advection) cycle
@@ -4285,7 +4299,7 @@ contains
                ! a volume so the flux below is a tracer volume.
                call drain_fill_conc(nx, ny, nz, ms%tracers(it)%hTr, this%hprev_work, this%tr_work)
                call drain_wrap_centre(this%tr_work, nx, ny, nz, nx_phys, ny_phys, nghost, &
-                                      per_x, per_y, fold_n)
+                                      per_x, per_y, fold_n, skip_halo=.true.)
                call drain_swept_flux_x_h3(nx, ny, nz, metrics%areaT, this%uhh_x, &
                                           this%hprev_work, this%tr_work, metrics%wet_T, &
                                           this%tr_flux_x)
@@ -4299,11 +4313,11 @@ contains
                ! Batch the 3 independent parabola-coeff wraps async on queue 1,
                ! sync once before the swept flux reads them.
                call drain_wrap_centre(this%pal, nx, ny, nz, nx_phys, ny_phys, nghost, &
-                                      per_x, per_y, fold_n, no_wait=.true.)
+                                      per_x, per_y, fold_n, no_wait=.true., skip_halo=.true.)
                call drain_wrap_centre(this%par, nx, ny, nz, nx_phys, ny_phys, nghost, &
-                                      per_x, per_y, fold_n, no_wait=.true.)
+                                      per_x, per_y, fold_n, no_wait=.true., skip_halo=.true.)
                call drain_wrap_centre(this%pa6, nx, ny, nz, nx_phys, ny_phys, nghost, &
-                                      per_x, per_y, fold_n, no_wait=.true.)
+                                      per_x, per_y, fold_n, no_wait=.true., skip_halo=.true.)
                !$acc wait(1)
                call drain_swept_flux_x(nx, ny, nz, metrics%areaT, this%uhh_x, &
                                        this%hprev_work, this%pal, this%par, this%pa6, &
@@ -4317,7 +4331,7 @@ contains
                ! evaluate the swept face flux directly from Tr.
                call drain_fill_conc(nx, ny, nz, ms%tracers(it)%hTr, this%hprev_work, this%tr_work)
                call drain_wrap_centre(this%tr_work, nx, ny, nz, nx_phys, ny_phys, nghost, &
-                                      per_x, per_y, fold_n)
+                                      per_x, per_y, fold_n, skip_halo=.true.)
                call drain_swept_flux_x_weno(nx, ny, nz, nghost, per_x, metrics%areaT, &
                                             this%uhh_x, this%hprev_work, this%tr_work, &
                                             metrics%wet_T, this%tracer_recon, this%tr_flux_x)
@@ -4351,7 +4365,7 @@ contains
                             this%uhr_y, this%hprev_work, this%uhh_y)
          ! Wrap the limited meridional transport (see the zonal note above).
          call drain_wrap_face_y(this%uhh_y, nx, ny, nz, nx_phys, ny_phys, nghost, &
-                                per_x, per_y, fold_n)
+                                per_x, per_y, fold_n, skip_halo=.true.)
          do it = 1, size(ms%tracers)
             if (.not. allocated(ms%tracers(it)%hTr)) cycle
             if (.not. ms%tracers(it)%do_horizontal_advection) cycle
@@ -4360,7 +4374,7 @@ contains
                ! a volume so the flux below is a tracer volume.
                call drain_fill_conc(nx, ny, nz, ms%tracers(it)%hTr, this%hprev_work, this%tr_work)
                call drain_wrap_centre(this%tr_work, nx, ny, nz, nx_phys, ny_phys, nghost, &
-                                      per_x, per_y, fold_n)
+                                      per_x, per_y, fold_n, skip_halo=.true.)
                call drain_swept_flux_y_h3(nx, ny, nz, metrics%areaT, this%uhh_y, &
                                           this%hprev_work, this%tr_work, metrics%wet_T, &
                                           this%tr_flux_y)
@@ -4371,11 +4385,11 @@ contains
                ! Batch the 3 independent parabola-coeff wraps async on queue 1,
                ! sync once before the swept flux reads them.
                call drain_wrap_centre(this%pal, nx, ny, nz, nx_phys, ny_phys, nghost, &
-                                      per_x, per_y, fold_n, no_wait=.true.)
+                                      per_x, per_y, fold_n, no_wait=.true., skip_halo=.true.)
                call drain_wrap_centre(this%par, nx, ny, nz, nx_phys, ny_phys, nghost, &
-                                      per_x, per_y, fold_n, no_wait=.true.)
+                                      per_x, per_y, fold_n, no_wait=.true., skip_halo=.true.)
                call drain_wrap_centre(this%pa6, nx, ny, nz, nx_phys, ny_phys, nghost, &
-                                      per_x, per_y, fold_n, no_wait=.true.)
+                                      per_x, per_y, fold_n, no_wait=.true., skip_halo=.true.)
                !$acc wait(1)
                call drain_swept_flux_y(nx, ny, nz, metrics%areaT, this%uhh_y, &
                                        this%hprev_work, this%pal, this%par, this%pa6, &
@@ -4384,7 +4398,7 @@ contains
                ! Q6 WENO drain (meridional; see the zonal branch note).
                call drain_fill_conc(nx, ny, nz, ms%tracers(it)%hTr, this%hprev_work, this%tr_work)
                call drain_wrap_centre(this%tr_work, nx, ny, nz, nx_phys, ny_phys, nghost, &
-                                      per_x, per_y, fold_n)
+                                      per_x, per_y, fold_n, skip_halo=.true.)
                call drain_swept_flux_y_weno(nx, ny, nz, nghost, per_y, metrics%areaT, &
                                             this%uhh_y, this%hprev_work, this%tr_work, &
                                             metrics%wet_T, this%tracer_recon, this%tr_flux_y)
@@ -4423,9 +4437,25 @@ contains
    ! Drain seam helpers (single-rank periodic + north-fold wraps).
    ! ====================================================================
 
+   function drain_do_halo(skip_halo) result(do_halo)
+      !! True when this drain field needs an inter-rank exchange: the run is
+      !! decomposed and the caller did not mark the field locally recomputable.
+      logical, intent(in), optional :: skip_halo
+      logical :: do_halo
+      do_halo = ocean_halo_is_decomposed_x() .or. ocean_halo_is_decomposed_y()
+      if (present(skip_halo)) then
+         if (skip_halo) do_halo = .false.
+      end if
+   end function drain_do_halo
+
    subroutine drain_wrap_centre(fld, nx, ny, nz, nx_phys, ny_phys, nghost, &
-                                per_x, per_y, fold_n, no_wait)
-      !! Periodic wrap (+ north fold) of a cell-centred drain field.
+                                per_x, per_y, fold_n, no_wait, skip_halo)
+      !! Inter-rank halo exchange (decomposed runs only), then periodic wrap
+      !! (+ north fold) of a cell-centred drain field.  The exchange precedes
+      !! the wrap so a periodic/fold seam reads exchanged ghosts, and is a
+      !! literal no-op on one rank (the wrap is then the whole path).
+      !! `skip_halo` (optional): the field's ghost band is recomputed locally
+      !! from already-exchanged inputs, so only the single-rank wrap runs.
       !! `no_wait` (optional): when .true. AND not folding, the periodic wrap
       !! is issued async on queue 1 without syncing, so a caller can batch
       !! several independent wraps (e.g. the pal/par/pa6 parabola triple) and
@@ -4435,7 +4465,9 @@ contains
       real(wp), intent(inout) :: fld(nx, ny, nz)
       logical, intent(in) :: per_x, per_y, fold_n
       logical, intent(in), optional :: no_wait
+      logical, intent(in), optional :: skip_halo
       logical :: nw
+      if (drain_do_halo(skip_halo)) call ocean_halo_centre(fld, nz)
       nw = .false.
       if (present(no_wait)) nw = no_wait .and. .not. fold_n
       if (per_x .or. per_y) then
@@ -4446,11 +4478,14 @@ contains
    end subroutine drain_wrap_centre
 
    subroutine drain_wrap_face_x(fld, nx, ny, nz, nx_phys, ny_phys, nghost, &
-                                per_x, per_y, fold_n)
-      !! Periodic wrap (+ north fold) of an x-face drain field (nx+1,ny,nz).
+                                per_x, per_y, fold_n, skip_halo)
+      !! Halo exchange (decomposed runs) + periodic wrap (+ north fold) of an
+      !! x-face drain field (nx+1,ny,nz).  See `drain_wrap_centre`.
       integer, intent(in) :: nx, ny, nz, nx_phys, ny_phys, nghost
       real(wp), intent(inout) :: fld(nx + 1, ny, nz)
       logical, intent(in) :: per_x, per_y, fold_n
+      logical, intent(in), optional :: skip_halo
+      if (drain_do_halo(skip_halo)) call ocean_halo_face_x(fld, nz)
       if (per_x .or. per_y) then
          call ocean_periodic_wrap_face_x_3d(fld, nx + 1, ny, nz, &
                                             nx_phys, ny_phys, nghost, per_x, per_y)
@@ -4459,11 +4494,14 @@ contains
    end subroutine drain_wrap_face_x
 
    subroutine drain_wrap_face_y(fld, nx, ny, nz, nx_phys, ny_phys, nghost, &
-                                per_x, per_y, fold_n)
-      !! Periodic wrap (+ north fold) of a y-face drain field (nx,ny+1,nz).
+                                per_x, per_y, fold_n, skip_halo)
+      !! Halo exchange (decomposed runs) + periodic wrap (+ north fold) of a
+      !! y-face drain field (nx,ny+1,nz).  See `drain_wrap_centre`.
       integer, intent(in) :: nx, ny, nz, nx_phys, ny_phys, nghost
       real(wp), intent(inout) :: fld(nx, ny + 1, nz)
       logical, intent(in) :: per_x, per_y, fold_n
+      logical, intent(in), optional :: skip_halo
+      if (drain_do_halo(skip_halo)) call ocean_halo_face_y(fld, nz)
       if (per_x .or. per_y) then
          call ocean_periodic_wrap_face_y_3d(fld, nx, ny + 1, nz, &
                                             nx_phys, ny_phys, nghost, per_x, per_y)

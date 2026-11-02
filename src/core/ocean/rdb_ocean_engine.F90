@@ -419,10 +419,17 @@ contains
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
-         ! E1: windowed tracer advect drain halo not yet wired for multi-rank.
-         if (cfg%ocean%vmix%dt_tracer_advect_ratio > 1) then
-            call fail("dt_tracer_advect_ratio > 1 multi-rank drain halo "// &
-                      "is deferred (E1); run single-rank or set ratio = 1.", &
+         ! Windowed tracer-advection drain (ratio > 1): the C-grid halo of
+         ! every off-tile drain field plus a global pass count make it
+         ! decomposition-safe.  The tripolar north fold inside the drain
+         ! (the fold of uhtr/vhtr/hprev/hTr per pass) has no decomposed
+         ! coverage yet, so that one combination stays single-rank.
+         if (cfg%ocean%vmix%dt_tracer_advect_ratio > 1 .and. &
+             ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD) then
+            call fail("dt_tracer_advect_ratio > 1 with a tripolar north fold is "// &
+                      "single-rank ("//to_string(csize)//" ranks requested): the "// &
+                      "drain's per-pass fold exchange is not covered.  Run on 1 rank "// &
+                      "or set ratio = 1.", &
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
