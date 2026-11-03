@@ -512,11 +512,15 @@ contains
          if (trim(cfg%ocean%ic%ic_config) /= "" .and. &
              trim(cfg%ocean%ic%ic_config) /= "eady" .and. &
              trim(cfg%ocean%ic%ic_config) /= "geostrophic_adjustment" .and. &
-             trim(cfg%ocean%ic%ic_config) /= "baroclinic_jet") then
+             trim(cfg%ocean%ic%ic_config) /= "baroclinic_jet" .and. &
+             trim(cfg%ocean%ic%ic_config) /= "balanced_vortex") then
             call logger%error("Invalid ic_config = '"//trim(cfg%ocean%ic%ic_config)// &
-                              "': must be '', 'eady', 'geostrophic_adjustment', or "// &
-                              "'baroclinic_jet'")
+                              "': must be '', 'eady', 'geostrophic_adjustment', "// &
+                              "'baroclinic_jet', or 'balanced_vortex'")
             has_error = .true.
+         end if
+         if (trim(cfg%ocean%ic%ic_config) == "balanced_vortex") then
+            call validate_balanced_vortex(cfg, has_error)
          end if
          if (trim(cfg%ocean%topo%topo_config) == "file" .and. &
              len_trim(cfg%bathymetry_file) == 0) then
@@ -4015,6 +4019,60 @@ contains
       if (present(ierr)) ierr = OCEAN_STATUS_OK
 
    end subroutine validate_config
+
+   subroutine validate_balanced_vortex(cfg, has_error)
+      !! Config conflicts of `ic_config = "balanced_vortex"`.  The IC is
+      !! built from an analytic Boussinesq hydrostatic pressure anomaly, so
+      !! it needs a linear EOS (the density anomaly is `-alpha_T * dT`), a
+      !! cartesian beta-plane f, a flat bed, and a vortex that the grid
+      !! resolves (R >= 3 dx).  Gradient-wind real-root existence depends on
+      !! the field and is checked at seed time.
+      type(config_t), intent(in) :: cfg
+      logical, intent(inout) :: has_error
+      real(wp) :: dmax
+
+      if (trim(cfg%ocean%eos%eos) /= "linear") then
+         call logger%error("ic_config='balanced_vortex' requires &ocean_eos_nml "// &
+                           "eos='linear' (the analytic pressure anomaly uses "// &
+                           "rho' = -alpha_T*dT); got '"//trim(cfg%ocean%eos%eos)//"'")
+         has_error = .true.
+      end if
+      if (trim(cfg%ocean%grid%grid_config) /= "cartesian") then
+         call logger%error("ic_config='balanced_vortex' requires &ocean_grid_nml "// &
+                           "grid_config='cartesian'")
+         has_error = .true.
+      end if
+      if (trim(cfg%ocean%grid%coriolis_scheme) /= "beta_plane") then
+         call logger%error("ic_config='balanced_vortex' requires "// &
+                           "coriolis_scheme='beta_plane' (f0 + beta*(y-y_ref))")
+         has_error = .true.
+      end if
+      if (trim(cfg%ocean%topo%topo_config) /= "flat") then
+         call logger%error("ic_config='balanced_vortex' requires topo_config='flat'")
+         has_error = .true.
+      end if
+      if (abs(cfg%coriolis_f) < 1.0e-6_wp) then
+         call logger%error("ic_config='balanced_vortex' requires coriolis_f /= 0 "// &
+                           "(|f0| >= 1e-6 1/s): geostrophy is singular on an f = 0 grid")
+         has_error = .true.
+      end if
+      dmax = max(cfg%dx, cfg%dy)
+      if (cfg%ocean%ic%vortex_radius < 3.0_wp*dmax) then
+         call logger%error("vortex_radius = "//to_string(cfg%ocean%ic%vortex_radius)// &
+                           " m must be >= 3 dx = "//to_string(3.0_wp*dmax)//" m")
+         has_error = .true.
+      end if
+      if (cfg%ocean%ic%vortex_hv <= 0.0_wp) then
+         call logger%error("vortex_hv must be > 0")
+         has_error = .true.
+      end if
+      if (trim(cfg%ocean%ic%vortex_balance) /= "geostrophic" .and. &
+          trim(cfg%ocean%ic%vortex_balance) /= "gradient" .and. &
+          trim(cfg%ocean%ic%vortex_balance) /= "none") then
+         call logger%error("vortex_balance must be 'geostrophic', 'gradient', or 'none'")
+         has_error = .true.
+      end if
+   end subroutine validate_balanced_vortex
 
    ! ======================================================================
    ! &ocean_dataovr_nml predicates (PR-15).

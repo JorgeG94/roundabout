@@ -3266,7 +3266,9 @@ module rdb_config
          !! + zero-velocity IC.  "eady" runs the Eady-front overlay;
          !! "geostrophic_adjustment" drops a Gaussian SSH bump on an
          !! f-plane; "baroclinic_jet" runs the two-layer reduced-gravity
-         !! baroclinic-instability jet (SIM_DETAILS.md §5).
+         !! baroclinic-instability jet (SIM_DETAILS.md §5);
+         !! "balanced_vortex" seeds an isolated, geostrophically (or
+         !! gradient-wind) balanced warm/cold-core vortex (`vortex_*`).
       real(wp) :: alpha_T = 1.7e-4_wp
          !! Linear-EOS thermal-expansion coefficient, **DIMENSIONAL**
          !! (kg/m³ per °C) — see `beta_S` for the conversion from the
@@ -3370,6 +3372,35 @@ module rdb_config
          !! layer H₁ (m).  The lower (bed, k=1) rest thickness is
          !! `max_depth − upper_layer_rest`.  Spec §4 default 500 m
          !! (H₂ = 1500 m over the 2000 m column).
+      real(wp) :: vortex_x0 = -1.0_wp
+         !! Balanced-vortex IC (`ic_config="balanced_vortex"`): x of the
+         !! vortex centre (m, cartesian grid units).  Negative => auto
+         !! (domain centre).
+      real(wp) :: vortex_y0 = -1.0_wp
+         !! Balanced-vortex IC: y of the vortex centre (m).  Negative =>
+         !! auto (domain centre).
+      real(wp) :: vortex_radius = 50000.0_wp
+         !! Balanced-vortex IC: Gaussian e-folding radius R (m) of the
+         !! temperature anomaly, `exp(-r^2/R^2)`.  Must be >= 3 dx.
+      real(wp) :: vortex_hv = 800.0_wp
+         !! Balanced-vortex IC: vertical e-folding scale Hv (m) of the
+         !! anomaly from the surface, `exp(-depth^2/Hv^2)`.
+      real(wp) :: vortex_dT = 1.0_wp
+         !! Balanced-vortex IC: peak temperature anomaly at the surface
+         !! centre (degC).  Positive = warm core (anticyclone in the
+         !! northern hemisphere), negative = cold core (cyclone).
+      real(wp) :: vortex_T_surf = 20.0_wp
+         !! Balanced-vortex IC: background temperature (degC) at z = 0.
+      real(wp) :: vortex_dT_dz = 2.0e-3_wp
+         !! Balanced-vortex IC: background stratification dT/dz (degC/m,
+         !! z positive up, so a positive value is warmer toward the
+         !! surface -- the same sign convention as `eady_dT_dz`).
+      character(len=16) :: vortex_balance = "geostrophic"
+         !! Balanced-vortex IC: "geostrophic" (f v = d(phi)/dx, f u =
+         !! -d(phi)/dy) or "gradient" (adds the cyclostrophic term
+         !! v^2/r + f v = d(phi)/dr; fails loud where no real root exists),
+         !! or "none" (same density + SSH, zero velocity: the unbalanced
+         !! start of the geostrophic-adjustment problem).
    end type ocean_ic_config_t
    type :: ocean_zinit_config_t
       !! Z-level T/S initial-condition overlay (`&ocean_zinit_nml`,
