@@ -2,6 +2,14 @@ submodule(rdb_config) rdb_config_validate
    !! validate_config and its helper predicates.
    implicit none
 
+   real(wp), parameter :: VORTEX_F_MIN = 1.0e-6_wp
+      !! Smallest |f| (1/s) the balanced-vortex IC accepts anywhere on the grid
+      !! (ghosts included): `u = -phi_y/f` is singular at f = 0, and below this
+      !! (within ~0.4 deg of the equator) geostrophy is not meaningful.
+   real(wp), parameter :: VORTEX_MIN_CELLS_PER_RADIUS = 3.0_wp
+      !! The vortex radius must span at least this many cells (R >= 3 dx) so the
+      !! centred-difference velocity error stays second-order small.
+
 contains
 
    module subroutine validate_config(cfg, ierr)
@@ -4029,7 +4037,7 @@ contains
       !! the field and is checked at seed time.
       type(config_t), intent(in) :: cfg
       logical, intent(inout) :: has_error
-      real(wp) :: dmax, dtdz_min
+      real(wp) :: dmax, dtdz_min, y_lo, y_hi, f_lo, f_hi
 
       if (trim(cfg%ocean%eos%eos) /= "linear") then
          call logger%error("ic_config='balanced_vortex' requires &ocean_eos_nml "// &
@@ -4051,15 +4059,38 @@ contains
          call logger%error("ic_config='balanced_vortex' requires topo_config='flat'")
          has_error = .true.
       end if
-      if (abs(cfg%coriolis_f) < 1.0e-6_wp) then
+      if (abs(cfg%coriolis_f) < VORTEX_F_MIN) then
          call logger%error("ic_config='balanced_vortex' requires coriolis_f /= 0 "// &
-                           "(|f0| >= 1e-6 1/s): geostrophy is singular on an f = 0 grid")
+                           "(|f0| >= "//to_string(VORTEX_F_MIN)//" 1/s): geostrophy is "// &
+                           "singular on an f = 0 grid")
+         has_error = .true.
+      end if
+      ! f = f0 + beta (y - y_ref) is linear in y, so its minimum |f| over the
+      ! whole grid (ghost rows included: y from -nghost*dy to (ny+nghost)*dy)
+      ! is at an end or at the zero crossing the seed would divide by.
+      y_lo = -real(cfg%nghost, wp)*cfg%dy
+      y_hi = (real(cfg%ny, wp) + real(cfg%nghost, wp))*cfg%dy
+      f_lo = cfg%coriolis_f + cfg%ocean%topo%coriolis_beta*(y_lo - cfg%ocean%topo%coriolis_y_ref)
+      f_hi = cfg%coriolis_f + cfg%ocean%topo%coriolis_beta*(y_hi - cfg%ocean%topo%coriolis_y_ref)
+      if (f_lo*f_hi <= 0.0_wp .and. cfg%ocean%topo%coriolis_beta /= 0.0_wp) then
+         call logger%error("ic_config='balanced_vortex': f changes sign on the grid; f = 0 at y = "// &
+                           to_string(cfg%ocean%topo%coriolis_y_ref - &
+                                     cfg%coriolis_f/cfg%ocean%topo%coriolis_beta)// &
+                           " m (grid spans y = "//to_string(y_lo)//" .. "//to_string(y_hi)// &
+                           " m); geostrophy is singular there")
+         has_error = .true.
+      else if (min(abs(f_lo), abs(f_hi)) < VORTEX_F_MIN) then
+         call logger%error("ic_config='balanced_vortex': |f| falls below "// &
+                           to_string(VORTEX_F_MIN)//" 1/s at the grid edge (f = "// &
+                           to_string(f_lo)//" at y = "//to_string(y_lo)//", "// &
+                           to_string(f_hi)//" at y = "//to_string(y_hi)//" m)")
          has_error = .true.
       end if
       dmax = max(cfg%dx, cfg%dy)
-      if (cfg%ocean%ic%vortex_radius < 3.0_wp*dmax) then
+      if (cfg%ocean%ic%vortex_radius < VORTEX_MIN_CELLS_PER_RADIUS*dmax) then
          call logger%error("vortex_radius = "//to_string(cfg%ocean%ic%vortex_radius)// &
-                           " m must be >= 3 dx = "//to_string(3.0_wp*dmax)//" m")
+                           " m must be >= "//to_string(VORTEX_MIN_CELLS_PER_RADIUS)// &
+                           " dx = "//to_string(VORTEX_MIN_CELLS_PER_RADIUS*dmax)//" m")
          has_error = .true.
       end if
       if (cfg%ocean%ic%vortex_hv <= 0.0_wp) then

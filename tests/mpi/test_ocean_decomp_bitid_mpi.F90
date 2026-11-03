@@ -73,6 +73,10 @@
 !!   * sss_restore - the island basin with FILE sea-surface-salinity restoring
 !!     (per-rank windowed two-record target, halo-exchanged, piston salt flux,
 !!     net-zero shift through the EFP allreduce); needs NetCDF;
+!!   * balanced_vortex / balanced_vortex_t0 - the isolated balanced cold-core
+!!     vortex IC (`ic_config = 'balanced_vortex'`) on a closed beta-plane, centred
+!!     on the 2x1/1x2 seams and the 2x2 corner; `_t0` takes zero steps so the
+!!     seeded state itself (incl. ghosts) is compared;
 !!   * tracer_ppm_h3 - re-entrant channel (periodic x) with
 !!     `tracer_advection_scheme = 'ppm_h3'` on the per-step path;
 !!   * the OM3-parity feature cases, each the spherical spoon basin plus ONE
@@ -213,9 +217,13 @@ program test_ocean_decomp_bitid_mpi
    end type snap_t
 
    integer :: rank, nprocs, n_fail, total_fail, ic
+   integer :: n_steps_cur = N_STEPS
+      !! Steps `run_one` takes; 0 for the `*_t0` labels (compare the seeded IC itself).
+   character(len=256) :: case_filter = ""
+      !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(33) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(35) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -232,7 +240,8 @@ program test_ocean_decomp_bitid_mpi
                                                 "redi_cfl_fold", "tidal_files", &
                                                 "tidal_polzin", "bbl_lotw", "tracer_ppm_h3", &
                                                 "hvisc_kh_points", "diabatic_end", &
-                                                "hvisc_thin_layer", "hvisc_biharm_stress"]
+                                                "hvisc_thin_layer", "hvisc_biharm_stress", &
+                                                "balanced_vortex_t0", "balanced_vortex"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -245,7 +254,11 @@ program test_ocean_decomp_bitid_mpi
    call comm%barrier()
 #endif
 
+   call get_environment_variable("RDB_BITID_CASES", case_filter)
    do ic = 1, size(CASES)
+      if (len_trim(case_filter) > 0) then
+         if (index(trim(CASES(ic)), trim(case_filter)) == 0) cycle
+      end if
 #ifdef RDB_NO_NETCDF
       if (trim(CASES(ic)) == "file_readers" .or. &
           trim(CASES(ic)) == "file_readers_zstar_full" .or. &
@@ -389,6 +402,27 @@ contains
                "slope_scale = 0.15, wind_config = '2gyre', taux_magnitude = 0.1, "// &
                "coriolis_beta = 2.0e-11 /"//NL// &
                "&ocean_vdiff_nml hvel_mom6 = .true., bbl_glue = .true. /"//NL// &
+               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+      case ("balanced_vortex", "balanced_vortex_t0")
+         ! Isolated balanced cold-core vortex (ic_config = 'balanced_vortex') on a
+         ! closed beta-plane, centred on the 2x1/1x2 seams and the 2x2 four-way
+         ! corner (x0 = 13 dx, y0 = 9 dx), R = 3 dx so the core also straddles the
+         ! 4x1 (x = 7, 14, 20 dx) and 1x4 (y = 5, 10, 14 dx) seams.  Strong beta
+         ! so f(y) differs rank to rank.  The `_t0` twin takes zero steps: the
+         ! seeded IC (h, T, face velocities incl. ghosts) alone must match.
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'flat', max_depth = 1000.0, "// &
+               "coriolis_beta = 1.0e-10, coriolis_y_ref = 180000.0 /"//NL// &
+               "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
+               "&ocean_eos_nml eos = 'linear' /"//NL// &
+               "&ocean_ic_nml ic_config = 'balanced_vortex', alpha_T = 0.17, "// &
+               "rho_0 = 1035.0, vortex_x0 = 260000.0, vortex_y0 = 180000.0, "// &
+               "vortex_radius = 60000.0, vortex_hv = 300.0, vortex_dT = -2.0, "// &
+               "vortex_T_surf = 20.0, vortex_dT_dz = 1.5e-2 /"//NL// &
                "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
       case ("weno7_pv")
          ! The island basin on the Sadourny enstrophy path with the weno7 PV
@@ -793,7 +827,7 @@ contains
       call engine_enter_data(engine, cfg)
       t = 0.0_wp
       ierr = OCEAN_STATUS_OK
-      do n = 1, N_STEPS
+      do n = 1, n_steps_cur
          call engine_step(engine, DT, t, ierr=ierr)
          if (ierr /= OCEAN_STATUS_OK) exit
          ! Driver order: the sea-ice block (a no-op unless `&ocean_ice_nml
@@ -851,7 +885,7 @@ contains
             error stop "run_one: csize must be 1 (serial reference) or nprocs (decomposed run)"
          end if
          call ocean_console_stats_report(cstats, engine%grid, engine%state%metrics, &
-                                         engine%state%multilayer, t, DT, N_STEPS, &
+                                         engine%state%multilayer, t, DT, max(n_steps_cur, 1), &
                                          compute_rank=crank, reproducing_sums=.true., &
                                          budget_stage_weight=ocean_budget_stage_weight( &
                                          engine%state%dyn%split_scheme == SPLIT_SCHEME_PRED_CORR), &
@@ -1188,6 +1222,10 @@ contains
       character(len=96) :: tag
       type(conservation_budget_t) :: buds(8)
 
+      n_steps_cur = N_STEPS
+      if (len(label) > 3) then
+         if (label(len(label) - 2:) == "_t0") n_steps_cur = 0
+      end if
       call run_one(case_nml(label, scheme, 1, 1), 1, 0, ref, ok_ref)
       if (.not. ok_ref) then
          write (*, '(5a,i0)') "FAIL ", label, "/", scheme, ": serial reference failed on rank ", rank
