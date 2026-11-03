@@ -763,7 +763,7 @@ budgets, config schema, decomposition.
 
 Canonical benchmark configs live under
 [`validation_examples/ocean/`](../validation_examples/ocean):
-`seamount/`, `geostrophic_adjustment/`, `eady/`, `eddy_test/`,
+`seamount/`, `geostrophic_adjustment/`, `eady/`, `balanced_vortex/`, `eddy_test/`,
 `double_gyre/`, `acc_channel/`, `neverworld2/`, `baroclinic_channel/`,
 `island_at_rest/`, `flow_past_island/`, `double_drake/`, `sea_ice/`,
 `tides/`, `sponge_demo/`, `ideal_age/`, `epbl_mld/`, `ice_shelf_cavity/`,
@@ -1045,6 +1045,47 @@ full knob list with defaults is in
 
 Ocean initial conditions proper are set by `&ocean_ic_nml`,
 `&ocean_zinit_nml` and `&ocean_topo_nml`.
+
+### Isolated balanced vortex (`&ocean_ic_nml ic_config = "balanced_vortex"`)
+
+A single warm- or cold-core eddy in geostrophic (or gradient-wind) balance on
+a flat-bottom cartesian beta-plane, for beta-drift and vertical-tilt
+experiments (`validation_examples/ocean/balanced_vortex/`). Needs a linear EOS,
+`topo_config = "flat"`, `coriolis_scheme = "beta_plane"`, `|f0| >= 1e-6` and
+`vortex_radius >= 3 dx` (all refused at configure time otherwise). With
+layer-centre depth `d_k`, `G = exp(-r^2/R^2)` and `E_k = exp(-d_k^2/Hv^2)`:
+
+- `T = T_surf - dT_dz d_k + dT G E_k`, `S` uniform, so `rho' = -alpha_T dT G E_k`.
+- Hydrostatic potential `phi = p'/rho_0`: the surface term `g eta` plus the
+  integral of `g rho'/rho_0` down to the layer centre (own layer counted
+  half). **SSH choice:** `eta = -(1/rho_0) sum_k rho'_k dz`, i.e. the bottom
+  pressure anomaly is exactly zero (no deep flow, surface-intensified vortex;
+  a warm core bulges the surface up). This gives the separable
+  `phi_k = (g alpha_T dT/rho_0)(S_all - S_k) G(r)`.
+- Face velocities: `phi` is averaged to the C-grid corners and differenced,
+  `u = -phi_y/f`, `v = phi_x/f`, with the LOCAL `f = f0 + beta (y - y_ref)` at
+  each face, so beta is consistent. Error against the analytic geostrophic
+  speed is second order in `dx/R` (measured `0.99 (dx/R)^2` of the peak speed).
+- `vortex_balance = "gradient"` multiplies the speed by
+  `2/(1 + sqrt(1 + 4 G_r/(f^2 r)))`, the root of `v^2/r + f v = d(phi)/dr`
+  that tends to geostrophy; it fails loud where `1 + 4 G_r/(f^2 r) < 0` (a
+  too-intense anticyclone). `"none"` keeps the density and SSH but starts from
+  rest (the unbalanced start of the geostrophic-adjustment problem).
+
+| Parameter | Default | Description |
+|---|---|---|
+| `vortex_x0`, `vortex_y0` | -1 (domain centre) | Centre (m) |
+| `vortex_radius` | 50 000 | Gaussian e-folding radius R (m) |
+| `vortex_hv` | 800 | Vertical e-folding scale Hv from the surface (m) |
+| `vortex_dT` | 1.0 | Peak surface anomaly (degC); `> 0` warm core / anticyclone |
+| `vortex_T_surf`, `vortex_dT_dz` | 20, 2e-3 | Background T at `z = 0` and `dT/dz` (z up) |
+| `vortex_balance` | `"geostrophic"` | `"geostrophic"`, `"gradient"`, `"none"` |
+
+Beta drift (McWilliams & Flierl 1979): in the northern hemisphere cyclones
+drift north-west and anticyclones south-west; the upper and lower parts of a
+baroclinic vortex move at different speeds, which tilts it
+(`analyze_vortex_tilt.py` measures the tilt and the surface-vorticity
+signature).
 
 ### Formula bathymetry (`&ocean_topo_nml topo_config`)
 

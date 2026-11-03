@@ -5669,7 +5669,7 @@ class OceanIc(Group):
         units='',
         required=False,
         default='',
-        allowed=('', 'eady', 'geostrophic_adjustment', 'baroclinic_jet'),
+        allowed=('', 'eady', 'geostrophic_adjustment', 'baroclinic_jet', 'balanced_vortex'),
     )
 
     alpha_T = Real(
@@ -5853,6 +5853,71 @@ class OceanIc(Group):
         units='m',
         required=False,
         default=500.0,
+    )
+
+    vortex_x0 = Real(
+        'vortex_x0',
+        doc='Balanced-vortex IC: centre x (<0 = domain centre)',
+        units='m',
+        required=False,
+        default=-1.0,
+    )
+
+    vortex_y0 = Real(
+        'vortex_y0',
+        doc='Balanced-vortex IC: centre y (<0 = domain centre)',
+        units='m',
+        required=False,
+        default=-1.0,
+    )
+
+    vortex_radius = Real(
+        'vortex_radius',
+        doc='Balanced-vortex IC: Gaussian e-folding radius R (>= 3 dx)',
+        units='m',
+        required=False,
+        default=50000.0,
+    )
+
+    vortex_hv = Real(
+        'vortex_hv',
+        doc='Balanced-vortex IC: vertical e-folding scale Hv from the surface',
+        units='m',
+        required=False,
+        default=800.0,
+    )
+
+    vortex_dT = Real(
+        'vortex_dT',
+        doc='Balanced-vortex IC: peak surface temperature anomaly (+ warm core)',
+        units='degC',
+        required=False,
+        default=1.0,
+    )
+
+    vortex_T_surf = Real(
+        'vortex_T_surf',
+        doc='Balanced-vortex IC: background temperature at z=0',
+        units='degC',
+        required=False,
+        default=20.0,
+    )
+
+    vortex_dT_dz = Real(
+        'vortex_dT_dz',
+        doc='Balanced-vortex IC: background dT/dz (z up; + = warmer toward surface)',
+        units='degC/m',
+        required=False,
+        default=0.002,
+    )
+
+    vortex_balance = Enum(
+        'vortex_balance',
+        doc='Balanced-vortex IC: balance level',
+        units='',
+        required=False,
+        default='geostrophic',
+        allowed=('geostrophic', 'gradient', 'none'),
     )
 
 
@@ -7262,4 +7327,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 63
-N_KNOBS = 799
+N_KNOBS = 807

@@ -452,6 +452,7 @@ column.
 |---|---|---|---|
 | Uniform T and S | **default** | `&tracer_nml initial_temperature`, `initial_salinity` | `test_ocean_salinity_ic` |
 | Linear-in-layer T(z) (bed `k=1` to surface `k=nz`) | available | `&tracer_nml T_init_bottom` and `T_init_surface` (both non-zero) | `test_ocean_eady_ic` |
+| Isolated balanced warm/cold-core vortex (geostrophic, gradient-wind, or at rest) | opt-in | `&ocean_ic_nml ic_config` (`""`) `= "balanced_vortex"`, `vortex_x0`, `vortex_y0`, `vortex_radius`, `vortex_hv`, `vortex_dT`, `vortex_T_surf`, `vortex_dT_dz`, `vortex_balance` (`"geostrophic"`) | `test_ocean_balanced_vortex` |
 | Linear-in-layer S(z) | available | `&tracer_nml S_init_bottom` and `S_init_surface` (both non-zero; one alone fails loud) | `test_ocean_salinity_ic` |
 
 ### Boundary and surface fluxes
