@@ -1194,6 +1194,24 @@ contains
          d_k(k) = (real(nz - k, wp) + 0.5_wp)*dz
          e_k(k) = exp(-(d_k(k)/Hv)**2)
       end do
+      ! Static stability of the discrete centre-column profile (the anomaly is
+      ! separable in r, so the centre column is the worst case): T must not
+      ! decrease toward the surface, T_{k+1} - T_k = dT_dz dz + dT (E_{k+1} - E_k) >= 0.
+      block
+         real(wp) :: dtdz_need
+         dtdz_need = 0.0_wp
+         do k = 1, nz - 1
+            dtdz_need = max(dtdz_need, -dT*(e_k(k + 1) - e_k(k))/dz)
+         end do
+         if (cfg%ocean%ic%vortex_dT_dz < dtdz_need) then
+            call fail("seed_balanced_vortex_ic: statically UNSTABLE initial profile "// &
+                      "(N^2 < 0 in the vortex core): need vortex_dT_dz >= "// &
+                      to_string(dtdz_need)//" K/m on this layer grid for dT = "// &
+                      to_string(dT)//", Hv = "//to_string(Hv)//"; got "// &
+                      to_string(cfg%ocean%ic%vortex_dT_dz), ierr, OCEAN_STATUS_ERR_IC_SEED)
+            return
+         end if
+      end block
       s_all = sum(e_k)*dz
       ! S_k = sum_{m>k} E_m dz + E_k dz/2;  a_k = (g alpha dT / rho0)(S_all - S_k)
       do k = 1, nz

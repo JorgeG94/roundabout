@@ -1078,8 +1078,16 @@ layer-centre depth `d_k`, `G = exp(-r^2/R^2)` and `E_k = exp(-d_k^2/Hv^2)`:
 | `vortex_radius` | 50 000 | Gaussian e-folding radius R (m) |
 | `vortex_hv` | 800 | Vertical e-folding scale Hv from the surface (m) |
 | `vortex_dT` | 1.0 | Peak surface anomaly (degC); `> 0` warm core / anticyclone |
-| `vortex_T_surf`, `vortex_dT_dz` | 20, 2e-3 | Background T at `z = 0` and `dT/dz` (z up) |
+| `vortex_T_surf`, `vortex_dT_dz` | 20, 2e-3 (cold cores need more, see below) | Background T at `z = 0` and `dT/dz` (z up) |
 | `vortex_balance` | `"geostrophic"` | `"geostrophic"`, `"gradient"`, `"none"` |
+
+**Static stability.** A cold core (`vortex_dT < 0`) warms with depth by up to
+`sqrt(2) exp(-1/2) |dT|/Hv = 0.858 |dT|/Hv` K/m (at depth `Hv/sqrt(2)`), so
+`vortex_dT_dz` must exceed that or `N^2 < 0` in the core (a convectively
+unstable start). `validate_config` refuses it, quoting the minimum
+`vortex_dT_dz`, and the seed re-checks the discrete layer profile. A warm core
+only adds stratification. Keep the outer step below the first-internal-mode
+CFL, `dt < ~dx/(N H/pi)` (the shipped `N = 2.5e-3`, 5 km examples use 600 s).
 
 Beta drift (McWilliams & Flierl 1979): in the northern hemisphere cyclones
 drift north-west and anticyclones south-west; the upper and lower parts of a

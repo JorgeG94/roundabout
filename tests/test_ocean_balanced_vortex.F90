@@ -68,6 +68,7 @@ contains
                   new_unittest("vortex_thermal_wind_and_zero_bottom_pressure", test_thermal_wind), &
                   new_unittest("vortex_swirl_sense", test_swirl_sense), &
                   new_unittest("vortex_gradient_wind_quadratic_and_fail_loud", test_gradient_wind), &
+                  new_unittest("vortex_refuses_statically_unstable_cold_core", test_unstable_refused), &
                   new_unittest("vortex_fplane_balanced_steady", test_fplane_steady), &
                   new_unittest("vortex_beta_drift_sign", test_beta_drift) &
                   ]
@@ -77,7 +78,7 @@ contains
    ! static IC helpers
    ! ------------------------------------------------------------------
 
-   subroutine setup_ic(cfg, grid, state, nxp, dx, dT, balance, beta, ierr)
+   subroutine setup_ic(cfg, grid, state, nxp, dx, dT, balance, beta, ierr, dtdz)
       type(config_t), intent(out) :: cfg
       type(hgrid_t), intent(out) :: grid
       type(ocean_state_t), intent(out) :: state
@@ -85,6 +86,7 @@ contains
       real(wp), intent(in) :: dx, dT, beta
       character(len=*), intent(in) :: balance
       integer, intent(out), optional :: ierr
+      real(wp), intent(in), optional :: dtdz
 
       cfg%sim_type = "ocean"
       cfg%ocean%topo%topo_config = "flat"
@@ -98,6 +100,8 @@ contains
       cfg%ocean%ic%vortex_radius = 8.0_wp*5000.0_wp
       cfg%ocean%ic%vortex_hv = HV
       cfg%ocean%ic%vortex_dT = dT
+      cfg%ocean%ic%vortex_dT_dz = 0.03_wp   ! statically stable for every |dT| <= 12 K here
+      if (present(dtdz)) cfg%ocean%ic%vortex_dT_dz = dtdz
       cfg%ocean%ic%vortex_balance = balance
       cfg%initial_salinity = 35.0_wp
       cfg%initial_temperature = 10.0_wp
@@ -370,16 +374,41 @@ contains
       call state%destroy()
    end subroutine test_gradient_wind
 
+   subroutine test_unstable_refused(error)
+      !! A cold core warms with depth by up to sqrt(2) exp(-1/2) |dT|/Hv
+      !! (K/m, at d = Hv/sqrt(2)); a weaker background dT/dz gives N^2 < 0.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+      type(hgrid_t) :: grid
+      type(ocean_state_t) :: state
+      integer :: ierr
+      real(wp) :: dtdz_min
+
+      dtdz_min = sqrt(2.0_wp)*exp(-0.5_wp)*2.0_wp/HV   ! dT = -2 K, Hv = 500 m: 3.4e-3
+      call setup_ic(cfg, grid, state, 48, 5000.0_wp, -2.0_wp, "geostrophic", 0.0_wp, ierr, 0.9_wp*dtdz_min)
+      call check(error, ierr /= 0, "cold core with dT_dz below 0.858|dT|/Hv must be refused")
+      call state%destroy()
+      if (allocated(error)) return
+      call setup_ic(cfg, grid, state, 48, 5000.0_wp, -2.0_wp, "geostrophic", 0.0_wp, ierr, 1.3_wp*dtdz_min)
+      call check(error, ierr == 0, "the same core with margin above the minimum is accepted")
+      call state%destroy()
+      if (allocated(error)) return
+      call setup_ic(cfg, grid, state, 48, 5000.0_wp, 2.0_wp, "geostrophic", 0.0_wp, ierr, 1.0e-4_wp)
+      call check(error, ierr == 0, "a warm core only adds stratification: weak background is fine")
+      call state%destroy()
+   end subroutine test_unstable_refused
+
    ! ------------------------------------------------------------------
    ! dynamic cases
    ! ------------------------------------------------------------------
 
-   function vortex_nml(dT, beta, balance) result(nml)
-      real(wp), intent(in) :: dT, beta
+   function vortex_nml(dT, beta, balance, dtdz) result(nml)
+      real(wp), intent(in) :: dT, beta, dtdz
       character(len=*), intent(in) :: balance
       character(len=:), allocatable :: nml
       character(len=1), parameter :: nl = new_line("a")
-      character(len=32) :: s_dt, s_beta, s_yref
+      character(len=32) :: s_dt, s_beta, s_yref, s_dtdz
+      write (s_dtdz, '(es14.6)') dtdz
       write (s_dt, '(es14.6)') dT
       write (s_beta, '(es14.6)') beta
       write (s_yref, '(es14.6)') 0.5_wp*real(DNX, wp)*DDX
@@ -395,7 +424,7 @@ contains
             "&ocean_thermo_nml enable_thermodynamics = .true. /"//nl// &
             "&ocean_eos_nml eos = 'linear' /"//nl// &
             "&ocean_ic_nml ic_config = 'balanced_vortex', alpha_T = 0.17, rho_0 = 1035.0, "// &
-            "vortex_radius = 40000.0, vortex_hv = 500.0, vortex_dT = "//trim(adjustl(s_dt))// &
+     "vortex_radius = 40000.0, vortex_hv = 500.0, vortex_dT_dz = "//trim(adjustl(s_dtdz))//", vortex_dT = "//trim(adjustl(s_dt))// &
             ", vortex_balance = '"//balance//"' /"//nl// &
             "&ocean_hvisc_nml nu_h = 350.0 /"//nl// &
             "&ocean_vmix_nml use_closure = .false. /"//nl// &
@@ -478,8 +507,8 @@ contains
    end subroutine surface_diag
 
    subroutine run_vortex(dT, beta, balance, n_steps, xbar0, ybar0, xbar1, ybar1, &
-                         aniso0, aniso1, ke0, ke1, ok)
-      real(wp), intent(in) :: dT, beta
+                         aniso0, aniso1, ke0, ke1, ok, dtdz)
+      real(wp), intent(in) :: dT, beta, dtdz
       character(len=*), intent(in) :: balance
       integer, intent(in) :: n_steps
       real(wp), intent(out) :: xbar0, ybar0, xbar1, ybar1, aniso0, aniso1, ke0, ke1
@@ -494,7 +523,7 @@ contains
       xbar0 = 0.0_wp; ybar0 = 0.0_wp; xbar1 = 0.0_wp; ybar1 = 0.0_wp
       aniso0 = 0.0_wp; aniso1 = 0.0_wp; ke0 = 0.0_wp; ke1 = 0.0_wp
       sgn = merge(-1.0_wp, 1.0_wp, dT > 0.0_wp)   ! warm core => anticyclone
-      nml = vortex_nml(dT, beta, balance)
+      nml = vortex_nml(dT, beta, balance, dtdz)
       handle = c_null_ptr
       status = rdb_ocean_create_from_string(nml, len(nml, kind=c_int), handle)
       if (status /= OCEAN_STATUS_OK) return
@@ -513,7 +542,7 @@ contains
       logical :: ok
       character(len=240) :: msg
 
-      call run_vortex(1.0_wp, 0.0_wp, "geostrophic", NSTEP, x0, y0, x1, y1, a0, a1, ke0, ke1, ok)
+      call run_vortex(1.0_wp, 0.0_wp, "geostrophic", NSTEP, x0, y0, x1, y1, a0, a1, ke0, ke1, ok, 2.0e-3_wp)
       call check(error, ok .and. x0 > 0.0_wp .and. x1 > 0.0_wp, &
                  "balanced f-plane vortex run must stay finite and keep a vorticity centroid")
       if (allocated(error)) return
@@ -533,7 +562,7 @@ contains
       if (allocated(error)) return
 
       ! Non-vacuity: identical density + SSH but zero velocity must NOT be steady.
-      call run_vortex(1.0_wp, 0.0_wp, "none", NSTEP, ru0, rv0, x1, y1, ra0, ra1, rke0, rke1, ok)
+      call run_vortex(1.0_wp, 0.0_wp, "none", NSTEP, ru0, rv0, x1, y1, ra0, ra1, rke0, rke1, ok, 2.0e-3_wp)
       call check(error, ok, "unbalanced run must execute and stay finite")
       if (allocated(error)) return
       dke_rest = (rke1 - ke0)/ke0
@@ -555,7 +584,7 @@ contains
       character(len=240) :: msg
 
       do s = 1, 2
-         call run_vortex(DTS(s), 1.2e-10_wp, "geostrophic", NSTEP, x0, y0, x1, y1, a0, a1, ke0, ke1, ok)
+         call run_vortex(DTS(s), 1.2e-10_wp, "geostrophic", NSTEP, x0, y0, x1, y1, a0, a1, ke0, ke1, ok, 5.0e-3_wp)
          call check(error, ok .and. x0 > 0.0_wp .and. x1 > 0.0_wp, &
                     "beta-plane vortex run must stay finite and keep a vorticity centroid")
          if (allocated(error)) return
