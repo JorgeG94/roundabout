@@ -1038,6 +1038,14 @@ Initial-condition overlay + EOS reference state.
 | `pert_amp_frac` | `0.2000000000E+00` |  | Baroclinic-jet IC: meander amplitude as a fraction of interface_amp |
 | `pert_nx` | `3` |  | Baroclinic-jet IC: zonal perturbation wavenumber (integer) |
 | `upper_layer_rest` | `0.5000000000E+03` | m | Baroclinic-jet IC: upper (surface) layer rest thickness H1 |
+| `vortex_x0` | `-0.1000000000E+01` | m | Balanced-vortex IC: centre x (<0 = domain centre) |
+| `vortex_y0` | `-0.1000000000E+01` | m | Balanced-vortex IC: centre y (<0 = domain centre) |
+| `vortex_radius` | `0.5000000000E+05` | m | Balanced-vortex IC: Gaussian e-folding radius R (>= 3 dx) |
+| `vortex_hv` | `0.8000000000E+03` | m | Balanced-vortex IC: vertical e-folding scale Hv from the surface |
+| `vortex_dT` | `0.1000000000E+01` | degC | Balanced-vortex IC: peak surface temperature anomaly (+ warm core) |
+| `vortex_T_surf` | `0.2000000000E+02` | degC | Balanced-vortex IC: background temperature at z=0 |
+| `vortex_dT_dz` | `0.2000000000E-02` | degC/m | Balanced-vortex IC: background dT/dz (z up; + = warmer toward surface) |
+| `vortex_balance` | `"geostrophic"` |  | Balanced-vortex IC: balance level |
 
 ### &ocean_zinit_nml
 
