@@ -4029,7 +4029,7 @@ contains
       !! the field and is checked at seed time.
       type(config_t), intent(in) :: cfg
       logical, intent(inout) :: has_error
-      real(wp) :: dmax
+      real(wp) :: dmax, dtdz_min
 
       if (trim(cfg%ocean%eos%eos) /= "linear") then
          call logger%error("ic_config='balanced_vortex' requires &ocean_eos_nml "// &
@@ -4065,6 +4065,21 @@ contains
       if (cfg%ocean%ic%vortex_hv <= 0.0_wp) then
          call logger%error("vortex_hv must be > 0")
          has_error = .true.
+      end if
+      ! Static stability.  Warm core: the anomaly adds stratification.  Cold
+      ! core (dT < 0): the anomaly -|dT| exp(-d^2/Hv^2) warms with depth, with
+      ! largest gradient at d = Hv/sqrt(2) of sqrt(2) exp(-1/2) |dT|/Hv =
+      ! 0.858 |dT|/Hv (K/m); the background dT/dz must exceed it or N^2 < 0.
+      if (cfg%ocean%ic%vortex_dT < 0.0_wp .and. cfg%ocean%ic%vortex_hv > 0.0_wp) then
+         dtdz_min = sqrt(2.0_wp)*exp(-0.5_wp)*abs(cfg%ocean%ic%vortex_dT)/cfg%ocean%ic%vortex_hv
+         if (cfg%ocean%ic%vortex_dT_dz <= dtdz_min) then
+            call logger%error("balanced_vortex is statically UNSTABLE (N^2 < 0 in the core): "// &
+                              "a cold core dT = "//to_string(cfg%ocean%ic%vortex_dT)// &
+                              " degC needs vortex_dT_dz > sqrt(2)*exp(-1/2)*|dT|/Hv = "// &
+                              to_string(dtdz_min)//" K/m; got "// &
+                              to_string(cfg%ocean%ic%vortex_dT_dz))
+            has_error = .true.
+         end if
       end if
       if (trim(cfg%ocean%ic%vortex_balance) /= "geostrophic" .and. &
           trim(cfg%ocean%ic%vortex_balance) /= "gradient" .and. &
