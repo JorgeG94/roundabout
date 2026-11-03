@@ -1140,6 +1140,10 @@ contains
       type(config_t), intent(in) :: cfg
       integer, intent(out), optional :: ierr
 
+      real(wp), parameter :: CENTRE_EPS_DX = 1.0e-6_wp
+         !! Radius (in cells) inside which a face counts as ON the vortex centre
+         !! and the gradient-wind factor is left at 1 (G_r/r is 0/0 there; the
+         !! geostrophic gradient itself vanishes at the centre).
       integer :: i, j, k, nx, ny, nz, ng, ioff, joff, idx_T, idx_S
       real(wp) :: H, dz, dx, dy, x0, y0, R, Hv, dT, f0, beta, y_ref
       real(wp) :: alpha, rho0, amp, s_all, f_loc, xx, yy, rr, gx, gy, g_r, s4, c, hf
@@ -1286,7 +1290,7 @@ contains
                if (rest) c = 0.0_wp
                if (gradient) then
                   rr = sqrt((xx - x0)**2 + (yy - y0)**2)
-                  if (rr > 1.0e-6_wp*dx) then
+                  if (rr > CENTRE_EPS_DX*dx) then
                      g_r = ((xx - x0)*gx + (yy - y0)*gy)/rr
                      s4 = 4.0_wp*g_r/(f_loc*f_loc*rr)
                      if (1.0_wp + s4 < 0.0_wp) then
@@ -1311,7 +1315,7 @@ contains
                if (rest) c = 0.0_wp
                if (gradient) then
                   rr = sqrt((xx - x0)**2 + (yy - y0)**2)
-                  if (rr > 1.0e-6_wp*dx) then
+                  if (rr > CENTRE_EPS_DX*dx) then
                      g_r = ((xx - x0)*gx + (yy - y0)*gy)/rr
                      s4 = 4.0_wp*g_r/(f_loc*f_loc*rr)
                      if (1.0_wp + s4 < 0.0_wp) then

@@ -80,20 +80,29 @@ bottom pressure anomaly < 1e-3 of `g*eta`; f-plane 2 days (R = 40 km, dx = 10 km
 centre moves 0.000 cells, surface KE +1.2 %, anisotropy 0.006 -- whereas the same
 density and SSH started from rest ends at 47 % of the balanced surface KE
 (-53 %), so the balance test is not vacuous. A cold core below the minimum
-`dT_dz` is refused.
+`dT_dz` is refused, and so is a grid on which f crosses zero (the message gives the y of the crossing).
+The IC is bit-identical across rank layouts (`balanced_vortex` and `balanced_vortex_t0` cases of
+`tests/mpi/test_ocean_decomp_bitid_mpi.F90`).
 
-**Earlier 40-day runs (20 layers, `dT_dz = 2e-3`, `dt = 1200 s`; NOT the shipped
-configuration).** Warm core: drifts SW, centre (200, 200) -> (177.1, 166.3) km
-(dx = -22.9, dy = -33.7); f-plane control stays at (200.0, 200.0) with
-circulation within 2 %. The 100 m centre leads the 700 m centre by 0.1 km (day 1),
-0.9 (day 4), 1.4 (day 8), 2.2 (day 16), 3.0 (day 28), 2.8 km (day 40) while the
-azimuth of the upper part relative to the deep part rotates from east (352 deg)
-to south (261 deg); the offset to 1500 m reaches 46 km, but that deep anomaly
-(about 4 % of the surface anomaly's weight) is a westward-dispersing wake, not a
-coherent tilted core. Surface `zeta/f0` of the warm core: -0.273 -> -0.219
-(day 16) -> -0.295 (day 40). These were at 200 m vertical resolution, which is
-too coarse to resolve a tilt of a 700 m core; rerun with the shipped 40-layer
-files before quoting tilt numbers.
+**40-day runs of the shipped namelists** (40 layers, `dT_dz = 4e-3`, `dt = 600 s`),
+produced at commit `293f87470` on the GPU (one V100, about 150 s per run):
+
+| Case | start (km) | day 40 (km) |
+|---|---|---|
+| warm / anticyclone | (200, 200) | (170, 164) (SW) |
+| cold / cyclone | (200, 200) | (169, 233) (NW) |
+| warm, f-plane | (200, 200) | stationary |
+
+Tilt (50 m layer against the 650 m layer): the offset reaches 3.1 km for the
+anticyclone and 4.6 km for the cyclone. The azimuth of the lean rotates
+clockwise for the anticyclone (346 deg to 192 deg) and anticlockwise for the
+cyclone (344 deg to 195 deg).
+
+Earlier coarse runs (20 layers, `dT_dz = 2e-3`, `dt = 1200 s`, CPU; superseded
+by the table above, kept only for the baseline numbers): the warm core drifted to
+(177.1, 166.3) km, and its surface `zeta/f0` went -0.273 -> -0.219 (day 16) ->
+-0.295 (day 40). Their 1500 m "tilt" (46 km) was the deep anomaly's
+westward-dispersing wake, not a coherent tilted core.
 
 **The cyclone "intensification" was a statically unstable IC.** That earlier
 cold-core run (same coarse configuration) gained 68 % domain energy
