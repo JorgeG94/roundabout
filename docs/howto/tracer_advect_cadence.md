@@ -69,6 +69,22 @@ accuracy tolerance, then back off — per config, MOM6-style. Reduced-gravity
 `do_horizontal_advection = .false.` on those tracers to skip the work
 entirely.
 
+## Multi-rank
+
+`ratio > 1` runs on any rank count, bit-identical to the single-rank run.
+The drain fields a pass reads off-tile (the accumulated `uhtr`/`vhtr`, then
+each pass's tracer content, reconstructed thickness and remaining transport)
+are halo-exchanged; fields every rank rebuilds identically from those (the
+concentrations, the PPM edge values) are recomputed locally instead. And
+the sub-cycle pass count comes from one global-max CFL per window, so every
+rank takes the same number of passes. The WENO reconstructions key their
+stencil fallback on the GLOBAL edges (`has_*`), not the tile's, so a seam is
+never treated as a wall. Gated by the `drain_ratio*` cases of
+`tests/mpi/test_ocean_decomp_bitid_mpi` (ppm, ppm_h3, weno5/7/9, at
+2x1/1x2/4x1/2x2/1x4). The one exception: with a tripolar north fold
+(`north = "tripolar_fold"`) `ratio > 1` still refuses at configure on more
+than one rank.
+
 ## See also
 
 - `continuity_tracer_drain` (`rdb_continuity.F90`) — the windowed swept-PPM
