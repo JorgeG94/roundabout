@@ -784,7 +784,8 @@ contains
       ps => cfg%ocean%ic%ic_config
       call g%add(nml_enum("ic_config", ps, "IC overlay tag", &
                           allowed=[character(len=22) :: "", "eady", &
-                                   "geostrophic_adjustment", "baroclinic_jet"]))
+                                   "geostrophic_adjustment", "baroclinic_jet", &
+                                   "balanced_vortex"]))
       pr => cfg%ocean%ic%alpha_T
       call g%add(nml_real("alpha_T", pr, &
                           "Linear-EOS thermal-expansion coefficient (DIMENSIONAL: "// &
@@ -855,6 +856,32 @@ contains
       call g%add(nml_real("upper_layer_rest", pr, &
                           "Baroclinic-jet IC: upper (surface) layer rest thickness H1", &
                           units="m"))
+      pr => cfg%ocean%ic%vortex_x0
+      call g%add(nml_real("vortex_x0", pr, &
+                          "Balanced-vortex IC: centre x (<0 = domain centre)", units="m"))
+      pr => cfg%ocean%ic%vortex_y0
+      call g%add(nml_real("vortex_y0", pr, &
+                          "Balanced-vortex IC: centre y (<0 = domain centre)", units="m"))
+      pr => cfg%ocean%ic%vortex_radius
+      call g%add(nml_real("vortex_radius", pr, &
+                          "Balanced-vortex IC: Gaussian e-folding radius R (>= 3 dx)", units="m"))
+      pr => cfg%ocean%ic%vortex_hv
+      call g%add(nml_real("vortex_hv", pr, &
+                          "Balanced-vortex IC: vertical e-folding scale Hv from the surface", units="m"))
+      pr => cfg%ocean%ic%vortex_dT
+      call g%add(nml_real("vortex_dT", pr, &
+                          "Balanced-vortex IC: peak surface temperature anomaly (+ warm core)", &
+                          units="degC"))
+      pr => cfg%ocean%ic%vortex_T_surf
+      call g%add(nml_real("vortex_T_surf", pr, &
+                          "Balanced-vortex IC: background temperature at z=0", units="degC"))
+      pr => cfg%ocean%ic%vortex_dT_dz
+      call g%add(nml_real("vortex_dT_dz", pr, &
+                          "Balanced-vortex IC: background dT/dz (z up; + = warmer toward surface)", &
+                          units="degC/m"))
+      ps => cfg%ocean%ic%vortex_balance
+      call g%add(nml_enum("vortex_balance", ps, "Balanced-vortex IC: balance level", &
+                          allowed=[character(len=22) :: "geostrophic", "gradient", "none"]))
       call schema%add_group(g)
    end subroutine register_ocean_ic
 

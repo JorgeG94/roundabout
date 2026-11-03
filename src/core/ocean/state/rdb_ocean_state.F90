@@ -119,6 +119,7 @@ module rdb_ocean_state
       !! NetCDF-level file surgery.  No production call site.
 #endif
    public :: seed_eady_ic
+   public :: seed_balanced_vortex_ic
    public :: seed_geostrophic_adjustment_ic
    public :: seed_baroclinic_jet_ic
    public :: set_bathymetry_spoon
@@ -458,6 +459,15 @@ module rdb_ocean_state
          type(config_t), intent(in) :: cfg
          integer, intent(out), optional :: ierr
       end subroutine seed_eady_ic
+
+      module subroutine seed_balanced_vortex_ic(state, grid, cfg, ierr)
+            !! See submodule [[rdb_ocean_state_seed]].
+         implicit none
+         type(ocean_state_t), intent(inout) :: state
+         type(hgrid_t), intent(in) :: grid
+         type(config_t), intent(in) :: cfg
+         integer, intent(out), optional :: ierr
+      end subroutine seed_balanced_vortex_ic
 
       module subroutine seed_baroclinic_jet_ic(state, grid, cfg, ierr)
             !! See submodule [[rdb_ocean_state_seed]].

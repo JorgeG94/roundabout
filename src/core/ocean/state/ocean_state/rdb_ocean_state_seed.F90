@@ -616,6 +616,8 @@ contains
             call seed_geostrophic_adjustment_ic(state, grid, cfg, ierr=local_ierr)
          case ("baroclinic_jet")
             call seed_baroclinic_jet_ic(state, grid, cfg, ierr=local_ierr)
+         case ("balanced_vortex")
+            call seed_balanced_vortex_ic(state, grid, cfg, ierr=local_ierr)
          case default
             ! "" — keep the default analytical IC unchanged.
             local_ierr = 0
@@ -632,6 +634,8 @@ contains
             call seed_geostrophic_adjustment_ic(state, grid, cfg)
          case ("baroclinic_jet")
             call seed_baroclinic_jet_ic(state, grid, cfg)
+         case ("balanced_vortex")
+            call seed_balanced_vortex_ic(state, grid, cfg)
          case default
             ! "" — keep the default analytical IC unchanged.
          end select
@@ -1079,6 +1083,281 @@ contains
       deallocate (noise, seed_buf)
       if (present(ierr)) ierr = OCEAN_STATUS_OK
    end subroutine seed_eady_ic
+
+   module subroutine seed_balanced_vortex_ic(state, grid, cfg, ierr)
+      !! Isolated, balanced warm/cold-core vortex IC (`ic_config =
+      !! "balanced_vortex"`), on a flat-bottom cartesian beta-plane.
+      !!
+      !! Construction (Boussinesq, hydrostatic, linear EOS; layers k = 1 bed
+      !! ... nz surface, rest thickness dz = H/nz, layer-centre depth
+      !! d_k = (nz - k + 1/2) dz):
+      !!
+      !!   T(x,y,k) = T_bg(d_k) + dT * G(r) * E_k,
+      !!       G = exp(-r^2/R^2),  E_k = exp(-d_k^2/Hv^2),
+      !!       T_bg = T_surf - dT_dz * d_k            (z up, d down)
+      !!   rho'     = -alpha_T * dT * G * E_k          (S uniform)
+      !!
+      !! The pressure-anomaly potential phi = p'/rho_0 at the layer centre is
+      !! the hydrostatic integral of rho' from the surface down to the layer
+      !! centre (own layer counted half), plus the surface term g*eta:
+      !!
+      !!   phi_k = g*eta + (g/rho_0) ( sum_{m>k} rho'_m dz + rho'_k dz/2 ).
+      !!
+      !! SSH choice: eta is set so the BOTTOM pressure anomaly vanishes,
+      !!   eta = -(1/rho_0) sum_k rho'_k dz = (alpha_T dT / rho_0) S_all G(r),
+      !! i.e. the anomaly carries no net load on the bed: no deep flow, a
+      !! surface-intensified vortex (a warm core bulges the surface up).
+      !! With S_k = sum_{m>k} E_m dz + E_k dz/2 this gives the separable form
+      !!   phi_k = (g alpha_T dT / rho_0) (S_all - S_k) G(r).
+      !!
+      !! Velocity on the C-grid faces: the layer potential is averaged to
+      !! corners (four cells) and differenced with the grid spacing, so
+      !!   u(i,j) = -(1/f_u) (phi_c(i,j+1) - phi_c(i,j)) / dy
+      !!   v(i,j) =  (1/f_v) (phi_c(i+1,j) - phi_c(i,j)) / dx
+      !! with the LOCAL f = f0 + beta (y - y_ref) at each face (u-face is the
+      !! west face of T(i,j), v-face the south face), so beta is consistent.
+      !! The compact cell-to-cell gradient supplies the other component for
+      !! the gradient-wind correction.  Error against the analytic
+      !! geostrophic speed is O((dx/R)^2).  `vortex_balance = "gradient"`
+      !! multiplies the face speed by the cyclostrophic factor
+      !! c = 2 / (1 + sqrt(1 + 4 G_r / (f^2 r))), the root of
+      !! v^2/r + f v = G_r = d(phi)/dr that tends to the geostrophic speed
+      !! as G_r -> 0 (a quadratic: McWilliams & Flierl 1979 use the same
+      !! gradient-wind balance); it fails loud where 1 + 4 G_r/(f^2 r) < 0
+      !! (no real root, a too-intense anticyclone).
+      !!
+      !! `vortex_balance = "none"` seeds the SAME density and SSH with zero
+      !! velocity: the unbalanced start of the classic geostrophic-adjustment
+      !! problem, used to show that the balanced start is what keeps the
+      !! vortex from radiating.
+      !!
+      !! The barotropic face velocity is set to the thickness-weighted depth
+      !! mean of the layer velocity.  All arrays (incl. ghost rows/columns)
+      !! are filled from the analytic continuation of the profile.
+      !! Host-side init, before `enter_data`.
+      type(ocean_state_t), intent(inout) :: state
+      type(hgrid_t), intent(in) :: grid
+      type(config_t), intent(in) :: cfg
+      integer, intent(out), optional :: ierr
+
+      integer :: i, j, k, nx, ny, nz, ng, ioff, joff, idx_T, idx_S
+      real(wp) :: H, dz, dx, dy, x0, y0, R, Hv, dT, f0, beta, y_ref
+      real(wp) :: alpha, rho0, amp, s_all, f_loc, xx, yy, rr, gx, gy, g_r, s4, c, hf
+      real(wp), allocatable :: gcell(:, :), gcorn(:, :), e_k(:), a_k(:), d_k(:)
+      real(wp), allocatable :: u_bt_num(:, :), v_bt_num(:, :), d_u(:, :), d_v(:, :)
+      real(wp), allocatable :: eta(:, :)
+      logical :: gradient, rest, no_root
+      real(wp) :: gk
+
+      gradient = (trim(cfg%ocean%ic%vortex_balance) == "gradient")
+      rest = (trim(cfg%ocean%ic%vortex_balance) == "none")
+      if (trim(cfg%ocean%topo%topo_config) /= "flat") then
+         call fail("seed_balanced_vortex_ic: requires topo_config='flat'", ierr, OCEAN_STATUS_ERR_IC_SEED)
+         return
+      end if
+      if (trim(cfg%ocean%eos%eos) /= "linear") then
+         call fail("seed_balanced_vortex_ic: requires a linear EOS", ierr, OCEAN_STATUS_ERR_IC_SEED)
+         return
+      end if
+      idx_T = state%multilayer%idx_temperature
+      idx_S = state%multilayer%idx_salinity
+      if (idx_T <= 0) then
+         call fail("seed_balanced_vortex_ic: requires a temperature tracer", ierr, OCEAN_STATUS_ERR_IC_SEED)
+         return
+      end if
+
+      nx = grid%nx_total
+      ny = grid%ny_total
+      nz = state%multilayer%nz_ml
+      ng = grid%nghost
+      ioff = grid%i_offset_global
+      joff = grid%j_offset_global
+      dx = grid%dx
+      dy = grid%dy
+      H = cfg%ocean%topo%max_depth
+      dz = H/real(nz, wp)
+      R = cfg%ocean%ic%vortex_radius
+      Hv = cfg%ocean%ic%vortex_hv
+      dT = cfg%ocean%ic%vortex_dT
+      alpha = cfg%ocean%ic%alpha_T
+      rho0 = cfg%ocean%ic%rho_0
+      f0 = cfg%coriolis_f
+      beta = cfg%ocean%topo%coriolis_beta
+      y_ref = cfg%ocean%topo%coriolis_y_ref
+      x0 = cfg%ocean%ic%vortex_x0
+      y0 = cfg%ocean%ic%vortex_y0
+      if (x0 < 0.0_wp) x0 = 0.5_wp*real(grid%nx_global, wp)*dx
+      if (y0 < 0.0_wp) y0 = 0.5_wp*real(grid%ny_global, wp)*dy
+
+      allocate (d_k(nz), e_k(nz), a_k(nz))
+      do k = 1, nz
+         d_k(k) = (real(nz - k, wp) + 0.5_wp)*dz
+         e_k(k) = exp(-(d_k(k)/Hv)**2)
+      end do
+      s_all = sum(e_k)*dz
+      ! S_k = sum_{m>k} E_m dz + E_k dz/2;  a_k = (g alpha dT / rho0)(S_all - S_k)
+      do k = 1, nz
+         gk = 0.5_wp*e_k(k)*dz
+         if (k < nz) gk = gk + sum(e_k(k + 1:nz))*dz
+         a_k(k) = GRAVITY*alpha*dT/rho0*(s_all - gk)
+      end do
+
+      ! Gaussian at cell centres 0..nx+1 x 0..ny+1 (one ring beyond the array,
+      ! so every corner/face stencil is analytic) and at the SW corners.
+      allocate (gcell(0:nx + 1, 0:ny + 1), gcorn(nx + 1, ny + 1), eta(nx, ny))
+      do j = 0, ny + 1
+         yy = (real(j - ng + joff, wp) - 0.5_wp)*dy
+         do i = 0, nx + 1
+            xx = (real(i - ng + ioff, wp) - 0.5_wp)*dx
+            gcell(i, j) = exp(-((xx - x0)**2 + (yy - y0)**2)/R**2)
+         end do
+      end do
+      do j = 1, ny + 1
+         do i = 1, nx + 1
+            gcorn(i, j) = 0.25_wp*(gcell(i - 1, j - 1) + gcell(i, j - 1) &
+                                   + gcell(i - 1, j) + gcell(i, j))
+         end do
+      end do
+
+      ! ---- SSH (zero bottom-pressure anomaly) and layer thickness ----
+      do j = 1, ny
+         do i = 1, nx
+            eta(i, j) = alpha*dT/rho0*s_all*gcell(i, j)
+            state%barotropic%h(i, j) = state%barotropic%b(i, j) + eta(i, j)
+         end do
+      end do
+      call seed_h_layer_uniform_impl(state%multilayer%h_layer, state%barotropic%h, nz)
+
+      ! ---- temperature (and uniform salinity) against the new h_layer ----
+      do k = 1, nz
+         do j = 1, ny
+            do i = 1, nx
+               state%multilayer%tracers(idx_T)%hTr(i, j, k) = &
+                  (cfg%ocean%ic%vortex_T_surf - cfg%ocean%ic%vortex_dT_dz*d_k(k) &
+                   + dT*gcell(i, j)*e_k(k))*state%multilayer%h_layer(i, j, k)
+            end do
+         end do
+      end do
+      if (idx_S > 0) then
+         call seed_tracer_uniform_impl( &
+            state%multilayer%tracers(idx_S)%hTr, &
+            state%multilayer%h_layer, cfg%initial_salinity, nz)
+      end if
+
+      ! ---- face velocities ----
+      state%multilayer%u_face_x_layer = 0.0_wp
+      state%multilayer%v_face_y_layer = 0.0_wp
+      state%multilayer%hu_face_x_layer = 0.0_wp
+      state%multilayer%hv_face_y_layer = 0.0_wp
+      allocate (u_bt_num(nx + 1, ny), v_bt_num(nx, ny + 1), d_u(nx + 1, ny), d_v(nx, ny + 1))
+      u_bt_num = 0.0_wp
+      v_bt_num = 0.0_wp
+      d_u = 0.0_wp
+      d_v = 0.0_wp
+      no_root = .false.
+      do k = 1, nz
+         ! u-faces (west face of T(i,j))
+         do j = 1, ny
+            yy = (real(j - ng + joff, wp) - 0.5_wp)*dy
+            f_loc = f0 + beta*(yy - y_ref)
+            do i = 1, nx + 1
+               xx = real(i - 1 - ng + ioff, wp)*dx
+               gy = a_k(k)*(gcorn(i, j + 1) - gcorn(i, j))/dy
+               gx = a_k(k)*(gcell(i, j) - gcell(i - 1, j))/dx
+               c = 1.0_wp
+               if (rest) c = 0.0_wp
+               if (gradient) then
+                  rr = sqrt((xx - x0)**2 + (yy - y0)**2)
+                  if (rr > 1.0e-6_wp*dx) then
+                     g_r = ((xx - x0)*gx + (yy - y0)*gy)/rr
+                     s4 = 4.0_wp*g_r/(f_loc*f_loc*rr)
+                     if (1.0_wp + s4 < 0.0_wp) then
+                        no_root = .true.
+                     else
+                        c = 2.0_wp/(1.0_wp + sqrt(1.0_wp + s4))
+                     end if
+                  end if
+               end if
+               state%multilayer%u_face_x_layer(i, j, k) = -c*gy/f_loc
+            end do
+         end do
+         ! v-faces (south face of T(i,j))
+         do j = 1, ny + 1
+            yy = real(j - 1 - ng + joff, wp)*dy
+            f_loc = f0 + beta*(yy - y_ref)
+            do i = 1, nx
+               xx = (real(i - ng + ioff, wp) - 0.5_wp)*dx
+               gx = a_k(k)*(gcorn(i + 1, j) - gcorn(i, j))/dx
+               gy = a_k(k)*(gcell(i, j) - gcell(i, j - 1))/dy
+               c = 1.0_wp
+               if (rest) c = 0.0_wp
+               if (gradient) then
+                  rr = sqrt((xx - x0)**2 + (yy - y0)**2)
+                  if (rr > 1.0e-6_wp*dx) then
+                     g_r = ((xx - x0)*gx + (yy - y0)*gy)/rr
+                     s4 = 4.0_wp*g_r/(f_loc*f_loc*rr)
+                     if (1.0_wp + s4 < 0.0_wp) then
+                        no_root = .true.
+                     else
+                        c = 2.0_wp/(1.0_wp + sqrt(1.0_wp + s4))
+                     end if
+                  end if
+               end if
+               state%multilayer%v_face_y_layer(i, j, k) = c*gx/f_loc
+            end do
+         end do
+         ! mass fluxes u*h, h interpolated to the face (end faces: adjacent cell)
+         do j = 1, ny
+            do i = 1, nx + 1
+               if (i == 1) then
+                  hf = state%multilayer%h_layer(1, j, k)
+               else if (i == nx + 1) then
+                  hf = state%multilayer%h_layer(nx, j, k)
+               else
+                  hf = 0.5_wp*(state%multilayer%h_layer(i - 1, j, k) + state%multilayer%h_layer(i, j, k))
+               end if
+               state%multilayer%hu_face_x_layer(i, j, k) = state%multilayer%u_face_x_layer(i, j, k)*hf
+               u_bt_num(i, j) = u_bt_num(i, j) + state%multilayer%hu_face_x_layer(i, j, k)
+               d_u(i, j) = d_u(i, j) + hf
+            end do
+         end do
+         do j = 1, ny + 1
+            do i = 1, nx
+               if (j == 1) then
+                  hf = state%multilayer%h_layer(i, 1, k)
+               else if (j == ny + 1) then
+                  hf = state%multilayer%h_layer(i, ny, k)
+               else
+                  hf = 0.5_wp*(state%multilayer%h_layer(i, j - 1, k) + state%multilayer%h_layer(i, j, k))
+               end if
+               state%multilayer%hv_face_y_layer(i, j, k) = state%multilayer%v_face_y_layer(i, j, k)*hf
+               v_bt_num(i, j) = v_bt_num(i, j) + state%multilayer%hv_face_y_layer(i, j, k)
+               d_v(i, j) = d_v(i, j) + hf
+            end do
+         end do
+      end do
+      if (no_root) then
+         call fail("seed_balanced_vortex_ic: vortex_balance='gradient' has no real "// &
+                   "root (1 + 4 G_r/(f^2 r) < 0): the anticyclone is too intense for "// &
+                   "gradient-wind balance; reduce |vortex_dT| or increase vortex_radius", &
+                   ierr, OCEAN_STATUS_ERR_IC_SEED)
+         return
+      end if
+
+      ! ---- barotropic (depth-mean) face fields ----
+      state%barotropic%hu_face_x = u_bt_num
+      state%barotropic%hv_face_y = v_bt_num
+      state%barotropic%u_face_x = u_bt_num/max(d_u, tiny(1.0_wp))
+      state%barotropic%v_face_y = v_bt_num/max(d_v, tiny(1.0_wp))
+
+      if (comm_env_rank() == 0) then
+         call logger%info("seed_balanced_vortex_ic: "//trim(cfg%ocean%ic%vortex_balance)// &
+                          " vortex, R="//to_string(R)//" m, Hv="//to_string(Hv)// &
+                          " m, dT="//to_string(dT)//" degC, peak eta="// &
+                          to_string(alpha*dT/rho0*s_all)//" m")
+      end if
+      if (present(ierr)) ierr = OCEAN_STATUS_OK
+   end subroutine seed_balanced_vortex_ic
 
    module subroutine seed_baroclinic_jet_ic(state, grid, cfg, ierr)
       !! Two-layer reduced-gravity baroclinic-instability IC — a
