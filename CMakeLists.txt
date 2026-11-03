@@ -8,6 +8,16 @@ set(main_lib core_rdb)
 set(exe_name rdb)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# GNUInstallDirs picks lib vs lib64 from CMAKE_SIZEOF_VOID_P. In a Fortran-only
+# configure that comes from the Fortran ABI probe
+# (CMAKE_Fortran_SIZEOF_DATA_PTR), which some toolchains do not report (seen on
+# GH200 / neoverse_v2): an author warning and a `lib` default where the platform
+# wants `lib64`. Every supported target is 64-bit, so assume it only when the
+# probe is silent; a later enable_language(C) still overrides it.
+if(NOT DEFINED CMAKE_SIZEOF_VOID_P)
+  set(CMAKE_SIZEOF_VOID_P 8)
+endif()
 include(GNUInstallDirs)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
