@@ -22,6 +22,7 @@ than silent memory corruption.
 
 from __future__ import annotations
 
+import array
 import ctypes
 import os
 from pathlib import Path
@@ -445,46 +446,87 @@ def _nest_axis(flat, shape, strides, prefix):
     return [_nest_axis(flat, shape, strides, prefix + (i,)) for i in range(n)]
 
 
+_AI_TYPECODES = {"f8": "d", "f4": "f", "i4": "i", "i8": "q", "u4": "I"}
+
+
+def c_strides(shape, itemsize):
+    """Row-major (C / numpy-default) byte strides for `shape`."""
+    strides = []
+    acc = itemsize
+    for n in reversed(shape):
+        strides.append(acc)
+        acc *= n
+    return tuple(reversed(strides))
+
+
+def _array_interface_doubles(value, shape):
+    """Bulk-convert an ``__array_interface__`` object to a Fortran-ordered
+    ``array.array('d')`` (the only copy; no per-element Python work beyond
+    one slice assignment per contiguous-or-strided axis-0 line).
+
+    Per the numpy protocol, ``strides`` of ``None`` (or absent) means
+    C-contiguous (row-major), NOT Fortran order.
+    """
+    info = value.__array_interface__
+    vshape = tuple(info["shape"])
+    if vshape != tuple(shape):
+        raise ValueError(f"expected shape {tuple(shape)}, got {vshape}")
+    typestr = info["typestr"]
+    if typestr[0] not in "<=|" or typestr[1:] not in _AI_TYPECODES:
+        raise TypeError(
+            f"unsupported array dtype {typestr!r}; accepted: little-endian "
+            f"float64/float32/int32/int64 ('<f8', '<f4', '<i4', '<i8')")
+    itemsize = int(typestr[2:])
+    code = _AI_TYPECODES[typestr[1:]]
+    address = info["data"][0]
+    strides = info.get("strides")
+    strides = c_strides(vshape, itemsize) if strides is None else tuple(strides)
+    total = _prod(vshape)
+    if total == 0:
+        return array.array("d")
+    for st in strides:
+        if st % itemsize:
+            raise ValueError("array strides must be multiples of itemsize")
+    # Byte extent touched by the view (handles negative strides).
+    lo = sum(min(0, (n - 1) * st) for n, st in zip(vshape, strides))
+    hi = sum(max(0, (n - 1) * st) for n, st in zip(vshape, strides))
+    nbytes = hi - lo + itemsize
+    raw = array.array(code)
+    raw.frombytes((ctypes.c_char * nbytes).from_address(address + lo))
+    src = raw if code == "d" else array.array("d", raw)
+    estrides = [st // itemsize for st in strides]   # element strides
+    base = -lo // itemsize
+    if tuple(estrides) == f_strides(vshape, 1) and base == 0 \
+            and len(src) == total:
+        return src
+    dst = array.array("d", bytes(8 * total))
+    n0 = vshape[0]
+    s0 = estrides[0]
+    outer = vshape[1:]
+    ostr = estrides[1:]
+    idx = [0] * len(outer)
+    for line in range(total // n0):
+        off = base + sum(i * s for i, s in zip(idx, ostr))
+        stop = off + (n0 - 1) * s0 + (1 if s0 > 0 else -1)
+        dst[line * n0:(line + 1) * n0] = src[off:(stop if stop >= 0 else None):s0]
+        for d in range(len(idx)):
+            idx[d] += 1
+            if idx[d] < outer[d]:
+                break
+            idx[d] = 0
+    return dst
+
+
 def flatten_nested(value, shape):
     """Flatten a nested list/tuple (numpy-style indexing: value[i][j][k])
     into a flat, Fortran-ordered list of floats matching `shape`.
 
     Also accepts anything exposing ``__array_interface__`` (e.g. a numpy
-    array) without importing numpy: its own buffer is read directly via
-    ctypes, respecting ITS strides, in the same iteration order.
+    array) without importing numpy; any strides/order are honoured (absent
+    ``strides`` means C-contiguous, per the protocol).
     """
     if hasattr(value, "__array_interface__"):
-        info = value.__array_interface__
-        vshape = info["shape"]
-        if tuple(vshape) != tuple(shape):
-            raise ValueError(f"expected shape {shape}, got {vshape}")
-        address, _ro = info["data"]
-        typestr = info["typestr"]
-        itemsize = int(typestr[2:])
-        ctype = ctypes.c_double if itemsize == 8 else ctypes.c_float
-        strides = info.get("strides")
-        if strides is None:
-            strides = f_strides(vshape, itemsize)
-
-        # Iterate in Fortran order (first axis fastest) to match our own
-        # flatten convention.
-        def walk_fortran():
-            total = 1
-            for n in vshape:
-                total *= n
-            idx = [0] * len(vshape)
-            for _ in range(total):
-                off = sum(i * s for i, s in zip(idx, strides))
-                flat.append(ctype.from_address(address + off).value)
-                for d in range(len(idx)):
-                    idx[d] += 1
-                    if idx[d] < vshape[d]:
-                        break
-                    idx[d] = 0
-
-        flat = []
-        walk_fortran()
-        return flat
+        return list(_array_interface_doubles(value, shape))
 
     # Plain nested list/tuple: value[i][j][k]... numpy-style indexing.
     flat = [0.0] * _prod(shape)
@@ -515,5 +557,47 @@ def _prod(shape):
 
 
 def make_double_array(flat):
-    n = len(flat)
-    return (c_double * n)(*flat)
+    """Copy a flat sequence of floats into a ``c_double`` array."""
+    buf = array.array("d", flat)
+    out = (c_double * len(buf)).from_buffer(buf)
+    out._keepalive = buf
+    return out
+
+
+def as_double_buffer(value, shape):
+    """Return a ctypes object usable as a ``double*`` argument holding
+    `value` laid out Fortran-ordered for `shape`.
+
+    Accepted: nested lists/tuples (``value[i][j][k]``), or any object with
+    ``__array_interface__`` (numpy arrays, no numpy import) of dtype
+    ``<f8``/``<f4``/``<i4``/``<i8`` and ANY strides.
+
+    ZERO-COPY condition: a little-endian float64 array whose strides equal
+    the Fortran-contiguous strides for `shape` (e.g. ``np.asfortranarray``)
+    is passed by address with no copy; the source is kept alive by the
+    returned object. Everything else costs exactly one bulk conversion.
+    """
+    if hasattr(value, "__array_interface__"):
+        info = value.__array_interface__
+        vshape = tuple(info["shape"])
+        shape = tuple(shape)
+        if (vshape == shape and info["typestr"] in ("<f8", "=f8")
+                and info.get("strides") is not None
+                and tuple(info["strides"]) == f_strides(shape, 8)
+                and _prod(shape) > 0):
+            ptr = ctypes.cast(info["data"][0], p_double)
+            ptr._keepalive = value
+            return ptr
+        if (vshape == shape and info["typestr"] in ("<f8", "=f8")
+                and info.get("strides") is None
+                and (len(shape) == 1 or _prod(shape) == max(shape))
+                and _prod(shape) > 0):
+            # C- and F-contiguous coincide for 1-D / single-extent arrays.
+            ptr = ctypes.cast(info["data"][0], p_double)
+            ptr._keepalive = value
+            return ptr
+        buf = _array_interface_doubles(value, shape)
+        out = (c_double * len(buf)).from_buffer(buf)
+        out._keepalive = buf
+        return out
+    return make_double_array(flatten_nested(value, shape))

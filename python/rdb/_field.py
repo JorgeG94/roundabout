@@ -256,12 +256,11 @@ class Field:
         full = (idx is Ellipsis) or (idx == slice(None))
         shape = self.shape
         if full:
-            flat = _ffi.flatten_nested(value, shape)
+            arr = _ffi.as_double_buffer(value, shape)
         else:
             nested = self.copy()
             _assign_into(nested, idx, value)
-            flat = _ffi.flatten_nested(nested, shape)
-        arr = _ffi.make_double_array(flat)
+            arr = _ffi.as_double_buffer(nested, shape)
         status = self._setter(self._model._handle, arr, *shape)
         check(status, f"{self._name} setter")
         # The setter left the DEVICE canonical; poison the generation so
