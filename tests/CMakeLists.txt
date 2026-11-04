@@ -396,6 +396,10 @@ set(RDB_TESTS
     # P2.5 pre-create geometry injection. Own binary: same single-live-handle
     # module-state reasoning as test_rdb_ocean_api/test_ocean_api_p2.
     "test_ocean_geometry_inject|test_ocean_geometry_inject|collect_ocean_geometry_inject_tests|ocean_geometry_inject|ocean"
+    # Staged initial state (h/u/v/tracers) in the pending-create window, applied
+    # between the IC seed and the sponge snapshot. Own binary: engine_setup +
+    # process-global halo state.
+    "test_ocean_staged_ic|test_ocean_staged_ic|collect_ocean_staged_ic_tests|ocean_staged_ic|ocean"
 )
 
 # Tests that MUST link the STATIC core.

@@ -71,6 +71,7 @@ module rdb_ocean_api
    ! reader — see rdb_ocean_bathymetry_inject's module docstring). Renamed
    ! on import so the existing rdb_ocean_set_bathymetry call sites below
    ! (P2) are untouched.
+   use rdb_ocean_ic_inject, only: staged_tracer_t
    use rdb_ocean_bathymetry_inject, only: fill_bathymetry_ghosts_array => bathymetry_fill_ghosts_array
    use rdb_ocean_periodic, only: ocean_periodic_wrap_centre_2d
    use rdb_ocean_fold_apply, only: ocean_fold_wrap_eta_2d
@@ -528,6 +529,109 @@ contains
       h%engine%has_staged_topology = .true.
       status = int(OCEAN_STATUS_OK, c_int)
    end function rdb_ocean_stage_topology
+
+   function rdb_ocean_stage_h(c_handle, data, nx_p, ny_p, nz_p) &
+      result(status) bind(c, name="rdb_ocean_stage_h")
+      !! Stage a layer-thickness field `(nx_p, ny_p, nz_p)` [m], k = 1 the
+      !! bed, on the PENDING handle. Applied inside `rdb_ocean_create_finalize`
+      !! by `ocean_ic_apply_staged` (see `rdb_ocean_ic_inject` for the order,
+      !! the `h > 0` / column-sum checks and the ghost rule). Shape is
+      !! validated at finalize, against the grid that does not exist yet.
+      type(c_ptr), intent(in), value :: c_handle
+      integer(c_int), intent(in), value :: nx_p, ny_p, nz_p
+      real(c_double), intent(in) :: data(nx_p, ny_p, nz_p)
+      integer(c_int) :: status
+
+      type(ocean_handle_t), pointer :: h
+
+      status = resolve_ocean_pending(c_handle, h)
+      if (status /= OCEAN_STATUS_OK) return
+      if (allocated(h%engine%staged_h)) deallocate (h%engine%staged_h)
+      allocate (h%engine%staged_h(nx_p, ny_p, nz_p), source=real(data, wp))
+      status = int(OCEAN_STATUS_OK, c_int)
+   end function rdb_ocean_stage_h
+
+   function rdb_ocean_stage_u(c_handle, data, nx_p, ny_p, nz_p) &
+      result(status) bind(c, name="rdb_ocean_stage_u")
+      !! Stage the x-face velocity `(nx_p, ny_p, nz_p)` [m/s] with
+      !! `nx_p = nx_phys + 1` (west face of cell i is face i), k = 1 the bed,
+      !! on the PENDING handle. Closed/land faces are zeroed by the ordinary
+      !! land mask after the apply.
+      type(c_ptr), intent(in), value :: c_handle
+      integer(c_int), intent(in), value :: nx_p, ny_p, nz_p
+      real(c_double), intent(in) :: data(nx_p, ny_p, nz_p)
+      integer(c_int) :: status
+
+      type(ocean_handle_t), pointer :: h
+
+      status = resolve_ocean_pending(c_handle, h)
+      if (status /= OCEAN_STATUS_OK) return
+      if (allocated(h%engine%staged_u)) deallocate (h%engine%staged_u)
+      allocate (h%engine%staged_u(nx_p, ny_p, nz_p), source=real(data, wp))
+      status = int(OCEAN_STATUS_OK, c_int)
+   end function rdb_ocean_stage_u
+
+   function rdb_ocean_stage_v(c_handle, data, nx_p, ny_p, nz_p) &
+      result(status) bind(c, name="rdb_ocean_stage_v")
+      !! Stage the y-face velocity `(nx_p, ny_p, nz_p)` [m/s] with
+      !! `ny_p = ny_phys + 1`, k = 1 the bed, on the PENDING handle.
+      type(c_ptr), intent(in), value :: c_handle
+      integer(c_int), intent(in), value :: nx_p, ny_p, nz_p
+      real(c_double), intent(in) :: data(nx_p, ny_p, nz_p)
+      integer(c_int) :: status
+
+      type(ocean_handle_t), pointer :: h
+
+      status = resolve_ocean_pending(c_handle, h)
+      if (status /= OCEAN_STATUS_OK) return
+      if (allocated(h%engine%staged_v)) deallocate (h%engine%staged_v)
+      allocate (h%engine%staged_v(nx_p, ny_p, nz_p), source=real(data, wp))
+      status = int(OCEAN_STATUS_OK, c_int)
+   end function rdb_ocean_stage_v
+
+   function rdb_ocean_stage_tracer(c_handle, name, name_len, data, nx_p, ny_p, nz_p) &
+      result(status) bind(c, name="rdb_ocean_stage_tracer")
+      !! Stage the CONCENTRATION field `(nx_p, ny_p, nz_p)` (the tracer's own
+      !! units) of the tracer named `name` on the PENDING handle. The name is
+      !! resolved against the registry at finalize
+      !! (`OCEAN_STATUS_ERR_NOT_FOUND` if unknown); the content `hTr = conc*h`
+      !! is formed against the final (possibly staged) `h`. Staging the same
+      !! name twice keeps the last.
+      type(c_ptr), intent(in), value :: c_handle
+      integer(c_int), intent(in), value :: name_len
+      character(kind=c_char), intent(in) :: name(name_len)
+      integer(c_int), intent(in), value :: nx_p, ny_p, nz_p
+      real(c_double), intent(in) :: data(nx_p, ny_p, nz_p)
+      integer(c_int) :: status
+
+      type(ocean_handle_t), pointer :: h
+      character(len=:), allocatable :: fname
+      type(staged_tracer_t), allocatable :: grown(:)
+      integer :: n, is, slot
+
+      status = resolve_ocean_pending(c_handle, h)
+      if (status /= OCEAN_STATUS_OK) return
+
+      call c_to_f_string(name, name_len, fname)
+      n = 0
+      if (allocated(h%engine%staged_tracers)) n = size(h%engine%staged_tracers)
+      slot = n + 1
+      do is = 1, n
+         if (trim(h%engine%staged_tracers(is)%name) == trim(fname)) slot = is
+      end do
+      if (slot == n + 1) then
+         allocate (grown(n + 1))
+         do is = 1, n
+            grown(is)%name = h%engine%staged_tracers(is)%name
+            call move_alloc(h%engine%staged_tracers(is)%conc, grown(is)%conc)
+         end do
+         call move_alloc(grown, h%engine%staged_tracers)
+      end if
+      h%engine%staged_tracers(slot)%name = fname
+      if (allocated(h%engine%staged_tracers(slot)%conc)) deallocate (h%engine%staged_tracers(slot)%conc)
+      allocate (h%engine%staged_tracers(slot)%conc(nx_p, ny_p, nz_p), source=real(data, wp))
+      status = int(OCEAN_STATUS_OK, c_int)
+   end function rdb_ocean_stage_tracer
 
    function rdb_ocean_required_halo(pv_adv_scheme, pv_adv_scheme_len, &
                                     tracer_recon, tracer_recon_len, &

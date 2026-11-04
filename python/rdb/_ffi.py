@@ -240,6 +240,15 @@ def _declare_prototypes(lib):
     lib.rdb_ocean_stage_topology.argtypes = [HANDLE, c_int, c_int]
     lib.rdb_ocean_stage_topology.restype = c_int
 
+    for _nm in ("h", "u", "v"):
+        _fn = getattr(lib, f"rdb_ocean_stage_{_nm}")
+        _fn.argtypes = [HANDLE, p_double, c_int, c_int, c_int]
+        _fn.restype = c_int
+    lib.rdb_ocean_stage_tracer.argtypes = [
+        HANDLE, c_char_p, c_int, p_double, c_int, c_int, c_int,
+    ]
+    lib.rdb_ocean_stage_tracer.restype = c_int
+
     lib.rdb_ocean_create_finalize.argtypes = [HANDLE_OUT]
     lib.rdb_ocean_create_finalize.restype = c_int
 

@@ -738,6 +738,45 @@ array whose extents do not match the configured interior raises
 :class:`~rdb.BadShapeError`. If ``finalize()`` fails, the whole handle is
 destroyed — there is no half-created model to inspect afterwards.
 
+Staged initial state
+--------------------
+
+The same window takes an initial *state*. ``stage_h``, ``stage_u``,
+``stage_v`` and ``stage_tracer`` hand the library arrays that replace the
+built-in initial condition before any setup-time snapshot is taken:
+
+.. code-block:: python
+
+   model = rdb.Model.pending(nml)
+   model.stage_h(h)                        # (nx, ny, nz) metres, k=0 = bed
+   model.stage_tracer("temperature", T)    # (nx, ny, nz) concentration
+   model.stage_tracer("salinity", S)
+   model.stage_u(u)                        # (nx+1, ny, nz) m/s
+   model.stage_v(v)                        # (nx, ny+1, nz) m/s
+   model.finalize()
+
+The data is applied once, right after the built-in seed and **before** the
+sponge reference is snapshotted. That is the point of staging over
+``model.temperature[...] = T`` after creation: the sponge target
+(``target_source = "ic"``), the pseudo-salt tracer, the land-face mask and
+``rho_layer`` all see your fields instead of the uniform defaults.
+
+* Layers are bottom-up: index ``k = 0`` is the bed, ``k = nz-1`` the surface.
+* Tracers are *concentrations*; the content ``conc * h`` is formed against the
+  final ``h``, so ``stage_h`` and ``stage_tracer`` may be called in any
+  order. A tracer you do not stage keeps its concentration across a staged
+  ``h``.
+* ``h`` must be finite and positive on wet cells, and every wet column must
+  sum to within 25 % of the water column; otherwise ``finalize()`` raises
+  :class:`~rdb.RdbInitialConditionError`. An unknown tracer name raises
+  :class:`~rdb.TracerNotFoundError`, a wrong shape :class:`~rdb.BadShapeError`.
+* Staged ``u``/``v`` on closed or land faces are zeroed by the usual land mask.
+* Staging salinity re-seeds pseudo-salt from it, unless you stage
+  ``"pseudo_salt"`` yourself.
+* Ghost cells are filled by periodic wrap on a periodic axis and
+  zero-gradient elsewhere.
+* Single-rank only. No balance is computed: stage the velocities you want.
+
 
 Fields
 ======
