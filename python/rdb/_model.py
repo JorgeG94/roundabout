@@ -391,8 +391,9 @@ class Model:
         """Phase 1 of 2 (P2.5): build + validate a config and allocate a
         handle without running setup or mapping the device. Call
         :meth:`stage_bathymetry` / :meth:`stage_metrics` /
-        :meth:`stage_topology` (any subset, any order), then
-        :meth:`finalize`."""
+        :meth:`stage_topology` / :meth:`stage_h` / :meth:`stage_u` /
+        :meth:`stage_v` / :meth:`stage_tracer` (any subset, any order),
+        then :meth:`finalize`."""
         text, config = _resolve_namelist_text(namelist_text)
         self = cls.__new__(cls)
         self._bootstrap()
@@ -448,6 +449,53 @@ class Model:
         status = self._lib.rdb_ocean_stage_topology(
             self._handle, int(bool(periodic_x)), int(bool(periodic_y)))
         check(status, "rdb_ocean_stage_topology")
+
+    def _stage_field3(self, fn_name, value):
+        self._require_pending()
+        shape = _shape_of(value, ndim=3)
+        arr = _ffi.as_double_buffer(value, shape)
+        status = getattr(self._lib, fn_name)(self._handle, arr, *shape)
+        check(status, fn_name)
+
+    def stage_h(self, h):
+        """Stage the initial layer thickness on a pending handle.
+
+        ``h`` has shape ``(nx, ny, nz)`` (metres), ``k = 0`` the BED (the
+        model's bottom-up convention). Validated at :meth:`finalize`:
+        finite and ``> 0`` on wet cells, each wet column within 25 % of the
+        water column. Tracers you do not stage keep their concentration.
+        Applied before the sponge snapshot, so every setup-time snapshot
+        sees it. Single-rank only."""
+        self._stage_field3("rdb_ocean_stage_h", h)
+
+    def stage_u(self, u):
+        """Stage the initial x-face velocity: shape ``(nx+1, ny, nz)`` (m/s),
+        ``k = 0`` the bed. Faces that are closed/land after finalize are
+        zeroed by the ordinary land mask. Single-rank only."""
+        self._stage_field3("rdb_ocean_stage_u", u)
+
+    def stage_v(self, v):
+        """Stage the initial y-face velocity: shape ``(nx, ny+1, nz)`` (m/s),
+        ``k = 0`` the bed. Single-rank only."""
+        self._stage_field3("rdb_ocean_stage_v", v)
+
+    def stage_tracer(self, name: str, conc):
+        """Stage the initial CONCENTRATION of tracer ``name`` (its own
+        units; ``"temperature"``, ``"salinity"``, ``"pseudo_salt"``, ...) on
+        a pending handle: shape ``(nx, ny, nz)``, ``k = 0`` the bed. The
+        content ``conc * h`` is formed against the final ``h`` at
+        :meth:`finalize`, so staging order versus :meth:`stage_h` does not
+        matter. An unknown name raises
+        :class:`~rdb._errors.TracerNotFoundError` at finalize. Staging
+        salinity re-seeds pseudo-salt from it unless pseudo-salt is staged
+        itself."""
+        self._require_pending()
+        shape = _shape_of(conc, ndim=3)
+        arr = _ffi.as_double_buffer(conc, shape)
+        enc = str(name).encode("utf-8")
+        status = self._lib.rdb_ocean_stage_tracer(
+            self._handle, enc, len(enc), arr, *shape)
+        check(status, "rdb_ocean_stage_tracer")
 
     def finalize(self):
         """Phase 2 of 2: complete a handle started by :meth:`pending`."""

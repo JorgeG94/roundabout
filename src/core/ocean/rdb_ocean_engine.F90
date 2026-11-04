@@ -174,6 +174,7 @@ module rdb_ocean_engine
    use rdb_ice_transport, only: ice_transport_step
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_SETUP, OCEAN_STATUS_ERR_BAD_SHAPE
    use rdb_error_ring, only: fail
+   use rdb_ocean_ic_inject, only: staged_tracer_t, ocean_ic_apply_staged
    use rdb_profiler, only: profiler_start, profiler_stop
    use pic_logger, only: logger => global_logger
    use pic_strings, only: to_string
@@ -270,6 +271,17 @@ module rdb_ocean_engine
          !! sg_dy/sg_area`). When `staged_metrics_x` is allocated,
          !! `engine_setup` assembles metrics directly from these instead of
          !! dispatching on `cfg%ocean%grid%grid_config`.
+      real(wp), allocatable :: staged_h(:, :, :)
+         !! Staged layer thickness `(nx_phys, ny_phys, nz)`, k = 1 the bed.
+         !! Applied by `engine_setup` (via `ocean_ic_apply_staged`) right
+         !! after the built-in IC seed and before the sponge snapshot.
+      real(wp), allocatable :: staged_u(:, :, :)
+         !! Staged x-face velocity `(nx_phys+1, ny_phys, nz)`.
+      real(wp), allocatable :: staged_v(:, :, :)
+         !! Staged y-face velocity `(nx_phys, ny_phys+1, nz)`.
+      type(staged_tracer_t), allocatable :: staged_tracers(:)
+         !! Staged tracer concentrations by registry name (resolved at
+         !! `engine_setup`, after the registry exists).
       logical :: has_staged_topology = .false.
          !! True after a topology injection call; `staged_periodic_x/y`
          !! are only meaningful when this is true.
@@ -610,6 +622,13 @@ contains
       else
          call ocean_state_seed_from_cfg(engine%state, engine%grid, cfg, ierr=ierr)
       end if
+      if (setup_failed(ierr)) return
+
+      ! Staged initial STATE (rdb_ocean_stage_h/u/v/tracer): lands after the
+      ! built-in seed and BEFORE the sponge snapshot, so the snapshot, the
+      ! land-face mask, the init-time seam exchange and enter_data all see the
+      ! user's fields.  No-op (bit-identical) when nothing is staged.
+      call engine_apply_staged_ic(engine, cfg, csize, ierr)
       if (setup_failed(ierr)) return
 
       ! PR-23 sponge: snapshot the reference state (target_source="ic")
@@ -1357,6 +1376,54 @@ contains
 
       engine%is_setup = .true.
    end subroutine engine_setup
+
+   subroutine engine_apply_staged_ic(engine, cfg, csize, ierr)
+      !! Apply `engine%staged_h/u/v/tracers` (if any) to the just-seeded
+      !! state, then release the staging buffers.  Resolves the periodicity
+      !! the same way the seed does (staged topology OR both edge tags
+      !! periodic) for the ghost fill.  Refuses a decomposed run: staged
+      !! arrays are the whole interior of a single rank.
+      type(ocean_engine_t), intent(inout) :: engine
+      type(config_t), intent(in) :: cfg
+      integer, intent(in) :: csize
+      integer, intent(out), optional :: ierr
+
+      logical :: per_x, per_y, any_staged
+
+      if (present(ierr)) ierr = OCEAN_STATUS_OK
+      any_staged = allocated(engine%staged_h) .or. allocated(engine%staged_u) .or. &
+                   allocated(engine%staged_v)
+      if (allocated(engine%staged_tracers)) any_staged = any_staged .or. size(engine%staged_tracers) > 0
+      if (.not. any_staged) return
+
+      if (csize > 1) then
+         call fail("staged initial state (stage_h/u/v/tracer) is single-rank only: the "// &
+                   "staged arrays are the whole interior, not a per-rank tile", &
+                   ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      end if
+
+      per_x = (ocean_bc_type_from_string(cfg%ocean%bc%west) == OBC_PERIODIC .and. &
+               ocean_bc_type_from_string(cfg%ocean%bc%east) == OBC_PERIODIC)
+      per_y = (ocean_bc_type_from_string(cfg%ocean%bc%south) == OBC_PERIODIC .and. &
+               ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_PERIODIC)
+      if (engine%has_staged_topology) then
+         per_x = per_x .or. engine%staged_periodic_x
+         per_y = per_y .or. engine%staged_periodic_y
+      end if
+
+      call ocean_ic_apply_staged(engine%state, engine%grid, &
+                                 staged_h=engine%staged_h, staged_u=engine%staged_u, &
+                                 staged_v=engine%staged_v, staged_tracers=engine%staged_tracers, &
+                                 per_x=per_x, per_y=per_y, &
+                                 thermo_active=cfg%ocean%thermo%enable_thermodynamics, &
+                                 ierr=ierr)
+
+      if (allocated(engine%staged_h)) deallocate (engine%staged_h)
+      if (allocated(engine%staged_u)) deallocate (engine%staged_u)
+      if (allocated(engine%staged_v)) deallocate (engine%staged_v)
+      if (allocated(engine%staged_tracers)) deallocate (engine%staged_tracers)
+   end subroutine engine_apply_staged_ic
 
    pure function setup_failed(ierr) result(bad)
       !! `.true.` iff `ierr` is present and non-OK — the "shall I
@@ -2110,6 +2177,10 @@ contains
       call ocean_fold_exchange_destroy()
       call engine%geo%destroy()
       call engine%state%destroy()
+      if (allocated(engine%staged_h)) deallocate (engine%staged_h)
+      if (allocated(engine%staged_u)) deallocate (engine%staged_u)
+      if (allocated(engine%staged_v)) deallocate (engine%staged_v)
+      if (allocated(engine%staged_tracers)) deallocate (engine%staged_tracers)
       engine%is_setup = .false.
       engine%warm_restart = .false.
    end subroutine engine_teardown

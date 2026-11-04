@@ -194,6 +194,41 @@ int rdb_ocean_stage_metrics(rdb_ocean_handle handle, const double *x,
 int rdb_ocean_stage_topology(rdb_ocean_handle handle, int periodic_x,
                                 int periodic_y);
 
+/* Stage the INITIAL STATE on a PENDING handle (any subset, any order, before
+ * create_finalize()). Applied once inside create_finalize(), right after the
+ * built-in IC seed and BEFORE the sponge reference snapshot, so the sponge
+ * target (ref T/S/tracers, u_ref/v_ref), pseudo-salt, land-face masking,
+ * tidal-mixing fold, wet/dry mask and the init-time seam exchange all see
+ * these fields. Nothing staged => bit-identical to the ordinary create.
+ * Arrays are Fortran-ordered (column-major, i fastest), k = 1 the BED,
+ * k = nz the surface. Shapes are validated at create_finalize()
+ * (RDB_OCEAN_ERR_BAD_SHAPE), where the grid exists:
+ *   h        (nx, ny, nz)     layer thickness [m]
+ *   u        (nx+1, ny, nz)   x-face velocity [m/s]
+ *   v        (nx, ny+1, nz)   y-face velocity [m/s]
+ *   tracer   (nx, ny, nz)     CONCENTRATION in the tracer's own units
+ * Order inside the apply (so call order does not matter): h first, then
+ * tracers (content = concentration * the final h), then u/v. Tracers NOT
+ * staged keep their concentration across a staged h. h must be finite and
+ * > 0 on wet cells with each wet column within 25% of the water column
+ * (else RDB_OCEAN_ERR_IC_SEED). An unknown tracer name is
+ * RDB_OCEAN_ERR_NOT_FOUND. Staged u/v on closed or land faces are zeroed by
+ * the ordinary land mask afterwards. Pseudo-salt, when enabled, is re-seeded
+ * from the staged S unless it is itself staged. Ghost cells: periodic wrap
+ * on a periodic axis, zero-gradient elsewhere. SINGLE-RANK only (a
+ * decomposed run fails RDB_OCEAN_ERR_SETUP at finalize). The input is
+ * copied; the caller's buffer may be reused immediately.
+ * Requires a PENDING handle: RDB_OCEAN_ERR_NOT_PENDING otherwise. */
+int rdb_ocean_stage_h(rdb_ocean_handle handle, const double *data,
+                         int nx_p, int ny_p, int nz_p);
+int rdb_ocean_stage_u(rdb_ocean_handle handle, const double *data,
+                         int nx_p, int ny_p, int nz_p);
+int rdb_ocean_stage_v(rdb_ocean_handle handle, const double *data,
+                         int nx_p, int ny_p, int nz_p);
+int rdb_ocean_stage_tracer(rdb_ocean_handle handle, const char *name,
+                              int name_len, const double *data,
+                              int nx_p, int ny_p, int nz_p);
+
 /* Phase 2 of 2: complete a handle started by create_pending() (optionally
  * staged with any of the stage_*() calls above in between) — runs setup
  * (consuming whatever was staged) through device mapping, exactly like

@@ -138,6 +138,9 @@ set(CORE_SOURCES
     # RDB_ENABLE_NETCDF=ON purely because it also contains the NetCDF reader) —
     # array injection must work with no filesystem touch.
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/rdb_ocean_bathymetry_inject.F90
+    # Pre-create initial-STATE injection (staged h/u/v/tracers), applied once in
+    # engine_setup between the IC seed and the sponge snapshot.
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/rdb_ocean_ic_inject.F90
     # P2.5: one required_halo() query folding the six scattered minimum- nghost
     # rules. Depends on rdb_coriolis_adv (CORE_SOURCES, above) and
     # rdb_recon_weno (KERNEL_SOURCES, below) — CMake's Fortran module dependency
