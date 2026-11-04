@@ -222,6 +222,7 @@ set(RDB_TESTS
     "test_ocean_step_bt_mode|test_ocean_step_bt_mode|collect_ocean_step_bt_mode_tests|ocean_step_bt_mode|ocean"
     "test_ocean_bt_slow_forcing|test_ocean_bt_slow_forcing|collect_ocean_bt_slow_forcing_tests|ocean_bt_slow_forcing|ocean"
     "test_ocean_bt_baroclinic_forcing|test_ocean_bt_baroclinic_forcing|collect_ocean_bt_baroclinic_forcing_tests|ocean_bt_baroclinic_forcing|ocean"
+    "test_ocean_api_setter_eos_active|test_ocean_api_setter_eos_active|collect_ocean_api_setter_eos_active_tests|ocean_api_setter_eos_active|ocean"
     "test_ocean_bt_cfl|test_ocean_bt_cfl|collect_ocean_bt_cfl_tests|ocean_bt_cfl|ocean"
     "test_ocean_bt_correction_weight|test_ocean_bt_correction_weight|collect_ocean_bt_correction_weight_tests|ocean_bt_correction_weight|ocean"
     "test_ocean_bt_cont_type|test_ocean_bt_cont_type|collect_ocean_bt_cont_type_tests|ocean_bt_cont_type|ocean"

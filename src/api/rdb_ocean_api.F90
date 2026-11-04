@@ -1384,7 +1384,10 @@ contains
       !! surface), narrow-push it, then recompute `rho_layer` from the new
       !! thickness against whatever T/S currently sit on device (pulling
       !! the recomputed density back to host so the host stays
-      !! authoritative). No other prognostic slot is touched.
+      !! authoritative). The recompute honours `enable_thermodynamics`
+      !! exactly as the time step does: with it off, prescribed densities
+      !! (`layer_rho_init`) are left untouched. No other prognostic slot is
+      !! touched.
       type(c_ptr), intent(in), value :: c_handle
       integer(c_int), intent(in), value :: nx_p, ny_p, nz_p
       real(c_double), intent(in) :: h_data(nx_p, ny_p, nz_p)
@@ -1413,7 +1416,8 @@ contains
          end do
          !$acc update device(hl)
       end associate
-      call ocean_eos_compute(h%state%eos, h%state%multilayer)
+      call ocean_eos_compute(h%state%eos, h%state%multilayer, &
+                             active=h%state%dyn%enable_thermodynamics)
       associate (rl => h%state%multilayer%rho_layer)
          !$acc update self(rl)
       end associate
@@ -1679,7 +1683,9 @@ contains
       !! windowed-advection accumulator -> refresh host (need the LIVE
       !! `h_layer` to form `hTr = h_layer*value`) -> mutate `hTr` on the
       !! physical interior -> narrow-push `hTr` -> recompute `rho_layer`
-      !! (pulled back to host so it stays authoritative).
+      !! (pulled back to host so it stays authoritative; honours
+      !! `enable_thermodynamics` like the time step, so prescribed `layer_rho_init`
+      !! densities survive when it is off).
       !! `OCEAN_STATUS_ERR_NOT_FOUND` if no registered tracer matches.
       type(c_ptr), intent(in), value :: c_handle
       integer(c_int), intent(in), value :: name_len
@@ -1730,7 +1736,8 @@ contains
          end do
          !$acc update device(htr)
       end associate
-      call ocean_eos_compute(h%state%eos, h%state%multilayer)
+      call ocean_eos_compute(h%state%eos, h%state%multilayer, &
+                             active=h%state%dyn%enable_thermodynamics)
       associate (rl => h%state%multilayer%rho_layer)
          !$acc update self(rl)
       end associate
