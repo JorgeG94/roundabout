@@ -178,6 +178,14 @@ without numpy is general slicing — ``field[:, :, -1]`` raises
 is importable the same expression works, because the field quietly hands
 numpy its own buffer and lets numpy do the slicing.
 
+Writes (``field[...] = x``, ``set_wind``, ``stage_bathymetry``) accept nested
+lists or any object exposing ``__array_interface__`` (``<f8``, ``<f4``,
+``<i4``, ``<i8``; any strides; absent ``strides`` means C order, as in numpy).
+A little-endian float64 array that is already Fortran-contiguous
+(``np.asfortranarray(a)``) is handed to the library by address with no copy;
+any other layout costs one bulk conversion, and nested lists are the slowest
+route. For multi-million-cell fields pass a Fortran-ordered float64 array.
+
 
 A first run
 ===========

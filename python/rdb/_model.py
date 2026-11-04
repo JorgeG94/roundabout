@@ -422,8 +422,7 @@ class Model:
         """
         self._require_pending()
         nx_p, ny_p = _shape_of(depth, ndim=2)
-        flat = _ffi.flatten_nested(depth, (nx_p, ny_p))
-        arr = _ffi.make_double_array(flat)
+        arr = _ffi.as_double_buffer(depth, (nx_p, ny_p))
         status = self._lib.rdb_ocean_stage_bathymetry(
             self._handle, arr, nx_p, ny_p, int(convention))
         check(status, "rdb_ocean_stage_bathymetry")
@@ -433,11 +432,11 @@ class Model:
         See ``rdb_ocean_stage_metrics`` in ``include/rdb_ocean.h``
         for the exact shapes."""
         self._require_pending()
-        x_arr = _ffi.make_double_array(_ffi.flatten_nested(x, (nxp, nyp)))
-        y_arr = _ffi.make_double_array(_ffi.flatten_nested(y, (nxp, nyp)))
-        dx_arr = _ffi.make_double_array(_ffi.flatten_nested(dx, (nx, nyp)))
-        dy_arr = _ffi.make_double_array(_ffi.flatten_nested(dy, (nxp, ny)))
-        area_arr = _ffi.make_double_array(_ffi.flatten_nested(area, (nx, ny)))
+        x_arr = _ffi.as_double_buffer(x, (nxp, nyp))
+        y_arr = _ffi.as_double_buffer(y, (nxp, nyp))
+        dx_arr = _ffi.as_double_buffer(dx, (nx, nyp))
+        dy_arr = _ffi.as_double_buffer(dy, (nxp, ny))
+        area_arr = _ffi.as_double_buffer(area, (nx, ny))
         status = self._lib.rdb_ocean_stage_metrics(
             self._handle, x_arr, y_arr, dx_arr, dy_arr, area_arr,
             nxp, nyp, nx, ny)
@@ -757,10 +756,8 @@ class Model:
         Fields and this is the writer."""
         self._check_alive()
         nx_p, ny_p = self._nx, self._ny
-        taux_flat = _ffi.flatten_nested(tau_x, (nx_p + 1, ny_p))
-        tauy_flat = _ffi.flatten_nested(tau_y, (nx_p, ny_p + 1))
-        taux_arr = _ffi.make_double_array(taux_flat)
-        tauy_arr = _ffi.make_double_array(tauy_flat)
+        taux_arr = _ffi.as_double_buffer(tau_x, (nx_p + 1, ny_p))
+        tauy_arr = _ffi.as_double_buffer(tau_y, (nx_p, ny_p + 1))
         status = self._lib.rdb_ocean_set_wind(
             self._handle, taux_arr, tauy_arr, nx_p, ny_p)
         check(status, "rdb_ocean_set_wind")
