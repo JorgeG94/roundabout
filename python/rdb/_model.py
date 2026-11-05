@@ -538,6 +538,12 @@ class Model:
         bottom pressure anomaly vanishes (a surface-intensified eddy with no
         deep flow; columns are stretched uniformly, concentrations kept);
         ``"keep_h"`` trusts the thickness you supplied.
+
+        With ``enable_thermodynamics = .false.`` the density is the
+        prescribed ``layer_rho_init`` and staged/set temperature or
+        salinity cannot change it, so the balance of such a write would be
+        silently zero: it raises :class:`~rdb.RdbInitialConditionError`
+        instead. Thermodynamics off with no T/S writes is allowed.
         """
         self._require_pending()
         m, r = _balance_codes(mode, ref_level)
@@ -917,6 +923,12 @@ class Model:
         bottom pressure anomaly vanishes (a surface-intensified eddy with no
         deep flow; columns are stretched uniformly, concentrations kept);
         ``"keep_h"`` trusts the thickness you supplied.
+
+        With ``enable_thermodynamics = .false.`` the density is the
+        prescribed ``layer_rho_init`` and staged/set temperature or
+        salinity cannot change it, so the balance of such a write would be
+        silently zero: it raises :class:`~rdb.RdbInitialConditionError`
+        instead. Thermodynamics off with no T/S writes is allowed.
         """
         self._check_alive()
         m, r = _balance_codes(mode, ref_level)

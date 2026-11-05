@@ -331,6 +331,7 @@ contains
       if (allocated(h%engine%staged_tracers)) then
          do is = 1, size(h%engine%staged_tracers)
             if (trim(h%engine%staged_tracers(is)%name) == "pseudo_salt") pseudo_staged = .true.
+            if (is_ts_name(h%engine%staged_tracers(is)%name)) h%user_set_ts = .true.
          end do
       end if
 
@@ -384,6 +385,41 @@ contains
       h%is_pending = .false.
       status = int(OCEAN_STATUS_OK, c_int)
    end subroutine complete_ocean_create
+
+   pure function is_ts_name(name) result(is_ts)
+      !! `.true.` for the two tracers that set the equation-of-state density.
+      character(len=*), intent(in) :: name
+      logical :: is_ts
+      is_ts = (trim(name) == "temperature" .or. trim(name) == "salinity")
+   end function is_ts_name
+
+   function ts_without_thermo_refused(h, where, force) result(status)
+      !! Refuse a balance request whose T/S writes cannot reach `rho_layer`
+      !! (thermodynamics off): the result would be an exactly-zero velocity.
+      type(ocean_handle_t), intent(in) :: h
+      character(len=*), intent(in) :: where
+      logical, intent(in), optional :: force
+         !! Treat T/S as written (the caller is about to stage one).
+      integer(c_int) :: status
+      integer :: ierr_local, is
+      logical :: ts_written
+
+      status = int(OCEAN_STATUS_OK, c_int)
+      if (h%cfg%ocean%thermo%enable_thermodynamics) return
+      ts_written = h%user_set_ts
+      if (present(force)) ts_written = ts_written .or. force
+      if (allocated(h%engine%staged_tracers)) then
+         do is = 1, size(h%engine%staged_tracers)
+            if (is_ts_name(h%engine%staged_tracers(is)%name)) ts_written = .true.
+         end do
+      end if
+      if (.not. ts_written) return
+      call fail(where//": balance with enable_thermodynamics = .false. uses the "// &
+                "prescribed layer densities; staged/set T/S do not change rho -- "// &
+                "enable thermodynamics, or set layer densities instead", &
+                ierr_local, OCEAN_STATUS_ERR_IC_SEED)
+      status = int(ierr_local, c_int)
+   end function ts_without_thermo_refused
 
    function ref_level_name(code) result(name)
       !! `RDB_REF_LEVEL_*` code -> the routine's `ref_level` string ("" if bad).
@@ -454,6 +490,8 @@ contains
       if (status /= OCEAN_STATUS_OK) return
       status = balance_args_ok(mode, ref_level, "rdb_ocean_stage_balance")
       if (status /= OCEAN_STATUS_OK) return
+      status = ts_without_thermo_refused(h, "rdb_ocean_stage_balance")
+      if (status /= OCEAN_STATUS_OK) return
       h%engine%staged_balance_mode = int(mode)
       h%engine%staged_balance_ref_level = int(ref_level)
       status = int(OCEAN_STATUS_OK, c_int)
@@ -490,6 +528,8 @@ contains
          return
       end if
       status = balance_args_ok(mode, ref_level, "rdb_ocean_balance")
+      if (status /= OCEAN_STATUS_OK) return
+      status = ts_without_thermo_refused(h, "rdb_ocean_balance")
       if (status /= OCEAN_STATUS_OK) return
 
       call ocean_dyn_flush_tracer_window(h%grid, h%state%metrics, h%state%dyn, &
@@ -770,6 +810,11 @@ contains
       if (status /= OCEAN_STATUS_OK) return
 
       call c_to_f_string(name, name_len, fname)
+      if (h%engine%staged_balance_mode /= 0 .and. is_ts_name(fname)) then
+         status = ts_without_thermo_refused(h, "rdb_ocean_stage_tracer(after stage_balance)", &
+                                            force=.true.)
+         if (status /= OCEAN_STATUS_OK) return
+      end if
       n = 0
       if (allocated(h%engine%staged_tracers)) n = size(h%engine%staged_tracers)
       slot = n + 1
@@ -2004,6 +2049,7 @@ contains
       end associate
       h%host_is_current = .true.
       if (it == h%state%multilayer%idx_pseudo_salt) h%user_set_pseudo_salt = .true.
+      if (is_ts_name(h%state%multilayer%tracers(it)%name)) h%user_set_ts = .true.
       status = int(OCEAN_STATUS_OK, c_int)
    end function rdb_ocean_set_tracer
 

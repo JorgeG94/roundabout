@@ -853,8 +853,11 @@ Rules:
   :math:`|f| \ge 10^{-6}\,\mathrm{s^{-1}}` on every open face. A refusal raises
   :class:`~rdb.RdbInitialConditionError` and leaves ``u``/``v`` untouched; a
   stepped model raises :class:`~rdb.RdbSetupError`.
-* Without ``enable_thermodynamics`` the density is the prescribed
-  ``layer_rho_init``, not derived from your temperature.
+* With ``enable_thermodynamics = .false.`` the density is the prescribed
+  ``layer_rho_init`` and your temperature/salinity cannot change it, so
+  staging or setting T/S and then requesting a balance raises
+  :class:`~rdb.RdbInitialConditionError` (enable thermodynamics, or set the
+  layer densities instead). Thermodynamics off with no T/S writes is allowed.
 
 
 Fields
