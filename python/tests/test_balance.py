@@ -231,3 +231,51 @@ def test_balance_overrides_staged_velocity():
         assert 0.0 < peak < 0.5
     finally:
         p.close()
+
+
+def _nml_no_thermo(layer_rho=None):
+    nml = _nml().replace("enable_thermodynamics = .true.",
+                         "enable_thermodynamics = .false.")
+    if layer_rho:
+        nml = nml.replace(
+            "&ocean_ic_nml alpha_T = 0.17, rho_0 = 1035.0 /",
+            "&ocean_ic_nml alpha_T = 0.17, rho_0 = 1035.0, layer_rho_init = "
+            + ", ".join(str(v) for v in layer_rho) + " /")
+    return nml
+
+
+def test_thermo_off_refuses_balance_of_written_temperature():
+    """T/S cannot change rho with thermodynamics off: refuse, don't return a
+    silent zero velocity."""
+    with rdb.Model(_nml_no_thermo()) as m:
+        m.temperature[...] = _eddy()
+        with pytest.raises(rdb.RdbInitialConditionError):
+            m.balance()
+    p = rdb.Model.pending(_nml_no_thermo())
+    try:
+        p.stage_tracer("temperature", _eddy())
+        with pytest.raises(rdb.RdbInitialConditionError):
+            p.stage_balance()
+        p.finalize()
+    finally:
+        p.close()
+    p = rdb.Model.pending(_nml_no_thermo())
+    try:
+        p.stage_balance()
+        with pytest.raises(rdb.RdbInitialConditionError):
+            p.stage_tracer("salinity", _eddy())
+        p.finalize()
+    finally:
+        p.close()
+
+
+def test_thermo_off_with_prescribed_layer_densities_is_allowed():
+    rho = [1034.0, 1034.3, 1034.6, 1034.9]
+    with rdb.Model(_nml_no_thermo(rho)) as m:
+        m.balance()
+    p = rdb.Model.pending(_nml_no_thermo(rho))
+    try:
+        p.stage_balance()
+        p.finalize()
+    finally:
+        p.close()

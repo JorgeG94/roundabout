@@ -98,6 +98,12 @@ module rdb_handle
          !! `!$acc update self`, never the aggregate `state`). Starts `true`:
          !! right after `create()` the host seed IS what `enter_data` copied
          !! to the device, so the two agree with nothing to refresh yet.
+      logical :: user_set_ts = .false.
+         !! Latched when temperature or salinity was staged or set through the
+         !! API since create.  With `enable_thermodynamics = .false.` the EOS
+         !! never runs, so such a write cannot change `rho_layer` and a balance
+         !! request would silently return zero velocity; the balance entry
+         !! points refuse on this flag.
       logical :: user_set_pseudo_salt = .false.
          !! Latched by `rdb_ocean_set_tracer` when the caller overwrites the
          !! pseudo-salt tracer itself; `rdb_ocean_rebaseline` then keeps it
