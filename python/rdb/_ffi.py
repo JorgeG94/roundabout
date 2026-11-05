@@ -358,6 +358,9 @@ def _declare_prototypes(lib):
     ]
     lib.rdb_ocean_set_tracer.restype = c_int
 
+    lib.rdb_ocean_rebaseline.argtypes = [HANDLE]
+    lib.rdb_ocean_rebaseline.restype = c_int
+
     # ---- Scalar diagnostics ----
     lib.rdb_ocean_get_kinetic_energy.argtypes = [HANDLE, p_double]
     lib.rdb_ocean_get_kinetic_energy.restype = c_int

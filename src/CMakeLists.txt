@@ -339,8 +339,10 @@ set(ENGINE_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/rdb_ocean_engine.F90)
 # rdb_ocean_dyn, rdb_ocean_status, rdb_ocean_engine — all declared above in
 # CORE_SOURCES/ENGINE_SOURCES — so this list must be appended to target_sources
 # after them.
-set(API_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/api/rdb_handle.F90
-                ${CMAKE_CURRENT_SOURCE_DIR}/api/rdb_ocean_api.F90)
+set(API_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/rdb_ocean_reinit.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/api/rdb_handle.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/api/rdb_ocean_api.F90)
 
 target_sources(
   ${core_objs}
