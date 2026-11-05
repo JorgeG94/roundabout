@@ -48,6 +48,7 @@ module rdb_ocean_ic_inject
 
    public :: staged_tracer_t
    public :: ocean_ic_apply_staged
+   public :: ocean_ic_fill_state_ghosts
    public :: IC_H_COLUMN_RTOL
 
    real(wp), parameter :: IC_H_COLUMN_RTOL = 0.25_wp
@@ -219,21 +220,9 @@ contains
       end if
 
       ! ---- 4. ghosts ----
-      if (any_h .or. any_tr) then
-         if (any_h) call fill_ghosts_centre(state%multilayer%h_layer, nxt, nyt, nz, nx, ny, ng, &
-                                            per_x, per_y)
-         do it = 1, ntr
-            if (.not. allocated(state%multilayer%tracers(it)%hTr)) cycle
-            if (any_h .or. is_staged(it)) then
-               call fill_ghosts_centre(state%multilayer%tracers(it)%hTr, nxt, nyt, nz, &
-                                       nx, ny, ng, per_x, per_y)
-            end if
-         end do
-      end if
-      if (any_u) call fill_ghosts_face_x(state%multilayer%u_face_x_layer, nxt + 1, nyt, nz, &
-                                         nx, ny, ng, per_x, per_y)
-      if (any_v) call fill_ghosts_face_y(state%multilayer%v_face_y_layer, nxt, nyt + 1, nz, &
-                                         nx, ny, ng, per_x, per_y)
+      call ocean_ic_fill_state_ghosts(state, grid, per_x, per_y, fill_h=any_h, &
+                                      fill_u=any_u, fill_v=any_v, tracer_mask=is_staged, &
+                                      all_tracers=any_h)
 
       ! ---- 5. pseudo-salt follows S unless the caller staged it ----
       if (.not. pseudo_staged) call ocean_pseudo_salt_seed(state%multilayer)
@@ -241,6 +230,65 @@ contains
       ! ---- 6. rho_layer from the final T/S/h ----
       call ocean_eos_compute(state%eos, state%multilayer, active=thermo_active)
    end subroutine ocean_ic_apply_staged
+
+   subroutine ocean_ic_fill_state_ghosts(state, grid, per_x, per_y, fill_h, fill_u, fill_v, &
+                                         tracer_mask, all_tracers)
+      !! Fill the ghost bands of the host multilayer state from its interior:
+      !! periodic image on a periodic axis, zero-gradient elsewhere (never
+      !! `h = 0` ghosts, see the module docstring).  HOST plain loops, so it
+      !! is correct before `enter_data` (the staged path) AND on the live
+      !! handle (`ocean_rebaseline_apply` pushes the result to the device
+      !! afterwards).  With every optional absent it fills `h`, `u`, `v` and
+      !! every tracer.
+      type(ocean_state_t), intent(inout) :: state
+      type(hgrid_t), intent(in) :: grid
+      logical, intent(in) :: per_x
+      logical, intent(in) :: per_y
+      logical, intent(in), optional :: fill_h
+      logical, intent(in), optional :: fill_u
+      logical, intent(in), optional :: fill_v
+      logical, intent(in), optional :: tracer_mask(:)
+         !! Registry-indexed: tracers to fill (absent: all).
+      logical, intent(in), optional :: all_tracers
+         !! `.true.`: fill every tracer regardless of `tracer_mask`.
+
+      integer :: nx, ny, nz, ng, nxt, nyt, it
+      logical :: do_h, do_u, do_v, do_all
+
+      do_h = .true.
+      do_u = .true.
+      do_v = .true.
+      if (present(fill_h)) do_h = fill_h
+      if (present(fill_u)) do_u = fill_u
+      if (present(fill_v)) do_v = fill_v
+      do_all = .not. present(tracer_mask)
+      if (present(all_tracers)) do_all = do_all .or. all_tracers
+
+      nx = grid%nx_phys
+      ny = grid%ny_phys
+      nz = state%multilayer%nz_ml
+      ng = grid%nghost
+      nxt = grid%nx_total
+      nyt = grid%ny_total
+
+      if (do_h) call fill_ghosts_centre(state%multilayer%h_layer, nxt, nyt, nz, nx, ny, ng, &
+                                        per_x, per_y)
+      if (allocated(state%multilayer%tracers)) then
+         do it = 1, size(state%multilayer%tracers)
+            if (.not. allocated(state%multilayer%tracers(it)%hTr)) cycle
+            if (.not. do_all) then
+               if (it > size(tracer_mask)) cycle
+               if (.not. tracer_mask(it)) cycle
+            end if
+            call fill_ghosts_centre(state%multilayer%tracers(it)%hTr, nxt, nyt, nz, &
+                                    nx, ny, ng, per_x, per_y)
+         end do
+      end if
+      if (do_u) call fill_ghosts_face_x(state%multilayer%u_face_x_layer, nxt + 1, nyt, nz, &
+                                        nx, ny, ng, per_x, per_y)
+      if (do_v) call fill_ghosts_face_y(state%multilayer%v_face_y_layer, nxt, nyt + 1, nz, &
+                                        nx, ny, ng, per_x, per_y)
+   end subroutine ocean_ic_fill_state_ghosts
 
    pure function shape_ok(a, n1, n2, n3) result(ok)
       real(wp), intent(in) :: a(:, :, :)

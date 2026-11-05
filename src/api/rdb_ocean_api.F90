@@ -72,6 +72,8 @@ module rdb_ocean_api
    ! on import so the existing rdb_ocean_set_bathymetry call sites below
    ! (P2) are untouched.
    use rdb_ocean_ic_inject, only: staged_tracer_t
+   use rdb_ocean_reinit, only: ocean_rebaseline_apply
+   use pic_strings, only: to_string
    use rdb_ocean_bathymetry_inject, only: fill_bathymetry_ghosts_array => bathymetry_fill_ghosts_array
    use rdb_ocean_periodic, only: ocean_periodic_wrap_centre_2d
    use rdb_ocean_fold_apply, only: ocean_fold_wrap_eta_2d
@@ -92,6 +94,10 @@ module rdb_ocean_api
    public :: rdb_ocean_stage_bathymetry
    public :: rdb_ocean_stage_metrics
    public :: rdb_ocean_stage_topology
+   public :: rdb_ocean_stage_h
+   public :: rdb_ocean_stage_u
+   public :: rdb_ocean_stage_v
+   public :: rdb_ocean_stage_tracer
    public :: rdb_ocean_required_halo
    public :: rdb_ocean_get_time
    public :: rdb_ocean_get_step_count
@@ -127,6 +133,7 @@ module rdb_ocean_api
    public :: rdb_ocean_get_tracer_ptr
    ! ---- P2: narrow setters ----
    public :: rdb_ocean_set_tracer
+   public :: rdb_ocean_rebaseline
    public :: rdb_ocean_set_h
    public :: rdb_ocean_set_u
    public :: rdb_ocean_set_v
@@ -1846,8 +1853,71 @@ contains
          !$acc update self(rl)
       end associate
       h%host_is_current = .true.
+      if (it == h%state%multilayer%idx_pseudo_salt) h%user_set_pseudo_salt = .true.
       status = int(OCEAN_STATUS_OK, c_int)
    end function rdb_ocean_set_tracer
+
+   function rdb_ocean_rebaseline(c_handle) result(status) &
+      bind(c, name="rdb_ocean_rebaseline")
+      !! Re-derive the setup-time snapshots of a live, not-yet-stepped model
+      !! after its initial state was overwritten through `rdb_ocean_set_h/u/v/
+      !! tracer`.  The setters stay narrow and do NOT call this (a loop of
+      !! per-layer sets would re-snapshot `nz` times): batch the sets, call
+      !! this once, then step.  The staged-IC path (`rdb_ocean_stage_*`)
+      !! needs no rebaseline.
+      !!
+      !! Refused with `OCEAN_STATUS_ERR_SETUP` once the model has stepped:
+      !! re-baselining a running model would silently redefine the sponge
+      !! target and the pseudo-salt ledger.
+      !!
+      !! Order: flush the windowed tracer accumulator; refresh host from
+      !! device (h, u, v, every hTr); seam ghosts (host fill, device
+      !! exchange + periodic wrap + fold, pulled back); land / closed-face
+      !! masking; pseudo-salt re-seeded from salinity UNLESS the caller set
+      !! pseudo-salt itself since the last rebaseline (the flag is consumed
+      !! here); push to device; EOS (gated on `enable_thermodynamics`);
+      !! sponge reference snapshot; `derive_bt_from_layers`.  See
+      !! `rdb_ocean_reinit` for the per-array device-sync directives.
+      !!
+      !! Known limit: the tidal-mixing static fields (folded from
+      !! `sum(h_layer)` at setup) and the wet/dry hysteresis mask are not
+      !! re-derived.
+      type(c_ptr), intent(in), value :: c_handle
+      integer(c_int) :: status
+
+      type(ocean_handle_t), pointer :: h
+      integer :: ierr_local
+
+      status = resolve_ocean(c_handle, h)
+      if (status /= OCEAN_STATUS_OK) return
+      if (h%state%dyn%outer_step_count /= 0) then
+         call fail("rdb_ocean_rebaseline: the model has already stepped ("// &
+                   to_string(int(h%state%dyn%outer_step_count))//" outer steps); re-baselining "// &
+                   "a running model would silently redefine the sponge target and the "// &
+                   "pseudo-salt ledger.  Call it after the post-create sets and before "// &
+                   "the first step, or use the staged initial-state path.", &
+                   ierr_local, OCEAN_STATUS_ERR_SETUP)
+         status = int(ierr_local, c_int)
+         return
+      end if
+
+      ! 1. Drain any open windowed tracer-advection accumulation (hard no-op
+      !    at dt_tracer_advect_ratio <= 1 and before the first step).
+      call ocean_dyn_flush_tracer_window(h%grid, h%state%metrics, h%state%dyn, &
+                                         h%state%continuity, h%state%multilayer, &
+                                         bc=h%state%bc)
+      ! 2. The flush may have moved device h/hTr: force the host refresh.
+      h%host_is_current = .false.
+      call ocean_handle_refresh_host(h)
+
+      ! 3-8. Ghosts, land mask, pseudo-salt, EOS, sponge snapshot, BT state.
+      call ocean_rebaseline_apply(h%state, h%grid, &
+                                  thermo_active=h%state%dyn%enable_thermodynamics, &
+                                  reseed_pseudo_salt=.not. h%user_set_pseudo_salt)
+      h%user_set_pseudo_salt = .false.
+      h%host_is_current = .true.
+      status = int(OCEAN_STATUS_OK, c_int)
+   end function rdb_ocean_rebaseline
 
    ! ================================================================
    ! P2 — scalar diagnostics

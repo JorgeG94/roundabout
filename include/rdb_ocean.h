@@ -431,6 +431,20 @@ int rdb_ocean_set_tracer(rdb_ocean_handle handle, const char *name,
                             int name_len, const double *data, int nx_p,
                             int ny_p, int nz_p);
 
+/* Re-derive the setup-time snapshots after a batch of post-create
+ * rdb_ocean_set_h/u/v/tracer calls, BEFORE the first step: drains the
+ * windowed tracer accumulator, refreshes the host from the device, rebuilds
+ * the seam ghosts, applies the land / closed-face mask, re-seeds pseudo-salt
+ * from salinity (unless pseudo-salt was itself set through set_tracer since
+ * the last rebaseline), recomputes rho_layer, re-snapshots the sponge
+ * reference (target_source = "ic") and re-derives the barotropic state so
+ * the eta getter is current. The setters do NOT call it implicitly. The
+ * staged path (rdb_ocean_stage_*) needs no rebaseline.
+ * Fails RDB_OCEAN_ERR_SETUP once the model has stepped. Known limit: the
+ * tidal-mixing static fields and the wet/dry hysteresis mask are not
+ * re-derived. */
+int rdb_ocean_rebaseline(rdb_ocean_handle handle);
+
 /* ---- P2: scalar diagnostics -------------------------------------------
  * Unlike the getters above, this refreshes the host itself — it hands
  * back a number, not a pointer a caller could otherwise defer syncing.

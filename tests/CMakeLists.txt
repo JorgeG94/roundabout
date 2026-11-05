@@ -400,6 +400,9 @@ set(RDB_TESTS
     # between the IC seed and the sponge snapshot. Own binary: engine_setup +
     # process-global halo state.
     "test_ocean_staged_ic|test_ocean_staged_ic|collect_ocean_staged_ic_tests|ocean_staged_ic|ocean"
+    # rdb_ocean_rebaseline: same IC staged vs post-create sets + rebaseline. Own
+    # binary: single-live-handle module state in rdb_ocean_api.
+    "test_ocean_rebaseline|test_ocean_rebaseline|collect_ocean_rebaseline_tests|ocean_rebaseline|ocean"
 )
 
 # Tests that MUST link the STATIC core.

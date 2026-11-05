@@ -759,8 +759,15 @@ class Model:
         elif setter_name is not None:
             fn = getattr(self._lib, setter_name)
 
-            def setter(handle, arr, *shape, _fn=fn):
-                return _fn(handle, arr, *shape)
+            # The C ABI takes the PHYSICAL cell counts (nx_p, ny_p, nz_p) and
+            # reads an (nx_p+1, ...) u array / (.., ny_p+1, ..) v array; the
+            # Field shape of a face field already includes the extra face.
+            dx = 1 if name == "u" else 0
+            dy = 1 if name == "v" else 0
+
+            def setter(handle, arr, *shape, _fn=fn, _dx=dx, _dy=dy):
+                return _fn(handle, arr, shape[0] - _dx, shape[1] - _dy,
+                           *shape[2:])
 
         return Field(self, name, ptr.value, full_shape, gen.value, location,
                      units=units, long_name=long_name, setter=setter)
@@ -793,6 +800,10 @@ class Model:
                 for j in range(ny)] for i in range(nx)]
         return out
 
+    # Post-create writes to h/u/v/temperature/salinity/tracers leave the
+    # setup-time snapshots (sponge reference, pseudo-salt, land-face mask)
+    # describing the OLD state: call rebaseline() once before step(), or
+    # use the staged path (stage_h/u/v/tracer on Model.pending).
     writable_fields = frozenset({
         "h", "u", "v", "bathymetry", "Q_heat", "Q_salt",
         "temperature", "salinity",
@@ -809,6 +820,30 @@ class Model:
         status = self._lib.rdb_ocean_set_wind(
             self._handle, taux_arr, tauy_arr, nx_p, ny_p)
         check(status, "rdb_ocean_set_wind")
+
+    def rebaseline(self):
+        """Re-derive the setup-time snapshots after post-create sets.
+
+        After a batch of ``model.h[...] = ...``, ``model.u/v[...] = ...``
+        and ``model.temperature/salinity/tracer(...)[...] = ...`` on a
+        finished model, call this ONCE before :meth:`step`; or build the
+        state through the staged path (:meth:`stage_h` ...) instead, which
+        needs no rebaseline. The setters do not call it themselves (a loop
+        of per-layer writes would re-snapshot ``nz`` times).
+
+        It rebuilds the seam ghosts, applies the land / closed-face mask
+        (zeroes ``u``/``v`` on closed faces), re-seeds pseudo-salt from
+        salinity -- unless you wrote the pseudo-salt tracer yourself since
+        the last call -- recomputes ``rho``, re-snapshots the sponge
+        reference (``target_source = "ic"``) and refreshes ``eta``.
+
+        Only legal before the first step: a stepped model raises
+        :class:`~rdb.RdbSetupError`. Known limit: the tidal-mixing static
+        fields and the wet/dry hysteresis mask are not re-derived.
+        """
+        self._check_alive()
+        check(self._lib.rdb_ocean_rebaseline(self._handle),
+              "rdb_ocean_rebaseline")
 
     # ---- tracers --------------------------------------------------------
     @property

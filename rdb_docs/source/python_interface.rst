@@ -777,6 +777,35 @@ sponge reference is snapshotted. That is the point of staging over
   zero-gradient elsewhere.
 * Single-rank only. No balance is computed: stage the velocities you want.
 
+Overwriting the state after creation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``model.h[...] = h``, ``model.u[...] = u`` and ``model.temperature[...] = T``
+on a finished model overwrite the prognostics but leave everything derived
+from the *old* initial state: the sponge reference, the pseudo-salt tracer,
+the land-face mask and the seam ghosts. After a batch of such writes, call
+:meth:`~rdb.Model.rebaseline` **once, before the first** ``step()``:
+
+.. code-block:: python
+
+   model = rdb.Model(nml)
+   model.h[...] = h                 # set h before the tracers
+   model.temperature[...] = T
+   model.u[...] = u
+   model.rebaseline()               # sponge ref, pseudo-salt, land mask, rho, eta
+   model.step(10)
+
+The setters do not call it implicitly (a per-layer loop would re-snapshot
+``nz`` times). The staged path above needs no rebaseline. Rules:
+
+* Only before the first step; a stepped model raises
+  :class:`~rdb.RdbSetupError`.
+* Pseudo-salt is re-seeded from salinity unless you wrote the ``pseudo_salt``
+  tracer yourself since the last ``rebaseline()`` (that write wins; the flag is
+  consumed by the call).
+* Known limit: the tidal-mixing static fields (folded from ``sum(h)`` at
+  setup) and the wet/dry hysteresis mask are not re-derived.
+
 
 Fields
 ======
@@ -1012,6 +1041,11 @@ implies — flushing the tracer window before a tracer write, recomputing
 density after one, re-deriving the barotropic reference depth after a
 bathymetry write. A broad push would rewind live device state to a stale host
 snapshot, which is why there is no "write everything" call.
+
+Post-create writes to ``h``, ``u``, ``v`` and tracers also leave the
+setup-time snapshots (sponge reference, pseudo-salt, land-face mask) describing
+the old state: after a batch of them call ``model.rebaseline()`` before
+``step()``, or use the staged path (see *Staged initial state*).
 
 Writing a read-only field raises with the list of the ones that are not:
 
