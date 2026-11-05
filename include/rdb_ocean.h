@@ -229,6 +229,20 @@ int rdb_ocean_stage_tracer(rdb_ocean_handle handle, const char *name,
                               int name_len, const double *data,
                               int nx_p, int ny_p, int nz_p);
 
+/* Balanced-velocity request (see rdb_ocean_balance below). On a PENDING
+ * handle: at finalize, AFTER the staged h/tracers are applied and the state
+ * is device-mapped, the balance runs and is followed by the rebaseline tail,
+ * overriding any staged u/v. mode and ref_level are validated here
+ * (RDB_OCEAN_ERR_IC_SEED; gradient is not implemented yet and fails here);
+ * grid-dependent refusals fail finalize with RDB_OCEAN_ERR_IC_SEED. Staging
+ * again keeps the last. Requires a PENDING handle:
+ * RDB_OCEAN_ERR_NOT_PENDING otherwise. */
+#define RDB_BALANCE_GEOSTROPHIC 1
+#define RDB_BALANCE_GRADIENT    2   /* reserved: fails loud, not implemented */
+#define RDB_REF_LEVEL_KEEP_H       1 /* trust the caller's column thickness */
+#define RDB_REF_LEVEL_BOTTOM_REST  2 /* re-level eta: zero bottom-pressure anomaly */
+int rdb_ocean_stage_balance(rdb_ocean_handle handle, int mode, int ref_level);
+
 /* Phase 2 of 2: complete a handle started by create_pending() (optionally
  * staged with any of the stage_*() calls above in between) — runs setup
  * (consuming whatever was staged) through device mapping, exactly like
@@ -444,6 +458,20 @@ int rdb_ocean_set_tracer(rdb_ocean_handle handle, const char *name,
  * tidal-mixing static fields and the wet/dry hysteresis mask are not
  * re-derived. */
 int rdb_ocean_rebaseline(rdb_ocean_handle handle);
+
+/* Set u/v of a live, not-yet-stepped model in geostrophic balance with its
+ * current density field, using the model's own pressure-gradient kernel
+ * (4-face-average geostrophy: a C-grid residual of order (dx/R)^2 remains,
+ * it is not an exact discrete steady state). With
+ * RDB_REF_LEVEL_BOTTOM_REST the sea surface is first re-levelled to a zero
+ * bottom-pressure anomaly (columns stretched uniformly, tracer
+ * concentrations kept); RDB_REF_LEVEL_KEEP_H trusts the current h. Includes
+ * the rebaseline tail, so no separate rdb_ocean_rebaseline is needed.
+ * Envelope: cartesian/spherical, single rank, no porous / wet-dry / cavity /
+ * tripolar / supergrid, |f| >= 1e-6 1/s. Refusals (and RDB_BALANCE_GRADIENT)
+ * return RDB_OCEAN_ERR_IC_SEED with u/v untouched; a stepped model returns
+ * RDB_OCEAN_ERR_SETUP. */
+int rdb_ocean_balance(rdb_ocean_handle handle, int mode, int ref_level);
 
 /* ---- P2: scalar diagnostics -------------------------------------------
  * Unlike the getters above, this refreshes the host itself — it hands

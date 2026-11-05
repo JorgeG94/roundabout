@@ -25,6 +25,9 @@ module rdb_ocean_reinit
    !! setup and are NOT re-folded here (the error is O(eta/H) after a `set_h`).
    !! The wet/dry hysteresis mask is likewise left to the first step.
    use rdb_grid, only: hgrid_t
+   use rdb_config, only: config_t
+   use rdb_ocean_status, only: OCEAN_STATUS_OK
+   use rdb_ocean_balance, only: ocean_balance_velocity
    use rdb_ocean_state, only: ocean_state_t, ocean_state_seed_land_cells
    use rdb_ocean_ic_inject, only: ocean_ic_fill_state_ghosts
    use rdb_ocean_eos_compute, only: ocean_eos_compute
@@ -39,6 +42,7 @@ module rdb_ocean_reinit
    private
 
    public :: ocean_rebaseline_apply
+   public :: ocean_balance_apply
 
 contains
 
@@ -54,31 +58,8 @@ contains
       logical, intent(in) :: reseed_pseudo_salt
          !! `.false.` when the caller set pseudo-salt itself.
 
-      integer :: it
-
       ! ---- 3. seam ghosts ----
-      ! Host: periodic image / zero-gradient (the staged path's fill), so the
-      ! ghosts of an interior-only overwrite are consistent with the new
-      ! interior.  Push, then run the SAME exchange + periodic wrap + north
-      ! fold the step runs at stage entry (device kernels), and pull the
-      ! result back so the host copy carries the seam-correct ghosts for the
-      ! host steps below.
-      call ocean_ic_fill_state_ghosts(state, grid, state%bc%periodic_x, state%bc%periodic_y)
-      call push_state(state)
-      call ocean_halo_exchange_ml_state(state%multilayer)
-      call ocean_periodic_wrap_state(grid, state%bc, state%multilayer, &
-                                     skip_x=ocean_halo_is_decomposed_x(), &
-                                     skip_y=ocean_halo_is_decomposed_y())
-      call ocean_fold_wrap_state(grid, state%bc, state%multilayer)
-      associate (ms => state%multilayer)
-         !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
-         if (allocated(ms%tracers)) then
-            do it = 1, size(ms%tracers)
-               if (.not. allocated(ms%tracers(it)%hTr)) cycle
-               !$acc update self(ms%tracers(it)%hTr)
-            end do
-         end if
-      end associate
+      call refresh_seam_ghosts(state, grid)
 
       ! ---- 4. land / closed faces (host) ----
       ! Zeroes u/v/hu/hv on closed faces, holds land tracer content at 0 and
@@ -118,6 +99,64 @@ contains
          end associate
       end if
    end subroutine ocean_rebaseline_apply
+
+   subroutine ocean_balance_apply(state, grid, cfg, mode, ref_level, thermo_active, &
+                                  reseed_pseudo_salt, ierr)
+      !! `ocean_balance_velocity` (device-resident state, host authoritative on
+      !! entry) followed by `ocean_rebaseline_apply`, so the sponge reference,
+      !! land mask, pseudo-salt and eta describe the balanced state.  On a
+      !! refusal `ierr /= OCEAN_STATUS_OK`, the error ring carries the reason
+      !! and nothing was modified.
+      type(ocean_state_t), intent(inout) :: state
+      type(hgrid_t), intent(in) :: grid
+      type(config_t), intent(in) :: cfg
+      integer, intent(in) :: mode
+         !! `BALANCE_*`.
+      character(len=*), intent(in) :: ref_level
+         !! `"keep_h"` or `"bottom_rest"`.
+      logical, intent(in) :: thermo_active
+      logical, intent(in) :: reseed_pseudo_salt
+      integer, intent(out) :: ierr
+
+      ! The balance stencil reads ghost thickness/density at the seams: a live
+      ! caller has only written the interior.
+      call refresh_seam_ghosts(state, grid)
+      call ocean_balance_velocity(grid, cfg, state, mode, ierr, ref_level=ref_level)
+      if (ierr /= OCEAN_STATUS_OK) return
+      call ocean_rebaseline_apply(state, grid, thermo_active, reseed_pseudo_salt)
+   end subroutine ocean_balance_apply
+
+   subroutine refresh_seam_ghosts(state, grid)
+      !! Make the host AND device ghost cells of `h`, `u`, `v`, `hTr` consistent
+      !! with their (host-authoritative) interior.
+      type(ocean_state_t), intent(inout) :: state
+      type(hgrid_t), intent(in) :: grid
+
+      integer :: it
+
+      ! Host: periodic image / zero-gradient (the staged path's fill), so the
+      ! ghosts of an interior-only overwrite are consistent with the new
+      ! interior.  Push, then run the SAME exchange + periodic wrap + north
+      ! fold the step runs at stage entry (device kernels), and pull the
+      ! result back so the host copy carries the seam-correct ghosts for the
+      ! host steps below.
+      call ocean_ic_fill_state_ghosts(state, grid, state%bc%periodic_x, state%bc%periodic_y)
+      call push_state(state)
+      call ocean_halo_exchange_ml_state(state%multilayer)
+      call ocean_periodic_wrap_state(grid, state%bc, state%multilayer, &
+                                     skip_x=ocean_halo_is_decomposed_x(), &
+                                     skip_y=ocean_halo_is_decomposed_y())
+      call ocean_fold_wrap_state(grid, state%bc, state%multilayer)
+      associate (ms => state%multilayer)
+         !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
+         if (allocated(ms%tracers)) then
+            do it = 1, size(ms%tracers)
+               if (.not. allocated(ms%tracers(it)%hTr)) cycle
+               !$acc update self(ms%tracers(it)%hTr)
+            end do
+         end if
+      end associate
+   end subroutine refresh_seam_ghosts
 
    subroutine push_state(state)
       !! Host -> device for the prognostic leaves this module writes: `h`,

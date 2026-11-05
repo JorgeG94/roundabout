@@ -282,6 +282,12 @@ module rdb_ocean_engine
       type(staged_tracer_t), allocatable :: staged_tracers(:)
          !! Staged tracer concentrations by registry name (resolved at
          !! `engine_setup`, after the registry exists).
+      integer :: staged_balance_mode = 0
+         !! `BALANCE_*` requested by `rdb_ocean_stage_balance` (0 = none).
+         !! Run by the API finalize AFTER `engine_enter_data`, because the
+         !! balance drives device kernels.
+      integer :: staged_balance_ref_level = 0
+         !! `RDB_REF_LEVEL_*` paired with `staged_balance_mode`.
       logical :: has_staged_topology = .false.
          !! True after a topology injection call; `staged_periodic_x/y`
          !! are only meaningful when this is true.
