@@ -62,7 +62,7 @@ module rdb_ocean_api
                                OCEAN_STATUS_ERR_ALREADY_EXISTS, &
                                OCEAN_STATUS_ERR_NOT_INITIALISED, &
                                OCEAN_STATUS_ERR_NOT_FOUND, OCEAN_STATUS_ERR_BAD_SHAPE, &
-                               OCEAN_STATUS_ERR_NOT_PENDING
+                               OCEAN_STATUS_ERR_NOT_PENDING, OCEAN_STATUS_ERR_IC_SEED
    use rdb_error_ring, only: fail, error_ring_push, error_ring_get, error_ring_count, &
                              error_ring_clear, ERROR_RING_MSG_LEN
    use rdb_ocean_eos_compute, only: ocean_eos_compute
@@ -72,7 +72,8 @@ module rdb_ocean_api
    ! on import so the existing rdb_ocean_set_bathymetry call sites below
    ! (P2) are untouched.
    use rdb_ocean_ic_inject, only: staged_tracer_t
-   use rdb_ocean_reinit, only: ocean_rebaseline_apply
+   use rdb_ocean_reinit, only: ocean_rebaseline_apply, ocean_balance_apply
+   use rdb_ocean_balance, only: BALANCE_GEOSTROPHIC, BALANCE_GRADIENT
    use pic_strings, only: to_string
    use rdb_ocean_bathymetry_inject, only: fill_bathymetry_ghosts_array => bathymetry_fill_ghosts_array
    use rdb_ocean_periodic, only: ocean_periodic_wrap_centre_2d
@@ -135,6 +136,8 @@ module rdb_ocean_api
    ! ---- P2: narrow setters ----
    public :: rdb_ocean_set_tracer
    public :: rdb_ocean_rebaseline
+   public :: rdb_ocean_balance_live
+   public :: rdb_ocean_stage_balance
    public :: rdb_ocean_set_h
    public :: rdb_ocean_set_u
    public :: rdb_ocean_set_v
@@ -319,7 +322,17 @@ contains
       type(ocean_handle_t), pointer, intent(inout) :: h
       integer(c_int), intent(out) :: status
 
-      integer :: ierr
+      integer :: ierr, is
+      logical :: pseudo_staged
+
+      ! engine_setup consumes the staged tracers; remember whether the caller
+      ! staged pseudo-salt itself before the balance tail decides on a re-seed.
+      pseudo_staged = .false.
+      if (allocated(h%engine%staged_tracers)) then
+         do is = 1, size(h%engine%staged_tracers)
+            if (trim(h%engine%staged_tracers(is)%name) == "pseudo_salt") pseudo_staged = .true.
+         end do
+      end if
 
       call engine_setup(h%engine, h%cfg, ierr)
       if (ierr /= OCEAN_STATUS_OK) then
@@ -351,10 +364,146 @@ contains
       h%state => h%engine%state
       h%device_mapped = .true.
 
+      ! Staged balance: needs the device-resident state, so it runs here and
+      ! not inside `engine_setup`.  The rebaseline tail follows, so the caller
+      ! never sees the intermediate (unbalanced) state.
+      if (h%engine%staged_balance_mode /= 0) then
+         call balance_and_rebaseline(h, h%engine%staged_balance_mode, &
+                                     h%engine%staged_balance_ref_level, &
+                                     .not. pseudo_staged, ierr)
+         if (ierr /= OCEAN_STATUS_OK) then
+            status = int(ierr, c_int)
+            call handle_destroy(c_handle)
+            g_handle_live = .false.
+            h => null()
+            return
+         end if
+      end if
+
       h%is_initialised = .true.
       h%is_pending = .false.
       status = int(OCEAN_STATUS_OK, c_int)
    end subroutine complete_ocean_create
+
+   function ref_level_name(code) result(name)
+      !! `RDB_REF_LEVEL_*` code -> the routine's `ref_level` string ("" if bad).
+      integer, intent(in) :: code
+      character(len=11) :: name
+      select case (code)
+      case (1)
+         name = "keep_h"
+      case (2)
+         name = "bottom_rest"
+      case default
+         name = ""
+      end select
+   end function ref_level_name
+
+   function balance_args_ok(mode, ref_level, where) result(status)
+      !! Argument validation shared by the live and staged entry points.
+      integer(c_int), intent(in) :: mode, ref_level
+      character(len=*), intent(in) :: where
+      integer(c_int) :: status
+      integer :: ierr_local
+
+      status = int(OCEAN_STATUS_OK, c_int)
+      if (mode == BALANCE_GRADIENT) then
+         call fail(where//": gradient-wind balance is not implemented yet; "// &
+                   "use geostrophic", ierr_local, OCEAN_STATUS_ERR_IC_SEED)
+         status = int(ierr_local, c_int)
+      else if (mode /= BALANCE_GEOSTROPHIC) then
+         call fail(where//": unknown balance mode "//to_string(int(mode))// &
+                   " (1 = geostrophic)", ierr_local, OCEAN_STATUS_ERR_IC_SEED)
+         status = int(ierr_local, c_int)
+      else if (len_trim(ref_level_name(int(ref_level))) == 0) then
+         call fail(where//": unknown ref_level "//to_string(int(ref_level))// &
+                   " (1 = keep_h, 2 = bottom_rest)", ierr_local, OCEAN_STATUS_ERR_IC_SEED)
+         status = int(ierr_local, c_int)
+      end if
+   end function balance_args_ok
+
+   subroutine balance_and_rebaseline(h, mode, ref_level, reseed_pseudo_salt, ierr)
+      !! Thin handle adapter over `ocean_balance_apply` (kept out of this
+      !! module: a procedure whose C binding label equals the balance module's
+      !! name makes gfortran bind the `ocean_balance_velocity` call to the C
+      !! symbol).  Host is authoritative on entry.
+      type(ocean_handle_t), intent(inout) :: h
+      integer, intent(in) :: mode, ref_level
+      logical, intent(in) :: reseed_pseudo_salt
+      integer, intent(out) :: ierr
+
+      call ocean_balance_apply(h%state, h%grid, h%cfg, mode, trim(ref_level_name(ref_level)), &
+                               h%state%dyn%enable_thermodynamics, reseed_pseudo_salt, ierr)
+   end subroutine balance_and_rebaseline
+
+   function rdb_ocean_stage_balance(c_handle, mode, ref_level) result(status) &
+      bind(c, name="rdb_ocean_stage_balance")
+      !! Request a balanced velocity on the PENDING handle: at finalize, after
+      !! the staged `h`/tracers are applied and the state is device-mapped,
+      !! `ocean_balance_velocity` runs and is followed by the rebaseline tail.
+      !! It therefore overrides any staged `u`/`v`.  `mode` and `ref_level` are
+      !! validated here; grid-dependent refusals (and the unimplemented
+      !! gradient mode) surface at finalize.  Staging again keeps the last.
+      type(c_ptr), intent(in), value :: c_handle
+      integer(c_int), intent(in), value :: mode, ref_level
+      integer(c_int) :: status
+
+      type(ocean_handle_t), pointer :: h
+
+      status = resolve_ocean_pending(c_handle, h)
+      if (status /= OCEAN_STATUS_OK) return
+      status = balance_args_ok(mode, ref_level, "rdb_ocean_stage_balance")
+      if (status /= OCEAN_STATUS_OK) return
+      h%engine%staged_balance_mode = int(mode)
+      h%engine%staged_balance_ref_level = int(ref_level)
+      status = int(OCEAN_STATUS_OK, c_int)
+   end function rdb_ocean_stage_balance
+
+   function rdb_ocean_balance_live(c_handle, mode, ref_level) result(status) &
+      bind(c, name="rdb_ocean_balance")
+      !! C symbol `rdb_ocean_balance`; the Fortran name differs because the
+      !! balance module has that name and the two symbols would collide.
+      !!
+      !! Balance a live, not-yet-stepped model: set `u`/`v` in geostrophic
+      !! balance with the density field the model already carries (the model's
+      !! own PGF), and for `ref_level = RDB_REF_LEVEL_BOTTOM_REST` first
+      !! re-level the sea surface so the bottom pressure anomaly is zero.
+      !! Includes the rebaseline tail (a separate `rdb_ocean_rebaseline` is not
+      !! needed).  Refused with `OCEAN_STATUS_ERR_SETUP` once the model has
+      !! stepped; gradient mode and unsupported grids fail loud with
+      !! `OCEAN_STATUS_ERR_IC_SEED` and leave `u`/`v` untouched.
+      type(c_ptr), intent(in), value :: c_handle
+      integer(c_int), intent(in), value :: mode, ref_level
+      integer(c_int) :: status
+
+      type(ocean_handle_t), pointer :: h
+      integer :: ierr_local
+
+      status = resolve_ocean(c_handle, h)
+      if (status /= OCEAN_STATUS_OK) return
+      if (h%state%dyn%outer_step_count /= 0) then
+         call fail("rdb_ocean_balance: the model has already stepped ("// &
+                   to_string(int(h%state%dyn%outer_step_count))//" outer steps); balancing "// &
+                   "a running model would silently redefine the sponge target.  "// &
+                   "Call it before the first step.", ierr_local, OCEAN_STATUS_ERR_SETUP)
+         status = int(ierr_local, c_int)
+         return
+      end if
+      status = balance_args_ok(mode, ref_level, "rdb_ocean_balance")
+      if (status /= OCEAN_STATUS_OK) return
+
+      call ocean_dyn_flush_tracer_window(h%grid, h%state%metrics, h%state%dyn, &
+                                         h%state%continuity, h%state%multilayer, &
+                                         bc=h%state%bc)
+      h%host_is_current = .false.
+      call ocean_handle_refresh_host(h)
+
+      call balance_and_rebaseline(h, int(mode), int(ref_level), &
+                                  .not. h%user_set_pseudo_salt, ierr_local)
+      status = int(ierr_local, c_int)
+      if (ierr_local == OCEAN_STATUS_OK) h%user_set_pseudo_salt = .false.
+      h%host_is_current = .true.
+   end function rdb_ocean_balance_live
 
    function rdb_ocean_create_pending(nml_text, nml_len, handle_out) &
       result(status) bind(c, name="rdb_ocean_create_pending")

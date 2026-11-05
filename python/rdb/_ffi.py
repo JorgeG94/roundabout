@@ -361,6 +361,10 @@ def _declare_prototypes(lib):
     lib.rdb_ocean_rebaseline.argtypes = [HANDLE]
     lib.rdb_ocean_rebaseline.restype = c_int
 
+    for _fn in (lib.rdb_ocean_balance, lib.rdb_ocean_stage_balance):
+        _fn.argtypes = [HANDLE, c_int, c_int]
+        _fn.restype = c_int
+
     # ---- Scalar diagnostics ----
     lib.rdb_ocean_get_kinetic_energy.argtypes = [HANDLE, p_double]
     lib.rdb_ocean_get_kinetic_energy.restype = c_int

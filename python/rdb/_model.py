@@ -170,6 +170,21 @@ class _DiagnosticsView:
                f"selected={self.selected!r})"
 
 
+_BALANCE_MODES = {"geostrophic": 1, "gradient": 2}
+_REF_LEVELS = {"keep_h": 1, "bottom_rest": 2}
+
+
+def _balance_codes(mode, ref_level):
+    """Map the string spellings to the C ABI codes (ValueError if unknown)."""
+    try:
+        return _BALANCE_MODES[mode], _REF_LEVELS[ref_level]
+    except (KeyError, TypeError):
+        raise ValueError(
+            f"balance: mode must be one of {sorted(_BALANCE_MODES)} and "
+            f"ref_level one of {sorted(_REF_LEVELS)}; got mode={mode!r}, "
+            f"ref_level={ref_level!r}") from None
+
+
 class Model:
     """A live ocean solver handle.
 
@@ -496,6 +511,38 @@ class Model:
         status = self._lib.rdb_ocean_stage_tracer(
             self._handle, enc, len(enc), arr, *shape)
         check(status, "rdb_ocean_stage_tracer")
+
+    def stage_balance(self, mode: str = "geostrophic",
+                      ref_level: str = "bottom_rest"):
+        """Request a balanced velocity on a pending handle.
+
+        Runs inside :meth:`finalize`, after the staged ``h`` and tracers
+        (so after ``stage_h`` / ``stage_tracer`` regardless of call order)
+        and before the model is returned; it overrides any staged
+        ``u``/``v`` and includes the rebaseline, so the sponge reference,
+        land mask, pseudo-salt and ``eta`` describe the balanced state.
+        Staging again keeps the last request.
+
+        The balance is the model's own pressure-gradient kernel run on the
+        current density field, then 4-face-average geostrophy
+        (``u = a_y/f``, ``v = -a_x/f``). On a C-grid that leaves an
+        O((dx/R)^2) residual: it is a balanced start that radiates little,
+        not an exact discrete steady state. Supported on cartesian and
+        spherical single-rank grids with ``|f| >= 1e-6 1/s`` and no porous
+        barriers, wet/dry, ice-shelf cavities, tripolar fold or supergrid;
+        anything else raises :class:`~rdb.RdbInitialConditionError` and
+        leaves ``u``/``v`` untouched. ``mode="gradient"`` is reserved and
+        raises the same error (not implemented).
+
+        ``ref_level="bottom_rest"`` first re-levels the sea surface so the
+        bottom pressure anomaly vanishes (a surface-intensified eddy with no
+        deep flow; columns are stretched uniformly, concentrations kept);
+        ``"keep_h"`` trusts the thickness you supplied.
+        """
+        self._require_pending()
+        m, r = _balance_codes(mode, ref_level)
+        check(self._lib.rdb_ocean_stage_balance(self._handle, m, r),
+              "rdb_ocean_stage_balance")
 
     def finalize(self):
         """Phase 2 of 2: complete a handle started by :meth:`pending`."""
@@ -844,6 +891,37 @@ class Model:
         self._check_alive()
         check(self._lib.rdb_ocean_rebaseline(self._handle),
               "rdb_ocean_rebaseline")
+
+    def balance(self, mode: str = "geostrophic",
+                ref_level: str = "bottom_rest"):
+        """Set ``u``/``v`` in balance with the density the model carries.
+
+        Call it after writing ``temperature`` / ``salinity`` (and ``h``) on
+        a finished model and BEFORE the first :meth:`step` (a stepped model
+        raises :class:`~rdb.RdbSetupError`). It includes a rebaseline, so
+        no separate :meth:`rebaseline` is needed. The staged equivalent is
+        :meth:`stage_balance`.
+
+        The balance is the model's own pressure-gradient kernel run on the
+        current density field, then 4-face-average geostrophy
+        (``u = a_y/f``, ``v = -a_x/f``). On a C-grid that leaves an
+        O((dx/R)^2) residual: it is a balanced start that radiates little,
+        not an exact discrete steady state. Supported on cartesian and
+        spherical single-rank grids with ``|f| >= 1e-6 1/s`` and no porous
+        barriers, wet/dry, ice-shelf cavities, tripolar fold or supergrid;
+        anything else raises :class:`~rdb.RdbInitialConditionError` and
+        leaves ``u``/``v`` untouched. ``mode="gradient"`` is reserved and
+        raises the same error (not implemented).
+
+        ``ref_level="bottom_rest"`` first re-levels the sea surface so the
+        bottom pressure anomaly vanishes (a surface-intensified eddy with no
+        deep flow; columns are stretched uniformly, concentrations kept);
+        ``"keep_h"`` trusts the thickness you supplied.
+        """
+        self._check_alive()
+        m, r = _balance_codes(mode, ref_level)
+        check(self._lib.rdb_ocean_balance(self._handle, m, r),
+              "rdb_ocean_balance")
 
     # ---- tracers --------------------------------------------------------
     @property

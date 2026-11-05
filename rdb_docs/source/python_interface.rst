@@ -775,7 +775,8 @@ sponge reference is snapshotted. That is the point of staging over
   ``"pseudo_salt"`` yourself.
 * Ghost cells are filled by periodic wrap on a periodic axis and
   zero-gradient elsewhere.
-* Single-rank only. No balance is computed: stage the velocities you want.
+* Single-rank only. Staging does not compute a balance: stage the velocities
+  you want, or request one with :meth:`~rdb.Model.stage_balance` (below).
 
 Overwriting the state after creation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -805,6 +806,55 @@ The setters do not call it implicitly (a per-layer loop would re-snapshot
   consumed by the call).
 * Known limit: the tidal-mixing static fields (folded from ``sum(h)`` at
   setup) and the wet/dry hysteresis mask are not re-derived.
+
+Balanced velocity from a density field
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+An eddy defined by a temperature anomaly starts from rest unless its velocity
+is in balance with the pressure field it implies; the unbalanced start
+radiates inertia-gravity waves. :meth:`~rdb.Model.stage_balance` (pending
+window) and :meth:`~rdb.Model.balance` (finished model, before the first
+step) set ``u``/``v`` from the density the model already carries, using the
+model's own pressure-gradient kernel:
+
+.. code-block:: python
+
+   import math
+
+   cx, cy, ax, ay = nx / 2, ny / 2, 5.0, 3.0     # elliptical Gaussian, cells
+   T = [[[10.0 + (k + 1) / nz * math.exp(-((i + .5 - cx) / ax) ** 2
+                                          -((j + .5 - cy) / ay) ** 2)
+          for k in range(nz)] for j in range(ny)] for i in range(nx)]
+
+   model = rdb.Model.pending(nml)        # thermodynamics on, f-plane
+   model.stage_tracer("temperature", T)
+   model.stage_balance("geostrophic", ref_level="bottom_rest")
+   model.finalize()                      # u/v now geostrophic
+
+Rules:
+
+* The staged balance runs inside ``finalize()`` after the other staged fields
+  (so the order of the ``stage_*`` calls does not matter) and overrides any
+  staged ``u``/``v``. ``balance()`` on a finished model needs no separate
+  ``rebaseline()``: both include one, so the sponge reference, land mask,
+  pseudo-salt and ``eta`` describe the balanced state. Live and staged paths
+  give bit-identical fields.
+* ``ref_level="bottom_rest"`` (default) first re-levels the sea surface so the
+  bottom pressure anomaly vanishes, giving a surface-intensified eddy with no
+  deep flow (columns are stretched uniformly, concentrations kept);
+  ``"keep_h"`` trusts the thickness you supplied.
+* The balance is the routine's four-face-average geostrophy. On a C-grid it
+  leaves an :math:`O((\Delta x/R)^2)` residual (R the eddy radius): a balanced
+  start that radiates little, not an exact discrete steady state.
+* ``mode="gradient"`` is reserved and raises
+  :class:`~rdb.RdbInitialConditionError` (not implemented).
+* Envelope: cartesian or spherical grid, single rank, no porous barriers,
+  wet/dry, ice-shelf cavity, tripolar fold or supergrid, and
+  :math:`|f| \ge 10^{-6}\,\mathrm{s^{-1}}` on every open face. A refusal raises
+  :class:`~rdb.RdbInitialConditionError` and leaves ``u``/``v`` untouched; a
+  stepped model raises :class:`~rdb.RdbSetupError`.
+* Without ``enable_thermodynamics`` the density is the prescribed
+  ``layer_rho_init``, not derived from your temperature.
 
 
 Fields
