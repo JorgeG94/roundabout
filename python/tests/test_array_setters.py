@@ -113,3 +113,51 @@ def test_c_order_flatten_is_fortran_ordered():
 def test_shape_mismatch_raises():
     with pytest.raises(ValueError):
         _ffi.as_double_buffer(FakeArray((2, 3), "C", fn=_val), (3, 2))
+
+
+class BroadcastArray:
+    """``__array_interface__`` view with a ZERO stride on one axis, as
+    ``np.broadcast_to`` produces: every index along `axis` reads the same
+    element of a smaller C-ordered buffer."""
+
+    def __init__(self, shape, axis, fn):
+        base_shape = tuple(1 if d == axis else s for d, s in enumerate(shape))
+        n = 1
+        for s in base_shape:
+            n *= s
+        buf = array.array("d", [0.0] * n)
+        cs = _ffi.c_strides(base_shape, 8)
+        for idx in itertools.product(*[range(s) for s in base_shape]):
+            buf[sum(i * s for i, s in zip(idx, cs)) // 8] = fn(idx)
+        self._buf = buf
+        self._shape = tuple(shape)
+        self._strides = tuple(0 if d == axis else s for d, s in enumerate(cs))
+
+    @property
+    def __array_interface__(self):
+        return {"shape": self._shape, "typestr": "<f8",
+                "data": (self._buf.buffer_info()[0], False),
+                "strides": self._strides, "version": 3}
+
+
+@pytest.mark.parametrize("axis", [0, 1, 2])
+def test_zero_stride_broadcast_flattens(axis):
+    shape = (4, 3, 5)
+    fn = lambda idx: _val(tuple(0 if d == axis else i for d, i in enumerate(idx)))
+    flat = _ffi.flatten_nested(BroadcastArray(shape, axis, fn), shape)
+    fs = _ffi.f_strides(shape, 1)
+    for idx in itertools.product(*[range(s) for s in shape]):
+        assert flat[sum(i * s for i, s in zip(idx, fs))] == fn(idx), idx
+
+
+def test_zero_stride_broadcast_through_setter(ocean_nml):
+    with rdb.Model(ocean_nml) as m:
+        shape = m.h.shape
+        fn = lambda idx: _val((0,) + tuple(idx[1:]))
+        m.h[...] = BroadcastArray(shape, 0, fn)
+        got = m.h[...]
+        for idx in itertools.product(*[range(s) for s in shape]):
+            g = got
+            for i in idx:
+                g = g[i]
+            assert g == fn(idx), idx
