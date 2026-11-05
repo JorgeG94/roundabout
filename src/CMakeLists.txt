@@ -227,6 +227,7 @@ set(CORE_SOURCES
     # number, Munk-layer resolution, ah_max/nu_h clamp): depends on rdb_config +
     # rdb_ocean_metrics (both declared above).
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/rdb_ocean_stability_audit.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/rdb_ocean_balance.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/diag/rdb_ocean_diag_fills.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/diag/rdb_ocean_diag_derived.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/diag/rdb_ocean_console_stats.F90
