@@ -507,8 +507,13 @@ def _array_interface_doubles(value, shape):
     idx = [0] * len(outer)
     for line in range(total // n0):
         off = base + sum(i * s for i, s in zip(idx, ostr))
-        stop = off + (n0 - 1) * s0 + (1 if s0 > 0 else -1)
-        dst[line * n0:(line + 1) * n0] = src[off:(stop if stop >= 0 else None):s0]
+        if s0 == 0:
+            # Broadcast axis (e.g. np.broadcast_to): one value repeated;
+            # a zero slice step is illegal in Python.
+            dst[line * n0:(line + 1) * n0] = array.array("d", [src[off]]) * n0
+        else:
+            stop = off + (n0 - 1) * s0 + (1 if s0 > 0 else -1)
+            dst[line * n0:(line + 1) * n0] = src[off:(stop if stop >= 0 else None):s0]
         for d in range(len(idx)):
             idx[d] += 1
             if idx[d] < outer[d]:
