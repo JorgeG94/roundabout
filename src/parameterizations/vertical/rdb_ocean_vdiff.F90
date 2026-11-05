@@ -1620,19 +1620,19 @@ contains
       integer :: i, j, k, ktop, kb, kb_live, i_left, i_right, j_below, j_above, i_c2, j_c2
       real(wp) :: zacc, zcol_l, zcol_r, d_min, i_hbbl, kv_bbl, bbl_thick
       ! Sliding window over the face-thickness / height-above-bed stack:
-      ! `hv_m/hv_0/hv_p` = hvel(k-1/k/k+1), `zi_0/zi_p` = zint(k/k+1).  It
+      ! `hv_0/hv_p` = hvel(k/k+1), `zi_0/zi_p` = zint(k/k+1).  It
       ! replaces the `hvel(NZ_STACK_MAX)` / `zint(NZ_STACK_MAX)` `local()`
       ! stacks, which at nz ~ 100 live in GPU local memory.  With the fused
       ! sweep below: 2082 -> 957 us per launch on the NK=100 double gyre
-      ! (512x256, GH200), before the single-reciprocal forward step.
-      real(wp) :: hv_m, hv_0, hv_p, zi_0, zi_p
+      ! (512x256, GH200).
+      real(wp) :: hv_0, hv_p, zi_0, zi_p
       ! Interface couplings: `_b` = interface below row k, `_t` = above.  Each
       ! is formed ONCE, as `num = dt*nu_eff` and `dz_eff`, and read by both
       ! rows it couples (`alpha = num/(hf_k*dz)`), from the same operands
       ! either row used to form it from.
       real(wp) :: num_b, dz_b, num_t, dz_t, kv_cnr
       logical :: cut_b, cut_t
-      real(wp) :: hf_k, alpha, beta, a_k, b_k, c_k, r_k, rdenom, wind_open
+      real(wp) :: hf_k, alpha, beta, a_k, b_k, c_k, r_k, denom, wind_open
       real(wp) :: cp_prev, dp_prev, gp_prev, cp, dp, gp, u_next, g_next
       real(wp) :: inv_rho0
       real(wp), parameter :: EPS_HVEL = 1.0e-30_wp
@@ -1651,13 +1651,12 @@ contains
       ! back-substitution for both.  `a_diag` / `b_diag` are never stored —
       ! nothing reads them after the solve; `c_diag` / `rhs` end holding c'
       ! and d', as before.  The arithmetic is the separate-sweep version's,
-      ! expression for expression, except the forward step's single
-      ! reciprocal (last-ulp differences).
+      ! expression for expression (bit-identical).
       do concurrent(j=1:nv, i=1:nu) &
          local(i_left, i_right, j_below, j_above, i_c2, j_c2, k, ktop, kb, kb_live, &
                zacc, zcol_l, zcol_r, d_min, i_hbbl, kv_bbl, bbl_thick, &
-               hv_m, hv_0, hv_p, zi_0, zi_p, num_b, dz_b, num_t, dz_t, kv_cnr, &
-               cut_b, cut_t, hf_k, alpha, beta, a_k, b_k, c_k, r_k, rdenom, wind_open, &
+               hv_0, hv_p, zi_0, zi_p, num_b, dz_b, num_t, dz_t, kv_cnr, &
+               cut_b, cut_t, hf_k, alpha, beta, a_k, b_k, c_k, r_k, denom, wind_open, &
                cp_prev, dp_prev, gp_prev, cp, dp, gp, u_next, g_next)
          ! Neighbour cell indices for averaging h.  (i_c2, j_c2) is the
          ! SECOND end corner of this face for the corner-viscosity
@@ -1757,7 +1756,6 @@ contains
          gp_prev = 0.0_wp
 
          do k = 1, nz
-            hv_m = hv_0
             hv_0 = hv_p
             zi_0 = zi_p
             num_b = num_t
@@ -1892,12 +1890,10 @@ contains
                gp = 1.0_wp/b_k
             end if
             if (k > 1) then
-               ! One reciprocal for the three quotients by the same
-               ! denominator (was three divisions: last-ulp differences).
-               rdenom = 1.0_wp/(b_k - a_k*cp_prev)
-               cp = c_k*rdenom
-               dp = (r_k - a_k*dp_prev)*rdenom
-               gp = (1.0_wp - a_k*gp_prev)*rdenom
+               denom = b_k - a_k*cp_prev
+               cp = c_k/denom
+               dp = (r_k - a_k*dp_prev)/denom
+               gp = (1.0_wp - a_k*gp_prev)/denom
             end if
             c_diag(i, j, k) = cp
             if (solve_momentum) rhs(i, j, k) = dp
