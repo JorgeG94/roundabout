@@ -92,6 +92,7 @@ contains
       ! One push of everything the host steps above may have written.
       call push_state(state)
       associate (ms => state%multilayer)
+         ! Host hu/hv are current: step 2 pulled them, step 4 only zeroed closed faces.
          !$acc update device(ms%hu_face_x_layer, ms%hv_face_y_layer)
       end associate
 

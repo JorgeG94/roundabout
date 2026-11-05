@@ -79,6 +79,7 @@ module rdb_ocean_api
    use rdb_ocean_fold_apply, only: ocean_fold_wrap_eta_2d
    ! ---- P2.5: pre-create geometry injection ----
    use rdb_ocean_halo_width, only: required_halo
+   use rdb_ocean_halo, only: ocean_halo_is_decomposed
    ! ---- P7: diagnostics discoverability + in-memory access ----
    use rdb_ocean_diag_derived, only: derived_catalog_size, derived_catalog_name
    use rdb_ocean_diag_fills, only: canonical_diag_catalog_size, canonical_diag_catalog_name
@@ -1859,7 +1860,8 @@ contains
       !! this once, then step.  The staged-IC path (`rdb_ocean_stage_*`)
       !! needs no rebaseline.
       !!
-      !! Refused with `OCEAN_STATUS_ERR_SETUP` once the model has stepped:
+      !! Refused with `OCEAN_STATUS_ERR_SETUP` on a decomposed run (single-rank
+      !! only, like every other initial-state seam) and once the model has stepped:
       !! re-baselining a running model would silently redefine the sponge
       !! target and the pseudo-salt ledger.
       !!
@@ -1883,6 +1885,13 @@ contains
 
       status = resolve_ocean(c_handle, h)
       if (status /= OCEAN_STATUS_OK) return
+      if (ocean_halo_is_decomposed()) then
+         call fail("rdb_ocean_rebaseline: single-rank only; the ghost fill and the "// &
+                   "land/pseudo-salt/sponge re-derivation read the whole interior, "// &
+                   "not a per-rank tile", ierr_local, OCEAN_STATUS_ERR_SETUP)
+         status = int(ierr_local, c_int)
+         return
+      end if
       if (h%state%dyn%outer_step_count /= 0) then
          call fail("rdb_ocean_rebaseline: the model has already stepped ("// &
                    to_string(int(h%state%dyn%outer_step_count))//" outer steps); re-baselining "// &
