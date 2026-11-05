@@ -320,6 +320,7 @@ set(RDB_TESTS
     "test_ocean_pseudo_salt|test_ocean_pseudo_salt|collect_ocean_pseudo_salt_tests|ocean_pseudo_salt|ocean"
     "test_ocean_eady_ic|test_ocean_eady_ic|collect_ocean_eady_ic_tests|ocean_eady_ic|ocean"
     "test_ocean_balanced_vortex|test_ocean_balanced_vortex|collect_ocean_balanced_vortex_tests|ocean_balanced_vortex|ocean"
+    "test_ocean_balance_velocity|test_ocean_balance_velocity|collect_ocean_balance_velocity_tests|ocean_balance_velocity|ocean"
     "test_ocean_geostrophic_adjustment_ic|test_ocean_geostrophic_adjustment_ic|collect_ocean_geostrophic_adjustment_ic_tests|ocean_geostrophic_adjustment_ic|ocean"
     "test_ocean_diag|test_ocean_diag|collect_ocean_diag_tests|ocean_diag|ocean"
     "test_ocean_diag_reduce|test_ocean_diag_reduce|collect_ocean_diag_reduce_tests|ocean_diag_reduce|ocean"
