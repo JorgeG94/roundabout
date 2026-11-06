@@ -1246,7 +1246,7 @@ contains
       !
       ! This is an α, never a density: it is not differenced along a layer
       ! and so does not violate the "nothing horizontally varying may
-      ! enter rho_layer" contract (src/core/ocean/README.md, `p_top` seam).
+      ! enter rho_layer" contract (`multilayer_state_t%p_top` seam comment).
       p_buoy_ref = this%eos%p_ref
 
       ! Surface buoyancy flux B_0 is computed PER COLUMN inside the

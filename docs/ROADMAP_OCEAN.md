@@ -154,7 +154,7 @@ Cross-cutting numerics and engineering (WENO, SSP-RK3, IMEX, mixed precision, DA
 |---|---|
 | TEOS-10 | `EOS_VARIANT_TEOS10` is declared but marked "future" (`EOS_VARIANT_TEOS10` in `src/equation_of_state/rdb_eos.F90`). |
 | Stochastic parameterisations | Nothing in `src/`. |
-| Rivers | Runoff fields exist in `rdb_ocean_surface_flux.F90`. The `ocean_river_t` slot listed in `src/core/ocean/README.md` has no source file. |
+| Rivers | Runoff fields exist in `rdb_ocean_surface_flux.F90`. There is no `ocean_river_t` slot. |
 
 ### Performance and infrastructure
 

@@ -504,7 +504,7 @@ XFAIL_REASONS = {
         "`remap_boundary_extrap` bought 71x of it and it stayed four "
         "decades over (audit 2026-09-21, Result 4). FIXED by the "
         "vanished-layer content rule I1' (a filler carries its donor's "
-        "concentration; src/core/ocean/README.md) and the two-sided remap "
+        "concentration; rdb_vanished_layer.inc) and the two-sided remap "
         "guard, which landed together (PR #50): the salt residual falls "
         "4.4e-07 -> 1.7e-13 (slope), 1.2e-06 -> 8.3e-14 "
         "(seamount_gentle), 7.3e-07 -> 1.2e-14 (rx0_060), i.e. to "

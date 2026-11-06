@@ -12,7 +12,7 @@ branch.
 > **Where to read first** depends on what you're working on:
 >
 > - **New to the codebase / acronyms**: [CONCEPTS.md](CONCEPTS.md)
-> - **The dyn-core (Arakawa C-grid + continuity-PPM)**: [`src/core/ocean/README.md`](../../src/core/ocean/README.md) — slot map + design contract
+> - **The dyn-core (Arakawa C-grid + continuity-PPM)**: [`src/core/ocean/README.md`](../../src/core/ocean/README.md) — short orientation: directory map, design rules, one outer step
 > - **Which closure/scheme is enabled where + tunable knobs**: [`docs/CLOSURE_MATRIX.md`](../CLOSURE_MATRIX.md)
 > - **Capabilities + limitations**: [`docs/CAPABILITIES_AND_LIMITATIONS.md`](../CAPABILITIES_AND_LIMITATIONS.md)
 > - **Physics + namelist reference**: [`docs/REFERENCE.md`](../REFERENCE.md)
@@ -103,7 +103,8 @@ generate — are:
 | Document | Covers |
 |----------|--------|
 | [CONCEPTS.md](CONCEPTS.md) | Acronyms (PPM, PGF, CWC, PP81, KPP, ALE, …) + one-line concept definitions. Start here. |
-| [`src/core/ocean/README.md`](../../src/core/ocean/README.md) | Design contract: god-state slot map + the four rules. |
+| [`src/core/ocean/README.md`](../../src/core/ocean/README.md) | Human orientation to the dyn-core: directory map, the four design rules, what one outer step does. |
+| [CONTRACTS.md](CONTRACTS.md) | Where each cross-module contract lives (vanished layers, `p_top`, `eta_forcing`, `F_slow`, cavity datum, ...) plus the conventions with no single owner. Read only when touching that seam. |
 | [`docs/CLOSURE_MATRIX.md`](../CLOSURE_MATRIX.md) | Which closure/scheme is enabled + the tunable knobs. |
 | [`docs/CAPABILITIES_AND_LIMITATIONS.md`](../CAPABILITIES_AND_LIMITATIONS.md) | What the solver can / can't do today. |
 | [`docs/REFERENCE.md`](../REFERENCE.md) | Physics, numerics, namelist keys. |
@@ -155,8 +156,9 @@ The mental model:
   else; enforced by the `no-mpi-in-rdb` pre-commit hook
 
 The step is reached via `driver_run` → `driver_run_ocean` →
-`ocean_dyn_step_split`. The god-state slot map and the "how to pick up a slot"
-recipe live in `src/core/ocean/README.md`; remaining gaps (non-hydrostatic on
+`ocean_dyn_step_split`. The directory map, the design rules and a step-by-step
+outline live in `src/core/ocean/README.md`; the seam contracts in
+`CONTRACTS.md`; remaining gaps (non-hydrostatic on
 the C-grid, C-grid MPI halo) are tracked in `docs/ROADMAP_OCEAN.md`.
 
 > The coastal A-grid (HLL/HLLC) path and the unstructured (triangular, KNP)

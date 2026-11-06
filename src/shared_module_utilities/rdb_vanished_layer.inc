@@ -10,8 +10,13 @@
 ! helper across a module boundary (CLAUDE.md, "Cross-TU helper inlining").
 ! One source of truth, no hand-duplicated `*_impl` twins to drift.
 !
-! Contract (see `src/core/ocean/README.md`, "The vanished-layer content rule"
-! and `src/shared_module_utilities/README.md`):
+! Contract (this header is its home; see also
+! `src/shared_module_utilities/README.md`):
+!
+!   Tracers are stored as CONTENT, `hTr = h*c`.  Several vertical
+!   coordinates (`z_fixed`, `zstar`, `zstar_full`, wet/dry) place inert
+!   FILLER layers, with `h <= H_VANISHED`.  The tree holds ONE invariant
+!   about them:
 !
 !   I1′  `h <= H_VANISHED  ⇒  hTr = h·c_live`, for every registered tracer,
 !        where `c_live` is the concentration of the filler's DONOR: the
@@ -19,6 +24,61 @@
 !        the top of the column (the fillers inside an ice shelf), the
 !        topmost live layer (`k_top`).  A column with no live layer at all
 !        (land, fully grounded) holds `hTr = 0`.
+!
+!   Why not `hTr = 0` (the old rule I1): every transport kernel reads a
+!   filler's concentration as `hTr/h`, and between remaps continuity moves
+!   thickness out of fillers into live layers.  Under I1 that thickness
+!   arrived as fresh zero-concentration water, so a uniform tracer did not
+!   stay uniform.
+!
+!   How it is restored: each live layer and the fillers it donates to form
+!   one contiguous POOL that is mixed to a single concentration `Σq/Σh`
+!   (`rdb_vl_merge_content`).  Content moves WITHIN the column, so no
+!   budget records it; a contributor that always sums to zero is noise in
+!   the instrument that detects real leaks.
+!
+!   Enforcement and gates:
+!     * ONE enforcement point: `multilayer_state_t%enforce_vanished_content`
+!       at the tail of `ocean_dyn_step_split` (host twin
+!       `enforce_vanished_content_host` for the seeded state).  It is
+!       unconditional: land columns sit at exactly `H_VANISHED` on every
+!       family, so no coordinate is exempt.  A column with no sub-threshold
+!       layer is a textual no-op (sigma / z*-lite / eulerian_z stay
+!       bit-identical).
+!     * The ALE remap applies the rule on BOTH sides of its `c = hTr/h` round
+!       trip (read side pools source fillers; write side pools target
+!       fillers) and folds the unplaced sliver back into the topmost live
+!       target layer.
+!     * `&vcoord_nml check_vanished_content` (default off, on in every
+!       shipped namelist that vanishes layers) is a fail-loud device scan
+!       right after the enforcement point.
+!     * The diff-aware `vanished-layer` pre-commit hook flags a NEW raw
+!       `hTr/h` divide or a NEW comparison against `H_VANISHED` outside the
+!       sanctioned modules.
+!     * Tests: `test_ocean_vanished_constancy` (full solver, uniform tracer
+!       stays uniform to 1e-12) and `test_ocean_remap_vanished` (the rule).
+!
+!   Substituting something OTHER than `c_live` on a vanished layer is
+!   legal when the consumer answers a different question.  Do NOT route
+!   these through `rdb_vl_conc`, and declare any new one with a
+!   `! vanished-ok: <reason>` waiver where the lint sees it:
+!
+!     consumer                          substitution            why
+!     rdb_eos (eos_*_impl)              reference T/S, rho=rho0 a filler must not perturb the PGF density column
+!     rdb_ocean_sponge                  nearest massive layer   relaxation target must be a physical water mass
+!     diag fills / rho_layer / MLD      NaN / never marks       a plot shows a gap; a filler's rho0 is no pycnocline
+!     rdb_ocean_pseudo_salt deviation   NaN                     0 is the perfect score, a filler must not read as one
+!     diag output-vcoord remap          zero weight             a NaN would be smeared over the target cells
+!     rdb_ocean_cavity_flux sampler     `cycle`                 a filler carries no water to melt against
+!     rdb_ocean_kappa_shear             massless merge          the solve needs a well-conditioned grid
+!
+!   A substitution is only safe where the value is multiplied by the
+!   filler's OWN thickness.  The FV-MOM6 PGF once read a filler's T/S as
+!   `hS/max(h, H_VANISHED)`; the cross-face Boole integral then integrated
+!   the wrong salinity over tens of metres of live water.  It now reads
+!   `c_live` off the donor (`test_ocean_pgf_insitu :: open_step_filler_faces_*`).
+!   The FV-lite / FV-Wright `rho_face*dz_centre` correction has the same
+!   hazard and is not yet ported.
 !
 ! The consuming module must already `use rdb_constants, only: wp, H_VANISHED`
 ! (and `NZ_STACK_MAX` if it includes the column procedures).  Everything here
@@ -54,7 +114,7 @@
       !! A consumer that wants something ELSE on a vanished layer (the EOS
       !! wants reference T/S so `rho = rho_0`; the diagnostics want NaN) is
       !! making a DIFFERENT, documented substitution and must not be routed
-      !! here — see the consumer table in `src/core/ocean/README.md`.
+      !! here — see the consumer table in the header of this file.
       real(wp), intent(in) :: hTr
          !! Layer content (`h·c`), e.g. `tracers(t)%hTr(i,j,k)`.
       real(wp), intent(in) :: h

@@ -76,7 +76,8 @@ More acronyms (CWC, PGF, PP81, ALE, EPBL, MEKE) and concept definitions (vanishi
 | Which closure is enabled, and its knobs | [`CLOSURE_MATRIX.md`](CLOSURE_MATRIX.md) |
 | Physics and namelist reference | [`REFERENCE.md`](REFERENCE.md) |
 | The planned and deferred work | `ROADMAP_OCEAN.md` |
-| The design contract for the ocean state | [`../src/core/ocean/README.md`](../src/core/ocean/README.md) |
+| An orientation to the ocean dyn-core | [`../src/core/ocean/README.md`](../src/core/ocean/README.md) |
+| Where each cross-module contract lives | [`codebase/CONTRACTS.md`](codebase/CONTRACTS.md) |
 | Concepts and acronyms | [`codebase/CONCEPTS.md`](codebase/CONCEPTS.md) |
 
 ## 2. Does the model fit my use case?

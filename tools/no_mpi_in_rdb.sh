@@ -6,7 +6,7 @@
 # facade, solvers, kernels) stays portable across single-process and
 # multi-rank builds.
 #
-# See src/core/ocean/README.md (Design contract rule 4) for the
+# See src/core/ocean/README.md (Four design rules, rule 4) for the
 # rationale; the rule applies to the coastal path too.
 #
 # Receives candidate files as args from pre-commit.  Can also be run
@@ -24,7 +24,7 @@ if [[ -n "$violations" ]]; then
     echo
     echo "ERROR: direct 'use mpi' / 'use mpi_f08' is banned everywhere in Roundabout."
     echo "All MPI calls go through 'pic_mpi_lib' — including inside src/comm/."
-    echo "See src/core/ocean/README.md (Design contract rule 4)."
+    echo "See src/core/ocean/README.md (Four design rules, rule 4)."
     exit 1
 fi
 

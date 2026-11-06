@@ -34,6 +34,45 @@ module rdb_ocean_p_surf
    !! g_load*mis` via its own `inout` access earlier in the same outer step,
    !! and this module reads whatever `p_surf` then holds.  Adcroft et al.
    !! (2019) levitating surface-load convention.
+   !!
+   !! ## The `eta_forcing` seam contract (tides + SAL + surface pressure)
+   !!
+   !! The barotropic substep drives `-g_bt*grad(eta - eta_forcing)`, where
+   !! `eta_forcing` is a cell-centred `(nx,ny)` field in METRES, valid
+   !! including ghosts, device-resident, refreshed ONCE per outer step and
+   !! held static across the inner substep loop.  It is the sum of every
+   !! equilibrium-elevation forcing: `eta_eq` (body tide) + `eta_sal`
+   !! (scalar SAL, `rdb_ocean_tides`) + `eta_ib` (this module).
+   !!
+   !!   * Sign and gravity: `eta_ib = -p_surf/(eos%rho0 * dyn%bt_work%g_bt)`.
+   !!     `g_bt`, not `rdb_constants:GRAVITY` (that mis-scales the response
+   !!     by ~3.4e-4 and silently breaks isostatic cancellation for a load).
+   !!   * At most one producer's combined array is passed per step:
+   !!     `ocean_p_surf_t%eta_seam` folds the tide in when both are on, else
+   !!     `ocean_tides_t%eta_forcing` (the dispatch is in `run_stage_split`).
+   !!   * A new surface load adds its own input component to
+   !!     `ocean_surface_flux_t` and extends the single overwrite that builds
+   !!     `sf%p_surf` (full overwrite from the pristine `p_surf_atm`, never
+   !!     `+=`); `eta_ib` is always built from the assembled total.
+   !!   * Split solver only, and mutually exclusive with `&ocean_bt_nml
+   !!     bt_halo > 0` (an explicit width fails loud in `validate_config`;
+   !!     the AUTO default resolves to 0).
+   !!
+   !! The partition rule: the seam owns the barotropic response to a load
+   !! that is NOT in the layer PGF.  Under the default split
+   !! (`&ocean_bt_nml bc_pgf_forcing`) the substep is forced by the depth mean
+   !! of the FULL layer PGF, shedding only the free-surface term the PGF
+   !! carries at stage entry (`set_fast_forcing_eta_pf`), so a DEPTH-UNIFORM
+   !! PGF contribution reaches the barotropic mode.  A load that is both in
+   !! the PGF boundary condition (`&ocean_pgf_nml p_top_in_bc`) and on this
+   !! seam would be counted twice; `ocean_dyn_step_split` therefore hands
+   !! `run_stage_split` `eta_pf_seam = eta_ib` in exactly that case and the
+   !! forcing sheds `g*grad(eta_ib)`.  A load a DATUM already absorbs (an ice
+   !! draft moved into `bt_H_ref`) must NOT also be added to `sf%p_surf`;
+   !! only the load ANOMALY belongs here.  `compute_pbce` is deliberately
+   !! load-blind (`pbce` is `dp_k/d eta`, a static load has none).  See also
+   !! the `p_top` comment on `multilayer_state_t` and the datum/partition
+   !! text in `rdb_ocean_cavity`.
    use rdb_constants, only: wp
    use rdb_grid, only: hgrid_t
    use, intrinsic :: iso_fortran_env, only: int64

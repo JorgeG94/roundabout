@@ -15,7 +15,7 @@ separately from this reference.
 
 The repository map and run lifecycle are in
 [`docs/codebase/INDEX.md`](https://github.com/JorgeG94/roundabout/blob/main/docs/codebase/INDEX.md);
-the god-state slot map and the four design rules are in
+the dyn-core directory map, the four design rules and the outer step are in
 [`src/core/ocean/README.md`](https://github.com/JorgeG94/roundabout/blob/main/src/core/ocean/README.md).
 Acronyms and concept definitions are in
 [`docs/codebase/CONCEPTS.md`](https://github.com/JorgeG94/roundabout/blob/main/docs/codebase/CONCEPTS.md).

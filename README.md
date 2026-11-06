@@ -250,7 +250,7 @@ modules are nvfortran-built.
 src/
   core/
     rdb_{grid,tracer,barotropic_state,multilayer_state}.F90   shared state types
-    ocean/         the C-grid dyn-core — god-state slot map (see its README)
+    ocean/         the C-grid dyn-core — ocean state, solver and kernels (see its README)
     ice/           sea ice — thermo/, itd/, transport/, dynamics/, coupling/
   ALE/  tracer/  equation_of_state/  pressure_force/  parameterizations/  framework/   shared physics
   driver/  io/  comm/    lifecycle, NetCDF I/O, MPI facade
@@ -285,7 +285,7 @@ Cross-backend validation:
 - [`CLAUDE.md`](CLAUDE.md) — project overview, architecture, build, conventions, + the doc map
 - [`docs/CAPABILITIES_AND_LIMITATIONS.md`](docs/CAPABILITIES_AND_LIMITATIONS.md) — what the solver can / can't do today
 - [`docs/CLOSURE_MATRIX.md`](docs/CLOSURE_MATRIX.md) — which closure/scheme is enabled in which regime + the tunable knobs
-- [`src/core/ocean/README.md`](src/core/ocean/README.md) — the dyn-core design contract (conventions, dispatch pipeline, slot map)
+- [`src/core/ocean/README.md`](src/core/ocean/README.md) — a short orientation to the dyn-core (directory map, design rules, one outer step); contracts are in [`docs/codebase/CONTRACTS.md`](docs/codebase/CONTRACTS.md)
 - [`docs/REFERENCE.md`](docs/REFERENCE.md) — physics + numerics + namelist reference
 - [`rdb_docs/source/references.rst`](rdb_docs/source/references.rst) — acknowledgement of NOAA-GFDL (MOM6, SIS2), licensing, and the papers the physics comes from
 - [`FORTRAN_STYLE.md`](FORTRAN_STYLE.md) — coding style + the GPU (`do concurrent` + OpenACC) programming guide

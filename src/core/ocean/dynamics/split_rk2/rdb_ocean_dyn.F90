@@ -3892,7 +3892,7 @@ contains
          "[I1'] `h <= H_VANISHED ⇒ hTr = h*c_live`. The enforcement point "// &
          "(multilayer_state_t%enforce_vanished_content) runs immediately before this "// &
          "check, so a hit is a bug in the rule or an off-device array, not a stray "// &
-         "kernel write. See src/core/ocean/README.md, 'The vanished-layer content rule'.")
+         "kernel write. See the header of rdb_vanished_layer.inc.")
       error stop "I1' violated (&vcoord_nml check_vanished_content)"
    end subroutine check_vanished_invariant_or_die
 
@@ -5276,8 +5276,8 @@ contains
       ! resetter, mutually exclusive with `bt_substep_drag` at configure
       ! (D2 — double-counted bed drag) — so this if/else-if chain still
       ! dispatches to exactly one resetter per stage, never more than
-      ! one, preserving the multiplicative-accumulator contract (`src/
-      ! core/ocean/README.md`).  Built from the SAME visc_rem producer
+      ! one, preserving the multiplicative-accumulator contract (see
+      ! `reset_bt_rem`).  Built from the SAME visc_rem producer
       ! the BT corrector reads (MOM6's barotropic solver), once
       ! per barotropic call, BEFORE the substeps below.
       if (dyn%bt_work%bt_rem_from_visc_rem) then
@@ -5291,7 +5291,7 @@ contains
          ! `compute_bt_rem_wave_drag` below MULTIPLIES into it —
          ! without this reset bt_rem would compound geometrically across
          ! outer steps (bt_rem = R^n after n stages), silently annihilating
-         ! the barotropic mode. See `src/core/ocean/README.md`.
+         ! the barotropic mode. See `reset_bt_rem`.
          call reset_bt_rem(grid, dyn%bt_work)
       end if
       if (dyn%bt_work%lwd_enable) then

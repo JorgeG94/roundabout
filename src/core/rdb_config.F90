@@ -4348,8 +4348,7 @@ module rdb_config
          !! actually vanishes layers (`z_fixed`, `zstar`, `zstar_full`, wet/dry) —
          !! the stability suite does.  Inert on a family with no fillers.
          !!
-         !! See `src/core/ocean/README.md`, "The vanished-layer content
-         !! rule".
+         !! See the header of `rdb_vanished_layer.inc` for the rule.
       logical :: zfixed_closed_faces = .false.
          !! **Partial-step z-level face closure** under
          !! `vcoord_type = "z_fixed"` (Adcroft, Hill & Marshall 1997;

@@ -504,7 +504,7 @@ end type ocean_sponge_t
 - When a change adds, removes or renames a closure, scheme, knob or extension
   seam, update the hand-maintained synthesis docs in the same PR:
   `docs/CLOSURE_MATRIX.md`, `docs/CAPABILITIES_AND_LIMITATIONS.md`,
-  `src/core/ocean/README.md` and the relevant `docs/howto/` guide.
+  `docs/codebase/CONTRACTS.md` and the relevant `docs/howto/` guide.
 
 ### Citing Algorithms
 
@@ -797,7 +797,8 @@ end do
   (seen on AMD). **Rule:** a TBP that contains or launches a kernel is
   `non_overridable`, or it is a thin polymorphic wrapper that immediately
   delegates (via `select type`) to a non-polymorphic `*_impl` that does the
-  device work, the ocean-state pattern in `src/core/ocean/README.md`.
+  device work, the ocean-state pattern in `src/core/ocean/state/rdb_ocean_state.F90`
+  (`ocean_state_enter_data` and the slot `enter_data` TBPs).
 
 ### Sharing a helper body across kernel modules: `#include`, not a hand-copied `*_impl`
 

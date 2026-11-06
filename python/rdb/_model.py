@@ -806,7 +806,7 @@ class Model:
                     f"ocean_surface_flux_assemble computes it every "
                     f"thermo step from the component fluxes, so a "
                     f"direct write would be silently overwritten at the "
-                    f"next thermo step (src/core/ocean/README.md:138). "
+                    f"next thermo step (see the component-ownership notes in rdb_ocean_surface_flux.F90). "
                     f"Set the component fluxes instead, or drop "
                     f"SurfaceFluxComponents() from forcing=[...].")
         elif setter_name is not None:

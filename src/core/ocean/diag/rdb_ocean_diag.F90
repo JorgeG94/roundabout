@@ -1,40 +1,29 @@
 !! Ocean diagnostics manager.
 module rdb_ocean_diag
-   !! Owns the diagnostics pipeline for the ocean dynamical core.
-   !! Built around the following design points (Phase 6 work):
+   !! Owns the diagnostics pipeline for the ocean dynamical core: a
+   !! registry of named diagnostics, each with a cadence, a time operator
+   !! (instantaneous / MEAN / MAX / MIN / INTEGRAL) and an output vertical
+   !! grid.  Design points:
    !!
-   !!   1. **Pull model, not push.**  Kernels write to `state` and
-   !!      stay diag-agnostic; this manager iterates a registry each
-   !!      output step, fetches the source array (by pointer / by
-   !!      enum tag), remaps onto the configured output vertical
-   !!      grid, accumulates time means, and hands the ready buffer
-   !!      to the I/O server.  Kernels never call `diag%send(...)`.
+   !!   1. **Pull model, not push.**  Kernels write to `state` and stay
+   !!      diag-agnostic: never call a diag `send` from a slot's kernel and
+   !!      never add diagnostic code to one.  This manager iterates its
+   !!      registry on each cadence fire, fills a device-side buffer through
+   !!      a procedure-pointer fill (`rdb_ocean_diag_fills`,
+   !!      `rdb_ocean_diag_derived`), remaps onto the configured output
+   !!      vertical grid (layer->z / sigma / z* / density), accumulates time
+   !!      means, and copies H<-D only when a diagnostic fires.  A slot that
+   !!      exposes a new derived quantity adds a fill and a registry entry;
+   !!      its kernel stays untouched.
    !!
-   !!   2. **Compute-side remap.**  Layer→z, layer→isopycnal, and
-   !!      time-mean accumulation all happen on the compute rank
-   !!      before hand-off.  The I/O server then only has to do
-   !!      compression + netcdf write.  Keeps the I/O server lean
-   !!      (no physics-aware code) at the cost of carrying the
-   !!      remap target buffers on every compute rank — which is
-   !!      cheap since they're shape `(nx, ny, nz_out)` not
-   !!      `(nx_global, ny_global, nz_out)`.
+   !!   2. **Compute-side remap.**  Vertical remap and time accumulation
+   !!      happen on the compute rank before the write, so the writer only
+   !!      does compression and NetCDF (`rdb_ocean_diag_netcdf`, one file per
+   !!      rank; merge offline with `tools/merge_output.py`).
    !!
-   !!   3. **I/O server interaction.**  When a `diag_var_t`'s
-   !!      cadence fires, this manager calls `io_server_send(buf,
-   !!      meta)` on the per-rank send queue.  Backpressure (server
-   !!      slower than compute) shows up as a hung send and is
-   !!      logged.  Hand-off contract: the manager owns the buffer
-   !!      lifetime; the I/O server gets a non-owning view.
-   !!
-   !! Phase 0e status: empty scaffold.  Components are declared so
-   !! Phase 6 can fill in `register / step / send_ready` without
-   !! restructuring the god state.  The bound procedures init/destroy
-   !! are no-ops on the empty registry.
-   !!
-   !! Collaborator hand-off: this slot is independent of the
-   !! dynamical core — once `ocean_diag_register` lands, every other
-   !! kernel can be diagnosed without modification.  Good first task
-   !! for a new contributor with FMS / diag_manager experience.
+   !!   3. **Vanished layers are missing, not zero** (NaN in the buffer,
+   !!      excluded from console min/max/mean, zero weight in a remap); see
+   !!      the consumer table in `rdb_vanished_layer.inc`.
 #ifdef LFORTRAN_PASSING
    use rdb_constants, only: wp
 #else

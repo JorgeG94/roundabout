@@ -228,7 +228,7 @@ three counts still agree.
 - The **synthesis docs** must move in the same PR when a closure, scheme,
   knob or extension seam is added, removed or renamed:
   `docs/CLOSURE_MATRIX.md`, `docs/CAPABILITIES_AND_LIMITATIONS.md`,
-  `src/core/ocean/README.md`, the relevant `docs/howto/` guide, and
+  `docs/codebase/CONTRACTS.md` (and the owning module's `!!` docstring), the relevant `docs/howto/` guide, and
   `CLAUDE.md` when the change creates a new gotcha. A doc that now disagrees
   with the code is a bug.
 

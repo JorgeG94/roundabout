@@ -878,7 +878,7 @@ def assert_energy(series, phys, tier):
             "state. The usual sources are a spurious pressure gradient over "
             "topography, a wall-normal velocity leak, or an ALE remap that is "
             "not idempotent on a resting column.",
-            "src/core/ocean/README.md"))
+            "docs/CAPABILITIES_AND_LIMITATIONS.md"))
         # Only meaningful where there is spurious motion to settle. `seamount`
         # and friends sit at En ~ 1e-20 -- machine zero, |u| ~ 1e-10 m/s --
         # where "peak == final" just means the number never changed. Asserting
@@ -907,7 +907,7 @@ def assert_energy(series, phys, tier):
                 "the run, so nothing bounded it -- it is growing, not "
                 "saturating. A tolerable discretisation error settles; an "
                 "instability does not. Re-run longer to see which this is.",
-                "src/core/ocean/README.md"))
+                "docs/CAPABILITIES_AND_LIMITATIONS.md"))
 
     elif regime in ("adiabatic", "unforced"):
         # An IC with energy, nothing adding more: En may decay, must not grow.
