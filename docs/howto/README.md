@@ -21,7 +21,8 @@ the kernel; the guide's job is to tell you *where the seam is and what to edit*.
 | Repo map + run lifecycle | [`docs/codebase/INDEX.md`](../codebase/INDEX.md) |
 | Acronyms / concepts | [`docs/codebase/CONCEPTS.md`](../codebase/CONCEPTS.md) |
 | Which closure/scheme is on + the knobs | [`docs/CLOSURE_MATRIX.md`](../CLOSURE_MATRIX.md) |
-| Ocean design contract (god-state slot map, the 4 rules) | [`src/core/ocean/README.md`](../../src/core/ocean/README.md) |
+| Dyn-core orientation (directory map, the 4 rules, one outer step) | [`src/core/ocean/README.md`](../../src/core/ocean/README.md) |
+| Where each cross-module contract lives | [`docs/codebase/CONTRACTS.md`](../codebase/CONTRACTS.md) |
 | Every namelist group + knob + default (code-derived) | [`docs/generated_nml_knobs.md`](../generated_nml_knobs.md) |
 | Physics + namelist reference | [`docs/REFERENCE.md`](../REFERENCE.md) |
 | Style + GPU programming (`do concurrent` + OpenACC) | [`FORTRAN_STYLE.md`](../../FORTRAN_STYLE.md) |
@@ -60,8 +61,8 @@ the kernel; the guide's job is to tell you *where the seam is and what to edit*.
 - **State composition**: `ocean_state_t`
   (`src/core/ocean/state/rdb_ocean_state.F90`) is a thin composition of slot
   types, each owning its allocatables + bound `init`/`destroy`/`enter_data`.
-  Read [`src/core/ocean/README.md`](../../src/core/ocean/README.md) — it is the
-  slot map, the 4 rules, and the "how to pick up a slot" recipe.
+  Read [`src/core/ocean/README.md`](../../src/core/ocean/README.md) — the
+  directory map, the 4 rules, and a short "add a slot" recipe.
 - **Test regimes**: every row in `tests/CMakeLists.txt` carries a `<regime>`
   label — `ocean` (C-grid dyn-core + sea-ice), `core` (shared infrastructure),
   or `ocean+core` (both). Those three are the *only* legal values; configure
@@ -144,7 +145,7 @@ This repo is set up to be navigated by an agent. A few things make that work wel
   section that is essentially a list of mistakes an LLM would otherwise make. Point
   the assistant at it first.
 - **Give the assistant the relevant guide from this directory** as the task seam,
-  plus the design contract README (`src/core/ocean/README.md`).
+  plus the owning module's `!!` docstring (look it up in `docs/codebase/CONTRACTS.md`).
 - **The assistant cannot see GPU correctness from the source.** NVHPC stdpar +
   OpenACC has sharp edges (descriptor-walk memcpys, illegal-address crashes from
   automatic arrays, silent approximate-math from intrinsic-shadowing locals). The

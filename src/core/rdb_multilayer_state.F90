@@ -184,8 +184,51 @@ module rdb_multilayer_state
       !   * NOT the barotropic `eta_forcing` seam — that is a separate,
       !     gradient-only, metres-valued field on `ocean_p_surf_t`, and it
       !     already carries the depth-uniform load gradient.
-      !   * NOT the PGF top boundary condition (`pa(nz+1)`, still
-      !     `rho_ref*g*eta`; `p_edge(nz+1)`, still 0).
+      !   * NOT the PGF top boundary condition by default: it reaches the
+      !     FV_MOM6 `pa(nz+1) = rho_ref*g*eta_geo + p_top` only through
+      !     `&ocean_pgf_nml p_top_in_bc` (default off).  FV_WRIGHT's and
+      !     FV_LITE's `p_edge(nz+1)` are still 0.
+      !
+      ! THE P_TOP SEAM CONTRACT (three distinct pressures; conflating any
+      ! two is a physics bug with no symptom):
+      !   gradient of the load   `ocean_p_surf_t%eta_seam` (m)  -> barotropic
+      !                          `eta_forcing`; only the gradient is physical
+      !   magnitude of the load  this field `p_top` (Pa)        -> top of the
+      !                          column an IN-SITU pressure is measured from
+      !   potential-density ref  `eos%p_ref` (Pa, SCALAR by design) -> the
+      !                          pressure `rho_layer` is referenced to
+      ! Rules for a builder that joins the seam:
+      !   * Only an IN-SITU builder may join (the quantity must be a true
+      !     per-layer hydrostatic pressure of THAT column).  The Wright PGF
+      !     column sweep and EPBL's `pres`/`p_mid` stack are in; `eos%p_ref`
+      !     is not and must not be.  Replace the `p = 0` seed by
+      !     `p = p_top(i,j)` and accumulate downward; the result must be
+      !     `>= p_top > 0` and increase toward the bed (guard:
+      !     `test_ocean_eos_p_top :: p_top_sign_and_monotone`).
+      !   * A stack with two consumers moves BOTH or neither (EPBL's `p_mid`
+      !     is both an EOS argument and a PE weight).
+      !   * `&ocean_psurf_nml in_eos` (EOS arguments) and `&ocean_pgf_nml
+      !     p_top_in_bc` (PGF boundary condition) are independent knobs on
+      !     this one field; the per-step refresh fires on their disjunction.
+      !     A varying cavity draft REQUIRES `p_top_in_bc` (fail-loud).
+      !   * A COEFFICIENT read at a pressure (alpha/beta via
+      !     `eos_buoyancy_coeffs`) is a different kind of thing: the
+      !     double-diffusion density ratio is an ordinary joiner (seed
+      !     `p_top`, accumulate `g*rho0*h`, never add `p_ref`), while the KPP
+      !     surface `B_0` has no depth to accumulate over and takes `p_top`
+      !     under `in_eos`, else `eos%p_ref`.  Gate on `in_eos`, never on
+      !     `p_top /= 0` (a cavity fills `p_top` either way).
+      !   * Fill from `sf%p_surf` over the WHOLE array, ghosts included, so
+      !     `p_top` inherits `p_surf`'s halo validity.
+      !   * An unported in-situ builder is refused, never silently mixed:
+      !     `validate_config` rejects `in_eos` together with kappa-shear,
+      !     tidal mixing, Redi, isopycnal slopes, PGF in-layer
+      !     reconstruction and sea ice.  Porting one means deleting its line
+      !     there in the same PR.
+      !   * The basal-melt liquidus (`rdb_ocean_cavity_flux`) is a third
+      !     CONSUMER (it evaluates the freezing point at `p_top`); the only
+      !     producer is `configure_ocean_cavity` (per-step re-assembly in
+      !     `ocean_dyn_step_split`).  Consumers never write it.
       real(wp), allocatable :: p_top(:, :)
 
       ! ---- Vertical (cross-layer) velocity at layer interfaces ----

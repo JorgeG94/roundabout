@@ -2370,9 +2370,22 @@ contains
       !! so when wave drag is on and `bt_substep_drag` is off, something
       !! must still reset it to 1 each stage — otherwise it compounds
       !! geometrically across outer steps (bt_rem = R^n after n stages),
-      !! silently annihilating the barotropic mode. See
-      !! `src/core/ocean/README.md` for the multiplicative-accumulator
-      !! contract this establishes.
+      !! silently annihilating the barotropic mode.
+      !!
+      !! THE MULTIPLICATIVE-ACCUMULATOR CONTRACT.  `bt_rem_u/v` is allocated
+      !! `source=1.0`.  Exactly ONE routine resets it to a fresh base each
+      !! stage: `compute_bt_rem` (`&ocean_bt_nml substep_drag`),
+      !! `compute_bt_rem_from_visc_rem` (`bt_rem_from_visc_rem`), or, when
+      !! both are off, this routine.  Every other contributor (today
+      !! `compute_bt_rem_wave_drag`) MULTIPLIES into it, and `mask_bt_rem`
+      !! (idempotent under `*=`) runs last.  The first two are mutually
+      !! exclusive at configure (bed drag would be counted twice), so the
+      !! dispatch in `run_stage_split` picks exactly one resetter per stage.
+      !! A PR that adds a fourth resetter or another multiplicative
+      !! contributor must extend that dispatch (or refactor to one
+      !! unconditional reset plus N independent contributors, the
+      !! `vmix_assemble` idiom).  Gate:
+      !! `test_ocean_wave_drag :: wave_drag_no_compounding`.
       type(hgrid_t), intent(in) :: grid
       type(barotropic_workstate_t), intent(inout) :: bt_work
       integer :: i, j, nx, ny
@@ -2394,9 +2407,9 @@ contains
       !! `compute_bt_rem` — a RESETTER, mutually exclusive at configure
       !! with `bt_substep_drag` (D2, double-counted bed drag) and with
       !! `bt_halo > 0` (`validate_config`) — so this and `compute_bt_rem`/
-      !! `reset_bt_rem` never both run for the same stage; `src/core/
-      !! ocean/README.md`'s "exactly one resets, everything else
-      !! MULTIPLIES" contract gets this as its third resetter.
+      !! `reset_bt_rem` never both run for the same stage; the "exactly one
+      !! resets, everything else MULTIPLIES" contract (see `reset_bt_rem`)
+      !! gets this as its third resetter.
       !!
       !! Two steps:
       !!

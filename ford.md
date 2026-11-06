@@ -37,7 +37,7 @@ GPU parallelism is expressed with `do concurrent` + OpenACC, portable across NVH
 (HLL/HLLC) path and the unstructured triangular backend were carved out into
 their own repository.
 
-The full architectural overview, repository map, and run lifecycle live in [`docs/codebase/INDEX.md`](https://github.com/JorgeG94/roundabout/blob/main/docs/codebase/INDEX.md); the god-state slot map and design rules are in [`src/core/ocean/README.md`](https://github.com/JorgeG94/roundabout/blob/main/src/core/ocean/README.md).
+The full architectural overview, repository map, and run lifecycle live in [`docs/codebase/INDEX.md`](https://github.com/JorgeG94/roundabout/blob/main/docs/codebase/INDEX.md); the dyn-core orientation is in [`src/core/ocean/README.md`](https://github.com/JorgeG94/roundabout/blob/main/src/core/ocean/README.md).
 
 ## Building
 
@@ -97,7 +97,7 @@ When adding a new capability: namelist knob (default off, preserves bit-identity
 
 ## Contributing
 
-Contributions are welcome. Please follow the conventions documented in [`FORTRAN_STYLE.md`](https://github.com/JorgeG94/roundabout/blob/main/FORTRAN_STYLE.md) and the design contract in `src/core/ocean/README.md`. File a PR against `main` — FORD docs are rebuilt on every PR merged to `main`.
+Contributions are welcome. Please follow the conventions documented in [`FORTRAN_STYLE.md`](https://github.com/JorgeG94/roundabout/blob/main/FORTRAN_STYLE.md) and the design rules in `src/core/ocean/README.md`; cross-module contracts are looked up in [`docs/codebase/CONTRACTS.md`](https://github.com/JorgeG94/roundabout/blob/main/docs/codebase/CONTRACTS.md). File a PR against `main` — FORD docs are rebuilt on every PR merged to `main`.
 
 ## License
 

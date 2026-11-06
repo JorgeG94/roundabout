@@ -83,6 +83,35 @@
 !!       (`Q_heat`/`Q_salt`, `heat_content_massin/massout`) are never
 !!       registered (derived-field rule, `ocean_state_build_restart_registry`
 !!       in `ocean_state/rdb_ocean_state_restart.F90`).
+!!
+!! **Component ownership: exactly ONE legal writer per field.**  A second
+!! writer on any row is a silent clobber, not a merge.
+!!
+!!   * `q_sw`, `q_lw`, `q_lat`, `q_sens` (W/m^2, positive DOWN): a forcing
+!!     reader (`rdb_ocean_data_forcing`) OR the bulk-flux consumer
+!!     (`rdb_ocean_bulk_forcing`), mutually exclusive by `validate_config`
+!!     (`&ocean_atm_forcing_nml enable` conflicts with any
+!!     `&ocean_dataovr_nml tau_x/tau_y/heat/evap/lprec` file).  `q_sw` also
+!!     gates `has_q_sw`.
+!!   * `heat_added` (either sign) and `salt_flux` (positive SALINIFIES): the
+!!     sea-ice coupler, as a FULL OVERWRITE.  Do not add a second contributor.
+!!   * `heat_cavity` (`= -q_ocean`, melting cools) and `salt_cavity`
+!!     (`= -m_mass*(S_far - s_ice)`, melting freshens): the ice-shelf cavity
+!!     (`ocean_cavity_flux_step`) and nothing else.  They are separate from
+!!     `heat_added`/`salt_flux` precisely because the ice coupler overwrites
+!!     those.  Under `&ocean_cavity_melt_nml freshwater="mass"`,
+!!     `salt_cavity` stays assembled UNCHANGED as the `B_0` buoyancy forcing
+!!     and `ocean_cavity_mass_step` removes it again from the tracer.
+!!   * mass fluxes (`evap`, `lprec`, `fprec`, `vprec`, `lrunoff`, `frunoff`,
+!!     `seaice_melt`) and their `heat_content_*` twins: a forcing reader OR
+!!     the bulk-flux consumer; a mass flux owes its enthalpy companion.
+!!   * `heat_content_massin`/`massout`, `Q_heat`, `Q_salt`: the assembler
+!!     (`ocean_surface_flux_assemble`) ONLY.  A filler writing these is a bug.
+!!   * `p_surf_atm` (Pa): a reader, a configure seed, or the bulk consumer
+!!     (`= psl`); `p_surf` is the assembled total and is NOT open-water
+!!     weighted (a pressure-loading term, not a flux).
+!!
+!! Which of these change real column MASS is in `docs/codebase/CONTRACTS.md`.
 module rdb_ocean_surface_flux
    use rdb_constants, only: wp, SEAWATER_CP_DEFAULT, H_DIV_EPS
    use rdb_grid, only: hgrid_t

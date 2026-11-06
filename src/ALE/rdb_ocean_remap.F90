@@ -11,8 +11,8 @@ module rdb_ocean_remap
    !! vanishing-layer guard (`rdb_vl_merge_content`, invariant I1′) which
    !! keeps the content of a sub-threshold layer in the column instead of
    !! deleting it, and leaves every sub-threshold layer holding `h·c_live`,
-   !! the concentration of its donor live layer. See
-   !! `src/core/ocean/README.md` ("The vanished-layer content rule").
+   !! the concentration of its donor live layer. See the header of
+   !! `rdb_vanished_layer.inc`.
 #ifdef LFORTRAN_PASSING
    use rdb_constants, only: wp, REMAP_PPM, H_VANISHED, H_DIV_EPS
 #else

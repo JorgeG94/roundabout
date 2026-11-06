@@ -104,7 +104,7 @@ contains
       !! pseudo-salt concentration minus the salinity concentration.
       !!
       !! A vanished layer (`rdb_vl_is_live` false — the ONE predicate, see
-      !! `src/core/ocean/README.md`, "The vanished-layer content rule")
+      !! the header of `rdb_vanished_layer.inc`)
       !! writes `missing`, which the caller passes as the IEEE NaN sentinel
       !! `fill_tracer_impl` uses for the two concentrations this is the
       !! difference of.  It used to write `0` below a private `1e-6 m`

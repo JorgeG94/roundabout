@@ -84,6 +84,24 @@ contains
       !! registering it (and issuing `update self` on its host-only
       !! buffers) was a latent GPU crash (review #3/#8).  When OBC lands,
       !! it registers its own live persistent state here.
+      !!
+      !! HOW A SLOT JOINS THE CHECKPOINT.  A new prognostic-owning slot
+      !! registers its arrays here via `reg%register_2d` / `register_3d` /
+      !! `register_scalar` (or `register_full_3d`).  Each entry is REQUIRED
+      !! on read by default (a missing field is fatal); mark genuinely
+      !! optional ones `optional=.true.`.  Host-only scalars use
+      !! `register_scalar` and are skipped by the device-pull walk.  The
+      !! manager (`ocean_state_restart_write`/`_read`) does the
+      !! `!$acc update self` pulls on write (device-mapped entries only),
+      !! writes each field as a full local array to a per-rank
+      !! `restart_rank_NNNNNN.nc` (to `.tmp`, then POSIX-rename), and
+      !! validates decomposition, grid/vcoord/tracer and schema metadata on
+      !! read; slots write no per-slot I/O.  Read runs BEFORE
+      !! `ocean_state_enter_data`, so the H->D copy carries restored state
+      !! up.  Same-decomposition resume only.  The ice->ocean EVP stress
+      !! mediation is carried on the ICE slot (`ice_tau_ocn_x/y` +
+      !! `ice_tau_ocn_valid`) and folded into `surface_stress%tau_x/y` after
+      !! the configure-time wind re-seed (gate `restart_bit_exact_ice_evp`).
       type(ocean_state_t), intent(in), target :: state
       type(hgrid_t), intent(in) :: grid
       type(restart_registry_t), intent(inout) :: reg

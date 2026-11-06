@@ -4,8 +4,9 @@ Canonical reference for the physics, numerical schemes, boundary
 conditions, validation tests, and namelist configuration. **Codebase
 structure, build system, GPU programming model, and kernel API live in
 [`CLAUDE.md`](../CLAUDE.md) + [`docs/codebase/`](codebase/INDEX.md) —
-this file is the science-and-config view.** Ocean dynamical-core design
-contract: [`src/core/ocean/README.md`](../src/core/ocean/README.md) and
+this file is the science-and-config view.** Ocean dynamical-core
+orientation: [`src/core/ocean/README.md`](../src/core/ocean/README.md);
+contracts: [`docs/codebase/CONTRACTS.md`](codebase/CONTRACTS.md); plan:
 [`docs/ROADMAP_OCEAN.md`](ROADMAP_OCEAN.md). Per-closure knob tables:
 [`docs/CLOSURE_MATRIX.md`](CLOSURE_MATRIX.md) and the auto-generated
 [`docs/generated_nml_knobs.md`](generated_nml_knobs.md).

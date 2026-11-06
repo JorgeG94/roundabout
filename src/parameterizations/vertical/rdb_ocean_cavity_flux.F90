@@ -45,8 +45,8 @@
 !!
 !! The liquidus is evaluated at `multilayer_state_t%p_top` — THE
 !! interface pressure, the same field the FV_MOM6 pressure-stack
-!! boundary condition and the in-situ EOS read (`src/core/ocean/README.md`,
-!! the `p_top` seam contract).  It is NOT `eos%p_ref` (a scalar potential
+!! boundary condition and the in-situ EOS read (the `p_top` seam contract on
+!! `multilayer_state_t%p_top`).  It is NOT `eos%p_ref` (a scalar potential
 !! -density reference, deliberately horizontally uniform) and NOT the
 !! `eta_forcing` seam (a gradient).  One pressure, three consumers, and
 !! this module is a CONSUMER — it writes nothing to `p_top`.  The sole
@@ -405,8 +405,8 @@ module rdb_ocean_cavity_flux
          !! `rho_w`, `c_w`, `alpha_T`, `beta_S` here are the MELT LAW's
          !! own calibrated constants, NOT copies of the model's
          !! Boussinesq `rho_0` — the same "out of scope on purpose"
-         !! category as `RHO_WATER` and `&ocean_ice_nml rho_ocean` in
-         !! `src/core/ocean/README.md`'s reference-density table.
+         !! category as `RHO_WATER` and `&ocean_ice_nml rho_ocean` (see
+         !! `configure_ocean_reference_density`).
          !! Overriding them would break ISOMIP+ comparability, which is
          !! the reason this path exists.
 

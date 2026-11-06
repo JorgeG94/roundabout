@@ -32,7 +32,7 @@ Ocean0 are listed at the bottom.
 **Under an ice-shelf cavity, `z_fixed` is the only z-like coordinate this
 build accepts** (`sigma` is also legal; every other `VCOORD_*` family is
 refused at configure over a rigid top) — see `docs/CLOSURE_MATRIX.md`'s
-`Z-fixed (gprime)` row and `src/core/ocean/README.md`. The `*_zfixed`
+`Z-fixed (gprime)` row and the header of `src/core/ocean/state/rdb_ocean_cavity.F90`. The `*_zfixed`
 files above are the z\_fixed twins of `ocean0_idealised_draft.nml`; see
 "v0.1.0 release validation" at the bottom for measured numbers.
 
@@ -368,8 +368,8 @@ runs the same 64 cells as grounded ice and as ordinary island land and
 finds every wet column identical). What moved is the step-0 latch, which
 was the thing that was wrong.
 
-The contract is in `src/core/ocean/README.md` ("the land-state contract"
-and "the cavity datum contract"); the gate is
+The contracts are in `ocean_state_seed_land_cells` (the land state) and the header
+of `src/core/ocean/state/rdb_ocean_cavity.F90` (the cavity datum); the gate is
 `tests/test_ocean_cavity_grounded_budget.F90`, which holds all three
 relative residuals at `1e-12` for 20 steps of the full split solver, with
 melt off and with melt on.

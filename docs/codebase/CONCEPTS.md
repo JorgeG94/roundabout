@@ -98,6 +98,6 @@ isn't here, please add it.
 Cross-references:
 - Codebase map + run lifecycle → [INDEX.md](INDEX.md)
 - Per-module / per-kernel / solver call-chain detail → the source `!!` docstrings, rendered by FORD (the old `KERNELS.md` / `SOLVER.md` / `DATA_FLOW.md` were retired in favour of this)
-- Design contract → [`src/core/ocean/README.md`](../../src/core/ocean/README.md)
+- Dyn-core orientation → [`src/core/ocean/README.md`](../../src/core/ocean/README.md); seam contracts → [CONTRACTS.md](CONTRACTS.md)
 - GPU patterns and gotchas → [`FORTRAN_STYLE.md`](../../FORTRAN_STYLE.md), [CLAUDE.md](../../CLAUDE.md) → "Gotchas"
 - Capability matrix and known limitations → [CAPABILITIES_AND_LIMITATIONS.md](../CAPABILITIES_AND_LIMITATIONS.md)

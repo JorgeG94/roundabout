@@ -388,8 +388,9 @@ module rdb_ocean_pressure_force
          !! below), and the split solver replaces the depth mean of the
          !! layer PGF with the barotropic solution, so the baroclinic
          !! operator does not see it and this does NOT double-count the
-         !! `eta_forcing` seam. See the `p_top` seam contract in
-         !! `src/core/ocean/README.md`.
+         !! `eta_forcing` seam. See the `p_top` seam contract on
+         !! `multilayer_state_t%p_top` and the `eta_forcing` contract in
+         !! `rdb_ocean_p_surf`.
       real(wp) :: gfs_scale = 1.0_wp
          !! Free-surface gravity scaling (= GFS / G_EARTH). Default 1.0 ⇒
          !! pure FV_MOM6, bit-identical. When < 1, Pass 5 applies the

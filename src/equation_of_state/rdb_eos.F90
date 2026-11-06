@@ -1697,7 +1697,7 @@ contains
          !! else `eos%p_ref`); an interior-interface closure wants the
          !! true in-situ hydrostatic pressure there.  Never a
          !! horizontally-varying value fed back into `ms%rho_layer` —
-         !! see the `p_top` seam contract in `src/core/ocean/README.md`.
+         !! see the `p_top` seam contract on `multilayer_state_t%p_top`.
       real(wp), intent(out) :: alpha_T
          !! −∂ρ/∂T (kg/m³ per degC).
       real(wp), intent(out) :: beta_S

@@ -92,7 +92,7 @@ module rdb_constants
       !! table of consumers that deliberately substitute something ELSE
       !! (the EOS's reference T/S, the sponge's nearest massive layer, the
       !! diagnostics' NaN, the melt sampler's skip), is written down once
-      !! in `src/core/ocean/README.md`, "The vanished-layer content rule".
+      !! in the header of `rdb_vanished_layer.inc`.
       !! A new raw `hTr/h` divide or a new comparison against this constant
       !! outside the sanctioned modules is flagged by the `vanished-layer`
       !! pre-commit hook.

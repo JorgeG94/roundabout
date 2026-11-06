@@ -9,7 +9,7 @@
 !! formula) because the sharpest failure modes here are (a) `bt_rem`
 !! compounding geometrically across outer steps when `substep_drag` is off
 !! (the trap `reset_bt_rem` exists to prevent — see
-!! `src/core/ocean/README.md`), and (b) a closure that silently scalarises
+!! its docstring), and (b) a closure that silently scalarises
 !! its spatial map (see `docs/RDB_PHYSICS_PLAN.md` trap #11).
 !!
 !! Cases (§9 of `PLAN_PR29_wave_drag.md`):

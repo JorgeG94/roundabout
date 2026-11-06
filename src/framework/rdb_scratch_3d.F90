@@ -8,25 +8,48 @@ module rdb_scratch_3d
    !!
    !! Why centralise this:
    !!   1. **One allocation policy.**  The strided hybrid loop
-   !!      pattern (see `src/core/ocean/README.md`) sizes every
-   !!      column-local scratch at `(stride, stride, nz_ml)` with
+   !!      pattern sizes every column-local scratch at
+   !!      `(stride, stride, nz_ml)` with
    !!      `stride = ocean_state%column_stride`.  Putting that policy
    !!      in one type means a new slot follows the convention by
    !!      construction, not by remembering to copy-paste it.
+   !!
+   !!      The pattern: a column-local kernel (anything with `nz`-sized
+   !!      scratch per `(i,j)`: vmix/KPP, continuity-PPM, Coriolis with q at
+   !!      corners, vorticity-gradient, FV pressure force) tiles the plane
+   !!      with a host loop and runs a `do concurrent` over each tile and
+   !!      all layers, writing only into the tile's scratch:
+   !!
+   !!          do i_out = 1, nx, stride
+   !!             do j_out = 1, ny, stride
+   !!                do concurrent (k=1:nz_ml, j_in=1:min(stride, ny-j_out+1), &
+   !!                               i_in=1:min(stride, nx-i_out+1))
+   !!                   i = i_out + i_in - 1;  j = j_out + j_in - 1
+   !!                   ! read state, write this%scratch%data(i_in, j_in, k)
+   !!                end do
+   !!             end do
+   !!          end do
+   !!
+   !!      `stride = 1` is pure-column form (cache-friendly on CPUs);
+   !!      `stride = nx` is one plane-wide launch (maximum GPU occupancy).
+   !!      Reference: Kommera & Appelhans (NVIDIA, CESM SEWG 2026), "One
+   !!      Codebase with Good Performance on both CPUs and GPUs, for
+   !!      Column-based Loop Structures".
    !!   2. **One GPU-mapping site.**  `enter_data` / `exit_data`
    !!      live on the type, so every slot that uses this type
    !!      inherits the mapping for free — no per-slot directive
    !!      copies to keep in sync.
-   !!   3. **One resize site.**  If a kernel discovers it needs a
-   !!      different shape mid-run (rare — only happens if `stride`
-   !!      becomes dynamic), `ensure_size` reallocates and remaps in
-   !!      one place.
-   !!   4. **Cheap finite-check.**  Phase 6 debug guards walk every
-   !!      `scratch_3d_buffer_t` instance after each slot kernel and
-   !!      verify no NaN / out-of-range leaked into scratch.
+   !!   3. **One resize site.**  If a kernel ever needs a different shape
+   !!      mid-run (only if `stride` becomes dynamic), the reallocate-and-remap
+   !!      belongs here too (`ensure_size`, not written yet).
+   !!   4. **Cheap finite-check.**  A debug guard can walk every
+   !!      `scratch_3d_buffer_t` instance after a slot kernel and verify no
+   !!      NaN / out-of-range leaked into scratch (`assert_finite` is not
+   !!      written yet).
    !!
-   !! Phase 2 status: alloc + GPU enter_data / exit_data live.  Phase
-   !! 1+ items (`ensure_size`, `assert_finite`) still pending.
+   !! Device contract: `enter_data` device-zeroes the payload after the
+   !! `create`, so a buffer whose producer is SKIPPED for a step reads as
+   !! zero on every toolchain (gate: `tests/test_scratch_3d_device.F90`).
    use rdb_constants, only: wp
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_mem_report, only: arr_bytes

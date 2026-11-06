@@ -55,6 +55,58 @@ module rdb_ocean_cavity
    !! stacks upward, so the column top lands at `-z_draft + eta` on its
    !! own.  Two datums, kept apart on purpose.
    !!
+   !! ### Rules for anything that touches the datum
+   !!
+   !!   * Two datums, two owners: the free-surface anomaly
+   !!     `bt_eta = sum(h_layer) - bt_H_ref` (zero point: the loaded
+   !!     equilibrium, owned by the barotropic solve) and the geopotential
+   !!     height `eta_geo = -b + sum(h_layer)` (zero point `z = 0`, owned by
+   !!     the FV pressure force).  Without a cavity they coincide; with one
+   !!     `bt_eta ~ 0` while `eta_geo ~ -z_draft`, and both are correct.
+   !!   * The datum and the PGF boundary condition must carry the SAME
+   !!     static load.  Under the default split (`&ocean_bt_nml
+   !!     bc_pgf_forcing`) the depth mean of the layer PGF forces the
+   !!     barotropic mode, so `bt_H_ref = b - z_draft` (free surface at
+   !!     `eta_geo = -z_draft`) must be balanced by `p_ice_ref` in
+   !!     `pa(nz+1)`.  Hence `&ocean_pgf_nml p_top_in_bc` is REQUIRED for a
+   !!     cavity whose draft varies: fail-loud at configure, deliberately not
+   !!     auto-enabled.  A draft uniform over the whole array is exempt (a
+   !!     load with no gradient is bit-identically inert in the top BC).
+   !!   * The isostatic load `rho_ref*g*z_draft` is what ISOMIP+ prescribes,
+   !!     not the true weight `g*integral(rho)`.  In a stratified column the
+   !!     difference leaves a depth-uniform residual `N^2 z_draft grad(z_draft)`
+   !!     in the raw PGF (5.8e-6 m/s^2 at N^2 = 1e-5, z_draft = 280 m, slope
+   !!     2e-3) that the barotropic mode adjusts to.  `&ocean_cavity_dyn_nml
+   !!     trim_ic_for_p_surf` (default off) starts it balanced by moving each
+   !!     loaded column's initial top (`bt_eta = eta_trim /= 0` at t = 0; the
+   !!     datum is unchanged).  `draft_source="in_situ"` is deferred.
+   !!   * `bt_H_ref` is the reference WATER-COLUMN thickness, not the bed.
+   !!     Anything that re-derives it (the API's bathymetry re-injection, a
+   !!     wide-halo BT clone) must use `b - z_draft`, or the ice load is
+   !!     counted zero times there.  The wide clone is refused for exactly
+   !!     this reason.
+   !!   * The geopotential stack stays absolute: do not "helpfully" shift
+   !!     `e_face`.  A rigid shift is inert in exact arithmetic but re-rounds
+   !!     the whole `pa` anomaly stack (see `test_ocean_cavity_equivalence`).
+   !!   * Ordering is load-bearing: `z_draft` is filled in
+   !!     `ocean_state_seed_from_cfg` right after the bathymetry and BEFORE
+   !!     the layer split and wet-mask seed read `b - z_draft`; it is then
+   !!     re-wrapped and halo-exchanged alongside `b` and `bt_H_ref`.  A draft
+   !!     whose seam disagreed with the datum's would count the load twice
+   !!     at that face.
+   !!   * At rest, under sigma over a sloping draft, what remains is the
+   !!     sigma-coordinate PGF truncation: for a flat bed, slope `s`,
+   !!     `D = s*dx`, `PFu(k) - <PFu> = N^2 D^3 (3 sigma_k^2 - 1)/(12 dx Hbar)`
+   !!     (second order in dx, cubic in slope; `7.08e-8 m/s` after 12000 s at
+   !!     s = 1e-3, N^2 = 1e-5).  It is the baseline for any later
+   !!     sloping-coordinate PGF correction.
+   !!   * The `ms%p_top` assembly (`p_ice_ref + sf%p_surf`) happens in two
+   !!     places that must agree: the configure seed in
+   !!     `configure_ocean_cavity` and the once-per-step inline fill in
+   !!     `ocean_dyn_step_split` (only when the psurf seam makes `sf%p_surf`
+   !!     live), both over the WHOLE array including ghosts.  Gates:
+   !!     `test_ocean_cavity_load`, `test_ocean_cavity_equivalence`.
+   !!
    !! ### Grounding
    !!
    !! A column whose water thickness `b - z_draft` falls below

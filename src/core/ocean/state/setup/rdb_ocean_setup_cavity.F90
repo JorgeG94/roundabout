@@ -41,8 +41,8 @@ contains
       !! much.  Only the load ANOMALY reaches the `eta_forcing` seam, and
       !! for the Boussinesq-isostatic default that anomaly IS `sf%p_surf`
       !! (a cavity with no atmospheric load sends the seam nothing at
-      !! all).  See `src/core/ocean/README.md`'s `p_top` / `eta_forcing`
-      !! seam contracts.
+      !! all).  See the `p_top` comment on `multilayer_state_t` and the
+      !! `eta_forcing` seam text in `rdb_ocean_p_surf`.
       !!
       !! This seed is the FINAL value for a cavity without the psurf seam
       !! (the draft is static, so there is nothing to refresh); with psurf
@@ -268,7 +268,7 @@ contains
       !!
       !! **`ms%p_top`: this routine is a CONSUMER, not a writer.**
       !! `ms%p_top` is THE interface pressure
-      !! (`src/core/ocean/README.md`, the `p_top` seam contract), and the
+      !! (`multilayer_state_t%p_top`, the `p_top` seam contract), and the
       !! melt liquidus is its THIRD consumer alongside the FV_MOM6
       !! `pa(nz+1)` surface boundary condition and the in-situ EOS.  It
       !! has exactly ONE producer, `configure_ocean_cavity`, which

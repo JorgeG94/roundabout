@@ -118,7 +118,7 @@ module rdb_ocean_sponge
       !! Map-driven sponge state: per-cell `Idamp` [1/s] + a 3-D reference
       !! state. See the module docstring for the physics + the MOM6
       !! divergences. Value-semantics slot (no `CS` pointer, no
-      !! `associated(CS)` guards) per `src/core/ocean/README.md`.
+      !! `associated(CS)` guards): a plain handle owned by `ocean_state_t`.
       logical :: is_init = .false.
          !! True once `init` has run (only called when `enable`, mirroring
          !! the gated-closure convention — epbl/kshear/... — so a disabled
