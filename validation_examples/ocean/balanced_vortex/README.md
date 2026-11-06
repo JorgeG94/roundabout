@@ -33,6 +33,7 @@ rest -- the unbalanced start).
 | `vortex_beta.nml` | warm core (+2 K, anticyclone), beta = 2e-11, 40 days |
 | `vortex_beta_cyclone.nml` | cold core (-2 K, cyclone) twin |
 | `vortex_fplane.nml` | the warm vortex with beta = 0: must stay put (control) |
+| `vortex_beta.py` | Python-API port of all three (`warm`, `cyclone`, `fplane`); same config as the `.nml` files |
 
 All: 400 km x 400 km closed box at 5 km (80x80), H = 4000 m flat, **40 layers**
 (100 m; the Hv = 700 m core spans ~10 layers; sigma = z on a flat bed),
@@ -56,6 +57,8 @@ Two constraints that bit during development:
 
 ```bash
 ./build/rdb validation_examples/ocean/balanced_vortex/vortex_beta.nml
+# or the same run from the Python API (cases: warm | cyclone | fplane)
+python3 validation_examples/ocean/balanced_vortex/vortex_beta.py
 python3.10 validation_examples/ocean/balanced_vortex/analyze_vortex_tilt.py \
     out_vortex_beta/vortex_beta_rank_000000.nc \
     --dx 5000 --nghost 4 --depth 4000 --radius 50000 --tilt-depth 700
