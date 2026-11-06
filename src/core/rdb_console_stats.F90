@@ -280,7 +280,7 @@ contains
       if (root) then
          if (this%exact_sums .and. present(mass_efp)) then
             call emit_drift_line("Mass", total_mass, this%mass0, m_out, m_src, mass_on, &
-                                 residual_exact=efp_real_diff(mass_efp, this%mass0_efp))
+                                 residual_exact=real(efp_real_diff(mass_efp, this%mass0_efp), wp))
          else
             call emit_drift_line("Mass", total_mass, this%mass0, m_out, m_src, mass_on)
          end if
@@ -290,7 +290,7 @@ contains
             if (root) then
                if (this%exact_sums .and. present(salt_efp)) then
                   call emit_drift_line("Salt", total_salt, this%salt0, s_out, s_src, salt_on, &
-                                       residual_exact=efp_real_diff(salt_efp, this%salt0_efp))
+                                       residual_exact=real(efp_real_diff(salt_efp, this%salt0_efp), wp))
                else
                   call emit_drift_line("Salt", total_salt, this%salt0, s_out, s_src, salt_on)
                end if
@@ -300,7 +300,7 @@ contains
             if (root) then
                if (this%exact_sums .and. present(heat_efp)) then
                   call emit_drift_line("Heat", total_heat, this%heat0, h_out, h_src, heat_on, &
-                                       residual_exact=efp_real_diff(heat_efp, this%heat0_efp))
+                                       residual_exact=real(efp_real_diff(heat_efp, this%heat0_efp), wp))
                else
                   call emit_drift_line("Heat", total_heat, this%heat0, h_out, h_src, heat_on)
                end if

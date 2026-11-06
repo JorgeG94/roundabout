@@ -32,7 +32,7 @@
 !! Each test also asserts it is not vacuous: fillers exist in wet columns,
 !! and the flow is not at rest.
 module test_ocean_vanished_constancy
-   use, intrinsic :: iso_c_binding, only: c_ptr, c_int, c_null_ptr, c_f_pointer
+   use, intrinsic :: iso_c_binding, only: c_ptr, c_int, c_double, c_null_ptr, c_f_pointer
    use rdb_constants, only: wp, H_VANISHED
    use rdb_ocean_api, only: rdb_ocean_create_from_string, rdb_ocean_step, &
                             rdb_ocean_destroy, rdb_ocean_refresh_host, &
@@ -155,7 +155,7 @@ contains
       type(c_ptr) :: handle, ptr
       integer(c_int) :: status, nx_p, ny_p, nz_p, ng, nx, ny, nz, gen
       real(wp), pointer :: h(:, :, :), q(:, :, :), wet(:, :), u(:, :, :)
-      real(wp), allocatable :: ubuf(:, :, :)
+      real(c_double), allocatable :: ubuf(:, :, :)
       real(wp) :: worst_live, worst_fill, umax, c
       integer :: i, j, k, t, n_fill, n_live
       character(len=256) :: msg
@@ -168,7 +168,8 @@ contains
       body: block
          status = rdb_ocean_get_grid_info(handle, nx_p, ny_p, nz_p, ng)
          if (seed_u /= 0.0_wp) then
-            allocate (ubuf(nx_p + 1, ny_p, nz_p), source=seed_u)
+            allocate (ubuf(nx_p + 1, ny_p, nz_p))
+            ubuf = seed_u
             status = rdb_ocean_set_u(handle, ubuf, nx_p, ny_p, nz_p)
             call check(error, status == OCEAN_STATUS_OK, what//": seeding the jet")
             if (allocated(error)) exit body

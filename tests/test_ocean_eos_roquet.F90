@@ -179,10 +179,14 @@ contains
       ! SAME routine roquet_spv_point/roquet_rho_point call internally --
       ! so the inversion target is exactly the branch's.
       real(wp) :: lo, hi, mid, c
+      integer :: iter
       lo = ct_target - 5.0_wp
       hi = ct_target + 5.0_wp
-      do while (hi - lo > 1.0e-13_wp)
+      do iter = 1, 200
          mid = 0.5_wp*(lo + hi)
+         ! Adjacent representable values: the bracket cannot shrink further
+         ! (a fixed 1e-13 width never terminates when wp is single).
+         if (mid <= lo .or. mid >= hi) exit
          c = ct_from_pt(sp*SR_FACTOR, mid)
          if (c < ct_target) then
             lo = mid

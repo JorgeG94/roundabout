@@ -95,8 +95,8 @@ contains
       dtot = sum(h)
       ! tke = 1e300: the rotation-shortened decay (lambda = u*/|f| = 0.1 m)
       ! still leaves the mid-column ledger far above its Omega^2 cost.
-      call bbl_column_sweep(NZ, 1, h, n2, ustar, f, 1.0e300_wp, 1.0e30_wp, .true., OM2, VK, HUGE_KD, kd)
-      call bbl_column_sweep(NZ, 1, h, n2, ustar, 0.0_wp, 1.0e300_wp, 1.0e30_wp, .true., OM2, VK, HUGE_KD, kd0)
+      call bbl_column_sweep(NZ, 1, h, n2, ustar, f, 1.0e-8_wp*huge(1.0_wp), 1.0e30_wp, .true., OM2, VK, HUGE_KD, kd)
+      call bbl_column_sweep(NZ, 1, h, n2, ustar, 0.0_wp, 1.0e-8_wp*huge(1.0_wp), 1.0e30_wp, .true., OM2, VK, HUGE_KD, kd0)
       kmid = NZ/2
       z = sum(h(1:kmid))
       ! Exact formula, evaluated independently.

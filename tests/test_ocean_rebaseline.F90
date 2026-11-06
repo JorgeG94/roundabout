@@ -136,7 +136,7 @@ contains
       type(c_ptr), intent(out) :: c_handle
       integer :: status
       character(len=:), allocatable :: nml
-      real(wp) :: b(NX, NY)
+      real(c_double) :: b(NX, NY)
       nml = make_nml()
       status = int(rdb_ocean_create_pending(nml, int(len(nml), c_int), c_handle))
       if (status /= OCEAN_STATUS_OK) return
@@ -148,8 +148,8 @@ contains
       type(c_ptr), intent(out) :: c_handle
       logical, intent(in) :: with_pseudo
       integer :: status
-      real(wp) :: h(NX, NY, NZ), u(NX + 1, NY, NZ), v(NX, NY + 1, NZ)
-      real(wp) :: tc(NX, NY, NZ), sc(NX, NY, NZ), pc(NX, NY, NZ)
+      real(c_double) :: h(NX, NY, NZ), u(NX + 1, NY, NZ), v(NX, NY + 1, NZ)
+      real(c_double) :: tc(NX, NY, NZ), sc(NX, NY, NZ), pc(NX, NY, NZ)
       status = open_pending(c_handle)
       if (status /= OCEAN_STATUS_OK) return
       h = thickness()
@@ -177,8 +177,8 @@ contains
       type(c_ptr), intent(out) :: c_handle
       logical, intent(in) :: with_pseudo
       integer :: status
-      real(wp) :: h(NX, NY, NZ), u(NX + 1, NY, NZ), v(NX, NY + 1, NZ)
-      real(wp) :: tc(NX, NY, NZ), sc(NX, NY, NZ), pc(NX, NY, NZ)
+      real(c_double) :: h(NX, NY, NZ), u(NX + 1, NY, NZ), v(NX, NY + 1, NZ)
+      real(c_double) :: tc(NX, NY, NZ), sc(NX, NY, NZ), pc(NX, NY, NZ)
       status = open_pending(c_handle)
       if (status /= OCEAN_STATUS_OK) return
       status = int(rdb_ocean_create_finalize(c_handle))

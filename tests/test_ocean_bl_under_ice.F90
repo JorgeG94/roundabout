@@ -73,7 +73,7 @@
 !! Tolerances are STATED and derived; nothing here asserts bit-equality
 !! across two different code paths.
 module test_ocean_bl_under_ice
-   use, intrinsic :: iso_c_binding, only: c_ptr, c_int, c_null_ptr, c_f_pointer
+   use, intrinsic :: iso_c_binding, only: c_ptr, c_int, c_double, c_null_ptr, c_f_pointer
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp, GRAVITY
@@ -1233,7 +1233,7 @@ contains
          !! cost of the fallback path.
       type(c_ptr) :: handle, ptr
       real(wp), pointer :: kv(:, :, :)
-      real(wp), allocatable :: ubuf(:, :, :)
+      real(c_double), allocatable :: ubuf(:, :, :)
       integer(c_int) :: status, nx, ny, nz, gen, nx_p, ny_p, nz_p, ng
       character(len=:), allocatable :: nml
       integer :: ng_i, n_run
@@ -1254,7 +1254,8 @@ contains
 
       status = rdb_ocean_get_grid_info(handle, nx_p, ny_p, nz_p, ng)
       if (status == OCEAN_STATUS_OK) then
-         allocate (ubuf(nx_p + 1, ny_p, nz_p), source=U_JET)
+         allocate (ubuf(nx_p + 1, ny_p, nz_p))
+         ubuf = U_JET
          status = rdb_ocean_set_u(handle, ubuf, nx_p, ny_p, nz_p)
          deallocate (ubuf)
       end if

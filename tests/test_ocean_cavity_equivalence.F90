@@ -129,7 +129,7 @@ module test_ocean_cavity_equivalence
    !! itself capped a priori, because `dh`/`deta` are asserted under
    !! their floors first.  When the thicknesses agree bit for bit the
    !! term is zero and the loaded gate keeps its full 3.09e-17 tightness.
-   use, intrinsic :: iso_c_binding, only: c_ptr, c_int, c_null_ptr, c_f_pointer
+   use, intrinsic :: iso_c_binding, only: c_ptr, c_int, c_double, c_null_ptr, c_f_pointer
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp, GRAVITY
@@ -387,7 +387,7 @@ contains
       type(c_ptr), intent(in) :: handle
       integer(c_int) :: status
       integer(c_int) :: nx_p, ny_p, nz_p, ng
-      real(wp), allocatable :: ubuf(:, :, :)
+      real(c_double), allocatable :: ubuf(:, :, :)
       real(wp), parameter :: TWO_PI = 8.0_wp*atan(1.0_wp)
       integer :: i, j, k
 
@@ -764,9 +764,9 @@ contains
       type(c_ptr) :: handle
       integer(c_int) :: status
       character(len=:), allocatable :: nml
-      real(wp) :: b_new(12, 10)
+      real(c_double) :: b_new(12, 10)
 
-      b_new = 900.0_wp
+      b_new = 900.0_c_double
 
       nml = case_nml(BED, "enable = .true., draft_config = 'flat', draft_depth = 500.0")
       handle = c_null_ptr

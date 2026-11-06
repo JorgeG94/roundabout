@@ -8,7 +8,7 @@ module test_ocean_api_setter_eos_active
    !!
    !! Gates: thermodynamics OFF leaves `rho_layer` bit-identical across both
    !! setters; thermodynamics ON still recomputes it (unchanged behaviour).
-   use, intrinsic :: iso_c_binding, only: c_ptr, c_int, c_null_ptr, c_f_pointer
+   use, intrinsic :: iso_c_binding, only: c_ptr, c_int, c_double, c_null_ptr, c_f_pointer
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
    use rdb_ocean_api, only: rdb_ocean_create_from_string, rdb_ocean_destroy, &
@@ -66,7 +66,8 @@ contains
       type(c_ptr) :: handle, ptr
       integer(c_int) :: status, nx, ny, nz, gen, nxp, nyp, nzp, ngc
       real(wp), pointer :: r3(:, :, :)
-      real(wp), allocatable :: tval(:, :, :), hval(:, :, :), r0(:, :, :)
+      real(c_double), allocatable :: tval(:, :, :), hval(:, :, :)
+      real(wp), allocatable :: r0(:, :, :)
       character(len=:), allocatable :: nml
 
       ok = .false.

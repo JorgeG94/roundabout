@@ -116,6 +116,7 @@ module rdb_ice_transport
    !! another entered X4 would deadlock, and a rank-local abort would
    !! strand the others in the next exchange.
    use rdb_constants, only: wp
+   use, intrinsic :: iso_fortran_env, only: real64
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_multilayer_state, only: multilayer_state_t
@@ -150,7 +151,8 @@ module rdb_ice_transport
       !! guard's algebra (proportional `h_add` redistribution across the
       !! old mass + both face transports) is SIS2-specific and belongs
       !! with the kernel that uses it.
-   real(wp), parameter :: MASS_NEGLECT_ICE_TRANSPORT = 1.0e-60_wp
+   real(wp), parameter :: MASS_NEGLECT_ICE_TRANSPORT = &
+                          real(max(1.0e-60_real64, 1.0e3_real64*tiny(1.0_wp)), wp)
       !! SIS2 `compress_ice`'s `mass_neglect` (`SIS_transport.F90:959`) —
       !! the cell-average-mass gate below which a category is treated as
       !! contributing nothing to a transfer (guards the thickness-merge

@@ -214,7 +214,7 @@ contains
       real(wp), intent(in) :: dt_max
       integer :: n_inner
       real(wp) :: step
-      step = bt_dtbt_safe_step(dtbt, min(dt_max, 1.0e300_wp))
+      step = bt_dtbt_safe_step(dtbt, min(dt_max, 1.0e-8_wp*huge(1.0_wp)))
       if (dtbt <= 0.0_wp .and. dt_max >= huge(1.0_wp)) then
          n_inner = 1      ! no wet cell anywhere
       else
