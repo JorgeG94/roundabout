@@ -1,0 +1,748 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>sw_chl_apply &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>sw_chl_apply
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">11 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_sw_chl.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_sw_chl.f90.html'>rdb_ocean_sw_chl.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_sw_chl.html'>rdb_ocean_sw_chl</a></li>
+            <li class="breadcrumb-item active" aria-current="page">sw_chl_apply</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/sw_chl_apply.html#src">sw_chl_apply</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine sw_chl_apply(this, reader, grid, wet_mask, sf, t)  
+</h2>
+    
+
+    <p>Blend the chlorophyll bracket for time <code>t</code> into
+<code>sf%sw_chl_field</code> and refresh every band&rsquo;s opacity.  Call right
+after <code>ocean_data_input_update_all(t)</code>.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~467"></span>
+              type(<a href='../type/ocean_sw_chl_t.html'>ocean_sw_chl_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-reader~11"></span>
+              type(<a href='../type/ocean_data_input_t.html'>ocean_data_input_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>reader</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~361"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wet_mask~36"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wet_mask</strong>(grid%nx_total,grid%ny_total)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sf~30"></span>
+              type(<a href='../type/ocean_surface_flux_t.html'>ocean_surface_flux_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sf</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t~56"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~sw_chl_apply~~CallsGraph Pages: 1 -->
+<svg id="procsw_chl_applyCallsGraph" width="638pt" height="158pt"
+ viewBox="0.00 0.00 638.00 158.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~sw_chl_apply~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 154)">
+<title>proc~~sw_chl_apply~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-154 634,-154 634,4 -4,4"/>
+<!-- proc~sw_chl_apply -->
+<g id="proc~~sw_chl_apply~~CallsGraph_node1" class="node">
+<title>proc~sw_chl_apply</title>
+<polygon fill="none" stroke="black" points="82,-66 0,-66 0,-42 82,-42 82,-66"/>
+<text text-anchor="middle" x="41" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50">sw_chl_apply</text>
+</g>
+<!-- proc~ocean_data_input_update_2d -->
+<g id="proc~~sw_chl_apply~~CallsGraph_node2" class="node">
+<title>proc~ocean_data_input_update_2d</title>
+<g id="a_proc~~sw_chl_apply~~CallsGraph_node2"><a xlink:href="../proc/ocean_data_input_update_2d.html" xlink:title="ocean_data_input_update_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="287,-97 118,-97 118,-73 287,-73 287,-97"/>
+<text text-anchor="middle" x="202.5" y="-82.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_data_input_update_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~sw_chl_apply&#45;&gt;proc~ocean_data_input_update_2d -->
+<g id="proc~~sw_chl_apply~~CallsGraph_edge1" class="edge">
+<title>proc~sw_chl_apply&#45;&gt;proc~ocean_data_input_update_2d</title>
+<path fill="none" stroke="#ff0000" d="M82.25,-61.82C96.62,-64.62 113.27,-67.85 129.5,-71.01"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="129.04,-74.48 139.52,-72.95 130.37,-67.61 129.04,-74.48"/>
+</g>
+<!-- proc~sw_chl_fill_kappa -->
+<g id="proc~~sw_chl_apply~~CallsGraph_node3" class="node">
+<title>proc~sw_chl_fill_kappa</title>
+<g id="a_proc~~sw_chl_apply~~CallsGraph_node3"><a xlink:href="../proc/sw_chl_fill_kappa.html" xlink:title="sw_chl_fill_kappa">
+<polygon fill="#d9534f" stroke="#d9534f" points="254,-45 151,-45 151,-21 254,-21 254,-45"/>
+<text text-anchor="middle" x="202.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">sw_chl_fill_kappa</text>
+</a>
+</g>
+</g>
+<!-- proc~sw_chl_apply&#45;&gt;proc~sw_chl_fill_kappa -->
+<g id="proc~~sw_chl_apply~~CallsGraph_edge2" class="edge">
+<title>proc~sw_chl_apply&#45;&gt;proc~sw_chl_fill_kappa</title>
+<path fill="none" stroke="#ff0000" d="M82.25,-48.7C100.01,-46.36 121.27,-43.56 140.88,-40.98"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="141.51,-44.43 150.96,-39.65 140.59,-37.49 141.51,-44.43"/>
+</g>
+<!-- proc~check_fresh -->
+<g id="proc~~sw_chl_apply~~CallsGraph_node4" class="node">
+<title>proc~check_fresh</title>
+<g id="a_proc~~sw_chl_apply~~CallsGraph_node4"><a xlink:href="../proc/check_fresh.html" xlink:title="check_fresh">
+<polygon fill="#d9534f" stroke="#d9534f" points="436.5,-150 360.5,-150 360.5,-126 436.5,-126 436.5,-150"/>
+<text text-anchor="middle" x="398.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">check_fresh</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_data_input_update_2d&#45;&gt;proc~check_fresh -->
+<g id="proc~~sw_chl_apply~~CallsGraph_edge3" class="edge">
+<title>proc~ocean_data_input_update_2d&#45;&gt;proc~check_fresh</title>
+<path fill="none" stroke="#ff0000" d="M247.52,-97.03C278.29,-105.43 319.31,-116.64 350.68,-125.21"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="349.93,-128.63 360.5,-127.89 351.77,-121.88 349.93,-128.63"/>
+</g>
+<!-- proc~check_registered -->
+<g id="proc~~sw_chl_apply~~CallsGraph_node5" class="node">
+<title>proc~check_registered</title>
+<g id="a_proc~~sw_chl_apply~~CallsGraph_node5"><a xlink:href="../proc/check_registered.html" xlink:title="check_registered">
+<polygon fill="#d9534f" stroke="#d9534f" points="450,-108 347,-108 347,-84 450,-84 450,-108"/>
+<text text-anchor="middle" x="398.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">check_registered</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_data_input_update_2d&#45;&gt;proc~check_registered -->
+<g id="proc~~sw_chl_apply~~CallsGraph_edge4" class="edge">
+<title>proc~ocean_data_input_update_2d&#45;&gt;proc~check_registered</title>
+<path fill="none" stroke="#ff0000" d="M287.18,-89.74C303.84,-90.69 321.03,-91.66 336.74,-92.55"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="336.64,-96.05 346.83,-93.13 337.04,-89.07 336.64,-96.05"/>
+</g>
+<!-- proc~data_input_blend_2d_impl -->
+<g id="proc~~sw_chl_apply~~CallsGraph_node6" class="node">
+<title>proc~data_input_blend_2d_impl</title>
+<g id="a_proc~~sw_chl_apply~~CallsGraph_node6"><a xlink:href="../proc/data_input_blend_2d_impl.html" xlink:title="data_input_blend_2d_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="474,-66 323,-66 323,-42 474,-42 474,-66"/>
+<text text-anchor="middle" x="398.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">data_input_blend_2d_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_data_input_update_2d&#45;&gt;proc~data_input_blend_2d_impl -->
+<g id="proc~~sw_chl_apply~~CallsGraph_edge5" class="edge">
+<title>proc~ocean_data_input_update_2d&#45;&gt;proc~data_input_blend_2d_impl</title>
+<path fill="none" stroke="#ff0000" d="M278.78,-72.97C289.99,-71.18 301.6,-69.32 312.98,-67.51"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="313.58,-70.96 322.9,-65.92 312.47,-64.04 313.58,-70.96"/>
+</g>
+<!-- proc~sw_kappa_band_impl -->
+<g id="proc~~sw_chl_apply~~CallsGraph_node7" class="node">
+<title>proc~sw_kappa_band_impl</title>
+<g id="a_proc~~sw_chl_apply~~CallsGraph_node7"><a xlink:href="../proc/sw_kappa_band_impl.html" xlink:title="sw_kappa_band_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="461,-24 336,-24 336,0 461,0 461,-24"/>
+<text text-anchor="middle" x="398.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">sw_kappa_band_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~sw_chl_fill_kappa&#45;&gt;proc~sw_kappa_band_impl -->
+<g id="proc~~sw_chl_apply~~CallsGraph_edge6" class="edge">
+<title>proc~sw_chl_fill_kappa&#45;&gt;proc~sw_kappa_band_impl</title>
+<path fill="none" stroke="#00ffff" d="M254.22,-27.51C276.03,-25.15 301.91,-22.35 325.64,-19.78"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="326.09,-23.25 335.66,-18.69 325.34,-16.29 326.09,-23.25"/>
+</g>
+<!-- error -->
+<g id="proc~~sw_chl_apply~~CallsGraph_node8" class="node">
+<title>error</title>
+<polygon fill="#777777" stroke="#777777" points="597,-108 543,-108 543,-84 597,-84 597,-108"/>
+<text text-anchor="middle" x="570" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error</text>
+</g>
+<!-- proc~check_fresh&#45;&gt;error -->
+<g id="proc~~sw_chl_apply~~CallsGraph_edge7" class="edge">
+<title>proc~check_fresh&#45;&gt;error</title>
+<path fill="none" stroke="#ff0000" d="M436.7,-128.78C465.34,-121.69 504.69,-111.93 533.02,-104.91"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="534.06,-108.26 542.92,-102.46 532.37,-101.47 534.06,-108.26"/>
+</g>
+<!-- to_string -->
+<g id="proc~~sw_chl_apply~~CallsGraph_node10" class="node">
+<title>to_string</title>
+<polygon fill="#777777" stroke="#777777" points="599,-150 541,-150 541,-126 599,-126 599,-150"/>
+<text text-anchor="middle" x="570" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">to_string</text>
+</g>
+<!-- proc~check_fresh&#45;&gt;to_string -->
+<g id="proc~~sw_chl_apply~~CallsGraph_edge8" class="edge">
+<title>proc~check_fresh&#45;&gt;to_string</title>
+<path fill="none" stroke="#ff0000" d="M436.7,-138C464.52,-138 502.46,-138 530.57,-138"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="530.83,-141.5 540.83,-138 530.83,-134.5 530.83,-141.5"/>
+</g>
+<!-- proc~check_registered&#45;&gt;error -->
+<g id="proc~~sw_chl_apply~~CallsGraph_edge9" class="edge">
+<title>proc~check_registered&#45;&gt;error</title>
+<path fill="none" stroke="#7fff00" d="M450.36,-96C476.86,-96 508.66,-96 532.66,-96"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="532.76,-99.5 542.76,-96 532.76,-92.5 532.76,-99.5"/>
+</g>
+<!-- proc~check_registered&#45;&gt;to_string -->
+<g id="proc~~sw_chl_apply~~CallsGraph_edge10" class="edge">
+<title>proc~check_registered&#45;&gt;to_string</title>
+<path fill="none" stroke="#7fff00" d="M448.07,-108.04C474.26,-114.53 506.13,-122.42 530.58,-128.48"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="530.01,-131.95 540.56,-130.95 531.7,-125.15 530.01,-131.95"/>
+</g>
+<!-- proc~sw_opacity_manizza -->
+<g id="proc~~sw_chl_apply~~CallsGraph_node9" class="node">
+<title>proc~sw_opacity_manizza</title>
+<g id="a_proc~~sw_chl_apply~~CallsGraph_node9"><a xlink:href="../proc/sw_opacity_manizza.html" xlink:title="sw_opacity_manizza">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="630,-24 510,-24 510,0 630,0 630,-24"/>
+<text text-anchor="middle" x="570" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">sw_opacity_manizza</text>
+</a>
+</g>
+</g>
+<!-- proc~sw_kappa_band_impl&#45;&gt;proc~sw_opacity_manizza -->
+<g id="proc~~sw_chl_apply~~CallsGraph_edge11" class="edge">
+<title>proc~sw_kappa_band_impl&#45;&gt;proc~sw_opacity_manizza</title>
+<path fill="none" stroke="#7f00ff" d="M461.17,-12C473.72,-12 487,-12 499.79,-12"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="499.92,-15.5 509.92,-12 499.92,-8.5 499.92,-15.5"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~sw_chl_apply~~CalledByGraph Pages: 1 -->
+<svg id="procsw_chl_applyCalledByGraph" width="448pt" height="74pt"
+ viewBox="0.00 0.00 448.00 74.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~sw_chl_apply~~CalledByGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 70)">
+<title>proc~~sw_chl_apply~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 444,-70 444,4 -4,4"/>
+<!-- proc~sw_chl_apply -->
+<g id="proc~~sw_chl_apply~~CalledByGraph_node1" class="node">
+<title>proc~sw_chl_apply</title>
+<polygon fill="none" stroke="black" points="440,-45 358,-45 358,-21 440,-21 440,-45"/>
+<text text-anchor="middle" x="399" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">sw_chl_apply</text>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~sw_chl_apply~~CalledByGraph_node2" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~sw_chl_apply~~CalledByGraph_node2"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="322,-45 245,-45 245,-21 322,-21 322,-45"/>
+<text text-anchor="middle" x="283.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~sw_chl_apply -->
+<g id="proc~~sw_chl_apply~~CalledByGraph_edge1" class="edge">
+<title>proc~engine_step&#45;&gt;proc~sw_chl_apply</title>
+<path fill="none" stroke="#ff0000" d="M322.29,-33C330.36,-33 339.01,-33 347.47,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="347.64,-36.5 357.64,-33 347.64,-29.5 347.64,-36.5"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~sw_chl_apply~~CalledByGraph_node3" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~sw_chl_apply~~CalledByGraph_node3"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="209,-66 103,-66 103,-42 209,-42 209,-66"/>
+<text text-anchor="middle" x="156" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~sw_chl_apply~~CalledByGraph_edge2" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M209.13,-45.28C217.66,-43.85 226.45,-42.38 234.85,-40.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="235.59,-44.4 244.87,-39.3 234.43,-37.49 235.59,-44.4"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~sw_chl_apply~~CalledByGraph_node4" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~sw_chl_apply~~CalledByGraph_node4"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="204.5,-24 107.5,-24 107.5,0 204.5,0 204.5,-24"/>
+<text text-anchor="middle" x="156" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~sw_chl_apply~~CalledByGraph_edge3" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M204.8,-20C214.68,-21.65 225.07,-23.39 234.93,-25.04"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="234.53,-28.52 244.97,-26.72 235.69,-21.62 234.53,-28.52"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~sw_chl_apply~~CalledByGraph_node5" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~sw_chl_apply~~CalledByGraph_node5"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="67,-66 0,-66 0,-42 67,-42 67,-66"/>
+<text text-anchor="middle" x="33.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~sw_chl_apply~~CalledByGraph_edge4" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M67.11,-54C75.11,-54 83.94,-54 92.83,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="92.85,-57.5 102.85,-54 92.85,-50.5 92.85,-57.5"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">sw_chl_apply</span><span class="p">(</span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">reader</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">,</span><span class="w"> </span><span class="n">t</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Blend the chlorophyll bracket for time `t` into</span>
+<span class="w">      </span><span class="c">!! `sf%sw_chl_field` and refresh every band's opacity.  Call right</span>
+<span class="w">      </span><span class="c">!! after `ocean_data_input_update_all(t)`.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_sw_chl_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_data_input_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">reader</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wet_mask</span><span class="p">(</span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span><span class="p">)</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_surface_flux_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sf</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">t</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">active</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      call </span><span class="n">ocean_data_input_update_2d</span><span class="p">(</span><span class="n">reader</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">id_chl</span><span class="p">,</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">sf</span><span class="p">%</span><span class="n">sw_chl_field</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">sw_chl_fill_kappa</span><span class="p">(</span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                             </span><span class="n">sf</span><span class="p">%</span><span class="n">sw_chl_field</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">%</span><span class="n">sw_kappa</span><span class="p">)</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">sw_chl_apply</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-06 22:39 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

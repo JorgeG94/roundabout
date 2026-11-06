@@ -1,0 +1,708 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>parse_grid_config &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>parse_grid_config
+      <small>Function</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">14 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_metrics.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_metrics.f90.html'>rdb_ocean_metrics.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_metrics.html'>rdb_ocean_metrics</a></li>
+            <li class="breadcrumb-item active" aria-current="page">parse_grid_config</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/parse_grid_config.html#src">parse_grid_config</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public pure function parse_grid_config(s) result(cfg_enum)  
+</h2>
+    
+
+    <p>Map a <code>&amp;ocean_grid_nml grid_config</code> string onto its enum.
+Unknown -&gt; cartesian (the schema enum already validates the
+set; this is the canonical-name dispatch).</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s~44"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+      <h3>Return Value
+        <small>
+          <span class="anchor" id="variable-cfg_enum"></span>
+          integer
+        </small>
+      </h3>
+      
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~parse_grid_config~~CalledByGraph Pages: 1 -->
+<svg id="procparse_grid_configCalledByGraph" width="641pt" height="105pt"
+ viewBox="0.00 0.00 641.00 105.17" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~parse_grid_config~~CalledByGraph" class="graph" transform="scale(0.53 0.53) rotate(0) translate(4 196)">
+<title>proc~~parse_grid_config~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-196 1215,-196 1215,4 -4,4"/>
+<!-- proc~parse_grid_config -->
+<g id="proc~~parse_grid_config~~CalledByGraph_node1" class="node">
+<title>proc~parse_grid_config</title>
+<polygon fill="none" stroke="black" points="1211,-108 1104,-108 1104,-84 1211,-84 1211,-108"/>
+<text text-anchor="middle" x="1157.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50">parse_grid_config</text>
+</g>
+<!-- proc~configure_ocean_forcing -->
+<g id="proc~~parse_grid_config~~CalledByGraph_node2" class="node">
+<title>proc~configure_ocean_forcing</title>
+<g id="a_proc~~parse_grid_config~~CalledByGraph_node2"><a xlink:href="../proc/configure_ocean_forcing.html" xlink:title="configure_ocean_forcing">
+<polygon fill="#d9534f" stroke="#d9534f" points="1060.5,-192 917.5,-192 917.5,-168 1060.5,-168 1060.5,-192"/>
+<text text-anchor="middle" x="989" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_forcing</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_forcing&#45;&gt;proc~parse_grid_config -->
+<g id="proc~~parse_grid_config~~CalledByGraph_edge1" class="edge">
+<title>proc~configure_ocean_forcing&#45;&gt;proc~parse_grid_config</title>
+<path fill="none" stroke="#ff0000" d="M1044.6,-167.97C1052.62,-165.45 1060.64,-162.47 1068,-159 1092.77,-147.31 1117.92,-128.61 1135.05,-114.61"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1137.33,-117.26 1142.77,-108.17 1132.85,-111.89 1137.33,-117.26"/>
+</g>
+<!-- proc~configure_ocean_metrics -->
+<g id="proc~~parse_grid_config~~CalledByGraph_node3" class="node">
+<title>proc~configure_ocean_metrics</title>
+<g id="a_proc~~parse_grid_config~~CalledByGraph_node3"><a xlink:href="../proc/configure_ocean_metrics.html" xlink:title="configure_ocean_metrics">
+<polygon fill="#d9534f" stroke="#d9534f" points="1062,-150 916,-150 916,-126 1062,-126 1062,-150"/>
+<text text-anchor="middle" x="989" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_metrics</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_metrics&#45;&gt;proc~parse_grid_config -->
+<g id="proc~~parse_grid_config~~CalledByGraph_edge2" class="edge">
+<title>proc~configure_ocean_metrics&#45;&gt;proc~parse_grid_config</title>
+<path fill="none" stroke="#ff0000" d="M1037.71,-125.96C1056.78,-121.15 1078.92,-115.57 1098.88,-110.54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1099.94,-113.88 1108.78,-108.04 1098.23,-107.09 1099.94,-113.88"/>
+</g>
+<!-- proc~ocean_dyn_enable_bt_wide -->
+<g id="proc~~parse_grid_config~~CalledByGraph_node4" class="node">
+<title>proc~ocean_dyn_enable_bt_wide</title>
+<g id="a_proc~~parse_grid_config~~CalledByGraph_node4"><a xlink:href="../proc/ocean_dyn_enable_bt_wide.html" xlink:title="ocean_dyn_enable_bt_wide">
+<polygon fill="#d9534f" stroke="#d9534f" points="1068,-66 910,-66 910,-42 1068,-42 1068,-66"/>
+<text text-anchor="middle" x="989" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_enable_bt_wide</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_enable_bt_wide&#45;&gt;proc~parse_grid_config -->
+<g id="proc~~parse_grid_config~~CalledByGraph_edge3" class="edge">
+<title>proc~ocean_dyn_enable_bt_wide&#45;&gt;proc~parse_grid_config</title>
+<path fill="none" stroke="#ff0000" d="M1037.71,-66.04C1056.78,-70.85 1078.92,-76.43 1098.88,-81.46"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1098.23,-84.91 1108.78,-83.96 1099.94,-78.12 1098.23,-84.91"/>
+</g>
+<!-- proc~ocean_munk_worst_case -->
+<g id="proc~~parse_grid_config~~CalledByGraph_node5" class="node">
+<title>proc~ocean_munk_worst_case</title>
+<g id="a_proc~~parse_grid_config~~CalledByGraph_node5"><a xlink:href="../proc/ocean_munk_worst_case.html" xlink:title="ocean_munk_worst_case">
+<polygon fill="#d9534f" stroke="#d9534f" points="1061.5,-108 916.5,-108 916.5,-84 1061.5,-84 1061.5,-108"/>
+<text text-anchor="middle" x="989" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_munk_worst_case</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_munk_worst_case&#45;&gt;proc~parse_grid_config -->
+<g id="proc~~parse_grid_config~~CalledByGraph_edge4" class="edge">
+<title>proc~ocean_munk_worst_case&#45;&gt;proc~parse_grid_config</title>
+<path fill="none" stroke="#ff0000" d="M1061.58,-96C1072.15,-96 1082.99,-96 1093.38,-96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1093.59,-99.5 1103.59,-96 1093.59,-92.5 1093.59,-99.5"/>
+</g>
+<!-- proc~refusals_clear -->
+<g id="proc~~parse_grid_config~~CalledByGraph_node6" class="node">
+<title>proc~refusals_clear</title>
+<g id="a_proc~~parse_grid_config~~CalledByGraph_node6"><a xlink:href="../proc/refusals_clear.html" xlink:title="refusals_clear">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1032,-24 946,-24 946,0 1032,0 1032,-24"/>
+<text text-anchor="middle" x="989" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">refusals_clear</text>
+</a>
+</g>
+</g>
+<!-- proc~refusals_clear&#45;&gt;proc~parse_grid_config -->
+<g id="proc~~parse_grid_config~~CalledByGraph_edge5" class="edge">
+<title>proc~refusals_clear&#45;&gt;proc~parse_grid_config</title>
+<path fill="none" stroke="#ff0000" d="M1032.27,-20.46C1044.13,-23.61 1056.84,-27.73 1068,-33 1092.77,-44.69 1117.92,-63.39 1135.05,-77.39"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1132.85,-80.11 1142.77,-83.83 1137.33,-74.74 1132.85,-80.11"/>
+</g>
+<!-- interface~configure_ocean_forcing -->
+<g id="proc~~parse_grid_config~~CalledByGraph_node7" class="node">
+<title>interface~configure_ocean_forcing</title>
+<g id="a_proc~~parse_grid_config~~CalledByGraph_node7"><a xlink:href="../interface/configure_ocean_forcing.html" xlink:title="configure_ocean_forcing">
+<polygon fill="#a7506f" stroke="#a7506f" points="872.5,-192 729.5,-192 729.5,-168 872.5,-168 872.5,-192"/>
+<text text-anchor="middle" x="801" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_forcing</text>
+</a>
+</g>
+</g>
+<!-- interface~configure_ocean_forcing&#45;&gt;proc~configure_ocean_forcing -->
+<g id="proc~~parse_grid_config~~CalledByGraph_edge6" class="edge">
+<title>interface~configure_ocean_forcing&#45;&gt;proc~configure_ocean_forcing</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M872.58,-180C883.95,-180 895.79,-180 907.37,-180"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="907.46,-183.5 917.46,-180 907.46,-176.5 907.46,-183.5"/>
+</g>
+<!-- interface~configure_ocean_metrics -->
+<g id="proc~~parse_grid_config~~CalledByGraph_node8" class="node">
+<title>interface~configure_ocean_metrics</title>
+<g id="a_proc~~parse_grid_config~~CalledByGraph_node8"><a xlink:href="../interface/configure_ocean_metrics.html" xlink:title="configure_ocean_metrics">
+<polygon fill="#a7506f" stroke="#a7506f" points="874,-150 728,-150 728,-126 874,-126 874,-150"/>
+<text text-anchor="middle" x="801" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_metrics</text>
+</a>
+</g>
+</g>
+<!-- interface~configure_ocean_metrics&#45;&gt;proc~configure_ocean_metrics -->
+<g id="proc~~parse_grid_config~~CalledByGraph_edge7" class="edge">
+<title>interface~configure_ocean_metrics&#45;&gt;proc~configure_ocean_metrics</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M874.18,-138C884.55,-138 895.28,-138 905.83,-138"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="905.86,-141.5 915.86,-138 905.86,-134.5 905.86,-141.5"/>
+</g>
+<!-- proc~engine_enter_data -->
+<g id="proc~~parse_grid_config~~CalledByGraph_node9" class="node">
+<title>proc~engine_enter_data</title>
+<g id="a_proc~~parse_grid_config~~CalledByGraph_node9"><a xlink:href="../proc/engine_enter_data.html" xlink:title="engine_enter_data">
+<polygon fill="#d9534f" stroke="#d9534f" points="684,-66 572,-66 572,-42 684,-42 684,-66"/>
+<text text-anchor="middle" x="628" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_enter_data</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_enter_data&#45;&gt;proc~ocean_dyn_enable_bt_wide -->
+<g id="proc~~parse_grid_config~~CalledByGraph_edge8" class="edge">
+<title>proc~engine_enter_data&#45;&gt;proc~ocean_dyn_enable_bt_wide</title>
+<path fill="none" stroke="#00ff66" d="M684.31,-54C741.74,-54 832.45,-54 899.79,-54"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="899.97,-57.5 909.97,-54 899.97,-50.5 899.97,-57.5"/>
+</g>
+<!-- proc~ocean_balance_velocity -->
+<g id="proc~~parse_grid_config~~CalledByGraph_node10" class="node">
+<title>proc~ocean_balance_velocity</title>
+<g id="a_proc~~parse_grid_config~~CalledByGraph_node10"><a xlink:href="../proc/ocean_balance_velocity.html" xlink:title="ocean_balance_velocity">
+<polygon fill="#d9534f" stroke="#d9534f" points="871,-24 731,-24 731,0 871,0 871,-24"/>
+<text text-anchor="middle" x="801" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_balance_velocity</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_balance_velocity&#45;&gt;proc~refusals_clear -->
+<g id="proc~~parse_grid_config~~CalledByGraph_edge10" class="edge">
+<title>proc~ocean_balance_velocity&#45;&gt;proc~refusals_clear</title>
+<path fill="none" stroke="#cc00ff" d="M871.26,-12C892.63,-12 915.8,-12 935.82,-12"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="935.97,-15.5 945.97,-12 935.97,-8.5 935.97,-15.5"/>
+</g>
+<!-- proc~ocean_stability_audit -->
+<g id="proc~~parse_grid_config~~CalledByGraph_node11" class="node">
+<title>proc~ocean_stability_audit</title>
+<g id="a_proc~~parse_grid_config~~CalledByGraph_node11"><a xlink:href="../proc/ocean_stability_audit.html" xlink:title="ocean_stability_audit">
+<polygon fill="#d9534f" stroke="#d9534f" points="863,-108 739,-108 739,-84 863,-84 863,-108"/>
+<text text-anchor="middle" x="801" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_stability_audit</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_stability_audit&#45;&gt;proc~ocean_munk_worst_case -->
+<g id="proc~~parse_grid_config~~CalledByGraph_edge9" class="edge">
+<title>proc~ocean_stability_audit&#45;&gt;proc~ocean_munk_worst_case</title>
+<path fill="none" stroke="#0066ff" d="M863.16,-96C876.88,-96 891.65,-96 906.06,-96"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="906.47,-99.5 916.47,-96 906.47,-92.5 906.47,-99.5"/>
+</g>
+<!-- proc~complete_ocean_create -->
+<g id="proc~~parse_grid_config~~CalledByGraph_node12" class="node">
+<title>proc~complete_ocean_create</title>
+<g id="a_proc~~parse_grid_config~~CalledByGraph_node12"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="349.5,-66 209.5,-66 209.5,-42 349.5,-42 349.5,-66"/>
+<text text-anchor="middle" x="279.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_enter_data -->
+<g id="proc~~parse_grid_config~~CalledByGraph_edge13" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_enter_data</title>
+<path fill="none" stroke="#00ff66" d="M349.79,-54C411.49,-54 501.11,-54 561.6,-54"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="561.8,-57.5 571.8,-54 561.8,-50.5 561.8,-57.5"/>
+</g>
+<!-- proc~engine_setup -->
+<g id="proc~~parse_grid_config~~CalledByGraph_node14" class="node">
+<title>proc~engine_setup</title>
+<g id="a_proc~~parse_grid_config~~CalledByGraph_node14"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="670,-147 586,-147 586,-123 670,-123 670,-147"/>
+<text text-anchor="middle" x="628" y="-132.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_setup -->
+<g id="proc~~parse_grid_config~~CalledByGraph_edge20" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#00ffff" d="M333.65,-66.05C383.8,-77.47 461.06,-95.18 528,-111 543.53,-114.67 560.41,-118.74 575.76,-122.46"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="575.06,-125.89 585.6,-124.85 576.71,-119.09 575.06,-125.89"/>
+</g>
+<!-- proc~balance_and_rebaseline -->
+<g id="proc~~parse_grid_config~~CalledByGraph_node16" class="node">
+<title>proc~balance_and_rebaseline</title>
+<g id="a_proc~~parse_grid_config~~CalledByGraph_node16"><a xlink:href="../proc/balance_and_rebaseline.html" xlink:title="balance_and_rebaseline">
+<polygon fill="#d9534f" stroke="#d9534f" points="528,-24 386,-24 386,0 528,0 528,-24"/>
+<text text-anchor="middle" x="457" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">balance_and_rebaseline</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~balance_and_rebaseline -->
+<g id="proc~~parse_grid_config~~CalledByGraph_edge24" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~balance_and_rebaseline</title>
+<path fill="none" stroke="#ff0000" d="M330.79,-41.96C351.08,-37.11 374.65,-31.47 395.84,-26.4"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="396.79,-29.77 405.7,-24.04 395.16,-22.96 396.79,-29.77"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~parse_grid_config~~CalledByGraph_node13" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~parse_grid_config~~CalledByGraph_node13"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="510,-144 404,-144 404,-120 510,-120 510,-144"/>
+<text text-anchor="middle" x="457" y="-129.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_enter_data -->
+<g id="proc~~parse_grid_config~~CalledByGraph_edge14" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_enter_data</title>
+<path fill="none" stroke="#00ff66" d="M484.04,-119.98C512.82,-106.7 559.35,-85.22 591.46,-70.4"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="593.32,-73.4 600.93,-66.03 590.39,-67.04 593.32,-73.4"/>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_setup -->
+<g id="proc~~parse_grid_config~~CalledByGraph_edge21" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#00ffff" d="M510.08,-132.92C530.91,-133.29 554.83,-133.72 575.59,-134.09"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="575.75,-137.59 585.81,-134.27 575.87,-130.59 575.75,-137.59"/>
+</g>
+<!-- proc~engine_setup&#45;&gt;interface~configure_ocean_forcing -->
+<g id="proc~~parse_grid_config~~CalledByGraph_edge11" class="edge">
+<title>proc~engine_setup&#45;&gt;interface~configure_ocean_forcing</title>
+<path fill="none" stroke="#ff0000" d="M670.39,-145.89C692.63,-151.75 720.36,-159.04 744.45,-165.38"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="743.61,-168.78 754.18,-167.94 745.4,-162.01 743.61,-168.78"/>
+</g>
+<!-- proc~engine_setup&#45;&gt;interface~configure_ocean_metrics -->
+<g id="proc~~parse_grid_config~~CalledByGraph_edge12" class="edge">
+<title>proc~engine_setup&#45;&gt;interface~configure_ocean_metrics</title>
+<path fill="none" stroke="#cbff00" d="M670.39,-135.73C684.72,-135.98 701.32,-136.27 717.76,-136.56"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="717.89,-140.06 727.95,-136.74 718.01,-133.06 717.89,-140.06"/>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~ocean_stability_audit -->
+<g id="proc~~parse_grid_config~~CalledByGraph_edge16" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~ocean_stability_audit</title>
+<path fill="none" stroke="#cc00ff" d="M670.39,-125.56C690.54,-120.96 715.19,-115.34 737.56,-110.24"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="738.35,-113.65 747.32,-108.01 736.79,-106.83 738.35,-113.65"/>
+</g>
+<!-- proc~ocean_balance_apply -->
+<g id="proc~~parse_grid_config~~CalledByGraph_node15" class="node">
+<title>proc~ocean_balance_apply</title>
+<g id="a_proc~~parse_grid_config~~CalledByGraph_node15"><a xlink:href="../proc/ocean_balance_apply.html" xlink:title="ocean_balance_apply">
+<polygon fill="#d9534f" stroke="#d9534f" points="692,-24 564,-24 564,0 692,0 692,-24"/>
+<text text-anchor="middle" x="628" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_balance_apply</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_balance_apply&#45;&gt;proc~ocean_balance_velocity -->
+<g id="proc~~parse_grid_config~~CalledByGraph_edge15" class="edge">
+<title>proc~ocean_balance_apply&#45;&gt;proc~ocean_balance_velocity</title>
+<path fill="none" stroke="#0066ff" d="M692.19,-12C701.41,-12 711.01,-12 720.5,-12"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="720.74,-15.5 730.74,-12 720.74,-8.5 720.74,-15.5"/>
+</g>
+<!-- proc~balance_and_rebaseline&#45;&gt;proc~ocean_balance_apply -->
+<g id="proc~~parse_grid_config~~CalledByGraph_edge23" class="edge">
+<title>proc~balance_and_rebaseline&#45;&gt;proc~ocean_balance_apply</title>
+<path fill="none" stroke="#7f00ff" d="M528.2,-12C536.58,-12 545.16,-12 553.58,-12"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="553.76,-15.5 563.76,-12 553.76,-8.5 553.76,-15.5"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~parse_grid_config~~CalledByGraph_node17" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~parse_grid_config~~CalledByGraph_node17"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="313,-144 246,-144 246,-120 313,-120 313,-144"/>
+<text text-anchor="middle" x="279.5" y="-129.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~parse_grid_config~~CalledByGraph_edge19" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#7fff00" d="M313.1,-132C335.69,-132 366.48,-132 393.69,-132"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="393.93,-135.5 403.93,-132 393.93,-128.5 393.93,-135.5"/>
+</g>
+<!-- proc~driver_validate -->
+<g id="proc~~parse_grid_config~~CalledByGraph_node18" class="node">
+<title>proc~driver_validate</title>
+<g id="a_proc~~parse_grid_config~~CalledByGraph_node18"><a xlink:href="../proc/driver_validate.html" xlink:title="driver_validate">
+<polygon fill="#d9534f" stroke="#d9534f" points="503,-186 411,-186 411,-162 503,-162 503,-186"/>
+<text text-anchor="middle" x="457" y="-171.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_validate</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_validate&#45;&gt;proc~engine_setup -->
+<g id="proc~~parse_grid_config~~CalledByGraph_edge22" class="edge">
+<title>proc~driver_validate&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#00ffff" d="M503.29,-163.55C525.69,-158.38 552.81,-152.12 575.95,-146.78"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="576.97,-150.14 585.93,-144.48 575.4,-143.32 576.97,-150.14"/>
+</g>
+<!-- proc~rdb_ocean_create_finalize -->
+<g id="proc~~parse_grid_config~~CalledByGraph_node19" class="node">
+<title>proc~rdb_ocean_create_finalize</title>
+<g id="a_proc~~parse_grid_config~~CalledByGraph_node19"><a xlink:href="../proc/rdb_ocean_create_finalize.html" xlink:title="rdb_ocean_create_finalize">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="162,-87 11,-87 11,-63 162,-63 162,-87"/>
+<text text-anchor="middle" x="86.5" y="-72.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~parse_grid_config~~CalledByGraph_edge17" class="edge">
+<title>proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M162.17,-66.79C174.35,-65.45 187,-64.06 199.28,-62.71"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="199.94,-66.16 209.5,-61.59 199.18,-59.2 199.94,-66.16"/>
+</g>
+<!-- proc~rdb_ocean_create_from_string -->
+<g id="proc~~parse_grid_config~~CalledByGraph_node20" class="node">
+<title>proc~rdb_ocean_create_from_string</title>
+<g id="a_proc~~parse_grid_config~~CalledByGraph_node20"><a xlink:href="../proc/rdb_ocean_create_from_string.html" xlink:title="rdb_ocean_create_from_string">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="173,-45 0,-45 0,-21 173,-21 173,-45"/>
+<text text-anchor="middle" x="86.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_from_string</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~parse_grid_config~~CalledByGraph_edge18" class="edge">
+<title>proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M173.22,-42.43C181.92,-43.38 190.72,-44.35 199.35,-45.3"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="199.04,-48.78 209.37,-46.4 199.81,-41.83 199.04,-48.78"/>
+</g>
+<!-- proc~rdb_ocean_balance_live -->
+<g id="proc~~parse_grid_config~~CalledByGraph_node21" class="node">
+<title>proc~rdb_ocean_balance_live</title>
+<g id="a_proc~~parse_grid_config~~CalledByGraph_node21"><a xlink:href="../proc/rdb_ocean_balance_live.html" xlink:title="rdb_ocean_balance_live">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="350,-24 209,-24 209,0 350,0 350,-24"/>
+<text text-anchor="middle" x="279.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_balance_live</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_balance_live&#45;&gt;proc~balance_and_rebaseline -->
+<g id="proc~~parse_grid_config~~CalledByGraph_edge25" class="edge">
+<title>proc~rdb_ocean_balance_live&#45;&gt;proc~balance_and_rebaseline</title>
+<path fill="none" stroke="#ff0000" d="M350.11,-12C358.57,-12 367.27,-12 375.87,-12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="375.9,-15.5 385.9,-12 375.9,-8.5 375.9,-15.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocparse_grid_configCalledByGraph = svgPanZoom('#procparse_grid_configCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure function </span><span class="n">parse_grid_config</span><span class="p">(</span><span class="n">s</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">cfg_enum</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Map a `&amp;ocean_grid_nml grid_config` string onto its enum.</span>
+<span class="w">      </span><span class="c">!! Unknown -&gt; cartesian (the schema enum already validates the</span>
+<span class="w">      </span><span class="c">!! set; this is the canonical-name dispatch).</span>
+<span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">s</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cfg_enum</span>
+<span class="w">      </span><span class="k">select case</span><span class="w"> </span><span class="p">(</span><span class="nb">trim</span><span class="p">(</span><span class="n">s</span><span class="p">))</span>
+<span class="w">      </span><span class="k">case</span><span class="w"> </span><span class="p">(</span><span class="s2">"spherical"</span><span class="p">)</span>
+<span class="w">         </span><span class="n">cfg_enum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">GRID_CONFIG_SPHERICAL</span>
+<span class="w">      </span><span class="k">case</span><span class="w"> </span><span class="p">(</span><span class="s2">"supergrid"</span><span class="p">)</span>
+<span class="w">         </span><span class="n">cfg_enum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">GRID_CONFIG_SUPERGRID</span>
+<span class="w">      </span><span class="k">case</span><span class="w"> </span><span class="p">(</span><span class="s2">"tripolar"</span><span class="p">)</span>
+<span class="w">         </span><span class="n">cfg_enum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">GRID_CONFIG_TRIPOLAR</span>
+<span class="w">      </span><span class="k">case </span><span class="n">default</span>
+<span class="w">         </span><span class="n">cfg_enum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">GRID_CONFIG_CARTESIAN</span>
+<span class="w">      </span><span class="k">end select</span>
+<span class="k">   end function </span><span class="n">parse_grid_config</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-06 22:39 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

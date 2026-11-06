@@ -1,0 +1,1312 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>apply_sw_and_restore &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>apply_sw_and_restore
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">20 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_dyn.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_dyn.f90.html'>rdb_ocean_dyn.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_dyn.html'>rdb_ocean_dyn</a></li>
+            <li class="breadcrumb-item active" aria-current="page">apply_sw_and_restore</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/apply_sw_and_restore.html#src">apply_sw_and_restore</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private  subroutine apply_sw_and_restore(grid, metrics, sf, ms, therm_dt, therm_active)  
+</h2>
+    
+
+    <p>The two cell-centred surface kernels that do NOT route through
+the assembler&rsquo;s <code>Q_heat</code> / <code>Q_salt</code>, with their ice-shelf-cover
+dispatch.  Shortwave penetration reads a pristine <code>q_sw</code>
+component (or moves a lump the masked deposit never added) and
+restoring forms its flux in-kernel from the live SST/SSS, so
+each needs the cover factor of its own; everything else the
+atmosphere contributes is already masked inside
+<code>ocean_surface_flux_assemble</code>.</p>
+<p>Hoisted into its own routine rather than written inline in
+<code>run_stage_split</code>: that routine hosts eight <code>do concurrent</code>
+kernels, and handing a state array (<code>metrics%cover_frac</code>) to an
+external subroutine from a <code>do concurrent</code> host is the
+documented nvfortran escape-analysis pessimisation (CLAUDE.md,
+measured at +4.8 % on <code>ocean_continuity</code>).  This wrapper has no
+<code>do concurrent</code> of its own, so there is nothing to pessimise.</p>
+<p>Cavity off (<code>metrics%use_cavity = .false.</code>) ⇒ the original two
+calls, byte-identical.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~12"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-metrics~6"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>metrics</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sf~3"></span>
+              type(<a href='../type/ocean_surface_flux_t.html'>ocean_surface_flux_t</a>),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sf</strong></td>
+            <td>
+                <p>Forwarded; absent ⇒ both kernels no-op (their own contract).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ms~6"></span>
+              type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ms</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-therm_dt~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>therm_dt</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-therm_active~2"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>therm_active</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~apply_sw_and_restore~~CallsGraph Pages: 1 -->
+<svg id="procapply_sw_and_restoreCallsGraph" width="641pt" height="383pt"
+ viewBox="0.00 0.00 641.00 383.32" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~apply_sw_and_restore~~CallsGraph" class="graph" transform="scale(0.58 0.58) rotate(0) translate(4 655)">
+<title>proc~~apply_sw_and_restore~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-655 1098,-655 1098,4 -4,4"/>
+<!-- proc~apply_sw_and_restore -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node1" class="node">
+<title>proc~apply_sw_and_restore</title>
+<polygon fill="none" stroke="black" points="128,-483 0,-483 0,-459 128,-459 128,-483"/>
+<text text-anchor="middle" x="64" y="-468.6" font-family="Helvetica,sans-Serif" font-size="10.50">apply_sw_and_restore</text>
+</g>
+<!-- proc~ocean_sss_restore_apply -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node2" class="node">
+<title>proc~ocean_sss_restore_apply</title>
+<g id="a_proc~~apply_sw_and_restore~~CallsGraph_node2"><a xlink:href="../proc/ocean_sss_restore_apply.html" xlink:title="ocean_sss_restore_apply">
+<polygon fill="#d9534f" stroke="#d9534f" points="307,-276 164,-276 164,-252 307,-252 307,-276"/>
+<text text-anchor="middle" x="235.5" y="-261.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_sss_restore_apply</text>
+</a>
+</g>
+</g>
+<!-- proc~apply_sw_and_restore&#45;&gt;proc~ocean_sss_restore_apply -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge1" class="edge">
+<title>proc~apply_sw_and_restore&#45;&gt;proc~ocean_sss_restore_apply</title>
+<path fill="none" stroke="#ff0000" d="M74.85,-458.98C102.87,-424.75 183.3,-326.52 218.11,-284.01"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="221,-286.01 224.63,-276.06 215.58,-281.58 221,-286.01"/>
+</g>
+<!-- proc~ocean_surface_flux_apply_sw_penetration -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node3" class="node">
+<title>proc~ocean_surface_flux_apply_sw_penetration</title>
+<g id="a_proc~~apply_sw_and_restore~~CallsGraph_node3"><a xlink:href="../proc/ocean_surface_flux_apply_sw_penetration.html" xlink:title="ocean_surface_flux_apply_sw_penetration">
+<polygon fill="#d9534f" stroke="#d9534f" points="579,-483 343,-483 343,-459 579,-459 579,-483"/>
+<text text-anchor="middle" x="461" y="-468.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_surface_flux_apply_sw_penetration</text>
+</a>
+</g>
+</g>
+<!-- proc~apply_sw_and_restore&#45;&gt;proc~ocean_surface_flux_apply_sw_penetration -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge2" class="edge">
+<title>proc~apply_sw_and_restore&#45;&gt;proc~ocean_surface_flux_apply_sw_penetration</title>
+<path fill="none" stroke="#ff0000" d="M128.03,-471C182.82,-471 263.92,-471 332.25,-471"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="332.66,-474.5 342.66,-471 332.66,-467.5 332.66,-474.5"/>
+</g>
+<!-- proc~ocean_surface_restore_apply_tracers -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node4" class="node">
+<title>proc~ocean_surface_restore_apply_tracers</title>
+<g id="a_proc~~apply_sw_and_restore~~CallsGraph_node4"><a xlink:href="../proc/ocean_surface_restore_apply_tracers.html" xlink:title="ocean_surface_restore_apply_tracers">
+<polygon fill="#d9534f" stroke="#d9534f" points="566,-525 356,-525 356,-501 566,-501 566,-525"/>
+<text text-anchor="middle" x="461" y="-510.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_surface_restore_apply_tracers</text>
+</a>
+</g>
+</g>
+<!-- proc~apply_sw_and_restore&#45;&gt;proc~ocean_surface_restore_apply_tracers -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge3" class="edge">
+<title>proc~apply_sw_and_restore&#45;&gt;proc~ocean_surface_restore_apply_tracers</title>
+<path fill="none" stroke="#ff0000" d="M128.05,-480.36C139.98,-482.01 152.36,-483.63 164,-485 223.84,-492.06 290.66,-498.5 345.64,-503.42"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="345.49,-506.92 355.77,-504.32 346.12,-499.95 345.49,-506.92"/>
+</g>
+<!-- info -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node5" class="node">
+<title>info</title>
+<polygon fill="#777777" stroke="#777777" points="488,-150 434,-150 434,-126 488,-126 488,-150"/>
+<text text-anchor="middle" x="461" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">info</text>
+</g>
+<!-- proc~ocean_sss_restore_apply&#45;&gt;info -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge4" class="edge">
+<title>proc~ocean_sss_restore_apply&#45;&gt;info</title>
+<path fill="none" stroke="#ff0000" d="M244.84,-251.89C260.96,-229.53 298.73,-181.93 343,-159 368.06,-146.02 399.74,-140.91 423.81,-138.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="424.2,-142.46 433.95,-138.31 423.74,-135.47 424.2,-142.46"/>
+</g>
+<!-- proc~deposit_dispatch -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node12" class="node">
+<title>proc~deposit_dispatch</title>
+<g id="a_proc~~apply_sw_and_restore~~CallsGraph_node12"><a xlink:href="../proc/deposit_dispatch.html" xlink:title="deposit_dispatch">
+<polygon fill="#d9534f" stroke="#d9534f" points="512,-402 410,-402 410,-378 512,-378 512,-402"/>
+<text text-anchor="middle" x="461" y="-387.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">deposit_dispatch</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_sss_restore_apply&#45;&gt;proc~deposit_dispatch -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge5" class="edge">
+<title>proc~ocean_sss_restore_apply&#45;&gt;proc~deposit_dispatch</title>
+<path fill="none" stroke="#ff0000" d="M244.84,-276.11C260.96,-298.47 298.73,-346.07 343,-369 360.32,-377.97 380.8,-383.18 399.74,-386.18"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="399.39,-389.67 409.78,-387.6 400.37,-382.74 399.39,-389.67"/>
+</g>
+<!-- proc~efp_to_real -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node13" class="node">
+<title>proc~efp_to_real</title>
+<g id="a_proc~~apply_sw_and_restore~~CallsGraph_node13"><a xlink:href="../proc/efp_to_real.html" xlink:title="efp_to_real">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="496.5,-276 425.5,-276 425.5,-252 496.5,-252 496.5,-276"/>
+<text text-anchor="middle" x="461" y="-261.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">efp_to_real</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_sss_restore_apply&#45;&gt;proc~efp_to_real -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge6" class="edge">
+<title>proc~ocean_sss_restore_apply&#45;&gt;proc~efp_to_real</title>
+<path fill="none" stroke="#ff0000" d="M307.22,-264C342.61,-264 384.37,-264 415.28,-264"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="415.32,-267.5 425.32,-264 415.32,-260.5 415.32,-267.5"/>
+</g>
+<!-- proc~halo_allreduce_efp_list -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node14" class="node">
+<title>proc~halo_allreduce_efp_list</title>
+<g id="a_proc~~apply_sw_and_restore~~CallsGraph_node14"><a xlink:href="../proc/halo_allreduce_efp_list.html" xlink:title="halo_allreduce_efp_list">
+<polygon fill="#d9534f" stroke="#d9534f" points="527.5,-108 394.5,-108 394.5,-84 527.5,-84 527.5,-108"/>
+<text text-anchor="middle" x="461" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">halo_allreduce_efp_list</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_sss_restore_apply&#45;&gt;proc~halo_allreduce_efp_list -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge7" class="edge">
+<title>proc~ocean_sss_restore_apply&#45;&gt;proc~halo_allreduce_efp_list</title>
+<path fill="none" stroke="#ff0000" d="M241.52,-251.66C253.95,-222.81 289.09,-150.85 343,-117 355.35,-109.24 369.81,-104.17 384.26,-100.89"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="385.11,-104.28 394.23,-98.89 383.74,-97.42 385.11,-104.28"/>
+</g>
+<!-- proc~sss_flux_maxabs -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node15" class="node">
+<title>proc~sss_flux_maxabs</title>
+<g id="a_proc~~apply_sw_and_restore~~CallsGraph_node15"><a xlink:href="../proc/sss_flux_maxabs.html" xlink:title="sss_flux_maxabs">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="511,-360 411,-360 411,-336 511,-336 511,-360"/>
+<text text-anchor="middle" x="461" y="-345.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">sss_flux_maxabs</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_sss_restore_apply&#45;&gt;proc~sss_flux_maxabs -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge8" class="edge">
+<title>proc~ocean_sss_restore_apply&#45;&gt;proc~sss_flux_maxabs</title>
+<path fill="none" stroke="#ff0000" d="M252.89,-276.24C273.04,-290.67 308.77,-314.28 343,-327 361.28,-333.8 382.01,-338.44 400.89,-341.59"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="400.45,-345.06 410.87,-343.14 401.53,-338.14 400.45,-345.06"/>
+</g>
+<!-- proc~sss_net_factors -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node16" class="node">
+<title>proc~sss_net_factors</title>
+<g id="a_proc~~apply_sw_and_restore~~CallsGraph_node16"><a xlink:href="../proc/sss_net_factors.html" xlink:title="sss_net_factors">
+<polygon fill="#d9534f" stroke="#d9534f" points="507.5,-234 414.5,-234 414.5,-210 507.5,-210 507.5,-234"/>
+<text text-anchor="middle" x="461" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">sss_net_factors</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_sss_restore_apply&#45;&gt;proc~sss_net_factors -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge9" class="edge">
+<title>proc~ocean_sss_restore_apply&#45;&gt;proc~sss_net_factors</title>
+<path fill="none" stroke="#ff0000" d="M296.45,-251.99C311.63,-249 327.91,-245.84 343,-243 363.03,-239.23 385.03,-235.24 404.48,-231.76"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="405.17,-235.2 414.41,-230 403.95,-228.3 405.17,-235.2"/>
+</g>
+<!-- proc~sums_all -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node17" class="node">
+<title>proc~sums_all</title>
+<g id="a_proc~~apply_sw_and_restore~~CallsGraph_node17"><a xlink:href="../proc/sums_all.html" xlink:title="sums_all">
+<polygon fill="#d9534f" stroke="#d9534f" points="490,-318 432,-318 432,-294 490,-294 490,-318"/>
+<text text-anchor="middle" x="461" y="-303.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">sums_all</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_sss_restore_apply&#45;&gt;proc~sums_all -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge10" class="edge">
+<title>proc~ocean_sss_restore_apply&#45;&gt;proc~sums_all</title>
+<path fill="none" stroke="#ff0000" d="M296.45,-276.01C311.63,-279 327.91,-282.16 343,-285 369.2,-289.93 398.76,-295.24 421.61,-299.28"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="421.15,-302.75 431.6,-301.04 422.36,-295.86 421.15,-302.75"/>
+</g>
+<!-- to_string -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node18" class="node">
+<title>to_string</title>
+<polygon fill="#777777" stroke="#777777" points="490,-192 432,-192 432,-168 490,-168 490,-192"/>
+<text text-anchor="middle" x="461" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">to_string</text>
+</g>
+<!-- proc~ocean_sss_restore_apply&#45;&gt;to_string -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge11" class="edge">
+<title>proc~ocean_sss_restore_apply&#45;&gt;to_string</title>
+<path fill="none" stroke="#ff0000" d="M252.89,-251.76C273.04,-237.33 308.77,-213.72 343,-201 368.33,-191.58 398.36,-186.31 421.65,-183.4"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="422.31,-186.84 431.84,-182.22 421.5,-179.89 422.31,-186.84"/>
+</g>
+<!-- proc~apply_sw_penetration_cover_impl -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node8" class="node">
+<title>proc~apply_sw_penetration_cover_impl</title>
+<g id="a_proc~~apply_sw_and_restore~~CallsGraph_node8"><a xlink:href="../proc/apply_sw_penetration_cover_impl.html" xlink:title="apply_sw_penetration_cover_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="816.5,-441 624.5,-441 624.5,-417 816.5,-417 816.5,-441"/>
+<text text-anchor="middle" x="720.5" y="-426.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">apply_sw_penetration_cover_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_surface_flux_apply_sw_penetration&#45;&gt;proc~apply_sw_penetration_cover_impl -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge12" class="edge">
+<title>proc~ocean_surface_flux_apply_sw_penetration&#45;&gt;proc~apply_sw_penetration_cover_impl</title>
+<path fill="none" stroke="#00ff00" d="M535.79,-458.96C566.9,-453.89 603.28,-447.96 635.43,-442.71"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="636.39,-446.1 645.7,-441.04 635.27,-439.19 636.39,-446.1"/>
+</g>
+<!-- proc~apply_sw_penetration_impl -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node9" class="node">
+<title>proc~apply_sw_penetration_impl</title>
+<g id="a_proc~~apply_sw_and_restore~~CallsGraph_node9"><a xlink:href="../proc/apply_sw_penetration_impl.html" xlink:title="apply_sw_penetration_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="799,-483 642,-483 642,-459 799,-459 799,-483"/>
+<text text-anchor="middle" x="720.5" y="-468.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">apply_sw_penetration_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_surface_flux_apply_sw_penetration&#45;&gt;proc~apply_sw_penetration_impl -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge13" class="edge">
+<title>proc~ocean_surface_flux_apply_sw_penetration&#45;&gt;proc~apply_sw_penetration_impl</title>
+<path fill="none" stroke="#00ff00" d="M579.07,-471C596.67,-471 614.57,-471 631.43,-471"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="631.78,-474.5 641.78,-471 631.78,-467.5 631.78,-474.5"/>
+</g>
+<!-- proc~apply_sw_penetration_nb_cover_impl -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node10" class="node">
+<title>proc~apply_sw_penetration_nb_cover_impl</title>
+<g id="a_proc~~apply_sw_and_restore~~CallsGraph_node10"><a xlink:href="../proc/apply_sw_penetration_nb_cover_impl.html" xlink:title="apply_sw_penetration_nb_cover_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="826,-567 615,-567 615,-543 826,-543 826,-567"/>
+<text text-anchor="middle" x="720.5" y="-552.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">apply_sw_penetration_nb_cover_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_surface_flux_apply_sw_penetration&#45;&gt;proc~apply_sw_penetration_nb_cover_impl -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge14" class="edge">
+<title>proc~ocean_surface_flux_apply_sw_penetration&#45;&gt;proc~apply_sw_penetration_nb_cover_impl</title>
+<path fill="none" stroke="#00ff00" d="M559.32,-483.01C566.18,-485.5 572.82,-488.46 579,-492 600.34,-504.21 593.79,-521.57 615,-534 618.22,-535.89 621.59,-537.61 625.05,-539.18"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="623.84,-542.47 634.42,-542.99 626.47,-535.98 623.84,-542.47"/>
+</g>
+<!-- proc~apply_sw_penetration_nb_impl -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node11" class="node">
+<title>proc~apply_sw_penetration_nb_impl</title>
+<g id="a_proc~~apply_sw_and_restore~~CallsGraph_node11"><a xlink:href="../proc/apply_sw_penetration_nb_impl.html" xlink:title="apply_sw_penetration_nb_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="808,-609 633,-609 633,-585 808,-585 808,-609"/>
+<text text-anchor="middle" x="720.5" y="-594.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">apply_sw_penetration_nb_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_surface_flux_apply_sw_penetration&#45;&gt;proc~apply_sw_penetration_nb_impl -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge15" class="edge">
+<title>proc~ocean_surface_flux_apply_sw_penetration&#45;&gt;proc~apply_sw_penetration_nb_impl</title>
+<path fill="none" stroke="#00ff00" d="M564.9,-483.02C569.9,-485.56 574.64,-488.53 579,-492 610.79,-517.28 583.47,-550.39 615,-576 617.78,-578.26 620.73,-580.29 623.82,-582.12"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="622.35,-585.31 632.84,-586.78 625.56,-579.08 622.35,-585.31"/>
+</g>
+<!-- proc~apply_surface_restore_2d_cover_impl -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node6" class="node">
+<title>proc~apply_surface_restore_2d_cover_impl</title>
+<g id="a_proc~~apply_sw_and_restore~~CallsGraph_node6"><a xlink:href="../proc/apply_surface_restore_2d_cover_impl.html" xlink:title="apply_surface_restore_2d_cover_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="826,-651 615,-651 615,-627 826,-627 826,-651"/>
+<text text-anchor="middle" x="720.5" y="-636.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">apply_surface_restore_2d_cover_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_surface_restore_apply_tracers&#45;&gt;proc~apply_surface_restore_2d_cover_impl -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge16" class="edge">
+<title>proc~ocean_surface_restore_apply_tracers&#45;&gt;proc~apply_surface_restore_2d_cover_impl</title>
+<path fill="none" stroke="#0000ff" d="M475.62,-525.24C501.05,-547.39 558.32,-594.04 615,-618 620.35,-620.26 625.96,-622.28 631.68,-624.09"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="630.82,-627.49 641.4,-626.94 632.79,-620.77 630.82,-627.49"/>
+</g>
+<!-- proc~apply_surface_restore_2d_impl -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node7" class="node">
+<title>proc~apply_surface_restore_2d_impl</title>
+<g id="a_proc~~apply_sw_and_restore~~CallsGraph_node7"><a xlink:href="../proc/apply_surface_restore_2d_impl.html" xlink:title="apply_surface_restore_2d_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="808.5,-525 632.5,-525 632.5,-501 808.5,-501 808.5,-525"/>
+<text text-anchor="middle" x="720.5" y="-510.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">apply_surface_restore_2d_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_surface_restore_apply_tracers&#45;&gt;proc~apply_surface_restore_2d_impl -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge17" class="edge">
+<title>proc~ocean_surface_restore_apply_tracers&#45;&gt;proc~apply_surface_restore_2d_impl</title>
+<path fill="none" stroke="#0000ff" d="M566.36,-513C584.83,-513 603.99,-513 622.26,-513"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="622.3,-516.5 632.3,-513 622.3,-509.5 622.3,-516.5"/>
+</g>
+<!-- local -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node21" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="952,-525 898,-525 898,-501 952,-501 952,-525"/>
+<text text-anchor="middle" x="925" y="-510.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~apply_surface_restore_2d_cover_impl&#45;&gt;local -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge18" class="edge">
+<title>proc~apply_surface_restore_2d_cover_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff6d00" d="M810.22,-626.98C815.8,-624.48 821.12,-621.52 826,-618 852.15,-599.13 840.08,-578.66 862,-555 870.77,-545.54 882.05,-537.1 892.59,-530.32"/>
+<polygon fill="#ff6d00" stroke="#ff6d00" points="894.51,-533.24 901.19,-525.02 890.83,-527.28 894.51,-533.24"/>
+</g>
+<!-- proc~apply_surface_restore_2d_impl&#45;&gt;local -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge19" class="edge">
+<title>proc~apply_surface_restore_2d_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ffda00" d="M808.55,-513C836.19,-513 865.27,-513 887.32,-513"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="887.55,-516.5 897.55,-513 887.55,-509.5 887.55,-516.5"/>
+</g>
+<!-- proc~apply_sw_penetration_cover_impl&#45;&gt;local -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge20" class="edge">
+<title>proc~apply_sw_penetration_cover_impl&#45;&gt;local</title>
+<path fill="none" stroke="#b6ff00" d="M798.38,-441.02C807.84,-443.49 817.25,-446.46 826,-450 833.62,-453.09 871.1,-477.67 897.44,-495.2"/>
+<polygon fill="#b6ff00" stroke="#b6ff00" points="895.62,-498.19 905.88,-500.83 899.5,-492.37 895.62,-498.19"/>
+</g>
+<!-- proc~sw_transmission -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node30" class="node">
+<title>proc~sw_transmission</title>
+<g id="a_proc~~apply_sw_and_restore~~CallsGraph_node30"><a xlink:href="../proc/sw_transmission.html" xlink:title="sw_transmission">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="974.5,-462 875.5,-462 875.5,-438 974.5,-438 974.5,-462"/>
+<text text-anchor="middle" x="925" y="-447.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">sw_transmission</text>
+</a>
+</g>
+</g>
+<!-- proc~apply_sw_penetration_cover_impl&#45;&gt;proc~sw_transmission -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge21" class="edge">
+<title>proc~apply_sw_penetration_cover_impl&#45;&gt;proc~sw_transmission</title>
+<path fill="none" stroke="#b6ff00" d="M816.52,-438.85C833.06,-440.57 849.81,-442.31 865.01,-443.88"/>
+<polygon fill="#b6ff00" stroke="#b6ff00" points="864.96,-447.4 875.27,-444.95 865.68,-440.43 864.96,-447.4"/>
+</g>
+<!-- proc~apply_sw_penetration_impl&#45;&gt;local -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge22" class="edge">
+<title>proc~apply_sw_penetration_impl&#45;&gt;local</title>
+<path fill="none" stroke="#48ff00" d="M782.03,-483.03C796.45,-485.93 811.78,-489.05 826,-492 846.56,-496.27 869.5,-501.18 888.02,-505.18"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="887.3,-508.6 897.81,-507.29 888.78,-501.76 887.3,-508.6"/>
+</g>
+<!-- proc~apply_sw_penetration_impl&#45;&gt;proc~sw_transmission -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge23" class="edge">
+<title>proc~apply_sw_penetration_impl&#45;&gt;proc~sw_transmission</title>
+<path fill="none" stroke="#48ff00" d="M799.21,-462.94C821.16,-460.67 844.67,-458.23 865.29,-456.09"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="865.89,-459.54 875.48,-455.03 865.17,-452.58 865.89,-459.54"/>
+</g>
+<!-- proc~apply_sw_penetration_nb_cover_impl&#45;&gt;local -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge24" class="edge">
+<title>proc~apply_sw_penetration_nb_cover_impl&#45;&gt;local</title>
+<path fill="none" stroke="#00ff24" d="M782.03,-542.97C796.45,-540.07 811.78,-536.95 826,-534 846.56,-529.73 869.5,-524.82 888.02,-520.82"/>
+<polygon fill="#00ff24" stroke="#00ff24" points="888.78,-524.24 897.81,-518.71 887.3,-517.4 888.78,-524.24"/>
+</g>
+<!-- proc~sw_transmission_nb -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node31" class="node">
+<title>proc~sw_transmission_nb</title>
+<g id="a_proc~~apply_sw_and_restore~~CallsGraph_node31"><a xlink:href="../proc/sw_transmission_nb.html" xlink:title="sw_transmission_nb">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="984,-588 866,-588 866,-564 984,-564 984,-588"/>
+<text text-anchor="middle" x="925" y="-573.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">sw_transmission_nb</text>
+</a>
+</g>
+</g>
+<!-- proc~apply_sw_penetration_nb_cover_impl&#45;&gt;proc~sw_transmission_nb -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge25" class="edge">
+<title>proc~apply_sw_penetration_nb_cover_impl&#45;&gt;proc~sw_transmission_nb</title>
+<path fill="none" stroke="#00ff24" d="M826.01,-565.84C836.1,-566.88 846.14,-567.93 855.74,-568.92"/>
+<polygon fill="#00ff24" stroke="#00ff24" points="855.65,-572.43 865.96,-569.98 856.37,-565.47 855.65,-572.43"/>
+</g>
+<!-- proc~apply_sw_penetration_nb_impl&#45;&gt;local -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge26" class="edge">
+<title>proc~apply_sw_penetration_nb_impl&#45;&gt;local</title>
+<path fill="none" stroke="#00ff91" d="M798.38,-584.98C807.84,-582.51 817.25,-579.54 826,-576 833.62,-572.91 871.1,-548.33 897.44,-530.8"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="899.5,-533.63 905.88,-525.17 895.62,-527.81 899.5,-533.63"/>
+</g>
+<!-- proc~apply_sw_penetration_nb_impl&#45;&gt;proc~sw_transmission_nb -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge27" class="edge">
+<title>proc~apply_sw_penetration_nb_impl&#45;&gt;proc~sw_transmission_nb</title>
+<path fill="none" stroke="#00ff91" d="M808.26,-588C824.05,-586.37 840.31,-584.68 855.48,-583.11"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="856.2,-586.55 865.79,-582.04 855.48,-579.59 856.2,-586.55"/>
+</g>
+<!-- proc~sss_deposit_impl -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node28" class="node">
+<title>proc~sss_deposit_impl</title>
+<g id="a_proc~~apply_sw_and_restore~~CallsGraph_node28"><a xlink:href="../proc/sss_deposit_impl.html" xlink:title="sss_deposit_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="771,-399 670,-399 670,-375 771,-375 771,-399"/>
+<text text-anchor="middle" x="720.5" y="-384.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">sss_deposit_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~deposit_dispatch&#45;&gt;proc~sss_deposit_impl -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge28" class="edge">
+<title>proc~deposit_dispatch&#45;&gt;proc~sss_deposit_impl</title>
+<path fill="none" stroke="#00ffff" d="M512.26,-389.41C554.49,-388.92 614.94,-388.22 659.66,-387.7"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="659.85,-391.2 669.8,-387.58 659.76,-384.2 659.85,-391.2"/>
+</g>
+<!-- proc~efp_regularize -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node25" class="node">
+<title>proc~efp_regularize</title>
+<g id="a_proc~~apply_sw_and_restore~~CallsGraph_node25"><a xlink:href="../proc/efp_regularize.html" xlink:title="efp_regularize">
+<polygon fill="#d9534f" stroke="#d9534f" points="969,-236 881,-236 881,-212 969,-212 969,-236"/>
+<text text-anchor="middle" x="925" y="-221.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">efp_regularize</text>
+</a>
+</g>
+</g>
+<!-- proc~efp_to_real&#45;&gt;proc~efp_regularize -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge29" class="edge">
+<title>proc~efp_to_real&#45;&gt;proc~efp_regularize</title>
+<path fill="none" stroke="#0091ff" d="M496.53,-263.78C561.37,-263 705.64,-259.5 826,-244 840.69,-242.11 856.48,-239.26 870.99,-236.29"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="871.74,-239.71 880.81,-234.24 870.3,-232.86 871.74,-239.71"/>
+</g>
+<!-- allreduce -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node19" class="node">
+<title>allreduce</title>
+<polygon fill="#777777" stroke="#777777" points="751.5,-108 689.5,-108 689.5,-84 751.5,-84 751.5,-108"/>
+<text text-anchor="middle" x="720.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">allreduce</text>
+</g>
+<!-- proc~halo_allreduce_efp_list&#45;&gt;allreduce -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge30" class="edge">
+<title>proc~halo_allreduce_efp_list&#45;&gt;allreduce</title>
+<path fill="none" stroke="#0024ff" d="M527.64,-96C575.48,-96 638.76,-96 679.31,-96"/>
+<polygon fill="#0024ff" stroke="#0024ff" points="679.36,-99.5 689.36,-96 679.36,-92.5 679.36,-99.5"/>
+</g>
+<!-- error -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node20" class="node">
+<title>error</title>
+<polygon fill="#777777" stroke="#777777" points="747.5,-66 693.5,-66 693.5,-42 747.5,-42 747.5,-66"/>
+<text text-anchor="middle" x="720.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error</text>
+</g>
+<!-- proc~halo_allreduce_efp_list&#45;&gt;error -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge31" class="edge">
+<title>proc~halo_allreduce_efp_list&#45;&gt;error</title>
+<path fill="none" stroke="#0024ff" d="M527.64,-85.29C577.13,-77.22 643.13,-66.46 683.41,-59.89"/>
+<polygon fill="#0024ff" stroke="#0024ff" points="684.01,-63.33 693.32,-58.27 682.88,-56.43 684.01,-63.33"/>
+</g>
+<!-- proc~comm_env_compute_comm -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node22" class="node">
+<title>proc~comm_env_compute_comm</title>
+<g id="a_proc~~apply_sw_and_restore~~CallsGraph_node22"><a xlink:href="../proc/comm_env_compute_comm.html" xlink:title="comm_env_compute_comm">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="802,-24 639,-24 639,0 802,0 802,-24"/>
+<text text-anchor="middle" x="720.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_env_compute_comm</text>
+</a>
+</g>
+</g>
+<!-- proc~halo_allreduce_efp_list&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge32" class="edge">
+<title>proc~halo_allreduce_efp_list&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#0024ff" d="M486.9,-84C516.74,-70.03 568.54,-47.09 615,-33 623.02,-30.57 631.47,-28.34 639.95,-26.32"/>
+<polygon fill="#0024ff" stroke="#0024ff" points="640.93,-29.69 649.89,-24.04 639.37,-22.86 640.93,-29.69"/>
+</g>
+<!-- proc~efp_bin1_within_transport_bound -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node23" class="node">
+<title>proc~efp_bin1_within_transport_bound</title>
+<g id="a_proc~~apply_sw_and_restore~~CallsGraph_node23"><a xlink:href="../proc/efp_bin1_within_transport_bound.html" xlink:title="efp_bin1_within_transport_bound">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="814.5,-192 626.5,-192 626.5,-168 814.5,-168 814.5,-192"/>
+<text text-anchor="middle" x="720.5" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">efp_bin1_within_transport_bound</text>
+</a>
+</g>
+</g>
+<!-- proc~halo_allreduce_efp_list&#45;&gt;proc~efp_bin1_within_transport_bound -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge33" class="edge">
+<title>proc~halo_allreduce_efp_list&#45;&gt;proc~efp_bin1_within_transport_bound</title>
+<path fill="none" stroke="#0024ff" d="M527.58,-99.76C545.13,-102.86 563.51,-108.13 579,-117 600.34,-129.21 593.79,-146.57 615,-159 618.22,-160.89 621.59,-162.61 625.05,-164.18"/>
+<polygon fill="#0024ff" stroke="#0024ff" points="623.84,-167.47 634.42,-167.99 626.47,-160.98 623.84,-167.47"/>
+</g>
+<!-- proc~efp_from_transport -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node24" class="node">
+<title>proc~efp_from_transport</title>
+<g id="a_proc~~apply_sw_and_restore~~CallsGraph_node24"><a xlink:href="../proc/efp_from_transport.html" xlink:title="efp_from_transport">
+<polygon fill="#d9534f" stroke="#d9534f" points="777.5,-235 663.5,-235 663.5,-211 777.5,-211 777.5,-235"/>
+<text text-anchor="middle" x="720.5" y="-220.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">efp_from_transport</text>
+</a>
+</g>
+</g>
+<!-- proc~halo_allreduce_efp_list&#45;&gt;proc~efp_from_transport -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge34" class="edge">
+<title>proc~halo_allreduce_efp_list&#45;&gt;proc~efp_from_transport</title>
+<path fill="none" stroke="#0024ff" d="M527.75,-96.51C545.89,-99.48 564.54,-105.5 579,-117 610.79,-142.28 583.59,-175.25 615,-201 625.9,-209.94 639.55,-215.51 653.35,-218.92"/>
+<polygon fill="#0024ff" stroke="#0024ff" points="652.88,-222.4 663.38,-221.04 654.32,-215.55 652.88,-222.4"/>
+</g>
+<!-- proc~efp_to_transport -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node26" class="node">
+<title>proc~efp_to_transport</title>
+<g id="a_proc~~apply_sw_and_restore~~CallsGraph_node26"><a xlink:href="../proc/efp_to_transport.html" xlink:title="efp_to_transport">
+<polygon fill="#d9534f" stroke="#d9534f" points="770.5,-150 670.5,-150 670.5,-126 770.5,-126 770.5,-150"/>
+<text text-anchor="middle" x="720.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">efp_to_transport</text>
+</a>
+</g>
+</g>
+<!-- proc~halo_allreduce_efp_list&#45;&gt;proc~efp_to_transport -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge35" class="edge">
+<title>proc~halo_allreduce_efp_list&#45;&gt;proc~efp_to_transport</title>
+<path fill="none" stroke="#0024ff" d="M527.64,-106.71C568.49,-113.37 620.6,-121.87 660.2,-128.33"/>
+<polygon fill="#0024ff" stroke="#0024ff" points="659.81,-131.81 670.24,-129.97 660.93,-124.9 659.81,-131.81"/>
+</g>
+<!-- proc~sss_cell_flux -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node27" class="node">
+<title>proc~sss_cell_flux</title>
+<g id="a_proc~~apply_sw_and_restore~~CallsGraph_node27"><a xlink:href="../proc/sss_cell_flux.html" xlink:title="sss_cell_flux">
+<polygon fill="#d9534f" stroke="#d9534f" points="963.5,-359 886.5,-359 886.5,-335 963.5,-335 963.5,-359"/>
+<text text-anchor="middle" x="925" y="-344.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">sss_cell_flux</text>
+</a>
+</g>
+</g>
+<!-- proc~sss_flux_maxabs&#45;&gt;proc~sss_cell_flux -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge36" class="edge">
+<title>proc~sss_flux_maxabs&#45;&gt;proc~sss_cell_flux</title>
+<path fill="none" stroke="#4800ff" d="M511,-347.89C600.16,-347.7 787.8,-347.29 876.12,-347.1"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="876.39,-350.6 886.38,-347.08 876.37,-343.6 876.39,-350.6"/>
+</g>
+<!-- proc~sss_flux_sums -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node29" class="node">
+<title>proc~sss_flux_sums</title>
+<g id="a_proc~~apply_sw_and_restore~~CallsGraph_node29"><a xlink:href="../proc/sss_flux_sums.html" xlink:title="sss_flux_sums">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="763.5,-318 677.5,-318 677.5,-294 763.5,-294 763.5,-318"/>
+<text text-anchor="middle" x="720.5" y="-303.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">sss_flux_sums</text>
+</a>
+</g>
+</g>
+<!-- proc~sums_all&#45;&gt;proc~sss_flux_sums -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge37" class="edge">
+<title>proc~sums_all&#45;&gt;proc~sss_flux_sums</title>
+<path fill="none" stroke="#ff00da" d="M490.05,-306C532.45,-306 613.6,-306 667.14,-306"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="667.46,-309.5 677.46,-306 667.46,-302.5 667.46,-309.5"/>
+</g>
+<!-- comm_world -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node32" class="node">
+<title>comm_world</title>
+<polygon fill="#777777" stroke="#777777" points="965.5,-24 884.5,-24 884.5,0 965.5,0 965.5,-24"/>
+<text text-anchor="middle" x="925" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_world</text>
+</g>
+<!-- proc~comm_env_compute_comm&#45;&gt;comm_world -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge38" class="edge">
+<title>proc~comm_env_compute_comm&#45;&gt;comm_world</title>
+<path fill="none" stroke="#9cff00" d="M802.12,-12C826.38,-12 852.3,-12 873.96,-12"/>
+<polygon fill="#9cff00" stroke="#9cff00" points="874.23,-15.5 884.23,-12 874.23,-8.5 874.23,-15.5"/>
+</g>
+<!-- proc~efp_from_transport&#45;&gt;proc~efp_regularize -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge39" class="edge">
+<title>proc~efp_from_transport&#45;&gt;proc~efp_regularize</title>
+<path fill="none" stroke="#00ff4e" d="M777.64,-223.28C806.72,-223.42 842.05,-223.6 870.71,-223.74"/>
+<polygon fill="#00ff4e" stroke="#00ff4e" points="870.93,-227.24 880.94,-223.79 870.96,-220.24 870.93,-227.24"/>
+</g>
+<!-- proc~efp_carry -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node33" class="node">
+<title>proc~efp_carry</title>
+<g id="a_proc~~apply_sw_and_restore~~CallsGraph_node33"><a xlink:href="../proc/efp_carry.html" xlink:title="efp_carry">
+<polygon fill="#d9534f" stroke="#d9534f" points="1090.5,-277 1027.5,-277 1027.5,-253 1090.5,-253 1090.5,-277"/>
+<text text-anchor="middle" x="1059" y="-262.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">efp_carry</text>
+</a>
+</g>
+</g>
+<!-- proc~efp_regularize&#45;&gt;proc~efp_carry -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge40" class="edge">
+<title>proc~efp_regularize&#45;&gt;proc~efp_carry</title>
+<path fill="none" stroke="#00ffc4" d="M964.89,-236.08C981.39,-241.2 1000.63,-247.18 1017.32,-252.36"/>
+<polygon fill="#00ffc4" stroke="#00ffc4" points="1016.74,-255.85 1027.33,-255.47 1018.82,-249.17 1016.74,-255.85"/>
+</g>
+<!-- proc~sr_from_sp -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node35" class="node">
+<title>proc~sr_from_sp</title>
+<g id="a_proc~~apply_sw_and_restore~~CallsGraph_node35"><a xlink:href="../proc/sr_from_sp.html" xlink:title="sr_from_sp">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1094,-359 1024,-359 1024,-335 1094,-335 1094,-359"/>
+<text text-anchor="middle" x="1059" y="-344.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">sr_from_sp</text>
+</a>
+</g>
+</g>
+<!-- proc~sss_cell_flux&#45;&gt;proc~sr_from_sp -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge41" class="edge">
+<title>proc~sss_cell_flux&#45;&gt;proc~sr_from_sp</title>
+<path fill="none" stroke="#004eff" d="M963.83,-347C979.32,-347 997.37,-347 1013.5,-347"/>
+<polygon fill="#004eff" stroke="#004eff" points="1013.78,-350.5 1023.78,-347 1013.78,-343.5 1013.78,-350.5"/>
+</g>
+<!-- proc~sss_deposit_impl&#45;&gt;local -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge42" class="edge">
+<title>proc~sss_deposit_impl&#45;&gt;local</title>
+<path fill="none" stroke="#2700ff" d="M771.23,-388.43C789.83,-391.06 810.24,-396.63 826,-408 852.15,-426.87 840.08,-447.34 862,-471 870.77,-480.46 882.05,-488.9 892.59,-495.68"/>
+<polygon fill="#2700ff" stroke="#2700ff" points="890.83,-498.72 901.19,-500.98 894.51,-492.76 890.83,-498.72"/>
+</g>
+<!-- proc~sss_deposit_impl&#45;&gt;proc~sss_cell_flux -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge43" class="edge">
+<title>proc~sss_deposit_impl&#45;&gt;proc~sss_cell_flux</title>
+<path fill="none" stroke="#2700ff" d="M771.04,-377.21C803.16,-370.87 844.77,-362.65 876.48,-356.39"/>
+<polygon fill="#2700ff" stroke="#2700ff" points="877.27,-359.8 886.4,-354.43 875.91,-352.93 877.27,-359.8"/>
+</g>
+<!-- proc~sss_flux_sums&#45;&gt;proc~sss_cell_flux -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge46" class="edge">
+<title>proc~sss_flux_sums&#45;&gt;proc~sss_cell_flux</title>
+<path fill="none" stroke="#9c00ff" d="M763.95,-314.59C796.74,-321.23 842.13,-330.42 876.2,-337.32"/>
+<polygon fill="#9c00ff" stroke="#9c00ff" points="875.88,-340.83 886.38,-339.38 877.27,-333.97 875.88,-340.83"/>
+</g>
+<!-- proc~sss_flux_sums&#45;&gt;proc~efp_carry -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge44" class="edge">
+<title>proc~sss_flux_sums&#45;&gt;proc~efp_carry</title>
+<path fill="none" stroke="#9c00ff" d="M763.89,-306.01C816.8,-305.33 909.85,-301.86 988,-287 997.75,-285.15 1008.05,-282.38 1017.67,-279.43"/>
+<polygon fill="#9c00ff" stroke="#9c00ff" points="1018.93,-282.71 1027.38,-276.33 1016.79,-276.04 1018.93,-282.71"/>
+</g>
+<!-- proc~efp_decompose_impl -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_node34" class="node">
+<title>proc~efp_decompose_impl</title>
+<g id="a_proc~~apply_sw_and_restore~~CallsGraph_node34"><a xlink:href="../proc/efp_decompose_impl.html" xlink:title="efp_decompose_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="988,-278 862,-278 862,-254 988,-254 988,-278"/>
+<text text-anchor="middle" x="925" y="-263.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">efp_decompose_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~sss_flux_sums&#45;&gt;proc~efp_decompose_impl -->
+<g id="proc~~apply_sw_and_restore~~CallsGraph_edge45" class="edge">
+<title>proc~sss_flux_sums&#45;&gt;proc~efp_decompose_impl</title>
+<path fill="none" stroke="#9c00ff" d="M763.95,-297.61C789.79,-292.51 823.45,-285.86 853.23,-279.98"/>
+<polygon fill="#9c00ff" stroke="#9c00ff" points="854.03,-283.39 863.17,-278.02 852.68,-276.52 854.03,-283.39"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocapply_sw_and_restoreCallsGraph = svgPanZoom('#procapply_sw_and_restoreCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~apply_sw_and_restore~~CalledByGraph Pages: 1 -->
+<svg id="procapply_sw_and_restoreCalledByGraph" width="641pt" height="90pt"
+ viewBox="0.00 0.00 641.00 89.80" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~apply_sw_and_restore~~CalledByGraph" class="graph" transform="scale(0.77 0.77) rotate(0) translate(4 112)">
+<title>proc~~apply_sw_and_restore~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-112 824,-112 824,4 -4,4"/>
+<!-- proc~apply_sw_and_restore -->
+<g id="proc~~apply_sw_and_restore~~CalledByGraph_node1" class="node">
+<title>proc~apply_sw_and_restore</title>
+<polygon fill="none" stroke="black" points="820,-66 692,-66 692,-42 820,-42 820,-66"/>
+<text text-anchor="middle" x="756" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50">apply_sw_and_restore</text>
+</g>
+<!-- proc~apply_deferred_thermo -->
+<g id="proc~~apply_sw_and_restore~~CalledByGraph_node2" class="node">
+<title>proc~apply_deferred_thermo</title>
+<g id="a_proc~~apply_sw_and_restore~~CalledByGraph_node2"><a xlink:href="../proc/apply_deferred_thermo.html" xlink:title="apply_deferred_thermo">
+<polygon fill="#d9534f" stroke="#d9534f" points="656,-66 519,-66 519,-42 656,-42 656,-66"/>
+<text text-anchor="middle" x="587.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">apply_deferred_thermo</text>
+</a>
+</g>
+</g>
+<!-- proc~apply_deferred_thermo&#45;&gt;proc~apply_sw_and_restore -->
+<g id="proc~~apply_sw_and_restore~~CalledByGraph_edge1" class="edge">
+<title>proc~apply_deferred_thermo&#45;&gt;proc~apply_sw_and_restore</title>
+<path fill="none" stroke="#ff0000" d="M656.22,-54C664.61,-54 673.21,-54 681.67,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="681.91,-57.5 691.91,-54 681.91,-50.5 681.91,-57.5"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~apply_sw_and_restore~~CalledByGraph_node3" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~apply_sw_and_restore~~CalledByGraph_node3"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="620,-108 555,-108 555,-84 620,-84 620,-108"/>
+<text text-anchor="middle" x="587.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~apply_sw_and_restore -->
+<g id="proc~~apply_sw_and_restore~~CalledByGraph_edge2" class="edge">
+<title>proc~run_stage&#45;&gt;proc~apply_sw_and_restore</title>
+<path fill="none" stroke="#ff0000" d="M620.21,-88C642.05,-82.49 671.68,-75.02 697.6,-68.48"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="698.49,-71.86 707.33,-66.02 696.78,-65.08 698.49,-71.86"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~apply_sw_and_restore~~CalledByGraph_node4" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~apply_sw_and_restore~~CalledByGraph_node4"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="633.5,-24 541.5,-24 541.5,0 633.5,0 633.5,-24"/>
+<text text-anchor="middle" x="587.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~apply_sw_and_restore -->
+<g id="proc~~apply_sw_and_restore~~CalledByGraph_edge3" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~apply_sw_and_restore</title>
+<path fill="none" stroke="#ff0000" d="M633.56,-23.37C653.26,-28.34 676.61,-34.23 697.54,-39.51"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="696.73,-42.91 707.29,-41.96 698.44,-36.12 696.73,-42.91"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~apply_sw_and_restore~~CalledByGraph_node5" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~apply_sw_and_restore~~CalledByGraph_node5"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="469.5,-108 371.5,-108 371.5,-84 469.5,-84 469.5,-108"/>
+<text text-anchor="middle" x="420.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~apply_sw_and_restore~~CalledByGraph_edge5" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#00ff00" d="M469.67,-96C493.42,-96 521.8,-96 544.64,-96"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="544.71,-99.5 554.71,-96 544.71,-92.5 544.71,-99.5"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~apply_sw_and_restore~~CalledByGraph_node6" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~apply_sw_and_restore~~CalledByGraph_node6"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="483,-66 358,-66 358,-42 483,-42 483,-66"/>
+<text text-anchor="middle" x="420.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~apply_deferred_thermo -->
+<g id="proc~~apply_sw_and_restore~~CalledByGraph_edge4" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~apply_deferred_thermo</title>
+<path fill="none" stroke="#ff0000" d="M483.41,-54C491.76,-54 500.4,-54 508.98,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="508.99,-57.5 518.99,-54 508.99,-50.5 508.99,-57.5"/>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~apply_sw_and_restore~~CalledByGraph_edge6" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#0000ff" d="M468.78,-41.96C488.42,-36.96 511.34,-31.13 531.71,-25.95"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="532.65,-29.32 541.48,-23.46 530.93,-22.53 532.65,-29.32"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~apply_sw_and_restore~~CalledByGraph_node7" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~apply_sw_and_restore~~CalledByGraph_node7"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="322,-87 245,-87 245,-63 322,-63 322,-87"/>
+<text text-anchor="middle" x="283.5" y="-72.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step -->
+<g id="proc~~apply_sw_and_restore~~CalledByGraph_edge7" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step</title>
+<path fill="none" stroke="#ff0000" d="M322.11,-80.85C334.29,-82.75 348.1,-84.89 361.42,-86.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="361.05,-90.45 371.47,-88.53 362.13,-83.53 361.05,-90.45"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~apply_sw_and_restore~~CalledByGraph_edge8" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#00ffff" d="M322.11,-69.15C330.15,-67.9 338.91,-66.54 347.77,-65.16"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="348.44,-68.6 357.78,-63.6 347.36,-61.68 348.44,-68.6"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~apply_sw_and_restore~~CalledByGraph_node8" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~apply_sw_and_restore~~CalledByGraph_node8"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="209,-108 103,-108 103,-84 209,-84 209,-108"/>
+<text text-anchor="middle" x="156" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~apply_sw_and_restore~~CalledByGraph_edge9" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M209.13,-87.28C217.66,-85.85 226.45,-84.38 234.85,-82.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="235.59,-86.4 244.87,-81.3 234.43,-79.49 235.59,-86.4"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~apply_sw_and_restore~~CalledByGraph_node9" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~apply_sw_and_restore~~CalledByGraph_node9"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="204.5,-66 107.5,-66 107.5,-42 204.5,-42 204.5,-66"/>
+<text text-anchor="middle" x="156" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~apply_sw_and_restore~~CalledByGraph_edge10" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M204.8,-62C214.68,-63.65 225.07,-65.39 234.93,-67.04"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="234.53,-70.52 244.97,-68.72 235.69,-63.62 234.53,-70.52"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~apply_sw_and_restore~~CalledByGraph_node10" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~apply_sw_and_restore~~CalledByGraph_node10"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="67,-108 0,-108 0,-84 67,-84 67,-108"/>
+<text text-anchor="middle" x="33.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~apply_sw_and_restore~~CalledByGraph_edge11" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M67.11,-96C75.11,-96 83.94,-96 92.83,-96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="92.85,-99.5 102.85,-96 92.85,-92.5 92.85,-99.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocapply_sw_and_restoreCalledByGraph = svgPanZoom('#procapply_sw_and_restoreCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">apply_sw_and_restore</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">therm_dt</span><span class="p">,</span><span class="w"> </span><span class="n">therm_active</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! The two cell-centred surface kernels that do NOT route through</span>
+<span class="w">      </span><span class="c">!! the assembler's `Q_heat` / `Q_salt`, with their ice-shelf-cover</span>
+<span class="w">      </span><span class="c">!! dispatch.  Shortwave penetration reads a pristine `q_sw`</span>
+<span class="w">      </span><span class="c">!! component (or moves a lump the masked deposit never added) and</span>
+<span class="w">      </span><span class="c">!! restoring forms its flux in-kernel from the live SST/SSS, so</span>
+<span class="w">      </span><span class="c">!! each needs the cover factor of its own; everything else the</span>
+<span class="w">      </span><span class="c">!! atmosphere contributes is already masked inside</span>
+<span class="w">      </span><span class="c">!! `ocean_surface_flux_assemble`.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Hoisted into its own routine rather than written inline in</span>
+<span class="w">      </span><span class="c">!! `run_stage_split`: that routine hosts eight `do concurrent`</span>
+<span class="w">      </span><span class="c">!! kernels, and handing a state array (`metrics%cover_frac`) to an</span>
+<span class="w">      </span><span class="c">!! external subroutine from a `do concurrent` host is the</span>
+<span class="w">      </span><span class="c">!! documented nvfortran escape-analysis pessimisation (CLAUDE.md,</span>
+<span class="w">      </span><span class="c">!! measured at +4.8 % on `ocean_continuity`).  This wrapper has no</span>
+<span class="w">      </span><span class="c">!! `do concurrent` of its own, so there is nothing to pessimise.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Cavity off (`metrics%use_cavity = .false.`) ⇒ the original two</span>
+<span class="w">      </span><span class="c">!! calls, byte-identical.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_metrics_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">metrics</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_surface_flux_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sf</span>
+<span class="w">         </span><span class="c">!! Forwarded; absent ⇒ both kernels no-op (their own contract).</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">therm_dt</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">therm_active</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">metrics</span><span class="p">%</span><span class="n">use_cavity</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">ocean_surface_flux_apply_sw_penetration</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">therm_dt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                      </span><span class="n">active</span><span class="o">=</span><span class="n">therm_active</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                      </span><span class="n">cover_frac</span><span class="o">=</span><span class="n">metrics</span><span class="p">%</span><span class="n">cover_frac</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">ocean_surface_restore_apply_tracers</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">therm_dt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                  </span><span class="n">active</span><span class="o">=</span><span class="n">therm_active</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                  </span><span class="n">cover_frac</span><span class="o">=</span><span class="n">metrics</span><span class="p">%</span><span class="n">cover_frac</span><span class="p">)</span>
+<span class="w">      </span><span class="k">else</span>
+<span class="k">         call </span><span class="n">ocean_surface_flux_apply_sw_penetration</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">therm_dt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                      </span><span class="n">active</span><span class="o">=</span><span class="n">therm_active</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">ocean_surface_restore_apply_tracers</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">therm_dt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                  </span><span class="n">active</span><span class="o">=</span><span class="n">therm_active</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="w">      </span><span class="c">! File-based SSS restoring (salt-flux form): host gate, default off.</span>
+<span class="w">      </span><span class="c">! Kept out of the `do concurrent` hosts - this wrapper has none.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">sf</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">sf</span><span class="p">%</span><span class="n">has_restore_S_file</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">ocean_sss_restore_apply</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">therm_dt</span><span class="p">,</span><span class="w"> </span><span class="n">active</span><span class="o">=</span><span class="n">therm_active</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end if</span>
+<span class="k">   end subroutine </span><span class="n">apply_sw_and_restore</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-06 22:39 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

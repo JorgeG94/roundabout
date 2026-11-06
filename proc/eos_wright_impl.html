@@ -1,0 +1,1195 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>eos_wright_impl &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>eos_wright_impl
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">28 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_eos.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_eos.f90.html'>rdb_eos.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_eos.html'>rdb_eos</a></li>
+            <li class="breadcrumb-item active" aria-current="page">eos_wright_impl</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/eos_wright_impl.html#variable-s_k~2">S_k</a>
+            <a class="list-group-item" href="../proc/eos_wright_impl.html#variable-t_cu">T_cu</a>
+            <a class="list-group-item" href="../proc/eos_wright_impl.html#variable-t_k~2">T_k</a>
+            <a class="list-group-item" href="../proc/eos_wright_impl.html#variable-t_sq~2">T_sq</a>
+            <a class="list-group-item" href="../proc/eos_wright_impl.html#variable-alpha_0~2">alpha_0</a>
+            <a class="list-group-item" href="../proc/eos_wright_impl.html#variable-denom~21">denom</a>
+            <a class="list-group-item" href="../proc/eos_wright_impl.html#variable-i~409">i</a>
+            <a class="list-group-item" href="../proc/eos_wright_impl.html#variable-inv_h~4">inv_h</a>
+            <a class="list-group-item" href="../proc/eos_wright_impl.html#variable-j~384">j</a>
+            <a class="list-group-item" href="../proc/eos_wright_impl.html#variable-k~310">k</a>
+            <a class="list-group-item" href="../proc/eos_wright_impl.html#variable-lambda~4">lambda</a>
+            <a class="list-group-item" href="../proc/eos_wright_impl.html#variable-p_0~2">p_0</a>
+            <a class="list-group-item" href="../proc/eos_wright_impl.html#variable-p_plus_p0~2">p_plus_p0</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/eos_wright_impl.html#src">eos_wright_impl</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private pure subroutine eos_wright_impl(h_layer, hS_layer, hT_layer, rho_layer, rho_0, p_ref, nx, ny, nz)  
+</h2>
+    
+
+    <p>Wright (1997) rational EOS evaluated at a single reference
+pressure <code>p_ref</code>, which is a SCALAR by design — see the
+horizontal-uniformity contract in <code>eos_compute_arrays</code>.  Same
+outer-shim signature as <code>eos_linear_impl</code> — bare 3D arrays,
+vanishing-layer fallback to <code>rho_0</code>.</p>
+<p>α_0(T, S) = a0 + a1<em>T + a2</em>S
+  p_0(T, S) = b0 + b1<em>T + b2</em>T^2 + b3<em>T^3 + b4</em>S + b5<em>S</em>T
+  λ  (T, S) = c0 + c1<em>T + c2</em>T^2 + c3<em>T^3 + c4</em>S + c5<em>S</em>T</p>
+<p>ρ = (P + p_0) / (λ + α_0 * (P + p_0))</p>
+<p>Reference behaviour (T=10, S=35, P=0): ρ ≈ 1027.3 kg/m^3,
+within 0.01 kg/m^3 of the surface seawater density used
+across the MOM6 test suite.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_layer~100"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_layer</strong>(nx,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hs_layer~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hS_layer</strong>(nx,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ht_layer~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hT_layer</strong>(nx,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rho_layer~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rho_layer</strong>(nx,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rho_0~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rho_0</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-p_ref~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>p_ref</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~366"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~366"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~366"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~eos_wright_impl~~CallsGraph Pages: 1 -->
+<svg id="proceos_wright_implCallsGraph" width="196pt" height="32pt"
+ viewBox="0.00 0.00 196.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~eos_wright_impl~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>proc~~eos_wright_impl~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 192,-28 192,4 -4,4"/>
+<!-- proc~eos_wright_impl -->
+<g id="proc~~eos_wright_impl~~CallsGraph_node1" class="node">
+<title>proc~eos_wright_impl</title>
+<polygon fill="none" stroke="black" points="98,-24 0,-24 0,0 98,0 98,-24"/>
+<text text-anchor="middle" x="49" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">eos_wright_impl</text>
+</g>
+<!-- local -->
+<g id="proc~~eos_wright_impl~~CallsGraph_node2" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="188,-24 134,-24 134,0 188,0 188,-24"/>
+<text text-anchor="middle" x="161" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~eos_wright_impl&#45;&gt;local -->
+<g id="proc~~eos_wright_impl~~CallsGraph_edge1" class="edge">
+<title>proc~eos_wright_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M98.25,-12C106.76,-12 115.48,-12 123.6,-12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="123.85,-15.5 133.85,-12 123.85,-8.5 123.85,-15.5"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~eos_wright_impl~~CalledByGraph Pages: 1 -->
+<svg id="proceos_wright_implCalledByGraph" width="641pt" height="162pt"
+ viewBox="0.00 0.00 641.00 161.97" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~eos_wright_impl~~CalledByGraph" class="graph" transform="scale(0.57 0.57) rotate(0) translate(4 278)">
+<title>proc~~eos_wright_impl~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-278 1112,-278 1112,4 -4,4"/>
+<!-- proc~eos_wright_impl -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_node1" class="node">
+<title>proc~eos_wright_impl</title>
+<polygon fill="none" stroke="black" points="1108,-150 1010,-150 1010,-126 1108,-126 1108,-150"/>
+<text text-anchor="middle" x="1059" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50">eos_wright_impl</text>
+</g>
+<!-- proc~eos_compute_arrays -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_node2" class="node">
+<title>proc~eos_compute_arrays</title>
+<g id="a_proc~~eos_wright_impl~~CalledByGraph_node2"><a xlink:href="../proc/eos_compute_arrays.html" xlink:title="eos_compute_arrays">
+<polygon fill="#d9534f" stroke="#d9534f" points="974,-150 851,-150 851,-126 974,-126 974,-150"/>
+<text text-anchor="middle" x="912.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">eos_compute_arrays</text>
+</a>
+</g>
+</g>
+<!-- proc~eos_compute_arrays&#45;&gt;proc~eos_wright_impl -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_edge1" class="edge">
+<title>proc~eos_compute_arrays&#45;&gt;proc~eos_wright_impl</title>
+<path fill="none" stroke="#ff0000" d="M974.36,-138C982.81,-138 991.46,-138 999.86,-138"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="999.93,-141.5 1009.93,-138 999.93,-134.5 999.93,-141.5"/>
+</g>
+<!-- proc~ocean_eos_compute -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_node3" class="node">
+<title>proc~ocean_eos_compute</title>
+<g id="a_proc~~eos_wright_impl~~CalledByGraph_node3"><a xlink:href="../proc/ocean_eos_compute.html" xlink:title="ocean_eos_compute">
+<polygon fill="#d9534f" stroke="#d9534f" points="815,-150 693,-150 693,-126 815,-126 815,-150"/>
+<text text-anchor="middle" x="754" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_eos_compute</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_eos_compute&#45;&gt;proc~eos_compute_arrays -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_edge2" class="edge">
+<title>proc~ocean_eos_compute&#45;&gt;proc~eos_compute_arrays</title>
+<path fill="none" stroke="#ff0000" d="M815.06,-138C823.49,-138 832.21,-138 840.81,-138"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="840.83,-141.5 850.83,-138 840.82,-134.5 840.83,-141.5"/>
+</g>
+<!-- proc~ocean_ic_apply_staged -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_node4" class="node">
+<title>proc~ocean_ic_apply_staged</title>
+<g id="a_proc~~eos_wright_impl~~CalledByGraph_node4"><a xlink:href="../proc/ocean_ic_apply_staged.html" xlink:title="ocean_ic_apply_staged">
+<polygon fill="#d9534f" stroke="#d9534f" points="657,-273 521,-273 521,-249 657,-249 657,-273"/>
+<text text-anchor="middle" x="589" y="-258.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_ic_apply_staged</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_ic_apply_staged&#45;&gt;proc~ocean_eos_compute -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_edge3" class="edge">
+<title>proc~ocean_ic_apply_staged&#45;&gt;proc~ocean_eos_compute</title>
+<path fill="none" stroke="#ff0000" d="M627.5,-248.96C637.49,-244.95 648,-239.95 657,-234 689.28,-212.65 719.65,-179.19 737.27,-157.94"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="739.99,-160.15 743.59,-150.18 734.57,-155.73 739.99,-160.15"/>
+</g>
+<!-- proc~ocean_rebaseline_apply -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_node5" class="node">
+<title>proc~ocean_rebaseline_apply</title>
+<g id="a_proc~~eos_wright_impl~~CalledByGraph_node5"><a xlink:href="../proc/ocean_rebaseline_apply.html" xlink:title="ocean_rebaseline_apply">
+<polygon fill="#d9534f" stroke="#d9534f" points="485,-232 344,-232 344,-208 485,-208 485,-232"/>
+<text text-anchor="middle" x="414.5" y="-217.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_rebaseline_apply</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_rebaseline_apply&#45;&gt;proc~ocean_eos_compute -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_edge4" class="edge">
+<title>proc~ocean_rebaseline_apply&#45;&gt;proc~ocean_eos_compute</title>
+<path fill="none" stroke="#ff0000" d="M485,-223.57C534.29,-223.95 601.29,-220.06 657,-201 685.3,-191.32 713.4,-171.35 731.81,-156.47"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="734.09,-159.13 739.56,-150.05 729.63,-153.74 734.09,-159.13"/>
+</g>
+<!-- proc~rdb_ocean_set_h -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_node6" class="node">
+<title>proc~rdb_ocean_set_h</title>
+<g id="a_proc~~eos_wright_impl~~CalledByGraph_node6"><a xlink:href="../proc/rdb_ocean_set_h.html" xlink:title="rdb_ocean_set_h">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="640,-150 538,-150 538,-126 640,-126 640,-150"/>
+<text text-anchor="middle" x="589" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_set_h</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_set_h&#45;&gt;proc~ocean_eos_compute -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_edge5" class="edge">
+<title>proc~rdb_ocean_set_h&#45;&gt;proc~ocean_eos_compute</title>
+<path fill="none" stroke="#ff0000" d="M640.24,-138C653.63,-138 668.36,-138 682.62,-138"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="682.9,-141.5 692.9,-138 682.9,-134.5 682.9,-141.5"/>
+</g>
+<!-- proc~rdb_ocean_set_tracer -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_node7" class="node">
+<title>proc~rdb_ocean_set_tracer</title>
+<g id="a_proc~~eos_wright_impl~~CalledByGraph_node7"><a xlink:href="../proc/rdb_ocean_set_tracer.html" xlink:title="rdb_ocean_set_tracer">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="652.5,-108 525.5,-108 525.5,-84 652.5,-84 652.5,-108"/>
+<text text-anchor="middle" x="589" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_set_tracer</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_set_tracer&#45;&gt;proc~ocean_eos_compute -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_edge6" class="edge">
+<title>proc~rdb_ocean_set_tracer&#45;&gt;proc~ocean_eos_compute</title>
+<path fill="none" stroke="#ff0000" d="M636.71,-108.04C655.38,-112.85 677.05,-118.43 696.59,-123.46"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="695.73,-126.86 706.28,-125.96 697.47,-120.08 695.73,-126.86"/>
+</g>
+<!-- proc~refresh_density -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_node8" class="node">
+<title>proc~refresh_density</title>
+<g id="a_proc~~eos_wright_impl~~CalledByGraph_node8"><a xlink:href="../proc/refresh_density.html" xlink:title="refresh_density">
+<polygon fill="#d9534f" stroke="#d9534f" points="635.5,-192 542.5,-192 542.5,-168 635.5,-168 635.5,-192"/>
+<text text-anchor="middle" x="589" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">refresh_density</text>
+</a>
+</g>
+</g>
+<!-- proc~refresh_density&#45;&gt;proc~ocean_eos_compute -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_edge7" class="edge">
+<title>proc~refresh_density&#45;&gt;proc~ocean_eos_compute</title>
+<path fill="none" stroke="#ff0000" d="M635.84,-168.19C654.69,-163.33 676.71,-157.66 696.54,-152.55"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="697.56,-155.9 706.37,-150.01 695.82,-149.12 697.56,-155.9"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_node9" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~eos_wright_impl~~CalledByGraph_node9"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="621.5,-66 556.5,-66 556.5,-42 621.5,-42 621.5,-66"/>
+<text text-anchor="middle" x="589" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~ocean_eos_compute -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_edge8" class="edge">
+<title>proc~run_stage&#45;&gt;proc~ocean_eos_compute</title>
+<path fill="none" stroke="#ff0000" d="M621.7,-61.98C633.1,-65.35 645.87,-69.73 657,-75 683.13,-87.37 710.47,-105.95 729.25,-119.72"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="727.39,-122.7 737.5,-125.87 731.57,-117.09 727.39,-122.7"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_node10" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~eos_wright_impl~~CalledByGraph_node10"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="635,-24 543,-24 543,0 635,0 635,-24"/>
+<text text-anchor="middle" x="589" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~ocean_eos_compute -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_edge9" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~ocean_eos_compute</title>
+<path fill="none" stroke="#ff0000" d="M635.07,-22.52C642.71,-25.3 650.32,-28.74 657,-33 692.1,-55.35 722.58,-93.76 739.32,-117.41"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="736.48,-119.45 745.04,-125.69 742.23,-115.47 736.48,-119.45"/>
+</g>
+<!-- proc~engine_apply_staged_ic -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_node11" class="node">
+<title>proc~engine_apply_staged_ic</title>
+<g id="a_proc~~eos_wright_impl~~CalledByGraph_node11"><a xlink:href="../proc/engine_apply_staged_ic.html" xlink:title="engine_apply_staged_ic">
+<polygon fill="#d9534f" stroke="#d9534f" points="484,-274 345,-274 345,-250 484,-250 484,-274"/>
+<text text-anchor="middle" x="414.5" y="-259.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_apply_staged_ic</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_apply_staged_ic&#45;&gt;proc~ocean_ic_apply_staged -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_edge10" class="edge">
+<title>proc~engine_apply_staged_ic&#45;&gt;proc~ocean_ic_apply_staged</title>
+<path fill="none" stroke="#ff0000" d="M484.17,-261.6C492.98,-261.55 502.04,-261.5 510.97,-261.45"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="510.99,-264.95 520.97,-261.39 510.95,-257.95 510.99,-264.95"/>
+</g>
+<!-- proc~ocean_balance_apply -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_node12" class="node">
+<title>proc~ocean_balance_apply</title>
+<g id="a_proc~~eos_wright_impl~~CalledByGraph_node12"><a xlink:href="../proc/ocean_balance_apply.html" xlink:title="ocean_balance_apply">
+<polygon fill="#d9534f" stroke="#d9534f" points="307,-190 179,-190 179,-166 307,-166 307,-190"/>
+<text text-anchor="middle" x="243" y="-175.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_balance_apply</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_balance_apply&#45;&gt;proc~ocean_rebaseline_apply -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_edge11" class="edge">
+<title>proc~ocean_balance_apply&#45;&gt;proc~ocean_rebaseline_apply</title>
+<path fill="none" stroke="#ffda00" d="M292.57,-190.04C312.08,-194.87 334.73,-200.48 355.12,-205.53"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="354.37,-208.95 364.92,-207.96 356.06,-202.16 354.37,-208.95"/>
+</g>
+<!-- proc~ocean_balance_velocity -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_node13" class="node">
+<title>proc~ocean_balance_velocity</title>
+<g id="a_proc~~eos_wright_impl~~CalledByGraph_node13"><a xlink:href="../proc/ocean_balance_velocity.html" xlink:title="ocean_balance_velocity">
+<polygon fill="#d9534f" stroke="#d9534f" points="484.5,-190 344.5,-190 344.5,-166 484.5,-166 484.5,-190"/>
+<text text-anchor="middle" x="414.5" y="-175.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_balance_velocity</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_balance_apply&#45;&gt;proc~ocean_balance_velocity -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_edge18" class="edge">
+<title>proc~ocean_balance_apply&#45;&gt;proc~ocean_balance_velocity</title>
+<path fill="none" stroke="#00ff00" d="M307.12,-178C315.94,-178 325.09,-178 334.17,-178"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="334.36,-181.5 344.36,-178 334.36,-174.5 334.36,-181.5"/>
+</g>
+<!-- proc~ocean_balance_velocity&#45;&gt;proc~refresh_density -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_edge13" class="edge">
+<title>proc~ocean_balance_velocity&#45;&gt;proc~refresh_density</title>
+<path fill="none" stroke="#0091ff" d="M484.67,-178.8C500.43,-178.98 516.99,-179.18 532.12,-179.35"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="532.3,-182.85 542.34,-179.47 532.38,-175.85 532.3,-182.85"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_node14" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~eos_wright_impl~~CalledByGraph_node14"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="463.5,-66 365.5,-66 365.5,-42 463.5,-42 463.5,-66"/>
+<text text-anchor="middle" x="414.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_edge14" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#4800ff" d="M463.55,-54C489.46,-54 521.13,-54 546.03,-54"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="546.26,-57.5 556.26,-54 546.26,-50.5 546.26,-57.5"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_node15" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~eos_wright_impl~~CalledByGraph_node15"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="477,-24 352,-24 352,0 477,0 477,-24"/>
+<text text-anchor="middle" x="414.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_edge15" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#ff00da" d="M477.29,-12C495.39,-12 515.06,-12 532.73,-12"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="532.87,-15.5 542.87,-12 532.87,-8.5 532.87,-15.5"/>
+</g>
+<!-- proc~rdb_ocean_rebaseline -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_node16" class="node">
+<title>proc~rdb_ocean_rebaseline</title>
+<g id="a_proc~~eos_wright_impl~~CalledByGraph_node16"><a xlink:href="../proc/rdb_ocean_rebaseline.html" xlink:title="rdb_ocean_rebaseline">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="308,-232 178,-232 178,-208 308,-208 308,-232"/>
+<text text-anchor="middle" x="243" y="-217.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_rebaseline</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_rebaseline&#45;&gt;proc~ocean_rebaseline_apply -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_edge12" class="edge">
+<title>proc~rdb_ocean_rebaseline&#45;&gt;proc~ocean_rebaseline_apply</title>
+<path fill="none" stroke="#ffda00" d="M308.08,-220C316.5,-220 325.22,-220 333.86,-220"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="333.95,-223.5 343.95,-220 333.95,-216.5 333.95,-223.5"/>
+</g>
+<!-- proc~balance_and_rebaseline -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_node17" class="node">
+<title>proc~balance_and_rebaseline</title>
+<g id="a_proc~~eos_wright_impl~~CalledByGraph_node17"><a xlink:href="../proc/balance_and_rebaseline.html" xlink:title="balance_and_rebaseline">
+<polygon fill="#d9534f" stroke="#d9534f" points="142,-190 0,-190 0,-166 142,-166 142,-190"/>
+<text text-anchor="middle" x="71" y="-175.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">balance_and_rebaseline</text>
+</a>
+</g>
+</g>
+<!-- proc~balance_and_rebaseline&#45;&gt;proc~ocean_balance_apply -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_edge17" class="edge">
+<title>proc~balance_and_rebaseline&#45;&gt;proc~ocean_balance_apply</title>
+<path fill="none" stroke="#ffff00" d="M142.13,-178C150.87,-178 159.83,-178 168.62,-178"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="168.84,-181.5 178.84,-178 168.84,-174.5 168.84,-181.5"/>
+</g>
+<!-- proc~engine_setup -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_node18" class="node">
+<title>proc~engine_setup</title>
+<g id="a_proc~~eos_wright_impl~~CalledByGraph_node18"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="285,-274 201,-274 201,-250 285,-250 285,-274"/>
+<text text-anchor="middle" x="243" y="-259.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~engine_apply_staged_ic -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_edge16" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~engine_apply_staged_ic</title>
+<path fill="none" stroke="#ff0000" d="M285.03,-262C300.02,-262 317.52,-262 334.69,-262"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="334.74,-265.5 344.74,-262 334.74,-258.5 334.74,-265.5"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_node19" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~eos_wright_impl~~CalledByGraph_node19"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="281.5,-45 204.5,-45 204.5,-21 281.5,-21 281.5,-45"/>
+<text text-anchor="middle" x="243" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_edge19" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step</title>
+<path fill="none" stroke="#00ffff" d="M281.62,-37.66C303.21,-40.34 330.78,-43.75 355.13,-46.77"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="354.99,-50.28 365.34,-48.03 355.85,-43.33 354.99,-50.28"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~eos_wright_impl~~CalledByGraph_edge20" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#0000ff" d="M281.62,-28.34C299.3,-26.15 321,-23.46 341.66,-20.9"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="342.19,-24.36 351.69,-19.66 341.33,-17.41 342.19,-24.36"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panproceos_wright_implCalledByGraph = svgPanZoom('#proceos_wright_implCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s_k~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>S_k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_cu"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>T_cu</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_k~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>T_k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_sq~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>T_sq</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-alpha_0~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>alpha_0</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-denom~21"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>denom</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~409"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-inv_h~4"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>inv_h</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~384"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~310"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lambda~4"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lambda</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-p_0~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>p_0</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-p_plus_p0~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>p_plus_p0</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">eos_wright_impl</span><span class="p">(</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">hS_layer</span><span class="p">,</span><span class="w"> </span><span class="n">hT_layer</span><span class="p">,</span><span class="w"> </span><span class="n">rho_layer</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                   </span><span class="n">rho_0</span><span class="p">,</span><span class="w"> </span><span class="n">p_ref</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Wright (1997) rational EOS evaluated at a single reference</span>
+<span class="w">      </span><span class="c">!! pressure `p_ref`, which is a SCALAR by design — see the</span>
+<span class="w">      </span><span class="c">!! horizontal-uniformity contract in `eos_compute_arrays`.  Same</span>
+<span class="w">      </span><span class="c">!! outer-shim signature as `eos_linear_impl` — bare 3D arrays,</span>
+<span class="w">      </span><span class="c">!! vanishing-layer fallback to `rho_0`.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!!   α_0(T, S) = a0 + a1*T + a2*S</span>
+<span class="w">      </span><span class="c">!!   p_0(T, S) = b0 + b1*T + b2*T^2 + b3*T^3 + b4*S + b5*S*T</span>
+<span class="w">      </span><span class="c">!!   λ  (T, S) = c0 + c1*T + c2*T^2 + c3*T^3 + c4*S + c5*S*T</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!!   ρ = (P + p_0) / (λ + α_0 * (P + p_0))</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Reference behaviour (T=10, S=35, P=0): ρ ≈ 1027.3 kg/m^3,</span>
+<span class="w">      </span><span class="c">!! within 0.01 kg/m^3 of the surface seawater density used</span>
+<span class="w">      </span><span class="c">!! across the MOM6 test suite.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hS_layer</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hT_layer</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rho_layer</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rho_0</span><span class="p">,</span><span class="w"> </span><span class="n">p_ref</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">inv_h</span><span class="p">,</span><span class="w"> </span><span class="n">S_k</span><span class="p">,</span><span class="w"> </span><span class="n">T_k</span><span class="p">,</span><span class="w"> </span><span class="n">T_sq</span><span class="p">,</span><span class="w"> </span><span class="n">T_cu</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">alpha_0</span><span class="p">,</span><span class="w"> </span><span class="n">p_0</span><span class="p">,</span><span class="w"> </span><span class="n">lambda</span><span class="p">,</span><span class="w"> </span><span class="n">p_plus_p0</span><span class="p">,</span><span class="w"> </span><span class="n">denom</span>
+
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">         </span><span class="n">local</span><span class="p">(</span><span class="n">inv_h</span><span class="p">,</span><span class="w"> </span><span class="n">S_k</span><span class="p">,</span><span class="w"> </span><span class="n">T_k</span><span class="p">,</span><span class="w"> </span><span class="n">T_sq</span><span class="p">,</span><span class="w"> </span><span class="n">T_cu</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="n">alpha_0</span><span class="p">,</span><span class="w"> </span><span class="n">p_0</span><span class="p">,</span><span class="w"> </span><span class="n">lambda</span><span class="p">,</span><span class="w"> </span><span class="n">p_plus_p0</span><span class="p">,</span><span class="w"> </span><span class="n">denom</span><span class="p">)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">H_VANISHED</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">inv_h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="n">S_k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hS_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="o">*</span><span class="n">inv_h</span>
+<span class="w">            </span><span class="n">T_k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hT_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="o">*</span><span class="n">inv_h</span>
+<span class="w">            </span><span class="n">T_sq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">T_k</span><span class="o">*</span><span class="n">T_k</span>
+<span class="w">            </span><span class="n">T_cu</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">T_sq</span><span class="o">*</span><span class="n">T_k</span>
+
+<span class="w">            </span><span class="n">alpha_0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">WRIGHT_A0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">WRIGHT_A1</span><span class="o">*</span><span class="n">T_k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">WRIGHT_A2</span><span class="o">*</span><span class="n">S_k</span>
+<span class="w">            </span><span class="n">p_0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">WRIGHT_B0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">WRIGHT_B1</span><span class="o">*</span><span class="n">T_k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">WRIGHT_B2</span><span class="o">*</span><span class="n">T_sq</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">WRIGHT_B3</span><span class="o">*</span><span class="n">T_cu</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">WRIGHT_B4</span><span class="o">*</span><span class="n">S_k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">WRIGHT_B5</span><span class="o">*</span><span class="n">S_k</span><span class="o">*</span><span class="n">T_k</span>
+<span class="w">            </span><span class="n">lambda</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">WRIGHT_C0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">WRIGHT_C1</span><span class="o">*</span><span class="n">T_k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">WRIGHT_C2</span><span class="o">*</span><span class="n">T_sq</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">WRIGHT_C3</span><span class="o">*</span><span class="n">T_cu</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                     </span><span class="n">WRIGHT_C4</span><span class="o">*</span><span class="n">S_k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">WRIGHT_C5</span><span class="o">*</span><span class="n">S_k</span><span class="o">*</span><span class="n">T_k</span>
+
+<span class="w">            </span><span class="n">p_plus_p0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">p_ref</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">p_0</span>
+<span class="w">            </span><span class="n">denom</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">lambda</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">alpha_0</span><span class="o">*</span><span class="n">p_plus_p0</span>
+<span class="w">            </span><span class="n">rho_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">p_plus_p0</span><span class="o">/</span><span class="n">denom</span>
+<span class="w">         </span><span class="k">else</span>
+<span class="k">            </span><span class="n">rho_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rho_0</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end do</span>
+<span class="k">   end subroutine </span><span class="n">eos_wright_impl</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-06 22:39 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

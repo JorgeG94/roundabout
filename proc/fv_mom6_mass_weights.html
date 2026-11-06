@@ -1,0 +1,836 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>fv_mom6_mass_weights &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>fv_mom6_mass_weights
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">21 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_pressure_force.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_pressure_force.f90.html'>rdb_ocean_pressure_force.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_pressure_force.html'>rdb_ocean_pressure_force</a></li>
+            <li class="breadcrumb-item active" aria-current="page">fv_mom6_mass_weights</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/fv_mom6_mass_weights.html#variable-hwght~2">hwght</a>
+            <a class="list-group-item" href="../proc/fv_mom6_mass_weights.html#variable-hwl~2">hwl</a>
+            <a class="list-group-item" href="../proc/fv_mom6_mass_weights.html#variable-hwr~2">hwr</a>
+            <a class="list-group-item" href="../proc/fv_mom6_mass_weights.html#variable-idenom_hw~2">idenom_hw</a>
+            <a class="list-group-item" href="../proc/fv_mom6_mass_weights.html#variable-use_hw">use_hw</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/fv_mom6_mass_weights.html#src">fv_mom6_mass_weights</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private pure subroutine fv_mom6_mass_weights(mass_weight, e_bed_l, e_bed_r, e_top_l, e_top_r, h_l, h_r, h_neglect, hwt_ll, hwt_lr, hwt_rr, hwt_rl)  
+</h2>
+    
+
+    <p>MOM6 near-bottom <code>hWght</code> mass-weighting fractions of one face
+(<code>MASS_WEIGHT_IN_PRESSURE_GRADIENT</code>): the distance by which the
+layer top of one column sits below the other column&rsquo;s bed, scaled
+by the squared relative thickness contrast.  Zero ⇒ plain linear
+interpolation (<code>hwt_ll = hwt_rr = 1</code>, <code>hwt_lr = hwt_rl = 0</code>).</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mass_weight~4"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mass_weight</strong></td>
+            <td>
+                <p>Mass weighting on?</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-e_bed_l"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>e_bed_l</strong></td>
+            <td>
+                <p>Bed heights of the left / right column (m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-e_bed_r"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>e_bed_r</strong></td>
+            <td>
+                <p>Bed heights of the left / right column (m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-e_top_l~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>e_top_l</strong></td>
+            <td>
+                <p>Layer top heights of the left / right column (m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-e_top_r~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>e_top_r</strong></td>
+            <td>
+                <p>Layer top heights of the left / right column (m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_l~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_l</strong></td>
+            <td>
+                <p>Layer thicknesses of the left / right column (m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_r~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_r</strong></td>
+            <td>
+                <p>Layer thicknesses of the left / right column (m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_neglect~7"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_neglect</strong></td>
+            <td>
+                <p>Negligible thickness (m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hwt_ll~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hwt_ll</strong></td>
+            <td>
+                <p>MOM6 <code>hWt_LL/LR/RR/RL</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hwt_lr~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hwt_lr</strong></td>
+            <td>
+                <p>MOM6 <code>hWt_LL/LR/RR/RL</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hwt_rr~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hwt_rr</strong></td>
+            <td>
+                <p>MOM6 <code>hWt_LL/LR/RR/RL</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hwt_rl~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hwt_rl</strong></td>
+            <td>
+                <p>MOM6 <code>hWt_LL/LR/RR/RL</code>.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~fv_mom6_mass_weights~~CalledByGraph Pages: 1 -->
+<svg id="procfv_mom6_mass_weightsCalledByGraph" width="641pt" height="66pt"
+ viewBox="0.00 0.00 641.00 66.09" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~fv_mom6_mass_weights~~CalledByGraph" class="graph" transform="scale(0.57 0.57) rotate(0) translate(4 112)">
+<title>proc~~fv_mom6_mass_weights~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-112 1121,-112 1121,4 -4,4"/>
+<!-- proc~fv_mom6_mass_weights -->
+<g id="proc~~fv_mom6_mass_weights~~CalledByGraph_node1" class="node">
+<title>proc~fv_mom6_mass_weights</title>
+<polygon fill="none" stroke="black" points="1117,-66 976,-66 976,-42 1117,-42 1117,-66"/>
+<text text-anchor="middle" x="1046.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50">fv_mom6_mass_weights</text>
+</g>
+<!-- proc~compute_fv_mom6_insitu_pcm_impl -->
+<g id="proc~~fv_mom6_mass_weights~~CalledByGraph_node2" class="node">
+<title>proc~compute_fv_mom6_insitu_pcm_impl</title>
+<g id="a_proc~~fv_mom6_mass_weights~~CalledByGraph_node2"><a xlink:href="../proc/compute_fv_mom6_insitu_pcm_impl.html" xlink:title="compute_fv_mom6_insitu_pcm_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="940,-66 735,-66 735,-42 940,-42 940,-66"/>
+<text text-anchor="middle" x="837.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">compute_fv_mom6_insitu_pcm_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~compute_fv_mom6_insitu_pcm_impl&#45;&gt;proc~fv_mom6_mass_weights -->
+<g id="proc~~fv_mom6_mass_weights~~CalledByGraph_edge1" class="edge">
+<title>proc~compute_fv_mom6_insitu_pcm_impl&#45;&gt;proc~fv_mom6_mass_weights</title>
+<path fill="none" stroke="#ff0000" d="M940.18,-54C948.76,-54 957.35,-54 965.73,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="965.82,-57.5 975.82,-54 965.82,-50.5 965.82,-57.5"/>
+</g>
+<!-- proc~ocean_pressure_force_compute -->
+<g id="proc~~fv_mom6_mass_weights~~CalledByGraph_node3" class="node">
+<title>proc~ocean_pressure_force_compute</title>
+<g id="a_proc~~fv_mom6_mass_weights~~CalledByGraph_node3"><a xlink:href="../proc/ocean_pressure_force_compute.html" xlink:title="ocean_pressure_force_compute">
+<polygon fill="#d9534f" stroke="#d9534f" points="699,-66 518,-66 518,-42 699,-42 699,-66"/>
+<text text-anchor="middle" x="608.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_pressure_force_compute</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_pressure_force_compute&#45;&gt;proc~compute_fv_mom6_insitu_pcm_impl -->
+<g id="proc~~fv_mom6_mass_weights~~CalledByGraph_edge2" class="edge">
+<title>proc~ocean_pressure_force_compute&#45;&gt;proc~compute_fv_mom6_insitu_pcm_impl</title>
+<path fill="none" stroke="#ff0000" d="M699.22,-54C707.59,-54 716.14,-54 724.68,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="724.69,-57.5 734.69,-54 724.69,-50.5 724.69,-57.5"/>
+</g>
+<!-- proc~ocean_balance_velocity -->
+<g id="proc~~fv_mom6_mass_weights~~CalledByGraph_node4" class="node">
+<title>proc~ocean_balance_velocity</title>
+<g id="a_proc~~fv_mom6_mass_weights~~CalledByGraph_node4"><a xlink:href="../proc/ocean_balance_velocity.html" xlink:title="ocean_balance_velocity">
+<polygon fill="#d9534f" stroke="#d9534f" points="482,-108 342,-108 342,-84 482,-84 482,-108"/>
+<text text-anchor="middle" x="412" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_balance_velocity</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_balance_velocity&#45;&gt;proc~ocean_pressure_force_compute -->
+<g id="proc~~fv_mom6_mass_weights~~CalledByGraph_edge3" class="edge">
+<title>proc~ocean_balance_velocity&#45;&gt;proc~ocean_pressure_force_compute</title>
+<path fill="none" stroke="#ff0000" d="M468.74,-83.96C491.52,-79.04 518.06,-73.31 541.78,-68.19"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="542.72,-71.57 551.76,-66.04 541.24,-64.73 542.72,-71.57"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~fv_mom6_mass_weights~~CalledByGraph_node5" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~fv_mom6_mass_weights~~CalledByGraph_node5"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="444.5,-66 379.5,-66 379.5,-42 444.5,-42 444.5,-66"/>
+<text text-anchor="middle" x="412" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~ocean_pressure_force_compute -->
+<g id="proc~~fv_mom6_mass_weights~~CalledByGraph_edge4" class="edge">
+<title>proc~run_stage&#45;&gt;proc~ocean_pressure_force_compute</title>
+<path fill="none" stroke="#ff0000" d="M444.68,-54C462.12,-54 484.83,-54 507.72,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="507.88,-57.5 517.88,-54 507.88,-50.5 507.88,-57.5"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~fv_mom6_mass_weights~~CalledByGraph_node6" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~fv_mom6_mass_weights~~CalledByGraph_node6"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="458,-24 366,-24 366,0 458,0 458,-24"/>
+<text text-anchor="middle" x="412" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~ocean_pressure_force_compute -->
+<g id="proc~~fv_mom6_mass_weights~~CalledByGraph_edge5" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~ocean_pressure_force_compute</title>
+<path fill="none" stroke="#ff0000" d="M458.11,-21.74C483,-27.12 514.35,-33.89 541.9,-39.84"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="541.35,-43.3 551.86,-41.99 542.83,-36.45 541.35,-43.3"/>
+</g>
+<!-- proc~ocean_balance_apply -->
+<g id="proc~~fv_mom6_mass_weights~~CalledByGraph_node7" class="node">
+<title>proc~ocean_balance_apply</title>
+<g id="a_proc~~fv_mom6_mass_weights~~CalledByGraph_node7"><a xlink:href="../proc/ocean_balance_apply.html" xlink:title="ocean_balance_apply">
+<polygon fill="#d9534f" stroke="#d9534f" points="306,-108 178,-108 178,-84 306,-84 306,-108"/>
+<text text-anchor="middle" x="242" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_balance_apply</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_balance_apply&#45;&gt;proc~ocean_balance_velocity -->
+<g id="proc~~fv_mom6_mass_weights~~CalledByGraph_edge6" class="edge">
+<title>proc~ocean_balance_apply&#45;&gt;proc~ocean_balance_velocity</title>
+<path fill="none" stroke="#ff0000" d="M306.03,-96C314.47,-96 323.2,-96 331.86,-96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="331.98,-99.5 341.98,-96 331.98,-92.5 331.98,-99.5"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~fv_mom6_mass_weights~~CalledByGraph_node8" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~fv_mom6_mass_weights~~CalledByGraph_node8"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="291,-66 193,-66 193,-42 291,-42 291,-66"/>
+<text text-anchor="middle" x="242" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~fv_mom6_mass_weights~~CalledByGraph_edge7" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#00ff00" d="M291.14,-54C315.8,-54 345.54,-54 369.23,-54"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="369.31,-57.5 379.31,-54 369.31,-50.5 369.31,-57.5"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~fv_mom6_mass_weights~~CalledByGraph_node9" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~fv_mom6_mass_weights~~CalledByGraph_node9"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="304.5,-24 179.5,-24 179.5,0 304.5,0 304.5,-24"/>
+<text text-anchor="middle" x="242" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~fv_mom6_mass_weights~~CalledByGraph_edge8" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#0000ff" d="M304.6,-12C321.27,-12 339.21,-12 355.52,-12"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="355.98,-15.5 365.98,-12 355.98,-8.5 355.98,-15.5"/>
+</g>
+<!-- proc~balance_and_rebaseline -->
+<g id="proc~~fv_mom6_mass_weights~~CalledByGraph_node10" class="node">
+<title>proc~balance_and_rebaseline</title>
+<g id="a_proc~~fv_mom6_mass_weights~~CalledByGraph_node10"><a xlink:href="../proc/balance_and_rebaseline.html" xlink:title="balance_and_rebaseline">
+<polygon fill="#d9534f" stroke="#d9534f" points="142,-108 0,-108 0,-84 142,-84 142,-108"/>
+<text text-anchor="middle" x="71" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">balance_and_rebaseline</text>
+</a>
+</g>
+</g>
+<!-- proc~balance_and_rebaseline&#45;&gt;proc~ocean_balance_apply -->
+<g id="proc~~fv_mom6_mass_weights~~CalledByGraph_edge9" class="edge">
+<title>proc~balance_and_rebaseline&#45;&gt;proc~ocean_balance_apply</title>
+<path fill="none" stroke="#ff0000" d="M142.2,-96C150.58,-96 159.16,-96 167.58,-96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="167.76,-99.5 177.76,-96 167.76,-92.5 167.76,-99.5"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~fv_mom6_mass_weights~~CalledByGraph_node11" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~fv_mom6_mass_weights~~CalledByGraph_node11"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="109.5,-45 32.5,-45 32.5,-21 109.5,-21 109.5,-45"/>
+<text text-anchor="middle" x="71" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step -->
+<g id="proc~~fv_mom6_mass_weights~~CalledByGraph_edge10" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step</title>
+<path fill="none" stroke="#00ff00" d="M109.51,-37.66C131.03,-40.34 158.53,-43.75 182.8,-46.77"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="182.63,-50.27 192.98,-48.03 183.49,-43.33 182.63,-50.27"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~fv_mom6_mass_weights~~CalledByGraph_edge11" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#0000ff" d="M109.51,-28.34C127.14,-26.15 148.78,-23.46 169.37,-20.9"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="169.88,-24.36 179.37,-19.66 169.02,-17.42 169.88,-24.36"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocfv_mom6_mass_weightsCalledByGraph = svgPanZoom('#procfv_mom6_mass_weightsCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hwght~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hwght</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hwl~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hwl</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hwr~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hwr</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idenom_hw~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>idenom_hw</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-use_hw"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>use_hw</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">fv_mom6_mass_weights</span><span class="p">(</span><span class="n">mass_weight</span><span class="p">,</span><span class="w"> </span><span class="n">e_bed_l</span><span class="p">,</span><span class="w"> </span><span class="n">e_bed_r</span><span class="p">,</span><span class="w"> </span><span class="n">e_top_l</span><span class="p">,</span><span class="w"> </span><span class="n">e_top_r</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                        </span><span class="n">h_l</span><span class="p">,</span><span class="w"> </span><span class="n">h_r</span><span class="p">,</span><span class="w"> </span><span class="n">h_neglect</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                        </span><span class="n">hwt_ll</span><span class="p">,</span><span class="w"> </span><span class="n">hwt_lr</span><span class="p">,</span><span class="w"> </span><span class="n">hwt_rr</span><span class="p">,</span><span class="w"> </span><span class="n">hwt_rl</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!$acc routine seq</span>
+<span class="w">      </span><span class="c">!! MOM6 near-bottom `hWght` mass-weighting fractions of one face</span>
+<span class="w">      </span><span class="c">!! (`MASS_WEIGHT_IN_PRESSURE_GRADIENT`): the distance by which the</span>
+<span class="w">      </span><span class="c">!! layer top of one column sits below the other column's bed, scaled</span>
+<span class="w">      </span><span class="c">!! by the squared relative thickness contrast.  Zero ⇒ plain linear</span>
+<span class="w">      </span><span class="c">!! interpolation (`hwt_ll = hwt_rr = 1`, `hwt_lr = hwt_rl = 0`).</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">   </span><span class="kd">::</span><span class="w"> </span><span class="n">mass_weight</span>
+<span class="w">         </span><span class="c">!! Mass weighting on?</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">  </span><span class="kd">::</span><span class="w"> </span><span class="n">e_bed_l</span><span class="p">,</span><span class="w"> </span><span class="n">e_bed_r</span>
+<span class="w">         </span><span class="c">!! Bed heights of the left / right column (m).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">  </span><span class="kd">::</span><span class="w"> </span><span class="n">e_top_l</span><span class="p">,</span><span class="w"> </span><span class="n">e_top_r</span>
+<span class="w">         </span><span class="c">!! Layer top heights of the left / right column (m).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">  </span><span class="kd">::</span><span class="w"> </span><span class="n">h_l</span><span class="p">,</span><span class="w"> </span><span class="n">h_r</span>
+<span class="w">         </span><span class="c">!! Layer thicknesses of the left / right column (m).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w">  </span><span class="kd">::</span><span class="w"> </span><span class="n">h_neglect</span>
+<span class="w">         </span><span class="c">!! Negligible thickness (m).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hwt_ll</span><span class="p">,</span><span class="w"> </span><span class="n">hwt_lr</span><span class="p">,</span><span class="w"> </span><span class="n">hwt_rr</span><span class="p">,</span><span class="w"> </span><span class="n">hwt_rl</span>
+<span class="w">         </span><span class="c">!! MOM6 `hWt_LL/LR/RR/RL`.</span>
+
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hwght</span><span class="p">,</span><span class="w"> </span><span class="n">hwl</span><span class="p">,</span><span class="w"> </span><span class="n">hwr</span><span class="p">,</span><span class="w"> </span><span class="n">idenom_hw</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w">  </span><span class="kd">::</span><span class="w"> </span><span class="n">use_hw</span>
+
+<span class="w">      </span><span class="c">! Branch-free: the weighted fractions are formed unconditionally and</span>
+<span class="w">      </span><span class="c">! SELECTED where `hwght &gt; 0` (else plain linear interpolation) -- the</span>
+<span class="w">      </span><span class="c">! same numbers as the branched form, and a CPU compiler can vectorise</span>
+<span class="w">      </span><span class="c">! the face loops that call this.  `h_neglect &gt; 0` keeps the unselected</span>
+<span class="w">      </span><span class="c">! arithmetic finite.</span>
+<span class="w">      </span><span class="n">hwght</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">mass_weight</span><span class="p">)</span><span class="w"> </span><span class="n">hwght</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="mf">0.0_wp</span><span class="p">,</span><span class="w"> </span><span class="n">e_bed_r</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">e_top_l</span><span class="p">,</span><span class="w"> </span><span class="n">e_bed_l</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">e_top_r</span><span class="p">)</span>
+<span class="w">      </span><span class="n">use_hw</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hwght</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">      </span><span class="n">hwl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_l</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h_neglect</span>
+<span class="w">      </span><span class="n">hwr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_r</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h_neglect</span>
+<span class="w">      </span><span class="n">hwght</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hwght</span><span class="o">*</span><span class="p">((</span><span class="n">hwl</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">hwr</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">hwl</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">hwr</span><span class="p">))</span><span class="o">**</span><span class="mi">2</span>
+<span class="w">      </span><span class="n">idenom_hw</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="p">(</span><span class="n">hwght</span><span class="o">*</span><span class="p">(</span><span class="n">hwr</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">hwl</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">hwl</span><span class="o">*</span><span class="n">hwr</span><span class="p">)</span>
+<span class="w">      </span><span class="n">hwt_ll</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">merge</span><span class="p">((</span><span class="n">hwght</span><span class="o">*</span><span class="n">hwl</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">hwr</span><span class="o">*</span><span class="n">hwl</span><span class="p">)</span><span class="o">*</span><span class="n">idenom_hw</span><span class="p">,</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="p">,</span><span class="w"> </span><span class="n">use_hw</span><span class="p">)</span>
+<span class="w">      </span><span class="n">hwt_lr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">merge</span><span class="p">((</span><span class="n">hwght</span><span class="o">*</span><span class="n">hwr</span><span class="p">)</span><span class="o">*</span><span class="n">idenom_hw</span><span class="p">,</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">,</span><span class="w"> </span><span class="n">use_hw</span><span class="p">)</span>
+<span class="w">      </span><span class="n">hwt_rr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">merge</span><span class="p">((</span><span class="n">hwght</span><span class="o">*</span><span class="n">hwr</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">hwr</span><span class="o">*</span><span class="n">hwl</span><span class="p">)</span><span class="o">*</span><span class="n">idenom_hw</span><span class="p">,</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="p">,</span><span class="w"> </span><span class="n">use_hw</span><span class="p">)</span>
+<span class="w">      </span><span class="n">hwt_rl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">merge</span><span class="p">((</span><span class="n">hwght</span><span class="o">*</span><span class="n">hwl</span><span class="p">)</span><span class="o">*</span><span class="n">idenom_hw</span><span class="p">,</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">,</span><span class="w"> </span><span class="n">use_hw</span><span class="p">)</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">fv_mom6_mass_weights</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-06 22:39 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

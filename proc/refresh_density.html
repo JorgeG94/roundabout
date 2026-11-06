@@ -1,0 +1,796 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>refresh_density &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>refresh_density
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">12 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_balance.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_balance.f90.html'>rdb_ocean_balance.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_balance.html'>rdb_ocean_balance</a></li>
+            <li class="breadcrumb-item active" aria-current="page">refresh_density</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/refresh_density.html#src">refresh_density</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private  subroutine refresh_density(state, from_eos)  
+</h2>
+    
+
+    <p><code>rho_layer</code> from the EOS on the device, then host copy refreshed; or,
+when thermodynamics is off (prescribed density), push the host density.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-state~13"></span>
+              type(<a href='../type/ocean_state_t.html'>ocean_state_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>state</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-from_eos"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>from_eos</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~refresh_density~~CallsGraph Pages: 1 -->
+<svg id="procrefresh_densityCallsGraph" width="641pt" height="145pt"
+ viewBox="0.00 0.00 641.00 145.35" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~refresh_density~~CallsGraph" class="graph" transform="scale(0.73 0.73) rotate(0) translate(4 196)">
+<title>proc~~refresh_density~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-196 878,-196 878,4 -4,4"/>
+<!-- proc~refresh_density -->
+<g id="proc~~refresh_density~~CallsGraph_node1" class="node">
+<title>proc~refresh_density</title>
+<polygon fill="none" stroke="black" points="93,-129 0,-129 0,-105 93,-105 93,-129"/>
+<text text-anchor="middle" x="46.5" y="-114.6" font-family="Helvetica,sans-Serif" font-size="10.50">refresh_density</text>
+</g>
+<!-- proc~ocean_eos_compute -->
+<g id="proc~~refresh_density~~CallsGraph_node2" class="node">
+<title>proc~ocean_eos_compute</title>
+<g id="a_proc~~refresh_density~~CallsGraph_node2"><a xlink:href="../proc/ocean_eos_compute.html" xlink:title="ocean_eos_compute">
+<polygon fill="#d9534f" stroke="#d9534f" points="251,-129 129,-129 129,-105 251,-105 251,-129"/>
+<text text-anchor="middle" x="190" y="-114.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_eos_compute</text>
+</a>
+</g>
+</g>
+<!-- proc~refresh_density&#45;&gt;proc~ocean_eos_compute -->
+<g id="proc~~refresh_density~~CallsGraph_edge1" class="edge">
+<title>proc~refresh_density&#45;&gt;proc~ocean_eos_compute</title>
+<path fill="none" stroke="#ff0000" d="M93.05,-117C101.24,-117 109.94,-117 118.64,-117"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="118.82,-120.5 128.82,-117 118.82,-113.5 118.82,-120.5"/>
+</g>
+<!-- proc~eos_compute_arrays -->
+<g id="proc~~refresh_density~~CallsGraph_node3" class="node">
+<title>proc~eos_compute_arrays</title>
+<g id="a_proc~~refresh_density~~CallsGraph_node3"><a xlink:href="../proc/eos_compute_arrays.html" xlink:title="eos_compute_arrays">
+<polygon fill="#d9534f" stroke="#d9534f" points="410,-129 287,-129 287,-105 410,-105 410,-129"/>
+<text text-anchor="middle" x="348.5" y="-114.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">eos_compute_arrays</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_eos_compute&#45;&gt;proc~eos_compute_arrays -->
+<g id="proc~~refresh_density~~CallsGraph_edge2" class="edge">
+<title>proc~ocean_eos_compute&#45;&gt;proc~eos_compute_arrays</title>
+<path fill="none" stroke="#ff0000" d="M251.06,-117C259.49,-117 268.21,-117 276.81,-117"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="276.83,-120.5 286.83,-117 276.82,-113.5 276.83,-120.5"/>
+</g>
+<!-- proc~eos_linear_impl -->
+<g id="proc~~refresh_density~~CallsGraph_node4" class="node">
+<title>proc~eos_linear_impl</title>
+<g id="a_proc~~refresh_density~~CallsGraph_node4"><a xlink:href="../proc/eos_linear_impl.html" xlink:title="eos_linear_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="555.5,-192 459.5,-192 459.5,-168 555.5,-168 555.5,-192"/>
+<text text-anchor="middle" x="507.5" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">eos_linear_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~eos_compute_arrays&#45;&gt;proc~eos_linear_impl -->
+<g id="proc~~refresh_density~~CallsGraph_edge3" class="edge">
+<title>proc~eos_compute_arrays&#45;&gt;proc~eos_linear_impl</title>
+<path fill="none" stroke="#ff0000" d="M375.9,-129.14C395.17,-137.84 422,-149.63 446,-159 450.73,-160.85 455.7,-162.71 460.68,-164.51"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="459.59,-167.84 470.18,-167.9 461.94,-161.25 459.59,-167.84"/>
+</g>
+<!-- proc~eos_roquet_rho_impl -->
+<g id="proc~~refresh_density~~CallsGraph_node5" class="node">
+<title>proc~eos_roquet_rho_impl</title>
+<g id="a_proc~~refresh_density~~CallsGraph_node5"><a xlink:href="../proc/eos_roquet_rho_impl.html" xlink:title="eos_roquet_rho_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="569,-108 446,-108 446,-84 569,-84 569,-108"/>
+<text text-anchor="middle" x="507.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">eos_roquet_rho_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~eos_compute_arrays&#45;&gt;proc~eos_roquet_rho_impl -->
+<g id="proc~~refresh_density~~CallsGraph_edge4" class="edge">
+<title>proc~eos_compute_arrays&#45;&gt;proc~eos_roquet_rho_impl</title>
+<path fill="none" stroke="#ff0000" d="M410.2,-108.88C418.64,-107.75 427.36,-106.59 435.95,-105.44"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="436.51,-108.89 445.96,-104.1 435.59,-101.95 436.51,-108.89"/>
+</g>
+<!-- proc~eos_roquet_spv_impl -->
+<g id="proc~~refresh_density~~CallsGraph_node6" class="node">
+<title>proc~eos_roquet_spv_impl</title>
+<g id="a_proc~~refresh_density~~CallsGraph_node6"><a xlink:href="../proc/eos_roquet_spv_impl.html" xlink:title="eos_roquet_spv_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="569,-66 446,-66 446,-42 569,-42 569,-66"/>
+<text text-anchor="middle" x="507.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">eos_roquet_spv_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~eos_compute_arrays&#45;&gt;proc~eos_roquet_spv_impl -->
+<g id="proc~~refresh_density~~CallsGraph_edge5" class="edge">
+<title>proc~eos_compute_arrays&#45;&gt;proc~eos_roquet_spv_impl</title>
+<path fill="none" stroke="#ff0000" d="M375.9,-104.86C395.17,-96.16 422,-84.37 446,-75 450.73,-73.15 455.7,-71.29 460.68,-69.49"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="461.94,-72.75 470.18,-66.1 459.59,-66.16 461.94,-72.75"/>
+</g>
+<!-- proc~eos_wright_impl -->
+<g id="proc~~refresh_density~~CallsGraph_node7" class="node">
+<title>proc~eos_wright_impl</title>
+<g id="a_proc~~refresh_density~~CallsGraph_node7"><a xlink:href="../proc/eos_wright_impl.html" xlink:title="eos_wright_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="556.5,-150 458.5,-150 458.5,-126 556.5,-126 556.5,-150"/>
+<text text-anchor="middle" x="507.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">eos_wright_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~eos_compute_arrays&#45;&gt;proc~eos_wright_impl -->
+<g id="proc~~refresh_density~~CallsGraph_edge6" class="edge">
+<title>proc~eos_compute_arrays&#45;&gt;proc~eos_wright_impl</title>
+<path fill="none" stroke="#ff0000" d="M410.2,-125.12C422.6,-126.78 435.63,-128.52 447.96,-130.17"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="447.74,-133.67 458.12,-131.53 448.67,-126.73 447.74,-133.67"/>
+</g>
+<!-- local -->
+<g id="proc~~refresh_density~~CallsGraph_node8" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="684.5,-150 630.5,-150 630.5,-126 684.5,-126 684.5,-150"/>
+<text text-anchor="middle" x="657.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~eos_linear_impl&#45;&gt;local -->
+<g id="proc~~refresh_density~~CallsGraph_edge7" class="edge">
+<title>proc~eos_linear_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M550.91,-167.96C572.93,-161.72 599.55,-154.16 620.55,-148.2"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="621.7,-151.51 630.36,-145.42 619.79,-144.78 621.7,-151.51"/>
+</g>
+<!-- proc~eos_roquet_rho_impl&#45;&gt;local -->
+<g id="proc~~refresh_density~~CallsGraph_edge8" class="edge">
+<title>proc~eos_roquet_rho_impl&#45;&gt;local</title>
+<path fill="none" stroke="#7fff00" d="M550.91,-108.04C572.93,-114.28 599.55,-121.84 620.55,-127.8"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="619.79,-131.22 630.36,-130.58 621.7,-124.49 619.79,-131.22"/>
+</g>
+<!-- proc~roquet_rho_value -->
+<g id="proc~~refresh_density~~CallsGraph_node9" class="node">
+<title>proc~roquet_rho_value</title>
+<g id="a_proc~~refresh_density~~CallsGraph_node9"><a xlink:href="../proc/roquet_rho_value.html" xlink:title="roquet_rho_value">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="710,-108 605,-108 605,-84 710,-84 710,-108"/>
+<text text-anchor="middle" x="657.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">roquet_rho_value</text>
+</a>
+</g>
+</g>
+<!-- proc~eos_roquet_rho_impl&#45;&gt;proc~roquet_rho_value -->
+<g id="proc~~refresh_density~~CallsGraph_edge9" class="edge">
+<title>proc~eos_roquet_rho_impl&#45;&gt;proc~roquet_rho_value</title>
+<path fill="none" stroke="#7fff00" d="M569.12,-96C577.52,-96 586.16,-96 594.58,-96"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="594.72,-99.5 604.72,-96 594.72,-92.5 594.72,-99.5"/>
+</g>
+<!-- proc~eos_roquet_spv_impl&#45;&gt;local -->
+<g id="proc~~refresh_density~~CallsGraph_edge10" class="edge">
+<title>proc~eos_roquet_spv_impl&#45;&gt;local</title>
+<path fill="none" stroke="#00ffff" d="M552.16,-66.01C558.07,-68.52 563.85,-71.49 569,-75 589.32,-88.84 585.06,-102.62 605,-117 609.87,-120.51 615.41,-123.55 621,-126.15"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="619.8,-129.44 630.37,-130.1 622.52,-122.99 619.8,-129.44"/>
+</g>
+<!-- proc~roquet_spv_value -->
+<g id="proc~~refresh_density~~CallsGraph_node10" class="node">
+<title>proc~roquet_spv_value</title>
+<g id="a_proc~~refresh_density~~CallsGraph_node10"><a xlink:href="../proc/roquet_spv_value.html" xlink:title="roquet_spv_value">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="710,-66 605,-66 605,-42 710,-42 710,-66"/>
+<text text-anchor="middle" x="657.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">roquet_spv_value</text>
+</a>
+</g>
+</g>
+<!-- proc~eos_roquet_spv_impl&#45;&gt;proc~roquet_spv_value -->
+<g id="proc~~refresh_density~~CallsGraph_edge11" class="edge">
+<title>proc~eos_roquet_spv_impl&#45;&gt;proc~roquet_spv_value</title>
+<path fill="none" stroke="#00ffff" d="M569.12,-54C577.52,-54 586.16,-54 594.58,-54"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="594.72,-57.5 604.72,-54 594.72,-50.5 594.72,-57.5"/>
+</g>
+<!-- proc~eos_wright_impl&#45;&gt;local -->
+<g id="proc~~refresh_density~~CallsGraph_edge12" class="edge">
+<title>proc~eos_wright_impl&#45;&gt;local</title>
+<path fill="none" stroke="#7f00ff" d="M556.55,-138C577.2,-138 600.94,-138 620.1,-138"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="620.23,-141.5 630.23,-138 620.23,-134.5 620.23,-141.5"/>
+</g>
+<!-- rdb_roq_rho_p -->
+<g id="proc~~refresh_density~~CallsGraph_node11" class="node">
+<title>rdb_roq_rho_p</title>
+<polygon fill="#777777" stroke="#777777" points="854,-150 766,-150 766,-126 854,-126 854,-150"/>
+<text text-anchor="middle" x="810" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_roq_rho_p</text>
+</g>
+<!-- proc~roquet_rho_value&#45;&gt;rdb_roq_rho_p -->
+<g id="proc~~refresh_density~~CallsGraph_edge13" class="edge">
+<title>proc~roquet_rho_value&#45;&gt;rdb_roq_rho_p</title>
+<path fill="none" stroke="#00ff00" d="M701.63,-108.04C718.63,-112.78 738.33,-118.28 756.17,-123.26"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="755.29,-126.65 765.87,-125.96 757.18,-119.9 755.29,-126.65"/>
+</g>
+<!-- rdb_roq_rho_ts_coeffs -->
+<g id="proc~~refresh_density~~CallsGraph_node12" class="node">
+<title>rdb_roq_rho_ts_coeffs</title>
+<polygon fill="#777777" stroke="#777777" points="874,-108 746,-108 746,-84 874,-84 874,-108"/>
+<text text-anchor="middle" x="810" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_roq_rho_ts_coeffs</text>
+</g>
+<!-- proc~roquet_rho_value&#45;&gt;rdb_roq_rho_ts_coeffs -->
+<g id="proc~~refresh_density~~CallsGraph_edge14" class="edge">
+<title>proc~roquet_rho_value&#45;&gt;rdb_roq_rho_ts_coeffs</title>
+<path fill="none" stroke="#00ff00" d="M710.29,-96C718.54,-96 727.21,-96 735.84,-96"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="735.93,-99.5 745.93,-96 735.93,-92.5 735.93,-99.5"/>
+</g>
+<!-- rdb_roq_spv_p -->
+<g id="proc~~refresh_density~~CallsGraph_node13" class="node">
+<title>rdb_roq_spv_p</title>
+<polygon fill="#777777" stroke="#777777" points="854,-66 766,-66 766,-42 854,-42 854,-66"/>
+<text text-anchor="middle" x="810" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_roq_spv_p</text>
+</g>
+<!-- proc~roquet_spv_value&#45;&gt;rdb_roq_spv_p -->
+<g id="proc~~refresh_density~~CallsGraph_edge15" class="edge">
+<title>proc~roquet_spv_value&#45;&gt;rdb_roq_spv_p</title>
+<path fill="none" stroke="#0000ff" d="M710.29,-54C724.8,-54 740.6,-54 755.21,-54"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="755.61,-57.5 765.61,-54 755.61,-50.5 755.61,-57.5"/>
+</g>
+<!-- rdb_roq_ts_coeffs -->
+<g id="proc~~refresh_density~~CallsGraph_node14" class="node">
+<title>rdb_roq_ts_coeffs</title>
+<polygon fill="#777777" stroke="#777777" points="862.5,-24 757.5,-24 757.5,0 862.5,0 862.5,-24"/>
+<text text-anchor="middle" x="810" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_roq_ts_coeffs</text>
+</g>
+<!-- proc~roquet_spv_value&#45;&gt;rdb_roq_ts_coeffs -->
+<g id="proc~~refresh_density~~CallsGraph_edge16" class="edge">
+<title>proc~roquet_spv_value&#45;&gt;rdb_roq_ts_coeffs</title>
+<path fill="none" stroke="#0000ff" d="M701.63,-41.96C718.63,-37.22 738.33,-31.72 756.17,-26.74"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="757.18,-30.1 765.87,-24.04 755.29,-23.35 757.18,-30.1"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocrefresh_densityCallsGraph = svgPanZoom('#procrefresh_densityCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~refresh_density~~CalledByGraph Pages: 1 -->
+<svg id="procrefresh_densityCalledByGraph" width="641pt" height="61pt"
+ viewBox="0.00 0.00 641.00 60.59" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~refresh_density~~CalledByGraph" class="graph" transform="scale(0.64 0.64) rotate(0) translate(4 91)">
+<title>proc~~refresh_density~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-91 1001,-91 1001,4 -4,4"/>
+<!-- proc~refresh_density -->
+<g id="proc~~refresh_density~~CalledByGraph_node1" class="node">
+<title>proc~refresh_density</title>
+<polygon fill="none" stroke="black" points="997,-45 904,-45 904,-21 997,-21 997,-45"/>
+<text text-anchor="middle" x="950.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">refresh_density</text>
+</g>
+<!-- proc~ocean_balance_velocity -->
+<g id="proc~~refresh_density~~CalledByGraph_node2" class="node">
+<title>proc~ocean_balance_velocity</title>
+<g id="a_proc~~refresh_density~~CalledByGraph_node2"><a xlink:href="../proc/ocean_balance_velocity.html" xlink:title="ocean_balance_velocity">
+<polygon fill="#d9534f" stroke="#d9534f" points="868,-45 728,-45 728,-21 868,-21 868,-45"/>
+<text text-anchor="middle" x="798" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_balance_velocity</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_balance_velocity&#45;&gt;proc~refresh_density -->
+<g id="proc~~refresh_density~~CalledByGraph_edge1" class="edge">
+<title>proc~ocean_balance_velocity&#45;&gt;proc~refresh_density</title>
+<path fill="none" stroke="#ff0000" d="M868.08,-33C876.56,-33 885.14,-33 893.39,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="893.64,-36.5 903.64,-33 893.64,-29.5 893.64,-36.5"/>
+</g>
+<!-- proc~ocean_balance_apply -->
+<g id="proc~~refresh_density~~CalledByGraph_node3" class="node">
+<title>proc~ocean_balance_apply</title>
+<g id="a_proc~~refresh_density~~CalledByGraph_node3"><a xlink:href="../proc/ocean_balance_apply.html" xlink:title="ocean_balance_apply">
+<polygon fill="#d9534f" stroke="#d9534f" points="692,-45 564,-45 564,-21 692,-21 692,-45"/>
+<text text-anchor="middle" x="628" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_balance_apply</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_balance_apply&#45;&gt;proc~ocean_balance_velocity -->
+<g id="proc~~refresh_density~~CalledByGraph_edge2" class="edge">
+<title>proc~ocean_balance_apply&#45;&gt;proc~ocean_balance_velocity</title>
+<path fill="none" stroke="#ff0000" d="M692.03,-33C700.47,-33 709.2,-33 717.86,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="717.98,-36.5 727.98,-33 717.98,-29.5 717.98,-36.5"/>
+</g>
+<!-- proc~balance_and_rebaseline -->
+<g id="proc~~refresh_density~~CalledByGraph_node4" class="node">
+<title>proc~balance_and_rebaseline</title>
+<g id="a_proc~~refresh_density~~CalledByGraph_node4"><a xlink:href="../proc/balance_and_rebaseline.html" xlink:title="balance_and_rebaseline">
+<polygon fill="#d9534f" stroke="#d9534f" points="528,-45 386,-45 386,-21 528,-21 528,-45"/>
+<text text-anchor="middle" x="457" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">balance_and_rebaseline</text>
+</a>
+</g>
+</g>
+<!-- proc~balance_and_rebaseline&#45;&gt;proc~ocean_balance_apply -->
+<g id="proc~~refresh_density~~CalledByGraph_edge3" class="edge">
+<title>proc~balance_and_rebaseline&#45;&gt;proc~ocean_balance_apply</title>
+<path fill="none" stroke="#ff0000" d="M528.2,-33C536.58,-33 545.16,-33 553.58,-33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="553.76,-36.5 563.76,-33 553.76,-29.5 553.76,-36.5"/>
+</g>
+<!-- proc~complete_ocean_create -->
+<g id="proc~~refresh_density~~CalledByGraph_node5" class="node">
+<title>proc~complete_ocean_create</title>
+<g id="a_proc~~refresh_density~~CalledByGraph_node5"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="349.5,-66 209.5,-66 209.5,-42 349.5,-42 349.5,-66"/>
+<text text-anchor="middle" x="279.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~balance_and_rebaseline -->
+<g id="proc~~refresh_density~~CalledByGraph_edge4" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~balance_and_rebaseline</title>
+<path fill="none" stroke="#ff0000" d="M349.61,-45.73C358.16,-44.71 366.96,-43.65 375.65,-42.61"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="376.29,-46.06 385.8,-41.4 375.46,-39.11 376.29,-46.06"/>
+</g>
+<!-- proc~rdb_ocean_balance_live -->
+<g id="proc~~refresh_density~~CalledByGraph_node6" class="node">
+<title>proc~rdb_ocean_balance_live</title>
+<g id="a_proc~~refresh_density~~CalledByGraph_node6"><a xlink:href="../proc/rdb_ocean_balance_live.html" xlink:title="rdb_ocean_balance_live">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="350,-24 209,-24 209,0 350,0 350,-24"/>
+<text text-anchor="middle" x="279.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_balance_live</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_balance_live&#45;&gt;proc~balance_and_rebaseline -->
+<g id="proc~~refresh_density~~CalledByGraph_edge5" class="edge">
+<title>proc~rdb_ocean_balance_live&#45;&gt;proc~balance_and_rebaseline</title>
+<path fill="none" stroke="#ff0000" d="M350.11,-20.33C358.57,-21.34 367.27,-22.38 375.87,-23.41"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="375.55,-26.9 385.9,-24.61 376.38,-19.95 375.55,-26.9"/>
+</g>
+<!-- proc~rdb_ocean_create_finalize -->
+<g id="proc~~refresh_density~~CalledByGraph_node7" class="node">
+<title>proc~rdb_ocean_create_finalize</title>
+<g id="a_proc~~refresh_density~~CalledByGraph_node7"><a xlink:href="../proc/rdb_ocean_create_finalize.html" xlink:title="rdb_ocean_create_finalize">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="162,-87 11,-87 11,-63 162,-63 162,-87"/>
+<text text-anchor="middle" x="86.5" y="-72.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~refresh_density~~CalledByGraph_edge6" class="edge">
+<title>proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M162.17,-66.79C174.35,-65.45 187,-64.06 199.28,-62.71"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="199.94,-66.16 209.5,-61.59 199.18,-59.2 199.94,-66.16"/>
+</g>
+<!-- proc~rdb_ocean_create_from_string -->
+<g id="proc~~refresh_density~~CalledByGraph_node8" class="node">
+<title>proc~rdb_ocean_create_from_string</title>
+<g id="a_proc~~refresh_density~~CalledByGraph_node8"><a xlink:href="../proc/rdb_ocean_create_from_string.html" xlink:title="rdb_ocean_create_from_string">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="173,-45 0,-45 0,-21 173,-21 173,-45"/>
+<text text-anchor="middle" x="86.5" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_from_string</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~refresh_density~~CalledByGraph_edge7" class="edge">
+<title>proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M173.22,-42.43C181.92,-43.38 190.72,-44.35 199.35,-45.3"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="199.04,-48.78 209.37,-46.4 199.81,-41.83 199.04,-48.78"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocrefresh_densityCalledByGraph = svgPanZoom('#procrefresh_densityCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">refresh_density</span><span class="p">(</span><span class="n">state</span><span class="p">,</span><span class="w"> </span><span class="n">from_eos</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! `rho_layer` from the EOS on the device, then host copy refreshed; or,</span>
+<span class="w">      </span><span class="c">!! when thermodynamics is off (prescribed density), push the host density.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">state</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">from_eos</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">from_eos</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">ocean_eos_compute</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">,</span><span class="w"> </span><span class="n">active</span><span class="o">=</span><span class="p">.</span><span class="n">true</span><span class="p">.)</span>
+<span class="w">         </span><span class="k">associate</span><span class="w"> </span><span class="p">(</span><span class="n">rl</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">%</span><span class="n">rho_layer</span><span class="p">)</span>
+<span class="w">            </span><span class="c">!$acc update self(rl)</span>
+<span class="w">         </span><span class="k">end associate</span>
+<span class="k">      else</span>
+<span class="k">         associate</span><span class="w"> </span><span class="p">(</span><span class="n">rl</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">%</span><span class="n">rho_layer</span><span class="p">)</span>
+<span class="w">            </span><span class="c">!$acc update device(rl)</span>
+<span class="w">         </span><span class="k">end associate</span>
+<span class="k">      end if</span>
+<span class="k">   end subroutine </span><span class="n">refresh_density</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-06 22:39 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,1046 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>load_bathymetry_into_array &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>load_bathymetry_into_array
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">7 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_bathymetry.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_bathymetry.f90.html'>rdb_bathymetry.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_bathymetry.html'>rdb_bathymetry</a></li>
+            <li class="breadcrumb-item active" aria-current="page">load_bathymetry_into_array</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/load_bathymetry_into_array.html#src">load_bathymetry_into_array</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine load_bathymetry_into_array(filename, b, grid, ierr)  
+</h2>
+    
+
+    <p>Load bathymetry from a NetCDF file into a target 2D array
+shaped <code>(grid%nx_total, grid%ny_total)</code>.  Thin wrapper over
+<code>load_static_2d_field</code> that looks the variable up as <code>b</code>, then
+<code>elevation</code>, then <code>depth</code>.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-filename~15"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>filename</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-b~60"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>b</strong>(:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~286"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ierr~137"></span>
+              integer,
+            </td>
+<td>intent(out),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ierr</strong></td>
+            <td>
+                <p>Non-zero on a missing/unreadable file or a dimension mismatch
+when present; absent behaves as today (<code>error stop</code>).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~load_bathymetry_into_array~~CallsGraph Pages: 1 -->
+<svg id="procload_bathymetry_into_arrayCallsGraph" width="641pt" height="431pt"
+ viewBox="0.00 0.00 641.00 431.23" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~load_bathymetry_into_array~~CallsGraph" class="graph" transform="scale(0.63 0.63) rotate(0) translate(4 682.87)">
+<title>proc~~load_bathymetry_into_array~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-682.87 1017,-682.87 1017,4 -4,4"/>
+<!-- proc~load_bathymetry_into_array -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_node1" class="node">
+<title>proc~load_bathymetry_into_array</title>
+<polygon fill="none" stroke="black" points="162,-310 0,-310 0,-286 162,-286 162,-310"/>
+<text text-anchor="middle" x="81" y="-295.6" font-family="Helvetica,sans-Serif" font-size="10.50">load_bathymetry_into_array</text>
+</g>
+<!-- proc~load_2d_core -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_node2" class="node">
+<title>proc~load_2d_core</title>
+<g id="a_proc~~load_bathymetry_into_array~~CallsGraph_node2"><a xlink:href="../proc/load_2d_core.html" xlink:title="load_2d_core">
+<polygon fill="#d9534f" stroke="#d9534f" points="281,-310 198,-310 198,-286 281,-286 281,-310"/>
+<text text-anchor="middle" x="239.5" y="-295.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">load_2d_core</text>
+</a>
+</g>
+</g>
+<!-- proc~load_bathymetry_into_array&#45;&gt;proc~load_2d_core -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge1" class="edge">
+<title>proc~load_bathymetry_into_array&#45;&gt;proc~load_2d_core</title>
+<path fill="none" stroke="#ff0000" d="M162.08,-298C170.76,-298 179.4,-298 187.58,-298"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="187.68,-301.5 197.68,-298 187.68,-294.5 187.68,-301.5"/>
+</g>
+<!-- error -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_node3" class="node">
+<title>error</title>
+<polygon fill="#777777" stroke="#777777" points="992,-589 938,-589 938,-565 992,-565 992,-589"/>
+<text text-anchor="middle" x="965" y="-574.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error</text>
+</g>
+<!-- proc~load_2d_core&#45;&gt;error -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge2" class="edge">
+<title>proc~load_2d_core&#45;&gt;error</title>
+<path fill="none" stroke="#ff0000" d="M241.35,-310.17C245.49,-365.63 265.49,-593.74 317,-638 408.41,-716.54 466.98,-657 587.5,-657 587.5,-657 587.5,-657 730,-657 807.2,-657 891.39,-617.53 934.67,-594.04"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="936.46,-597.05 943.52,-589.15 933.07,-590.93 936.46,-597.05"/>
+</g>
+<!-- info -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_node4" class="node">
+<title>info</title>
+<polygon fill="#777777" stroke="#777777" points="427,-192 373,-192 373,-168 427,-168 427,-192"/>
+<text text-anchor="middle" x="400" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">info</text>
+</g>
+<!-- proc~load_2d_core&#45;&gt;info -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge3" class="edge">
+<title>proc~load_2d_core&#45;&gt;info</title>
+<path fill="none" stroke="#ff0000" d="M247.34,-285.96C259.08,-266.36 284.94,-227.56 317,-206 330.69,-196.79 347.84,-190.69 362.91,-186.72"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="364.04,-190.05 372.95,-184.31 362.41,-183.25 364.04,-190.05"/>
+</g>
+<!-- nf90_inquire_dimension -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_node5" class="node">
+<title>nf90_inquire_dimension</title>
+<polygon fill="#777777" stroke="#777777" points="658,-229 519,-229 519,-205 658,-205 658,-229"/>
+<text text-anchor="middle" x="588.5" y="-214.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nf90_inquire_dimension</text>
+</g>
+<!-- proc~load_2d_core&#45;&gt;nf90_inquire_dimension -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge4" class="edge">
+<title>proc~load_2d_core&#45;&gt;nf90_inquire_dimension</title>
+<path fill="none" stroke="#ff0000" d="M281.29,-286.4C292.81,-283.23 305.37,-279.88 317,-277 385.57,-260 464.49,-242.76 519.31,-231.15"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="520.2,-234.54 529.26,-229.04 518.75,-227.69 520.2,-234.54"/>
+</g>
+<!-- nf90_inquire_variable -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_node6" class="node">
+<title>nf90_inquire_variable</title>
+<polygon fill="#777777" stroke="#777777" points="463.5,-150 336.5,-150 336.5,-126 463.5,-126 463.5,-150"/>
+<text text-anchor="middle" x="400" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nf90_inquire_variable</text>
+</g>
+<!-- proc~load_2d_core&#45;&gt;nf90_inquire_variable -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge5" class="edge">
+<title>proc~load_2d_core&#45;&gt;nf90_inquire_variable</title>
+<path fill="none" stroke="#ff0000" d="M243.63,-285.8C251.26,-258.6 273.45,-192.74 317,-159 320.18,-156.54 323.61,-154.36 327.21,-152.44"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="328.84,-155.54 336.45,-148.17 325.9,-149.19 328.84,-155.54"/>
+</g>
+<!-- proc~bathy_io_ok -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_node7" class="node">
+<title>proc~bathy_io_ok</title>
+<g id="a_proc~~load_bathymetry_into_array~~CallsGraph_node7"><a xlink:href="../proc/bathy_io_ok.html" xlink:title="bathy_io_ok">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="438,-629 362,-629 362,-605 438,-605 438,-629"/>
+<text text-anchor="middle" x="400" y="-614.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bathy_io_ok</text>
+</a>
+</g>
+</g>
+<!-- proc~load_2d_core&#45;&gt;proc~bathy_io_ok -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge6" class="edge">
+<title>proc~load_2d_core&#45;&gt;proc~bathy_io_ok</title>
+<path fill="none" stroke="#ff0000" d="M242.11,-310.23C248.92,-360.27 276.91,-548.78 317,-591 326.26,-600.75 339.15,-606.86 351.97,-610.68"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="351.15,-614.08 361.7,-613.18 352.89,-607.3 351.15,-614.08"/>
+</g>
+<!-- proc~fill_bathymetry_ghosts_array -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_node8" class="node">
+<title>proc~fill_bathymetry_ghosts_array</title>
+<g id="a_proc~~load_bathymetry_into_array~~CallsGraph_node8"><a xlink:href="../proc/fill_bathymetry_ghosts_array.html" xlink:title="fill_bathymetry_ghosts_array">
+<polygon fill="#d9534f" stroke="#d9534f" points="483,-108 317,-108 317,-84 483,-84 483,-108"/>
+<text text-anchor="middle" x="400" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fill_bathymetry_ghosts_array</text>
+</a>
+</g>
+</g>
+<!-- proc~load_2d_core&#45;&gt;proc~fill_bathymetry_ghosts_array -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge7" class="edge">
+<title>proc~load_2d_core&#45;&gt;proc~fill_bathymetry_ghosts_array</title>
+<path fill="none" stroke="#ff0000" d="M241.95,-285.71C246.5,-252.98 263.48,-163.07 317,-117 318.55,-115.67 320.16,-114.42 321.84,-113.25"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="323.86,-116.12 330.69,-108.02 320.3,-110.1 323.86,-116.12"/>
+</g>
+<!-- proc~grid_init -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_node9" class="node">
+<title>proc~grid_init</title>
+<g id="a_proc~~load_bathymetry_into_array~~CallsGraph_node9"><a xlink:href="../proc/grid_init.html" xlink:title="hgrid_t%grid_init">
+<polygon fill="#d9534f" stroke="#d9534f" points="451,-66 349,-66 349,-42 451,-42 451,-66"/>
+<text text-anchor="middle" x="400" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">hgrid_t%grid_init</text>
+</a>
+</g>
+</g>
+<!-- proc~load_2d_core&#45;&gt;proc~grid_init -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge8" class="edge">
+<title>proc~load_2d_core&#45;&gt;proc~grid_init</title>
+<path fill="none" stroke="#ff0000" d="M240.84,-285.98C242.57,-248.7 253.1,-134 317,-75 323.29,-69.2 330.95,-64.95 339.05,-61.84"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="340.27,-65.13 348.69,-58.7 338.1,-58.47 340.27,-65.13"/>
+</g>
+<!-- proc~nc_check -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_node10" class="node">
+<title>proc~nc_check</title>
+<g id="a_proc~~load_bathymetry_into_array~~CallsGraph_node10"><a xlink:href="../proc/nc_check.html" xlink:title="nc_check">
+<polygon fill="#d9534f" stroke="#d9534f" points="760,-471 698,-471 698,-447 760,-447 760,-471"/>
+<text text-anchor="middle" x="729" y="-456.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nc_check</text>
+</a>
+</g>
+</g>
+<!-- proc~load_2d_core&#45;&gt;proc~nc_check -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge9" class="edge">
+<title>proc~load_2d_core&#45;&gt;proc~nc_check</title>
+<path fill="none" stroke="#ff0000" d="M251.69,-285.89C265.58,-271.63 290.68,-248.33 317,-236 337.72,-226.29 496.23,-198.23 519,-196 580.48,-189.97 609.02,-158.35 658,-196 696.71,-225.76 718.54,-378.89 725.52,-436.79"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="722.04,-437.21 726.68,-446.74 729,-436.4 722.04,-437.21"/>
+</g>
+<!-- proc~nc_close -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_node11" class="node">
+<title>proc~nc_close</title>
+<g id="a_proc~~load_bathymetry_into_array~~CallsGraph_node11"><a xlink:href="../proc/nc_close.html" xlink:title="nc_close">
+<polygon fill="#d9534f" stroke="#d9534f" points="617.5,-629 559.5,-629 559.5,-605 617.5,-605 617.5,-629"/>
+<text text-anchor="middle" x="588.5" y="-614.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nc_close</text>
+</a>
+</g>
+</g>
+<!-- proc~load_2d_core&#45;&gt;proc~nc_close -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge10" class="edge">
+<title>proc~load_2d_core&#45;&gt;proc~nc_close</title>
+<path fill="none" stroke="#ff0000" d="M240.07,-310.28C239.31,-351.9 242.79,-488.91 317,-558 321.28,-561.99 475.73,-594.08 549.29,-609.19"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="548.61,-612.62 559.11,-611.2 550.01,-605.76 548.61,-612.62"/>
+</g>
+<!-- proc~nc_get_dim_len -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_node12" class="node">
+<title>proc~nc_get_dim_len</title>
+<g id="a_proc~~load_bathymetry_into_array~~CallsGraph_node12"><a xlink:href="../proc/nc_get_dim_len.html" xlink:title="nc_get_dim_len">
+<polygon fill="#d9534f" stroke="#d9534f" points="447.5,-310 352.5,-310 352.5,-286 447.5,-286 447.5,-310"/>
+<text text-anchor="middle" x="400" y="-295.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nc_get_dim_len</text>
+</a>
+</g>
+</g>
+<!-- proc~load_2d_core&#45;&gt;proc~nc_get_dim_len -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge11" class="edge">
+<title>proc~load_2d_core&#45;&gt;proc~nc_get_dim_len</title>
+<path fill="none" stroke="#ff0000" d="M281.32,-298C299.91,-298 322.24,-298 342.42,-298"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="342.43,-301.5 352.43,-298 342.43,-294.5 342.43,-301.5"/>
+</g>
+<!-- proc~nc_get_var_slab_2d -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_node13" class="node">
+<title>proc~nc_get_var_slab_2d</title>
+<g id="a_proc~~load_bathymetry_into_array~~CallsGraph_node13"><a xlink:href="../proc/nc_get_var_slab_2d.html" xlink:title="nc_get_var_slab_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="458,-352 342,-352 342,-328 458,-328 458,-352"/>
+<text text-anchor="middle" x="400" y="-337.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nc_get_var_slab_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~load_2d_core&#45;&gt;proc~nc_get_var_slab_2d -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge12" class="edge">
+<title>proc~load_2d_core&#45;&gt;proc~nc_get_var_slab_2d</title>
+<path fill="none" stroke="#ff0000" d="M281.36,-309.36C292.87,-312.52 305.42,-315.93 317,-319 324.88,-321.09 333.19,-323.26 341.38,-325.38"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="340.71,-328.82 351.27,-327.92 342.46,-322.04 340.71,-328.82"/>
+</g>
+<!-- proc~nc_get_varid~2 -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_node14" class="node">
+<title>proc~nc_get_varid~2</title>
+<g id="a_proc~~load_bathymetry_into_array~~CallsGraph_node14"><a xlink:href="../proc/nc_get_varid~2.html" xlink:title="nc_get_varid">
+<polygon fill="#d9534f" stroke="#d9534f" points="440,-507 360,-507 360,-483 440,-483 440,-507"/>
+<text text-anchor="middle" x="400" y="-492.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nc_get_varid</text>
+</a>
+</g>
+</g>
+<!-- proc~load_2d_core&#45;&gt;proc~nc_get_varid~2 -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge13" class="edge">
+<title>proc~load_2d_core&#45;&gt;proc~nc_get_varid~2</title>
+<path fill="none" stroke="#ff0000" d="M244.76,-310.24C254.35,-336.45 279.73,-398.95 317,-440 330.77,-455.17 349.56,-468.17 365.68,-477.71"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="364.38,-481 374.8,-482.92 367.86,-474.92 364.38,-481"/>
+</g>
+<!-- proc~nc_open_read -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_node15" class="node">
+<title>proc~nc_open_read</title>
+<g id="a_proc~~load_bathymetry_into_array~~CallsGraph_node15"><a xlink:href="../proc/nc_open_read.html" xlink:title="nc_open_read">
+<polygon fill="#d9534f" stroke="#d9534f" points="443.5,-431 356.5,-431 356.5,-407 443.5,-407 443.5,-431"/>
+<text text-anchor="middle" x="400" y="-416.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nc_open_read</text>
+</a>
+</g>
+</g>
+<!-- proc~load_2d_core&#45;&gt;proc~nc_open_read -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge14" class="edge">
+<title>proc~load_2d_core&#45;&gt;proc~nc_open_read</title>
+<path fill="none" stroke="#ff0000" d="M254.63,-310.16C269.79,-323.09 294.71,-343.98 317,-361 335.24,-374.93 356.4,-389.87 372.66,-401.1"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="370.91,-404.14 381.13,-406.92 374.88,-398.37 370.91,-404.14"/>
+</g>
+<!-- proc~try_get_bathymetry_var -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_node16" class="node">
+<title>proc~try_get_bathymetry_var</title>
+<g id="a_proc~~load_bathymetry_into_array~~CallsGraph_node16"><a xlink:href="../proc/try_get_bathymetry_var.html" xlink:title="try_get_bathymetry_var">
+<polygon fill="#d9534f" stroke="#d9534f" points="469.5,-549 330.5,-549 330.5,-525 469.5,-525 469.5,-549"/>
+<text text-anchor="middle" x="400" y="-534.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">try_get_bathymetry_var</text>
+</a>
+</g>
+</g>
+<!-- proc~load_2d_core&#45;&gt;proc~try_get_bathymetry_var -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge15" class="edge">
+<title>proc~load_2d_core&#45;&gt;proc~try_get_bathymetry_var</title>
+<path fill="none" stroke="#ff0000" d="M240.95,-310.01C242.99,-346.74 254.32,-458.54 317,-516 318.5,-517.38 320.08,-518.67 321.73,-519.88"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="320.1,-522.98 330.44,-525.26 323.77,-517.02 320.1,-522.98"/>
+</g>
+<!-- to_string -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_node17" class="node">
+<title>to_string</title>
+<polygon fill="#777777" stroke="#777777" points="429,-24 371,-24 371,0 429,0 429,-24"/>
+<text text-anchor="middle" x="400" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">to_string</text>
+</g>
+<!-- proc~load_2d_core&#45;&gt;to_string -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge16" class="edge">
+<title>proc~load_2d_core&#45;&gt;to_string</title>
+<path fill="none" stroke="#ff0000" d="M240.08,-285.89C239.34,-244.16 242.76,-105.02 317,-33 328.57,-21.78 345.28,-16.32 360.6,-13.74"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="361.45,-17.16 370.9,-12.38 360.53,-10.22 361.45,-17.16"/>
+</g>
+<!-- proc~bathy_io_ok&#45;&gt;proc~nc_close -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge17" class="edge">
+<title>proc~bathy_io_ok&#45;&gt;proc~nc_close</title>
+<path fill="none" stroke="#65ff00" d="M438.29,-617C470.52,-617 516.9,-617 549.37,-617"/>
+<polygon fill="#65ff00" stroke="#65ff00" points="549.39,-620.5 559.39,-617 549.39,-613.5 549.39,-620.5"/>
+</g>
+<!-- nf90_strerror -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_node23" class="node">
+<title>nf90_strerror</title>
+<polygon fill="#777777" stroke="#777777" points="881,-471 800,-471 800,-447 881,-447 881,-471"/>
+<text text-anchor="middle" x="840.5" y="-456.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nf90_strerror</text>
+</g>
+<!-- proc~nc_check&#45;&gt;nf90_strerror -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge18" class="edge">
+<title>proc~nc_check&#45;&gt;nf90_strerror</title>
+<path fill="none" stroke="#00ffcb" d="M760.21,-459C769.42,-459 779.8,-459 789.94,-459"/>
+<polygon fill="#00ffcb" stroke="#00ffcb" points="789.95,-462.5 799.95,-459 789.95,-455.5 789.95,-462.5"/>
+</g>
+<!-- proc~fail -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_node24" class="node">
+<title>proc~fail</title>
+<g id="a_proc~~load_bathymetry_into_array~~CallsGraph_node24"><a xlink:href="../proc/fail.html" xlink:title="fail">
+<polygon fill="#d9534f" stroke="#d9534f" points="867.5,-530 813.5,-530 813.5,-506 867.5,-506 867.5,-530"/>
+<text text-anchor="middle" x="840.5" y="-515.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fail</text>
+</a>
+</g>
+</g>
+<!-- proc~nc_check&#45;&gt;proc~fail -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge19" class="edge">
+<title>proc~nc_check&#45;&gt;proc~fail</title>
+<path fill="none" stroke="#00ffcb" d="M752.42,-471.08C768.51,-479.75 790.41,-491.55 808.22,-501.15"/>
+<polygon fill="#00ffcb" stroke="#00ffcb" points="806.64,-504.27 817.11,-505.93 809.96,-498.11 806.64,-504.27"/>
+</g>
+<!-- proc~nc_close&#45;&gt;proc~nc_check -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge21" class="edge">
+<title>proc~nc_close&#45;&gt;proc~nc_check</title>
+<path fill="none" stroke="#00cbff" d="M605.72,-604.88C620.26,-593.61 641.74,-575.89 658,-558 680.59,-533.14 702.21,-500.81 715.3,-479.98"/>
+<polygon fill="#00cbff" stroke="#00cbff" points="718.39,-481.63 720.68,-471.29 712.44,-477.94 718.39,-481.63"/>
+</g>
+<!-- nf90_close -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_node18" class="node">
+<title>nf90_close</title>
+<polygon fill="#777777" stroke="#777777" points="764,-629 694,-629 694,-605 764,-605 764,-629"/>
+<text text-anchor="middle" x="729" y="-614.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nf90_close</text>
+</g>
+<!-- proc~nc_close&#45;&gt;nf90_close -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge20" class="edge">
+<title>proc~nc_close&#45;&gt;nf90_close</title>
+<path fill="none" stroke="#00cbff" d="M617.53,-617C636.57,-617 662.14,-617 683.89,-617"/>
+<polygon fill="#00cbff" stroke="#00cbff" points="683.89,-620.5 693.89,-617 683.89,-613.5 683.89,-620.5"/>
+</g>
+<!-- proc~nc_get_dim_len&#45;&gt;nf90_inquire_dimension -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge23" class="edge">
+<title>proc~nc_get_dim_len&#45;&gt;nf90_inquire_dimension</title>
+<path fill="none" stroke="#0066ff" d="M447.67,-287.18C459.64,-283.35 472.19,-278.36 483,-272 501.97,-260.84 499.98,-249.07 519,-238 522.2,-236.14 525.58,-234.43 529.05,-232.85"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="530.5,-236.04 538.42,-229.01 527.84,-229.57 530.5,-236.04"/>
+</g>
+<!-- proc~nc_get_dim_len&#45;&gt;proc~nc_check -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge24" class="edge">
+<title>proc~nc_get_dim_len&#45;&gt;proc~nc_check</title>
+<path fill="none" stroke="#0066ff" d="M447.66,-288.77C502.85,-280.55 595.13,-275.56 658,-318 698.93,-345.63 716.95,-404.5 724.02,-436.75"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="720.67,-437.84 726.08,-446.95 727.53,-436.45 720.67,-437.84"/>
+</g>
+<!-- nf90_inq_dimid -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_node20" class="node">
+<title>nf90_inq_dimid</title>
+<polygon fill="#777777" stroke="#777777" points="635.5,-271 541.5,-271 541.5,-247 635.5,-247 635.5,-271"/>
+<text text-anchor="middle" x="588.5" y="-256.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nf90_inq_dimid</text>
+</g>
+<!-- proc~nc_get_dim_len&#45;&gt;nf90_inq_dimid -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge22" class="edge">
+<title>proc~nc_get_dim_len&#45;&gt;nf90_inq_dimid</title>
+<path fill="none" stroke="#0066ff" d="M447.58,-288.26C472.93,-282.96 504.49,-276.36 531.21,-270.77"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="532.12,-274.16 541.19,-268.68 530.69,-267.31 532.12,-274.16"/>
+</g>
+<!-- proc~nc_get_var_slab_2d&#45;&gt;proc~nc_check -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge26" class="edge">
+<title>proc~nc_get_var_slab_2d&#45;&gt;proc~nc_check</title>
+<path fill="none" stroke="#0000ff" d="M458.22,-349.54C522.87,-360.9 623.58,-380.54 658,-398 678.19,-408.24 697.29,-425.6 710.43,-439.19"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="708.04,-441.77 717.43,-446.67 713.15,-436.98 708.04,-441.77"/>
+</g>
+<!-- nf90_get_var -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_node19" class="node">
+<title>nf90_get_var</title>
+<polygon fill="#777777" stroke="#777777" points="629.5,-351 547.5,-351 547.5,-327 629.5,-327 629.5,-351"/>
+<text text-anchor="middle" x="588.5" y="-336.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nf90_get_var</text>
+</g>
+<!-- proc~nc_get_var_slab_2d&#45;&gt;nf90_get_var -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge25" class="edge">
+<title>proc~nc_get_var_slab_2d&#45;&gt;nf90_get_var</title>
+<path fill="none" stroke="#0000ff" d="M458.22,-339.69C483.43,-339.56 512.78,-339.4 537.14,-339.27"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="537.26,-342.77 547.25,-339.22 537.23,-335.77 537.26,-342.77"/>
+</g>
+<!-- proc~nc_get_varid~2&#45;&gt;proc~nc_check -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge28" class="edge">
+<title>proc~nc_get_varid~2&#45;&gt;proc~nc_check</title>
+<path fill="none" stroke="#6500ff" d="M440.34,-493C490.9,-490.13 581.3,-483.92 658,-473 667.74,-471.61 678.18,-469.74 687.94,-467.81"/>
+<polygon fill="#6500ff" stroke="#6500ff" points="688.7,-471.23 697.81,-465.81 687.31,-464.37 688.7,-471.23"/>
+</g>
+<!-- nf90_inq_varid -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_node21" class="node">
+<title>nf90_inq_varid</title>
+<polygon fill="#777777" stroke="#777777" points="634,-549 543,-549 543,-525 634,-525 634,-549"/>
+<text text-anchor="middle" x="588.5" y="-534.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nf90_inq_varid</text>
+</g>
+<!-- proc~nc_get_varid~2&#45;&gt;nf90_inq_varid -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge27" class="edge">
+<title>proc~nc_get_varid~2&#45;&gt;nf90_inq_varid</title>
+<path fill="none" stroke="#6500ff" d="M440.1,-503.8C467.06,-509.88 503.27,-518.03 533.06,-524.74"/>
+<polygon fill="#6500ff" stroke="#6500ff" points="532.36,-528.17 542.89,-526.95 533.9,-521.34 532.36,-528.17"/>
+</g>
+<!-- proc~nc_open_read&#45;&gt;proc~nc_check -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge30" class="edge">
+<title>proc~nc_open_read&#45;&gt;proc~nc_check</title>
+<path fill="none" stroke="#cc00ff" d="M443.74,-427.51C466.09,-431.74 493.94,-436.64 519,-440 577.42,-447.84 645.48,-453.36 687.65,-456.36"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="687.58,-459.86 697.8,-457.07 688.07,-452.88 687.58,-459.86"/>
+</g>
+<!-- nf90_open -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_node22" class="node">
+<title>nf90_open</title>
+<polygon fill="#777777" stroke="#777777" points="623,-431 554,-431 554,-407 623,-407 623,-431"/>
+<text text-anchor="middle" x="588.5" y="-416.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nf90_open</text>
+</g>
+<!-- proc~nc_open_read&#45;&gt;nf90_open -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge29" class="edge">
+<title>proc~nc_open_read&#45;&gt;nf90_open</title>
+<path fill="none" stroke="#cc00ff" d="M443.79,-419C473.7,-419 513.54,-419 543.68,-419"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="543.91,-422.5 553.91,-419 543.91,-415.5 543.91,-422.5"/>
+</g>
+<!-- proc~try_get_bathymetry_var&#45;&gt;error -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge31" class="edge">
+<title>proc~try_get_bathymetry_var&#45;&gt;error</title>
+<path fill="none" stroke="#ff00cb" d="M459.6,-549.02C478.48,-552.47 499.56,-555.86 519,-558 670.23,-574.61 851.85,-576.91 927.82,-577.09"/>
+<polygon fill="#ff00cb" stroke="#ff00cb" points="927.82,-580.59 937.83,-577.1 927.83,-573.59 927.82,-580.59"/>
+</g>
+<!-- proc~try_get_bathymetry_var&#45;&gt;nf90_inq_varid -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge32" class="edge">
+<title>proc~try_get_bathymetry_var&#45;&gt;nf90_inq_varid</title>
+<path fill="none" stroke="#ff00cb" d="M469.65,-537C490.44,-537 512.98,-537 532.72,-537"/>
+<polygon fill="#ff00cb" stroke="#ff00cb" points="532.77,-540.5 542.77,-537 532.77,-533.5 532.77,-540.5"/>
+</g>
+<!-- proc~fail&#45;&gt;error -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge33" class="edge">
+<title>proc~fail&#45;&gt;error</title>
+<path fill="none" stroke="#ff00da" d="M866.59,-530.08C884.83,-538.87 909.76,-550.87 929.82,-560.54"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="928.42,-563.75 938.95,-564.93 931.46,-557.44 928.42,-563.75"/>
+</g>
+<!-- proc~error_ring_push -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_node25" class="node">
+<title>proc~error_ring_push</title>
+<g id="a_proc~~load_bathymetry_into_array~~CallsGraph_node25"><a xlink:href="../proc/error_ring_push.html" xlink:title="error_ring_push">
+<polygon fill="#d9534f" stroke="#d9534f" points="1013,-530 917,-530 917,-506 1013,-506 1013,-530"/>
+<text text-anchor="middle" x="965" y="-515.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error_ring_push</text>
+</a>
+</g>
+</g>
+<!-- proc~fail&#45;&gt;proc~error_ring_push -->
+<g id="proc~~load_bathymetry_into_array~~CallsGraph_edge34" class="edge">
+<title>proc~fail&#45;&gt;proc~error_ring_push</title>
+<path fill="none" stroke="#ff00da" d="M867.78,-518C879.1,-518 892.81,-518 906.29,-518"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="906.51,-521.5 916.51,-518 906.51,-514.5 906.51,-521.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocload_bathymetry_into_arrayCallsGraph = svgPanZoom('#procload_bathymetry_into_arrayCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~load_bathymetry_into_array~~CalledByGraph Pages: 1 -->
+<svg id="procload_bathymetry_into_arrayCalledByGraph" width="641pt" height="95pt"
+ viewBox="0.00 0.00 641.00 94.92" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~load_bathymetry_into_array~~CalledByGraph" class="graph" transform="scale(0.6 0.6) rotate(0) translate(4 154)">
+<title>proc~~load_bathymetry_into_array~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-154 1063,-154 1063,4 -4,4"/>
+<!-- proc~load_bathymetry_into_array -->
+<g id="proc~~load_bathymetry_into_array~~CalledByGraph_node1" class="node">
+<title>proc~load_bathymetry_into_array</title>
+<polygon fill="none" stroke="black" points="1059,-66 897,-66 897,-42 1059,-42 1059,-66"/>
+<text text-anchor="middle" x="978" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50">load_bathymetry_into_array</text>
+</g>
+<!-- proc~ocean_state_seed_from_cfg -->
+<g id="proc~~load_bathymetry_into_array~~CalledByGraph_node2" class="node">
+<title>proc~ocean_state_seed_from_cfg</title>
+<g id="a_proc~~load_bathymetry_into_array~~CalledByGraph_node2"><a xlink:href="../proc/ocean_state_seed_from_cfg.html" xlink:title="ocean_state_seed_from_cfg">
+<polygon fill="#d9534f" stroke="#d9534f" points="861,-66 701,-66 701,-42 861,-42 861,-66"/>
+<text text-anchor="middle" x="781" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_state_seed_from_cfg</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_seed_from_cfg&#45;&gt;proc~load_bathymetry_into_array -->
+<g id="proc~~load_bathymetry_into_array~~CalledByGraph_edge1" class="edge">
+<title>proc~ocean_state_seed_from_cfg&#45;&gt;proc~load_bathymetry_into_array</title>
+<path fill="none" stroke="#ff0000" d="M861.03,-54C869.53,-54 878.22,-54 886.84,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="886.9,-57.5 896.9,-54 886.9,-50.5 886.9,-57.5"/>
+</g>
+<!-- interface~ocean_state_seed_from_cfg -->
+<g id="proc~~load_bathymetry_into_array~~CalledByGraph_node3" class="node">
+<title>interface~ocean_state_seed_from_cfg</title>
+<g id="a_proc~~load_bathymetry_into_array~~CalledByGraph_node3"><a xlink:href="../interface/ocean_state_seed_from_cfg.html" xlink:title="ocean_state_seed_from_cfg">
+<polygon fill="#a7506f" stroke="#a7506f" points="665,-66 505,-66 505,-42 665,-42 665,-66"/>
+<text text-anchor="middle" x="585" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_state_seed_from_cfg</text>
+</a>
+</g>
+</g>
+<!-- interface~ocean_state_seed_from_cfg&#45;&gt;proc~ocean_state_seed_from_cfg -->
+<g id="proc~~load_bathymetry_into_array~~CalledByGraph_edge2" class="edge">
+<title>interface~ocean_state_seed_from_cfg&#45;&gt;proc~ocean_state_seed_from_cfg</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M665.19,-54C673.53,-54 682.05,-54 690.5,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="690.75,-57.5 700.75,-54 690.75,-50.5 690.75,-57.5"/>
+</g>
+<!-- proc~engine_setup -->
+<g id="proc~~load_bathymetry_into_array~~CalledByGraph_node4" class="node">
+<title>proc~engine_setup</title>
+<g id="a_proc~~load_bathymetry_into_array~~CalledByGraph_node4"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="469,-66 385,-66 385,-42 469,-42 469,-66"/>
+<text text-anchor="middle" x="427" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;interface~ocean_state_seed_from_cfg -->
+<g id="proc~~load_bathymetry_into_array~~CalledByGraph_edge3" class="edge">
+<title>proc~engine_setup&#45;&gt;interface~ocean_state_seed_from_cfg</title>
+<path fill="none" stroke="#ff0000" d="M469.4,-54C477.4,-54 486.06,-54 494.92,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="494.98,-57.5 504.98,-54 494.98,-50.5 494.98,-57.5"/>
+</g>
+<!-- proc~complete_ocean_create -->
+<g id="proc~~load_bathymetry_into_array~~CalledByGraph_node5" class="node">
+<title>proc~complete_ocean_create</title>
+<g id="a_proc~~load_bathymetry_into_array~~CalledByGraph_node5"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="349,-108 209,-108 209,-84 349,-84 349,-108"/>
+<text text-anchor="middle" x="279" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_setup -->
+<g id="proc~~load_bathymetry_into_array~~CalledByGraph_edge4" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M321.84,-83.96C338.39,-79.2 357.58,-73.68 374.94,-68.69"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="376.27,-71.95 384.91,-65.82 374.33,-65.22 376.27,-71.95"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~load_bathymetry_into_array~~CalledByGraph_node6" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~load_bathymetry_into_array~~CalledByGraph_node6"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="332,-66 226,-66 226,-42 332,-42 332,-66"/>
+<text text-anchor="middle" x="279" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_setup -->
+<g id="proc~~load_bathymetry_into_array~~CalledByGraph_edge5" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M332.3,-54C345.99,-54 360.74,-54 374.4,-54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="374.59,-57.5 384.59,-54 374.59,-50.5 374.59,-57.5"/>
+</g>
+<!-- proc~driver_validate -->
+<g id="proc~~load_bathymetry_into_array~~CalledByGraph_node7" class="node">
+<title>proc~driver_validate</title>
+<g id="a_proc~~load_bathymetry_into_array~~CalledByGraph_node7"><a xlink:href="../proc/driver_validate.html" xlink:title="driver_validate">
+<polygon fill="#d9534f" stroke="#d9534f" points="325,-24 233,-24 233,0 325,0 325,-24"/>
+<text text-anchor="middle" x="279" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_validate</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_validate&#45;&gt;proc~engine_setup -->
+<g id="proc~~load_bathymetry_into_array~~CalledByGraph_edge6" class="edge">
+<title>proc~driver_validate&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M321.84,-24.04C338.39,-28.8 357.58,-34.32 374.94,-39.31"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="374.33,-42.78 384.91,-42.18 376.27,-36.05 374.33,-42.78"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~load_bathymetry_into_array~~CalledByGraph_node8" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~load_bathymetry_into_array~~CalledByGraph_node8"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="120,-66 53,-66 53,-42 120,-42 120,-66"/>
+<text text-anchor="middle" x="86.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~load_bathymetry_into_array~~CalledByGraph_edge9" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#00ff00" d="M120.25,-54C146.45,-54 183.96,-54 215.83,-54"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="215.95,-57.5 225.95,-54 215.95,-50.5 215.95,-57.5"/>
+</g>
+<!-- proc~rdb_ocean_create_finalize -->
+<g id="proc~~load_bathymetry_into_array~~CalledByGraph_node9" class="node">
+<title>proc~rdb_ocean_create_finalize</title>
+<g id="a_proc~~load_bathymetry_into_array~~CalledByGraph_node9"><a xlink:href="../proc/rdb_ocean_create_finalize.html" xlink:title="rdb_ocean_create_finalize">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="162,-150 11,-150 11,-126 162,-126 162,-150"/>
+<text text-anchor="middle" x="86.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~load_bathymetry_into_array~~CalledByGraph_edge7" class="edge">
+<title>proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M142.09,-125.96C164.41,-121.04 190.39,-115.31 213.63,-110.19"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="214.39,-113.61 223.4,-108.04 212.88,-106.77 214.39,-113.61"/>
+</g>
+<!-- proc~rdb_ocean_create_from_string -->
+<g id="proc~~load_bathymetry_into_array~~CalledByGraph_node10" class="node">
+<title>proc~rdb_ocean_create_from_string</title>
+<g id="a_proc~~load_bathymetry_into_array~~CalledByGraph_node10"><a xlink:href="../proc/rdb_ocean_create_from_string.html" xlink:title="rdb_ocean_create_from_string">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="173,-108 0,-108 0,-84 173,-84 173,-108"/>
+<text text-anchor="middle" x="86.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_from_string</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~load_bathymetry_into_array~~CalledByGraph_edge8" class="edge">
+<title>proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M173.28,-96C181.77,-96 190.37,-96 198.79,-96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="198.97,-99.5 208.97,-96 198.97,-92.5 198.97,-99.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocload_bathymetry_into_arrayCalledByGraph = svgPanZoom('#procload_bathymetry_into_arrayCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">load_bathymetry_into_array</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Load bathymetry from a NetCDF file into a target 2D array</span>
+<span class="w">      </span><span class="c">!! shaped `(grid%nx_total, grid%ny_total)`.  Thin wrapper over</span>
+<span class="w">      </span><span class="c">!! `load_static_2d_field` that looks the variable up as `b`, then</span>
+<span class="w">      </span><span class="c">!! `elevation`, then `depth`.</span>
+<span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">filename</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">b</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ierr</span>
+<span class="w">         </span><span class="c">!! Non-zero on a missing/unreadable file or a dimension mismatch</span>
+<span class="w">         </span><span class="c">!! when present; absent behaves as today (`error stop`).</span>
+
+<span class="w">      </span><span class="k">call </span><span class="n">load_2d_core</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span><span class="w"> </span><span class="s2">""</span><span class="p">,</span><span class="w"> </span><span class="s2">"bathymetry"</span><span class="p">,</span><span class="w"> </span><span class="s2">" m"</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">)</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">load_bathymetry_into_array</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-06 22:39 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

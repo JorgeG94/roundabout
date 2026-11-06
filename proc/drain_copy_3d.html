@@ -1,0 +1,788 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>drain_copy_3d &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>drain_copy_3d
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">9 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_continuity.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_continuity.f90.html'>rdb_continuity.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_continuity.html'>rdb_continuity</a></li>
+            <li class="breadcrumb-item active" aria-current="page">drain_copy_3d</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/drain_copy_3d.html#variable-i~229">i</a>
+            <a class="list-group-item" href="../proc/drain_copy_3d.html#variable-j~217">j</a>
+            <a class="list-group-item" href="../proc/drain_copy_3d.html#variable-k~164">k</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/drain_copy_3d.html#src">drain_copy_3d</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private pure subroutine drain_copy_3d(n1, n2, n3, src, dst)  
+</h2>
+    
+
+    <p>dst = src (explicit-shape device copy).</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n1~13"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n1</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n2~16"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n2</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n3~8"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n3</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-src~12"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>src</strong>(n1,n2,n3)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dst~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dst</strong>(n1,n2,n3)</td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~drain_copy_3d~~CalledByGraph Pages: 1 -->
+<svg id="procdrain_copy_3dCalledByGraph" width="641pt" height="114pt"
+ viewBox="0.00 0.00 641.00 114.41" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~drain_copy_3d~~CalledByGraph" class="graph" transform="scale(0.5 0.5) rotate(0) translate(4 225)">
+<title>proc~~drain_copy_3d~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-225 1279,-225 1279,4 -4,4"/>
+<!-- proc~drain_copy_3d -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_node1" class="node">
+<title>proc~drain_copy_3d</title>
+<polygon fill="none" stroke="black" points="1275,-159 1185,-159 1185,-135 1275,-135 1275,-159"/>
+<text text-anchor="middle" x="1230" y="-144.6" font-family="Helvetica,sans-Serif" font-size="10.50">drain_copy_3d</text>
+</g>
+<!-- proc~continuity_gm_apply -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_node2" class="node">
+<title>proc~continuity_gm_apply</title>
+<g id="a_proc~~drain_copy_3d~~CalledByGraph_node2"><a xlink:href="../proc/continuity_gm_apply.html" xlink:title="continuity_gm_apply">
+<polygon fill="#d9534f" stroke="#d9534f" points="1131.5,-211 1009.5,-211 1009.5,-187 1131.5,-187 1131.5,-211"/>
+<text text-anchor="middle" x="1070.5" y="-196.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">continuity_gm_apply</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_gm_apply&#45;&gt;proc~drain_copy_3d -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_edge1" class="edge">
+<title>proc~continuity_gm_apply&#45;&gt;proc~drain_copy_3d</title>
+<path fill="none" stroke="#ff0000" d="M1108.03,-186.94C1130.31,-179.58 1159,-170.11 1182.85,-162.24"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1184,-165.54 1192.4,-159.09 1181.8,-158.9 1184,-165.54"/>
+</g>
+<!-- proc~continuity_tracer_drain -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_node3" class="node">
+<title>proc~continuity_tracer_drain</title>
+<g id="a_proc~~drain_copy_3d~~CalledByGraph_node3"><a xlink:href="../proc/continuity_tracer_drain.html" xlink:title="continuity_tracer_drain">
+<polygon fill="#d9534f" stroke="#d9534f" points="797,-99 661,-99 661,-75 797,-75 797,-99"/>
+<text text-anchor="middle" x="729" y="-84.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">continuity_tracer_drain</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_tracer_drain&#45;&gt;proc~drain_copy_3d -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_edge2" class="edge">
+<title>proc~continuity_tracer_drain&#45;&gt;proc~drain_copy_3d</title>
+<path fill="none" stroke="#ff0000" d="M797.25,-89.65C880.43,-93.75 1026.09,-103.64 1149,-126 1158.54,-127.74 1168.62,-130.02 1178.28,-132.44"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1177.6,-135.88 1188.16,-134.99 1179.35,-129.1 1177.6,-135.88"/>
+</g>
+<!-- proc~continuity_tracer_step_split -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_node4" class="node">
+<title>proc~continuity_tracer_step_split</title>
+<g id="a_proc~~drain_copy_3d~~CalledByGraph_node4"><a xlink:href="../proc/continuity_tracer_step_split.html" xlink:title="continuity_tracer_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="1149,-159 992,-159 992,-135 1149,-135 1149,-159"/>
+<text text-anchor="middle" x="1070.5" y="-144.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">continuity_tracer_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_tracer_step_split&#45;&gt;proc~drain_copy_3d -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_edge3" class="edge">
+<title>proc~continuity_tracer_step_split&#45;&gt;proc~drain_copy_3d</title>
+<path fill="none" stroke="#ff0000" d="M1149.33,-147C1157.94,-147 1166.56,-147 1174.79,-147"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1174.97,-150.5 1184.97,-147 1174.97,-143.5 1174.97,-150.5"/>
+</g>
+<!-- proc~ocean_dyn_flush_tracer_window -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_node5" class="node">
+<title>proc~ocean_dyn_flush_tracer_window</title>
+<g id="a_proc~~drain_copy_3d~~CalledByGraph_node5"><a xlink:href="../proc/ocean_dyn_flush_tracer_window.html" xlink:title="ocean_dyn_flush_tracer_window">
+<polygon fill="#d9534f" stroke="#d9534f" points="464,-98 280,-98 280,-74 464,-74 464,-98"/>
+<text text-anchor="middle" x="372" y="-83.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_flush_tracer_window</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_flush_tracer_window&#45;&gt;proc~continuity_tracer_drain -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_edge5" class="edge">
+<title>proc~ocean_dyn_flush_tracer_window&#45;&gt;proc~continuity_tracer_drain</title>
+<path fill="none" stroke="#00ff00" d="M464.42,-86.26C522.25,-86.42 596.16,-86.63 650.99,-86.78"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="650.99,-90.28 661,-86.81 651.01,-83.28 650.99,-90.28"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_node6" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~drain_copy_3d~~CalledByGraph_node6"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="611.5,-138 513.5,-138 513.5,-114 611.5,-114 611.5,-138"/>
+<text text-anchor="middle" x="562.5" y="-123.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~continuity_tracer_drain -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_edge6" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~continuity_tracer_drain</title>
+<path fill="none" stroke="#00ff00" d="M611.52,-114.61C629.05,-110.46 649.09,-105.71 667.56,-101.33"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="668.42,-104.72 677.34,-99.01 666.8,-97.91 668.42,-104.72"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_node10" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~drain_copy_3d~~CalledByGraph_node10"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="927,-139 862,-139 862,-115 927,-115 927,-139"/>
+<text text-anchor="middle" x="894.5" y="-124.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_edge18" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#ff00ff" d="M611.84,-126.15C676.65,-126.34 790.65,-126.69 851.85,-126.87"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="851.92,-130.37 861.93,-126.9 851.94,-123.37 851.92,-130.37"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_node7" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~drain_copy_3d~~CalledByGraph_node7"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="625,-180 500,-180 500,-156 625,-156 625,-180"/>
+<text text-anchor="middle" x="562.5" y="-165.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~continuity_tracer_drain -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_edge7" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~continuity_tracer_drain</title>
+<path fill="none" stroke="#00ff00" d="M602.67,-155.93C610.19,-153.25 617.92,-150.23 625,-147 651.89,-134.72 680.85,-117.46 701.19,-104.61"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="703.08,-107.55 709.62,-99.22 699.31,-101.65 703.08,-107.55"/>
+</g>
+<!-- proc~run_gm_step -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_node9" class="node">
+<title>proc~run_gm_step</title>
+<g id="a_proc~~drain_copy_3d~~CalledByGraph_node9"><a xlink:href="../proc/run_gm_step.html" xlink:title="run_gm_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="769.5,-221 688.5,-221 688.5,-197 769.5,-197 769.5,-221"/>
+<text text-anchor="middle" x="729" y="-206.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_gm_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_gm_step -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_edge17" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_gm_step</title>
+<path fill="none" stroke="#0000ff" d="M611.97,-180.08C632.99,-185.32 657.58,-191.45 678.7,-196.71"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="677.9,-200.12 688.45,-199.14 679.59,-193.33 677.9,-200.12"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_node16" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~drain_copy_3d~~CalledByGraph_node16"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="775,-179 683,-179 683,-155 775,-155 775,-179"/>
+<text text-anchor="middle" x="729" y="-164.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_edge22" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#ff00ff" d="M625.22,-167.62C640.78,-167.53 657.38,-167.43 672.6,-167.34"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="672.91,-170.84 682.89,-167.27 672.87,-163.84 672.91,-170.84"/>
+</g>
+<!-- proc~run_continuity_chain -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_node8" class="node">
+<title>proc~run_continuity_chain</title>
+<g id="a_proc~~drain_copy_3d~~CalledByGraph_node8"><a xlink:href="../proc/run_continuity_chain.html" xlink:title="run_continuity_chain">
+<polygon fill="#d9534f" stroke="#d9534f" points="956,-181 833,-181 833,-157 956,-157 956,-181"/>
+<text text-anchor="middle" x="894.5" y="-166.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_continuity_chain</text>
+</a>
+</g>
+</g>
+<!-- proc~run_continuity_chain&#45;&gt;proc~continuity_tracer_step_split -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_edge8" class="edge">
+<title>proc~run_continuity_chain&#45;&gt;proc~continuity_tracer_step_split</title>
+<path fill="none" stroke="#0000ff" d="M956.36,-161.31C964.6,-160.26 973.18,-159.18 981.78,-158.09"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="982.37,-161.54 991.85,-156.82 981.49,-154.6 982.37,-161.54"/>
+</g>
+<!-- proc~run_gm_step&#45;&gt;proc~continuity_gm_apply -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_edge4" class="edge">
+<title>proc~run_gm_step&#45;&gt;proc~continuity_gm_apply</title>
+<path fill="none" stroke="#ff0000" d="M769.61,-207.83C825.76,-206.18 929.39,-203.13 998.89,-201.08"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="999.42,-204.57 1009.31,-200.77 999.21,-197.57 999.42,-204.57"/>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~continuity_tracer_step_split -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_edge9" class="edge">
+<title>proc~run_stage&#45;&gt;proc~continuity_tracer_step_split</title>
+<path fill="none" stroke="#0000ff" d="M927.01,-130.62C942.59,-132.41 962.25,-134.67 981.95,-136.94"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="981.58,-140.42 991.92,-138.08 982.38,-133.46 981.58,-140.42"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_node11" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~drain_copy_3d~~CalledByGraph_node11"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="226.5,-150 120.5,-150 120.5,-126 226.5,-126 226.5,-150"/>
+<text text-anchor="middle" x="173.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~ocean_dyn_flush_tracer_window -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_edge10" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~ocean_dyn_flush_tracer_window</title>
+<path fill="none" stroke="#ff0000" d="M220.07,-125.94C248.49,-118.42 285.26,-108.69 315.39,-100.72"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="316.56,-104.03 325.33,-98.09 314.77,-97.26 316.56,-104.03"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_node12" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~drain_copy_3d~~CalledByGraph_node12"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="410.5,-160 333.5,-160 333.5,-136 410.5,-136 410.5,-160"/>
+<text text-anchor="middle" x="372" y="-145.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_edge20" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ffff00" d="M226.64,-140.65C256.52,-142.17 293.74,-144.07 322.91,-145.55"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="323.1,-149.07 333.26,-146.08 323.45,-142.08 323.1,-149.07"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_edge14" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step</title>
+<path fill="none" stroke="#ffff00" d="M410.69,-143.6C437.24,-140.5 473.28,-136.3 503.47,-132.77"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="503.94,-136.24 513.47,-131.61 503.13,-129.29 503.94,-136.24"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_edge15" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#00ff00" d="M410.69,-152C433.27,-154.39 462.72,-157.52 489.6,-160.37"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="489.44,-163.87 499.75,-161.45 490.18,-156.91 489.44,-163.87"/>
+</g>
+<!-- proc~rdb_ocean_balance_live -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_node13" class="node">
+<title>proc~rdb_ocean_balance_live</title>
+<g id="a_proc~~drain_copy_3d~~CalledByGraph_node13"><a xlink:href="../proc/rdb_ocean_balance_live.html" xlink:title="rdb_ocean_balance_live">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="244,-108 103,-108 103,-84 244,-84 244,-108"/>
+<text text-anchor="middle" x="173.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_balance_live</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_balance_live&#45;&gt;proc~ocean_dyn_flush_tracer_window -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_edge11" class="edge">
+<title>proc~rdb_ocean_balance_live&#45;&gt;proc~ocean_dyn_flush_tracer_window</title>
+<path fill="none" stroke="#ff0000" d="M244.06,-92.46C252.39,-92.04 261.02,-91.6 269.69,-91.16"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="270.05,-94.64 279.86,-90.64 269.69,-87.65 270.05,-94.64"/>
+</g>
+<!-- proc~rdb_ocean_rebaseline -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_node14" class="node">
+<title>proc~rdb_ocean_rebaseline</title>
+<g id="a_proc~~drain_copy_3d~~CalledByGraph_node14"><a xlink:href="../proc/rdb_ocean_rebaseline.html" xlink:title="rdb_ocean_rebaseline">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="238.5,-66 108.5,-66 108.5,-42 238.5,-42 238.5,-66"/>
+<text text-anchor="middle" x="173.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_rebaseline</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_rebaseline&#45;&gt;proc~ocean_dyn_flush_tracer_window -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_edge12" class="edge">
+<title>proc~rdb_ocean_rebaseline&#45;&gt;proc~ocean_dyn_flush_tracer_window</title>
+<path fill="none" stroke="#ff0000" d="M238.57,-64.43C254.06,-66.96 270.84,-69.69 287.09,-72.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="286.69,-75.82 297.12,-73.97 287.82,-68.91 286.69,-75.82"/>
+</g>
+<!-- proc~rdb_ocean_set_tracer -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_node15" class="node">
+<title>proc~rdb_ocean_set_tracer</title>
+<g id="a_proc~~drain_copy_3d~~CalledByGraph_node15"><a xlink:href="../proc/rdb_ocean_set_tracer.html" xlink:title="rdb_ocean_set_tracer">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="237,-24 110,-24 110,0 237,0 237,-24"/>
+<text text-anchor="middle" x="173.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_set_tracer</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_set_tracer&#45;&gt;proc~ocean_dyn_flush_tracer_window -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_edge13" class="edge">
+<title>proc~rdb_ocean_set_tracer&#45;&gt;proc~ocean_dyn_flush_tracer_window</title>
+<path fill="none" stroke="#ff0000" d="M216.99,-24.09C225.97,-26.85 235.34,-29.89 244,-33 275.11,-44.16 309.68,-58.73 334.89,-69.77"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="333.5,-72.99 344.06,-73.82 336.32,-66.58 333.5,-72.99"/>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~run_continuity_chain -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_edge16" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~run_continuity_chain</title>
+<path fill="none" stroke="#00ffff" d="M775.11,-167.55C789.76,-167.73 806.4,-167.93 822.47,-168.13"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="822.88,-171.64 832.93,-168.26 822.97,-164.64 822.88,-171.64"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_node17" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~drain_copy_3d~~CalledByGraph_node17"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="67,-150 0,-150 0,-126 67,-126 67,-150"/>
+<text text-anchor="middle" x="33.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_edge19" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M67.2,-138C80.09,-138 95.34,-138 110.17,-138"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="110.34,-141.5 120.34,-138 110.34,-134.5 110.34,-141.5"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_node18" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~drain_copy_3d~~CalledByGraph_node18"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="222,-192 125,-192 125,-168 222,-168 222,-192"/>
+<text text-anchor="middle" x="173.5" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~drain_copy_3d~~CalledByGraph_edge21" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ffff00" d="M222.07,-172.25C252.78,-167.25 292.6,-160.77 323.34,-155.76"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="324.08,-159.19 333.39,-154.13 322.95,-152.28 324.08,-159.19"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocdrain_copy_3dCalledByGraph = svgPanZoom('#procdrain_copy_3dCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~229"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~217"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~164"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">drain_copy_3d</span><span class="p">(</span><span class="n">n1</span><span class="p">,</span><span class="w"> </span><span class="n">n2</span><span class="p">,</span><span class="w"> </span><span class="n">n3</span><span class="p">,</span><span class="w"> </span><span class="n">src</span><span class="p">,</span><span class="w"> </span><span class="n">dst</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! dst = src (explicit-shape device copy).</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n1</span><span class="p">,</span><span class="w"> </span><span class="n">n2</span><span class="p">,</span><span class="w"> </span><span class="n">n3</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">src</span><span class="p">(</span><span class="n">n1</span><span class="p">,</span><span class="w"> </span><span class="n">n2</span><span class="p">,</span><span class="w"> </span><span class="n">n3</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dst</span><span class="p">(</span><span class="n">n1</span><span class="p">,</span><span class="w"> </span><span class="n">n2</span><span class="p">,</span><span class="w"> </span><span class="n">n3</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span>
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">n3</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">n2</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">n1</span><span class="p">)</span>
+<span class="w">         </span><span class="n">dst</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">src</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end do</span>
+<span class="k">   end subroutine </span><span class="n">drain_copy_3d</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-06 22:39 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

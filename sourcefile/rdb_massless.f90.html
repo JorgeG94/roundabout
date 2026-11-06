@@ -1,0 +1,1001 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>rdb_massless.F90 &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>rdb_massless.F90
+      <small>Source File</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for source files.">92 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_massless.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+            <li class="breadcrumb-item active" aria-current="page">rdb_massless.F90</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#mods-0"
+         aria-expanded="false" aria-controls="mods-0">
+         <h4 class="card-header bg-primary text-white">Modules</h4>
+      </a>
+      <div id="mods-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_massless.html">rdb_massless</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../sourcefile/rdb_massless.f90.html#src">rdb_massless.F90</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    <div class="col-md-9" id='text'>
+      <p>Massless-layer merge column helper (ocean dyn-core, D4).</p>
+      <br>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">This file depends on</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~rdb_massless.f90~~EfferentGraph Pages: 1 -->
+<svg id="sourcefilerdb_masslessf90EfferentGraph" width="259pt" height="32pt"
+ viewBox="0.00 0.00 259.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~rdb_massless.f90~~EfferentGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>sourcefile~~rdb_massless.f90~~EfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 255,-28 255,4 -4,4"/>
+<!-- sourcefile~rdb_massless.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~EfferentGraph_node1" class="node">
+<title>sourcefile~rdb_massless.f90</title>
+<polygon fill="none" stroke="black" points="251,-24 145,-24 145,0 251,0 251,-24"/>
+<text text-anchor="middle" x="198" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_massless.F90</text>
+</g>
+<!-- sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~EfferentGraph_node2" class="node">
+<title>sourcefile~rdb_constants.f90</title>
+<g id="a_sourcefile~~rdb_massless.f90~~EfferentGraph_node2"><a xlink:href="../sourcefile/rdb_constants.f90.html" xlink:title="rdb_constants.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="109,-24 0,-24 0,0 109,0 109,-24"/>
+<text text-anchor="middle" x="54.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_constants.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_massless.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~EfferentGraph_edge1" class="edge">
+<title>sourcefile~rdb_massless.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M144.71,-12C136.54,-12 128.02,-12 119.62,-12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="119.47,-8.5 109.47,-12 119.47,-15.5 119.47,-8.5"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#EfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="EfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Files dependent on this one</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: sourcefile~~rdb_massless.f90~~AfferentGraph Pages: 1 -->
+<svg id="sourcefilerdb_masslessf90AfferentGraph" width="641pt" height="308pt"
+ viewBox="0.00 0.00 641.00 307.55" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph" class="graph" transform="scale(0.43 0.43) rotate(0) translate(4 703.21)">
+<title>sourcefile~~rdb_massless.f90~~AfferentGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-703.21 1470,-703.21 1470,4 -4,4"/>
+<!-- sourcefile~rdb_massless.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_node1" class="node">
+<title>sourcefile~rdb_massless.f90</title>
+<polygon fill="none" stroke="black" points="106,-515.21 0,-515.21 0,-491.21 106,-491.21 106,-515.21"/>
+<text text-anchor="middle" x="53" y="-500.81" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_massless.F90</text>
+</g>
+<!-- sourcefile~rdb_ocean_kappa_shear.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_node2" class="node">
+<title>sourcefile~rdb_ocean_kappa_shear.f90</title>
+<g id="a_sourcefile~~rdb_massless.f90~~AfferentGraph_node2"><a xlink:href="../sourcefile/rdb_ocean_kappa_shear.f90.html" xlink:title="rdb_ocean_kappa_shear.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="305,-515.21 142,-515.21 142,-491.21 305,-491.21 305,-515.21"/>
+<text text-anchor="middle" x="223.5" y="-500.81" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_kappa_shear.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_kappa_shear.f90&#45;&gt;sourcefile~rdb_massless.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge1" class="edge">
+<title>sourcefile~rdb_ocean_kappa_shear.f90&#45;&gt;sourcefile~rdb_massless.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M141.7,-503.21C133.27,-503.21 124.79,-503.21 116.61,-503.21"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="116.42,-499.71 106.42,-503.21 116.42,-506.71 116.42,-499.71"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_node3" class="node">
+<title>sourcefile~rdb_ocean_dyn.f90</title>
+<g id="a_sourcefile~~rdb_massless.f90~~AfferentGraph_node3"><a xlink:href="../sourcefile/rdb_ocean_dyn.f90.html" xlink:title="rdb_ocean_dyn.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="457,-495.21 341,-495.21 341,-471.21 457,-471.21 457,-495.21"/>
+<text text-anchor="middle" x="399" y="-480.81" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_dyn.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_kappa_shear.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge2" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_kappa_shear.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M340.71,-489.82C332.55,-490.76 324,-491.75 315.39,-492.74"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="314.81,-489.28 305.28,-493.9 315.62,-496.23 314.81,-489.28"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_node4" class="node">
+<title>sourcefile~rdb_ocean_state.f90</title>
+<g id="a_sourcefile~~rdb_massless.f90~~AfferentGraph_node4"><a xlink:href="../sourcefile/rdb_ocean_state.f90.html" xlink:title="rdb_ocean_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="616,-535.21 493,-535.21 493,-511.21 616,-511.21 616,-535.21"/>
+<text text-anchor="middle" x="554.5" y="-520.81" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_kappa_shear.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge3" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_kappa_shear.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M492.77,-519.52C442.94,-516.49 371.64,-512.16 315.07,-508.72"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="315.24,-505.22 305.04,-508.11 314.81,-512.21 315.24,-505.22"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge8" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M507.44,-511.21C491.28,-507 472.94,-502.22 456.04,-497.82"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="456.85,-494.41 446.29,-495.28 455.08,-501.19 456.85,-494.41"/>
+</g>
+<!-- sourcefile~rdb_driver.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_node5" class="node">
+<title>sourcefile~rdb_driver.f90</title>
+<g id="a_sourcefile~~rdb_massless.f90~~AfferentGraph_node5"><a xlink:href="../sourcefile/rdb_driver.f90.html" xlink:title="rdb_driver.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1313.5,-256.21 1225.5,-256.21 1225.5,-232.21 1313.5,-232.21 1313.5,-256.21"/>
+<text text-anchor="middle" x="1269.5" y="-241.81" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge4" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1265.71,-232C1255.29,-189.84 1214.27,-52.37 1120.5,-41.21"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1118.5,-41.21C1037.52,-31.58 1013.1,-17.72 935,-41.21"/>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge9" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1118.5,-41.21C990.6,-27.7 1104.68,-218.12 1017,-312.21 1001.22,-329.15 700.25,-460.51 593.03,-506.99"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="591.36,-503.9 583.57,-511.09 594.14,-510.32 591.36,-503.9"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_node11" class="node">
+<title>sourcefile~rdb_ocean_engine.f90</title>
+<g id="a_sourcefile~~rdb_massless.f90~~AfferentGraph_node11"><a xlink:href="../sourcefile/rdb_ocean_engine.f90.html" xlink:title="rdb_ocean_engine.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1186,-497.21 1053,-497.21 1053,-473.21 1186,-473.21 1186,-497.21"/>
+<text text-anchor="middle" x="1119.5" y="-482.81" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge29" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#00ffc4" stroke-dasharray="5,2" d="M1260.96,-256.5C1237.16,-295.25 1163.44,-415.29 1133.42,-464.17"/>
+<polygon fill="#00ffc4" stroke="#00ffc4" points="1130.28,-462.6 1128.03,-472.96 1136.24,-466.27 1130.28,-462.6"/>
+</g>
+<!-- sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_node6" class="node">
+<title>sourcefile~rdb_handle.f90</title>
+<g id="a_sourcefile~~rdb_massless.f90~~AfferentGraph_node6"><a xlink:href="../sourcefile/rdb_handle.f90.html" xlink:title="rdb_handle.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1317,-537.21 1222,-537.21 1222,-513.21 1317,-513.21 1317,-537.21"/>
+<text text-anchor="middle" x="1269.5" y="-522.81" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge10" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1221.85,-537.06C1128.32,-558.94 911.68,-600.24 734.5,-563.21"/>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge30" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#00ffc4" stroke-dasharray="5,2" d="M1224.1,-513.21C1208.65,-509.04 1191.15,-504.31 1174.99,-499.94"/>
+<polygon fill="#00ffc4" stroke="#00ffc4" points="1175.7,-496.51 1165.13,-497.28 1173.87,-503.26 1175.7,-496.51"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_node7" class="node">
+<title>sourcefile~rdb_ocean_api.f90</title>
+<g id="a_sourcefile~~rdb_massless.f90~~AfferentGraph_node7"><a xlink:href="../sourcefile/rdb_ocean_api.f90.html" xlink:title="rdb_ocean_api.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1466,-517.21 1353,-517.21 1353,-493.21 1466,-493.21 1466,-517.21"/>
+<text text-anchor="middle" x="1409.5" y="-502.81" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge5" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1407.7,-492.84C1402.75,-427.89 1370.07,-125.58 1186,-27.21 1087.46,25.45 1041.99,-9.03 935,-41.21"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M933,-41.21C897.02,-51.46 883.97,-42.54 851,-60.21 811.2,-81.55 592.91,-313.93 555.5,-339.21"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M553.5,-339.21C497.84,-375.54 443.78,-432.94 417.15,-463.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="414.32,-461.05 410.38,-470.89 419.6,-465.65 414.32,-461.05"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge21" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90</title>
+<path fill="none" stroke="#ff7500" stroke-dasharray="5,2" d="M1352.77,-513.29C1344.37,-514.51 1335.69,-515.77 1327.27,-516.99"/>
+<polygon fill="#ff7500" stroke="#ff7500" points="1326.54,-513.56 1317.15,-518.45 1327.55,-520.48 1326.54,-513.56"/>
+</g>
+<!-- sourcefile~rdb_ocean_balance.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_node8" class="node">
+<title>sourcefile~rdb_ocean_balance.f90</title>
+<g id="a_sourcefile~~rdb_massless.f90~~AfferentGraph_node8"><a xlink:href="../sourcefile/rdb_ocean_balance.f90.html" xlink:title="rdb_ocean_balance.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1003.5,-695.21 864.5,-695.21 864.5,-671.21 1003.5,-671.21 1003.5,-695.21"/>
+<text text-anchor="middle" x="934" y="-680.81" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_balance.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_balance.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge22" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_balance.f90</title>
+<path fill="none" stroke="#9cff00" stroke-dasharray="5,2" d="M1268.5,-643.21C1186.38,-678.06 1083.32,-685.55 1013.66,-685.93"/>
+<polygon fill="#9cff00" stroke="#9cff00" points="1013.63,-682.43 1003.64,-685.93 1013.64,-689.43 1013.63,-682.43"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_node9" class="node">
+<title>sourcefile~rdb_ocean_diag_derived.f90</title>
+<g id="a_sourcefile~~rdb_massless.f90~~AfferentGraph_node9"><a xlink:href="../sourcefile/rdb_ocean_diag_derived.f90.html" xlink:title="rdb_ocean_diag_derived.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1017,-535.21 851,-535.21 851,-511.21 1017,-511.21 1017,-535.21"/>
+<text text-anchor="middle" x="934" y="-520.81" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_derived.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge24" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90</title>
+<path fill="none" stroke="#27ff00" stroke-dasharray="5,2" d="M1268.5,-485.21C1230.76,-482.53 1223.36,-500.25 1186,-506.21 1133.76,-514.56 1074.76,-518.82 1027.09,-520.98"/>
+<polygon fill="#27ff00" stroke="#27ff00" points="1026.94,-517.48 1017.1,-521.41 1027.24,-524.48 1026.94,-517.48"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_node10" class="node">
+<title>sourcefile~rdb_ocean_diag_fills.f90</title>
+<g id="a_sourcefile~~rdb_massless.f90~~AfferentGraph_node10"><a xlink:href="../sourcefile/rdb_ocean_diag_fills.f90.html" xlink:title="rdb_ocean_diag_fills.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="805,-535.21 662,-535.21 662,-511.21 805,-511.21 805,-535.21"/>
+<text text-anchor="middle" x="733.5" y="-520.81" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_fills.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge26" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#00ff4e" stroke-dasharray="5,2" d="M1352.94,-495.65C1327.84,-491.72 1297.76,-487.55 1270.5,-485.21"/>
+<path fill="none" stroke="#00ff4e" stroke-dasharray="5,2" d="M1268.5,-485.21C1230.8,-481.99 1223.54,-468.92 1186,-464.21 1137.92,-458.19 855.38,-468.19 851,-469.21 819.33,-476.61 785.92,-493.12 763.04,-505.94"/>
+<polygon fill="#00ff4e" stroke="#00ff4e" points="761.15,-502.99 754.21,-511 764.63,-509.07 761.15,-502.99"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge31" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#00ffc4" stroke-dasharray="5,2" d="M1268.5,-485.21C1245.06,-483.55 1219.47,-483.07 1196.27,-483.15"/>
+<polygon fill="#00ffc4" stroke="#00ffc4" points="1196.12,-479.65 1186.14,-483.22 1196.17,-486.65 1196.12,-479.65"/>
+</g>
+<!-- sourcefile~rdb_ocean_ic_inject.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_node12" class="node">
+<title>sourcefile~rdb_ocean_ic_inject.f90</title>
+<g id="a_sourcefile~~rdb_massless.f90~~AfferentGraph_node12"><a xlink:href="../sourcefile/rdb_ocean_ic_inject.f90.html" xlink:title="rdb_ocean_ic_inject.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1004,-615.21 864,-615.21 864,-591.21 1004,-591.21 1004,-615.21"/>
+<text text-anchor="middle" x="934" y="-600.81" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_ic_inject.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_ic_inject.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge32" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_ic_inject.f90</title>
+<path fill="none" stroke="#00c4ff" stroke-dasharray="5,2" d="M1401.12,-517.58C1383.14,-546.34 1333.83,-617.25 1270.5,-643.21"/>
+<path fill="none" stroke="#00c4ff" stroke-dasharray="5,2" d="M1268.5,-643.21C1233.49,-657.57 1223.34,-628.33 1186,-622.21 1128.91,-612.86 1063.75,-608.1 1014.12,-605.68"/>
+<polygon fill="#00c4ff" stroke="#00c4ff" points="1014.25,-602.19 1004.1,-605.22 1013.92,-609.18 1014.25,-602.19"/>
+</g>
+<!-- sourcefile~rdb_ocean_reinit.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_node13" class="node">
+<title>sourcefile~rdb_ocean_reinit.f90</title>
+<g id="a_sourcefile~~rdb_massless.f90~~AfferentGraph_node13"><a xlink:href="../sourcefile/rdb_ocean_reinit.f90.html" xlink:title="rdb_ocean_reinit.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1181.5,-655.21 1057.5,-655.21 1057.5,-631.21 1181.5,-631.21 1181.5,-655.21"/>
+<text text-anchor="middle" x="1119.5" y="-640.81" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_reinit.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_reinit.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge35" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_reinit.f90</title>
+<path fill="none" stroke="#004eff" stroke-dasharray="5,2" d="M1268.5,-643.21C1244.68,-652.98 1216.83,-655.1 1191.76,-654.07"/>
+<polygon fill="#004eff" stroke="#004eff" points="1191.76,-650.56 1181.58,-653.47 1191.35,-657.55 1191.76,-650.56"/>
+</g>
+<!-- sourcefile~rdb_ocean_balance.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge11" class="edge">
+<title>sourcefile~rdb_ocean_balance.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M874.3,-671.16C865.86,-667.64 857.77,-663.09 851,-657.21 823.08,-632.97 843.81,-605.39 815,-582.21 786.36,-559.17 770.47,-570.82 734.5,-563.21"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge12" class="edge">
+<title>sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M892.46,-535.33C843.52,-549.26 764.08,-569.47 734.5,-563.21"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M732.5,-563.21C693.93,-555.06 650.77,-545.32 616.72,-537.49"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="617.45,-534.07 606.92,-535.23 615.88,-540.89 617.45,-534.07"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge27" class="edge">
+<title>sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#00ff4e" stroke-dasharray="5,2" d="M850.83,-523.21C839.12,-523.21 827.07,-523.21 815.39,-523.21"/>
+<polygon fill="#00ff4e" stroke="#00ff4e" points="815.22,-519.71 805.22,-523.21 815.22,-526.71 815.22,-519.71"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge13" class="edge">
+<title>sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M661.78,-523.21C650.09,-523.21 637.96,-523.21 626.27,-523.21"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="626.13,-519.71 616.13,-523.21 626.13,-526.71 626.13,-519.71"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge6" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1092.2,-473.19C994.03,-429.1 649.84,-281.78 555.5,-339.21"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge14" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1052.65,-482.74C1017.68,-481.87 973.99,-481.49 935,-483.21"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M933,-483.21C807.95,-488.76 775.93,-484.64 652,-502.21 639.68,-503.96 626.58,-506.41 614.15,-509.01"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="613.38,-505.6 604.34,-511.13 614.85,-512.44 613.38,-505.6"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge25" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90</title>
+<path fill="none" stroke="#27ff00" stroke-dasharray="5,2" d="M1060.44,-497.24C1042.19,-501.02 1021.88,-505.22 1003.01,-509.13"/>
+<polygon fill="#27ff00" stroke="#27ff00" points="1002.08,-505.75 993,-511.2 1003.5,-512.6 1002.08,-505.75"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge28" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#00ff4e" stroke-dasharray="5,2" d="M933,-483.21C881.85,-485.48 824.64,-498.12 784.83,-508.59"/>
+<polygon fill="#00ff4e" stroke="#00ff4e" points="783.85,-505.23 775.1,-511.2 785.67,-511.99 783.85,-505.23"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_ic_inject.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge33" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_ic_inject.f90</title>
+<path fill="none" stroke="#00c4ff" stroke-dasharray="5,2" d="M1099.55,-497.4C1066.92,-518.39 999.97,-561.43 962.31,-585.66"/>
+<polygon fill="#00c4ff" stroke="#00c4ff" points="960.36,-582.74 953.84,-591.1 964.15,-588.63 960.36,-582.74"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_node14" class="node">
+<title>sourcefile~rdb_ocean_setup.f90</title>
+<g id="a_sourcefile~~rdb_massless.f90~~AfferentGraph_node14"><a xlink:href="../sourcefile/rdb_ocean_setup.f90.html" xlink:title="rdb_ocean_setup.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="796.5,-282.21 670.5,-282.21 670.5,-258.21 796.5,-258.21 796.5,-282.21"/>
+<text text-anchor="middle" x="733.5" y="-267.81" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge36" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#2700ff" stroke-dasharray="5,2" d="M1107.65,-473.11C1090.11,-454.1 1053.76,-416.96 1017,-393.21 974.81,-365.97 842.54,-312.52 775.02,-285.96"/>
+<polygon fill="#2700ff" stroke="#2700ff" points="776.13,-282.64 765.55,-282.25 773.58,-289.16 776.13,-282.64"/>
+</g>
+<!-- sourcefile~rdb_ocean_ic_inject.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge15" class="edge">
+<title>sourcefile~rdb_ocean_ic_inject.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M871.68,-591.17C832.42,-583.38 780.42,-572.92 734.5,-563.21"/>
+</g>
+<!-- sourcefile~rdb_ocean_reinit.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge16" class="edge">
+<title>sourcefile~rdb_ocean_reinit.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1057.36,-651.76C1000.74,-656.79 915.76,-656.83 851,-624.21 829.04,-613.16 836,-595 815,-582.21 783.6,-563.1 770.47,-570.82 734.5,-563.21"/>
+</g>
+<!-- sourcefile~rdb_ocean_reinit.f90&#45;&gt;sourcefile~rdb_ocean_balance.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge23" class="edge">
+<title>sourcefile~rdb_ocean_reinit.f90&#45;&gt;sourcefile~rdb_ocean_balance.f90</title>
+<path fill="none" stroke="#9cff00" stroke-dasharray="5,2" d="M1063.44,-655.22C1043.58,-659.55 1020.96,-664.48 1000.3,-668.98"/>
+<polygon fill="#9cff00" stroke="#9cff00" points="999.36,-665.6 990.33,-671.15 1000.85,-672.44 999.36,-665.6"/>
+</g>
+<!-- sourcefile~rdb_ocean_reinit.f90&#45;&gt;sourcefile~rdb_ocean_ic_inject.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge34" class="edge">
+<title>sourcefile~rdb_ocean_reinit.f90&#45;&gt;sourcefile~rdb_ocean_ic_inject.f90</title>
+<path fill="none" stroke="#00c4ff" stroke-dasharray="5,2" d="M1063.44,-631.21C1043.58,-626.88 1020.96,-621.95 1000.3,-617.45"/>
+<polygon fill="#00c4ff" stroke="#00c4ff" points="1000.85,-613.99 990.33,-615.28 999.36,-620.83 1000.85,-613.99"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge7" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M689.8,-282.22C652.69,-293.71 598.32,-313.15 555.5,-339.21"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge17" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M719.22,-282.33C702.38,-298.11 672.99,-327.01 652,-355.21 615.42,-404.37 582.04,-468.63 565.82,-501.61"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="562.59,-500.27 561.36,-510.79 568.88,-503.33 562.59,-500.27"/>
+</g>
+<!-- sourcefile~rdb_ocean_state_restart.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_node15" class="node">
+<title>sourcefile~rdb_ocean_state_restart.f90</title>
+<g id="a_sourcefile~~rdb_massless.f90~~AfferentGraph_node15"><a xlink:href="../sourcefile/rdb_ocean_state_restart.f90.html" xlink:title="rdb_ocean_state_restart.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="815,-699.21 652,-699.21 652,-675.21 815,-675.21 815,-699.21"/>
+<text text-anchor="middle" x="733.5" y="-684.81" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_restart.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state_restart.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge18" class="edge">
+<title>sourcefile~rdb_ocean_state_restart.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M668.17,-675.07C662.44,-672.64 656.95,-669.72 652,-666.21 607.67,-634.82 577.72,-576.13 564.02,-544.58"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="567.25,-543.23 560.15,-535.36 560.79,-545.94 567.25,-543.23"/>
+</g>
+<!-- sourcefile~rdb_ocean_state_seed.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_node16" class="node">
+<title>sourcefile~rdb_ocean_state_seed.f90</title>
+<g id="a_sourcefile~~rdb_massless.f90~~AfferentGraph_node16"><a xlink:href="../sourcefile/rdb_ocean_state_seed.f90.html" xlink:title="rdb_ocean_state_seed.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="810.5,-657.21 656.5,-657.21 656.5,-633.21 810.5,-633.21 810.5,-657.21"/>
+<text text-anchor="middle" x="733.5" y="-642.81" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_seed.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state_seed.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge19" class="edge">
+<title>sourcefile~rdb_ocean_state_seed.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M671.26,-633.11C664.54,-630.66 657.98,-627.73 652,-624.21 616.94,-603.59 586.39,-566.63 569.5,-543.6"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="572.18,-541.33 563.52,-535.23 566.49,-545.4 572.18,-541.33"/>
+</g>
+<!-- sourcefile~rdb_ocean_state_topo.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_node17" class="node">
+<title>sourcefile~rdb_ocean_state_topo.f90</title>
+<g id="a_sourcefile~~rdb_massless.f90~~AfferentGraph_node17"><a xlink:href="../sourcefile/rdb_ocean_state_topo.f90.html" xlink:title="rdb_ocean_state_topo.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="809,-615.21 658,-615.21 658,-591.21 809,-591.21 809,-615.21"/>
+<text text-anchor="middle" x="733.5" y="-600.81" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_topo.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state_topo.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge20" class="edge">
+<title>sourcefile~rdb_ocean_state_topo.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M689.72,-591.13C677.36,-587.18 663.98,-582.44 652,-577.21 627.96,-566.73 602.09,-552.05 583.19,-540.65"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="584.87,-537.57 574.51,-535.34 581.22,-543.54 584.87,-537.57"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_bc.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_node18" class="node">
+<title>sourcefile~rdb_ocean_setup_bc.f90</title>
+<g id="a_sourcefile~~rdb_massless.f90~~AfferentGraph_node18"><a xlink:href="../sourcefile/rdb_ocean_setup_bc.f90.html" xlink:title="rdb_ocean_setup_bc.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1006,-177.21 862,-177.21 862,-153.21 1006,-153.21 1006,-177.21"/>
+<text text-anchor="middle" x="934" y="-162.81" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_bc.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_bc.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge37" class="edge">
+<title>sourcefile~rdb_ocean_setup_bc.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#2700ff" stroke-dasharray="5,2" d="M874.7,-177.25C866.57,-179.76 858.45,-182.73 851,-186.21 814.55,-203.27 777.76,-232.2 755.54,-251.26"/>
+<polygon fill="#2700ff" stroke="#2700ff" points="753.01,-248.83 747.77,-258.04 757.61,-254.1 753.01,-248.83"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_bt.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_node19" class="node">
+<title>sourcefile~rdb_ocean_setup_bt.f90</title>
+<g id="a_sourcefile~~rdb_massless.f90~~AfferentGraph_node19"><a xlink:href="../sourcefile/rdb_ocean_setup_bt.f90.html" xlink:title="rdb_ocean_setup_bt.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1005,-135.21 863,-135.21 863,-111.21 1005,-111.21 1005,-135.21"/>
+<text text-anchor="middle" x="934" y="-120.81" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_bt.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_bt.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge38" class="edge">
+<title>sourcefile~rdb_ocean_setup_bt.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#2700ff" stroke-dasharray="5,2" d="M870.14,-135.28C863.45,-137.73 856.93,-140.68 851,-144.21 805.51,-171.34 767.02,-221.54 747.75,-249.7"/>
+<polygon fill="#2700ff" stroke="#2700ff" points="744.84,-247.76 742.18,-258.01 750.65,-251.65 744.84,-247.76"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_cavity.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_node20" class="node">
+<title>sourcefile~rdb_ocean_setup_cavity.f90</title>
+<g id="a_sourcefile~~rdb_massless.f90~~AfferentGraph_node20"><a xlink:href="../sourcefile/rdb_ocean_setup_cavity.f90.html" xlink:title="rdb_ocean_setup_cavity.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1014.5,-93.21 853.5,-93.21 853.5,-69.21 1014.5,-69.21 1014.5,-93.21"/>
+<text text-anchor="middle" x="934" y="-78.81" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_cavity.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_cavity.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge39" class="edge">
+<title>sourcefile~rdb_ocean_setup_cavity.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#2700ff" stroke-dasharray="5,2" d="M866.92,-93.23C861.26,-95.69 855.86,-98.65 851,-102.21 826.54,-120.16 831.97,-135.07 815,-160.21 793.48,-192.11 766.82,-227.86 750.23,-249.71"/>
+<polygon fill="#2700ff" stroke="#2700ff" points="747.27,-247.82 743.99,-257.9 752.84,-252.07 747.27,-247.82"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_grid.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_node21" class="node">
+<title>sourcefile~rdb_ocean_setup_grid.f90</title>
+<g id="a_sourcefile~~rdb_massless.f90~~AfferentGraph_node21"><a xlink:href="../sourcefile/rdb_ocean_setup_grid.f90.html" xlink:title="rdb_ocean_setup_grid.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1010,-303.21 858,-303.21 858,-279.21 1010,-279.21 1010,-303.21"/>
+<text text-anchor="middle" x="934" y="-288.81" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_grid.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_grid.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge40" class="edge">
+<title>sourcefile~rdb_ocean_setup_grid.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#2700ff" stroke-dasharray="5,2" d="M857.96,-283.28C841.23,-281.51 823.52,-279.63 806.9,-277.87"/>
+<polygon fill="#2700ff" stroke="#2700ff" points="807.02,-274.37 796.71,-276.8 806.29,-281.33 807.02,-274.37"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_lateral.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_node22" class="node">
+<title>sourcefile~rdb_ocean_setup_lateral.f90</title>
+<g id="a_sourcefile~~rdb_massless.f90~~AfferentGraph_node22"><a xlink:href="../sourcefile/rdb_ocean_setup_lateral.f90.html" xlink:title="rdb_ocean_setup_lateral.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1017,-261.21 851,-261.21 851,-237.21 1017,-237.21 1017,-261.21"/>
+<text text-anchor="middle" x="934" y="-246.81" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_lateral.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_lateral.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge41" class="edge">
+<title>sourcefile~rdb_ocean_setup_lateral.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#2700ff" stroke-dasharray="5,2" d="M850.83,-257.91C836.24,-259.45 821.14,-261.05 806.85,-262.56"/>
+<polygon fill="#2700ff" stroke="#2700ff" points="806.18,-259.11 796.6,-263.64 806.91,-266.07 806.18,-259.11"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_vmix.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_node23" class="node">
+<title>sourcefile~rdb_ocean_setup_vmix.f90</title>
+<g id="a_sourcefile~~rdb_massless.f90~~AfferentGraph_node23"><a xlink:href="../sourcefile/rdb_ocean_setup_vmix.f90.html" xlink:title="rdb_ocean_setup_vmix.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1012.5,-219.21 855.5,-219.21 855.5,-195.21 1012.5,-195.21 1012.5,-219.21"/>
+<text text-anchor="middle" x="934" y="-204.81" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_vmix.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_vmix.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_massless.f90~~AfferentGraph_edge42" class="edge">
+<title>sourcefile~rdb_ocean_setup_vmix.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#2700ff" stroke-dasharray="5,2" d="M882.92,-219.23C872.33,-222 861.25,-225.06 851,-228.21 825.4,-236.09 797.13,-246.24 774.85,-254.6"/>
+<polygon fill="#2700ff" stroke="#2700ff" points="773.5,-251.36 765.38,-258.17 775.97,-257.91 773.5,-251.36"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefilerdb_masslessf90AfferentGraph = svgPanZoom('#sourcefilerdb_masslessf90AfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#AfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="AfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="202pt" height="32pt"
+ viewBox="0.00 0.00 201.50 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 197.5,-28 197.5,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="193.5,-24 88.5,-24 88.5,0 193.5,0 193.5,-24"/>
+<text text-anchor="middle" x="141" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+<br>
+      <section>
+        <h2><span class="anchor" id="src"></span>Source Code</h2>
+        <div class="hl codehilite"><pre><span></span><a id="ln-1" name="ln-1" href="#ln-1"></a><span class="c">!! Massless-layer merge column helper (ocean dyn-core, D4).</span>
+<a id="ln-2" name="ln-2" href="#ln-2"></a><span class="k">module </span><span class="n">rdb_massless</span>
+<a id="ln-3" name="ln-3" href="#ln-3"></a><span class="w">   </span><span class="c">!! Pure column helpers that merge vanished (sub-`H_VANISHED`) layers into a</span>
+<a id="ln-4" name="ln-4" href="#ln-4"></a><span class="w">   </span><span class="c">!! "massive" grid (`nzc &lt;= nz`) so the column solver never divides by a</span>
+<a id="ln-5" name="ln-5" href="#ln-5"></a><span class="w">   </span><span class="c">!! vanished thickness: thickness-weighted means onto the merged grid, plus</span>
+<a id="ln-6" name="ln-6" href="#ln-6"></a><span class="w">   </span><span class="c">!! the inverse interpolation of an interface quantity back to the original</span>
+<a id="ln-7" name="ln-7" href="#ln-7"></a><span class="w">   </span><span class="c">!! interfaces. Reference: Jackson, Hallberg &amp; Legg (2008), JPO 38, 1033.</span>
+<a id="ln-8" name="ln-8" href="#ln-8"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-9" name="ln-9" href="#ln-9"></a><span class="w">   </span><span class="c">!! ORDERING (load-bearing): LOCAL SURFACE-DOWN indices — local `k=1` =</span>
+<a id="ln-10" name="ln-10" href="#ln-10"></a><span class="w">   </span><span class="c">!! surface, `k=nz` = bed; interfaces `K=1` (surface) ... `K=nz+1` (bed).</span>
+<a id="ln-11" name="ln-11" href="#ln-11"></a><span class="w">   </span><span class="c">!! The consumer does the global(bed-up) &lt;-&gt; local(surface-down) flip; the</span>
+<a id="ln-12" name="ln-12" href="#ln-12"></a><span class="w">   </span><span class="c">!! helper never sees global indices.</span>
+<a id="ln-13" name="ln-13" href="#ln-13"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-14" name="ln-14" href="#ln-14"></a><span class="w">   </span><span class="c">!! MERGE DIRECTION (do not invent a symmetric rule): walking surface-down, a</span>
+<a id="ln-15" name="ln-15" href="#ln-15"></a><span class="w">   </span><span class="c">!! merged layer opens only when the current cluster already has mass AND the</span>
+<a id="ln-16" name="ln-16" href="#ln-16"></a><span class="w">   </span><span class="c">!! incoming layer is massive (&gt; h_min). So a vanished layer folds into the</span>
+<a id="ln-17" name="ln-17" href="#ln-17"></a><span class="w">   </span><span class="c">!! preceding (surfaceward) massive layer; a leading surface run folds into</span>
+<a id="ln-18" name="ln-18" href="#ln-18"></a><span class="w">   </span><span class="c">!! the first massive layer beneath; a trailing bed run folds into the last</span>
+<a id="ln-19" name="ln-19" href="#ln-19"></a><span class="w">   </span><span class="c">!! massive layer above.</span>
+<a id="ln-20" name="ln-20" href="#ln-20"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-21" name="ln-21" href="#ln-21"></a><span class="w">   </span><span class="c">!! GPU NOTE: `!$acc routine seq`, callable cross-module from the kappa-shear</span>
+<a id="ln-22" name="ln-22" href="#ln-22"></a><span class="w">   </span><span class="c">!! `do concurrent` column kernel. NVHPC will NOT inline across the module</span>
+<a id="ln-23" name="ln-23" href="#ln-23"></a><span class="w">   </span><span class="c">!! boundary, but these run once per column per compute (thermo cadence), so</span>
+<a id="ln-24" name="ln-24" href="#ln-24"></a><span class="w">   </span><span class="c">!! the divergence cost is acceptable. All arrays are fixed-size</span>
+<a id="ln-25" name="ln-25" href="#ln-25"></a><span class="w">   </span><span class="c">!! `NZ_STACK_MAX`(+1) explicit-shape locals (no descriptor walk, no alloc).</span>
+<a id="ln-26" name="ln-26" href="#ln-26"></a><span class="cp">#ifdef LFORTRAN_PASSING</span>
+<a id="ln-27" name="ln-27" href="#ln-27"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_constants</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">wp</span><span class="p">,</span><span class="w"> </span><span class="n">H_DIV_EPS</span>
+<a id="ln-28" name="ln-28" href="#ln-28"></a><span class="cp">#else</span>
+<a id="ln-29" name="ln-29" href="#ln-29"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_constants</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">NZ_STACK_MAX</span><span class="p">,</span><span class="w"> </span><span class="n">wp</span><span class="p">,</span><span class="w"> </span><span class="n">H_DIV_EPS</span>
+<a id="ln-30" name="ln-30" href="#ln-30"></a><span class="cp">#endif</span>
+<a id="ln-31" name="ln-31" href="#ln-31"></a><span class="w">   </span><span class="k">implicit none</span>
+<a id="ln-32" name="ln-32" href="#ln-32"></a><span class="k">   private</span>
+<a id="ln-33" name="ln-33" href="#ln-33"></a><span class="cp">#ifdef LFORTRAN_PASSING</span>
+<a id="ln-34" name="ln-34" href="#ln-34"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">NZ_STACK_MAX</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">64</span>
+<a id="ln-35" name="ln-35" href="#ln-35"></a><span class="w">      </span><span class="c">!! LFortran 0.64 workaround: module-local copy of the rdb_constants value</span>
+<a id="ln-36" name="ln-36" href="#ln-36"></a><span class="w">      </span><span class="c">!! (an imported parameter used as an explicit-shape dummy bound inside a</span>
+<a id="ln-37" name="ln-37" href="#ln-37"></a><span class="w">      </span><span class="c">!! PURE call becomes an impure getter under LFortran). Keep in sync (=64).</span>
+<a id="ln-38" name="ln-38" href="#ln-38"></a><span class="cp">#endif</span>
+<a id="ln-39" name="ln-39" href="#ln-39"></a>
+<a id="ln-40" name="ln-40" href="#ln-40"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">massless_build_maps</span>
+<a id="ln-41" name="ln-41" href="#ln-41"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">massless_merge_fields</span>
+<a id="ln-42" name="ln-42" href="#ln-42"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">massless_interp_back</span>
+<a id="ln-43" name="ln-43" href="#ln-43"></a>
+<a id="ln-44" name="ln-44" href="#ln-44"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">NZL</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">NZ_STACK_MAX</span>
+<a id="ln-45" name="ln-45" href="#ln-45"></a><span class="w">      </span><span class="c">!! Layer-array dimension (must match the consumer's NZL).</span>
+<a id="ln-46" name="ln-46" href="#ln-46"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">NZLI</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">NZ_STACK_MAX</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-47" name="ln-47" href="#ln-47"></a><span class="w">      </span><span class="c">!! Interface-array dimension (= NZL + 1).</span>
+<a id="ln-48" name="ln-48" href="#ln-48"></a>
+<a id="ln-49" name="ln-49" href="#ln-49"></a><span class="k">contains</span>
+<a id="ln-50" name="ln-50" href="#ln-50"></a>
+<a id="ln-51" name="ln-51" href="#ln-51"></a><span class="k">   pure subroutine </span><span class="n">massless_build_maps</span><span class="p">(</span><span class="n">h</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">h_min</span><span class="p">,</span><span class="w"> </span><span class="n">nzc</span><span class="p">,</span><span class="w"> </span><span class="n">hc</span><span class="p">,</span><span class="w"> </span><span class="n">kc</span><span class="p">,</span><span class="w"> </span><span class="n">kf</span><span class="p">)</span>
+<a id="ln-52" name="ln-52" href="#ln-52"></a><span class="w">      </span><span class="c">!! Build the merged massive-layer grid and the maps `kc`, `kf`.</span>
+<a id="ln-53" name="ln-53" href="#ln-53"></a><span class="w">      </span><span class="c">!! `kc(k)` (k=1..nz) = merged-layer index original layer `k` folds into;</span>
+<a id="ln-54" name="ln-54" href="#ln-54"></a><span class="w">      </span><span class="c">!! `kc(nz+1) = nzc+1` is the bed sentinel. `kf(K)` = fractional position</span>
+<a id="ln-55" name="ln-55" href="#ln-55"></a><span class="w">      </span><span class="c">!! of original interface `K` inside merged layer `kc(K)` (0 = coincides</span>
+<a id="ln-56" name="ln-56" href="#ln-56"></a><span class="w">      </span><span class="c">!! with a merged interface -&gt; pure lookup; (0,1) = interior -&gt; linear</span>
+<a id="ln-57" name="ln-57" href="#ln-57"></a><span class="w">      </span><span class="c">!! blend in `massless_interp_back`).</span>
+<a id="ln-58" name="ln-58" href="#ln-58"></a><span class="w">      </span><span class="c">!! Identity case (no layer &lt; h_min): `nzc==nz`, `kc(k)==k`, `kf(k)==0`,</span>
+<a id="ln-59" name="ln-59" href="#ln-59"></a><span class="w">      </span><span class="c">!! `hc==h` bit-for-bit.</span>
+<a id="ln-60" name="ln-60" href="#ln-60"></a><span class="w">      </span><span class="c">!$acc routine seq</span>
+<a id="ln-61" name="ln-61" href="#ln-61"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nz</span>
+<a id="ln-62" name="ln-62" href="#ln-62"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h</span><span class="p">(</span><span class="n">NZL</span><span class="p">)</span>
+<a id="ln-63" name="ln-63" href="#ln-63"></a><span class="w">         </span><span class="c">!! Local surface-down layer thicknesses (m), &gt;= 0.</span>
+<a id="ln-64" name="ln-64" href="#ln-64"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_min</span>
+<a id="ln-65" name="ln-65" href="#ln-65"></a><span class="w">         </span><span class="c">!! Merge threshold (H_VANISHED).</span>
+<a id="ln-66" name="ln-66" href="#ln-66"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nzc</span>
+<a id="ln-67" name="ln-67" href="#ln-67"></a><span class="w">         </span><span class="c">!! Number of merged massive layers (&lt;= nz).</span>
+<a id="ln-68" name="ln-68" href="#ln-68"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hc</span><span class="p">(</span><span class="n">NZL</span><span class="p">)</span>
+<a id="ln-69" name="ln-69" href="#ln-69"></a><span class="w">         </span><span class="c">!! Merged thicknesses (m), valid 1..nzc.</span>
+<a id="ln-70" name="ln-70" href="#ln-70"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kc</span><span class="p">(</span><span class="n">NZLI</span><span class="p">)</span>
+<a id="ln-71" name="ln-71" href="#ln-71"></a><span class="w">         </span><span class="c">!! Layer/interface -&gt; merged index, valid 1..nz+1 (sentinel at nz+1).</span>
+<a id="ln-72" name="ln-72" href="#ln-72"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kf</span><span class="p">(</span><span class="n">NZLI</span><span class="p">)</span>
+<a id="ln-73" name="ln-73" href="#ln-73"></a><span class="w">         </span><span class="c">!! Fractional interface weight, valid 1..nz+1.</span>
+<a id="ln-74" name="ln-74" href="#ln-74"></a>
+<a id="ln-75" name="ln-75" href="#ln-75"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">k</span>
+<a id="ln-76" name="ln-76" href="#ln-76"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dz_in</span>
+<a id="ln-77" name="ln-77" href="#ln-77"></a>
+<a id="ln-78" name="ln-78" href="#ln-78"></a><span class="w">      </span><span class="c">! Build loop (surface-down, 1-based).</span>
+<a id="ln-79" name="ln-79" href="#ln-79"></a><span class="w">      </span><span class="n">nzc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-80" name="ln-80" href="#ln-80"></a><span class="w">      </span><span class="n">hc</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-81" name="ln-81" href="#ln-81"></a><span class="w">      </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<a id="ln-82" name="ln-82" href="#ln-82"></a><span class="w">         </span><span class="c">! Open a new merged layer iff the current cluster has mass AND</span>
+<a id="ln-83" name="ln-83" href="#ln-83"></a><span class="w">         </span><span class="c">! this layer is massive.</span>
+<a id="ln-84" name="ln-84" href="#ln-84"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">hc</span><span class="p">(</span><span class="n">nzc</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">h</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">h_min</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-85" name="ln-85" href="#ln-85"></a><span class="k">            </span><span class="n">nzc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nzc</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-86" name="ln-86" href="#ln-86"></a><span class="w">            </span><span class="n">hc</span><span class="p">(</span><span class="n">nzc</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-87" name="ln-87" href="#ln-87"></a><span class="w">         </span><span class="k">end if</span>
+<a id="ln-88" name="ln-88" href="#ln-88"></a><span class="k">         </span><span class="n">kc</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nzc</span>
+<a id="ln-89" name="ln-89" href="#ln-89"></a><span class="w">         </span><span class="n">hc</span><span class="p">(</span><span class="n">nzc</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hc</span><span class="p">(</span><span class="n">nzc</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<a id="ln-90" name="ln-90" href="#ln-90"></a><span class="w">      </span><span class="k">end do</span>
+<a id="ln-91" name="ln-91" href="#ln-91"></a><span class="k">      </span><span class="n">kc</span><span class="p">(</span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nzc</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w">   </span><span class="c">! bed-interface sentinel</span>
+<a id="ln-92" name="ln-92" href="#ln-92"></a>
+<a id="ln-93" name="ln-93" href="#ln-93"></a><span class="w">      </span><span class="c">! --- kf: interface interpolation weights ---</span>
+<a id="ln-94" name="ln-94" href="#ln-94"></a><span class="w">      </span><span class="n">kf</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-95" name="ln-95" href="#ln-95"></a><span class="w">      </span><span class="n">dz_in</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<a id="ln-96" name="ln-96" href="#ln-96"></a><span class="w">      </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<a id="ln-97" name="ln-97" href="#ln-97"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">kc</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">kc</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-98" name="ln-98" href="#ln-98"></a><span class="w">            </span><span class="c">! Interface k sits ON a merged interface.</span>
+<a id="ln-99" name="ln-99" href="#ln-99"></a><span class="w">            </span><span class="n">kf</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-100" name="ln-100" href="#ln-100"></a><span class="w">            </span><span class="n">dz_in</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<a id="ln-101" name="ln-101" href="#ln-101"></a><span class="w">         </span><span class="k">else</span>
+<a id="ln-102" name="ln-102" href="#ln-102"></a><span class="w">            </span><span class="c">! Interface k is interior to merged layer kc(k).</span>
+<a id="ln-103" name="ln-103" href="#ln-103"></a><span class="w">            </span><span class="n">kf</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dz_in</span><span class="o">/</span><span class="nb">max</span><span class="p">(</span><span class="n">hc</span><span class="p">(</span><span class="n">kc</span><span class="p">(</span><span class="n">k</span><span class="p">)),</span><span class="w"> </span><span class="n">H_DIV_EPS</span><span class="p">)</span>
+<a id="ln-104" name="ln-104" href="#ln-104"></a><span class="w">            </span><span class="n">dz_in</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dz_in</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<a id="ln-105" name="ln-105" href="#ln-105"></a><span class="w">         </span><span class="k">end if</span>
+<a id="ln-106" name="ln-106" href="#ln-106"></a><span class="k">      end do</span>
+<a id="ln-107" name="ln-107" href="#ln-107"></a><span class="k">      </span><span class="n">kf</span><span class="p">(</span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-108" name="ln-108" href="#ln-108"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">massless_build_maps</span>
+<a id="ln-109" name="ln-109" href="#ln-109"></a>
+<a id="ln-110" name="ln-110" href="#ln-110"></a><span class="w">   </span><span class="k">pure subroutine </span><span class="n">massless_merge_fields</span><span class="p">(</span><span class="n">h</span><span class="p">,</span><span class="w"> </span><span class="n">kc</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nzc</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-111" name="ln-111" href="#ln-111"></a><span class="w">                                         </span><span class="n">u</span><span class="p">,</span><span class="w"> </span><span class="n">v</span><span class="p">,</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="n">s</span><span class="p">,</span><span class="w"> </span><span class="n">uc</span><span class="p">,</span><span class="w"> </span><span class="n">vc</span><span class="p">,</span><span class="w"> </span><span class="n">tc</span><span class="p">,</span><span class="w"> </span><span class="n">sc</span><span class="p">)</span>
+<a id="ln-112" name="ln-112" href="#ln-112"></a><span class="w">      </span><span class="c">!! Thickness-weighted merged means for u, v, T, S — the solver receives</span>
+<a id="ln-113" name="ln-113" href="#ln-113"></a><span class="w">      </span><span class="c">!! MEANS, not integrals, and must not re-divide. Accumulation runs in the</span>
+<a id="ln-114" name="ln-114" href="#ln-114"></a><span class="w">      </span><span class="c">!! same surface-down `k` order as `massless_build_maps` so the</span>
+<a id="ln-115" name="ln-115" href="#ln-115"></a><span class="w">      </span><span class="c">!! column-integral conservation holds to round-off.</span>
+<a id="ln-116" name="ln-116" href="#ln-116"></a><span class="w">      </span><span class="c">!$acc routine seq</span>
+<a id="ln-117" name="ln-117" href="#ln-117"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nzc</span>
+<a id="ln-118" name="ln-118" href="#ln-118"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h</span><span class="p">(</span><span class="n">NZL</span><span class="p">)</span>
+<a id="ln-119" name="ln-119" href="#ln-119"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kc</span><span class="p">(</span><span class="n">NZLI</span><span class="p">)</span>
+<a id="ln-120" name="ln-120" href="#ln-120"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u</span><span class="p">(</span><span class="n">NZL</span><span class="p">),</span><span class="w"> </span><span class="n">v</span><span class="p">(</span><span class="n">NZL</span><span class="p">),</span><span class="w"> </span><span class="n">t</span><span class="p">(</span><span class="n">NZL</span><span class="p">),</span><span class="w"> </span><span class="n">s</span><span class="p">(</span><span class="n">NZL</span><span class="p">)</span>
+<a id="ln-121" name="ln-121" href="#ln-121"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">uc</span><span class="p">(</span><span class="n">NZL</span><span class="p">),</span><span class="w"> </span><span class="n">vc</span><span class="p">(</span><span class="n">NZL</span><span class="p">),</span><span class="w"> </span><span class="n">tc</span><span class="p">(</span><span class="n">NZL</span><span class="p">),</span><span class="w"> </span><span class="n">sc</span><span class="p">(</span><span class="n">NZL</span><span class="p">)</span>
+<a id="ln-122" name="ln-122" href="#ln-122"></a>
+<a id="ln-123" name="ln-123" href="#ln-123"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">kk</span>
+<a id="ln-124" name="ln-124" href="#ln-124"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hc_acc</span><span class="p">(</span><span class="n">NZL</span><span class="p">)</span>
+<a id="ln-125" name="ln-125" href="#ln-125"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">denom</span>
+<a id="ln-126" name="ln-126" href="#ln-126"></a>
+<a id="ln-127" name="ln-127" href="#ln-127"></a><span class="w">      </span><span class="k">do </span><span class="n">kk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nzc</span>
+<a id="ln-128" name="ln-128" href="#ln-128"></a><span class="w">         </span><span class="n">hc_acc</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-129" name="ln-129" href="#ln-129"></a><span class="w">         </span><span class="n">uc</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-130" name="ln-130" href="#ln-130"></a><span class="w">         </span><span class="n">vc</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-131" name="ln-131" href="#ln-131"></a><span class="w">         </span><span class="n">tc</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-132" name="ln-132" href="#ln-132"></a><span class="w">         </span><span class="n">sc</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-133" name="ln-133" href="#ln-133"></a><span class="w">      </span><span class="k">end do</span>
+<a id="ln-134" name="ln-134" href="#ln-134"></a>
+<a id="ln-135" name="ln-135" href="#ln-135"></a><span class="k">      do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<a id="ln-136" name="ln-136" href="#ln-136"></a><span class="w">         </span><span class="n">kk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kc</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<a id="ln-137" name="ln-137" href="#ln-137"></a><span class="w">         </span><span class="n">hc_acc</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hc_acc</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<a id="ln-138" name="ln-138" href="#ln-138"></a><span class="w">         </span><span class="n">uc</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">uc</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">u</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="o">*</span><span class="n">h</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<a id="ln-139" name="ln-139" href="#ln-139"></a><span class="w">         </span><span class="n">vc</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vc</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">v</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="o">*</span><span class="n">h</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<a id="ln-140" name="ln-140" href="#ln-140"></a><span class="w">         </span><span class="n">tc</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tc</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">t</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="o">*</span><span class="n">h</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<a id="ln-141" name="ln-141" href="#ln-141"></a><span class="w">         </span><span class="n">sc</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sc</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">s</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="o">*</span><span class="n">h</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<a id="ln-142" name="ln-142" href="#ln-142"></a><span class="w">      </span><span class="k">end do</span>
+<a id="ln-143" name="ln-143" href="#ln-143"></a>
+<a id="ln-144" name="ln-144" href="#ln-144"></a><span class="w">      </span><span class="c">! Finalise means.  hc_acc(kk) &gt; 0 for every kk (a cluster opens only</span>
+<a id="ln-145" name="ln-145" href="#ln-145"></a><span class="w">      </span><span class="c">! on a massive layer or holds an absorbed leading run + its first</span>
+<a id="ln-146" name="ln-146" href="#ln-146"></a><span class="w">      </span><span class="c">! massive layer), so H_DIV_EPS is armour, not a clamp.</span>
+<a id="ln-147" name="ln-147" href="#ln-147"></a><span class="w">      </span><span class="k">do </span><span class="n">kk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nzc</span>
+<a id="ln-148" name="ln-148" href="#ln-148"></a><span class="w">         </span><span class="n">denom</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">hc_acc</span><span class="p">(</span><span class="n">kk</span><span class="p">),</span><span class="w"> </span><span class="n">H_DIV_EPS</span><span class="p">)</span>
+<a id="ln-149" name="ln-149" href="#ln-149"></a><span class="w">         </span><span class="n">uc</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">uc</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="o">/</span><span class="n">denom</span>
+<a id="ln-150" name="ln-150" href="#ln-150"></a><span class="w">         </span><span class="n">vc</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vc</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="o">/</span><span class="n">denom</span>
+<a id="ln-151" name="ln-151" href="#ln-151"></a><span class="w">         </span><span class="n">tc</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tc</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="o">/</span><span class="n">denom</span>
+<a id="ln-152" name="ln-152" href="#ln-152"></a><span class="w">         </span><span class="n">sc</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sc</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="o">/</span><span class="n">denom</span>
+<a id="ln-153" name="ln-153" href="#ln-153"></a><span class="w">      </span><span class="k">end do</span>
+<a id="ln-154" name="ln-154" href="#ln-154"></a><span class="k">   end subroutine </span><span class="n">massless_merge_fields</span>
+<a id="ln-155" name="ln-155" href="#ln-155"></a>
+<a id="ln-156" name="ln-156" href="#ln-156"></a><span class="w">   </span><span class="k">pure subroutine </span><span class="n">massless_interp_back</span><span class="p">(</span><span class="n">qc</span><span class="p">,</span><span class="w"> </span><span class="n">kc</span><span class="p">,</span><span class="w"> </span><span class="n">kf</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">q</span><span class="p">)</span>
+<a id="ln-157" name="ln-157" href="#ln-157"></a><span class="w">      </span><span class="c">!! Inverse map: interpolate an interface quantity `qc(1:nzc+1)` on the</span>
+<a id="ln-158" name="ln-158" href="#ln-158"></a><span class="w">      </span><span class="c">!! merged grid back to the original `nz+1` interfaces. `kf==0` takes a</span>
+<a id="ln-159" name="ln-159" href="#ln-159"></a><span class="w">      </span><span class="c">!! pure lookup; interior interfaces take the linear blend between merged</span>
+<a id="ln-160" name="ln-160" href="#ln-160"></a><span class="w">      </span><span class="c">!! interfaces `kc(K)` and `kc(K)+1` (in range since `kf&gt;0` only when</span>
+<a id="ln-161" name="ln-161" href="#ln-161"></a><span class="w">      </span><span class="c">!! `kc(K) &lt; nzc+1`). Identity case: `kf==0` everywhere -&gt; `q==qc`.</span>
+<a id="ln-162" name="ln-162" href="#ln-162"></a><span class="w">      </span><span class="c">!$acc routine seq</span>
+<a id="ln-163" name="ln-163" href="#ln-163"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nz</span>
+<a id="ln-164" name="ln-164" href="#ln-164"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">qc</span><span class="p">(</span><span class="n">NZLI</span><span class="p">)</span>
+<a id="ln-165" name="ln-165" href="#ln-165"></a><span class="w">         </span><span class="c">!! Interface quantity on the merged grid (valid 1..nzc+1).</span>
+<a id="ln-166" name="ln-166" href="#ln-166"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kc</span><span class="p">(</span><span class="n">NZLI</span><span class="p">)</span>
+<a id="ln-167" name="ln-167" href="#ln-167"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kf</span><span class="p">(</span><span class="n">NZLI</span><span class="p">)</span>
+<a id="ln-168" name="ln-168" href="#ln-168"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">q</span><span class="p">(</span><span class="n">NZLI</span><span class="p">)</span>
+<a id="ln-169" name="ln-169" href="#ln-169"></a><span class="w">         </span><span class="c">!! Interface quantity on the original grid (filled 1..nz+1).</span>
+<a id="ln-170" name="ln-170" href="#ln-170"></a>
+<a id="ln-171" name="ln-171" href="#ln-171"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kk</span>
+<a id="ln-172" name="ln-172" href="#ln-172"></a>
+<a id="ln-173" name="ln-173" href="#ln-173"></a><span class="w">      </span><span class="k">do </span><span class="n">kk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-174" name="ln-174" href="#ln-174"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">kf</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-175" name="ln-175" href="#ln-175"></a><span class="k">            </span><span class="n">q</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">qc</span><span class="p">(</span><span class="n">kc</span><span class="p">(</span><span class="n">kk</span><span class="p">))</span>
+<a id="ln-176" name="ln-176" href="#ln-176"></a><span class="w">         </span><span class="k">else</span>
+<a id="ln-177" name="ln-177" href="#ln-177"></a><span class="k">            </span><span class="n">q</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">kf</span><span class="p">(</span><span class="n">kk</span><span class="p">))</span><span class="o">*</span><span class="n">qc</span><span class="p">(</span><span class="n">kc</span><span class="p">(</span><span class="n">kk</span><span class="p">))</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">kf</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="o">*</span><span class="n">qc</span><span class="p">(</span><span class="n">kc</span><span class="p">(</span><span class="n">kk</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<a id="ln-178" name="ln-178" href="#ln-178"></a><span class="w">         </span><span class="k">end if</span>
+<a id="ln-179" name="ln-179" href="#ln-179"></a><span class="k">      end do</span>
+<a id="ln-180" name="ln-180" href="#ln-180"></a><span class="k">   end subroutine </span><span class="n">massless_interp_back</span>
+<a id="ln-181" name="ln-181" href="#ln-181"></a>
+<a id="ln-182" name="ln-182" href="#ln-182"></a><span class="k">end module </span><span class="n">rdb_massless</span>
+</pre></div>
+
+      </section>
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-06 22:39 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,1026 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>pt_from_ct &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>pt_from_ct
+      <small>Function</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">24 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_teos10_convert.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_teos10_convert.f90.html'>rdb_teos10_convert.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_teos10_convert.html'>rdb_teos10_convert</a></li>
+            <li class="breadcrumb-item active" aria-current="page">pt_from_ct</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/pt_from_ct.html#variable-a5ct">a5ct</a>
+            <a class="list-group-item" href="../proc/pt_from_ct.html#variable-b3ct">b3ct</a>
+            <a class="list-group-item" href="../proc/pt_from_ct.html#variable-ct_diff">ct_diff</a>
+            <a class="list-group-item" href="../proc/pt_from_ct.html#variable-ct_factor">ct_factor</a>
+            <a class="list-group-item" href="../proc/pt_from_ct.html#variable-dpt_dct">dpt_dct</a>
+            <a class="list-group-item" href="../proc/pt_from_ct.html#variable-pt_num">pt_num</a>
+            <a class="list-group-item" href="../proc/pt_from_ct.html#variable-pt_old">pt_old</a>
+            <a class="list-group-item" href="../proc/pt_from_ct.html#variable-pt_recden">pt_recden</a>
+            <a class="list-group-item" href="../proc/pt_from_ct.html#variable-ptm">ptm</a>
+            <a class="list-group-item" href="../proc/pt_from_ct.html#variable-s1~2">s1</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/pt_from_ct.html#src">pt_from_ct</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public pure elemental function pt_from_ct(sa, ct) result(pt)  
+</h2>
+    
+
+    <p>Potential temperature (p_ref=0) from Conservative Temperature &ndash;
+the modified Newton-Raphson (&ldquo;Newton-McDougall&rdquo;) method, 1.5
+iterations fixed (McDougall &amp; Barker 2011; GSW <code>gsw_pt_from_ct</code>):
+a rational initial guess, one full Newton step with the cheap
+analytic <code>dpt/dct</code> from the guess itself, then one more step
+using the expensive-but-exact <code>dpt/dct = -cp0/((pt+T0)*gibbs_tt)</code>
+evaluated at the midpoint.  Fixed iteration count, no
+data-dependent loop &ndash; device-callable.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sa~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sa</strong></td>
+            <td>
+                <p>Reference/Absolute Salinity (g/kg).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ct~11"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ct</strong></td>
+            <td>
+                <p>Conservative Temperature (degC).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+      <h3>Return Value
+        <small>
+          <span class="anchor" id="variable-pt~3"></span>
+          real(kind=wp)
+        </small>
+      </h3>
+      <p>Potential temperature, p_ref=0 (degC).</p>
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~pt_from_ct~~CallsGraph Pages: 1 -->
+<svg id="procpt_from_ctCallsGraph" width="198pt" height="74pt"
+ viewBox="0.00 0.00 198.00 74.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~pt_from_ct~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 70)">
+<title>proc~~pt_from_ct~~CallsGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-70 194,-70 194,4 -4,4"/>
+<!-- proc~pt_from_ct -->
+<g id="proc~~pt_from_ct~~CallsGraph_node1" class="node">
+<title>proc~pt_from_ct</title>
+<polygon fill="none" stroke="black" points="68,-45 0,-45 0,-21 68,-21 68,-45"/>
+<text text-anchor="middle" x="34" y="-30.6" font-family="Helvetica,sans-Serif" font-size="10.50">pt_from_ct</text>
+</g>
+<!-- proc~ct_from_pt -->
+<g id="proc~~pt_from_ct~~CallsGraph_node2" class="node">
+<title>proc~ct_from_pt</title>
+<g id="a_proc~~pt_from_ct~~CallsGraph_node2"><a xlink:href="../proc/ct_from_pt.html" xlink:title="ct_from_pt">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="181,-66 113,-66 113,-42 181,-42 181,-66"/>
+<text text-anchor="middle" x="147" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ct_from_pt</text>
+</a>
+</g>
+</g>
+<!-- proc~pt_from_ct&#45;&gt;proc~ct_from_pt -->
+<g id="proc~~pt_from_ct~~CallsGraph_edge1" class="edge">
+<title>proc~pt_from_ct&#45;&gt;proc~ct_from_pt</title>
+<path fill="none" stroke="#ff0000" d="M68,-39.24C78.98,-41.32 91.36,-43.66 102.98,-45.86"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="102.46,-49.32 112.93,-47.74 103.76,-42.45 102.46,-49.32"/>
+</g>
+<!-- proc~gibbs_pt0_pt0 -->
+<g id="proc~~pt_from_ct~~CallsGraph_node3" class="node">
+<title>proc~gibbs_pt0_pt0</title>
+<g id="a_proc~~pt_from_ct~~CallsGraph_node3"><a xlink:href="../proc/gibbs_pt0_pt0.html" xlink:title="gibbs_pt0_pt0">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="190,-24 104,-24 104,0 190,0 190,-24"/>
+<text text-anchor="middle" x="147" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">gibbs_pt0_pt0</text>
+</a>
+</g>
+</g>
+<!-- proc~pt_from_ct&#45;&gt;proc~gibbs_pt0_pt0 -->
+<g id="proc~~pt_from_ct~~CallsGraph_edge2" class="edge">
+<title>proc~pt_from_ct&#45;&gt;proc~gibbs_pt0_pt0</title>
+<path fill="none" stroke="#ff0000" d="M68,-26.76C76.18,-25.21 85.13,-23.52 93.97,-21.84"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="94.67,-25.27 103.85,-19.97 93.37,-18.39 94.67,-25.27"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: proc~~pt_from_ct~~CalledByGraph Pages: 1 -->
+<svg id="procpt_from_ctCalledByGraph" width="641pt" height="215pt"
+ viewBox="0.00 0.00 641.00 215.44" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~pt_from_ct~~CalledByGraph" class="graph" transform="scale(0.76 0.76) rotate(0) translate(4 280)">
+<title>proc~~pt_from_ct~~CalledByGraph</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-280 841,-280 841,4 -4,4"/>
+<!-- proc~pt_from_ct -->
+<g id="proc~~pt_from_ct~~CalledByGraph_node1" class="node">
+<title>proc~pt_from_ct</title>
+<polygon fill="none" stroke="black" points="837,-150 769,-150 769,-126 837,-126 837,-150"/>
+<text text-anchor="middle" x="803" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50">pt_from_ct</text>
+</g>
+<!-- proc~bulk_forcing_core_impl -->
+<g id="proc~~pt_from_ct~~CalledByGraph_node2" class="node">
+<title>proc~bulk_forcing_core_impl</title>
+<g id="a_proc~~pt_from_ct~~CalledByGraph_node2"><a xlink:href="../proc/bulk_forcing_core_impl.html" xlink:title="bulk_forcing_core_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="710.5,-276 576.5,-276 576.5,-252 710.5,-252 710.5,-276"/>
+<text text-anchor="middle" x="643.5" y="-261.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bulk_forcing_core_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~bulk_forcing_core_impl&#45;&gt;proc~pt_from_ct -->
+<g id="proc~~pt_from_ct~~CalledByGraph_edge1" class="edge">
+<title>proc~bulk_forcing_core_impl&#45;&gt;proc~pt_from_ct</title>
+<path fill="none" stroke="#ff0000" d="M710.72,-254.22C718.63,-251.38 726.28,-247.71 733,-243 762.86,-222.08 783.14,-183.72 793.62,-159.61"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="796.91,-160.82 797.51,-150.25 790.44,-158.14 796.91,-160.82"/>
+</g>
+<!-- proc~fill_temperature_pt_impl -->
+<g id="proc~~pt_from_ct~~CalledByGraph_node3" class="node">
+<title>proc~fill_temperature_pt_impl</title>
+<g id="a_proc~~pt_from_ct~~CalledByGraph_node3"><a xlink:href="../proc/fill_temperature_pt_impl.html" xlink:title="fill_temperature_pt_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="714.5,-234 572.5,-234 572.5,-210 714.5,-210 714.5,-234"/>
+<text text-anchor="middle" x="643.5" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fill_temperature_pt_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~fill_temperature_pt_impl&#45;&gt;proc~pt_from_ct -->
+<g id="proc~~pt_from_ct~~CalledByGraph_edge2" class="edge">
+<title>proc~fill_temperature_pt_impl&#45;&gt;proc~pt_from_ct</title>
+<path fill="none" stroke="#ff0000" d="M711.56,-209.96C719,-207.5 726.3,-204.54 733,-201 753.38,-190.22 772.39,-172 785.28,-157.91"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="788.11,-159.99 792.12,-150.19 782.87,-155.35 788.11,-159.99"/>
+</g>
+<!-- proc~ice_compute_basal_flux_impl -->
+<g id="proc~~pt_from_ct~~CalledByGraph_node4" class="node">
+<title>proc~ice_compute_basal_flux_impl</title>
+<g id="a_proc~~pt_from_ct~~CalledByGraph_node4"><a xlink:href="../proc/ice_compute_basal_flux_impl.html" xlink:title="ice_compute_basal_flux_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="727.5,-192 559.5,-192 559.5,-168 727.5,-168 727.5,-192"/>
+<text text-anchor="middle" x="643.5" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_compute_basal_flux_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_compute_basal_flux_impl&#45;&gt;proc~pt_from_ct -->
+<g id="proc~~pt_from_ct~~CalledByGraph_edge3" class="edge">
+<title>proc~ice_compute_basal_flux_impl&#45;&gt;proc~pt_from_ct</title>
+<path fill="none" stroke="#ff0000" d="M697.52,-167.99C709.24,-165.18 721.57,-162.09 733,-159 741.43,-156.72 750.38,-154.12 758.95,-151.55"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="760.23,-154.82 768.78,-148.57 758.19,-148.13 760.23,-154.82"/>
+</g>
+<!-- proc~ice_frazil_uptake_impl -->
+<g id="proc~~pt_from_ct~~CalledByGraph_node5" class="node">
+<title>proc~ice_frazil_uptake_impl</title>
+<g id="a_proc~~pt_from_ct~~CalledByGraph_node5"><a xlink:href="../proc/ice_frazil_uptake_impl.html" xlink:title="ice_frazil_uptake_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="708.5,-108 578.5,-108 578.5,-84 708.5,-84 708.5,-108"/>
+<text text-anchor="middle" x="643.5" y="-93.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_frazil_uptake_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_frazil_uptake_impl&#45;&gt;proc~pt_from_ct -->
+<g id="proc~~pt_from_ct~~CalledByGraph_edge4" class="edge">
+<title>proc~ice_frazil_uptake_impl&#45;&gt;proc~pt_from_ct</title>
+<path fill="none" stroke="#ff0000" d="M697.52,-108.01C709.24,-110.82 721.57,-113.91 733,-117 741.43,-119.28 750.38,-121.88 758.95,-124.45"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="758.19,-127.87 768.78,-127.43 760.23,-121.18 758.19,-127.87"/>
+</g>
+<!-- proc~ice_frazil_uptake_multicat_impl -->
+<g id="proc~~pt_from_ct~~CalledByGraph_node6" class="node">
+<title>proc~ice_frazil_uptake_multicat_impl</title>
+<g id="a_proc~~pt_from_ct~~CalledByGraph_node6"><a xlink:href="../proc/ice_frazil_uptake_multicat_impl.html" xlink:title="ice_frazil_uptake_multicat_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="733,-150 554,-150 554,-126 733,-126 733,-150"/>
+<text text-anchor="middle" x="643.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_frazil_uptake_multicat_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_frazil_uptake_multicat_impl&#45;&gt;proc~pt_from_ct -->
+<g id="proc~~pt_from_ct~~CalledByGraph_edge5" class="edge">
+<title>proc~ice_frazil_uptake_multicat_impl&#45;&gt;proc~pt_from_ct</title>
+<path fill="none" stroke="#ff0000" d="M733.38,-138C742.11,-138 750.67,-138 758.63,-138"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="758.7,-141.5 768.7,-138 758.7,-134.5 758.7,-141.5"/>
+</g>
+<!-- proc~pt_freezing_poly -->
+<g id="proc~~pt_from_ct~~CalledByGraph_node7" class="node">
+<title>proc~pt_freezing_poly</title>
+<g id="a_proc~~pt_from_ct~~CalledByGraph_node7"><a xlink:href="../proc/pt_freezing_poly.html" xlink:title="pt_freezing_poly">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="693,-66 594,-66 594,-42 693,-42 693,-66"/>
+<text text-anchor="middle" x="643.5" y="-51.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pt_freezing_poly</text>
+</a>
+</g>
+</g>
+<!-- proc~pt_freezing_poly&#45;&gt;proc~pt_from_ct -->
+<g id="proc~~pt_from_ct~~CalledByGraph_edge6" class="edge">
+<title>proc~pt_freezing_poly&#45;&gt;proc~pt_from_ct</title>
+<path fill="none" stroke="#ff0000" d="M693.41,-60.97C706.74,-64.09 720.86,-68.58 733,-75 753.38,-85.78 772.39,-104 785.28,-118.09"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="782.87,-120.65 792.12,-125.81 788.11,-116.01 782.87,-120.65"/>
+</g>
+<!-- proc~pt_from_ct_impl -->
+<g id="proc~~pt_from_ct~~CalledByGraph_node8" class="node">
+<title>proc~pt_from_ct_impl</title>
+<g id="a_proc~~pt_from_ct~~CalledByGraph_node8"><a xlink:href="../proc/pt_from_ct_impl.html" xlink:title="pt_from_ct_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="692,-24 595,-24 595,0 692,0 692,-24"/>
+<text text-anchor="middle" x="643.5" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pt_from_ct_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~pt_from_ct_impl&#45;&gt;proc~pt_from_ct -->
+<g id="proc~~pt_from_ct~~CalledByGraph_edge7" class="edge">
+<title>proc~pt_from_ct_impl&#45;&gt;proc~pt_from_ct</title>
+<path fill="none" stroke="#ff0000" d="M692.28,-16.55C706.33,-19.61 721.1,-24.66 733,-33 762.86,-53.92 783.14,-92.28 793.62,-116.39"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="790.44,-117.86 797.51,-125.75 796.91,-115.18 790.44,-117.86"/>
+</g>
+<!-- proc~bulk_forcing_apply -->
+<g id="proc~~pt_from_ct~~CalledByGraph_node9" class="node">
+<title>proc~bulk_forcing_apply</title>
+<g id="a_proc~~pt_from_ct~~CalledByGraph_node9"><a xlink:href="../proc/bulk_forcing_apply.html" xlink:title="bulk_forcing_apply">
+<polygon fill="#d9534f" stroke="#d9534f" points="504.5,-276 392.5,-276 392.5,-252 504.5,-252 504.5,-276"/>
+<text text-anchor="middle" x="448.5" y="-261.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bulk_forcing_apply</text>
+</a>
+</g>
+</g>
+<!-- proc~bulk_forcing_apply&#45;&gt;proc~bulk_forcing_core_impl -->
+<g id="proc~~pt_from_ct~~CalledByGraph_edge8" class="edge">
+<title>proc~bulk_forcing_apply&#45;&gt;proc~bulk_forcing_core_impl</title>
+<path fill="none" stroke="#ff0000" d="M504.55,-264C523.79,-264 545.75,-264 566.41,-264"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="566.43,-267.5 576.43,-264 566.43,-260.5 566.43,-267.5"/>
+</g>
+<!-- proc~fill_temperature_pt -->
+<g id="proc~~pt_from_ct~~CalledByGraph_node10" class="node">
+<title>proc~fill_temperature_pt</title>
+<g id="a_proc~~pt_from_ct~~CalledByGraph_node10"><a xlink:href="../proc/fill_temperature_pt.html" xlink:title="fill_temperature_pt">
+<polygon fill="#d9534f" stroke="#d9534f" points="505,-234 392,-234 392,-210 505,-210 505,-234"/>
+<text text-anchor="middle" x="448.5" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fill_temperature_pt</text>
+</a>
+</g>
+</g>
+<!-- proc~fill_temperature_pt&#45;&gt;proc~fill_temperature_pt_impl -->
+<g id="proc~~pt_from_ct~~CalledByGraph_edge9" class="edge">
+<title>proc~fill_temperature_pt&#45;&gt;proc~fill_temperature_pt_impl</title>
+<path fill="none" stroke="#ffda00" d="M505.06,-222C522.81,-222 542.82,-222 561.97,-222"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="562.2,-225.5 572.2,-222 562.2,-218.5 562.2,-225.5"/>
+</g>
+<!-- proc~ice_compute_basal_flux -->
+<g id="proc~~pt_from_ct~~CalledByGraph_node11" class="node">
+<title>proc~ice_compute_basal_flux</title>
+<g id="a_proc~~pt_from_ct~~CalledByGraph_node11"><a xlink:href="../proc/ice_compute_basal_flux.html" xlink:title="ice_compute_basal_flux">
+<polygon fill="#d9534f" stroke="#d9534f" points="518,-192 379,-192 379,-168 518,-168 518,-192"/>
+<text text-anchor="middle" x="448.5" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_compute_basal_flux</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_compute_basal_flux&#45;&gt;proc~ice_compute_basal_flux_impl -->
+<g id="proc~~pt_from_ct~~CalledByGraph_edge10" class="edge">
+<title>proc~ice_compute_basal_flux&#45;&gt;proc~ice_compute_basal_flux_impl</title>
+<path fill="none" stroke="#48ff00" d="M518.09,-180C528.19,-180 538.73,-180 549.23,-180"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="549.26,-183.5 559.26,-180 549.26,-176.5 549.26,-183.5"/>
+</g>
+<!-- proc~ice_frazil_uptake -->
+<g id="proc~~pt_from_ct~~CalledByGraph_node12" class="node">
+<title>proc~ice_frazil_uptake</title>
+<g id="a_proc~~pt_from_ct~~CalledByGraph_node12"><a xlink:href="../proc/ice_frazil_uptake.html" xlink:title="ice_frazil_uptake">
+<polygon fill="#d9534f" stroke="#d9534f" points="499.5,-150 397.5,-150 397.5,-126 499.5,-126 499.5,-150"/>
+<text text-anchor="middle" x="448.5" y="-135.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_frazil_uptake</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_frazil_uptake&#45;&gt;proc~ice_frazil_uptake_impl -->
+<g id="proc~~pt_from_ct~~CalledByGraph_edge11" class="edge">
+<title>proc~ice_frazil_uptake&#45;&gt;proc~ice_frazil_uptake_impl</title>
+<path fill="none" stroke="#00ff91" d="M499.7,-127.07C523.37,-121.92 551.9,-115.72 577.22,-110.21"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="578.09,-113.6 587.11,-108.05 576.6,-106.76 578.09,-113.6"/>
+</g>
+<!-- proc~ice_frazil_uptake&#45;&gt;proc~ice_frazil_uptake_multicat_impl -->
+<g id="proc~~pt_from_ct~~CalledByGraph_edge12" class="edge">
+<title>proc~ice_frazil_uptake&#45;&gt;proc~ice_frazil_uptake_multicat_impl</title>
+<path fill="none" stroke="#0091ff" d="M499.7,-138C513.26,-138 528.42,-138 543.66,-138"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="543.67,-141.5 553.67,-138 543.67,-134.5 543.67,-141.5"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~pt_from_ct~~CalledByGraph_node13" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~pt_from_ct~~CalledByGraph_node13"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="332.5,-234 255.5,-234 255.5,-210 332.5,-210 332.5,-234"/>
+<text text-anchor="middle" x="294" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~bulk_forcing_apply -->
+<g id="proc~~pt_from_ct~~CalledByGraph_edge13" class="edge">
+<title>proc~engine_step&#45;&gt;proc~bulk_forcing_apply</title>
+<path fill="none" stroke="#ff0000" d="M332.7,-232.38C351.19,-237.48 373.79,-243.7 394.04,-249.28"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="393.18,-252.67 403.75,-251.95 395.04,-245.92 393.18,-252.67"/>
+</g>
+<!-- proc~engine_step_ice -->
+<g id="proc~~pt_from_ct~~CalledByGraph_node14" class="node">
+<title>proc~engine_step_ice</title>
+<g id="a_proc~~pt_from_ct~~CalledByGraph_node14"><a xlink:href="../proc/engine_step_ice.html" xlink:title="engine_step_ice">
+<polygon fill="#d9534f" stroke="#d9534f" points="343,-192 245,-192 245,-168 343,-168 343,-192"/>
+<text text-anchor="middle" x="294" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step_ice</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step_ice&#45;&gt;proc~ice_compute_basal_flux -->
+<g id="proc~~pt_from_ct~~CalledByGraph_edge14" class="edge">
+<title>proc~engine_step_ice&#45;&gt;proc~ice_compute_basal_flux</title>
+<path fill="none" stroke="#00ffff" d="M343.25,-180C351.41,-180 360.05,-180 368.75,-180"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="368.95,-183.5 378.95,-180 368.95,-176.5 368.95,-183.5"/>
+</g>
+<!-- proc~engine_step_ice&#45;&gt;proc~ice_frazil_uptake -->
+<g id="proc~~pt_from_ct~~CalledByGraph_edge15" class="edge">
+<title>proc~engine_step_ice&#45;&gt;proc~ice_frazil_uptake</title>
+<path fill="none" stroke="#7f00ff" d="M338.7,-167.96C355.93,-163.22 375.89,-157.72 393.97,-152.74"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="395.08,-156.07 403.79,-150.04 393.22,-149.32 395.08,-156.07"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~pt_from_ct~~CalledByGraph_node15" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~pt_from_ct~~CalledByGraph_node15"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="209,-234 103,-234 103,-210 209,-210 209,-234"/>
+<text text-anchor="middle" x="156" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~pt_from_ct~~CalledByGraph_edge16" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M209.19,-222C220.89,-222 233.25,-222 244.78,-222"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="245.09,-225.5 255.09,-222 245.09,-218.5 245.09,-225.5"/>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step_ice -->
+<g id="proc~~pt_from_ct~~CalledByGraph_edge18" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step_ice</title>
+<path fill="none" stroke="#00ffff" d="M195.97,-209.96C211.05,-205.31 228.48,-199.93 244.36,-195.02"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="245.5,-198.33 254.02,-192.04 243.43,-191.64 245.5,-198.33"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~pt_from_ct~~CalledByGraph_node16" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~pt_from_ct~~CalledByGraph_node16"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="204.5,-192 107.5,-192 107.5,-168 204.5,-168 204.5,-192"/>
+<text text-anchor="middle" x="156" y="-177.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~pt_from_ct~~CalledByGraph_edge17" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M195.97,-192.04C211.44,-196.81 229.38,-202.35 245.59,-207.36"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="244.84,-210.79 255.43,-210.4 246.91,-204.1 244.84,-210.79"/>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step_ice -->
+<g id="proc~~pt_from_ct~~CalledByGraph_edge19" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step_ice</title>
+<path fill="none" stroke="#00ffff" d="M204.57,-180C214.23,-180 224.5,-180 234.5,-180"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="234.77,-183.5 244.77,-180 234.77,-176.5 234.77,-183.5"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~pt_from_ct~~CalledByGraph_node17" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~pt_from_ct~~CalledByGraph_node17"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="67,-234 0,-234 0,-210 67,-210 67,-234"/>
+<text text-anchor="middle" x="33.5" y="-219.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~pt_from_ct~~CalledByGraph_edge20" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M67.11,-222C75.11,-222 83.94,-222 92.83,-222"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="92.85,-225.5 102.85,-222 92.85,-218.5 92.85,-225.5"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocpt_from_ctCalledByGraph = svgPanZoom('#procpt_from_ctCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 27.51" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.86 0.86) rotate(0) translate(4 28)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-28 741.5,-28 741.5,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="70,-24 0,-24 0,0 70,0 70,-24"/>
+<text text-anchor="middle" x="35" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="146,-24 88,-24 88,0 146,0 146,-24"/>
+<text text-anchor="middle" x="117" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="225.5,-24 164.5,-24 164.5,0 225.5,0 225.5,-24"/>
+<text text-anchor="middle" x="195" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="374,-24 244,-24 244,0 374,0 374,-24"/>
+<text text-anchor="middle" x="309" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="537.5,-24 392.5,-24 392.5,0 537.5,0 537.5,-24"/>
+<text text-anchor="middle" x="465" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="614,-24 556,-24 556,0 614,0 614,-24"/>
+<text text-anchor="middle" x="585" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="737.5,-24 632.5,-24 632.5,0 737.5,0 737.5,-24"/>
+<text text-anchor="middle" x="685" y="-9.6" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-a5ct"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>a5ct</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-b3ct"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>b3ct</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ct_diff"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ct_diff</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ct_factor"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ct_factor</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dpt_dct"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dpt_dct</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-pt_num"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>pt_num</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-pt_old"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>pt_old</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-pt_recden"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>pt_recden</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ptm"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ptm</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s1~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s1</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure elemental function </span><span class="n">pt_from_ct</span><span class="p">(</span><span class="n">sa</span><span class="p">,</span><span class="w"> </span><span class="n">ct</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">pt</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Potential temperature (p_ref=0) from Conservative Temperature --</span>
+<span class="w">      </span><span class="c">!! the modified Newton-Raphson ("Newton-McDougall") method, 1.5</span>
+<span class="w">      </span><span class="c">!! iterations fixed (McDougall &amp; Barker 2011; GSW `gsw_pt_from_ct`):</span>
+<span class="w">      </span><span class="c">!! a rational initial guess, one full Newton step with the cheap</span>
+<span class="w">      </span><span class="c">!! analytic `dpt/dct` from the guess itself, then one more step</span>
+<span class="w">      </span><span class="c">!! using the expensive-but-exact `dpt/dct = -cp0/((pt+T0)*gibbs_tt)`</span>
+<span class="w">      </span><span class="c">!! evaluated at the midpoint.  Fixed iteration count, no</span>
+<span class="w">      </span><span class="c">!! data-dependent loop -- device-callable.</span>
+<span class="w">      </span><span class="c">!$acc routine seq</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sa</span><span class="w">  </span><span class="c">!! Reference/Absolute Salinity (g/kg).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ct</span><span class="w">  </span><span class="c">!! Conservative Temperature (degC).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">pt</span><span class="w">  </span><span class="c">!! Potential temperature, p_ref=0 (degC).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">s1</span><span class="p">,</span><span class="w"> </span><span class="n">a5ct</span><span class="p">,</span><span class="w"> </span><span class="n">b3ct</span><span class="p">,</span><span class="w"> </span><span class="n">ct_factor</span><span class="p">,</span><span class="w"> </span><span class="n">pt_num</span><span class="p">,</span><span class="w"> </span><span class="n">pt_recden</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">pt_old</span><span class="p">,</span><span class="w"> </span><span class="n">ptm</span><span class="p">,</span><span class="w"> </span><span class="n">dpt_dct</span><span class="p">,</span><span class="w"> </span><span class="n">ct_diff</span>
+
+<span class="w">      </span><span class="n">s1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sa</span><span class="o">/</span><span class="n">SR_FACTOR</span>
+
+<span class="w">      </span><span class="n">a5ct</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">PA5</span><span class="o">*</span><span class="n">ct</span>
+<span class="w">      </span><span class="n">b3ct</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">PB3</span><span class="o">*</span><span class="n">ct</span>
+<span class="w">      </span><span class="n">ct_factor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">PA3</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">PA4</span><span class="o">*</span><span class="n">s1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">a5ct</span>
+<span class="w">      </span><span class="n">pt_num</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">PA0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">s1</span><span class="o">*</span><span class="p">(</span><span class="n">PA1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">PA2</span><span class="o">*</span><span class="n">s1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ct</span><span class="o">*</span><span class="n">ct_factor</span>
+<span class="w">      </span><span class="n">pt_recden</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="p">(</span><span class="n">PB0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">PB1</span><span class="o">*</span><span class="n">s1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ct</span><span class="o">*</span><span class="p">(</span><span class="n">PB2</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">b3ct</span><span class="p">))</span>
+<span class="w">      </span><span class="n">pt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pt_num</span><span class="o">*</span><span class="n">pt_recden</span>
+<span class="w">      </span><span class="n">dpt_dct</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">ct_factor</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">a5ct</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">PB2</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">b3ct</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">b3ct</span><span class="p">)</span><span class="o">*</span><span class="n">pt</span><span class="p">)</span><span class="o">*</span><span class="n">pt_recden</span>
+
+<span class="w">      </span><span class="c">! --- 1st (cheap) Newton-McDougall step ---</span>
+<span class="w">      </span><span class="n">ct_diff</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ct_from_pt</span><span class="p">(</span><span class="n">sa</span><span class="p">,</span><span class="w"> </span><span class="n">pt</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ct</span>
+<span class="w">      </span><span class="n">pt_old</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pt</span>
+<span class="w">      </span><span class="n">pt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pt_old</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ct_diff</span><span class="o">*</span><span class="n">dpt_dct</span>
+<span class="w">      </span><span class="n">ptm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">pt</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">pt_old</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! --- 0.5 (exact) Newton-McDougall step at the midpoint ---</span>
+<span class="w">      </span><span class="n">dpt_dct</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="n">CP0</span><span class="o">/</span><span class="p">((</span><span class="n">ptm</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">T0_KELVIN</span><span class="p">)</span><span class="o">*</span><span class="n">gibbs_pt0_pt0</span><span class="p">(</span><span class="n">sa</span><span class="p">,</span><span class="w"> </span><span class="n">ptm</span><span class="p">))</span>
+<span class="w">      </span><span class="n">pt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pt_old</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ct_diff</span><span class="o">*</span><span class="n">dpt_dct</span>
+<span class="w">      </span><span class="n">ct_diff</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ct_from_pt</span><span class="p">(</span><span class="n">sa</span><span class="p">,</span><span class="w"> </span><span class="n">pt</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ct</span>
+<span class="w">      </span><span class="n">pt_old</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pt</span>
+<span class="w">      </span><span class="n">pt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pt_old</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">ct_diff</span><span class="o">*</span><span class="n">dpt_dct</span>
+<span class="w">   </span><span class="k">end function </span><span class="n">pt_from_ct</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-06 22:39 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>
