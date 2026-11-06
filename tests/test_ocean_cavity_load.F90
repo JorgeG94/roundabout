@@ -135,7 +135,7 @@ module test_ocean_cavity_load
    !! 4.5e-4 m/s).  The truncation gate `cavity_resting_sloping_lid_
    !! stratified` therefore pins the legacy split — the quantity its
    !! formula describes is the deviation from the depth mean.
-   use, intrinsic :: iso_c_binding, only: c_ptr, c_int, c_null_ptr, c_f_pointer
+   use, intrinsic :: iso_c_binding, only: c_ptr, c_int, c_double, c_null_ptr, c_f_pointer
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp, GRAVITY
@@ -331,7 +331,7 @@ contains
       type(c_ptr) :: handle, ptr
       integer(c_int) :: status, nx, ny, nz, gen, nxp, nyp, nzp, ngc
       real(wp), pointer :: h3(:, :, :), b2(:, :), u3(:, :, :), v3(:, :, :)
-      real(wp), allocatable :: tval(:, :, :)
+      real(c_double), allocatable :: tval(:, :, :)
       character(len=:), allocatable :: nml
       integer :: i, j, k, ng
       real(wp) :: e_low, z_ctr, num, den, hf, ubar, ubt_s, ubc_s

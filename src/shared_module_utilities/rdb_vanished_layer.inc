@@ -154,8 +154,10 @@
          !! Its donor's concentration (`0` for a column with no live layer).
       real(wp), intent(in) :: c_scale
          !! Largest `|c|` among the column's live layers (`0` if none).
+      ! 1e-12 in double; floored at 8 eps so a single-precision wp (eps ~ 1e-7)
+      ! is not asked for better than its own round-off.
       rdb_vl_holds_live_conc = abs(hTr - h*c_live) <= &
-                               1.0e-12_wp*h*max(abs(c_live), c_scale)
+                               max(1.0e-12_wp, 8.0_wp*epsilon(1.0_wp))*h*max(abs(c_live), c_scale)
    end function rdb_vl_holds_live_conc
 
    pure subroutine rdb_vl_column_conc(nz, h_col, q_col, c_col)

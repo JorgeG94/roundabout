@@ -20,7 +20,7 @@ module rdb_coriolis_adv
    use rdb_scratch_3d, only: scratch_3d_buffer_t, &
                              scratch_3d_buffer_enter_data_impl, &
                              scratch_3d_buffer_exit_data_impl
-   use, intrinsic :: iso_fortran_env, only: int64
+   use, intrinsic :: iso_fortran_env, only: int64, real64
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_mem_report, only: arr_bytes
    implicit none
@@ -108,8 +108,10 @@ module rdb_coriolis_adv
       !! `|b| <= PV_WENO_EPS_REL*tau` is treated as degenerate (that stencil
       !! dominates, factor -> PV_WENO_FAC_DEGEN).  Matches MOM6's implicit
       !! (no additive-epsilon) WENO-Z regulariser exactly.
-   real(wp), parameter :: PV_WENO_FAC_DEGEN = 1.0e40_wp
-      !! Degenerate-stencil nonlinear factor (MOM6's literal `1.0e40`).
+   real(wp), parameter :: PV_WENO_FAC_DEGEN = &
+                          real(min(1.0e40_real64, sqrt(real(huge(1.0_wp), real64))), wp)
+      !! Degenerate-stencil nonlinear factor (MOM6's literal `1.0e40`; capped at
+      !! `sqrt(huge)` when `wp` is single, where 1e40 overflows).
 
    real(wp), parameter :: CORIOLIS_H_MIN_PV = 1.0e-12_wp
       !! Floor for the corner-h divide in the PV construction (shared by the

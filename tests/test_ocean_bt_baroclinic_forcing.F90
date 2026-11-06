@@ -52,7 +52,7 @@ module test_ocean_bt_baroclinic_forcing
    !! `c = sqrt(g H)` and `k = 2*pi/L` (0.14 % here).  The asserted
    !! tolerance is `(c*k*dt)^2 + 1e-3`; the legacy split gives a ratio of
    !! ZERO to round-off, which is the fails-before half, kept as a control.
-   use, intrinsic :: iso_c_binding, only: c_ptr, c_int, c_null_ptr, c_f_pointer
+   use, intrinsic :: iso_c_binding, only: c_ptr, c_int, c_double, c_null_ptr, c_f_pointer
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp, GRAVITY
@@ -137,7 +137,8 @@ contains
       type(c_ptr) :: handle, ptr
       integer(c_int) :: status, nx, ny, nz, gen, nxp, nyp, nzp, ngc
       real(wp), pointer :: r3(:, :, :), h3(:, :, :), u3(:, :, :)
-      real(wp), allocatable :: tval(:, :, :), accel(:, :)
+      real(c_double), allocatable :: tval(:, :, :)
+      real(wp), allocatable :: accel(:, :)
       character(len=:), allocatable :: nml
       integer :: i, j, k, ng
       real(wp) :: num, den, hf, ubar, r

@@ -36,7 +36,7 @@ module rdb_ocean_wave_speed
    use rdb_remap_column, only: remap_column_plm
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_ocean_metrics, only: ocean_metrics_t
-   use, intrinsic :: iso_fortran_env, only: int64
+   use, intrinsic :: iso_fortran_env, only: int64, real64
    use rdb_mem_report, only: arr_bytes
    implicit none
    private
@@ -66,7 +66,8 @@ module rdb_ocean_wave_speed
       !! Fixed inverse-iteration count for the EBT eigenvector.
    real(wp), parameter :: EBT_SHIFT = 1.0e-6_wp
       !! Inverse-iteration shift sits at `lambda*(1 - EBT_SHIFT)`.
-   real(wp), parameter :: EBT_PIVMIN = 1.0e-100_wp
+   real(wp), parameter :: EBT_PIVMIN = &
+                          real(max(1.0e-100_real64, 1.0e3_real64*tiny(1.0_wp)), wp)
       !! Pivot floor in the EBT Sturm count.
    integer, parameter :: MAX_DBL = 128
       !! Cap on the Sturm-count doubling prelude (data-dependent trip

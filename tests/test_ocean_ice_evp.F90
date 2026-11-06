@@ -1264,7 +1264,8 @@ contains
    subroutine test_mi_ratio_harmonic(error)
       type(error_type), allocatable, intent(out) :: error
       real(wp), parameter :: AREA = 25000.0_wp*25000.0_wp
-      real(wp), parameter :: M_NEGLECT = 905.0_wp*1.0e-30_wp
+      ! Floored so M_NEGLECT**4 stays representable when wp is single.
+      real(wp), parameter :: M_NEGLECT = max(905.0_wp*1.0e-30_wp, 10.0_wp*sqrt(sqrt(tiny(1.0_wp))))
       real(wp) :: m2, m4, ratio, sum_area
 
       m2 = M_NEGLECT*M_NEGLECT
