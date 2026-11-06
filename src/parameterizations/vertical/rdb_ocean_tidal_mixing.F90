@@ -255,7 +255,7 @@ contains
       !! capped at `f_max*h` (`h` the live column depth).  A degenerate
       !! column (U, <h^2>, N_b or Nbar^2 not positive) returns the cap.
       !! `!$acc routine seq` so the column kernel may call it on device.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: u, h2, n_b, nbar2, h
          !! RMS tidal speed (m/s), roughness variance (m^2), near-bed N
          !! (s^-1), column-mean N^2 (s^-2), column depth (m).
@@ -323,19 +323,19 @@ contains
    subroutine ocean_tidal_mixing_enter_data_impl(this)
       type(ocean_tidal_mixing_t), intent(inout) :: this
       if (allocated(this%e_in)) then
-         !$acc enter data copyin(this%e_in)
+         !$omp target enter data map(to: this%e_in)
       end if
       if (allocated(this%tideamp)) then
-         !$acc enter data copyin(this%tideamp)
+         !$omp target enter data map(to: this%tideamp)
       end if
       if (allocated(this%h2)) then
-         !$acc enter data copyin(this%h2)
+         !$omp target enter data map(to: this%h2)
       end if
       if (allocated(this%c_e)) then
-         !$acc enter data copyin(this%c_e)
+         !$omp target enter data map(to: this%c_e)
       end if
       if (allocated(this%kd_int)) then
-         !$acc enter data copyin(this%kd_int)
+         !$omp target enter data map(to: this%kd_int)
       end if
    end subroutine ocean_tidal_mixing_enter_data_impl
 
@@ -350,19 +350,19 @@ contains
    subroutine ocean_tidal_mixing_exit_data_impl(this)
       type(ocean_tidal_mixing_t), intent(inout) :: this
       if (allocated(this%kd_int)) then
-         !$acc exit data delete(this%kd_int)
+         !$omp target exit data map(delete: this%kd_int)
       end if
       if (allocated(this%c_e)) then
-         !$acc exit data delete(this%c_e)
+         !$omp target exit data map(delete: this%c_e)
       end if
       if (allocated(this%h2)) then
-         !$acc exit data delete(this%h2)
+         !$omp target exit data map(delete: this%h2)
       end if
       if (allocated(this%tideamp)) then
-         !$acc exit data delete(this%tideamp)
+         !$omp target exit data map(delete: this%tideamp)
       end if
       if (allocated(this%e_in)) then
-         !$acc exit data delete(this%e_in)
+         !$omp target exit data map(delete: this%e_in)
       end if
    end subroutine ocean_tidal_mixing_exit_data_impl
 
@@ -484,7 +484,7 @@ contains
       !! the surface for the EOS in-situ derivatives.  The surface layer
       !! (`k = nz`) has no overlying layer, so `n2_col(nz) = 0`.  Clamped
       !! `>= 0`.  `h_col` must already be floored at `H_VANISHED`.
-      !$acc routine seq
+      !$omp declare target
       type(eos_t), intent(in) :: eos
       real(wp), intent(in) :: rho0
       integer, intent(in) :: nz

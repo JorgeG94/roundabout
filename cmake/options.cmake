@@ -14,7 +14,7 @@ option(RDB_ENABLE_THREADS
 # consumed via the auto-regenerated `auto/dc-openmp` branch, which sets this and
 # applies the overlay patches under patches/openmp/.
 set(RDB_PARALLEL_BACKEND
-    "openacc"
+    "openmp"
     CACHE STRING "Parallel backend: openacc | openmp (advanced; leave default)")
 set_property(CACHE RDB_PARALLEL_BACKEND PROPERTY STRINGS openacc openmp)
 mark_as_advanced(RDB_PARALLEL_BACKEND)

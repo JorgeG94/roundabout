@@ -157,32 +157,32 @@ contains
    subroutine ocean_bbl_mixing_enter_data(this)
       class(ocean_bbl_mixing_t), intent(inout) :: this
       if (allocated(this%ustar_bbl)) then
-         !$acc enter data copyin(this%ustar_bbl)
+         !$omp target enter data map(to: this%ustar_bbl)
       end if
       if (allocated(this%ke_loss_bbl)) then
-         !$acc enter data copyin(this%ke_loss_bbl)
+         !$omp target enter data map(to: this%ke_loss_bbl)
       end if
       if (allocated(this%f_abs_h)) then
-         !$acc enter data copyin(this%f_abs_h)
+         !$omp target enter data map(to: this%f_abs_h)
       end if
       if (allocated(this%kd_int)) then
-         !$acc enter data copyin(this%kd_int)
+         !$omp target enter data map(to: this%kd_int)
       end if
    end subroutine ocean_bbl_mixing_enter_data
 
    subroutine ocean_bbl_mixing_exit_data(this)
       class(ocean_bbl_mixing_t), intent(inout) :: this
       if (allocated(this%kd_int)) then
-         !$acc exit data delete(this%kd_int)
+         !$omp target exit data map(delete: this%kd_int)
       end if
       if (allocated(this%f_abs_h)) then
-         !$acc exit data delete(this%f_abs_h)
+         !$omp target exit data map(delete: this%f_abs_h)
       end if
       if (allocated(this%ke_loss_bbl)) then
-         !$acc exit data delete(this%ke_loss_bbl)
+         !$omp target exit data map(delete: this%ke_loss_bbl)
       end if
       if (allocated(this%ustar_bbl)) then
-         !$acc exit data delete(this%ustar_bbl)
+         !$omp target exit data map(delete: this%ustar_bbl)
       end if
    end subroutine ocean_bbl_mixing_exit_data
 
@@ -360,7 +360,7 @@ contains
       !! surface up to round-off).  `kd_max` enters only the unstratified
       !! branch; the stratified branch is the wall law scaled by
       !! `used/need`.
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nz, kbed
       real(wp), intent(in) :: h(nz), n2(nz)
       real(wp), intent(in) :: ustar, f_abs, tke_col, max_decay, omega2

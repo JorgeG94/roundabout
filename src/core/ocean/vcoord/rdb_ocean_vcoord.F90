@@ -574,12 +574,12 @@ contains
    subroutine ocean_vcoord_enter_data_impl(this)
       type(ocean_vcoord_t), intent(inout) :: this
       if (.not. this%is_init) return
-      !$acc enter data copyin(this%dsig, this%z_ref_global, this%target_h, this%z_ref)
-      !$acc enter data copyin(this%z_top)
-      !$acc enter data copyin(this%z_fixed_zi, this%z_fixed_dz)
-      !$acc enter data copyin(this%rho_target)
-      !$acc enter data copyin(this%remap_total_h, this%remap_h_ref, this%remap_h_old)
-      !$acc enter data copyin(this%remap_conc_t, this%remap_conc_s)
+      !$omp target enter data map(to: this%dsig, this%z_ref_global, this%target_h, this%z_ref)
+      !$omp target enter data map(to: this%z_top)
+      !$omp target enter data map(to: this%z_fixed_zi, this%z_fixed_dz)
+      !$omp target enter data map(to: this%rho_target)
+      !$omp target enter data map(to: this%remap_total_h, this%remap_h_ref, this%remap_h_old)
+      !$omp target enter data map(to: this%remap_conc_t, this%remap_conc_s)
    end subroutine ocean_vcoord_enter_data_impl
 
    subroutine ocean_vcoord_exit_data(this)
@@ -593,12 +593,12 @@ contains
    subroutine ocean_vcoord_exit_data_impl(this)
       type(ocean_vcoord_t), intent(inout) :: this
       if (.not. this%is_init) return
-      !$acc exit data delete(this%remap_conc_t, this%remap_conc_s)
-      !$acc exit data delete(this%remap_h_old, this%remap_h_ref, this%remap_total_h)
-      !$acc exit data delete(this%rho_target)
-      !$acc exit data delete(this%z_fixed_zi, this%z_fixed_dz)
-      !$acc exit data delete(this%z_top)
-      !$acc exit data delete(this%z_ref, this%target_h, this%z_ref_global, this%dsig)
+      !$omp target exit data map(delete: this%remap_conc_t, this%remap_conc_s)
+      !$omp target exit data map(delete: this%remap_h_old, this%remap_h_ref, this%remap_total_h)
+      !$omp target exit data map(delete: this%rho_target)
+      !$omp target exit data map(delete: this%z_fixed_zi, this%z_fixed_dz)
+      !$omp target exit data map(delete: this%z_top)
+      !$omp target exit data map(delete: this%z_ref, this%target_h, this%z_ref_global, this%dsig)
    end subroutine ocean_vcoord_exit_data_impl
 
    pure subroutine ocean_vcoord_build_zref_full(this, h_bed)
@@ -2222,7 +2222,7 @@ contains
       !! `ocean_vcoord_compute_target_h_rho_impl`) — the per-thread body of
       !! `ocean_vcoord_rho_target`.  Same module as its caller (the
       !! project rule for `!$acc routine seq` callees of a `do concurrent`).
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in), value :: i
          !! Column i-index.
       integer, intent(in), value :: j
@@ -2528,7 +2528,7 @@ contains
       !! inversion).  Lightest
       !! target maps to the surface (index 2), densest to the bed (the
       !! surface→bed ordering the callers FLIP into the bottom-up state).
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in)  :: nk
       integer, intent(in)  :: n_int
       real(wp), intent(in)  :: hc(nk)

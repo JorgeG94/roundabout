@@ -117,13 +117,13 @@ contains
       !! directive here is an inert no-op on a host build.
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_top_drag_t), intent(inout) :: td
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(td)
+      !$omp target enter data map(to: td)
       call td%enter_data()
-      !$acc update device(ms%u_face_x_layer, ms%v_face_y_layer, &
-      !$acc               ms%h_layer, ms%wet_mask)
-      !$acc update device(td%cover_u, td%cover_v, td%cover_t)
+      !$omp target update to(ms%u_face_x_layer, ms%v_face_y_layer, &
+      !$omp               ms%h_layer, ms%wet_mask)
+      !$omp target update to(td%cover_u, td%cover_v, td%cover_t)
    end subroutine map_in
 
    subroutine map_out(ms, td)
@@ -132,12 +132,12 @@ contains
       !! descriptors with device addresses).
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_top_drag_t), intent(inout) :: td
-      !$acc update self(ms%u_face_x_layer, ms%v_face_y_layer)
-      !$acc update self(td%du_drag%data, td%dv_drag%data, td%stress_top)
+      !$omp target update from(ms%u_face_x_layer, ms%v_face_y_layer)
+      !$omp target update from(td%du_drag%data, td%dv_drag%data, td%stress_top)
       call td%exit_data()
-      !$acc exit data delete(td)
+      !$omp target exit data map(delete: td)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out
 
    ! ------------------------------------------------------------------
@@ -292,14 +292,14 @@ contains
             ms_t%u_face_x_layer(:, :, NZ + 1 - k) = U_BOT(k)
          end do
 
-         !$acc enter data copyin(ms_b)
+         !$omp target enter data map(to: ms_b)
          call ms_b%enter_data()
-         !$acc enter data copyin(bd)
+         !$omp target enter data map(to: bd)
          call bd%enter_data()
-         !$acc update device(ms_b%u_face_x_layer, ms_b%v_face_y_layer, &
-         !$acc               ms_b%h_layer, ms_b%wet_mask)
+         !$omp target update to(ms_b%u_face_x_layer, ms_b%v_face_y_layer, &
+         !$omp               ms_b%h_layer, ms_b%wet_mask)
          call ocean_bottom_drag_compute_tendencies(grid, bd, ms_b, DT)
-         !$acc update self(bd%du_drag%data)
+         !$omp target update from(bd%du_drag%data)
 
          call map_in(ms_t, td)
          call ocean_top_drag_compute_tendencies(td, ms_t, DT)
@@ -322,9 +322,9 @@ contains
 
       end block checks
       call bd%exit_data()
-      !$acc exit data delete(bd)
+      !$omp target exit data map(delete: bd)
       call ms_b%exit_data()
-      !$acc exit data delete(ms_b)
+      !$omp target exit data map(delete: ms_b)
       call bd%destroy(); call td%destroy()
       call ms_b%destroy(); call ms_t%destroy()
    end subroutine test_mirror_of_bottom
@@ -498,7 +498,7 @@ contains
          do step = 1, N_STEPS
             call ocean_top_drag_compute_tendencies(td, ms, DT)
             call ocean_top_drag_apply_tendencies(td, ms, DT)
-            !$acc update self(ms%u_face_x_layer)
+            !$omp target update from(ms%u_face_x_layer)
             u_now = ms%u_face_x_layer(nx/2, ny/2, NZ)
             if (.not. (abs(u_now) < abs(u_prev))) monotone = .false.
             if (u_now*U0 <= 0.0_wp) same_sign = .false.
@@ -805,7 +805,7 @@ contains
          ms%u_face_x_layer(:, :, NZ) = U0
 
          call map_in(ms, td)
-         !$acc enter data copyin(vd)
+         !$omp target enter data map(to: vd)
          call vd%enter_data()
          ! Fill lambda_top from the SAME kernel the production path uses,
          ! then let the vdiff solve consume it.
@@ -815,7 +815,7 @@ contains
                                    lambda_top_v=td%lambda_top_v, &
                                    cover_u=td%cover_u, cover_v=td%cover_v)
          call vd%exit_data()
-         !$acc exit data delete(vd)
+         !$omp target exit data map(delete: vd)
          call map_out(ms, td)
 
          lambda = CD*U0/H
@@ -889,18 +889,18 @@ contains
          allocate (tau_u(nx + 1, ny), source=TAU)
          allocate (tau_v(nx, ny + 1), source=0.0_wp)
          call map_in(ms, td)
-         !$acc enter data copyin(vd)
+         !$omp target enter data map(to: vd)
          call vd%enter_data()
-         !$acc enter data copyin(tau_u, tau_v)
+         !$omp target enter data map(to: tau_u, tau_v)
          call ocean_top_drag_compute_tendencies(td, ms, DT)
          call vdiff_apply_momentum(grid, vd, ms, DT, &
                                    tau_u=tau_u, tau_v=tau_v, rho0=RHO0, &
                                    lambda_top_u=td%lambda_top_u, &
                                    lambda_top_v=td%lambda_top_v, &
                                    cover_u=td%cover_u, cover_v=td%cover_v)
-         !$acc exit data delete(tau_u, tau_v)
+         !$omp target exit data map(delete: tau_u, tau_v)
          call vd%exit_data()
-         !$acc exit data delete(vd)
+         !$omp target exit data map(delete: vd)
          call map_out(ms, td)
 
          u_open = ms%u_face_x_layer(i0 + 3, j_p, NZ)

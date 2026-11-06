@@ -88,13 +88,13 @@ contains
 
    subroutine regrid_weights_enter_data(this)
       class(regrid_weights_t), intent(inout) :: this
-      !$acc enter data copyin(this%idx_i, this%idx_j, this%w)
+      !$omp target enter data map(to: this%idx_i, this%idx_j, this%w)
       this%on_device = .true.
    end subroutine regrid_weights_enter_data
 
    subroutine regrid_weights_exit_data(this)
       class(regrid_weights_t), intent(inout) :: this
-      !$acc exit data delete(this%idx_i, this%idx_j, this%w)
+      !$omp target exit data map(delete: this%idx_i, this%idx_j, this%w)
       this%on_device = .false.
    end subroutine regrid_weights_exit_data
 

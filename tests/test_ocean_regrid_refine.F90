@@ -444,16 +444,16 @@ contains
          allocate (bt_eta(nx_t, ny_t), source=0.0_wp)
          allocate (bt_H_ref(nx_t, ny_t), source=H_TOTAL)
 
-         !$acc enter data copyin(ms, vc, bt_eta, bt_H_ref)
+         !$omp target enter data map(to: ms, vc, bt_eta, bt_H_ref)
          call ms%enter_data()
          call vc%enter_data()
          call ocean_apply_ale_remap_step(grid, vc, ms, bt_eta, bt_H_ref, &
                                          method=REMAP_PPM, dt=DT)
-         !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
-         !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
+         !$omp target update from(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
+         !$omp target update from(ms%tracers(ms%idx_temperature)%hTr)
          call vc%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, vc, bt_eta, bt_H_ref)
+         !$omp target exit data map(delete: ms, vc, bt_eta, bt_H_ref)
 
          finite = .true.
          do k = 1, NZ

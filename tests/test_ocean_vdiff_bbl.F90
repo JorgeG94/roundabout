@@ -99,9 +99,9 @@ contains
    subroutine map_in(ms, vd)
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_vdiff_t), intent(inout) :: vd
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(vd)
+      !$omp target enter data map(to: vd)
       call vd%enter_data()
    end subroutine map_in
 
@@ -109,9 +109,9 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_vdiff_t), intent(inout) :: vd
       call vd%exit_data()
-      !$acc exit data delete(vd)
+      !$omp target exit data map(delete: vd)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out
 
    ! -----------------------------------------------------------------
@@ -558,7 +558,7 @@ contains
       call vdiff_bbl_configure(vd, grid%nx_total, grid%ny_total, nz, form, cd, r_lin, &
                                10.0_wp, bg, 0.0_wp, .false., RHO0, 1.0e-4_wp)
       call map_in(ms, vd)
-      !$acc enter data copyin(f_c)
+      !$omp target enter data map(to: f_c)
    end subroutine bbl_case
 
    subroutine test_set_bbl_unstratified(error)
@@ -581,7 +581,7 @@ contains
       call bbl_case(grid, ms, vd, eos, f_c, 3, [100.0_wp, 100.0_wp, 100.0_wp], &
                     [5.0_wp, 5.0_wp, 5.0_wp], U0, F0, BBL_FORM_QUADRATIC, CD, 0.0_wp, BG)
       call vdiff_set_viscous_bbl(grid, vd, ms, eos, f_c)
-      !$acc update self(vd%kv_bbl_u, vd%bbl_thick_u, vd%kv_bbl_v, vd%bbl_thick_v)
+      !$omp target update from(vd%kv_bbl_u, vd%bbl_thick_u, vd%kv_bbl_v, vd%bbl_thick_v)
       ustar = sqrt(CD)*sqrt(U0*U0 + BG*BG)
       thick = 300.0_wp/(0.5_wp + sqrt(0.25_wp + (300.0_wp*2.0_wp*F0/ustar)**2))
       kv = sqrt(CD)*ustar*thick
@@ -596,7 +596,7 @@ contains
       if (.not. allocated(error)) &
          call check(error, abs(vd%kv_bbl_v(i, j + 1) - kv)/kv < 1.0e-12_wp, &
                     "unstratified: kv_bbl_v must use the transverse speed (set_u_at_v)")
-      !$acc exit data delete(f_c)
+      !$omp target exit data map(delete: f_c)
       call map_out(ms, vd)
       call vd%destroy()
       call ms%destroy()
@@ -622,7 +622,7 @@ contains
       call bbl_case(grid, ms, vd, eos, f_c, 2, [100.0_wp, 100.0_wp], [0.0_wp, 10.0_wp], &
                     0.0_wp, 0.0_wp, BBL_FORM_QUADRATIC, CD, 0.0_wp, BG)
       call vdiff_set_viscous_bbl(grid, vd, ms, eos, f_c)
-      !$acc update self(vd%kv_bbl_u, vd%bbl_thick_u)
+      !$omp target update from(vd%kv_bbl_u, vd%bbl_thick_u)
       ustar = sqrt(CD)*BG
       ustarsq = 400.0_wp*RHO0/GRAVITY*ustar*ustar
       press = RHO0*GRAVITY*200.0_wp
@@ -638,7 +638,7 @@ contains
       if (.not. allocated(error)) &
          call check(error, abs(vd%kv_bbl_u(i, j) - sqrt(CD)*ustar*h_n)/(sqrt(CD)*ustar*h_n) &
                     < 1.0e-10_wp, "stratified: kv_bbl_u /= sqrt(cd)*u*·h_N")
-      !$acc exit data delete(f_c)
+      !$omp target exit data map(delete: f_c)
       call map_out(ms, vd)
       call vd%destroy()
       call ms%destroy()
@@ -669,7 +669,7 @@ contains
       vd%K_v_momentum = 0.0_wp
       call vdiff_set_viscous_bbl(grid, vd, ms, eos, f_c)
       call vdiff_apply_momentum(grid, vd, ms, DT, rho0=RHO0)
-      !$acc exit data delete(f_c)
+      !$omp target exit data map(delete: f_c)
       call map_out(ms, vd)
       kv = CD*sqrt(U0*U0 + BG*BG)*H
       u_expect = U0/(1.0_wp + DT*kv/(H*0.5_wp*H))

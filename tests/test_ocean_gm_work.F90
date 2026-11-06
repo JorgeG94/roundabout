@@ -126,11 +126,11 @@ contains
       uhD(2, 1, 2) = flux_top
       uhD(2, 1, 1) = -flux_top
       src = 0.0_wp
-      !$acc enter data copyin(areaT, h, bathy, t, s, uhD, vhD, ou, ov, src)
+      !$omp target enter data map(to: areaT, h, bathy, t, s, uhD, vhD, ou, ov, src)
       call gm_work_source_impl(2, 1, 2, eos, RHO0, .false., areaT, h, bathy, t, s, &
                                uhD, vhD, ou, ov, src)
-      !$acc update self(src)
-      !$acc exit data delete(areaT, h, bathy, t, s, uhD, vhD, ou, ov, src)
+      !$omp target update from(src)
+      !$omp target exit data map(delete: areaT, h, bathy, t, s, uhD, vhD, ou, ov, src)
    end subroutine two_column_src
 
    ! ------------------------------------------------------------------
@@ -290,14 +290,14 @@ contains
       end do
       allocate (cg1(nxt, nyt), source=cg1_val)
 
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
       call sl%set_bathymetry(sum(ms%h_layer, dim=3))
-      !$acc enter data copyin(sl)
+      !$omp target enter data map(to: sl)
       call sl%enter_data()
-      !$acc enter data copyin(gm)
+      !$omp target enter data map(to: gm)
       call gm%enter_data()
-      !$acc enter data copyin(cg1)
+      !$omp target enter data map(to: cg1)
 
       call ocean_slopes_compute(grid, metrics, eos, sl, ms, DT)
       if (use_fgnv) then
@@ -306,16 +306,16 @@ contains
          call gm_compute_transports(grid, metrics, gm, sl, ms, DT)
       end if
       call gm_work_source(grid, metrics, eos, gm, sl, ms)
-      !$acc update self(gm%gm_src)
+      !$omp target update from(gm%gm_src)
       src = gm%gm_src
 
-      !$acc exit data delete(cg1)
+      !$omp target exit data map(delete: cg1)
       call gm%exit_data()
-      !$acc exit data delete(gm)
+      !$omp target exit data map(delete: gm)
       call sl%exit_data()
-      !$acc exit data delete(sl)
+      !$omp target exit data map(delete: sl)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call gm%destroy()
       call sl%destroy()
       call ms%destroy()

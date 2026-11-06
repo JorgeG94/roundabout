@@ -256,11 +256,11 @@ contains
       kvu = sq*ustar_f*THICK
       kvv = sq*ustar_f*THICK
 
-      !$acc enter data copyin(u, v, h, wet, kvu, kvv, thu, thv, fc, at, acu, acv) create(ust, ke, fa)
+      !$omp target enter data map(to: u, v, h, wet, kvu, kvv, thu, thv, fc, at, acu, acv) map(alloc: ust, ke, fa)
       call bbl_mixing_set_tke_impl(NX, NY, NZ, CD, u, v, h, wet, kvu, kvv, thu, thv, fc, &
                                    at, acu, acv, ust, ke, fa)
-      !$acc update self(ust, ke, fa)
-      !$acc exit data delete(u, v, h, wet, kvu, kvv, thu, thv, fc, at, acu, acv, ust, ke, fa)
+      !$omp target update from(ust, ke, fa)
+      !$omp target exit data map(delete: u, v, h, wet, kvu, kvv, thu, thv, fc, at, acu, acv, ust, ke, fa)
 
       call check(error, abs(ust(2, 2) - sqrt(2.0_wp)*ustar_f) < 1.0e-12_wp*ustar_f, &
                  "u*_h = sqrt(1/2 * 4 u*_f^2) = sqrt(2) u*_f for four equal faces")
@@ -274,22 +274,22 @@ contains
 
       ! Dry cell is zero.
       wet(3, 3) = 0.0_wp
-      !$acc enter data copyin(u, v, h, wet, kvu, kvv, thu, thv, fc, at, acu, acv) create(ust, ke, fa)
+      !$omp target enter data map(to: u, v, h, wet, kvu, kvv, thu, thv, fc, at, acu, acv) map(alloc: ust, ke, fa)
       call bbl_mixing_set_tke_impl(NX, NY, NZ, CD, u, v, h, wet, kvu, kvv, thu, thv, fc, &
                                    at, acu, acv, ust, ke, fa)
-      !$acc update self(ust, ke, fa)
-      !$acc exit data delete(u, v, h, wet, kvu, kvv, thu, thv, fc, at, acu, acv, ust, ke, fa)
+      !$omp target update from(ust, ke, fa)
+      !$omp target exit data map(delete: u, v, h, wet, kvu, kvv, thu, thv, fc, at, acu, acv, ust, ke, fa)
       call check(error, ust(3, 3) == 0.0_wp .and. ke(3, 3) == 0.0_wp, "dry cell: u*_h = P = 0")
       if (allocated(error)) return
 
       ! A face with zero BBL thickness / viscosity (land face) contributes nothing.
       wet(3, 3) = 1.0_wp
       kvu(2, 2) = 0.0_wp
-      !$acc enter data copyin(u, v, h, wet, kvu, kvv, thu, thv, fc, at, acu, acv) create(ust, ke, fa)
+      !$omp target enter data map(to: u, v, h, wet, kvu, kvv, thu, thv, fc, at, acu, acv) map(alloc: ust, ke, fa)
       call bbl_mixing_set_tke_impl(NX, NY, NZ, CD, u, v, h, wet, kvu, kvv, thu, thv, fc, &
                                    at, acu, acv, ust, ke, fa)
-      !$acc update self(ust, ke, fa)
-      !$acc exit data delete(u, v, h, wet, kvu, kvv, thu, thv, fc, at, acu, acv, ust, ke, fa)
+      !$omp target update from(ust, ke, fa)
+      !$omp target exit data map(delete: u, v, h, wet, kvu, kvv, thu, thv, fc, at, acu, acv, ust, ke, fa)
       ! Cell (2,2): west u-face (2,2) dead -> one u-face + two v-faces.
       call check(error, abs(ke(2, 2) - sq*ustar_f*ubar**2) < 1.0e-12_wp*sq*ustar_f*ubar**2, &
                  "a dead face drops out of the KE sum")
@@ -371,10 +371,10 @@ contains
       end do
       kt = 2.0_wp
       kv = 5.0_wp
-      !$acc enter data copyin(bm%kd_int, kt)
+      !$omp target enter data map(to: bm%kd_int, kt)
       call bbl_mixing_merge_into_kt(bm, NX, NY, NZ + 1, kt)
-      !$acc update self(kt)
-      !$acc exit data delete(bm%kd_int, kt)
+      !$omp target update from(kt)
+      !$omp target exit data map(delete: bm%kd_int, kt)
       do k = 2, NZ
          if (abs(kt(1, 1, k) - (2.0_wp + 1.0e-3_wp*real(k, wp))) > 1.0e-15_wp) then
             call check(error, .false., "merge must add kd_int to kt at interior interfaces")
@@ -425,11 +425,11 @@ contains
       tke = effic*ke(1, 1)
       rho0_l = eos%rho0
 
-      !$acc enter data copyin(h, ht, hs, wet, kb, ust, ke, fa) create(kd)
+      !$omp target enter data map(to: h, ht, hs, wet, kb, ust, ke, fa) map(alloc: kd)
       call bbl_mixing_compute_impl(NX, NY, NZ, h, ht, hs, wet, kb, eos, rho0_l, ust, ke, fa, &
                                    effic, 1.0e30_wp, .true., OM2, VK, 0.1_wp, kd)
-      !$acc update self(kd)
-      !$acc exit data delete(h, ht, hs, wet, kb, ust, ke, fa, kd)
+      !$omp target update from(kd)
+      !$omp target exit data map(delete: h, ht, hs, wet, kb, ust, ke, fa, kd)
 
       dbuoy = GRAVITY*eos%alpha_T/eos%rho0
       spent = 0.0_wp

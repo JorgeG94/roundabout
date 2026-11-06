@@ -137,7 +137,7 @@ contains
       metrics%use_closed_faces = .true.
       ! The masks are device-present (grown before the map), so the builder
       ! wrote the device copy; pull it back for the host-side assertions.
-      !$acc update self(metrics%open_u, metrics%open_v)
+      !$omp target update from(metrics%open_u, metrics%open_v)
 
       ms%nz_ml = NZ
       call ms%init(grid)
@@ -206,14 +206,14 @@ contains
       type(ocean_slopes_t), intent(inout) :: sl
       type(ocean_gm_t), intent(inout) :: gm
       type(continuity_t), intent(inout), optional :: ct
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(sl)
+      !$omp target enter data map(to: sl)
       call sl%enter_data()
-      !$acc enter data copyin(gm)
+      !$omp target enter data map(to: gm)
       call gm%enter_data()
       if (present(ct)) then
-         !$acc enter data copyin(ct)
+         !$omp target enter data map(to: ct)
          call ct%enter_data()
       end if
    end subroutine map_in
@@ -222,11 +222,11 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_slopes_t), intent(inout) :: sl
       type(ocean_gm_t), intent(inout) :: gm
-      !$acc update self(gm%uhD, gm%vhD, gm%gm_src)
-      !$acc update self(sl%slope_x, sl%slope_y, sl%n2_u, sl%n2_v)
-      !$acc update self(ms%h_layer)
-      !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
-      !$acc update self(ms%tracers(ms%idx_salinity)%hTr)
+      !$omp target update from(gm%uhD, gm%vhD, gm%gm_src)
+      !$omp target update from(sl%slope_x, sl%slope_y, sl%n2_u, sl%n2_v)
+      !$omp target update from(ms%h_layer)
+      !$omp target update from(ms%tracers(ms%idx_temperature)%hTr)
+      !$omp target update from(ms%tracers(ms%idx_salinity)%hTr)
    end subroutine pull_back
 
    subroutine map_out(ms, sl, gm, ct)
@@ -236,14 +236,14 @@ contains
       type(continuity_t), intent(inout), optional :: ct
       if (present(ct)) then
          call ct%exit_data()
-         !$acc exit data delete(ct)
+         !$omp target exit data map(delete: ct)
       end if
       call gm%exit_data()
-      !$acc exit data delete(gm)
+      !$omp target exit data map(delete: gm)
       call sl%exit_data()
-      !$acc exit data delete(sl)
+      !$omp target exit data map(delete: sl)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out
 
    pure logical function all_finite_3d(a)

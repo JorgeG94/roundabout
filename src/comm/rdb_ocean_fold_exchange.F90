@@ -283,8 +283,8 @@ contains
       fx_re = fx_plan%recv_e
       fx_rcls = fx_plan%recv_cls
       allocate (fx_reqs(2*max(fx_npeer, 1)), fx_stats(2*max(fx_npeer, 1)))
-      !$acc enter data copyin(fx_sn, fx_rn, fx_scol, fx_speer, fx_se, &
-      !$acc&                  fx_rcol, fx_rpeer, fx_re, fx_rcls)
+      !$omp target enter data map(to: fx_sn, fx_rn, fx_scol, fx_speer, fx_se, &
+      !$omp&                  fx_rcol, fx_rpeer, fx_re, fx_rcls)
 
       ! Base capacity: one field of the widest stagger, one layer.
       call grow_buffers(fx_ng + 1)
@@ -294,10 +294,10 @@ contains
       !! Release the plan, buffers and topology.  Idempotent.
       if (.not. fx_initialised) return
       if (fx_active) then
-         !$acc exit data delete(fx_sn, fx_rn, fx_scol, fx_speer, fx_se, &
-         !$acc&                 fx_rcol, fx_rpeer, fx_re, fx_rcls)
+         !$omp target exit data map(delete: fx_sn, fx_rn, fx_scol, fx_speer, fx_se, &
+         !$omp&                 fx_rcol, fx_rpeer, fx_re, fx_rcls)
          if (allocated(fx_sbuf)) then
-            !$acc exit data delete(fx_sbuf, fx_rbuf)
+            !$omp target exit data map(delete: fx_sbuf, fx_rbuf)
             deallocate (fx_sbuf, fx_rbuf)
          end if
          deallocate (fx_peer_rank, fx_sn, fx_rn, fx_scol, fx_speer, fx_se, &
@@ -351,13 +351,13 @@ contains
 
       if (fx_open) error stop "rdb_ocean_fold_exchange: buffer growth inside an open group"
       if (allocated(fx_sbuf)) then
-         !$acc exit data delete(fx_sbuf, fx_rbuf)
+         !$omp target exit data map(delete: fx_sbuf, fx_rbuf)
          deallocate (fx_sbuf, fx_rbuf)
       end if
       fx_slab_cap = nslab
       fx_cap = nslab*fx_nmax
       allocate (fx_sbuf(fx_cap*max(fx_npeer, 1)), fx_rbuf(fx_cap*max(fx_npeer, 1)))
-      !$acc enter data create(fx_sbuf, fx_rbuf)
+      !$omp target enter data map(alloc: fx_sbuf, fx_rbuf)
    end subroutine grow_buffers
 
    ! ==================================================================
@@ -510,7 +510,7 @@ contains
             cycle
          end if
          if (on_device) then
-            !$acc host_data use_device(fx_sbuf, fx_rbuf)
+            !$omp target data use_device_addr(fx_sbuf, fx_rbuf)
             if (n_r > 0) then
                nreq = nreq + 1
                call FOLD_IRECV_N(comm, fx_rbuf(o + 1:o + n_r), n_r, fx_peer_rank(p), &
@@ -521,7 +521,7 @@ contains
                call FOLD_ISEND_N(comm, fx_sbuf(o + 1:o + n_s), n_s, fx_peer_rank(p), &
                                  TAG_OC_FOLD, fx_reqs(nreq))
             end if
-            !$acc end host_data
+            !$omp end target data
          else
             if (n_r > 0) then
                nreq = nreq + 1

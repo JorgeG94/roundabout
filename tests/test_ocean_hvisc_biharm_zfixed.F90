@@ -129,7 +129,7 @@ contains
             if (fil(i, j - 1) .or. fil(i, j)) metrics%open_v(i, j, 1) = 0.0_wp
          end do
       end do
-      !$acc update device(metrics%open_u, metrics%open_v)
+      !$omp target update to(metrics%open_u, metrics%open_v)
       metrics%use_closed_faces = .true.
    end subroutine set_masks
 
@@ -171,25 +171,25 @@ contains
       allocate (open_u, source=metrics%open_u)
       allocate (open_v, source=metrics%open_v)
       if (.not. closed) metrics%use_closed_faces = .false.
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(lmix)
+      !$omp target enter data map(to: lmix)
       call lmix%enter_data()
-      !$acc enter data copyin(hv)
+      !$omp target enter data map(to: hv)
       call hv%enter_data()
 
       call ocean_horizontal_viscosity_compute_tendencies(grid, metrics, hv, ms, &
                                                          lateral_mix=lmix, dt=DT)
-      !$acc update self(hv%du_visc%data, hv%dv_visc%data)
+      !$omp target update from(hv%du_visc%data, hv%dv_visc%data)
       allocate (du, source=hv%du_visc%data)
       allocate (dv, source=hv%dv_visc%data)
 
       call hv%exit_data()
-      !$acc exit data delete(hv)
+      !$omp target exit data map(delete: hv)
       call lmix%exit_data()
-      !$acc exit data delete(lmix)
+      !$omp target exit data map(delete: lmix)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call destroy_cartesian_metrics(metrics)
       call hv%destroy()
       call lmix%destroy()

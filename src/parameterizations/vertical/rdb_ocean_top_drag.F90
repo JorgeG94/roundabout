@@ -296,9 +296,9 @@ contains
       type(ocean_top_drag_t), intent(inout) :: this
       call scratch_3d_buffer_enter_data_impl(this%du_drag)
       call scratch_3d_buffer_enter_data_impl(this%dv_drag)
-      !$acc enter data copyin(this%cover_u, this%cover_v, this%cover_t, &
-      !$acc                   this%lambda_top_u, this%lambda_top_v, &
-      !$acc                   this%stress_top)
+      !$omp target enter data map(to: this%cover_u, this%cover_v, this%cover_t, &
+      !$omp                   this%lambda_top_u, this%lambda_top_v, &
+      !$omp                   this%stress_top)
    end subroutine ocean_top_drag_enter_data_impl
 
    subroutine ocean_top_drag_exit_data(this)
@@ -313,9 +313,9 @@ contains
       type(ocean_top_drag_t), intent(inout) :: this
       call scratch_3d_buffer_exit_data_impl(this%du_drag)
       call scratch_3d_buffer_exit_data_impl(this%dv_drag)
-      !$acc exit data delete(this%cover_u, this%cover_v, this%cover_t, &
-      !$acc                  this%lambda_top_u, this%lambda_top_v, &
-      !$acc                  this%stress_top)
+      !$omp target exit data map(delete: this%cover_u, this%cover_v, this%cover_t, &
+      !$omp                  this%lambda_top_u, this%lambda_top_v, &
+      !$omp                  this%stress_top)
    end subroutine ocean_top_drag_exit_data_impl
 
    ! ======================================================================
@@ -711,7 +711,7 @@ contains
       ny_face = size(ms%v_face_y_layer, 2)
       nz = ms%nz_ml
 
-      !$acc kernels async(1)
+      ! [acc->omp] dropped CUDA-graph wrapper: kernels async(1)
       do concurrent(k=1:nz, j=1:ny_uface, i=1:nx_face)
          ms%u_face_x_layer(i, j, k) = ms%u_face_x_layer(i, j, k) + &
                                       dt*this%du_drag%data(i, j, k)
@@ -720,9 +720,9 @@ contains
          ms%v_face_y_layer(i, j, k) = ms%v_face_y_layer(i, j, k) + &
                                       dt*this%dv_drag%data(i, j, k)
       end do
-      !$acc end kernels
+      ! [acc->omp] dropped CUDA-graph wrapper: end kernels
       if (lwait) then
-         !$acc wait(1)
+         ! [acc->omp] dropped CUDA-graph wrapper: wait (1)
       end if
    end subroutine ocean_top_drag_apply_tendencies
 

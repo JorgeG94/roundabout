@@ -391,7 +391,7 @@ contains
       type(ocean_vmix_t), intent(inout) :: vmix
       type(ocean_surface_stress_t), intent(inout) :: ss
       type(ocean_surface_flux_t), intent(inout) :: sf
-      !$acc enter data copyin(ms, vmix, ss, sf)
+      !$omp target enter data map(to: ms, vmix, ss, sf)
       call ms%enter_data()
       call vmix%enter_data()
       call ss%enter_data()
@@ -399,18 +399,18 @@ contains
       ! `p_top` and the tracer `hTr` are host-set inputs mapped by
       ! `enter_data`; push them so the device reads the values this test
       ! set, not whatever the map left behind.
-      !$acc update device(ms%p_top, ms%h_layer, ms%rho_layer)
-      !$acc update device(ms%tracers(ms%idx_temperature)%hTr)
-      !$acc update device(ms%tracers(ms%idx_salinity)%hTr)
-      !$acc update device(sf%Q_heat, sf%Q_salt)
+      !$omp target update to(ms%p_top, ms%h_layer, ms%rho_layer)
+      !$omp target update to(ms%tracers(ms%idx_temperature)%hTr)
+      !$omp target update to(ms%tracers(ms%idx_salinity)%hTr)
+      !$omp target update to(sf%Q_heat, sf%Q_salt)
       call vmix_compute_pp81(grid, vmix, ms)
       call vmix_apply_kpp_overlay(grid, vmix, ms, ss, sf)
-      !$acc update self(vmix%kv, vmix%kt, vmix%bl_depth, vmix%gamma_t, vmix%gamma_s)
+      !$omp target update from(vmix%kv, vmix%kt, vmix%bl_depth, vmix%gamma_t, vmix%gamma_s)
       call sf%exit_data()
       call ss%exit_data()
       call vmix%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, vmix, ss, sf)
+      !$omp target exit data map(delete: ms, vmix, ss, sf)
    end subroutine run_kpp_case
 
    subroutine test_kpp_linear(error)
@@ -563,18 +563,18 @@ contains
       type(hgrid_t), intent(in) :: grid
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_vmix_t), intent(inout) :: vmix
-      !$acc enter data copyin(ms, vmix)
+      !$omp target enter data map(to: ms, vmix)
       call ms%enter_data()
       call vmix%enter_data()
-      !$acc update device(ms%p_top, ms%h_layer)
-      !$acc update device(ms%tracers(ms%idx_temperature)%hTr)
-      !$acc update device(ms%tracers(ms%idx_salinity)%hTr)
-      !$acc update device(vmix%kt)
+      !$omp target update to(ms%p_top, ms%h_layer)
+      !$omp target update to(ms%tracers(ms%idx_temperature)%hTr)
+      !$omp target update to(ms%tracers(ms%idx_salinity)%hTr)
+      !$omp target update to(vmix%kt)
       call vmix_split_kd_heat_salt(grid, vmix, ms)
-      !$acc update self(vmix%kt, vmix%ks)
+      !$omp target update from(vmix%kt, vmix%ks)
       call vmix%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, vmix)
+      !$omp target exit data map(delete: ms, vmix)
    end subroutine run_ddiff_case
 
    subroutine setup_ddiff(ms, vmix, nz, h_layer, variant)

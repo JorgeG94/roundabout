@@ -142,7 +142,7 @@ contains
 
       allocate (ssh_t(n_steps), t_t(n_steps))
 
-      !$acc enter data copyin(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+      !$omp target enter data map(to: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
       call ms%enter_data()
       call ct%enter_data()
       call cor%enter_data()
@@ -163,7 +163,7 @@ contains
          call ocean_dyn_step_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
                                    va, hd, vd, vmix, ms, DT, N_INNER, t=t, tides=tides)
          t = t + DT
-         !$acc update self(ms%h_layer)
+         !$omp target update from(ms%h_layer)
          ! SSH = column height - reference depth.
          ssh_probe = 0.0_wp
          do k = 1, NZ
@@ -199,7 +199,7 @@ contains
       call cor%exit_data()
       call ct%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+      !$omp target exit data map(delete: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
 
       checks: block
          ! 1. Finite + bounded (no blow-up): |SSH| < a few * envelope.

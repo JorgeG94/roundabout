@@ -98,13 +98,13 @@ contains
          if (k > KJ) ms%u_face_x_layer(:, :, k) = DU
       end do
 
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(vmix)
+      !$omp target enter data map(to: vmix)
       call vmix%enter_data()
-      !$acc enter data copyin(ks)
+      !$omp target enter data map(to: ks)
       call ks%enter_data()
-      !$acc enter data copyin(ep)
+      !$omp target enter data map(to: ep)
       call ep%enter_data()
       call vmix_seed_interior_none(grid, vmix, ms)
       if (with_shear) then
@@ -117,15 +117,15 @@ contains
       else
          call epbl_merge_into_kv_kt(ep, grid%nx_total, grid%ny_total, NZK + 1, vmix%kv, vmix%kt)
       end if
-      !$acc update self(vmix%kv, vmix%kt, ks%kd_int)
+      !$omp target update from(vmix%kv, vmix%kt, ks%kd_int)
       call ep%exit_data()
-      !$acc exit data delete(ep)
+      !$omp target exit data map(delete: ep)
       call ks%exit_data()
-      !$acc exit data delete(ks)
+      !$omp target exit data map(delete: ks)
       call vmix%exit_data()
-      !$acc exit data delete(vmix)
+      !$omp target exit data map(delete: vmix)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       i = grid%nx_total/2; j = grid%ny_total/2
       kv = vmix%kv(i, j, :)
       kt = vmix%kt(i, j, :)

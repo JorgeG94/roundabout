@@ -134,7 +134,7 @@ contains
       j_probe = grid%ny_total/2
       n_sample = 0
 
-      !$acc enter data copyin(ms, epbl, ss, sf, vd)
+      !$omp target enter data map(to: ms, epbl, ss, sf, vd)
       call ms%enter_data()
       call sf%enter_data()
       call epbl%enter_data()
@@ -145,20 +145,20 @@ contains
          call vdiff_apply_tracers(grid, vd, ms, dt, kt_source=epbl%kd_int)
          if (mod(step, sample_every) == 0 .and. n_sample < size(mld_series)) then
             n_sample = n_sample + 1
-            !$acc update self(epbl%mld)
+            !$omp target update from(epbl%mld)
             mld_series(n_sample) = epbl%mld(i_probe, j_probe)
             t_series(n_sample) = real(step, wp)*dt
          end if
       end do
-      !$acc update self(epbl%mld, epbl%kd_int, epbl%la)
-      !$acc update self(epbl%tke_wind, epbl%tke_conv)
-      !$acc update self(epbl%tke_forcing, epbl%tke_mixing)
-      !$acc update self(epbl%tke_mech_decay, epbl%tke_conv_decay)
+      !$omp target update from(epbl%mld, epbl%kd_int, epbl%la)
+      !$omp target update from(epbl%tke_wind, epbl%tke_conv)
+      !$omp target update from(epbl%tke_forcing, epbl%tke_mixing)
+      !$omp target update from(epbl%tke_mech_decay, epbl%tke_conv_decay)
       call vd%exit_data()
       call epbl%exit_data()
       call sf%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, epbl, ss, sf, vd)
+      !$omp target exit data map(delete: ms, epbl, ss, sf, vd)
    end subroutine run_epbl_steps
 
    pure subroutine fit_loglog_slope(t_series, d_series, n, slope)

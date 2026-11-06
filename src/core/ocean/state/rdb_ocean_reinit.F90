@@ -74,20 +74,20 @@ contains
       call push_state(state)
       associate (ms => state%multilayer)
          ! Host hu/hv are current: step 2 pulled them, step 4 only zeroed closed faces.
-         !$acc update device(ms%hu_face_x_layer, ms%hv_face_y_layer)
+         !$omp target update to(ms%hu_face_x_layer, ms%hv_face_y_layer)
       end associate
 
       ! ---- 5. rho_layer from the final T/S/h (device kernel), host mirror ----
       call ocean_eos_compute(state%eos, state%multilayer, active=thermo_active)
       associate (ms => state%multilayer)
-         !$acc update self(ms%rho_layer)
+         !$omp target update from(ms%rho_layer)
       end associate
 
       ! ---- 7. sponge reference snapshot (host), then its device copy ----
       if (state%sponge%enable .and. state%sponge%is_init) then
          call ocean_sponge_snapshot_reference(state%sponge, grid, state%multilayer)
          associate (sp => state%sponge)
-            !$acc update device(sp%ref_tracer, sp%u_ref, sp%v_ref)
+            !$omp target update to(sp%ref_tracer, sp%u_ref, sp%v_ref)
          end associate
       end if
 
@@ -95,7 +95,7 @@ contains
       if (state%dyn%bt_work%is_init) then
          call derive_bt_from_layers(grid, state%dyn%bt_work, state%multilayer, state%metrics)
          associate (bw => state%dyn%bt_work)
-            !$acc update self(bw%bt_eta)
+            !$omp target update from(bw%bt_eta)
          end associate
       end if
    end subroutine ocean_rebaseline_apply
@@ -148,11 +148,11 @@ contains
                                      skip_y=ocean_halo_is_decomposed_y())
       call ocean_fold_wrap_state(grid, state%bc, state%multilayer)
       associate (ms => state%multilayer)
-         !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
+         !$omp target update from(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
          if (allocated(ms%tracers)) then
             do it = 1, size(ms%tracers)
                if (.not. allocated(ms%tracers(it)%hTr)) cycle
-               !$acc update self(ms%tracers(it)%hTr)
+               !$omp target update from(ms%tracers(it)%hTr)
             end do
          end if
       end associate
@@ -165,11 +165,11 @@ contains
       integer :: it
 
       associate (ms => state%multilayer)
-         !$acc update device(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
+         !$omp target update to(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
          if (allocated(ms%tracers)) then
             do it = 1, size(ms%tracers)
                if (.not. allocated(ms%tracers(it)%hTr)) cycle
-               !$acc update device(ms%tracers(it)%hTr)
+               !$omp target update to(ms%tracers(it)%hTr)
             end do
          end if
       end associate

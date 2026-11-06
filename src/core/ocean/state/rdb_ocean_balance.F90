@@ -322,12 +322,12 @@ contains
       type(ocean_state_t), intent(inout) :: state
       integer :: it
       associate (hl => state%multilayer%h_layer)
-         !$acc update device(hl)
+         !$omp target update to(hl)
       end associate
       if (allocated(state%multilayer%tracers)) then
          do it = 1, size(state%multilayer%tracers)
             associate (htr => state%multilayer%tracers(it)%hTr)
-               !$acc update device(htr)
+               !$omp target update to(htr)
             end associate
          end do
       end if
@@ -341,11 +341,11 @@ contains
       if (from_eos) then
          call ocean_eos_compute(state%eos, state%multilayer, active=.true.)
          associate (rl => state%multilayer%rho_layer)
-            !$acc update self(rl)
+            !$omp target update from(rl)
          end associate
       else
          associate (rl => state%multilayer%rho_layer)
-            !$acc update device(rl)
+            !$omp target update to(rl)
          end associate
       end if
    end subroutine refresh_density
@@ -355,7 +355,7 @@ contains
       type(ocean_state_t), intent(inout) :: state
       associate (dpx => state%pressure_force%dpdx_face%data, &
                  dpy => state%pressure_force%dpdy_face%data)
-         !$acc update self(dpx, dpy)
+         !$omp target update from(dpx, dpy)
       end associate
    end subroutine pull_pgf
 
@@ -364,11 +364,11 @@ contains
       type(ocean_state_t), intent(inout) :: state
       associate (uf => state%multilayer%u_face_x_layer, vf => state%multilayer%v_face_y_layer, &
                  huf => state%multilayer%hu_face_x_layer, hvf => state%multilayer%hv_face_y_layer)
-         !$acc update device(uf, vf, huf, hvf)
+         !$omp target update to(uf, vf, huf, hvf)
       end associate
       if (allocated(state%barotropic%h)) then
          associate (hb => state%barotropic%h)
-            !$acc update device(hb) if_present
+            !$omp target update to(hb)
          end associate
       end if
    end subroutine push_velocity

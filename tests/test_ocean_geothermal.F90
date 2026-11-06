@@ -58,15 +58,15 @@ contains
       type(ocean_geothermal_t), intent(in) :: geo
       type(multilayer_state_t), intent(inout) :: ms
       real(wp), intent(in) :: dt
-      !$acc enter data copyin(ms, geo)
+      !$omp target enter data map(to: ms, geo)
       call ms%enter_data()
       call ocean_geothermal_apply_tracers(grid, geo, ms, dt)
       associate (hT => ms%tracers(ms%idx_temperature)%hTr, &
                  bgeo => ms%heat_budget_geothermal)
-         !$acc update self(hT, bgeo)
+         !$omp target update from(hT, bgeo)
       end associate
       call ms%exit_data()
-      !$acc exit data delete(ms, geo)
+      !$omp target exit data map(delete: ms, geo)
    end subroutine run_apply
 
    ! -----------------------------------------------------------------

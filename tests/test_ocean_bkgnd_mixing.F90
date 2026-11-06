@@ -237,26 +237,26 @@ contains
          !! temporary — a temporary would be absent from the device present
          !! table and turn the residency check below into a false pass.
       logical, intent(in), optional :: poison_geolat
-      !$acc enter data copyin(ms, vmix)
+      !$omp target enter data map(to: ms, vmix)
       call ms%enter_data()
       call vmix%enter_data()
-      !$acc update device(vmix%kv, vmix%kt, vmix%ks)
+      !$omp target update to(vmix%kv, vmix%kt, vmix%ks)
       if (present(geolat)) then
-         !$acc enter data copyin(geolat)
+         !$omp target enter data map(to: geolat)
 #ifdef RDB_GPU_OFFLOAD
          if (present(poison_geolat)) then
             if (poison_geolat) call poison_host_2d(geolat)
          end if
 #endif
          call vmix_assemble(grid, vmix, ms, geolat=geolat)
-         !$acc exit data delete(geolat)
+         !$omp target exit data map(delete: geolat)
       else
          call vmix_assemble(grid, vmix, ms)
       end if
-      !$acc update self(vmix%kv, vmix%kt, vmix%ks, vmix%kd_bg)
+      !$omp target update from(vmix%kv, vmix%kt, vmix%ks, vmix%kd_bg)
       call vmix%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, vmix)
+      !$omp target exit data map(delete: ms, vmix)
    end subroutine run_assemble
 
    subroutine clip_henyey(grid, vmix, nz, k_bg, kd_min, n0_2omega, max_lat, geolat)
@@ -923,54 +923,54 @@ contains
          vmix%pp81_nu_bg = 0.0_wp
          vmix%pp81_nu0 = 0.0_wp
 
-         !$acc enter data copyin(ms)
+         !$omp target enter data map(to: ms)
          call ms%enter_data()
-         !$acc enter data copyin(ct)
+         !$omp target enter data map(to: ct)
          call ct%enter_data()
-         !$acc enter data copyin(cor)
+         !$omp target enter data map(to: cor)
          call cor%enter_data()
-         !$acc enter data copyin(pgf)
+         !$omp target enter data map(to: pgf)
          call pgf%enter_data()
-         !$acc enter data copyin(hv)
+         !$omp target enter data map(to: hv)
          call hv%enter_data()
-         !$acc enter data copyin(bd)
+         !$omp target enter data map(to: bd)
          call bd%enter_data()
-         !$acc enter data copyin(ss)
+         !$omp target enter data map(to: ss)
          call ss%enter_data()
-         !$acc enter data copyin(va)
+         !$omp target enter data map(to: va)
          call va%enter_data()
-         !$acc enter data copyin(hd)
+         !$omp target enter data map(to: hd)
          call hd%enter_data()
-         !$acc enter data copyin(vd)
+         !$omp target enter data map(to: vd)
          call vd%enter_data()
-         !$acc enter data copyin(vmix)
+         !$omp target enter data map(to: vmix)
          call vmix%enter_data()
 
          call ocean_dyn_step(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, va, hd, vd, vmix, ms, DT)
 
-         !$acc update self(vmix%kt, vmix%ks)
+         !$omp target update from(vmix%kt, vmix%ks)
          call vmix%exit_data()
-         !$acc exit data delete(vmix)
+         !$omp target exit data map(delete: vmix)
          call vd%exit_data()
-         !$acc exit data delete(vd)
+         !$omp target exit data map(delete: vd)
          call hd%exit_data()
-         !$acc exit data delete(hd)
+         !$omp target exit data map(delete: hd)
          call va%exit_data()
-         !$acc exit data delete(va)
+         !$omp target exit data map(delete: va)
          call ss%exit_data()
-         !$acc exit data delete(ss)
+         !$omp target exit data map(delete: ss)
          call bd%exit_data()
-         !$acc exit data delete(bd)
+         !$omp target exit data map(delete: bd)
          call hv%exit_data()
-         !$acc exit data delete(hv)
+         !$omp target exit data map(delete: hv)
          call pgf%exit_data()
-         !$acc exit data delete(pgf)
+         !$omp target exit data map(delete: pgf)
          call cor%exit_data()
-         !$acc exit data delete(cor)
+         !$omp target exit data map(delete: cor)
          call ct%exit_data()
-         !$acc exit data delete(ct)
+         !$omp target exit data map(delete: ct)
          call ms%exit_data()
-         !$acc exit data delete(ms)
+         !$omp target exit data map(delete: ms)
 
          ! Every physical column must carry its own latitude's factor.
          do j = NGHOST + 1, grid%ny_total - NGHOST

@@ -165,38 +165,38 @@ contains
 
       ! Map parent + components.  Parent first per the
       ! derived-type-GPU-mapping rule (see CLAUDE.md memory).
-      !$acc enter data copyin(bs)
+      !$omp target enter data map(to: bs)
       call bs%enter_data()
 
       ! Mutate every cell-centred slot, every east face, every north
       ! face — three loops with distinct shapes so a stride bug in
       ! any of them stands out.
-      !$acc parallel loop collapse(2) present(bs)
+      !$omp target teams distribute parallel do collapse(2)
       do j = 1, ny
          do i = 1, nx
             bs%h(i, j) = real(100*i + j, wp)
          end do
       end do
-      !$acc end parallel loop
+      !$omp end target teams distribute parallel do
 
-      !$acc parallel loop collapse(2) present(bs)
+      !$omp target teams distribute parallel do collapse(2)
       do j = 1, ny
          do i = 1, nx + 1
             bs%u_face_x(i, j) = real(1000*i + j, wp)
          end do
       end do
-      !$acc end parallel loop
+      !$omp end target teams distribute parallel do
 
-      !$acc parallel loop collapse(2) present(bs)
+      !$omp target teams distribute parallel do collapse(2)
       do j = 1, ny + 1
          do i = 1, nx
             bs%v_face_y(i, j) = real(10000*i + j, wp)
          end do
       end do
-      !$acc end parallel loop
+      !$omp end target teams distribute parallel do
 
       call bs%exit_data()
-      !$acc exit data delete(bs)
+      !$omp target exit data map(delete: bs)
 
       ! Host should now see the device-set tags.
       do j = 1, ny
@@ -372,11 +372,11 @@ contains
       ny = grid%ny_total
       idx_s = ms%idx_salinity
 
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
 
       ! h_layer at cell centres, shape (nx, ny, nz)
-      !$acc parallel loop collapse(3) present(ms)
+      !$omp target teams distribute parallel do collapse(3)
       do k = 1, NZ
          do j = 1, ny
             do i = 1, nx
@@ -384,10 +384,10 @@ contains
             end do
          end do
       end do
-      !$acc end parallel loop
+      !$omp end target teams distribute parallel do
 
       ! u_face_x_layer at east faces, shape (nx+1, ny, nz)
-      !$acc parallel loop collapse(3) present(ms)
+      !$omp target teams distribute parallel do collapse(3)
       do k = 1, NZ
          do j = 1, ny
             do i = 1, nx + 1
@@ -395,10 +395,10 @@ contains
             end do
          end do
       end do
-      !$acc end parallel loop
+      !$omp end target teams distribute parallel do
 
       ! v_face_y_layer at north faces, shape (nx, ny+1, nz)
-      !$acc parallel loop collapse(3) present(ms)
+      !$omp target teams distribute parallel do collapse(3)
       do k = 1, NZ
          do j = 1, ny + 1
             do i = 1, nx
@@ -406,10 +406,10 @@ contains
             end do
          end do
       end do
-      !$acc end parallel loop
+      !$omp end target teams distribute parallel do
 
       ! w_interface at layer interfaces, shape (nx, ny, nz+1)
-      !$acc parallel loop collapse(3) present(ms)
+      !$omp target teams distribute parallel do collapse(3)
       do k = 1, NZ + 1
          do j = 1, ny
             do i = 1, nx
@@ -417,13 +417,13 @@ contains
             end do
          end do
       end do
-      !$acc end parallel loop
+      !$omp end target teams distribute parallel do
 
       ! Salinity hTr at cell centres, shape (nx, ny, nz).  Exercises
       ! the two-step tracer-registry attach (parent array descriptor
       ! + per-element hTr) at the deepest level the ocean ml state
       ! reaches.
-      !$acc parallel loop collapse(3) present(ms)
+      !$omp target teams distribute parallel do collapse(3)
       do k = 1, NZ
          do j = 1, ny
             do i = 1, nx
@@ -431,10 +431,10 @@ contains
             end do
          end do
       end do
-      !$acc end parallel loop
+      !$omp end target teams distribute parallel do
 
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
 
       ! Verify
       do k = 1, NZ

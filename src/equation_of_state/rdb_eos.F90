@@ -1186,7 +1186,7 @@ contains
       !! path converts it: SR = SP·ROQ_SR_FACTOR, CT = ct_from_pt(SR, PT)
       !! (McDougall & Barker 2011). Public so the conversion the EOS
       !! actually uses can be pinned against the TEOS-10 check value.
-      !$acc routine seq
+      !$omp declare target
       logical, intent(in) :: cons
          !! `.true.` = (T, S) are already (CT, SA) (`TS_CONS_ABS`): no SR
          !! factor, no PT->CT conversion, unit Jacobian.
@@ -1203,7 +1203,7 @@ contains
    pure subroutine roquet_model_ct_derivs(T_pt, S_sp, SR, CT, dct_dpt, dct_dsr, cons)
       !! `roquet_model_ct` plus SR and the analytic dCT/dPT (1) and
       !! dCT/dSR (degC per g/kg) the Roquet points chain-rule through.
-      !$acc routine seq
+      !$omp declare target
       logical, intent(in) :: cons
          !! `.true.` = (T, S) are already (CT, SA) (`TS_CONS_ABS`): no SR
          !! factor, no PT->CT conversion, unit Jacobian.
@@ -1261,7 +1261,7 @@ contains
       !!
       !! Transcribed from the verified prototype roquet_spv_eos.py.  One
       !! sqrt for zs (shared by SV and both derivatives).
-      !$acc routine seq
+      !$omp declare target
       logical, intent(in) :: cons
          !! `.true.` = (T, S) are already (CT, SA) (`TS_CONS_ABS`): no SR
          !! factor, no PT->CT conversion, unit Jacobian.
@@ -1368,7 +1368,7 @@ contains
       !! The body is `rdb_roq_ts_coeffs` (`rdb_roquet_spv.inc`, included
       !! here): kernel modules include the same file for a local, inlinable
       !! copy rather than calling this out-of-line entry point.
-      !$acc routine seq
+      !$omp declare target
       logical, intent(in) :: cons
          !! `.true.` = (T, S) are already (CT, SA) (`TS_CONS_ABS`): no SR
          !! factor, no PT->CT conversion, unit Jacobian.
@@ -1390,7 +1390,7 @@ contains
       !! `roquet_spv_point`'s `sv` without the dSV/dT, dSV/dS and PT->CT
       !! chain-rule work that a density-only consumer (`rho_layer`,
       !! `eos_density_point`) would discard -- roughly half the arithmetic.
-      !$acc routine seq
+      !$omp declare target
       logical, intent(in) :: cons
          !! `.true.` = (T, S) are already (CT, SA) (`TS_CONS_ABS`): no SR
          !! factor, no PT->CT conversion, unit Jacobian.
@@ -1421,7 +1421,7 @@ contains
       !! here): kernel modules include the same file (after the SpV inc, for
       !! the shared `rdb_roq_ct_of` helper) for a local, inlinable copy
       !! rather than calling this out-of-line entry point.
-      !$acc routine seq
+      !$omp declare target
       logical, intent(in) :: cons
          !! `.true.` = (T, S) are already (CT, SA) (`TS_CONS_ABS`): no SR
          !! factor, no PT->CT conversion, unit Jacobian.
@@ -1451,7 +1451,7 @@ contains
       !! g/kg).  Same conversion chain as `roquet_spv_point` — SR =
       !! SP·(35.16504/35), CT = ct_from_pt_derivs(SR, PT) from
       !! `rdb_teos10_convert`, shared rather than copied now.
-      !$acc routine seq
+      !$omp declare target
       logical, intent(in) :: cons
          !! `.true.` = (T, S) are already (CT, SA) (`TS_CONS_ABS`): no SR
          !! factor, no PT->CT conversion, unit Jacobian.
@@ -1541,7 +1541,7 @@ contains
       !! hand-expanded form this function carried before the inc existed
       !! (same SR/CT conversion via the shared `rdb_roq_ct_of` helper, same
       !! Horner nesting, same evaluation order).
-      !$acc routine seq
+      !$omp declare target
       logical, intent(in) :: cons
          !! `.true.` = (T, S) are already (CT, SA) (`TS_CONS_ABS`): no SR
          !! factor, no PT->CT conversion, unit Jacobian.
@@ -1579,7 +1579,7 @@ contains
       !! The `else` is unreachable-by-contract: `eos_validate`
       !! guarantees `eos%variant` is in the device-callable set at
       !! configure time (device code cannot `error stop`).
-      !$acc routine seq
+      !$omp declare target
       type(eos_t), intent(in) :: eos
          !! Shared EOS handle (variant + scalar coeffs), by value.
       real(wp), intent(in) :: T, S
@@ -1683,7 +1683,7 @@ contains
       !! host-side sweep can evaluate whole arrays in one reference, and
       !! `!$acc routine seq` so a `do concurrent` kernel can call it —
       !! the same shape `eos_freezing_point` already ships.
-      !$acc routine seq
+      !$omp declare target
       type(eos_t), intent(in) :: eos
          !! Shared EOS handle (variant + scalar coeffs), by value.
       real(wp), intent(in) :: T, S
@@ -1763,7 +1763,7 @@ contains
       !! that genuinely works in SPECIFIC VOLUME (EPBL's PE weights,
       !! kappa-shear's `dbuoy = g·ρ₀·dSV/dX`); this routine is the density
       !! form, not a duplicate of it.
-      !$acc routine seq
+      !$omp declare target
       type(eos_t), intent(in) :: eos
       real(wp), intent(in) :: T, S
       real(wp), intent(in) :: p
@@ -1786,7 +1786,7 @@ contains
       !! diagnostics.  Takes the shared `eos_t` handle by value.
       !! The `else` is unreachable-by-contract (see
       !! `eos_validate`).
-      !$acc routine seq
+      !$omp declare target
       type(eos_t), intent(in) :: eos
       real(wp), intent(in) :: T, S, p
       real(wp) :: rho
@@ -1821,7 +1821,7 @@ contains
       !! of which threw its derivatives away.  Each branch uses the same
       !! expressions as the two routines it fuses, so `rho`, `dsv_dt` and
       !! `dsv_ds` are the numbers they return.
-      !$acc routine seq
+      !$omp declare target
       type(eos_t), intent(in) :: eos
          !! Shared EOS handle (variant + scalar coeffs), by value.
       real(wp), intent(in) :: T, S
@@ -1969,7 +1969,7 @@ contains
       !! 1 ulp).  That is a rounding-mode difference in a more accurate
       !! direction, not a change of formula.
       !! `test_default_set_bit_identical` pins both arms.
-      !$acc routine seq
+      !$omp declare target
       type(eos_t), intent(in) :: eos
          !! Shared EOS handle, by value — carries the liquidus
          !! coefficient set (`tfr_s`/`tfr_0`/`tfr_p`) written at configure

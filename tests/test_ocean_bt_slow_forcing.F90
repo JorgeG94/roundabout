@@ -239,11 +239,11 @@ contains
       ! (Coriolis-advection's corner vorticity, the Leith/Smagorinsky
       ! strain) are multiplying zero.
       metrics%wet_q(:, :) = 0.0_wp
-      !$acc update device(metrics%wet_q)
+      !$omp target update to(metrics%wet_q)
 
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+      !$omp target enter data map(to: ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
       call ct%enter_data(); call cor%enter_data(); call pgf%enter_data()
       call hv%enter_data(); call bd%enter_data(); call ss%enter_data()
       call va%enter_data(); call hd%enter_data()
@@ -256,7 +256,7 @@ contains
                                    va, hd, vd, vmix, ms, DT, N_INNER, vcoord=vc, bc=bc)
       end do
 
-      !$acc update self(ms%u_face_x_layer)
+      !$omp target update from(ms%u_face_x_layer)
       i_probe = NGHOST + NXP/2
       j_probe = NGHOST + NYP/2
       do k = 1, NZ
@@ -269,9 +269,9 @@ contains
       call hd%exit_data(); call va%exit_data()
       call ss%exit_data(); call bd%exit_data(); call hv%exit_data()
       call pgf%exit_data(); call cor%exit_data(); call ct%exit_data()
-      !$acc exit data delete(ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+      !$omp target exit data map(delete: ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call destroy_cartesian_metrics(metrics)
       call ocean_bc_state_destroy(bc)
       call ms%destroy()

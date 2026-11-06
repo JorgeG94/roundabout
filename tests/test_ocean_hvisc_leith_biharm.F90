@@ -79,14 +79,14 @@ contains
       type(ocean_lateral_mix_t), intent(inout), optional :: lmix
       type(ocean_horizontal_viscosity_t), intent(inout), optional :: hv
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
       if (present(lmix)) then
-         !$acc enter data copyin(lmix)
+         !$omp target enter data map(to: lmix)
          call lmix%enter_data()
       end if
       if (present(hv)) then
-         !$acc enter data copyin(hv)
+         !$omp target enter data map(to: hv)
          call hv%enter_data()
       end if
    end subroutine map_in
@@ -98,14 +98,14 @@ contains
       type(ocean_horizontal_viscosity_t), intent(inout), optional :: hv
       if (present(hv)) then
          call hv%exit_data()
-         !$acc exit data delete(hv)
+         !$omp target exit data map(delete: hv)
       end if
       if (present(lmix)) then
          call lmix%exit_data()
-         !$acc exit data delete(lmix)
+         !$omp target exit data map(delete: lmix)
       end if
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call destroy_cartesian_metrics(metrics)
    end subroutine map_out
 
@@ -128,7 +128,7 @@ contains
 
       call map_in(ms, metrics, grid, lmix)
       call ocean_lateral_mix_compute_leith_biharm(grid, metrics, lmix, ms)
-      !$acc update self(lmix%nu4_face_x, lmix%nu4_face_y)
+      !$omp target update from(lmix%nu4_face_x, lmix%nu4_face_y)
       call map_out(ms, metrics, lmix)
 
       max_diff_x = maxval(abs(lmix%nu4_face_x - NU4_BG))
@@ -184,7 +184,7 @@ contains
 
       call map_in(ms, metrics, grid, lmix)
       call ocean_lateral_mix_compute_leith_biharm(grid, metrics, lmix, ms)
-      !$acc update self(lmix%nu4_face_x, lmix%nu4_face_y)
+      !$omp target update from(lmix%nu4_face_x, lmix%nu4_face_y)
       call map_out(ms, metrics, lmix)
 
       inv_pi6 = (1.0_wp/PI)**6
@@ -241,7 +241,7 @@ contains
 
       call map_in(ms, metrics, grid, lmix)
       call ocean_lateral_mix_compute_leith_biharm(grid, metrics, lmix, ms)
-      !$acc update self(lmix%nu4_face_x, lmix%nu4_face_y)
+      !$omp target update from(lmix%nu4_face_x, lmix%nu4_face_y)
       call map_out(ms, metrics, lmix)
 
       peak_x = maxval(lmix%nu4_face_x)
@@ -295,12 +295,12 @@ contains
       call ocean_lateral_mix_compute_leith_biharm(grid_face, metrics_face, lmix_face, ms_face)
       call ocean_horizontal_viscosity_compute_tendencies(grid_face, metrics_face, hv_face, ms_face, &
                                                          lateral_mix=lmix_face)
-      !$acc update self(hv_face%du_visc%data, hv_face%dv_visc%data)
+      !$omp target update from(hv_face%du_visc%data, hv_face%dv_visc%data)
       call map_out(ms_face, metrics_face, lmix_face, hv_face)
 
       call map_in(ms_scalar, metrics_scalar, grid_scalar, hv=hv_scalar)
       call ocean_horizontal_viscosity_compute_tendencies(grid_scalar, metrics_scalar, hv_scalar, ms_scalar)
-      !$acc update self(hv_scalar%du_visc%data, hv_scalar%dv_visc%data)
+      !$omp target update from(hv_scalar%du_visc%data, hv_scalar%dv_visc%data)
       call map_out(ms_scalar, metrics_scalar, hv=hv_scalar)
 
       max_diff = maxval(abs(hv_face%dv_visc%data - hv_scalar%dv_visc%data))
@@ -353,13 +353,13 @@ contains
       call map_in(ms_a, metrics_a, grid_a, lmix_off, hv_a)
       call ocean_horizontal_viscosity_compute_tendencies(grid_a, metrics_a, hv_a, ms_a, &
                                                          lateral_mix=lmix_off)
-      !$acc update self(hv_a%du_visc%data, hv_a%dv_visc%data)
+      !$omp target update from(hv_a%du_visc%data, hv_a%dv_visc%data)
       call map_out(ms_a, metrics_a, lmix_off, hv_a)
 
       ! Path B: no lateral_mix argument.
       call map_in(ms_b, metrics_b, grid_b, hv=hv_b)
       call ocean_horizontal_viscosity_compute_tendencies(grid_b, metrics_b, hv_b, ms_b)
-      !$acc update self(hv_b%du_visc%data, hv_b%dv_visc%data)
+      !$omp target update from(hv_b%du_visc%data, hv_b%dv_visc%data)
       call map_out(ms_b, metrics_b, hv=hv_b)
 
       max_diff_u = maxval(abs(hv_a%du_visc%data - hv_b%du_visc%data))

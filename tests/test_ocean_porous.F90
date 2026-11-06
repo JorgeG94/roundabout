@@ -396,16 +396,16 @@ contains
       ! open fraction.
       dy_cu = 1.0_wp
       dx_cv = 1.0_wp
-      !$acc enter data copyin(bed, h_layer, dmin_u, dmax_u, davg_u, dmin_v, dmax_v, davg_v)
-      !$acc enter data copyin(dy_cu, dx_cv)
-      !$acc enter data create(por_u, por_v, dy_cu_bt, dx_cv_bt)
+      !$omp target enter data map(to: bed, h_layer, dmin_u, dmax_u, davg_u, dmin_v, dmax_v, davg_v)
+      !$omp target enter data map(to: dy_cu, dx_cv)
+      !$omp target enter data map(alloc: por_u, por_v, dy_cu_bt, dx_cv_bt)
       call porous_update_face_areas(nx, ny, NZ, interp, mask_depth, bed, h_layer, &
                                     dmin_u, dmax_u, davg_u, dmin_v, dmax_v, davg_v, &
                                     dy_cu, dx_cv, por_u, por_v, dy_cu_bt, dx_cv_bt)
-      !$acc update self(por_u, por_v, dy_cu_bt, dx_cv_bt)
-      !$acc exit data delete(bed, h_layer, dmin_u, dmax_u, davg_u, dmin_v, dmax_v, davg_v)
-      !$acc exit data delete(dy_cu, dx_cv)
-      !$acc exit data delete(por_u, por_v, dy_cu_bt, dx_cv_bt)
+      !$omp target update from(por_u, por_v, dy_cu_bt, dx_cv_bt)
+      !$omp target exit data map(delete: bed, h_layer, dmin_u, dmax_u, davg_u, dmin_v, dmax_v, davg_v)
+      !$omp target exit data map(delete: dy_cu, dx_cv)
+      !$omp target exit data map(delete: por_u, por_v, dy_cu_bt, dx_cv_bt)
       last_bt_u = dy_cu_bt
       last_bt_v = dx_cv_bt
    end subroutine run_update
@@ -784,7 +784,7 @@ contains
          end if
          metrics%use_porous = .true.
       end if
-      !$acc enter data copyin(metrics)
+      !$omp target enter data map(to: metrics)
       call metrics%enter_data()
       if (porous) then
          ! Fill the fractions once on the device from the seeded state's
@@ -802,7 +802,7 @@ contains
       nx = grid%nx_total
       ny = grid%ny_total
       allocate (h_uniform(nx, ny, NZ), source=25.0_wp)
-      !$acc enter data copyin(h_uniform)
+      !$omp target enter data map(to: h_uniform)
       call porous_update_face_areas(nx, ny, NZ, metrics%porous_eta_interp, &
                                     metrics%porous_mask_depth, metrics%por_bed, &
                                     h_uniform, &
@@ -813,23 +813,23 @@ contains
                                     metrics%dy_cu, metrics%dx_cv, &
                                     metrics%por_face_area_u, metrics%por_face_area_v, &
                                     metrics%dy_cu_bt, metrics%dx_cv_bt)
-      !$acc exit data delete(h_uniform)
+      !$omp target exit data map(delete: h_uniform)
       deallocate (h_uniform)
    end subroutine metrics_refresh
 
    subroutine teardown_metrics(metrics)
       type(ocean_metrics_t), intent(inout) :: metrics
       call metrics%exit_data()
-      !$acc exit data delete(metrics)
+      !$omp target exit data map(delete: metrics)
       call metrics%destroy()
    end subroutine teardown_metrics
 
    subroutine map_state(ms, ct)
       type(multilayer_state_t), intent(inout) :: ms
       type(continuity_t), intent(inout) :: ct
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(ct)
+      !$omp target enter data map(to: ct)
       call ct%enter_data()
       ! `enter_data` maps the mass fluxes `create` (the production step
       ! recomputes them on-device), so the device copies start as GARBAGE
@@ -839,17 +839,17 @@ contains
       ! test, so push the host zeros over explicitly.
       ms%mass_flux_x_layer = 0.0_wp
       ms%mass_flux_y_layer = 0.0_wp
-      !$acc update device(ms%mass_flux_x_layer, ms%mass_flux_y_layer)
+      !$omp target update to(ms%mass_flux_x_layer, ms%mass_flux_y_layer)
    end subroutine map_state
 
    subroutine unmap_state(ms, ct)
       type(multilayer_state_t), intent(inout) :: ms
       type(continuity_t), intent(inout) :: ct
-      !$acc update self(ms%mass_flux_x_layer, ms%mass_flux_y_layer)
+      !$omp target update from(ms%mass_flux_x_layer, ms%mass_flux_y_layer)
       call ct%exit_data()
-      !$acc exit data delete(ct)
+      !$omp target exit data map(delete: ct)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine unmap_state
 
    ! =================================================================
@@ -1084,18 +1084,18 @@ contains
          call ms%init(grid)
          call cor%init(grid, nz_ml=NZ)
          call seed_state(ms, nx, ny)
-         !$acc enter data copyin(ms)
+         !$omp target enter data map(to: ms)
          call ms%enter_data()
-         !$acc enter data copyin(cor)
+         !$omp target enter data map(to: cor)
          call cor%enter_data()
          call coriolis_adv_compute_tendencies_hk(grid, metrics, cor, ms, &
                                                  ms%u_face_x_layer, &
                                                  ms%v_face_y_layer, ms%h_layer)
-         !$acc update self(cor%mass_flux_u%data)
+         !$omp target update from(cor%mass_flux_u%data)
          call cor%exit_data()
-         !$acc exit data delete(cor)
+         !$omp target exit data map(delete: cor)
          call ms%exit_data()
-         !$acc exit data delete(ms)
+         !$omp target exit data map(delete: ms)
          allocate (flux_plain(nx + 1, ny, NZ))
          flux_plain = cor%mass_flux_u%data
          call cor%destroy()
@@ -1107,19 +1107,19 @@ contains
          call ms%init(grid)
          call cor%init(grid, nz_ml=NZ)
          call seed_state(ms, nx, ny)
-         !$acc enter data copyin(ms)
+         !$omp target enter data map(to: ms)
          call ms%enter_data()
-         !$acc enter data copyin(cor)
+         !$omp target enter data map(to: cor)
          call cor%enter_data()
          call coriolis_adv_compute_tendencies_hk(grid, metrics, cor, ms, &
                                                  ms%u_face_x_layer, &
                                                  ms%v_face_y_layer, ms%h_layer)
-         !$acc update self(cor%mass_flux_u%data)
-         !$acc update self(metrics%por_face_area_u)
+         !$omp target update from(cor%mass_flux_u%data)
+         !$omp target update from(metrics%por_face_area_u)
          call cor%exit_data()
-         !$acc exit data delete(cor)
+         !$omp target exit data map(delete: cor)
          call ms%exit_data()
-         !$acc exit data delete(ms)
+         !$omp target exit data map(delete: ms)
 
          allocate (por(nx + 1, ny, NZ))
          por = metrics%por_face_area_u
@@ -1189,9 +1189,9 @@ contains
 
          dy_cu = 1.0_wp
          dx_cv = 1.0_wp
-         !$acc enter data copyin(bed, h_layer, dmin_u, dmax_u, davg_u)
-         !$acc enter data copyin(dmin_v, dmax_v, davg_v, dy_cu, dx_cv)
-         !$acc enter data create(por_u, por_v, dy_cu_bt, dx_cv_bt)
+         !$omp target enter data map(to: bed, h_layer, dmin_u, dmax_u, davg_u)
+         !$omp target enter data map(to: dmin_v, dmax_v, davg_v, dy_cu, dx_cv)
+         !$omp target enter data map(alloc: por_u, por_v, dy_cu_bt, dx_cv_bt)
 #ifdef RDB_GPU_OFFLOAD
          call poison_2d(bed)
          call poison_3d(h_layer)
@@ -1204,10 +1204,10 @@ contains
                                        bed, h_layer, dmin_u, dmax_u, davg_u, &
                                        dmin_v, dmax_v, davg_v, dy_cu, dx_cv, &
                                        por_u, por_v, dy_cu_bt, dx_cv_bt)
-         !$acc update self(por_u, por_v, dy_cu_bt)
-         !$acc exit data delete(bed, h_layer, dmin_u, dmax_u, davg_u)
-         !$acc exit data delete(dmin_v, dmax_v, davg_v, dy_cu, dx_cv)
-         !$acc exit data delete(por_u, por_v, dy_cu_bt, dx_cv_bt)
+         !$omp target update from(por_u, por_v, dy_cu_bt)
+         !$omp target exit data map(delete: bed, h_layer, dmin_u, dmax_u, davg_u)
+         !$omp target exit data map(delete: dmin_v, dmax_v, davg_v, dy_cu, dx_cv)
+         !$omp target exit data map(delete: por_u, por_v, dy_cu_bt, dx_cv_bt)
 
          do k = 1, NZ
             call check(error, all(por_u(2:NXT, :, k) == want(k)), &
@@ -1559,17 +1559,17 @@ contains
       dy_cu = 1.0_wp
       dx_cv = 1.0_wp
 
-      !$acc enter data copyin(bed, h_layer, dmin_u, dmax_u, davg_u)
-      !$acc enter data copyin(dmin_v, dmax_v, davg_v, dy_cu, dx_cv)
-      !$acc enter data create(por_u, por_v, dy_cu_bt, dx_cv_bt)
+      !$omp target enter data map(to: bed, h_layer, dmin_u, dmax_u, davg_u)
+      !$omp target enter data map(to: dmin_v, dmax_v, davg_v, dy_cu, dx_cv)
+      !$omp target enter data map(alloc: por_u, por_v, dy_cu_bt, dx_cv_bt)
       call porous_update_face_areas(NXT, NYT, 1, POROUS_ETA_MAX, 0.0_wp, &
                                     bed, h_layer, dmin_u, dmax_u, davg_u, &
                                     dmin_v, dmax_v, davg_v, dy_cu, dx_cv, &
                                     por_u, por_v, dy_cu_bt, dx_cv_bt)
-      !$acc update self(por_u, por_v, dy_cu_bt, dx_cv_bt)
-      !$acc exit data delete(bed, h_layer, dmin_u, dmax_u, davg_u)
-      !$acc exit data delete(dmin_v, dmax_v, davg_v, dy_cu, dx_cv)
-      !$acc exit data delete(por_u, por_v, dy_cu_bt, dx_cv_bt)
+      !$omp target update from(por_u, por_v, dy_cu_bt, dx_cv_bt)
+      !$omp target exit data map(delete: bed, h_layer, dmin_u, dmax_u, davg_u)
+      !$omp target exit data map(delete: dmin_v, dmax_v, davg_v, dy_cu, dx_cv)
+      !$omp target exit data map(delete: por_u, por_v, dy_cu_bt, dx_cv_bt)
 
       checks: block
          call check(error, all(abs(por_u(2:NXT, :, 1) - 0.75_wp) < 1.0e-13_wp), &
@@ -1667,7 +1667,7 @@ contains
          call map_state(ms, ct)
          call continuity_zonal_flux(grid, metrics, ct, ms, DT)
          call continuity_meridional_flux(grid, metrics, ct, ms, DT)
-         !$acc update self(metrics%por_face_area_u, metrics%por_face_area_v)
+         !$omp target update from(metrics%por_face_area_u, metrics%por_face_area_v)
          call unmap_state(ms, ct)
          allocate (por_u(nx + 1, ny, NZ))
          allocate (por_v(nx, ny + 1, NZ))
@@ -1773,7 +1773,7 @@ contains
          call seed_state(ms, nx, ny)
          call map_state(ms, ct)
          call continuity_compute_fluxes(grid, metrics, ct, ms)
-         !$acc update self(metrics%por_face_area_u, metrics%por_face_area_v)
+         !$omp target update from(metrics%por_face_area_u, metrics%por_face_area_v)
          call unmap_state(ms, ct)
          allocate (por_u(nx + 1, ny, NZ))
          allocate (por_v(nx, ny + 1, NZ))
@@ -1886,7 +1886,7 @@ contains
          call seed_state(ms, nx, ny)
          call map_state(ms, ct)
          call continuity_zonal_flux(grid, metrics, ct, ms, DT, uhbt=uhbt)
-         !$acc update self(metrics%por_face_area_u)
+         !$omp target update from(metrics%por_face_area_u)
          call unmap_state(ms, ct)
 
          call check(error, all(metrics%por_face_area_u(3:nx - 1, 2:ny - 1, 1) == 0.0_wp), &
@@ -1946,24 +1946,24 @@ contains
          call ms%init(grid)
          call cor%init(grid, nz_ml=NZ)
          call seed_state(ms, nx, ny)
-         !$acc enter data copyin(ms)
+         !$omp target enter data map(to: ms)
          call ms%enter_data()
-         !$acc enter data copyin(cor)
+         !$omp target enter data map(to: cor)
          call cor%enter_data()
          ! Same `create`-mapped-garbage trap as `map_state`: the transport
          ! buffers are kernel products, so zero the device copies before a
          ! face-by-face comparison of two runs.
          cor%mass_flux_u%data = 0.0_wp
          cor%mass_flux_v%data = 0.0_wp
-         !$acc update device(cor%mass_flux_u%data, cor%mass_flux_v%data)
+         !$omp target update to(cor%mass_flux_u%data, cor%mass_flux_v%data)
          call coriolis_adv_compute_tendencies_sadourny_energy(grid, metrics, cor, ms, &
                                                               ms%u_face_x_layer, &
                                                               ms%v_face_y_layer, ms%h_layer)
-         !$acc update self(cor%mass_flux_u%data, cor%mass_flux_v%data)
+         !$omp target update from(cor%mass_flux_u%data, cor%mass_flux_v%data)
          call cor%exit_data()
-         !$acc exit data delete(cor)
+         !$omp target exit data map(delete: cor)
          call ms%exit_data()
-         !$acc exit data delete(ms)
+         !$omp target exit data map(delete: ms)
          allocate (fu_plain(nx + 1, ny, NZ))
          allocate (fv_plain(nx, ny + 1, NZ))
          fu_plain = cor%mass_flux_u%data
@@ -1977,25 +1977,25 @@ contains
          call ms%init(grid)
          call cor%init(grid, nz_ml=NZ)
          call seed_state(ms, nx, ny)
-         !$acc enter data copyin(ms)
+         !$omp target enter data map(to: ms)
          call ms%enter_data()
-         !$acc enter data copyin(cor)
+         !$omp target enter data map(to: cor)
          call cor%enter_data()
          ! Same `create`-mapped-garbage trap as `map_state`: the transport
          ! buffers are kernel products, so zero the device copies before a
          ! face-by-face comparison of two runs.
          cor%mass_flux_u%data = 0.0_wp
          cor%mass_flux_v%data = 0.0_wp
-         !$acc update device(cor%mass_flux_u%data, cor%mass_flux_v%data)
+         !$omp target update to(cor%mass_flux_u%data, cor%mass_flux_v%data)
          call coriolis_adv_compute_tendencies_sadourny_energy(grid, metrics, cor, ms, &
                                                               ms%u_face_x_layer, &
                                                               ms%v_face_y_layer, ms%h_layer)
-         !$acc update self(cor%mass_flux_u%data, cor%mass_flux_v%data)
-         !$acc update self(metrics%por_face_area_u, metrics%por_face_area_v)
+         !$omp target update from(cor%mass_flux_u%data, cor%mass_flux_v%data)
+         !$omp target update from(metrics%por_face_area_u, metrics%por_face_area_v)
          call cor%exit_data()
-         !$acc exit data delete(cor)
+         !$omp target exit data map(delete: cor)
          call ms%exit_data()
-         !$acc exit data delete(ms)
+         !$omp target exit data map(delete: ms)
 
          allocate (por_u(nx + 1, ny, NZ))
          allocate (por_v(nx, ny + 1, NZ))
@@ -2111,8 +2111,8 @@ contains
       metrics%dx_cv_bt = bt_scale*metrics%dx_cv
       metrics%dy_cu = slow_scale*metrics%dy_cu
       metrics%dx_cv = slow_scale*metrics%dx_cv
-      !$acc update device(metrics%dy_cu_bt, metrics%dx_cv_bt)
-      !$acc update device(metrics%dy_cu, metrics%dx_cv)
+      !$omp target update to(metrics%dy_cu_bt, metrics%dx_cv_bt)
+      !$omp target update to(metrics%dy_cu, metrics%dx_cv)
 
       call dyn%init(grid, nz_ml=NZ)
       call cor%init(grid, nz_ml=NZ)
@@ -2132,19 +2132,19 @@ contains
          end do
       end do
 
-      !$acc enter data copyin(dyn, cor)
+      !$omp target enter data map(to: dyn, cor)
       call dyn%enter_data()
       call cor%enter_data()
-      !$acc update device(dyn%bt_work%bt_eta, dyn%bt_work%bt_H_ref)
-      !$acc update device(dyn%bt_work%bt_ubt, dyn%bt_work%bt_vbt)
-      !$acc update device(dyn%bt_work%bt_rem_u, dyn%bt_work%bt_rem_v)
-      !$acc update device(dyn%bt_work%F_bt_u_fast, dyn%bt_work%F_bt_v_fast)
+      !$omp target update to(dyn%bt_work%bt_eta, dyn%bt_work%bt_H_ref)
+      !$omp target update to(dyn%bt_work%bt_ubt, dyn%bt_work%bt_vbt)
+      !$omp target update to(dyn%bt_work%bt_rem_u, dyn%bt_work%bt_rem_v)
+      !$omp target update to(dyn%bt_work%F_bt_u_fast, dyn%bt_work%F_bt_v_fast)
       call barotropic_substep_nonlinear_interior(grid, metrics, dyn%bt_work, &
                                                  cor%f_corner, N_STEPS, DT_INNER)
-      !$acc update self(dyn%bt_work%bt_eta_end)
+      !$omp target update from(dyn%bt_work%bt_eta_end)
       call cor%exit_data()
       call dyn%exit_data()
-      !$acc exit data delete(dyn, cor)
+      !$omp target exit data map(delete: dyn, cor)
 
       ip = grid%nghost + NXP/2 + 2
       jp = grid%nghost + NYP/2

@@ -142,7 +142,7 @@ contains
       !! simplification SA == SR (no delta-SA atlas -- see the module
       !! header note). TEOS-10 manual eq. 2.4.1 at global-mean
       !! composition.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: sp  !! Practical Salinity (PSU).
       real(wp) :: sr  !! Reference Salinity (g/kg).
       sr = sp*SR_FACTOR
@@ -150,7 +150,7 @@ contains
 
    pure elemental function sp_from_sr(sr) result(sp)
       !! Inverse of `sr_from_sp`.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: sr  !! Reference Salinity (g/kg).
       real(wp) :: sp  !! Practical Salinity (PSU).
       sp = sr/SR_FACTOR
@@ -162,7 +162,7 @@ contains
       !! degree-7-in-sqrt(SA) surface polynomial evaluated at p = 0.
       !! `sa` is Reference (or Absolute) Salinity in g/kg, `pt`
       !! potential temperature in degC referenced to p = 0.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: sa  !! Reference/Absolute Salinity (g/kg).
       real(wp), intent(in) :: pt  !! Potential temperature, p_ref=0 (degC).
       real(wp) :: ct  !! Conservative Temperature (degC).
@@ -220,7 +220,7 @@ contains
       !! a finite limit the floor reproduces instead of NaN. `ct` itself
       !! is computed by calling `ct_from_pt` directly (its own sa>=0
       !! clamp, no floor), so the returned CT is exactly `ct_from_pt`'s.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: sa  !! Reference/Absolute Salinity (g/kg).
       real(wp), intent(in) :: pt  !! Potential temperature, p_ref=0 (degC).
       real(wp), intent(out) :: ct  !! Conservative Temperature (degC).
@@ -273,7 +273,7 @@ contains
       !! g_TT(SA, pt0, 0) in J/(kg K²) (McDougall & Barker 2011; GSW
       !! `gsw_gibbs_pt0_pt0`) -- the one extra primitive the modified
       !! Newton-McDougall step in `pt_from_ct` needs beyond `ct_from_pt`.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: sa   !! Reference/Absolute Salinity (g/kg).
       real(wp), intent(in) :: pt0  !! Potential temperature, p_ref = 0 (degC).
       real(wp) :: g_tt  !! d²g/dT² at p = 0 (J/(kg K²)).
@@ -309,7 +309,7 @@ contains
       !! using the expensive-but-exact `dpt/dct = -cp0/((pt+T0)*gibbs_tt)`
       !! evaluated at the midpoint.  Fixed iteration count, no
       !! data-dependent loop -- device-callable.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: sa  !! Reference/Absolute Salinity (g/kg).
       real(wp), intent(in) :: ct  !! Conservative Temperature (degC).
       real(wp) :: pt  !! Potential temperature, p_ref=0 (degC).
@@ -350,7 +350,7 @@ contains
       !! `p_ref` uses; a caller crossing that boundary must convert).
       !! `sat_frac` is the saturation fraction of dissolved air in
       !! seawater (0 = no dissolved air, 1 = fully air-saturated).
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: sa  !! Reference/Absolute Salinity (g/kg).
       real(wp), intent(in) :: p  !! Sea pressure (dbar).
       real(wp), intent(in) :: sat_frac  !! Dissolved-air saturation fraction.
@@ -377,7 +377,7 @@ contains
       !! no separate GSW potential-temperature freezing polynomial, the
       !! toolbox gets it from the CT one the same way.  Same pressure
       !! convention as `ct_freezing_poly` (sea pressure in DBAR).
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: sa, p, sat_frac
       real(wp) :: pt_f
       pt_f = pt_from_ct(sa, ct_freezing_poly(sa, p, sat_frac))

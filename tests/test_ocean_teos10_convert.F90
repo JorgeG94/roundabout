@@ -310,17 +310,17 @@ contains
       p_l = P(1:M)
       sat_l = SAT_FRAC
 
-      !$acc enter data copyin(sa_l, pt_l, p_l, sat_l) &
-      !$acc    create(ct_dev, pt_dev, ctf_dev, ctd_dev, dpt_dev, dsa_dev)
+      !$omp target enter data map(to: sa_l, pt_l, p_l, sat_l) &
+      !$omp    map(alloc: ct_dev, pt_dev, ctf_dev, ctd_dev, dpt_dev, dsa_dev)
       ! Library kernels: a test's own kernel cannot device-link a library
       ! `routine seq` function.
       call ct_from_pt_impl(M, sa_l, pt_l, ct_dev)
       call pt_from_ct_impl(M, sa_l, ct_dev, pt_dev)
       call ct_freezing_poly_impl(M, sa_l, p_l, sat_l, ctf_dev)
       call ct_from_pt_derivs_impl(M, sa_l, pt_l, ctd_dev, dpt_dev, dsa_dev)
-      !$acc update self(ct_dev, pt_dev, ctf_dev, ctd_dev, dpt_dev, dsa_dev)
-      !$acc exit data delete(sa_l, pt_l, p_l, sat_l, ct_dev, pt_dev, ctf_dev, &
-      !$acc                  ctd_dev, dpt_dev, dsa_dev)
+      !$omp target update from(ct_dev, pt_dev, ctf_dev, ctd_dev, dpt_dev, dsa_dev)
+      !$omp target exit data map(delete: sa_l, pt_l, p_l, sat_l, ct_dev, pt_dev, ctf_dev, &
+      !$omp                  ctd_dev, dpt_dev, dsa_dev)
 
       do i = 1, M
          ct_host(i) = ct_from_pt(sa_l(i), pt_l(i))

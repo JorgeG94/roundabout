@@ -56,10 +56,10 @@ contains
 
       call fill_fields(vel0, vel)
       snap = -777.0_wp
-      !$acc enter data copyin(vel, snap)
+      !$omp target enter data map(to: vel, snap)
       call accel_visc_rem_snapshot(N1, N2, N3, vel, snap)
-      !$acc update self(snap)
-      !$acc exit data delete(vel, snap)
+      !$omp target update from(snap)
+      !$omp target exit data map(delete: vel, snap)
 
       do k = 1, N3
          do j = 1, N2
@@ -82,10 +82,10 @@ contains
 
       call fill_fields(vel0, vel)
       rem = 0.5_wp
-      !$acc enter data copyin(vel0, vel, rem)
+      !$omp target enter data map(to: vel0, vel, rem)
       call accel_visc_rem_reweight(N1, N2, N3, vel0, rem, vel)
-      !$acc update self(vel)
-      !$acc exit data delete(vel0, vel, rem)
+      !$omp target update from(vel)
+      !$omp target exit data map(delete: vel0, vel, rem)
 
       do k = 1, N3
          do j = 1, N2
@@ -115,10 +115,10 @@ contains
       vel = vel + 1.0e-7_wp*acos(-1.0_wp)
       before = vel
       rem = 1.0_wp
-      !$acc enter data copyin(vel0, vel, rem)
+      !$omp target enter data map(to: vel0, vel, rem)
       call accel_visc_rem_reweight(N1, N2, N3, vel0, rem, vel)
-      !$acc update self(vel)
-      !$acc exit data delete(vel0, vel, rem)
+      !$omp target update from(vel)
+      !$omp target exit data map(delete: vel0, vel, rem)
 
       do k = 1, N3
          do j = 1, N2
@@ -143,10 +143,10 @@ contains
       call fill_fields(vel0, vel)
       rem = 0.25_wp
       rem(2, 3, 1) = 0.0_wp
-      !$acc enter data copyin(vel0, vel, rem)
+      !$omp target enter data map(to: vel0, vel, rem)
       call accel_visc_rem_reweight(N1, N2, N3, vel0, rem, vel)
-      !$acc update self(vel)
-      !$acc exit data delete(vel0, vel, rem)
+      !$omp target update from(vel)
+      !$omp target exit data map(delete: vel0, vel, rem)
 
       call check(error, vel(2, 3, 1) == vel0(2, 3, 1), &
                  "rem=0 must restore the entry velocity exactly")

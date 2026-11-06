@@ -92,16 +92,16 @@ contains
             end if
          end if
       end if
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(hv)
+      !$omp target enter data map(to: hv)
       call hv%enter_data()
       call ocean_horizontal_viscosity_compute_tendencies(grid, metrics, hv, ms, dt=dt)
-      !$acc update self(hv%du_visc%data, hv%dv_visc%data, hv%ah4_t%data, hv%ah4_q%data)
+      !$omp target update from(hv%du_visc%data, hv%dv_visc%data, hv%ah4_t%data, hv%ah4_q%data)
       call hv%exit_data()
-      !$acc exit data delete(hv)
+      !$omp target exit data map(delete: hv)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call destroy_cartesian_metrics(metrics)
    end subroutine run_hv
 

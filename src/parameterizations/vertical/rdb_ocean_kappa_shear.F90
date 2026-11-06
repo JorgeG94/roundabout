@@ -290,19 +290,19 @@ contains
    subroutine ocean_kappa_shear_enter_data_impl(this)
       type(ocean_kappa_shear_t), intent(inout) :: this
       if (allocated(this%f_centre)) then
-         !$acc enter data copyin(this%f_centre)
+         !$omp target enter data map(to: this%f_centre)
       end if
       if (allocated(this%kd_int)) then
-         !$acc enter data copyin(this%kd_int)
+         !$omp target enter data map(to: this%kd_int)
       end if
       if (allocated(this%tke_int)) then
-         !$acc enter data copyin(this%tke_int)
+         !$omp target enter data map(to: this%tke_int)
       end if
       if (allocated(this%f_corner)) then
-         !$acc enter data copyin(this%f_corner)
+         !$omp target enter data map(to: this%f_corner)
       end if
       if (allocated(this%kd_corner)) then
-         !$acc enter data copyin(this%kd_corner)
+         !$omp target enter data map(to: this%kd_corner)
       end if
    end subroutine ocean_kappa_shear_enter_data_impl
 
@@ -317,19 +317,19 @@ contains
    subroutine ocean_kappa_shear_exit_data_impl(this)
       type(ocean_kappa_shear_t), intent(inout) :: this
       if (allocated(this%kd_corner)) then
-         !$acc exit data delete(this%kd_corner)
+         !$omp target exit data map(delete: this%kd_corner)
       end if
       if (allocated(this%f_corner)) then
-         !$acc exit data delete(this%f_corner)
+         !$omp target exit data map(delete: this%f_corner)
       end if
       if (allocated(this%tke_int)) then
-         !$acc exit data delete(this%tke_int)
+         !$omp target exit data map(delete: this%tke_int)
       end if
       if (allocated(this%kd_int)) then
-         !$acc exit data delete(this%kd_int)
+         !$omp target exit data map(delete: this%kd_int)
       end if
       if (allocated(this%f_centre)) then
-         !$acc exit data delete(this%f_centre)
+         !$omp target exit data map(delete: this%f_centre)
       end if
    end subroutine ocean_kappa_shear_exit_data_impl
 
@@ -678,7 +678,7 @@ contains
       !! massless-merge exactly as the column path does.  The deliberate
       !! (SW+NE)+(SE+NW) bracketing is reproducible-sum ordering — do
       !! not reassociate.
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nx, ny, nz, ic, jc
       real(wp), intent(in) :: h_layer(nx, ny, nz)
       real(wp), intent(in) :: u_face(nx + 1, ny, nz)
@@ -955,7 +955,7 @@ contains
       result(ksrc)
       !! Shear-source function K_src at one interface (JHL08 eq. for the
       !! source term): nonzero only where N^2 < Ri_c * S^2.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: ri_crit, shearmix_rate, fri_curvature, n2, s2
       real(wp) :: ksrc
       real(wp) :: dnom
@@ -975,7 +975,7 @@ contains
       !! reuses: 1/h, the interface 1/dz, the harmonic-mean interface FV
       !! cell thicknesses h_Int (Sum h_Int = Sum h), and the inverse
       !! boundary length scale squared (design doc section 5.1).
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nz
       real(wp), intent(in) :: lz_rescale
       real(wp), intent(in) :: h_sd(NZL)
@@ -1042,7 +1042,7 @@ contains
       !! Backward-Euler tridiagonal; no-slip for u,v iff the band
       !! reaches the bed (ke==nz), insulating T,S.  N^2 floored at 0
       !! (design doc section 5.5).
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nz, ks, ke
       real(wp), intent(in) :: dt_now, vel_underflow
       real(wp), intent(in) :: dbuoy_t(NZLI), dbuoy_s(NZLI)
@@ -1186,7 +1186,7 @@ contains
       !! truncation ramp + active-range tracking) until the Picard
       !! increment converges.  Scratch arrays are supplied by the caller
       !! to avoid double-allocating per-thread stack.
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nz, max_inner_it
       real(wp), intent(in) :: tke_min, f2_val
       real(wp), intent(in) :: ri_crit, shearmix_rate, fri_curvature
@@ -1426,7 +1426,7 @@ contains
       !! within the tolerance bands of the accepted-state source
       !! (design doc section 5.3): a halving pass followed by a 5-step
       !! refinement pass.
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nz, itt_outer, max_substep_it, ks_kap, ke_kap
       real(wp), intent(in) :: dt_rem, ri_crit, shearmix_rate, fri_curvature
       real(wp), intent(in) :: src_max_chg, tol_err, vel_underflow
@@ -1558,7 +1558,7 @@ contains
       !! e1 tail recursion, then the adaptive predictor-corrector outer
       !! loop driving the Picard inner solve.  Returns the time-mean
       !! diffusivity `kappa_avg_sd` and TKE `tke_avg_sd` over dt.
-      !$acc routine seq
+      !$omp declare target
       type(eos_t), intent(in) :: eos
          !! Shared EOS handle (by value) for the buoyancy derivatives.
       integer, intent(in) :: nz, max_inner_it, max_substep_it

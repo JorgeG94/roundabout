@@ -174,10 +174,10 @@ contains
          wet(5, j) = 0.0_wp
       end do
 
-      !$acc enter data copyin(sc, wet, chl, kap)
+      !$omp target enter data map(to: sc, wet, chl, kap)
       call sw_chl_fill_kappa(sc, grid%nx_total, grid%ny_total, wet, chl, kap)
-      !$acc update self(kap)
-      !$acc exit data delete(sc, wet, chl, kap)
+      !$omp target update from(kap)
+      !$omp target exit data map(delete: sc, wet, chl, kap)
 
       j = 2
       do m = 1, 3
@@ -239,16 +239,16 @@ contains
       i0 = sf%Q_heat(i, j)
       inv_scale = DT/(sf%rho0*sf%cp)
 
-      !$acc enter data copyin(ms, sf)
+      !$omp target enter data map(to: ms, sf)
       call ms%enter_data()
       call sf%enter_data()
       call ocean_surface_flux_apply_sw_penetration(grid, sf, ms, DT)
       associate (hT => ms%tracers(ms%idx_temperature)%hTr)
-         !$acc update self(hT)
+         !$omp target update from(hT)
       end associate
       call sf%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, sf)
+      !$omp target exit data map(delete: ms, sf)
 
       do k = 1, nz
          absorbed_frac(k) = ms%tracers(ms%idx_temperature)%hTr(i, j, k)/(inv_scale*i0)
@@ -412,14 +412,14 @@ contains
       tq = [0.25_wp*SW_CHL_YEAR_SECONDS, 0.75_wp*SW_CHL_YEAR_SECONDS, &
             1.25_wp*SW_CHL_YEAR_SECONDS]
 
-      !$acc enter data copyin(reader)
+      !$omp target enter data map(to: reader)
       call reader%enter_data()
       call sf%enter_data()
-      !$acc enter data copyin(wet)
+      !$omp target enter data map(to: wet)
       do iq = 1, 3
          call ocean_data_input_update_all(reader, tq(iq))
          call sw_chl_apply(sc, reader, grid, wet, sf, tq(iq))
-         !$acc update self(sf%sw_chl_field, sf%sw_kappa)
+         !$omp target update from(sf%sw_chl_field, sf%sw_kappa)
          do j = NGHOST + 1, NGHOST + NYP
             do i = NGHOST + 1, NGHOST + NXP
                if (wet(i, j) < 0.5_wp) then
@@ -442,10 +442,10 @@ contains
          end do
          if (allocated(error)) exit
       end do
-      !$acc exit data delete(wet)
+      !$omp target exit data map(delete: wet)
       call sf%exit_data()
       call reader%exit_data()
-      !$acc exit data delete(reader)
+      !$omp target exit data map(delete: reader)
       call reader%destroy()
       call sf%destroy()
    end subroutine test_time_interp
@@ -485,17 +485,17 @@ contains
       vmix%eos%rho0 = RHO0
       vmix%pp81_nu0 = 0.0_wp
 
-      !$acc enter data copyin(ms, vmix, ss, sf)
+      !$omp target enter data map(to: ms, vmix, ss, sf)
       call ms%enter_data()
       call vmix%enter_data()
       call sf%enter_data()
       call vmix_compute_pp81(grid, vmix, ms)
       call vmix_apply_kpp_overlay(grid, vmix, ms, ss, sf)
-      !$acc update self(vmix%kv, vmix%kt, vmix%bl_depth)
+      !$omp target update from(vmix%kv, vmix%kt, vmix%bl_depth)
       call sf%exit_data()
       call vmix%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, vmix, ss, sf)
+      !$omp target exit data map(delete: ms, vmix, ss, sf)
       call ms%destroy()
    end subroutine kpp_case
 
@@ -625,16 +625,16 @@ contains
       epbl%tke_diags = .true.
       epbl%epbl_sw_ctke = .true.
 
-      !$acc enter data copyin(ms, epbl, ss, sf)
+      !$omp target enter data map(to: ms, epbl, ss, sf)
       call ms%enter_data()
       call sf%enter_data()
       call epbl%enter_data()
       call epbl_compute(grid, epbl, ms, ss, 1800.0_wp, sf=sf)
-      !$acc update self(epbl%ctke_sw%data, epbl%dcolht_t%data)
+      !$omp target update from(epbl%ctke_sw%data, epbl%dcolht_t%data)
       call epbl%exit_data()
       call sf%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, epbl, ss, sf)
+      !$omp target exit data map(delete: ms, epbl, ss, sf)
       call ms%destroy()
    end subroutine epbl_case
 

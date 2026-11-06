@@ -304,8 +304,8 @@ contains
    subroutine ocean_gm_enter_data_impl(this)
       type(ocean_gm_t), intent(inout) :: this
       if (.not. this%is_init) return
-      !$acc enter data copyin(this%khth_u, this%khth_v)
-      !$acc enter data copyin(this%uhD, this%vhD, this%gm_src)
+      !$omp target enter data map(to: this%khth_u, this%khth_v)
+      !$omp target enter data map(to: this%uhD, this%vhD, this%gm_src)
    end subroutine ocean_gm_enter_data_impl
 
    subroutine ocean_gm_exit_data(this)
@@ -319,8 +319,8 @@ contains
    subroutine ocean_gm_exit_data_impl(this)
       type(ocean_gm_t), intent(inout) :: this
       if (.not. this%is_init) return
-      !$acc exit data delete(this%uhD, this%vhD, this%gm_src)
-      !$acc exit data delete(this%khth_u, this%khth_v)
+      !$omp target exit data map(delete: this%uhD, this%vhD, this%gm_src)
+      !$omp target exit data map(delete: this%khth_u, this%khth_v)
    end subroutine ocean_gm_exit_data_impl
 
    ! =================================================================
@@ -642,7 +642,7 @@ contains
    end subroutine gm_clamp_khth
 
    pure function gm_h_frac(h_avail_k, rsum_k) result(hf)
-      !$acc routine seq
+      !$omp declare target
       !! Donor mass fraction `h_avail(k)/rsum_above(k)` (0 when no mass is
       !! available above).  `rsum_above(k)` is the cumulative availability
       !! from the surface down to and including layer k, so `hf in [0,1]`.
@@ -1022,7 +1022,7 @@ contains
    end subroutine gm_column_y
 
    pure function gm_fgnv_n2(n2, n2_floor) result(nf)
-      !$acc routine seq
+      !$omp declare target
       !! FGNV stratification: `max(N^2, floor)` with a non-finite `N^2` read
       !! as the floor (a bare `max` is NaN-blind under relaxed FP).
       real(wp), intent(in) :: n2, n2_floor
@@ -1032,7 +1032,7 @@ contains
    end function gm_fgnv_n2
 
    pure subroutine gm_fgnv_solve_column(nl, c2, gain, h, n2, psi_unlim, psi)
-      !$acc routine seq
+      !$omp declare target
       !! Ferrari, Griffies, Nurser & Vallis (2010) streamfunction column
       !! solve.  Interfaces `K = 1..nl+1` are numbered bed -> surface
       !! (`K = 1` the bed, `K = nl+1` the surface; layer `k` lies between
@@ -1088,7 +1088,7 @@ contains
 
    pure function gm_block_below_bed(sfn, e_top_l, e_bot_l, bed_r, e_top_r, e_bot_r, bed_l) &
       result(sfn_b)
-      !$acc routine seq
+      !$omp declare target
       !! MOM6 bottom-blocking ("Avoid moving dense water upslope from below the
       !! level of the bottom on the receiving side").  `sfn` is the unlimited
       !! streamfunction at an interface: the transport of everything BELOW
@@ -1124,7 +1124,7 @@ contains
    end function gm_block_below_bed
 
    pure function gm_clamp_slope(s, smax) result(sc)
-      !$acc routine seq
+      !$omp declare target
       !! Clamp a slope to +/- smax (bounded slope for the PE release).
       !! A non-finite slope reads as 0 (no release) rather than being
       !! laundered into `±smax` by the NaN-blind clamp (CLAUDE.md).
@@ -1137,7 +1137,7 @@ contains
    end function gm_clamp_slope
 
    pure function gm_pos_n2(n2) result(np)
-      !$acc routine seq
+      !$omp declare target
       !! `max(N^2, 0)` for the PE release, with a non-finite N^2 read as 0
       !! (a bare `max` is NaN-blind under relaxed FP, CLAUDE.md).
       real(wp), intent(in) :: n2
@@ -1325,7 +1325,7 @@ contains
 
    pure function gm_work_face(nx, ny, nz, eos, rho0, h_layer, bathy, t_fill, s_fill, &
                               il, jl, ir, jr, uhf, opf, use_open) result(w)
-      !$acc routine seq
+      !$omp declare target
       !! Potential-energy release rate (W) of the bolus transports `uhf(k)`
       !! (m^3/s, positive from column L to column R, bottom-up layers)
       !! through one face.  Boussinesq PE per area is

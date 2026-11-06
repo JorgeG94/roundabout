@@ -80,16 +80,16 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_vmix_t), intent(inout) :: vmix
       real(wp), intent(in) :: bld(:, :)
-      !$acc enter data copyin(ms, vmix)
+      !$omp target enter data map(to: ms, vmix)
       call ms%enter_data()
       call vmix%enter_data()
       call vmix_compute_pp81(grid, vmix, ms)
       call vmix_apply_convection(grid, vmix, ms, bld)
       call vmix_assemble(grid, vmix, ms)
-      !$acc update self(vmix%kv, vmix%kt)
+      !$omp target update from(vmix%kv, vmix%kt)
       call vmix%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, vmix)
+      !$omp target exit data map(delete: ms, vmix)
    end subroutine run_conv
 
    subroutine run_no_conv(grid, ms, vmix)
@@ -98,15 +98,15 @@ contains
       type(hgrid_t), intent(in) :: grid
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_vmix_t), intent(inout) :: vmix
-      !$acc enter data copyin(ms, vmix)
+      !$omp target enter data map(to: ms, vmix)
       call ms%enter_data()
       call vmix%enter_data()
       call vmix_compute_pp81(grid, vmix, ms)
       call vmix_assemble(grid, vmix, ms)
-      !$acc update self(vmix%kv, vmix%kt)
+      !$omp target update from(vmix%kv, vmix%kt)
       call vmix%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, vmix)
+      !$omp target exit data map(delete: ms, vmix)
    end subroutine run_no_conv
 
    ! -----------------------------------------------------------------
@@ -459,25 +459,25 @@ contains
          call run_no_conv(grid, ms_off, vmix_off)
 
          ! Integrate: map, step NSTEPS times with the fixed kt, pull back.
-         !$acc enter data copyin(ms_on, vmix_on, vd_on)
+         !$omp target enter data map(to: ms_on, vmix_on, vd_on)
          call ms_on%enter_data(); call vmix_on%enter_data(); call vd_on%enter_data()
-         !$acc update device(vmix_on%kt)
+         !$omp target update to(vmix_on%kt)
          do step = 1, NSTEPS
             call vdiff_apply_tracers(grid, vd_on, ms_on, DT, kt_source=vmix_on%kt)
          end do
-         !$acc update self(ms_on%tracers(ms_on%idx_temperature)%hTr)
+         !$omp target update from(ms_on%tracers(ms_on%idx_temperature)%hTr)
          call vd_on%exit_data(); call vmix_on%exit_data(); call ms_on%exit_data()
-         !$acc exit data delete(ms_on, vmix_on, vd_on)
+         !$omp target exit data map(delete: ms_on, vmix_on, vd_on)
 
-         !$acc enter data copyin(ms_off, vmix_off, vd_off)
+         !$omp target enter data map(to: ms_off, vmix_off, vd_off)
          call ms_off%enter_data(); call vmix_off%enter_data(); call vd_off%enter_data()
-         !$acc update device(vmix_off%kt)
+         !$omp target update to(vmix_off%kt)
          do step = 1, NSTEPS
             call vdiff_apply_tracers(grid, vd_off, ms_off, DT, kt_source=vmix_off%kt)
          end do
-         !$acc update self(ms_off%tracers(ms_off%idx_temperature)%hTr)
+         !$omp target update from(ms_off%tracers(ms_off%idx_temperature)%hTr)
          call vd_off%exit_data(); call vmix_off%exit_data(); call ms_off%exit_data()
-         !$acc exit data delete(ms_off, vmix_off, vd_off)
+         !$omp target exit data map(delete: ms_off, vmix_off, vd_off)
 
          i_probe = nx/2; j_probe = ny/2
 

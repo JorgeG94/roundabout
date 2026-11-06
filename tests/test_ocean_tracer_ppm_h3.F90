@@ -65,15 +65,15 @@ contains
          hTr(NG + 1:NG + NP, j, 1) = T
       end do
       if (present(tot0)) tot0 = sum(hTr(NG + 1:NG + NP, :, :))
-      !$acc enter data copyin(iareaT, wet, h, hTr, mfx) create(fxl, fxr)
+      !$omp target enter data map(to: iareaT, wet, h, hTr, mfx) map(alloc: fxl, fxr)
       do n = 1, nsteps
          call wrap_ghosts(hTr)
-         !$acc update device(hTr)
+         !$omp target update to(hTr)
          call tracer_advect_zonal_one_impl(NX, NY, NZ, DT, iareaT, wet, h, hTr, &
                                            mfx, fxl, fxr, h3=h3)
-         !$acc update self(hTr)
+         !$omp target update from(hTr)
       end do
-      !$acc exit data delete(iareaT, wet, h, hTr, mfx, fxl, fxr)
+      !$omp target exit data map(delete: iareaT, wet, h, hTr, mfx, fxl, fxr)
       T = hTr(NG + 1:NG + NP, 1, 1)
       if (present(tot1)) tot1 = sum(hTr(NG + 1:NG + NP, :, :))
    end subroutine advect_steps
@@ -111,11 +111,11 @@ contains
          do i = 1, NX
             hTr(i, :, 1) = A + B*real(i, wp)
          end do
-         !$acc enter data copyin(iareaT, wet, h, hTr, mfx) create(fxl, fxr)
+         !$omp target enter data map(to: iareaT, wet, h, hTr, mfx) map(alloc: fxl, fxr)
          call tracer_advect_zonal_one_impl(NX, NY, NZ, DT, iareaT, wet, h, hTr, &
                                            mfx, fxl, fxr, h3=.true.)
-         !$acc update self(fxl)
-         !$acc exit data delete(iareaT, wet, h, hTr, mfx, fxl, fxr)
+         !$omp target update from(fxl)
+         !$omp target exit data map(delete: iareaT, wet, h, hTr, mfx, fxl, fxr)
          do i = 4, NX - 2
             ! face i sits at x = i - 1/2; the flow sweeps CFL cells upstream.
             xm = real(i, wp) - 0.5_wp - real(sgn, wp)*0.5_wp*CFL
@@ -142,11 +142,11 @@ contains
       hTr = 0.0_wp
       hTr(IP, :, 1) = 1.0_wp
       mfx = CFL/DT
-      !$acc enter data copyin(iareaT, wet, h, hTr, mfx) create(fxl, fxr)
+      !$omp target enter data map(to: iareaT, wet, h, hTr, mfx) map(alloc: fxl, fxr)
       call tracer_advect_zonal_one_impl(NX, NY, NZ, DT, iareaT, wet, h, hTr, &
                                         mfx, fxl, fxr, h3=.true.)
-      !$acc update self(fxl)
-      !$acc exit data delete(iareaT, wet, h, hTr, mfx, fxl, fxr)
+      !$omp target update from(fxl)
+      !$omp target exit data map(delete: iareaT, wet, h, hTr, mfx, fxl, fxr)
       ! Right face of the peak cell (face IP+1), flow to the right: PCM => U*Tc.
       e_pos = abs(fxl(IP + 1, 2, 1) - CFL/DT)
       ! Flow to the left through the peak's left face (face IP): redo reversed.
@@ -155,11 +155,11 @@ contains
       mfx = -CFL/DT
       fxl = 0.0_wp
       fxr = 0.0_wp
-      !$acc enter data copyin(iareaT, wet, h, hTr, mfx) create(fxl, fxr)
+      !$omp target enter data map(to: iareaT, wet, h, hTr, mfx) map(alloc: fxl, fxr)
       call tracer_advect_zonal_one_impl(NX, NY, NZ, DT, iareaT, wet, h, hTr, &
                                         mfx, fxl, fxr, h3=.true.)
-      !$acc update self(fxl)
-      !$acc exit data delete(iareaT, wet, h, hTr, mfx, fxl, fxr)
+      !$omp target update from(fxl)
+      !$omp target exit data map(delete: iareaT, wet, h, hTr, mfx, fxl, fxr)
       e_neg = abs(fxl(IP, 2, 1) + CFL/DT)
       ! A flat zero region far from the peak must carry exactly nothing.
       e_other = abs(fxl(40, 2, 1))

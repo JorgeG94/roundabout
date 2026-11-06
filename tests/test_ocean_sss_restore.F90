@@ -115,7 +115,7 @@ contains
    subroutine map_all(ms, sf)
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_surface_flux_t), intent(inout) :: sf
-      !$acc enter data copyin(ms, sf)
+      !$omp target enter data map(to: ms, sf)
       call ms%enter_data()
       call sf%enter_data()
    end subroutine map_all
@@ -124,18 +124,18 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_surface_flux_t), intent(inout) :: sf
       associate (hS => ms%tracers(ms%idx_salinity)%hTr, sbud => ms%salt_budget_surface)
-         !$acc update self(hS, sbud)
+         !$omp target update from(hS, sbud)
       end associate
       call sf%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, sf)
+      !$omp target exit data map(delete: ms, sf)
    end subroutine pull_unmap
 
    subroutine set_area(metrics, a)
       type(ocean_metrics_t), intent(inout) :: metrics
       real(wp), intent(in) :: a(:, :)
       metrics%areaT = a
-      !$acc update device(metrics%areaT)
+      !$omp target update to(metrics%areaT)
    end subroutine set_area
 
    subroutine teardown(metrics, ms, sf)
@@ -443,7 +443,7 @@ contains
                  "registration of a valid file must succeed")
       if (allocated(error)) return
 
-      !$acc enter data copyin(reader)
+      !$omp target enter data map(to: reader)
       call reader%enter_data()
       call map_all(ms, sf)
       checks: do k = 1, 2
@@ -451,7 +451,7 @@ contains
          call ocean_data_forcing_apply(df, reader, grid, ss, sf, bc, tq(k))
          call ocean_sss_restore_apply(grid, metrics, sf, ms, DT)
          associate (hS => ms%tracers(ms%idx_salinity)%hTr)
-            !$acc update self(hS)
+            !$omp target update from(hS)
             do j = NG + 1, NG + NYP
                do i = NG + 1, NG + NXP
                   ip = i - NG
@@ -473,7 +473,7 @@ contains
       end do checks
       call pull_unmap(ms, sf)
       call reader%exit_data()
-      !$acc exit data delete(reader)
+      !$omp target exit data map(delete: reader)
       call reader%destroy()
       call ocean_halo_destroy()
       call ss%destroy()

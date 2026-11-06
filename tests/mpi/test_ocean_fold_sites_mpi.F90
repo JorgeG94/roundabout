@@ -356,14 +356,14 @@ contains
          do it = 1, nt
             call fill3(ms%tracers(it)%hTr, e, 10 + it, 0)
          end do
-         !$acc update device(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
+         !$omp target update to(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
          do it = 1, nt
-            !$acc update device(ms%tracers(it)%hTr)
+            !$omp target update to(ms%tracers(it)%hTr)
          end do
          call ocean_fold_wrap_state(e%grid, e%state%bc, ms)
-         !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
+         !$omp target update from(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
          do it = 1, nt
-            !$acc update self(ms%tracers(it)%hTr)
+            !$omp target update from(ms%tracers(it)%hTr)
          end do
          call snap_ml(r, "D", e)
 
@@ -372,14 +372,14 @@ contains
          do it = 1, nt
             call fill3(ms%tracers(it)%hTr, e, 20 + it, 0)
          end do
-         !$acc update device(ms%h_layer)
+         !$omp target update to(ms%h_layer)
          do it = 1, nt
-            !$acc update device(ms%tracers(it)%hTr)
+            !$omp target update to(ms%tracers(it)%hTr)
          end do
          call ocean_fold_wrap_centre_3d_state(e%grid, e%state%bc, ms)
-         !$acc update self(ms%h_layer)
+         !$omp target update from(ms%h_layer)
          do it = 1, nt
-            !$acc update self(ms%tracers(it)%hTr)
+            !$omp target update from(ms%tracers(it)%hTr)
          end do
          call snap3(r, "C h", ms%h_layer, .false.)
          do it = 1, nt
@@ -391,9 +391,9 @@ contains
             call fill3(ms%u_av_layer, e, 5, 0)
             call fill3(ms%v_av_layer, e, 6, 1)
             call fill3(ms%h_av_layer, e, 7, 0)
-            !$acc update device(ms%u_av_layer, ms%v_av_layer, ms%h_av_layer)
+            !$omp target update to(ms%u_av_layer, ms%v_av_layer, ms%h_av_layer)
             call ocean_fold_wrap_time_means(e%grid, e%state%bc, ms)
-            !$acc update self(ms%u_av_layer, ms%v_av_layer, ms%h_av_layer)
+            !$omp target update from(ms%u_av_layer, ms%v_av_layer, ms%h_av_layer)
             call snap3(r, "M u_av", ms%u_av_layer, .false.)
             call snap3(r, "M v_av", ms%v_av_layer, .true.)
             call snap3(r, "M h_av", ms%h_av_layer, .false.)
@@ -401,21 +401,21 @@ contains
 
          ! F: the final meridional mass flux projection (no halo before it).
          call fill3(ms%mass_flux_y_layer, e, 8, 1)
-         !$acc update device(ms%mass_flux_y_layer)
+         !$omp target update to(ms%mass_flux_y_layer)
          if (e%state%bc%north_fold) then
             call ocean_fold_north_v_face(ms%mass_flux_y_layer, e%grid%nx_total, &
                                          e%grid%ny_total + 1, NZ, e%grid%nx_phys, &
                                          e%grid%ny_phys, NG)
          end if
-         !$acc update self(ms%mass_flux_y_layer)
+         !$omp target update from(ms%mass_flux_y_layer)
          call snap3(r, "F mass_flux_y", ms%mass_flux_y_layer, .true.)
 
          ! H: the surface-stress seam refresh (halo + wrap + fold + |tau|).
          call fill2(ss%tau_x, e, 30, 0)
          call fill2(ss%tau_y, e, 31, 1)
-         !$acc update device(ss%tau_x, ss%tau_y)
+         !$omp target update to(ss%tau_x, ss%tau_y)
          call ocean_seam_refresh_surface_stress(ss, e%grid, e%state%bc)
-         !$acc update self(ss%tau_x, ss%tau_y, ss%stress_mag)
+         !$omp target update from(ss%tau_x, ss%tau_y, ss%stress_mag)
          call snap2(r, "H tau_x", ss%tau_x, .false.)
          call snap2(r, "H tau_y", ss%tau_y, .true.)
          call snap2(r, "H stress_mag", ss%stress_mag, .false.)
@@ -444,9 +444,9 @@ contains
          call fill4(ic%enth_ice, e, 53)
          call fill4(ic%sal_ice, e, 54)
          call fill4(ic%enth_snow, e, 55)
-         !$acc update device(ic%part_size, ic%m_ice, ic%m_snow, ic%enth_ice, ic%sal_ice, ic%enth_snow)
+         !$omp target update to(ic%part_size, ic%m_ice, ic%m_snow, ic%enth_ice, ic%sal_ice, ic%enth_snow)
          call ocean_halo_exchange_ice_state(ic, e%grid, e%state%bc)
-         !$acc update self(ic%part_size, ic%m_ice, ic%m_snow, ic%enth_ice, ic%sal_ice, ic%enth_snow)
+         !$omp target update from(ic%part_size, ic%m_ice, ic%m_snow, ic%enth_ice, ic%sal_ice, ic%enth_snow)
          call snap3(r, "I part_size", ic%part_size, .false.)
          call snap3(r, "I m_ice", ic%m_ice, .false.)
          call snap3(r, "I m_snow", ic%m_snow, .false.)
@@ -461,9 +461,9 @@ contains
          call fill4(ic%enth_snow, e, 63)
          call fill4(ic%enth_ice, e, 64)
          call fill4(ic%sal_ice, e, 65)
-         !$acc update device(ic%mca_ice, ic%mca_snow, ic%m_ice, ic%enth_snow, ic%enth_ice, ic%sal_ice)
+         !$omp target update to(ic%mca_ice, ic%mca_snow, ic%m_ice, ic%enth_snow, ic%enth_ice, ic%sal_ice)
          call ocean_halo_exchange_ice_transport(ic, e%grid, e%state%bc)
-         !$acc update self(ic%mca_ice, ic%mca_snow, ic%m_ice, ic%enth_snow, ic%enth_ice, ic%sal_ice)
+         !$omp target update from(ic%mca_ice, ic%mca_snow, ic%m_ice, ic%enth_snow, ic%enth_ice, ic%sal_ice)
          call snap3(r, "T mca_ice", ic%mca_ice, .false.)
          call snap3(r, "T mca_snow", ic%mca_snow, .false.)
          call snap3(r, "T m_ice", ic%m_ice, .false.)
@@ -475,9 +475,9 @@ contains
          call fill2(ic%salt_flux_diag, e, 70, 0)
          call fill2(ic%heat_flux_diag, e, 71, 0)
          call fill2(ic%sw_thru_diag, e, 72, 0)
-         !$acc update device(ic%salt_flux_diag, ic%heat_flux_diag, ic%sw_thru_diag)
+         !$omp target update to(ic%salt_flux_diag, ic%heat_flux_diag, ic%sw_thru_diag)
          call ocean_halo_exchange_ice_fluxes(ic, e%grid, e%state%bc)
-         !$acc update self(ic%salt_flux_diag, ic%heat_flux_diag, ic%sw_thru_diag)
+         !$omp target update from(ic%salt_flux_diag, ic%heat_flux_diag, ic%sw_thru_diag)
          call snap2(r, "X salt_flux_diag", ic%salt_flux_diag, .false.)
          call snap2(r, "X heat_flux_diag", ic%heat_flux_diag, .false.)
          call snap2(r, "X sw_thru_diag", ic%sw_thru_diag, .false.)
@@ -488,10 +488,10 @@ contains
          call fill2(ic%str_s, e, 82, 1)
          call fill2(ic%u_ice, e, 83, 0)
          call fill2(ic%v_ice, e, 84, 1)
-         !$acc update device(ic%str_d, ic%str_t, ic%str_s, ic%u_ice, ic%v_ice)
+         !$omp target update to(ic%str_d, ic%str_t, ic%str_s, ic%u_ice, ic%v_ice)
          call ocean_fold_wrap_evp_stress(e%grid, e%state%bc, ic%str_d, ic%str_t, ic%str_s)
          call ocean_fold_wrap_face_pair(e%grid, e%state%bc, ic%u_ice, ic%v_ice)
-         !$acc update self(ic%str_d, ic%str_t, ic%str_s, ic%u_ice, ic%v_ice)
+         !$omp target update from(ic%str_d, ic%str_t, ic%str_s, ic%u_ice, ic%v_ice)
          call snap2(r, "V str_d", ic%str_d, .false.)
          call snap2(r, "V str_t", ic%str_t, .false.)
          call snap2(r, "V str_s", ic%str_s, .true.)

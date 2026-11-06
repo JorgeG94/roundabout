@@ -132,7 +132,7 @@ contains
       type(ocean_vmix_t), intent(inout) :: vmix
       type(ocean_dyn_t), intent(inout) :: dyn
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+      !$omp target enter data map(to: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
       call ms%enter_data()
       call ct%enter_data()
       call cor%enter_data()
@@ -174,7 +174,7 @@ contains
       call cor%exit_data()
       call ct%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+      !$omp target exit data map(delete: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
    end subroutine map_out
 
    subroutine destroy_all(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, eos, dyn)
@@ -462,7 +462,7 @@ contains
                                             grid%nghost, .true., .false.)
 
          call map_in(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
-         !$acc update device(dyn%bt_work%bt_H_ref)
+         !$omp target update to(dyn%bt_work%bt_H_ref)
 
          do step = 1, N_STEPS
             call ocean_dyn_step_split( &
@@ -470,7 +470,7 @@ contains
                va, hd, vd, vmix, ms, DT, N_INNER, bc=bc)
          end do
 
-         !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
+         !$omp target update from(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
          ! Only check physical interior cells
          block
             integer :: ig, i0, i1, j0, j1
@@ -627,7 +627,7 @@ contains
 
          call map_in(grid, metrics_a, ms_a, ct_a, cor_a, pgf_a, hv_a, bd_a, ss_a, va_a, hd_a, vd_a, vmix_a, dyn_a)
          call map_in(grid, metrics_b, ms_b, ct_b, cor_b, pgf_b, hv_b, bd_b, ss_b, va_b, hd_b, vd_b, vmix_b, dyn_b)
-         !$acc update device(dyn_a%bt_work%bt_H_ref, dyn_b%bt_work%bt_H_ref)
+         !$omp target update to(dyn_a%bt_work%bt_H_ref, dyn_b%bt_work%bt_H_ref)
 
          block
             integer :: stp
@@ -641,7 +641,7 @@ contains
             end do
          end block
 
-         !$acc update self(ms_a%h_layer, ms_b%h_layer)
+         !$omp target update from(ms_a%h_layer, ms_b%h_layer)
          call map_out(metrics_a, ms_a, ct_a, cor_a, pgf_a, hv_a, bd_a, ss_a, va_a, hd_a, vd_a, vmix_a, dyn_a)
          call map_out(metrics_b, ms_b, ct_b, cor_b, pgf_b, hv_b, bd_b, ss_b, va_b, hd_b, vd_b, vmix_b, dyn_b)
 
@@ -769,7 +769,7 @@ contains
          total_S0 = sum(ms%tracers(ms%idx_salinity)%hTr(i0:i1, j0:j1, :))*grid%dx*grid%dy
 
          call map_in(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
-         !$acc update device(dyn%bt_work%bt_H_ref)
+         !$omp target update to(dyn%bt_work%bt_H_ref)
 
          do step = 1, N_STEPS
             call ocean_dyn_step_split( &
@@ -777,7 +777,7 @@ contains
                va, hd, vd, vmix, ms, DT, N_INNER, bc=bc)
          end do
 
-         !$acc update self(ms%h_layer, ms%tracers(ms%idx_salinity)%hTr)
+         !$omp target update from(ms%h_layer, ms%tracers(ms%idx_salinity)%hTr)
          call map_out(metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
 
          total_h = sum(ms%h_layer(i0:i1, j0:j1, :))*grid%dx*grid%dy
@@ -862,7 +862,7 @@ contains
                                             grid%nghost, .true., .false.)
 
          call map_in(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
-         !$acc update device(dyn%bt_work%bt_H_ref)
+         !$omp target update to(dyn%bt_work%bt_H_ref)
 
          do step = 1, N_STEPS
             call ocean_dyn_step_split( &
@@ -870,7 +870,7 @@ contains
                va, hd, vd, vmix, ms, DT, N_INNER, bc=bc)
          end do
 
-         !$acc update self(ms%h_layer, ms%u_face_x_layer)
+         !$omp target update from(ms%h_layer, ms%u_face_x_layer)
          call map_out(metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
 
          max_dh = maxval(abs(ms%h_layer(i0:i1, j0:j1, :) - H0))
@@ -1082,7 +1082,7 @@ contains
 
          call map_in(grid, metrics_a, ms_a, ct_a, cor_a, pgf_a, hv_a, bd_a, ss_a, va_a, hd_a, vd_a, vmix_a, dyn_a)
          call map_in(grid, metrics_b, ms_b, ct_b, cor_b, pgf_b, hv_b, bd_b, ss_b, va_b, hd_b, vd_b, vmix_b, dyn_b)
-         !$acc update device(dyn_a%bt_work%bt_H_ref, dyn_b%bt_work%bt_H_ref)
+         !$omp target update to(dyn_a%bt_work%bt_H_ref, dyn_b%bt_work%bt_H_ref)
 
          do i = 1, N_STEPS
             call ocean_dyn_step_split( &
@@ -1093,7 +1093,7 @@ contains
                va_b, hd_b, vd_b, vmix_b, ms_b, DT, N_INNER, bc=bc)
          end do
 
-         !$acc update self(ms_a%h_layer, ms_b%h_layer)
+         !$omp target update from(ms_a%h_layer, ms_b%h_layer)
          call map_out(metrics_a, ms_a, ct_a, cor_a, pgf_a, hv_a, bd_a, ss_a, va_a, hd_a, vd_a, vmix_a, dyn_a)
          call map_out(metrics_b, ms_b, ct_b, cor_b, pgf_b, hv_b, bd_b, ss_b, va_b, hd_b, vd_b, vmix_b, dyn_b)
 

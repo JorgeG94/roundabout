@@ -127,7 +127,7 @@ contains
       real(wp), intent(in) :: fu(:, :), fv(:, :)
       integer, intent(in) :: n_steps
       real(wp), intent(in) :: dt_inner
-      !$acc enter data copyin(dyn, cor, fu, fv)
+      !$omp target enter data map(to: dyn, cor, fu, fv)
       call dyn%enter_data()
       call cor%enter_data()
       call barotropic_substep_nonlinear(grid, dyn%bt_work, &
@@ -149,14 +149,14 @@ contains
                                         area_cu=metrics%areaCu, area_cv=metrics%areaCv, dx_cu=metrics%dxCu, dx_cv=metrics%dx_cv, &
                                         dy_cu=metrics%dy_cu, dy_cv=metrics%dyCv, iarea_bu=metrics%iareaBu, iarea_t=metrics%iareaT, &
                                         idx_cu=metrics%idxCu, idy_cv=metrics%idyCv)
-      !$acc update self(dyn%bt_work%bt_eta_end, dyn%bt_work%bt_ubt_end, dyn%bt_work%bt_vbt_end)
+      !$omp target update from(dyn%bt_work%bt_eta_end, dyn%bt_work%bt_ubt_end, dyn%bt_work%bt_vbt_end)
       if (allocated(dyn%bt_work%wd_wet_dyn)) then
-         !$acc update self(dyn%bt_work%wd_wet_dyn, dyn%bt_work%wd_theta)
-         !$acc update self(dyn%bt_work%wd_open_u, dyn%bt_work%wd_open_v)
+         !$omp target update from(dyn%bt_work%wd_wet_dyn, dyn%bt_work%wd_theta)
+         !$omp target update from(dyn%bt_work%wd_open_u, dyn%bt_work%wd_open_v)
       end if
       call cor%exit_data()
       call dyn%exit_data()
-      !$acc exit data delete(dyn, cor, fu, fv)
+      !$omp target exit data map(delete: dyn, cor, fu, fv)
       ! Continue the trajectory from the end-of-chunk snapshot.
       dyn%bt_work%bt_eta = dyn%bt_work%bt_eta_end
       dyn%bt_work%bt_ubt = dyn%bt_work%bt_ubt_end
@@ -1043,7 +1043,7 @@ contains
          saw_flood = .false.
          saw_redry = .false.
 
-         !$acc enter data copyin(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+         !$omp target enter data map(to: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
          call ms%enter_data(); call ct%enter_data(); call cor%enter_data()
          call pgf%enter_data(); call hv%enter_data(); call bd%enter_data()
          call ss%enter_data(); call va%enter_data(); call hd%enter_data()
@@ -1055,7 +1055,7 @@ contains
             call ocean_dyn_step_split(grid, metrics, dyn, eos, cor, ct, pgf, &
                                       hv, bd, ss, va, hd, vd, vmix, ms, dt, N_INNER, &
                                       vcoord=vc)
-            !$acc update self(ms%h_layer, dyn%bt_work%wd_wet_dyn)
+            !$omp target update from(ms%h_layer, dyn%bt_work%wd_wet_dyn)
             ! Gate 2/3: finite + positivity over interior columns.
             do j = NGHOST + 1, NGHOST + NYP
                do i = NGHOST + 1, NGHOST + NXP
@@ -1080,14 +1080,14 @@ contains
             end do
          end do
 
-         !$acc update self(ms%h_layer)
+         !$omp target update from(ms%h_layer)
          call destroy_cartesian_metrics(metrics)
          call vc%exit_data()
          call dyn%exit_data(); call vmix%exit_data(); call vd%exit_data()
          call hd%exit_data(); call va%exit_data(); call ss%exit_data()
          call bd%exit_data(); call hv%exit_data(); call pgf%exit_data()
          call cor%exit_data(); call ct%exit_data(); call ms%exit_data()
-         !$acc exit data delete(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+         !$omp target exit data map(delete: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
 
          m1 = 0.0_wp
          do j = NGHOST + 1, NGHOST + NYP
@@ -1255,7 +1255,7 @@ contains
          dt = real(N_INNER, wp)*dt_inner
          min_tr = huge(1.0_wp)
 
-         !$acc enter data copyin(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+         !$omp target enter data map(to: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
          call ms%enter_data(); call ct%enter_data(); call cor%enter_data()
          call pgf%enter_data(); call hv%enter_data(); call bd%enter_data()
          call ss%enter_data(); call va%enter_data(); call hd%enter_data()
@@ -1269,15 +1269,15 @@ contains
                                       vcoord=vc)
          end do
 
-         !$acc update self(ms%h_layer)
-         !$acc update self(ms%tracers(idxS)%hTr, ms%tracers(idxT)%hTr)
+         !$omp target update from(ms%h_layer)
+         !$omp target update from(ms%tracers(idxS)%hTr, ms%tracers(idxT)%hTr)
          call destroy_cartesian_metrics(metrics)
          call vc%exit_data()
          call dyn%exit_data(); call vmix%exit_data(); call vd%exit_data()
          call hd%exit_data(); call va%exit_data(); call ss%exit_data()
          call bd%exit_data(); call hv%exit_data(); call pgf%exit_data()
          call cor%exit_data(); call ct%exit_data(); call ms%exit_data()
-         !$acc exit data delete(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+         !$omp target exit data map(delete: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
 
          hs1 = 0.0_wp; ht1 = 0.0_wp
          do j = NGHOST + 1, NGHOST + NYP
@@ -1449,7 +1449,7 @@ contains
          all_finite = .true.
          vanish_flooded = .false.
 
-         !$acc enter data copyin(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+         !$omp target enter data map(to: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
          call ms%enter_data(); call ct%enter_data(); call cor%enter_data()
          call pgf%enter_data(); call hv%enter_data(); call bd%enter_data()
          call ss%enter_data(); call va%enter_data(); call hd%enter_data()
@@ -1461,7 +1461,7 @@ contains
             call ocean_dyn_step_split(grid, metrics, dyn, eos, cor, ct, pgf, &
                                       hv, bd, ss, va, hd, vd, vmix, ms, dt, N_INNER, &
                                       vcoord=vc)
-            !$acc update self(ms%h_layer, dyn%bt_work%wd_wet_dyn)
+            !$omp target update from(ms%h_layer, dyn%bt_work%wd_wet_dyn)
             do j = NGHOST + 1, NGHOST + NYP
                do i = NGHOST + 1, NGHOST + NXP
                   do k = 1, NZ2
@@ -1473,15 +1473,15 @@ contains
                vanish_flooded = .true.
          end do
 
-         !$acc update self(ms%h_layer)
-         !$acc update self(ms%tracers(idxS)%hTr, ms%tracers(idxT)%hTr)
+         !$omp target update from(ms%h_layer)
+         !$omp target update from(ms%tracers(idxS)%hTr, ms%tracers(idxT)%hTr)
          call destroy_cartesian_metrics(metrics)
          call vc%exit_data()
          call dyn%exit_data(); call vmix%exit_data(); call vd%exit_data()
          call hd%exit_data(); call va%exit_data(); call ss%exit_data()
          call bd%exit_data(); call hv%exit_data(); call pgf%exit_data()
          call cor%exit_data(); call ct%exit_data(); call ms%exit_data()
-         !$acc exit data delete(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+         !$omp target exit data map(delete: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
 
          hs1 = 0.0_wp; ht1 = 0.0_wp; min_tr = huge(1.0_wp)
          do j = NGHOST + 1, NGHOST + NYP

@@ -65,9 +65,9 @@ contains
    subroutine map_in(ms, vadv)
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_vertical_advection_t), intent(inout) :: vadv
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(vadv)
+      !$omp target enter data map(to: vadv)
       call vadv%enter_data()
    end subroutine map_in
 
@@ -75,9 +75,9 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_vertical_advection_t), intent(inout) :: vadv
       call vadv%exit_data()
-      !$acc exit data delete(vadv)
+      !$omp target exit data map(delete: vadv)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out
 
    ! -----------------------------------------------------------------
@@ -337,10 +337,10 @@ contains
          ! normal pipeline — continuity writes it on-device); push
          ! the prescribed host values to device so the kernel reads
          ! them, not the initial uninitialised buffer.
-         !$acc update device(ms%flux_h_layer)
-         !$acc enter data copyin(vadv)
+         !$omp target update to(ms%flux_h_layer)
+         !$omp target enter data map(to: vadv)
          call compute_w_from_continuity(grid, vadv, ms)
-         !$acc exit data delete(vadv)
+         !$omp target exit data map(delete: vadv)
          call map_out(ms, vadv)
 
          max_diff = 0.0_wp

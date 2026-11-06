@@ -415,9 +415,9 @@ contains
       do e = 1, reg%n
          associate (en => reg%entries(e))
             if (en%device_mapped .and. en%rank == 2) then
-               !$acc update self(en%p2)
+               !$omp target update from(en%p2)
             else if (en%device_mapped .and. en%rank == 3) then
-               !$acc update self(en%p3)
+               !$omp target update from(en%p3)
             end if
             select case (en%rank)
             case (0)
@@ -429,9 +429,9 @@ contains
             end select
          end associate
       end do
-      !$acc update self(engine%state%surface_stress%tau_x, engine%state%surface_stress%tau_y)
-      !$acc update self(engine%state%surface_stress%stress_mag)
-      !$acc update self(engine%state%surface_flux%Q_heat, engine%state%surface_flux%Q_salt)
+      !$omp target update from(engine%state%surface_stress%tau_x, engine%state%surface_stress%tau_y)
+      !$omp target update from(engine%state%surface_stress%stress_mag)
+      !$omp target update from(engine%state%surface_flux%Q_heat, engine%state%surface_flux%Q_salt)
       call push2(snap, "surface_stress_tau_x", engine%state%surface_stress%tau_x)
       call push2(snap, "surface_stress_tau_y", engine%state%surface_stress%tau_y)
       call push2(snap, "surface_stress_mag", engine%state%surface_stress%stress_mag)

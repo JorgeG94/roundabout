@@ -301,13 +301,13 @@ contains
    subroutine ocean_lateral_mix_enter_data_impl(this)
       type(ocean_lateral_mix_t), intent(inout) :: this
       if (.not. this%is_init) return
-      !$acc enter data copyin(this%ah_face_x, this%ah_face_y)
-      !$acc enter data copyin(this%nu4_face_x, this%nu4_face_y)
+      !$omp target enter data map(to: this%ah_face_x, this%ah_face_y)
+      !$omp target enter data map(to: this%nu4_face_x, this%nu4_face_y)
       if (allocated(this%kh_floor_x)) then
-         !$acc enter data copyin(this%kh_floor_x, this%kh_floor_y)
+         !$omp target enter data map(to: this%kh_floor_x, this%kh_floor_y)
       end if
       if (allocated(this%f_max_T)) then
-         !$acc enter data copyin(this%f_max_T)
+         !$omp target enter data map(to: this%f_max_T)
       end if
       call scratch_3d_buffer_enter_data_impl(this%vort_corner)
    end subroutine ocean_lateral_mix_enter_data_impl
@@ -325,13 +325,13 @@ contains
       if (.not. this%is_init) return
       call scratch_3d_buffer_exit_data_impl(this%vort_corner)
       if (allocated(this%f_max_T)) then
-         !$acc exit data delete(this%f_max_T)
+         !$omp target exit data map(delete: this%f_max_T)
       end if
       if (allocated(this%kh_floor_x)) then
-         !$acc exit data delete(this%kh_floor_y, this%kh_floor_x)
+         !$omp target exit data map(delete: this%kh_floor_y, this%kh_floor_x)
       end if
-      !$acc exit data delete(this%nu4_face_y, this%nu4_face_x)
-      !$acc exit data delete(this%ah_face_y, this%ah_face_x)
+      !$omp target exit data map(delete: this%nu4_face_y, this%nu4_face_x)
+      !$omp target exit data map(delete: this%ah_face_y, this%ah_face_x)
    end subroutine ocean_lateral_mix_exit_data_impl
 
    pure subroutine ocean_lateral_mix_compute_leith(grid, metrics, this, ms, &
