@@ -112,18 +112,23 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     set_source_files_properties(
       ${PROJECT_SOURCE_DIR}/src/core/ocean/kernels/barotropic/rdb_barotropic_coupling.F90
       PROPERTIES COMPILE_OPTIONS "-Mnofma")
-    # Third file, same class (2026-10): the ALE column remap.  Under `-fast
-    # -tp=haswell` the remapped `v_face_y_layer` of one face in the first owned
-    # column of the 4x1 split's last tile came out 1 ulp off the 2x2 / 1x4
-    # value; fields re-converged, but the ulp reached the mass flux and the EFP
-    # `mass_out` budget kept it (test_ocean_decomp_bitid_mpi
-    # `gm_ebt_struct/ssp_rk2`, 4 ranks).  A per-file bisection of `-Mnofma` over
-    # every source isolates this file alone; the Debug build and the GPU build
-    # are bitwise without it.
-    set_source_files_properties(
-      ${PROJECT_SOURCE_DIR}/src/ALE/rdb_remap_column.F90
-      PROPERTIES COMPILE_OPTIONS "-Mnofma")
   endif()
+  # ALE remap: FMA contraction OFF on CPU *and* GPU builds, so the streaming
+  # remap kernel (rdb_ocean_remap) is bit-identical to the reference PPM remap
+  # (rdb_remap_column) regardless of how each is scheduled or vectorised.
+  # Textually identical expressions can contract differently when the loop
+  # structure differs, which would break that identity.  On the CPU build this
+  # file also fixes a decomposition drift: under `-fast -tp=haswell` the
+  # remapped `v_face_y_layer` of one face in the first owned column of the 4x1
+  # split's last tile came out 1 ulp off the 2x2 / 1x4 value, and the ulp
+  # reached the mass flux and the EFP `mass_out` budget
+  # (test_ocean_decomp_bitid_mpi `gm_ebt_struct/ssp_rk2`, 4 ranks).
+  # rdb_ocean_remap.F90 also `#include`s rdb_vanished_layer.inc, so the
+  # vanished-layer helpers it uses get the flag too.
+  set_source_files_properties(
+    ${PROJECT_SOURCE_DIR}/src/ALE/rdb_remap_column.F90
+    ${PROJECT_SOURCE_DIR}/src/ALE/rdb_ocean_remap.F90 PROPERTIES COMPILE_OPTIONS
+                                                                 "-Mnofma")
 
 elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   set(CMAKE_Fortran_FLAGS
@@ -158,8 +163,12 @@ elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   # Leith's rounding, the 4x1 split's `bt_visc_rem_u/v` and `epbl_kd_int` came
   # out a few ulp off the 1-rank run (2x1, 1x2, 2x2 still bitwise).  A per-file
   # bisection of `-ffp-contract=off` over every source isolates this file alone.
-  set_source_files_properties(${PROJECT_SOURCE_DIR}/src/ALE/rdb_remap_column.F90
-                              PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+  # rdb_ocean_remap.F90 (the streaming remap kernel) gets the same flag: it must
+  # stay bit-identical to the reference PPM remap independent of scheduling.
+  set_source_files_properties(
+    ${PROJECT_SOURCE_DIR}/src/ALE/rdb_remap_column.F90
+    ${PROJECT_SOURCE_DIR}/src/ALE/rdb_ocean_remap.F90
+    PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
   if(RDB_ENABLE_COVERAGE)
     # gcov instrumentation: disable optimisation so line counts map cleanly,
     # apply --coverage to both compile and link (gcc driver expands it to
