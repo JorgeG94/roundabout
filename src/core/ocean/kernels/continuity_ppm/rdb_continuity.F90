@@ -1497,7 +1497,7 @@ contains
 
       integer :: i, j, k, nx, ny, nz, iter
       real(wp) :: u, h_face, sum_flux, sum_h, du, target, w, wk
-      real(wp) :: flux0(NZ_STACK_MAX), u0(NZ_STACK_MAX)
+      real(wp) :: flux0_k, u0_k
       real(wp) :: u_lim, du_hi, du_lo, vr_k, du_k
       real(wp) :: b_lo, b_hi, du_new
       integer :: maxit
@@ -1528,7 +1528,7 @@ contains
       ! is false (periodic) or the edge is an MPI seam (has_* false),
       ! the two physical walls.
       do concurrent(j=1:ny, i=2:nx) &
-         local(k, iter, u, h_face, sum_flux, sum_h, du, target, w, wk, flux0, u0, &
+         local(k, iter, u, h_face, sum_flux, sum_h, du, target, w, wk, flux0_k, u0_k, &
                u_lim, du_hi, du_lo, vr_k, du_k, b_lo, b_hi, du_new)
          ! Bypass physical walls when requested (mass_flux already 0 there
          ! for wall BCs; for periodic, real transport is present).
@@ -1537,10 +1537,6 @@ contains
               (i == grid%nghost + grid%nx_phys + 1 .and. has_e))) cycle
          w = metrics%dy_cu(i, j)
          target = uhbt(i, j)
-         do k = 1, nz
-            u0(k) = ms%u_face_x_layer(i, j, k)
-            flux0(k) = ms%mass_flux_x_layer(i, j, k)
-         end do
          ! Legacy single-step form (wet/dry composition — see the
          ! `renorm_legacy_single_step` docstring): one linear correction
          ! with donors picked at the uncorrected velocity, bit-identical
@@ -1549,29 +1545,33 @@ contains
             sum_flux = 0.0_wp
             sum_h = 0.0_wp
             do k = 1, nz
+               u0_k = ms%u_face_x_layer(i, j, k)
+               flux0_k = ms%mass_flux_x_layer(i, j, k)
                wk = w
                if (use_por) wk = w*por(i, j, k)
                if (use_open) wk = wk*open_f(i, j, k)
-               if (u0(k) >= 0.0_wp) then
+               if (u0_k >= 0.0_wp) then
                   h_face = this%h_face_left_x%data(i, j, k)
                else
                   h_face = this%h_face_right_x%data(i, j, k)
                end if
-               sum_flux = sum_flux + flux0(k)
+               sum_flux = sum_flux + flux0_k
                sum_h = sum_h + h_face*wk
             end do
             if (sum_h > 0.0_wp) then
                du = (target - sum_flux)/sum_h
                do k = 1, nz
+                  u0_k = ms%u_face_x_layer(i, j, k)
+                  flux0_k = ms%mass_flux_x_layer(i, j, k)
                   wk = w
                   if (use_por) wk = w*por(i, j, k)
                   if (use_open) wk = wk*open_f(i, j, k)
-                  if (u0(k) >= 0.0_wp) then
+                  if (u0_k >= 0.0_wp) then
                      h_face = this%h_face_left_x%data(i, j, k)
                   else
                      h_face = this%h_face_right_x%data(i, j, k)
                   end if
-                  ms%mass_flux_x_layer(i, j, k) = flux0(k) + du*h_face*wk
+                  ms%mass_flux_x_layer(i, j, k) = flux0_k + du*h_face*wk
                end do
             end if
             cycle
@@ -1599,18 +1599,19 @@ contains
          du_hi = huge(1.0_wp)
          du_lo = -huge(1.0_wp)
          do k = 1, nz
+            u0_k = ms%u_face_x_layer(i, j, k)
             if (use_vr) then
                ! Layer increment is `du·γ_k`, so the CFL bound on `du` is
                ! divided by γ_k.  A layer the implicit friction has fully
                ! damped (γ→0) receives no increment and imposes no bound.
                vr_k = visc_rem(i, j, k)
                if (vr_k > RENORM_VR_MIN) then
-                  du_hi = min(du_hi, (u_lim - u0(k))/vr_k)
-                  du_lo = max(du_lo, (-u_lim - u0(k))/vr_k)
+                  du_hi = min(du_hi, (u_lim - u0_k)/vr_k)
+                  du_lo = max(du_lo, (-u_lim - u0_k)/vr_k)
                end if
             else
-               du_hi = min(du_hi, u_lim - u0(k))
-               du_lo = max(du_lo, -u_lim - u0(k))
+               du_hi = min(du_hi, u_lim - u0_k)
+               du_lo = max(du_lo, -u_lim - u0_k)
             end if
          end do
          du_hi = max(du_hi, 0.0_wp)
@@ -1629,12 +1630,14 @@ contains
             sum_flux = 0.0_wp
             sum_h = 0.0_wp
             do k = 1, nz
+               u0_k = ms%u_face_x_layer(i, j, k)
+               flux0_k = ms%mass_flux_x_layer(i, j, k)
                wk = w
                if (use_por) wk = w*por(i, j, k)
                if (use_open) wk = wk*open_f(i, j, k)
                du_k = du
                if (use_vr) du_k = du*visc_rem(i, j, k)
-               if (u0(k) + du_k >= 0.0_wp) then
+               if (u0_k + du_k >= 0.0_wp) then
                   h_face = this%h_face_left_x%data(i, j, k)
                else
                   h_face = this%h_face_right_x%data(i, j, k)
@@ -1645,10 +1648,10 @@ contains
                ! (→ 0 from both sides) where the historical
                ! `flux0 + du_k·h_face` jumps by `u0·(h_new − h_old)·wk`.
                ! Unflipped layers keep the historical expression.
-               if (consistent .and. ((u0(k) + du_k >= 0.0_wp) .neqv. (u0(k) >= 0.0_wp))) then
-                  sum_flux = sum_flux + (u0(k) + du_k)*h_face*wk
+               if (consistent .and. ((u0_k + du_k >= 0.0_wp) .neqv. (u0_k >= 0.0_wp))) then
+                  sum_flux = sum_flux + (u0_k + du_k)*h_face*wk
                else
-                  sum_flux = sum_flux + (flux0(k) + du_k*h_face*wk)
+                  sum_flux = sum_flux + (flux0_k + du_k*h_face*wk)
                end if
                if (use_vr) then
                   sum_h = sum_h + visc_rem(i, j, k)*h_face*wk
@@ -1678,26 +1681,28 @@ contains
          end do
          if (sum_h > 0.0_wp) then
             do k = 1, nz
+               u0_k = ms%u_face_x_layer(i, j, k)
+               flux0_k = ms%mass_flux_x_layer(i, j, k)
                wk = w
                if (use_por) wk = w*por(i, j, k)
                if (use_open) wk = wk*open_f(i, j, k)
                du_k = du
                if (use_vr) du_k = du*visc_rem(i, j, k)
-               if (u0(k) + du_k >= 0.0_wp) then
+               if (u0_k + du_k >= 0.0_wp) then
                   h_face = this%h_face_left_x%data(i, j, k)
                else
                   h_face = this%h_face_right_x%data(i, j, k)
                end if
-               if (consistent .and. ((u0(k) + du_k >= 0.0_wp) .neqv. (u0(k) >= 0.0_wp))) then
-                  ms%mass_flux_x_layer(i, j, k) = (u0(k) + du_k)*h_face*wk
+               if (consistent .and. ((u0_k + du_k >= 0.0_wp) .neqv. (u0_k >= 0.0_wp))) then
+                  ms%mass_flux_x_layer(i, j, k) = (u0_k + du_k)*h_face*wk
                else
-                  ms%mass_flux_x_layer(i, j, k) = flux0(k) + du_k*h_face*wk
+                  ms%mass_flux_x_layer(i, j, k) = flux0_k + du_k*h_face*wk
                end if
                ! MOM6 `u_cor(I,j,k) = u(I,j,k) + du(I)*visc_rem(I,k)`.
                ! Writing this makes the renormalisation the SOLE barotropic
                ! correction; without it the velocity and the flux carry
                ! differently-weighted corrections that can disagree.
-               if (upd_u) u_cor(i, j, k) = u0(k) + du_k
+               if (upd_u) u_cor(i, j, k) = u0_k + du_k
             end do
          end if
       end do
@@ -1973,7 +1978,7 @@ contains
 
       integer :: i, j, k, nx, ny, nz, iter
       real(wp) :: v, h_face, sum_flux, sum_h, dv, target, w, wk
-      real(wp) :: flux0(NZ_STACK_MAX), v0(NZ_STACK_MAX)
+      real(wp) :: flux0_k, v0_k
       real(wp) :: v_lim, dv_hi, dv_lo, vr_k, dv_k
       real(wp) :: b_lo, b_hi, dv_new
       integer :: maxit
@@ -1997,46 +2002,46 @@ contains
       if (consistent) maxit = RENORM_MAXIT_CONSISTENT
 
       do concurrent(j=2:ny, i=1:nx) &
-         local(k, iter, v, h_face, sum_flux, sum_h, dv, target, w, wk, flux0, v0, v_lim, dv_hi, dv_lo, &
+         local(k, iter, v, h_face, sum_flux, sum_h, dv, target, w, wk, flux0_k, v0_k, v_lim, dv_hi, dv_lo, &
                vr_k, dv_k, b_lo, b_hi, dv_new)
          if (skip_w .and. &
              ((j == grid%nghost + 1 .and. has_s) .or. &
               (j == grid%nghost + grid%ny_phys + 1 .and. has_n))) cycle
          w = metrics%dx_cv(i, j)
          target = vhbt(i, j)
-         do k = 1, nz
-            v0(k) = ms%v_face_y_layer(i, j, k)
-            flux0(k) = ms%mass_flux_y_layer(i, j, k)
-         end do
          ! Legacy single-step form (wet/dry composition — mirror of the
          ! zonal branch; see `renorm_legacy_single_step`).
          if (this%renorm_legacy_single_step) then
             sum_flux = 0.0_wp
             sum_h = 0.0_wp
             do k = 1, nz
+               v0_k = ms%v_face_y_layer(i, j, k)
+               flux0_k = ms%mass_flux_y_layer(i, j, k)
                wk = w
                if (use_por) wk = w*por(i, j, k)
                if (use_open) wk = wk*open_f(i, j, k)
-               if (v0(k) >= 0.0_wp) then
+               if (v0_k >= 0.0_wp) then
                   h_face = this%h_face_left_y%data(i, j, k)
                else
                   h_face = this%h_face_right_y%data(i, j, k)
                end if
-               sum_flux = sum_flux + flux0(k)
+               sum_flux = sum_flux + flux0_k
                sum_h = sum_h + h_face*wk
             end do
             if (sum_h > 0.0_wp) then
                dv = (target - sum_flux)/sum_h
                do k = 1, nz
+                  v0_k = ms%v_face_y_layer(i, j, k)
+                  flux0_k = ms%mass_flux_y_layer(i, j, k)
                   wk = w
                   if (use_por) wk = w*por(i, j, k)
                   if (use_open) wk = wk*open_f(i, j, k)
-                  if (v0(k) >= 0.0_wp) then
+                  if (v0_k >= 0.0_wp) then
                      h_face = this%h_face_left_y%data(i, j, k)
                   else
                      h_face = this%h_face_right_y%data(i, j, k)
                   end if
-                  ms%mass_flux_y_layer(i, j, k) = flux0(k) + dv*h_face*wk
+                  ms%mass_flux_y_layer(i, j, k) = flux0_k + dv*h_face*wk
                end do
             end if
             cycle
@@ -2048,15 +2053,16 @@ contains
          dv_hi = huge(1.0_wp)
          dv_lo = -huge(1.0_wp)
          do k = 1, nz
+            v0_k = ms%v_face_y_layer(i, j, k)
             if (use_vr) then
                vr_k = visc_rem(i, j, k)
                if (vr_k > RENORM_VR_MIN) then
-                  dv_hi = min(dv_hi, (v_lim - v0(k))/vr_k)
-                  dv_lo = max(dv_lo, (-v_lim - v0(k))/vr_k)
+                  dv_hi = min(dv_hi, (v_lim - v0_k)/vr_k)
+                  dv_lo = max(dv_lo, (-v_lim - v0_k)/vr_k)
                end if
             else
-               dv_hi = min(dv_hi, v_lim - v0(k))
-               dv_lo = max(dv_lo, -v_lim - v0(k))
+               dv_hi = min(dv_hi, v_lim - v0_k)
+               dv_lo = max(dv_lo, -v_lim - v0_k)
             end if
          end do
          dv_hi = max(dv_hi, 0.0_wp)
@@ -2071,12 +2077,14 @@ contains
             sum_flux = 0.0_wp
             sum_h = 0.0_wp
             do k = 1, nz
+               v0_k = ms%v_face_y_layer(i, j, k)
+               flux0_k = ms%mass_flux_y_layer(i, j, k)
                wk = w
                if (use_por) wk = w*por(i, j, k)
                if (use_open) wk = wk*open_f(i, j, k)
                dv_k = dv
                if (use_vr) dv_k = dv*visc_rem(i, j, k)
-               if (v0(k) + dv_k >= 0.0_wp) then
+               if (v0_k + dv_k >= 0.0_wp) then
                   h_face = this%h_face_left_y%data(i, j, k)
                else
                   h_face = this%h_face_right_y%data(i, j, k)
@@ -2087,10 +2095,10 @@ contains
                ! (→ 0 from both sides) where the historical
                ! `flux0 + dv_k·h_face` jumps by `v0·(h_new − h_old)·wk`.
                ! Unflipped layers keep the historical expression.
-               if (consistent .and. ((v0(k) + dv_k >= 0.0_wp) .neqv. (v0(k) >= 0.0_wp))) then
-                  sum_flux = sum_flux + (v0(k) + dv_k)*h_face*wk
+               if (consistent .and. ((v0_k + dv_k >= 0.0_wp) .neqv. (v0_k >= 0.0_wp))) then
+                  sum_flux = sum_flux + (v0_k + dv_k)*h_face*wk
                else
-                  sum_flux = sum_flux + (flux0(k) + dv_k*h_face*wk)
+                  sum_flux = sum_flux + (flux0_k + dv_k*h_face*wk)
                end if
                if (use_vr) then
                   sum_h = sum_h + visc_rem(i, j, k)*h_face*wk
@@ -2120,23 +2128,25 @@ contains
          end do
          if (sum_h > 0.0_wp) then
             do k = 1, nz
+               v0_k = ms%v_face_y_layer(i, j, k)
+               flux0_k = ms%mass_flux_y_layer(i, j, k)
                wk = w
                if (use_por) wk = w*por(i, j, k)
                if (use_open) wk = wk*open_f(i, j, k)
                dv_k = dv
                if (use_vr) dv_k = dv*visc_rem(i, j, k)
-               if (v0(k) + dv_k >= 0.0_wp) then
+               if (v0_k + dv_k >= 0.0_wp) then
                   h_face = this%h_face_left_y%data(i, j, k)
                else
                   h_face = this%h_face_right_y%data(i, j, k)
                end if
-               if (consistent .and. ((v0(k) + dv_k >= 0.0_wp) .neqv. (v0(k) >= 0.0_wp))) then
-                  ms%mass_flux_y_layer(i, j, k) = (v0(k) + dv_k)*h_face*wk
+               if (consistent .and. ((v0_k + dv_k >= 0.0_wp) .neqv. (v0_k >= 0.0_wp))) then
+                  ms%mass_flux_y_layer(i, j, k) = (v0_k + dv_k)*h_face*wk
                else
-                  ms%mass_flux_y_layer(i, j, k) = flux0(k) + dv_k*h_face*wk
+                  ms%mass_flux_y_layer(i, j, k) = flux0_k + dv_k*h_face*wk
                end if
                ! MOM6 `v_cor = v + dv·visc_rem` — see the zonal twin.
-               if (upd_v) v_cor(i, j, k) = v0(k) + dv_k
+               if (upd_v) v_cor(i, j, k) = v0_k + dv_k
             end do
          end if
       end do
