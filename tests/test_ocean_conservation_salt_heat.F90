@@ -224,8 +224,8 @@ contains
          ! device yet — push it (else the -gpu=mem:separate kernel reads
          ! uninitialised device flux and the budget never fills).
          !$acc update device(ms%mass_flux_x_layer, ms%mass_flux_y_layer)
-         call tracer_advect_zonal(grid, metrics, ct, ms, DT)
-         call tracer_advect_meridional(grid, metrics, ct, ms, DT)
+         call tracer_advect_zonal(grid, metrics, ct, ms, DT, ms%h_layer, ms%h_layer)
+         call tracer_advect_meridional(grid, metrics, ct, ms, DT, ms%h_layer, ms%h_layer)
          call map_out(ms, ct)
 
          max_salt_zero = maxval(abs(ms%salt_budget_horiz_adv))
@@ -259,7 +259,7 @@ contains
 
          call map_in(ms, ct)
          !$acc update device(ms%mass_flux_x_layer, ms%mass_flux_y_layer)
-         call tracer_advect_zonal(grid, metrics, ct, ms, DT)
+         call tracer_advect_zonal(grid, metrics, ct, ms, DT, ms%h_layer, ms%h_layer)
          call map_out(ms, ct)
 
          ! Expected: budget_salt(i,j,k) = -dt · A_RAMP · S0 · iareaT
@@ -720,12 +720,12 @@ contains
          call map_in(ms_a, ct_a)
          call map_in(ms_b, ct_b)
 
-         call tracer_advect_zonal(grid, metrics, ct_a, ms_a, DT)
-         call tracer_advect_zonal(grid, metrics, ct_b, ms_b, DT)
+         call tracer_advect_zonal(grid, metrics, ct_a, ms_a, DT, ms_a%h_layer, ms_a%h_layer)
+         call tracer_advect_zonal(grid, metrics, ct_b, ms_b, DT, ms_b%h_layer, ms_b%h_layer)
          call continuity_meridional_flux(grid, metrics, ct_a, ms_a, DT)
          call continuity_meridional_flux(grid, metrics, ct_b, ms_b, DT)
-         call tracer_advect_meridional(grid, metrics, ct_a, ms_a, DT)
-         call tracer_advect_meridional(grid, metrics, ct_b, ms_b, DT)
+         call tracer_advect_meridional(grid, metrics, ct_a, ms_a, DT, ms_a%h_layer, ms_a%h_layer)
+         call tracer_advect_meridional(grid, metrics, ct_b, ms_b, DT, ms_b%h_layer, ms_b%h_layer)
 
          call map_out(ms_a, ct_a)
          call map_out(ms_b, ct_b)
@@ -1049,13 +1049,13 @@ contains
          call ms%enter_data()
          !$acc enter data copyin(mfx) create(fxl, fxr) copyin(budget)
          call tracer_advect_zonal_one_impl(nx, ny, NZ, DT, metrics%iareaT, &
-                                           metrics%wet_T, ms%h_layer, &
+                                           metrics%wet_T, ms%h_layer, ms%h_layer, &
                                            ms%tracers(ms%idx_temperature)%hTr, mfx, &
                                            fxl, fxr, budget_adv=budget)
          fxl = 0.0_wp
          fxr = 0.0_wp
          call tracer_advect_zonal_one_impl(nx, ny, NZ, DT, metrics%iareaT, &
-                                           metrics%wet_T, ms%h_layer, &
+                                           metrics%wet_T, ms%h_layer, ms%h_layer, &
                                            ms%tracers(ms%idx_temperature)%hTr, mfx, &
                                            fxl, fxr, budget_adv=budget)
          !$acc update self(budget)
@@ -1195,10 +1195,10 @@ contains
          !$acc enter data copyin(mfx, hTr_a, hTr_b, budget) &
          !$acc            create(fxl_a, fxr_a, fxl_b, fxr_b)
          call tracer_advect_zonal_one_impl(nx, ny, NZ, DT, metrics%iareaT, &
-                                           metrics%wet_T, ms%h_layer, hTr_a, mfx, &
+                                           metrics%wet_T, ms%h_layer, ms%h_layer, hTr_a, mfx, &
                                            fxl_a, fxr_a, budget_adv=budget)
          call tracer_advect_zonal_one_impl(nx, ny, NZ, DT, metrics%iareaT, &
-                                           metrics%wet_T, ms%h_layer, hTr_b, mfx, &
+                                           metrics%wet_T, ms%h_layer, ms%h_layer, hTr_b, mfx, &
                                            fxl_b, fxr_b)
          !$acc update self(hTr_a, hTr_b, budget)
          !$acc exit data delete(mfx, hTr_a, hTr_b, budget, fxl_a, fxr_a, fxl_b, fxr_b)
@@ -1230,10 +1230,10 @@ contains
          !$acc enter data copyin(mfy, hTr_a, hTr_b, budget) &
          !$acc            create(fyl_a, fyr_a, fyl_b, fyr_b)
          call tracer_advect_meridional_one_impl(nx, ny, NZ, DT, metrics%iareaT, &
-                                                metrics%wet_T, ms%h_layer, hTr_a, mfy, &
+                                                metrics%wet_T, ms%h_layer, ms%h_layer, hTr_a, mfy, &
                                                 fyl_a, fyr_a, budget_adv=budget)
          call tracer_advect_meridional_one_impl(nx, ny, NZ, DT, metrics%iareaT, &
-                                                metrics%wet_T, ms%h_layer, hTr_b, mfy, &
+                                                metrics%wet_T, ms%h_layer, ms%h_layer, hTr_b, mfy, &
                                                 fyl_b, fyr_b)
          !$acc update self(hTr_a, hTr_b, budget)
          !$acc exit data delete(mfy, hTr_a, hTr_b, budget, fyl_a, fyr_a, fyl_b, fyr_b)

@@ -69,6 +69,11 @@ module rdb_ocean_vertical_advection
          !! have (each layer reads its neighbour's hTr while
          !! another iteration writes it).  Reused across all
          !! tracers in one call.
+      type(scratch_3d_buffer_t) :: h_pair_prev
+         !! Snapshot of `h_layer` taken just before the vertical thickness
+         !! update: the `h⁻` of the `h⁻ → h⁺` pair the tracer kernel takes
+         !! from `tracer_advect_vertical` (`h⁺` is `ms%h_layer` after the
+         !! update).  Shape (nx, ny, nz_ml).
    contains
       procedure, non_overridable :: init => ocean_vert_adv_init
       procedure, non_overridable :: destroy => ocean_vert_adv_destroy
@@ -91,6 +96,7 @@ contains
       if (present(nz_ml)) nz = nz_ml
 
       call this%F_face%init(nx, ny, nz + 1, "ocean_vert_adv_F_face")
+      call this%h_pair_prev%init(nx, ny, nz, "ocean_vert_adv_h_pair_prev")
       this%is_init = .true.
    end subroutine ocean_vert_adv_init
 
@@ -98,6 +104,7 @@ contains
       class(ocean_vertical_advection_t), intent(inout) :: this
       this%is_init = .false.
       call this%F_face%destroy()
+      call this%h_pair_prev%destroy()
    end subroutine ocean_vert_adv_destroy
 
    subroutine ocean_vert_adv_enter_data(this)
@@ -114,6 +121,7 @@ contains
    subroutine ocean_vert_adv_enter_data_impl(this)
       type(ocean_vertical_advection_t), intent(inout) :: this
       call scratch_3d_buffer_enter_data_impl(this%F_face)
+      call scratch_3d_buffer_enter_data_impl(this%h_pair_prev)
    end subroutine ocean_vert_adv_enter_data_impl
 
    subroutine ocean_vert_adv_exit_data(this)
@@ -126,6 +134,7 @@ contains
 
    subroutine ocean_vert_adv_exit_data_impl(this)
       type(ocean_vertical_advection_t), intent(inout) :: this
+      call scratch_3d_buffer_exit_data_impl(this%h_pair_prev)
       call scratch_3d_buffer_exit_data_impl(this%F_face)
    end subroutine ocean_vert_adv_exit_data_impl
 
@@ -174,9 +183,11 @@ contains
       !! the kernel CWC-consistent — uniform `T = hTr/h` stays
       !! uniform regardless of how divergent the w field is.
       !!
-      !! Order matters: tracers read the pre-update `h_layer` for
-      !! their upwind concentration; `h_layer` is updated only
-      !! after all tracers have run.
+      !! One shared `h⁻ → h⁺` pair: `h_layer` is snapshotted into
+      !! `this%h_pair_prev` (`h⁻`), updated by the vertical mass-flux
+      !! divergence (`h⁺`), and then every tracer takes the pair.  The tracer
+      !! kernel reads only `h⁻` (content form), so the order is bit-identical
+      !! to the old "tracers first, then h" one.
       !!
       !! Eulerian-z mode: the h update here exactly cancels the
       !! horizontal h update produced by
@@ -201,6 +212,9 @@ contains
       if (present(active)) then
          if (.not. active) return
       end if
+      call copy_h_before(grid%nx_total, grid%ny_total, ms%nz_ml, ms%h_layer, this%h_pair_prev%data)
+      call apply_w_to_h_layer(grid%nx_total, grid%ny_total, ms%nz_ml, dt, &
+                              ms%w_interface, ms%h_layer)
       if (allocated(ms%tracers)) then
          do it = 1, size(ms%tracers)
             if (.not. ms%tracers(it)%do_vertical_exchange) cycle
@@ -208,25 +222,33 @@ contains
             case (TRACER_BUDGET_HEAT)
                call tracer_advect_vertical_one_impl( &
                   grid%nx_total, grid%ny_total, ms%nz_ml, dt, &
-                  ms%h_layer, ms%w_interface, ms%tracers(it)%hTr, &
+                  this%h_pair_prev%data, ms%h_layer, ms%w_interface, ms%tracers(it)%hTr, &
                   this%F_face%data, budget=ms%heat_budget_vert_adv)
             case (TRACER_BUDGET_SALT)
                call tracer_advect_vertical_one_impl( &
                   grid%nx_total, grid%ny_total, ms%nz_ml, dt, &
-                  ms%h_layer, ms%w_interface, ms%tracers(it)%hTr, &
+                  this%h_pair_prev%data, ms%h_layer, ms%w_interface, ms%tracers(it)%hTr, &
                   this%F_face%data, budget=ms%salt_budget_vert_adv)
             case default
                call tracer_advect_vertical_one_impl( &
                   grid%nx_total, grid%ny_total, ms%nz_ml, dt, &
-                  ms%h_layer, ms%w_interface, ms%tracers(it)%hTr, &
+                  this%h_pair_prev%data, ms%h_layer, ms%w_interface, ms%tracers(it)%hTr, &
                   this%F_face%data)
             end select
          end do
       end if
-
-      call apply_w_to_h_layer(grid%nx_total, grid%ny_total, ms%nz_ml, dt, &
-                              ms%w_interface, ms%h_layer)
    end subroutine tracer_advect_vertical
+
+   pure subroutine copy_h_before(nx, ny, nz, h_layer, h_prev)
+      !! `h_prev = h_layer` (explicit-shape device copy): the `h⁻` snapshot.
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in) :: h_layer(nx, ny, nz)
+      real(wp), intent(inout) :: h_prev(nx, ny, nz)
+      integer :: i, j, k
+      do concurrent(k=1:nz, j=1:ny, i=1:nx)
+         h_prev(i, j, k) = h_layer(i, j, k)
+      end do
+   end subroutine copy_h_before
 
    pure subroutine apply_w_to_h_layer(nx, ny, nz, dt, w_interface, h_layer)
       !! `h_layer(k) += dt * (w(k) - w(k+1))` per cell.  Bed and
@@ -250,7 +272,7 @@ contains
    end subroutine apply_w_to_h_layer
 
    pure subroutine tracer_advect_vertical_one_impl(nx, ny, nz, dt, &
-                                                   h, w_interface, hTr, F_face, budget)
+                                                   h_before, h_after, w_interface, hTr, F_face, budget)
       !! Flat-impl first-order upwind-in-z vertical advection for
       !! one tracer.  Two passes:
       !!
@@ -267,8 +289,8 @@ contains
       !! scratch lives on `ocean_vertical_advection_t` and is
       !! reused across all tracers in one call.
       !!
-      !! Vanishing-layer donor side: if h_donor <= 0, `T_donor`
-      !! falls back to zero (no flux).
+      !! Vanishing-layer donor side: if the donor's `h_before <= 0`,
+      !! `T_donor` falls back to zero (no flux) -- see `rdb_conc_of`.
       !!
       !! `budget` (optional): Phase D v2 contributor slot.  When
       !! present, the per-cell `dt · (F(k) - F(k+1))` increment is
@@ -276,33 +298,28 @@ contains
       !! for budget closure.
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: dt
-      real(wp), intent(in) :: h(nx, ny, nz)
+      real(wp), intent(in) :: h_before(nx, ny, nz)
+         !! Thickness before the vertical update (`h⁻`); the upwind donor
+         !! concentration is read against it.
+      real(wp), intent(in) :: h_after(nx, ny, nz)
+         !! Thickness after the vertical update (`h⁺`).  Unused while the
+         !! tracer is stored as content; the concentration form divides by it.
       real(wp), intent(in) :: w_interface(nx, ny, nz + 1)
       real(wp), intent(inout) :: hTr(nx, ny, nz)
       real(wp), intent(inout) :: F_face(nx, ny, nz + 1)
       real(wp), intent(inout), optional :: budget(nx, ny, nz)
 
       integer :: i, j, k
-      real(wp) :: w_at_k, T_donor, h_donor
+      real(wp) :: w_at_k, T_donor
 
       ! ---- Pass 1: per-interface upwind tracer flux ----
       do concurrent(k=2:nz, j=1:ny, i=1:nx) &
-         local(w_at_k, T_donor, h_donor)
+         local(w_at_k, T_donor)
          w_at_k = w_interface(i, j, k)
          if (w_at_k >= 0.0_wp) then
-            h_donor = h(i, j, k - 1)
-            if (h_donor > 0.0_wp) then
-               T_donor = hTr(i, j, k - 1)/h_donor
-            else
-               T_donor = 0.0_wp
-            end if
+            T_donor = rdb_conc_of(hTr(i, j, k - 1), h_before(i, j, k - 1))
          else
-            h_donor = h(i, j, k)
-            if (h_donor > 0.0_wp) then
-               T_donor = hTr(i, j, k)/h_donor
-            else
-               T_donor = 0.0_wp
-            end if
+            T_donor = rdb_conc_of(hTr(i, j, k), h_before(i, j, k))
          end if
          F_face(i, j, k) = w_at_k*T_donor
       end do
@@ -333,7 +350,9 @@ contains
       !! unallocated).
       class(ocean_vertical_advection_t), intent(in) :: this
       integer(int64) :: nbytes
-      nbytes = this%F_face%bytes()
+      nbytes = this%F_face%bytes() + this%h_pair_prev%bytes()
    end function ocean_vertical_advection_bytes
+
+#include "rdb_tracer_conc.inc"
 
 end module rdb_ocean_vertical_advection

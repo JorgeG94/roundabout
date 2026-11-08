@@ -1656,7 +1656,7 @@ contains
       integer :: i, j
       real(wp) :: surf, inc
       do concurrent(j=1:ny, i=1:nx) local(surf, inc)
-         surf = hTr(i, j, nz)/max(h_layer(i, j, nz), h_min)
+         surf = rdb_conc_of_floor(hTr(i, j, nz), h_layer(i, j, nz), h_min)
          inc = dt_piston*(tgt - surf)*wet_mask(i, j)
          hTr(i, j, nz) = hTr(i, j, nz) + inc
          budget(i, j, nz) = budget(i, j, nz) + inc
@@ -1686,7 +1686,7 @@ contains
          ! vanished-ok: surface restoring measures the surface concentration against a
          ! CALLER-supplied floor `h_min` (a restoring depth), not the
          ! vanish marker; zero would restore toward a fictitious fresh sea.
-         surf = hTr(i, j, nz)/max(h_layer(i, j, nz), h_min)
+         surf = rdb_conc_of_floor(hTr(i, j, nz), h_layer(i, j, nz), h_min)
          inc = dt_piston*(tgt - surf)*wet_mask(i, j)*(1.0_wp - cover_frac(i, j))
          hTr(i, j, nz) = hTr(i, j, nz) + inc
          budget(i, j, nz) = budget(i, j, nz) + inc
@@ -1910,7 +1910,7 @@ contains
          massin = heat_content_lprec(i, j) + heat_content_fprec(i, j) &
                   + heat_content_vprec(i, j) + heat_content_lrunoff(i, j) &
                   + heat_content_frunoff(i, j) + heat_content_seaice_melt(i, j)
-         sst = hTr_T(i, j, nz)/max(h_layer(i, j, nz), h_min)
+         sst = rdb_conc_of_floor(hTr_T(i, j, nz), h_layer(i, j, nz), h_min)
          massout = cp*sst*evap(i, j)
          heat_content_massin(i, j) = wet_mask(i, j)*massin
          heat_content_massout(i, j) = wet_mask(i, j)*massout
@@ -1976,7 +1976,7 @@ contains
                           + heat_content_frunoff(i, j) + heat_content_seaice_melt(i, j))
          ! vanished-ok: same caller-supplied `h_min` floor — the SST carrying the
          ! evaporative heat content must stay a temperature.
-         sst = hTr_T(i, j, nz)/max(h_layer(i, j, nz), h_min)
+         sst = rdb_conc_of_floor(hTr_T(i, j, nz), h_layer(i, j, nz), h_min)
          massout = open_f*cp*sst*evap(i, j)
          heat_content_massin(i, j) = wet_mask(i, j)*massin
          heat_content_massout(i, j) = wet_mask(i, j)*massout
@@ -1988,5 +1988,7 @@ contains
                                         salt_cavity(i, j))
       end do
    end subroutine ocean_surfflux_assemble_cover_impl
+
+#include "rdb_tracer_conc.inc"
 
 end module rdb_ocean_surface_flux

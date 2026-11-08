@@ -118,8 +118,8 @@ contains
          tfw_seam(i, j) = 0.0_wp
          h = h_layer(i, j, nz)
          if (wet_mask(i, j) > 0.5_wp .and. h > H_VANISHED) then
-            sst = hTr_T(i, j, nz)/h
-            s_surf = hTr_S(i, j, nz)/h
+            sst = rdb_conc_of_raw(hTr_T(i, j, nz), h)
+            s_surf = rdb_conc_of_raw(hTr_S(i, j, nz), h)
             tfw = eos_freezing_point(eos, s_surf, 0.0_wp)
             ! OCEAN-side available heat: model T, S, T_f (CT, SA, CT liquidus
             ! under cons_abs) -- formed BEFORE the ice-boundary conversion.
@@ -145,5 +145,7 @@ contains
          end if
       end do
    end subroutine ice_compute_basal_flux_impl
+
+#include "rdb_tracer_conc.inc"
 
 end module rdb_ice_basal_flux
