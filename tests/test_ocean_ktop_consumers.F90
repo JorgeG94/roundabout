@@ -28,6 +28,7 @@ module test_ocean_ktop_consumers
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_ocean_surface_flux, only: ocean_surface_flux_t, &
                                      ocean_surface_flux_apply_tracers, &
+                                     ocean_surface_flux_apply_sw_penetration, &
                                      SEAWATER_CP
    use rdb_ocean_cavity_flux, only: cavity_far_field_impl
    use rdb_ocean_top_drag, only: top_drag_tendencies_impl, TDRAG_LINEAR
@@ -62,7 +63,10 @@ contains
                   new_unittest("deposit_matches_the_sigma_column", test_deposit_matches), &
                   new_unittest("surface_budget_closes_from_step_zero", test_budget_closes), &
                   new_unittest("top_drag_spin_down_matches_no_filler", test_top_drag_spindown), &
-                  new_unittest("top_drag_fold_rate_is_on_the_live_row", test_fold_row) &
+                  new_unittest("top_drag_fold_rate_is_on_the_live_row", test_fold_row), &
+                  new_unittest("vanished_top_layer_refuses_the_deposit", test_refuse_vanished), &
+                  new_unittest("fully_dry_column_refuses_and_books_nothing", test_refuse_dry_column), &
+                  new_unittest("sw_lump_and_deposit_hit_the_same_layer", test_sw_same_layer) &
                   ]
    end subroutine collect_ocean_ktop_consumers_tests
 
@@ -129,6 +133,34 @@ contains
       !$acc exit data delete(ms, sf)
       call sf%destroy()
    end subroutine apply_flux
+
+   subroutine apply_flux_sw(grid, ms, q_heat)
+      !! One thermo-step surface deposit followed by the two-band shortwave
+      !! redistribution, through the production path.
+      type(hgrid_t), intent(in) :: grid
+      type(multilayer_state_t), intent(inout) :: ms
+      real(wp), intent(in) :: q_heat
+      type(ocean_surface_flux_t) :: sf
+
+      call sf%init(grid)
+      sf%rho0 = RHO0
+      sf%cp = SEAWATER_CP
+      call sf%set_surface_flux_const(q_heat, 0.0_wp)
+      call sf%set_sw_penetration(0.5_wp, 0.58_wp, 0.35_wp, 23.0_wp)
+
+      !$acc enter data copyin(ms, sf)
+      call ms%enter_data()
+      call sf%enter_data()
+      call ocean_surface_flux_apply_tracers(grid, sf, ms, DT_STEP)
+      call ocean_surface_flux_apply_sw_penetration(grid, sf, ms, DT_STEP)
+      associate (hT => ms%tracers(ms%idx_temperature)%c, bT => ms%heat_budget_surface)
+         !$acc update self(hT, bT)
+      end associate
+      call sf%exit_data()
+      call ms%exit_data()
+      !$acc exit data delete(ms, sf)
+      call sf%destroy()
+   end subroutine apply_flux_sw
 
    ! ------------------------------------------------------------------
    ! Cases
@@ -308,6 +340,90 @@ contains
                  "the tracked source is non-zero")
       call ms%destroy()
    end subroutine test_budget_closes
+
+   subroutine test_refuse_vanished(error)
+      !! Deposit rule: a top layer at or below `H_VANISHED` holds no water to
+      !! take a flux.  `k_top` is static, so a dynamically emptied top layer
+      !! is still `k_top`; dividing the flux by its 1e-4 m thickness would
+      !! make a ~218 degC concentration.  The deposit is REFUSED instead: `c`
+      !! keeps its (finite) stale value and the budget books nothing.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      real(wp), parameter :: STALE = 7.25_wp
+      real(wp) :: total_h0, total_h1
+
+      call build_state(ms, grid, NZ_S, 0)
+      ms%h_layer(:, :, NZ_S) = H_FILL
+      ms%tracers(ms%idx_temperature)%c(:, :, NZ_S) = STALE
+      total_h0 = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)
+      call apply_flux(grid, ms, 100.0_wp, 5.0e-5_wp)
+      total_h1 = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)
+
+      call check(error, ms%tracers(ms%idx_temperature)%c(2, 2, NZ_S) == STALE, &
+                 "the vanished top layer's heat concentration is unchanged")
+      if (allocated(error)) return
+      call check(error, ms%tracers(ms%idx_salinity)%c(2, 2, NZ_S) == S0, &
+                 "and so is its salinity concentration (no 1/h blow-up)")
+      if (allocated(error)) return
+      call check(error, ms%heat_budget_surface(2, 2, NZ_S) == 0.0_wp .and. &
+                 ms%salt_budget_surface(2, 2, NZ_S) == 0.0_wp, &
+                 "the refused deposit is not booked")
+      if (allocated(error)) return
+      call check(error, abs((total_h1 - total_h0) - sum(ms%heat_budget_surface)) &
+                 <= 1.0e-12_wp*abs(total_h0), "heat: delta total = booked source (zero)")
+      call ms%destroy()
+   end subroutine test_refuse_vanished
+
+   subroutine test_refuse_dry_column(error)
+      !! A fully dry column (every layer at the marker): the deposit is
+      !! refused, nothing is recorded, every concentration stays finite.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      real(wp) :: t_before(NZ_S)
+
+      call build_state(ms, grid, NZ_S, 0)
+      ms%h_layer(:, :, :) = H_FILL
+      t_before = ms%tracers(ms%idx_temperature)%c(2, 2, :)
+      call apply_flux_sw(grid, ms, 100.0_wp)
+
+      call check(error, all(ms%tracers(ms%idx_temperature)%c(2, 2, :) == t_before), &
+                 "a dry column's concentrations are untouched by surface flux + SW")
+      if (allocated(error)) return
+      call check(error, all(ms%heat_budget_surface(2, 2, :) == 0.0_wp), &
+                 "and nothing is recorded in the heat budget")
+      call ms%destroy()
+   end subroutine test_refuse_dry_column
+
+   subroutine test_sw_same_layer(error)
+      !! The SW kernel removes the legacy surface lump from `k_top`, the layer
+      !! the lump was deposited on.  With the static `k_top` = `NZ_Z - NFILL`
+      !! under three fillers, the column total changes by exactly the booked
+      !! source (the net flux), and the live layers stay at sane values; with
+      !! the removal left on `k = nz` (a filler) it would not.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      real(wp) :: total0, total1, src, scale
+
+      call build_state(ms, grid, NZ_Z, NFILL)
+      total0 = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)
+      call apply_flux_sw(grid, ms, 100.0_wp)
+      total1 = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)
+      src = sum(ms%heat_budget_surface)
+      scale = max(abs(total0), abs(src))
+
+      call check(error, abs((total1 - total0) - src) <= 1.0e-12_wp*scale, &
+                 "heat: delta total = booked source with fillers on top")
+      if (allocated(error)) return
+      call check(error, src > 0.0_wp, "the booked source is the (positive) net flux")
+      if (allocated(error)) return
+      call check(error, abs(ms%tracers(ms%idx_temperature)%c(2, 2, NLIVE) - T0) < 1.0e-2_wp .and. &
+                 all(ms%tracers(ms%idx_temperature)%c(2, 2, NLIVE + 1:NZ_Z) == 0.0_wp), &
+                 "live top layer moves by a sane amount; the fillers stay untouched")
+      call ms%destroy()
+   end subroutine test_sw_same_layer
 
    subroutine test_top_drag_spindown(error)
       !! LINEAR top drag, layer-only mode, under full ice cover: the

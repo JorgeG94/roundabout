@@ -84,7 +84,7 @@ module rdb_ocean_bulk_forcing
    !! T_s"). No salt component is written (v1 bulk fluxes carry no
    !! virtual-salt term), so `has_salt` is left untouched.
    use, intrinsic :: iso_fortran_env, only: int64
-   use rdb_constants, only: wp, H_DIV_EPS
+   use rdb_constants, only: H_VANISHED, wp, H_DIV_EPS
    use rdb_grid, only: hgrid_t
    use rdb_config, only: config_t, ocean_atm_forcing_config_t
    use rdb_ocean_metrics, only: ocean_metrics_t

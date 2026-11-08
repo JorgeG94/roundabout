@@ -16,7 +16,7 @@ module rdb_continuity
    !! preserves uniform fields bit-for-bit (the constancy-preservation
    !! property the lake-at-rest tests guard) and propagates Gaussian
    !! humps with < 5% peak diffusion over their own width.
-   use rdb_constants, only: wp, NZ_STACK_MAX, H_DIV_EPS
+   use rdb_constants, only: H_VANISHED, wp, NZ_STACK_MAX, H_DIV_EPS
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_barotropic_state, only: barotropic_state_t

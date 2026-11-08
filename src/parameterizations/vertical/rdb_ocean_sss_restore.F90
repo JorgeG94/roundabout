@@ -51,7 +51,7 @@ module rdb_ocean_sss_restore
    !! mapped by `ms` / `sf` / `metrics`.
    use, intrinsic :: iso_fortran_env, only: int64, real64
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-   use rdb_constants, only: H_DIV_EPS, wp
+   use rdb_constants, only: H_DIV_EPS, H_VANISHED, wp
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_multilayer_state, only: multilayer_state_t
@@ -288,7 +288,7 @@ contains
          end if
          inc = inv_scale*f
          hTr(i, j, kt) = rdb_conc_add_source(hTr(i, j, kt), h_layer(i, j, kt), inc)
-         budget(i, j, kt) = budget(i, j, kt) + inc
+         budget(i, j, kt) = budget(i, j, kt) + rdb_conc_accepted_source(h_layer(i, j, kt), inc)
       end do
    end subroutine sss_deposit_impl
 

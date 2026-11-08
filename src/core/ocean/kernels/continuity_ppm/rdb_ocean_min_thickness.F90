@@ -39,7 +39,7 @@ module rdb_ocean_min_thickness
    !! only grounded columns / active faces do work — and reads fall back to
    !! `h_old` on non-grounded neighbours, where `h_new ≡ h_old` by
    !! construction.  Byte-identical results in all cases.
-   use rdb_constants, only: H_DIV_EPS, wp, NZ_STACK_MAX, REMAP_PPM
+   use rdb_constants, only: H_VANISHED, H_DIV_EPS, wp, NZ_STACK_MAX, REMAP_PPM
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_remap_column, only: remap_column

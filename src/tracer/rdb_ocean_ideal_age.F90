@@ -48,7 +48,7 @@ module rdb_ocean_ideal_age
    !!     call, which is strictly stronger (idempotent, exact) and
    !!     matches the tracer's definition as a hard Dirichlet condition
    !!     rather than a relaxation.
-   use rdb_constants, only: H_DIV_EPS, wp
+   use rdb_constants, only: H_VANISHED, H_DIV_EPS, wp
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    implicit none

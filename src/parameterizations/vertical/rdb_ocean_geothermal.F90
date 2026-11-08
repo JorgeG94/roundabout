@@ -14,7 +14,7 @@
 !! start index changes no answer — it states the bed-side contract in one
 !! place (`k_bot ≡ 1` off `z_fixed`).
 module rdb_ocean_geothermal
-   use rdb_constants, only: H_DIV_EPS, wp
+   use rdb_constants, only: H_DIV_EPS, H_VANISHED, wp
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_ocean_surface_flux, only: SEAWATER_CP
@@ -153,7 +153,7 @@ contains
          end do
          cell = src*wet_mask(i, j)
          hTr(i, j, k_dep) = rdb_conc_add_source(hTr(i, j, k_dep), h_layer(i, j, k_dep), cell)
-         budget(i, j, k_dep) = budget(i, j, k_dep) + cell
+         budget(i, j, k_dep) = budget(i, j, k_dep) + rdb_conc_accepted_source(h_layer(i, j, k_dep), cell)
       end do
    end subroutine apply_geothermal_src_impl
 

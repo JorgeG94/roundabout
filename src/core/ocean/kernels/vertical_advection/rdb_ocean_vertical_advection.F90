@@ -36,7 +36,7 @@
 !! may switch to PPM-in-z once vertical resolution warrants the
 !! higher-order treatment.
 module rdb_ocean_vertical_advection
-   use rdb_constants, only: wp, H_DIV_EPS
+   use rdb_constants, only: H_VANISHED, wp, H_DIV_EPS
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_tracer, only: TRACER_BUDGET_HEAT, TRACER_BUDGET_SALT
