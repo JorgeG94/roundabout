@@ -5465,6 +5465,7 @@ contains
       call profiler_start("ocean_bt_correction")
       call apply_bt_correction(dyn%bt_work, ms, dt, &
                                skip_h_rescale=is_lagrangian, &
+                               rescale_tracers=.not. is_pred, &
                                grid=grid, &
                                use_bc_pgf=dyn%bt_work%bt_correction_bc_pgf, &
                                use_visc_rem=dyn%bt_work%bt_correction_visc_rem, &

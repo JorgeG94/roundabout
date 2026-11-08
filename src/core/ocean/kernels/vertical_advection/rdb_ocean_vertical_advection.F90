@@ -332,7 +332,7 @@ contains
       ! ---- Pass 2: concentration update ----
       ! c+ = (c h- + dt (F_k - F_k+1))/h+ with h+ = h- + dt (w_k - w_k+1), the
       ! thickness `apply_w_to_h_layer` writes, written as
-      ! c + dt ((w_k - w_k+1) c + F_k - F_k+1)/h+: a uniform c is reproduced to
+      ! c + dt (F_k - F_k+1 - (w_k - w_k+1) c)/h+: a uniform c is reproduced to
       ! round-off whatever h does (Griffies et al. 2020).  A layer the pass
       ! empties (h+ <= H_DIV_EPS) keeps its c.  The budget increment stays the
       ! exact flux divergence, independent of the divide.
@@ -341,7 +341,7 @@ contains
          div_f = F_face(i, j, k) - F_face(i, j, k + 1)
          h_new = h_before(i, j, k) + dt*div_w
          if (h_new > H_DIV_EPS) then
-            c(i, j, k) = c(i, j, k) + dt*(div_w*c(i, j, k) + div_f)/h_new
+            c(i, j, k) = c(i, j, k) + dt*(div_f - div_w*c(i, j, k))/h_new
          end if
       end do
       if (present(budget)) then

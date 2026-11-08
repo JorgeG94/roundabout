@@ -212,8 +212,9 @@
 !! receiving "exactly salinity's surface salt flux" — its documented
 !! purpose — under either form.
 !!
-!! Passive tracers need NOTHING: `h` grows, `h*C` does not, so a tracer
-!! with zero concentration in the meltwater is diluted automatically.
+!! Passive tracers (`cavity_mass_dilute_impl`) carry no content in the
+!! meltwater: the layer grows `h0 -> hn` with its content `h*C` unchanged,
+!! so `C` is diluted by `h0/hn`.
 !! The ideal-age tracer is diluted the same way, which is the right
 !! answer (meltwater is new water).
 !!
@@ -320,6 +321,7 @@ module rdb_ocean_cavity_flux
    public :: cavity_melt_status_is_fatal
    public :: cavity_mass_apply_impl
    public :: cavity_mass_salt_mirror_impl
+   public :: cavity_mass_dilute_impl
    public :: cavity_mass_totals_impl
    public :: cavity_comp_apply_impl
    public :: cavity_mass_thin_is_fatal
@@ -1042,6 +1044,38 @@ contains
       n_thin = c_thin
    end subroutine cavity_mass_apply_impl
 
+   pure subroutine cavity_mass_dilute_impl(nx, ny, nz, dt_over_rho0, active, melt, h_layer, c, k_top)
+      !! Dilution of a PASSIVE tracer by the real-mass meltwater: the first
+      !! live layer grows `h0 -> hn` (the SAME clamp pair the salt branch
+      !! uses) while its content `h*c` is unchanged, so `c -> c*h0/hn`.  Must
+      !! run BEFORE `cavity_mass_apply_impl` overwrites `h_layer`.
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in) :: dt_over_rho0
+         !! `dt/rho_0` (m^3 s / kg).
+      real(wp), intent(in) :: active(nx, ny)
+         !! Composed solve mask.
+      real(wp), intent(in) :: melt(nx, ny)
+         !! Melt mass flux (kg/m^2/s), > 0 melting.
+      real(wp), intent(in) :: h_layer(nx, ny, nz)
+         !! Layer thickness before the source (m).
+      real(wp), intent(inout) :: c(nx, ny, nz)
+         !! Passive tracer concentration.
+      integer, intent(in) :: k_top(nx, ny)
+         !! First live layer from the top.
+      integer :: i, j
+      logical :: thin
+      real(wp) :: h0, hn, dh
+
+      do concurrent(j=1:ny, i=1:nx) local(h0, hn, dh, thin)
+         if (active(i, j) > 0.5_wp) then
+            h0 = h_layer(i, j, k_top(i, j))
+            dh = melt(i, j)*dt_over_rho0
+            call cavity_melt_thickness_pair(h0, dh, hn, thin)
+            c(i, j, k_top(i, j)) = rdb_conc_add_source_mass(c(i, j, k_top(i, j)), h0, hn, 0.0_wp)
+         end if
+      end do
+   end subroutine cavity_mass_dilute_impl
+
    pure subroutine cavity_mass_salt_mirror_impl(nx, ny, nz, dt_over_rho0, inv_rho0_dt, &
                                                 s_ice, active, melt, s_far, h_layer, hTr, k_top)
       !! The pseudo-salt mirror of `cavity_mass_apply_impl`'s SALT
@@ -1412,6 +1446,12 @@ contains
                                            cav%s_ice, cav%active, cav%melt, &
                                            cav%s_far, ms%h_layer, ms%tracers(idx_ps)%c, ms%k_top)
       end if
+      do it = 1, size(ms%tracers)
+         if (it == idx_t .or. it == idx_s .or. it == idx_ps) cycle
+         if (.not. allocated(ms%tracers(it)%c)) cycle
+         call cavity_mass_dilute_impl(nx, ny, nz, dt_over_rho0, cav%active, cav%melt, &
+                                      ms%h_layer, ms%tracers(it)%c, ms%k_top)
+      end do
       call cavity_mass_apply_impl(nx, ny, nz, dt_over_rho0, dt_over_rho0, cav%s_ice, &
                                   cav%active, cav%melt, cav%s_far, cav%t_b, &
                                   ms%h_layer, ms%tracers(idx_s)%c, ms%tracers(idx_t)%c, &

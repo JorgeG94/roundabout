@@ -1333,8 +1333,8 @@ contains
             ! concentration: a vanished surface layer must not hand the
             ! buoyancy flux fresh / 0 degC coefficients.
             if (h_sfc > H_VANISHED) then
-               t_sfc = temp_h(i, j, nz)/h_sfc
-               s_sfc = salt_h(i, j, nz)/h_sfc
+               t_sfc = temp_h(i, j, nz)
+               s_sfc = salt_h(i, j, nz)
                p_buoy = p_buoy_ref
                if (this%p_top_in_eos) p_buoy = ms%p_top(i, j)
                call eos_buoyancy_coeffs(this%eos, t_sfc, s_sfc, p_buoy, &
@@ -1444,8 +1444,8 @@ contains
             ! concentration: a vanished surface layer must not hand the
             ! buoyancy flux fresh / 0 degC coefficients.
             if (h_sfc > H_VANISHED) then
-               t_sfc = temp_h(i, j, nz)/h_sfc
-               s_sfc = salt_h(i, j, nz)/h_sfc
+               t_sfc = temp_h(i, j, nz)
+               s_sfc = salt_h(i, j, nz)
                p_buoy = p_buoy_ref
                if (this%p_top_in_eos) p_buoy = ms%p_top(i, j)
                call eos_buoyancy_coeffs(this%eos, t_sfc, s_sfc, p_buoy, &
@@ -1894,8 +1894,8 @@ contains
             hl = h_layer(i, j, k - 1)  ! lower layer
             if (hu > H_VANISHED .and. hl > H_VANISHED) then
                ! alpha*dT and beta*dS across interface k (upper - lower)
-               adT = alpha_T*(temp_h(i, j, k)/hu - temp_h(i, j, k - 1)/hl)
-               bdS = beta_S*(salt_h(i, j, k)/hu - salt_h(i, j, k - 1)/hl)
+               adT = alpha_T*(temp_h(i, j, k) - temp_h(i, j, k - 1))
+               bdS = beta_S*(salt_h(i, j, k) - salt_h(i, j, k - 1))
 
                if (adT >= bdS .and. bdS > 0.0_wp) then
                   ! ---- salt fingering (R_rho >= 1) ----
@@ -2028,10 +2028,10 @@ contains
                ! live and is skipped otherwise; a per-layer `rdb_vl_conc` would
                ! silently make the difference finite.
                if (hu > H_VANISHED .and. hl > H_VANISHED) then
-                  t_u = temp_h(i, j, k)/hu
-                  t_l = temp_h(i, j, k - 1)/hl
-                  s_u = salt_h(i, j, k)/hu
-                  s_l = salt_h(i, j, k - 1)/hl
+                  t_u = temp_h(i, j, k)
+                  t_l = temp_h(i, j, k - 1)
+                  s_u = salt_h(i, j, k)
+                  s_l = salt_h(i, j, k - 1)
                   ! α, β at the interface state: the mean of the two
                   ! abutting layer centres (the same two-point average
                   ! the ΔT / ΔS below are differences of), at the in-situ

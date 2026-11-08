@@ -1691,7 +1691,11 @@ contains
          end if
          iaij = 1.0_wp/areaT(i, j)
          do k = 1, nz
-            hTr(i, j, k) = hTr(i, j, k) + dTr(k)*iaij/(h_layer(i, j, k) + H_DIV_EPS)
+            ! An empty layer (h <= H_VANISHED) carries no content: it keeps its
+            ! last c rather than dividing a flux residue by ~0.
+            if (h_layer(i, j, k) > H_VANISHED) then
+               hTr(i, j, k) = hTr(i, j, k) + dTr(k)*iaij/h_layer(i, j, k)
+            end if
          end do
       end do
    end subroutine redi_apply_flux_impl
