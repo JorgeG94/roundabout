@@ -97,7 +97,7 @@ contains
             "dt_therm_ratio = 2 /"//nl// &
             "&ocean_bt_nml auto_n_inner = .true., cfl_bt_safety = 0.65, bebt = 0.2 /"//nl// &
             "&vcoord_nml vcoord_type = 'zstar_full', zstar_h_surf_target = 1000.0, "// &
-            "zstar_h_min = 1.5e-4, check_vanished_content = .true. /"//nl// &
+            "zstar_h_min = 1.5e-4 /"//nl// &
             "&ocean_tracers_nml enable_pseudo_salt = .true. /"//nl// &
             "&ocean_diag_nml enabled = .false. /"//nl// &
             "&output_nml output_to_file = .false. /"//nl
@@ -119,8 +119,7 @@ contains
             "&time_nml t_end = 1.0e9, dt_fixed = 300.0, cfl_interval = 1 /"//nl// &
             "&physics_nml coriolis_f = -1.409e-4 /"//nl// &
             "&nonhydrostatic_nml nz_layers = 15 /"//nl// &
-            "&vcoord_nml vcoord_type = 'z_fixed', zfixed_closed_faces = .true., "// &
-            "check_vanished_content = .true. /"//nl// &
+            "&vcoord_nml vcoord_type = 'z_fixed', zfixed_closed_faces = .true. /"//nl// &
             "&ocean_topo_nml topo_config = 'seamount', max_depth = 720.0, edge_depth = 450.0, "// &
             "slope_scale = 12000.0 /"//nl// &
             "&ocean_cavity_dyn_nml enable = .true., draft_config = 'linear', "// &

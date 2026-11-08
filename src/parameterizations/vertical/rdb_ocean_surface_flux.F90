@@ -1686,7 +1686,7 @@ contains
       integer :: i, j
       real(wp) :: surf, inc
       do concurrent(j=1:ny, i=1:nx) local(surf, inc)
-         ! vanished-ok: surface restoring measures the surface concentration against a
+         ! surface restoring measures the surface concentration against a
          ! CALLER-supplied floor `h_min` (a restoring depth), not the
          ! vanish marker; zero would restore toward a fictitious fresh sea.
          surf = c(i, j, nz)
@@ -1977,7 +1977,7 @@ contains
          massin = open_f*(heat_content_lprec(i, j) + heat_content_fprec(i, j) &
                           + heat_content_vprec(i, j) + heat_content_lrunoff(i, j) &
                           + heat_content_frunoff(i, j) + heat_content_seaice_melt(i, j))
-         ! vanished-ok: same caller-supplied `h_min` floor — the SST carrying the
+         ! same caller-supplied `h_min` floor — the SST carrying the
          ! evaporative heat content must stay a temperature.
          sst = c_T(i, j, nz)
          massout = open_f*cp*sst*evap(i, j)

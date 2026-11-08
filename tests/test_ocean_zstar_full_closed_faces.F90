@@ -262,7 +262,7 @@ contains
             "&physics_nml coriolis_f = 1.0e-4 /"//nl// &
             "&nonhydrostatic_nml nz_layers = 6 /"//nl// &
             "&vcoord_nml vcoord_type = 'zstar_full', zstar_h_surf_target = 20.0, "// &
-            "zstar_h_min = 1.0e-4, check_vanished_content = .true., "// &
+            "zstar_h_min = 1.0e-4, "// &
             "zfixed_closed_faces = "//merge(".true. ", ".false.", closed)//" /"//nl// &
             "&ocean_topo_nml topo_config = 'flat', max_depth = 200.0 /"//nl// &
             "&tracer_nml initial_salinity = 35.0, T_init_surface = 15.0, "// &

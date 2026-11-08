@@ -298,11 +298,6 @@ contains
                              "ALE remap: fail loud when a column violates the overlap "// &
                              "sweep's preconditions (non-negative thicknesses, "// &
                              "matching column totals)"))
-      pl => cfg%check_vanished_content
-      call g%add(nml_logical("check_vanished_content", pl, &
-                             "I1' tripwire: fail loud if any layer at or below "// &
-                             "H_VANISHED does not hold its donor live layer's "// &
-                             "concentration (debug/validation)"))
       pl => cfg%zfixed_closed_faces
       call g%add(nml_logical("zfixed_closed_faces", pl, &
                              "z_fixed / zstar / zstar_full partial steps: close every face whose "// &

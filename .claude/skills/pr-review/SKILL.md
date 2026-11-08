@@ -41,7 +41,6 @@ another PR's branch, so diff against that base, not `main`), `gh pr diff <N>`,
 | `dc-assumed-shape` | assumed-shape dummies in `do concurrent` kernels (waiver `! assumed-shape-ok: <reason>`) |
 | `dc-intrinsic-shadow`, `dc-transfer` | intrinsic-shadowing locals and `transfer()` in `do concurrent` |
 | `decl-order` | integer dims declared before the explicit-shape arrays that use them (ifx #8586) |
-| `vanished-layer` | hand-rolled `hTr/h` or `H_VANISHED` tests (waiver `! vanished-ok: <reason>`) |
 | `openmp-portability` | new `!$acc` shapes that break ifx's OpenMP path |
 | `check-closure-matrix` | knob / `docs/CLOSURE_MATRIX.md` / test drift |
 | `test-regime-labels` | every rdb ctest entry carries an `ocean`/`core` label |
@@ -110,10 +109,10 @@ when every CI leg is green.
   surface. Surface forcing lands at `nz`, bed forcing at `1`. A new layered
   kernel that assumes the opposite is Must fix.
 - **Thin layers**: dynamic vanishing tests use `H_VANISHED`, pure division
-  armour uses `H_DIV_EPS` (both `rdb_constants`). Vanished-layer content goes
-  through the `rdb_vl_*` helpers in
+  armour uses `H_DIV_EPS` (both `rdb_constants`). The live-layer test and the
+  donor read go through the `rdb_vl_*` helpers in
   `src/shared_module_utilities/rdb_vanished_layer.inc`, never a re-derived
-  rule; the enforcement point is `multilayer_state_t%enforce_vanished_content`.
+  rule.
 - **Formula bathymetry** must fill ghost rows, and its length scales are in
   grid units (degrees on spherical grids) — convert via
   `topo_length_to_grid_units`.

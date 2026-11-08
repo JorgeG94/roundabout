@@ -1864,7 +1864,7 @@ contains
       do k = 1, nz
          do j = 1, ny
             do i = 1, nx
-               ! vanished-ok: this IS the land-state contract's definition
+               ! this IS the land-state contract's definition
                ! site (wet_mask==0 => h_layer=H_VANISHED), not a liveness read.
                if (wet_mask(i, j) == 0.0_wp) h_layer(i, j, k) = H_VANISHED
             end do

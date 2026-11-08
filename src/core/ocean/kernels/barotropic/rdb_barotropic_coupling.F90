@@ -1559,7 +1559,7 @@ contains
                if (frhat_scheme == FRHAT_HYBRID) then
                   d_shallow_loc = -min(href_l, href_r)
                   e_cur_loc = e_prev + h_arith_loc
-                  ! vanished-ok: hand-inlined frhat_h_face_step copy (NVHPC call-site miscompile, see local() comment above)
+                  ! hand-inlined frhat_h_face_step copy (NVHPC call-site miscompile, see local() comment above)
                   if (hl_loc <= H_VANISHED .or. hr_loc <= H_VANISHED) then
                      h_face = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
                   else if (e_prev >= d_shallow_loc) then
@@ -1623,7 +1623,7 @@ contains
                if (frhat_scheme == FRHAT_HYBRID) then
                   d_shallow_loc = -min(href_l, href_r)
                   e_cur_loc = e_prev + h_arith_loc
-                  ! vanished-ok: hand-inlined frhat_h_face_step copy, same reason as the u-branch above
+                  ! hand-inlined frhat_h_face_step copy, same reason as the u-branch above
                   if (hl_loc <= H_VANISHED .or. hr_loc <= H_VANISHED) then
                      h_face = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
                   else if (e_prev >= d_shallow_loc) then
@@ -1734,7 +1734,7 @@ contains
                   if (frhat_scheme == FRHAT_HYBRID) then
                      d_shallow_loc = -min(href_l, href_r)
                      e_cur_loc = e_prev + h_arith_loc
-                     ! vanished-ok: hand-inlined frhat_h_face_step copy (NVHPC call-site miscompile, see local() comment above)
+                     ! hand-inlined frhat_h_face_step copy (NVHPC call-site miscompile, see local() comment above)
                      if (hl_loc <= H_VANISHED .or. hr_loc <= H_VANISHED) then
                         h_face = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
                      else if (e_prev >= d_shallow_loc) then
@@ -1795,7 +1795,7 @@ contains
                   if (frhat_scheme == FRHAT_HYBRID) then
                      d_shallow_loc = -min(href_l, href_r)
                      e_cur_loc = e_prev + h_arith_loc
-                     ! vanished-ok: hand-inlined frhat_h_face_step copy, same reason as the u-branch above
+                     ! hand-inlined frhat_h_face_step copy, same reason as the u-branch above
                      if (hl_loc <= H_VANISHED .or. hr_loc <= H_VANISHED) then
                         h_face = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
                      else if (e_prev >= d_shallow_loc) then
@@ -2155,7 +2155,7 @@ contains
             if (scheme == FRHAT_HYBRID) then
                d_shallow_loc = -min(href_l, href_r)
                e_cur_loc = e_prev + h_arith_loc
-               ! vanished-ok: hand-inlined frhat_h_face_step copy (NVHPC call-site miscompile, see docstring above)
+               ! hand-inlined frhat_h_face_step copy (NVHPC call-site miscompile, see docstring above)
                if (hl_loc <= H_VANISHED .or. hr_loc <= H_VANISHED) then
                   h_face = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
                else if (e_prev >= d_shallow_loc) then
@@ -2202,7 +2202,7 @@ contains
             if (scheme == FRHAT_HYBRID) then
                d_shallow_loc = -min(href_l, href_r)
                e_cur_loc = e_prev + h_arith_loc
-               ! vanished-ok: hand-inlined frhat_h_face_step copy, same reason as the E-face loop above
+               ! hand-inlined frhat_h_face_step copy, same reason as the E-face loop above
                if (hl_loc <= H_VANISHED .or. hr_loc <= H_VANISHED) then
                   h_face = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
                else if (e_prev >= d_shallow_loc) then
@@ -2249,7 +2249,7 @@ contains
             if (scheme == FRHAT_HYBRID) then
                d_shallow_loc = -min(href_l, href_r)
                e_cur_loc = e_prev + h_arith_loc
-               ! vanished-ok: hand-inlined frhat_h_face_step copy, same reason as the E-face loop above
+               ! hand-inlined frhat_h_face_step copy, same reason as the E-face loop above
                if (hl_loc <= H_VANISHED .or. hr_loc <= H_VANISHED) then
                   h_face = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
                else if (e_prev >= d_shallow_loc) then
@@ -2296,7 +2296,7 @@ contains
             if (scheme == FRHAT_HYBRID) then
                d_shallow_loc = -min(href_l, href_r)
                e_cur_loc = e_prev + h_arith_loc
-               ! vanished-ok: hand-inlined frhat_h_face_step copy, same reason as the E-face loop above
+               ! hand-inlined frhat_h_face_step copy, same reason as the E-face loop above
                if (hl_loc <= H_VANISHED .or. hr_loc <= H_VANISHED) then
                   h_face = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
                else if (e_prev >= d_shallow_loc) then

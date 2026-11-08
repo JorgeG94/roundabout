@@ -44,8 +44,7 @@ module rdb_ocean_remap
    ! literal here, which is a third definition waiting to drift from the
    ! constant of record.
    !
-   ! The per-LAYER tests it used to serve — `c = hTr/h` and the I1′ merge —
-   ! now go through `rdb_vl_column_conc` (and the tail sweep's `rdb_vl_merge_content`), the included
+   ! The per-LAYER donor read now goes through `rdb_vl_column_conc`, the included
    ! single definition (`src/shared_module_utilities/rdb_vanished_layer.inc`).
    ! Every test of the marker is a STRICT `>`: a layer sitting exactly ON it
    ! reads as vanished, which is what the geometric vcoord families rely on
@@ -69,7 +68,6 @@ module rdb_ocean_remap
    public :: ocean_remap_tracer_field   ! reference kernel, exposed for the stream test
    public :: ocean_remap_tracer_field_stream
    public :: remap_use_stream
-   public :: ocean_remap_merge_vanished_content   ! exposed for unit tests
 
 #ifdef LFORTRAN_PASSING
    integer, parameter :: NZ_STACK_MAX = 64
@@ -1102,7 +1100,7 @@ contains
 
       ! 3. Populate target_h. Geometric coords use compute_target_h; isopycnal
       ! needs per-layer T/S concentrations + EOS via compute_target_h_rho.
-      ! Concentrations built into persistent scratch (guarded c = hTr/h).
+      ! Concentrations copied into persistent scratch.
       if ((vcoord%coord_type == VCOORD_RHO .or. vcoord%coord_type == VCOORD_HYCOM) &
           .and. present(eos) .and. allocated(ms%tracers) &
           .and. ms%idx_temperature > 0 .and. ms%idx_salinity > 0) then
@@ -1270,11 +1268,10 @@ contains
    end subroutine ocean_remap_scan_preconditions
 
    pure subroutine build_ts_concentration(nx, ny, nz, h_old, hTr_T, hTr_S, conc_t, conc_s)
-      !! Build layer-mean T/S concentrations (c = hTr/h) from extensive tracer
-      !! content + pre-remap thicknesses, for the VCOORD_RHO density inversion.
-      !! Per-layer `rdb_vl_conc` (a filler reads `hTr/h`, its donor's
-      !! concentration by I1′; a zero-thickness layer reads 0). Flat-impl,
-      !! explicit-shape; one cadence-bounded launch per remap.
+      !! Copy the stored layer-mean T/S concentrations into the VCOORD_RHO /
+      !! HYCOM density-inversion scratch (the tracers ARE concentrations, so
+      !! this is a plain copy; `h_old` is kept for the call signature).
+      !! Flat-impl, explicit-shape; one cadence-bounded launch per remap.
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: h_old(nx, ny, nz)
       real(wp), intent(in) :: hTr_T(nx, ny, nz)
@@ -1317,19 +1314,6 @@ contains
       if (present(c_new_out)) c_new_out(1:nz) = c_new(1:nz)
       if (present(clamp_out)) clamp_out(1:nz) = clamp_col(1:nz)
    end subroutine ocean_remap_tracer_column
-
-   pure subroutine ocean_remap_merge_vanished_content(nz, h_col, q_col)
-      !! Public test shim over the included `rdb_vl_merge_content` — the ONE
-      !! definition of the vanished-layer content rule
-      !! (`src/shared_module_utilities/rdb_vanished_layer.inc`).  Production
-      !! code calls the included copy directly; this exists so
-      !! `tests/test_ocean_remap_vanished.F90` can assert the rule's own
-      !! properties without a second transcription of it.
-      integer, intent(in) :: nz
-      real(wp), intent(in) :: h_col(NZ_STACK_MAX)
-      real(wp), intent(inout) :: q_col(NZ_STACK_MAX)
-      call rdb_vl_merge_content(nz, h_col, q_col)
-   end subroutine ocean_remap_merge_vanished_content
 
 #include "rdb_vanished_layer.inc"
 

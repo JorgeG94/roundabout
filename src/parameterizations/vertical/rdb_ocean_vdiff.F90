@@ -2109,7 +2109,7 @@ contains
       ! z-level partial steps: no shear across an interface that touches a
       ! CLOSED face layer.  The tracer twin does exactly this,
       ! unconditionally, in `build_factorize_tracer_matrix`.
-      ! vanished-ok: row decoupling across a z-level wall (the closed-face rule) —
+      ! row decoupling across a z-level wall (the closed-face rule) —
       ! a momentum-grid question, not a tracer concentration.
       cut = zlevel_faces .and. (hv_lo <= H_VANISHED .or. hv_hi <= H_VANISHED)
    end subroutine vdiff_interface_coupling

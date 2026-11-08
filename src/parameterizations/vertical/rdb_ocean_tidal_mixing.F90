@@ -787,7 +787,7 @@ contains
                if (this%bed_lump .and. k == kbed) then
                   tke_used = 0.0_wp
                else if (this%limiter_reinject .and. k > kbed .and. k < nz) then
-                  ! vanished-ok: a vanished layer is skipped (takes no power)
+                  ! a vanished layer is skipped (takes no power)
                   if (ms%h_layer(i, j, k) <= H_VANISHED) then
                      tke_used = 0.0_wp
                   else if (kd_max_l >= 0.0_wp) then

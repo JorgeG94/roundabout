@@ -9,7 +9,7 @@ is the bug.
 
 | Contract | Owner (read this) |
 |---|---|
-| Vanished-layer content rule (invariant I1′), the consumer-substitution table, the pool, the gates | header of `src/shared_module_utilities/rdb_vanished_layer.inc`; enforcement in `multilayer_state_t%enforce_vanished_content` (`src/core/rdb_multilayer_state.F90`) |
+| Vanished-layer predicate, donor read and the consumer-substitution table | header of `src/shared_module_utilities/rdb_vanished_layer.inc` |
 | Thin-layer constants `H_VANISHED` / `H_DIV_EPS` | `src/core/rdb_constants.F90` |
 | Land state (`h = H_VANISHED`, `hTr = 0`) | `seed_land_tracer_hold_impl` and `ocean_state_seed_land_cells`, `src/core/ocean/state/ocean_state/rdb_ocean_state_seed.F90` |
 | `stress_mag` vs `stress_shelf` (two upper-boundary stresses) | module header of `src/parameterizations/vertical/rdb_ocean_surface_stress.F90` |
@@ -86,9 +86,8 @@ from `tau`, it belongs in `stress_mag` and its writer owes `ocean_surface_stress
 separate momentum flux across the ocean top, it gets its own always-allocated companion and an inline
 per-step fill, never a fold into `stress_mag`.
 
-**One definition, many consumers.** Never hand-roll a vanished-layer test or a raw `hTr/h` divide; use
-`rdb_vl_*` from the `.inc`. The `vanished-layer` pre-commit hook flags a new one, and a deliberate
-substitution is declared with `! vanished-ok: <reason>`.
+**One definition, many consumers.** Never hand-roll a vanished-layer test; use
+`rdb_vl_*` from the `.inc`, and document a deliberate substitution in its consumer table.
 
 **Kernels stay diagnostic-agnostic.** No `diag%send` in a kernel. New derived quantities go into the diag
 registry as a fill.

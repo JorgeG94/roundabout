@@ -647,7 +647,7 @@ contains
       ! Sentinel computed once on the HOST (the `fill_tracer_impl` pattern).
       qnan = ieee_value(0.0_wp, ieee_quiet_nan)
       do concurrent(k=1:nz, j=1:ny, i=1:nx)
-         ! vanished-ok: diagnostics report a vanished layer as NaN, not
+         ! diagnostics report a vanished layer as NaN, not
          ! the EOS's reference-density substitution.
          if (rdb_vl_is_live(h_layer(i, j, k))) then
             buf(i, j, k) = rho_layer(i, j, k)
@@ -722,7 +722,7 @@ contains
       qnan = ieee_value(0.0_wp, ieee_quiet_nan)
       do concurrent(k=1:nz, j=1:ny, i=1:nx) local(h)
          h = h_layer(i, j, k)
-         ! vanished-ok: NaN missing-data sentinel, as `fill_tracer_impl`.
+         ! NaN missing-data sentinel, as `fill_tracer_impl`.
          if (rdb_vl_is_live(h)) then
             if (cons) then
                buf(i, j, k) = pt_from_ct(hTr_S(i, j, k), &
@@ -752,7 +752,7 @@ contains
       qnan = ieee_value(0.0_wp, ieee_quiet_nan)
       do concurrent(k=1:nz, j=1:ny, i=1:nx) local(h)
          h = h_layer(i, j, k)
-         ! vanished-ok: NaN missing-data sentinel, as `fill_tracer_impl`.
+         ! NaN missing-data sentinel, as `fill_tracer_impl`.
          if (rdb_vl_is_live(h)) then
             if (cons) then
                buf(i, j, k) = sp_from_sr(hTr_S(i, j, k))

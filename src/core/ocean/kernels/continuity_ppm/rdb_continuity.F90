@@ -2921,12 +2921,9 @@ contains
       !! and no ghost fill is needed.  An MPI seam (`has_*` false) is
       !! interior and keeps its transport.
       !!
-      !! I1′: fillers keep their donor's concentration through this operator
-      !! — the PPM kernel reads a filler's `hTr/h`, which IS `c_live` under
-      !! I1′, and a filler cannot DONATE (its availability is 0); what it
-      !! receives arrives at its live neighbour's concentration.  The pool
-      !! (`multilayer_state_t%enforce_vanished_content`) at the tail of the
-      !! outer step restores I1′ exactly, as after the resolved continuity.
+      !! A filler cannot DONATE (its availability is 0); what it receives
+      !! arrives at its live neighbour's concentration, so its stored
+      !! concentration is never the source of a flux.
       !!
       !! `budget_w` multiplies the heat/salt horizontal-advection budget
       !! increments: this operator runs AFTER the RK2 stage average, so it

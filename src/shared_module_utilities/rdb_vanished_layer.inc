@@ -1,67 +1,33 @@
 ! -*- f90 -*-  (vim: set ft=fortran: )
 !
-! rdb_vanished_layer.inc — THE vanished-layer rule, as inlinable bodies.
+! rdb_vanished_layer.inc — THE vanished-layer predicate and donor read, as
+! inlinable bodies.
 !
 ! `#include` this file in the `contains` section of any module that needs to
-! know whether a layer is live, what the concentration of a layer is, or that
-! a column satisfies invariant I1′.  You get a module-LOCAL, `private` copy of
-! each procedure, which NVHPC's device codegen CAN inline into a
-! `do concurrent` kernel — it does not inline a `pure !$acc routine seq`
-! helper across a module boundary (CLAUDE.md, "Cross-TU helper inlining").
-! One source of truth, no hand-duplicated `*_impl` twins to drift.
+! know whether a layer is live, or what a vanished layer should read as when a
+! consumer integrates its concentration over a depth the layer does not
+! occupy.  You get a module-LOCAL, `private` copy of each procedure, which
+! NVHPC's device codegen CAN inline into a `do concurrent` kernel — it does
+! not inline a `pure !$acc routine seq` helper across a module boundary
+! (CLAUDE.md, "Cross-TU helper inlining").  One source of truth, no
+! hand-duplicated `*_impl` twins to drift.
 !
-! Contract (this header is its home; see also
-! `src/shared_module_utilities/README.md`):
+! Contract (see also `src/shared_module_utilities/README.md`):
 !
-!   Tracers are stored as CONTENT, `hTr = h*c`.  Several vertical
-!   coordinates (`z_fixed`, `zstar`, `zstar_full`, wet/dry) place inert
-!   FILLER layers, with `h <= H_VANISHED`.  The tree holds ONE invariant
-!   about them:
-!
-!   I1′  `h <= H_VANISHED  ⇒  hTr = h·c_live`, for every registered tracer,
-!        where `c_live` is the concentration of the filler's DONOR: the
-!        nearest live layer ABOVE it or, for a run of fillers that reaches
-!        the top of the column (the fillers inside an ice shelf), the
-!        topmost live layer (`k_top`).  A column with no live layer at all
-!        (land, fully grounded) holds `hTr = 0`.
-!
-!   Why not `hTr = 0` (the old rule I1): every transport kernel reads a
-!   filler's concentration as `hTr/h`, and between remaps continuity moves
-!   thickness out of fillers into live layers.  Under I1 that thickness
-!   arrived as fresh zero-concentration water, so a uniform tracer did not
-!   stay uniform.
-!
-!   How it is restored: each live layer and the fillers it donates to form
-!   one contiguous POOL that is mixed to a single concentration `Σq/Σh`
-!   (`rdb_vl_merge_content`).  Content moves WITHIN the column, so no
-!   budget records it; a contributor that always sums to zero is noise in
-!   the instrument that detects real leaks.
-!
-!   Enforcement and gates:
-!     * ONE enforcement point: `multilayer_state_t%enforce_vanished_content`
-!       at the tail of `ocean_dyn_step_split` (host twin
-!       `enforce_vanished_content_host` for the seeded state).  It is
-!       unconditional: land columns sit at exactly `H_VANISHED` on every
-!       family, so no coordinate is exempt.  A column with no sub-threshold
-!       layer is a textual no-op (sigma / z*-lite / eulerian_z stay
-!       bit-identical).
-!     * The ALE remap applies the rule on BOTH sides of its `c = hTr/h` round
-!       trip (read side pools source fillers; write side pools target
-!       fillers) and folds the unplaced sliver back into the topmost live
-!       target layer.
-!     * `&vcoord_nml check_vanished_content` (default off, on in every
-!       shipped namelist that vanishes layers) is a fail-loud device scan
-!       right after the enforcement point.
-!     * The diff-aware `vanished-layer` pre-commit hook flags a NEW raw
-!       `hTr/h` divide or a NEW comparison against `H_VANISHED` outside the
-!       sanctioned modules.
-!     * Tests: `test_ocean_vanished_constancy` (full solver, uniform tracer
-!       stays uniform to 1e-12) and `test_ocean_remap_vanished` (the rule).
+!   Tracers are stored as CONCENTRATION `c`; the conserved content is
+!   `h_layer·c`, formed only where a budget or console total needs it.
+!   Several vertical coordinates (`z_fixed`, `zstar`, `zstar_full`, wet/dry)
+!   place inert FILLER layers with `h <= H_VANISHED`.  A filler keeps the
+!   last concentration it held: transport weights it by its own thickness, so
+!   it carries no content of its own to maintain, and nothing is pooled,
+!   merged or policed.  Only a consumer that integrates a filler's
+!   concentration over a depth the filler does not occupy (the FV-MOM6
+!   cross-face Boole integral, the BBL stratification, Redi) reads through
+!   the donor substitution below.
 !
 !   Substituting something OTHER than `c_live` on a vanished layer is
 !   legal when the consumer answers a different question.  Do NOT route
-!   these through `rdb_vl_conc`, and declare any new one with a
-!   `! vanished-ok: <reason>` waiver where the lint sees it:
+!   these through `rdb_vl_column_conc`; document any new one in the table:
 !
 !     consumer                          substitution            why
 !     rdb_eos (eos_*_impl)              reference T/S, rho=rho0 a filler must not perturb the PGF density column
@@ -72,11 +38,11 @@
 !     rdb_ocean_cavity_flux sampler     `cycle`                 a filler carries no water to melt against
 !     rdb_ocean_kappa_shear             massless merge          the solve needs a well-conditioned grid
 !
-!   A substitution is only safe where the value is multiplied by the
-!   filler's OWN thickness.  The FV-MOM6 PGF once read a filler's T/S as
-!   `hS/max(h, H_VANISHED)`; the cross-face Boole integral then integrated
-!   the wrong salinity over tens of metres of live water.  It now reads
-!   `c_live` off the donor (`test_ocean_pgf_insitu :: open_step_filler_faces_*`).
+!   A filler's own stored concentration is only safe where the value is
+!   multiplied by the filler's OWN thickness.  The FV-MOM6 PGF's cross-face
+!   Boole integral reads a filler's T/S over tens of metres of live water, so
+!   it reads `c_live` off the donor
+!   (`test_ocean_pgf_insitu :: open_step_filler_faces_*`).
 !   The FV-lite / FV-Wright `rho_face*dz_centre` correction has the same
 !   hazard and is not yet ported.
 !
@@ -89,76 +55,13 @@
    pure logical function rdb_vl_is_live(h)
       !$acc routine seq
       !! THE live-layer predicate.  A layer at or below `H_VANISHED` is a
-      !! vanished / inert filler: it has no concentration of its OWN and, by
-      !! I1′, carries its donor's.  The test is a STRICT `>` — a layer
+      !! vanished / inert filler: it holds no water of its own.  The test is a STRICT `>` — a layer
       !! sitting exactly ON the marker reads as vanished, which is what the
       !! geometric vcoord families rely on (`rdb_vcoord :: vcoord_h_min_role`).
       real(wp), intent(in) :: h
          !! Layer thickness (m).
       rdb_vl_is_live = h > H_VANISHED
    end function rdb_vl_is_live
-
-   pure real(wp) function rdb_vl_conc(hTr, h)
-      !$acc routine seq
-      !! THE concentration of ONE layer, from that layer alone: `hTr/h`.
-      !!
-      !! On a live layer that is the definition.  On a vanished layer with
-      !! `h > 0` it is, by I1′, the donor's concentration `c_live` to
-      !! round-off — exactly so on a state the enforcement point
-      !! (`multilayer_state_t%enforce_vanished_content`) has just swept.  A
-      !! zero-thickness layer has no recoverable concentration and reads
-      !! `0`.  A caller that needs `c_live` on a vanished layer ROBUSTLY —
-      !! whatever its thickness, and between two sweeps — uses the column
-      !! form, `rdb_vl_column_conc`, which reads it off the donor.
-      !!
-      !! A consumer that wants something ELSE on a vanished layer (the EOS
-      !! wants reference T/S so `rho = rho_0`; the diagnostics want NaN) is
-      !! making a DIFFERENT, documented substitution and must not be routed
-      !! here — see the consumer table in the header of this file.
-      real(wp), intent(in) :: hTr
-         !! Layer content (`h·c`), e.g. `tracers(t)%c(i,j,k)`.
-      real(wp), intent(in) :: h
-         !! Layer thickness (m).
-      if (h > 0.0_wp) then
-         rdb_vl_conc = hTr/h
-      else
-         rdb_vl_conc = 0.0_wp
-      end if
-   end function rdb_vl_conc
-
-   pure logical function rdb_vl_holds_live_conc(hTr, h, c_live, c_scale)
-      !$acc routine seq
-      !! THE I1′ test on one vanished layer: does it hold `h·c_live` to
-      !! round-off?  Tolerance `1e-12·h·max(|c_live|, c_scale)`.
-      !!
-      !! **Why `c_scale` and not just `|h·c_live|`.**  The pooled merge
-      !! (`rdb_vl_merge_content`) rounds at the magnitude of the pool's
-      !! TERMS (the donor's content `h·c` is subtracted from and added to
-      !! numbers of that size), not of the pool's RESULT.  Where the mixed
-      !! concentration passes through zero — a potential temperature near
-      !! 0 °C, a tracer changing sign — the result is a difference of two
-      !! O(1) quantities, so its absolute error is a few ulp of the
-      !! column's concentration scale while `|h·c_live|` itself may be
-      !! 1e-20 or exactly 0.  A tolerance relative to `|h·c_live|` alone
-      !! then flags round-off as a violation (the OM3 1° z* run:
-      !! `|hTr − h·c_live| = 5e-20` on 36 cells of temperature).  `c_scale`
-      !! is the largest `|c|` among the column's live layers; a REAL
-      !! violation (a 0 °C filler under 15 °C water) is off by order
-      !! `h·c_scale` and stays ~12 orders above the tolerance.  A column
-      !! whose live layers are all exactly zero still demands `hTr == 0`.
-      real(wp), intent(in) :: hTr
-         !! The vanished layer's content.
-      real(wp), intent(in) :: h
-         !! The vanished layer's thickness (m).
-      real(wp), intent(in) :: c_live
-         !! Its donor's concentration (`0` for a column with no live layer).
-      real(wp), intent(in) :: c_scale
-         !! Largest `|c|` among the column's live layers (`0` if none).
-      ! 1e-12 in double; floored at 8 eps so a single-precision wp (eps ~ 1e-7)
-      ! is not asked for better than its own round-off.
-      rdb_vl_holds_live_conc = abs(hTr - h*c_live) <= &
-                               max(1.0e-12_wp, 8.0_wp*epsilon(1.0_wp))*h*max(abs(c_live), c_scale)
-   end function rdb_vl_holds_live_conc
 
    pure subroutine rdb_vl_column_conc(nz, h_col, c_in, c_col)
       !$acc routine seq
@@ -209,103 +112,3 @@
          end if
       end do
    end subroutine rdb_vl_column_conc
-
-   pure subroutine rdb_vl_merge_content(nz, h_col, q_col)
-      !$acc routine seq
-      !! Establish I1′ on one column — `h <= H_VANISHED ⇒ q = h·c_live` —
-      !! with the column sum `Σ q` preserved to round-off.
-      !!
-      !! `q_col` is CONTENT (`hTr = h·c`, or any extensive per-layer
-      !! quantity).  Each live layer and the fillers it is DONOR to form one
-      !! contiguous POOL: the run of fillers directly below it (down to the
-      !! previous live layer, or the bed) plus, for the topmost live layer
-      !! only, the run of fillers above it up to the top of the column (the
-      !! fillers inside an ice shelf).  The pool is mixed to one
-      !! concentration `c = Σq/Σh`: every filler gets `h·c`, and the live
-      !! layer gives up exactly what the fillers gained.  So the pool —
-      !! hence the column — keeps its content to round-off, and afterwards
-      !! the filler
-      !! holds exactly the concentration its donor reads
-      !! (`rdb_vl_holds_live_conc`).  A D4 skip/MERGE, not a clamp: nothing
-      !! is created, nothing destroyed, nothing leaves the column, so a
-      !! budget accumulator fed `q_new − q_old` still telescopes to zero per
-      !! column and stays a valid leak detector.
-      !!
-      !! Why a POOL and not "copy the donor's concentration": a filler whose
-      !! content has drifted off `h·c_live` (a remap target, a deposit) must
-      !! hand the difference back to its donor, which moves the donor's
-      !! concentration by a tiny amount — mixing the pool is the one
-      !! assignment after which filler and donor agree exactly.  A pool that
-      !! already satisfies I1′ (a uniform tracer) mixes back to the same
-      !! concentration to round-off, which is what keeps a uniform tracer
-      !! uniform.  The previous rule, `h <= H_VANISHED ⇒ q = 0`, did not: the
-      !! thickness the continuity step moved OUT of an emptied filler
-      !! arrived in the live layers as fresh, 0 °C water.
-      !!
-      !! **Bit-identity:** every mutation sits behind "this pool contains a
-      !! filler", so a column with no layer at or below `H_VANISHED` leaves
-      !! `q_col` textually untouched.
-      !!
-      !! **Column with no live layer at all** (land / fully grounded): there
-      !! is no `c_live`, the content is zero by construction (the land-state
-      !! contract), and `q_col` is zeroed.
-      integer, intent(in) :: nz
-         !! Number of layers in the column; `k = 1` is the bed.
-      real(wp), intent(in) :: h_col(NZ_STACK_MAX)
-         !! Layer thicknesses (m).
-      real(wp), intent(inout) :: q_col(NZ_STACK_MAX)
-         !! Layer content, rewritten in place.
-      integer :: k_vl, kk_vl, k_top_vl, k_lo_vl, k_hi_vl
-      real(wp) :: q_sum_vl, h_sum_vl, c_vl, q_new_vl, dq_vl
-
-      k_top_vl = 0
-      do k_vl = nz, 1, -1
-         if (h_col(k_vl) > H_VANISHED) then
-            k_top_vl = k_vl
-            exit
-         end if
-      end do
-      if (k_top_vl == 0) then
-         do k_vl = 1, nz
-            q_col(k_vl) = 0.0_wp
-         end do
-         return
-      end if
-
-      ! `k_lo_vl` = first layer of the filler run waiting below the next
-      ! live layer.
-      k_lo_vl = 1
-      do k_vl = 1, k_top_vl
-         if (h_col(k_vl) > H_VANISHED) then
-            k_hi_vl = k_vl
-            if (k_vl == k_top_vl) k_hi_vl = nz
-            if (k_lo_vl < k_vl .or. k_hi_vl > k_vl) then
-               ! Pool [k_lo_vl, k_hi_vl]: exactly one live layer, `k_vl`.
-               q_sum_vl = 0.0_wp
-               h_sum_vl = 0.0_wp
-               do kk_vl = k_lo_vl, k_hi_vl
-                  q_sum_vl = q_sum_vl + q_col(kk_vl)
-                  h_sum_vl = h_sum_vl + h_col(kk_vl)
-               end do
-               c_vl = q_sum_vl/h_sum_vl
-               ! Move only the DIFFERENCE: the donor gives up exactly what
-               ! the fillers gain (`dq_vl`), in one subtraction, rather
-               ! than being rewritten as `Σq − Σ_fillers h·c` (which
-               ! re-rounds the donor through the pool sum on every call).
-               ! A pool that already satisfies I1′ then has `dq_vl` at
-               ! round-off of the FILLER content, below one ulp of the
-               ! donor, and the donor is left bit-for-bit untouched.
-               dq_vl = 0.0_wp
-               do kk_vl = k_lo_vl, k_hi_vl
-                  if (kk_vl /= k_vl) then
-                     q_new_vl = h_col(kk_vl)*c_vl
-                     dq_vl = dq_vl + (q_new_vl - q_col(kk_vl))
-                     q_col(kk_vl) = q_new_vl
-                  end if
-               end do
-               q_col(k_vl) = q_col(k_vl) - dq_vl
-            end if
-            k_lo_vl = k_vl + 1
-         end if
-      end do
-   end subroutine rdb_vl_merge_content

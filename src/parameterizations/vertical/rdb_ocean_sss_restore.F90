@@ -117,7 +117,7 @@ contains
       if (.not. ieee_is_finite(tgt_in)) return
       tgt = tgt_in
       if (convert_sp) tgt = sr_from_sp(tgt_in)
-      ! vanished-ok: surface concentration against a caller-supplied
+      ! surface concentration against a caller-supplied
       ! restoring floor, as the scalar restoring path does.
       ds = tgt - hTr
       ds = sign(min(abs(ds), max_delta), ds)

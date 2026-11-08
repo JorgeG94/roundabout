@@ -356,7 +356,7 @@ contains
          h_face = 0.5_wp*(h(i - 1, j, k) + h(i, j, k))
          ! A face touching a vanished layer carries no water: it is closed, so
          ! a filler's retained c never exchanges content with a live neighbour.
-         if (min(h(i - 1, j, k), h(i, j, k)) <= H_VANISHED) h_face = 0.0_wp  ! vanished-ok: geometry (live-layer test), not a tracer update
+         if (min(h(i - 1, j, k), h(i, j, k)) <= H_VANISHED) h_face = 0.0_wp  ! geometry (live-layer test), not a tracer update
          F_x_face(i, j, k) = kappa*h_face* &
                              (T_centre(i, j, k) - T_centre(i - 1, j, k))* &
                              idxCu(i, j)*dy_cu(i, j)
@@ -387,7 +387,7 @@ contains
       ! ---- Pass 3: north-face transport flux ----
       do concurrent(k=1:nz, j=2:ny, i=1:nx) local(h_face)
          h_face = 0.5_wp*(h(i, j - 1, k) + h(i, j, k))
-         if (min(h(i, j - 1, k), h(i, j, k)) <= H_VANISHED) h_face = 0.0_wp  ! vanished-ok: geometry (live-layer test), not a tracer update
+         if (min(h(i, j - 1, k), h(i, j, k)) <= H_VANISHED) h_face = 0.0_wp  ! geometry (live-layer test), not a tracer update
          F_y_face(i, j, k) = kappa*h_face* &
                              (T_centre(i, j, k) - T_centre(i, j - 1, k))* &
                              idyCv(i, j)*dx_cv(i, j)

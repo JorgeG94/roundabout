@@ -1026,7 +1026,7 @@ contains
 
       do concurrent(k=1:nz, j=1:ny, i=1:nx) &
          local(S_k, T_k)
-         ! vanished-ok: substitutes rho_0 on a vanished layer, the same
+         ! substitutes rho_0 on a vanished layer, the same
          ! fallback eos_linear_impl/eos_wright_impl/eos_roquet_spv_impl use.
          if (h_layer(i, j, k) > H_VANISHED) then
             S_k = S_layer(i, j, k)

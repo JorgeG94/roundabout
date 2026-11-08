@@ -583,7 +583,7 @@ contains
                il = max(1, i - 1)
                ir = min(nx, i)
                hmin = min(h_layer(il, j, k), h_layer(ir, j, k))
-               ! vanished-ok: skip, no geostrophic velocity next to a vanished layer
+               ! skip, no geostrophic velocity next to a vanished layer
                if (hmin <= H_VANISHED) cycle
                s = 0.0_wp
                n = 0
@@ -607,7 +607,7 @@ contains
                jl = max(1, j - 1)
                jr = min(ny, j)
                hmin = min(h_layer(i, jl, k), h_layer(i, jr, k))
-               ! vanished-ok: skip, no geostrophic velocity next to a vanished layer
+               ! skip, no geostrophic velocity next to a vanished layer
                if (hmin <= H_VANISHED) cycle
                s = 0.0_wp
                n = 0

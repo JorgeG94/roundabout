@@ -339,7 +339,7 @@ contains
       qnan = ieee_value(0.0_wp, ieee_quiet_nan)
       do concurrent(k=1:min(nz, nz_h), j=1:ny, i=1:nx)
          h = h_layer(i, j, k)
-         ! vanished-ok: a diagnostic substitutes the NaN missing-data
+         ! a diagnostic substitutes the NaN missing-data
          ! sentinel on a vanished layer, not `rdb_vl_conc`'s copy of the
          ! donor's concentration (README
          ! consumer table); the live branch IS `rdb_vl_conc`.

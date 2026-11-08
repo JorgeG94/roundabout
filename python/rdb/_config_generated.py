@@ -369,14 +369,6 @@ class Vcoord(Group):
         default=False,
     )
 
-    check_vanished_content = Bool(
-        'check_vanished_content',
-        doc="I1' tripwire: fail loud if any layer at or below H_VANISHED does not hold its donor live layer's concentration (debug/validation)",
-        units='',
-        required=False,
-        default=False,
-    )
-
     zfixed_closed_faces = Bool(
         'zfixed_closed_faces',
         doc='z_fixed / zstar / zstar_full partial steps: close every face whose layer is an inert filler on either side (z-level wall, free-slip)',
@@ -7336,4 +7328,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 63
-N_KNOBS = 808
+N_KNOBS = 807

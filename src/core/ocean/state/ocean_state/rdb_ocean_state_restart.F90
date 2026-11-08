@@ -825,23 +825,23 @@ contains
                   ! Live layers first (in place), then fillers from live c.
                   do k = 1, nz
                      hk = state%multilayer%h_layer(i, j, k)
-                     if (hk > H_VANISHED) then  ! vanished-ok: geometry (live-layer test), not a tracer update
+                     if (hk > H_VANISHED) then  ! geometry (live-layer test), not a tracer update
                         state%multilayer%tracers(it)%c(i, j, k) = &
                            state%multilayer%tracers(it)%c(i, j, k)/hk
                      end if
                   end do
                   c_don = 0.0_wp
                   do k = nz, 1, -1  ! topmost live layer (fallback donor)
-                     if (state%multilayer%h_layer(i, j, k) > H_VANISHED) then  ! vanished-ok: geometry (live-layer test), not a tracer update
+                     if (state%multilayer%h_layer(i, j, k) > H_VANISHED) then  ! geometry (live-layer test), not a tracer update
                         c_don = state%multilayer%tracers(it)%c(i, j, k)
                         exit
                      end if
                   end do
                   do k = 1, nz
-                     if (state%multilayer%h_layer(i, j, k) > H_VANISHED) cycle  ! vanished-ok: geometry (live-layer test), not a tracer update
+                     if (state%multilayer%h_layer(i, j, k) > H_VANISHED) cycle  ! geometry (live-layer test), not a tracer update
                      state%multilayer%tracers(it)%c(i, j, k) = c_don
                      do kk = k + 1, nz  ! nearest live layer above
-                        if (state%multilayer%h_layer(i, j, kk) > H_VANISHED) then  ! vanished-ok: geometry (live-layer test), not a tracer update
+                        if (state%multilayer%h_layer(i, j, kk) > H_VANISHED) then  ! geometry (live-layer test), not a tracer update
                            state%multilayer%tracers(it)%c(i, j, k) = &
                               state%multilayer%tracers(it)%c(i, j, kk)
                            exit
