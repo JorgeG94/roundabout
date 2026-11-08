@@ -162,6 +162,7 @@ module rdb_continuity
    public :: continuity_compute_fluxes
    public :: continuity_apply_fluxes
    public :: tracer_advect
+   public :: continuity_save_h_pair
    public :: continuity_step_split
    ! Phase 2 (6b) windowed-drain internals — exposed for the swept-flux
    ! oracle + reconstruction unit tests.
@@ -2628,10 +2629,7 @@ contains
       if (mode == TR_MODE_ACCUMULATE) then
          ! First accumulate stage of a window: latch the window-start
          ! thickness the drain will use to undo the hold exactly.
-         if (.not. this%hTr_holds_conc) then
-            call drain_copy_3d(nx, ny, nz, ms%h_layer, this%h_win_start)
-         end if
-         call drain_copy_3d(nx, ny, nz, ms%h_layer, this%hprev_work)
+         call tracer_window_latch(this, ms, nx, ny, nz,.not. this%hTr_holds_conc)
       end if
 
       if (present(uhbt) .and. present(bc)) then
@@ -3022,7 +3020,7 @@ contains
 
       ! ---- x half: tracers at h^n, then h^n -> h*.
       if (tracer_mode == TR_MODE_ACCUMULATE) then
-         call drain_copy_3d(nx, ny, nz, ms%h_layer, this%hprev_work)
+         call tracer_window_latch(this, ms, nx, ny, nz, .false.)
          do concurrent(k=1:nz, j=1:ny, i=1:nx + 1)
             this%uhtr(i, j, k) = this%uhtr(i, j, k) + gm%uhD(i, j, k)*dt
          end do
@@ -3693,7 +3691,18 @@ contains
       end if
    end subroutine tracer_advect_meridional_one_impl
 
-   subroutine tracer_advect(grid, metrics, this, ms, dt)
+   subroutine continuity_save_h_pair(this, ms)
+      !! Snapshot `ms%h_layer` into `this%h_pair_prev` (the `h_before` of the
+      !! `(h_before, h_after)` pair) BEFORE continuity writes `h_after`.  The
+      !! unsplit reference path's analogue of the snapshot the split drivers
+      !! take inline; call it between `continuity_compute_fluxes` and
+      !! `continuity_apply_fluxes`.
+      type(continuity_t), intent(inout) :: this
+      type(multilayer_state_t), intent(in) :: ms
+      call drain_copy_3d(size(ms%h_layer, 1), size(ms%h_layer, 2), ms%nz_ml, ms%h_layer, this%h_pair_prev%data)
+   end subroutine continuity_save_h_pair
+
+   subroutine tracer_advect(grid, metrics, this, ms, dt, h_before, h_after)
       !! **Test-only** (no production caller): unsplit 2-D tracer advection,
       !! the reference oracle for split `tracer_advect_zonal`/`_meridional`.
       !! Per-layer PPM tracer advection — iterates over the tracer
@@ -3722,6 +3731,15 @@ contains
       type(continuity_t), intent(inout) :: this
       type(multilayer_state_t), intent(inout) :: ms
       real(wp), intent(in) :: dt
+      real(wp), intent(in) :: h_before(grid%nx_total, grid%ny_total, ms%nz_ml)
+         !! Layer thickness before the continuity update (`h⁻`); the
+         !! caller snapshots it with `continuity_save_h_pair`.
+      real(wp), intent(in) :: h_after(grid%nx_total, grid%ny_total, ms%nz_ml)
+         !! Layer thickness the continuity update wrote (`h⁺`), i.e.
+         !! `ms%h_layer` read AFTER `continuity_apply_fluxes`.  The kernel
+         !! consumes only `h_before` while the tracer is stored as content
+         !! (so running it after the apply is bit-identical to running it
+         !! before); the concentration update divides by `h_after`.
 
       integer :: it
 
@@ -3732,7 +3750,7 @@ contains
          call tracer_advect_one_impl( &
             grid%nx_total, grid%ny_total, ms%nz_ml, &
             dt, metrics%iareaT, metrics%wet_T, &
-            ms%h_layer, &
+            h_before, h_after, &
             ms%tracers(it)%hTr, &
             ms%mass_flux_x_layer, &
             ms%mass_flux_y_layer, &
@@ -3743,7 +3761,7 @@ contains
       end do
    end subroutine tracer_advect
 
-   pure subroutine tracer_advect_one_impl(nx, ny, nz, dt, iareaT, wet_T, h, hTr, &
+   pure subroutine tracer_advect_one_impl(nx, ny, nz, dt, iareaT, wet_T, h_before, h_after, hTr, &
                                           mass_flux_x, mass_flux_y, &
                                           Tr_face_left_x, Tr_face_right_x, &
                                           Tr_face_left_y, Tr_face_right_y)
@@ -3768,7 +3786,11 @@ contains
       real(wp), intent(in) :: dt
       real(wp), intent(in) :: iareaT(nx, ny)
       real(wp), intent(in) :: wet_T(nx, ny)
-      real(wp), intent(in) :: h(nx, ny, nz)
+      real(wp), intent(in) :: h_before(nx, ny, nz)
+         !! Thickness before the continuity update (`h⁻`).
+      real(wp), intent(in) :: h_after(nx, ny, nz)
+         !! Thickness the continuity update wrote (`h⁺`); unused while the
+         !! tracer is stored as content.
       real(wp), intent(inout) :: hTr(nx, ny, nz)
       real(wp), intent(in) :: mass_flux_x(nx + 1, ny, nz)
       real(wp), intent(in) :: mass_flux_y(nx, ny + 1, nz)
@@ -3788,11 +3810,11 @@ contains
       do concurrent(k=1:nz, j=1:ny, i=3:nx - 2) &
          local(Tr_m2, Tr_m1, Tr_0, Tr_p1, Tr_p2, &
                dh_m1, dh_0, dh_p1, Tr_left, Tr_right)
-         Tr_0 = rdb_conc_of_raw(hTr(i, j, k), h(i, j, k))
-         Tr_m1 = ppm_mirror_h(rdb_conc_of_raw(hTr(i - 1, j, k), h(i - 1, j, k)), Tr_0, wet_T(i - 1, j))
-         Tr_p1 = ppm_mirror_h(rdb_conc_of_raw(hTr(i + 1, j, k), h(i + 1, j, k)), Tr_0, wet_T(i + 1, j))
-         Tr_m2 = ppm_mirror_h(rdb_conc_of_raw(hTr(i - 2, j, k), h(i - 2, j, k)), Tr_m1, wet_T(i - 2, j))
-         Tr_p2 = ppm_mirror_h(rdb_conc_of_raw(hTr(i + 2, j, k), h(i + 2, j, k)), Tr_p1, wet_T(i + 2, j))
+         Tr_0 = rdb_conc_of_raw(hTr(i, j, k), h_before(i, j, k))
+         Tr_m1 = ppm_mirror_h(rdb_conc_of_raw(hTr(i - 1, j, k), h_before(i - 1, j, k)), Tr_0, wet_T(i - 1, j))
+         Tr_p1 = ppm_mirror_h(rdb_conc_of_raw(hTr(i + 1, j, k), h_before(i + 1, j, k)), Tr_0, wet_T(i + 1, j))
+         Tr_m2 = ppm_mirror_h(rdb_conc_of_raw(hTr(i - 2, j, k), h_before(i - 2, j, k)), Tr_m1, wet_T(i - 2, j))
+         Tr_p2 = ppm_mirror_h(rdb_conc_of_raw(hTr(i + 2, j, k), h_before(i + 2, j, k)), Tr_p1, wet_T(i + 2, j))
          call ppm_limited_slope(Tr_m2, Tr_m1, Tr_0, dh_m1)
          call ppm_limited_slope(Tr_m1, Tr_0, Tr_p1, dh_0)
          call ppm_limited_slope(Tr_0, Tr_p1, Tr_p2, dh_p1)
@@ -3808,20 +3830,20 @@ contains
       ! at i=1 and i=nx+1 walls anyway, so the wall faces' Tr value
       ! doesn't enter the divergence.
       do concurrent(k=1:nz, j=1:ny)
-         Tr_face_left_x(1, j, k) = rdb_conc_of_raw(hTr(1, j, k), h(1, j, k))
-         Tr_face_right_x(1, j, k) = rdb_conc_of_raw(hTr(1, j, k), h(1, j, k))
-         Tr_face_left_x(2, j, k) = rdb_conc_of_raw(hTr(1, j, k), h(1, j, k))
-         Tr_face_right_x(2, j, k) = rdb_conc_of_raw(hTr(2, j, k), h(2, j, k))
+         Tr_face_left_x(1, j, k) = rdb_conc_of_raw(hTr(1, j, k), h_before(1, j, k))
+         Tr_face_right_x(1, j, k) = rdb_conc_of_raw(hTr(1, j, k), h_before(1, j, k))
+         Tr_face_left_x(2, j, k) = rdb_conc_of_raw(hTr(1, j, k), h_before(1, j, k))
+         Tr_face_right_x(2, j, k) = rdb_conc_of_raw(hTr(2, j, k), h_before(2, j, k))
          ! Face 3: cell 2's 5-point stencil is short, so its right
          ! edge falls back to 1st order — match continuity's fix.
-         Tr_face_left_x(3, j, k) = rdb_conc_of_raw(hTr(2, j, k), h(2, j, k))
-         Tr_face_right_x(3, j, k) = rdb_conc_of_raw(hTr(2, j, k), h(2, j, k))
+         Tr_face_left_x(3, j, k) = rdb_conc_of_raw(hTr(2, j, k), h_before(2, j, k))
+         Tr_face_right_x(3, j, k) = rdb_conc_of_raw(hTr(2, j, k), h_before(2, j, k))
          ! Face nx-1: mirror of face 3.
-         Tr_face_right_x(nx - 1, j, k) = rdb_conc_of_raw(hTr(nx - 1, j, k), h(nx - 1, j, k))
-         Tr_face_left_x(nx, j, k) = rdb_conc_of_raw(hTr(nx - 1, j, k), h(nx - 1, j, k))
-         Tr_face_right_x(nx, j, k) = rdb_conc_of_raw(hTr(nx, j, k), h(nx, j, k))
-         Tr_face_left_x(nx + 1, j, k) = rdb_conc_of_raw(hTr(nx, j, k), h(nx, j, k))
-         Tr_face_right_x(nx + 1, j, k) = rdb_conc_of_raw(hTr(nx, j, k), h(nx, j, k))
+         Tr_face_right_x(nx - 1, j, k) = rdb_conc_of_raw(hTr(nx - 1, j, k), h_before(nx - 1, j, k))
+         Tr_face_left_x(nx, j, k) = rdb_conc_of_raw(hTr(nx - 1, j, k), h_before(nx - 1, j, k))
+         Tr_face_right_x(nx, j, k) = rdb_conc_of_raw(hTr(nx, j, k), h_before(nx, j, k))
+         Tr_face_left_x(nx + 1, j, k) = rdb_conc_of_raw(hTr(nx, j, k), h_before(nx, j, k))
+         Tr_face_right_x(nx + 1, j, k) = rdb_conc_of_raw(hTr(nx, j, k), h_before(nx, j, k))
       end do
 
       ! Upwind pick at east faces -> overwrite Tr_face_left_x with
@@ -3840,11 +3862,11 @@ contains
       do concurrent(k=1:nz, j=3:ny - 2, i=1:nx) &
          local(Tr_m2, Tr_m1, Tr_0, Tr_p1, Tr_p2, &
                dh_m1, dh_0, dh_p1, Tr_left, Tr_right)
-         Tr_0 = rdb_conc_of_raw(hTr(i, j, k), h(i, j, k))
-         Tr_m1 = ppm_mirror_h(rdb_conc_of_raw(hTr(i, j - 1, k), h(i, j - 1, k)), Tr_0, wet_T(i, j - 1))
-         Tr_p1 = ppm_mirror_h(rdb_conc_of_raw(hTr(i, j + 1, k), h(i, j + 1, k)), Tr_0, wet_T(i, j + 1))
-         Tr_m2 = ppm_mirror_h(rdb_conc_of_raw(hTr(i, j - 2, k), h(i, j - 2, k)), Tr_m1, wet_T(i, j - 2))
-         Tr_p2 = ppm_mirror_h(rdb_conc_of_raw(hTr(i, j + 2, k), h(i, j + 2, k)), Tr_p1, wet_T(i, j + 2))
+         Tr_0 = rdb_conc_of_raw(hTr(i, j, k), h_before(i, j, k))
+         Tr_m1 = ppm_mirror_h(rdb_conc_of_raw(hTr(i, j - 1, k), h_before(i, j - 1, k)), Tr_0, wet_T(i, j - 1))
+         Tr_p1 = ppm_mirror_h(rdb_conc_of_raw(hTr(i, j + 1, k), h_before(i, j + 1, k)), Tr_0, wet_T(i, j + 1))
+         Tr_m2 = ppm_mirror_h(rdb_conc_of_raw(hTr(i, j - 2, k), h_before(i, j - 2, k)), Tr_m1, wet_T(i, j - 2))
+         Tr_p2 = ppm_mirror_h(rdb_conc_of_raw(hTr(i, j + 2, k), h_before(i, j + 2, k)), Tr_p1, wet_T(i, j + 2))
          call ppm_limited_slope(Tr_m2, Tr_m1, Tr_0, dh_m1)
          call ppm_limited_slope(Tr_m1, Tr_0, Tr_p1, dh_0)
          call ppm_limited_slope(Tr_0, Tr_p1, Tr_p2, dh_p1)
@@ -3856,17 +3878,17 @@ contains
          Tr_face_left_y(i, j + 1, k) = Tr_right
       end do
       do concurrent(k=1:nz, i=1:nx)
-         Tr_face_left_y(i, 1, k) = rdb_conc_of_raw(hTr(i, 1, k), h(i, 1, k))
-         Tr_face_right_y(i, 1, k) = rdb_conc_of_raw(hTr(i, 1, k), h(i, 1, k))
-         Tr_face_left_y(i, 2, k) = rdb_conc_of_raw(hTr(i, 1, k), h(i, 1, k))
-         Tr_face_right_y(i, 2, k) = rdb_conc_of_raw(hTr(i, 2, k), h(i, 2, k))
-         Tr_face_left_y(i, 3, k) = rdb_conc_of_raw(hTr(i, 2, k), h(i, 2, k))
-         Tr_face_right_y(i, 3, k) = rdb_conc_of_raw(hTr(i, 2, k), h(i, 2, k))
-         Tr_face_right_y(i, ny - 1, k) = rdb_conc_of_raw(hTr(i, ny - 1, k), h(i, ny - 1, k))
-         Tr_face_left_y(i, ny, k) = rdb_conc_of_raw(hTr(i, ny - 1, k), h(i, ny - 1, k))
-         Tr_face_right_y(i, ny, k) = rdb_conc_of_raw(hTr(i, ny, k), h(i, ny, k))
-         Tr_face_left_y(i, ny + 1, k) = rdb_conc_of_raw(hTr(i, ny, k), h(i, ny, k))
-         Tr_face_right_y(i, ny + 1, k) = rdb_conc_of_raw(hTr(i, ny, k), h(i, ny, k))
+         Tr_face_left_y(i, 1, k) = rdb_conc_of_raw(hTr(i, 1, k), h_before(i, 1, k))
+         Tr_face_right_y(i, 1, k) = rdb_conc_of_raw(hTr(i, 1, k), h_before(i, 1, k))
+         Tr_face_left_y(i, 2, k) = rdb_conc_of_raw(hTr(i, 1, k), h_before(i, 1, k))
+         Tr_face_right_y(i, 2, k) = rdb_conc_of_raw(hTr(i, 2, k), h_before(i, 2, k))
+         Tr_face_left_y(i, 3, k) = rdb_conc_of_raw(hTr(i, 2, k), h_before(i, 2, k))
+         Tr_face_right_y(i, 3, k) = rdb_conc_of_raw(hTr(i, 2, k), h_before(i, 2, k))
+         Tr_face_right_y(i, ny - 1, k) = rdb_conc_of_raw(hTr(i, ny - 1, k), h_before(i, ny - 1, k))
+         Tr_face_left_y(i, ny, k) = rdb_conc_of_raw(hTr(i, ny - 1, k), h_before(i, ny - 1, k))
+         Tr_face_right_y(i, ny, k) = rdb_conc_of_raw(hTr(i, ny, k), h_before(i, ny, k))
+         Tr_face_left_y(i, ny + 1, k) = rdb_conc_of_raw(hTr(i, ny, k), h_before(i, ny, k))
+         Tr_face_right_y(i, ny + 1, k) = rdb_conc_of_raw(hTr(i, ny, k), h_before(i, ny, k))
       end do
 
       ! Upwind pick at north faces
@@ -4681,6 +4703,23 @@ contains
          vhtr(i, j, k) = vhtr(i, j, k)*sfac
       end do
    end subroutine drain_avail_scale_y
+
+   pure subroutine tracer_window_latch(this, ms, nx, ny, nz, latch_start)
+      !! THE windowed-advection LATCH (step 1 of a stage; `tracer_window_hold`
+      !! is step 2): snapshot the pre-stage thickness `ms%h_layer` into
+      !! `this%hprev_work` and, on the first accumulate stage of a window
+      !! (`latch_start`), also the window-start thickness `this%h_win_start`
+      !! the drain uses to undo the hold exactly.  With `tracer_window_hold`
+      !! and `tracer_window_release` this is the whole `h`-bookkeeping of the
+      !! windowed hold, which a concentration-valued prognostic does not need.
+      type(continuity_t), intent(inout) :: this
+      type(multilayer_state_t), intent(in) :: ms
+      integer, intent(in) :: nx, ny, nz
+      logical, intent(in) :: latch_start
+         !! `.true.` on the first accumulate stage of a window.
+      if (latch_start) call drain_copy_3d(nx, ny, nz, ms%h_layer, this%h_win_start)
+      call drain_copy_3d(nx, ny, nz, ms%h_layer, this%hprev_work)
+   end subroutine tracer_window_latch
 
    pure subroutine tracer_window_hold(this, ms, nx, ny, nz, w)
       !! THE windowed-advection HOLD (step 2 of 2 of a stage; the latch that
