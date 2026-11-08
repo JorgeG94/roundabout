@@ -34,6 +34,8 @@
 !   rdb_content_of_floor(c,h,hf) c*max(h, hf)          (solver reconstitute)
 !   rdb_content_of(c, h)         c*h                   (seed / reset / OBC ghost)
 !   rdb_conc_add_source(hTr,h,src)             hTr + src   (deposit, h unchanged)
+!   rdb_conc_add_source_mass(hTr,hb,ha,src)    hTr + src   (deposit that also
+!                                  changes h: explicit h_before -> h_after pair)
 !
 ! The consuming module must already `use rdb_constants, only: wp`.  Everything
 ! here is `pure` and device-callable.  Do NOT add state, logging or anything
@@ -131,3 +133,21 @@
          !! Content source over the step (`dt·tendency`).
       rdb_conc_add_source = hTr + src
    end function rdb_conc_add_source
+
+   pure real(wp) function rdb_conc_add_source_mass(hTr, h_before, h_after, src)
+      !$acc routine seq
+      !! Tracer state after adding a CONTENT source `src` to a layer whose
+      !! thickness the SAME operator changes, `h_before -> h_after` (melt
+      !! with mass).  The concentration form is
+      !! `(c*h_before + src)/h_after`; in content form it is `hTr + src` and
+      !! the pair is unused.
+      real(wp), intent(in) :: hTr
+         !! Layer content before the source.
+      real(wp), intent(in) :: h_before
+         !! Layer thickness (m) before the operator.
+      real(wp), intent(in) :: h_after
+         !! Layer thickness (m) the operator writes.
+      real(wp), intent(in) :: src
+         !! Content source over the step.
+      rdb_conc_add_source_mass = hTr + src
+   end function rdb_conc_add_source_mass

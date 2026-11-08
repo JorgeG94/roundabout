@@ -885,6 +885,52 @@ contains
    ! Phase 3 — real freshwater MASS
    ! ======================================================================
 
+   pure subroutine cavity_melt_thickness_pair(h0, dh, hn, thin)
+      !$acc routine seq
+      !! The explicit `h_before -> h_after` PAIR of the melt-with-mass
+      !! source in the top live layer: `h_after = h_before + dh`, with a
+      !! withdrawal (`dh < 0`) clamped at `H_CAVITY_FLOOR`.  Shared by
+      !! `cavity_mass_apply_impl` (which writes `h_after`) and
+      !! `cavity_mass_salt_mirror_impl` (the pseudo-salt twin, which must
+      !! see the SAME pair), so the tracer deposit and the thickness it
+      !! rides on can never diverge.
+      real(wp), intent(in) :: h0
+         !! Layer thickness before the source (m).
+      real(wp), intent(inout) :: dh
+         !! In: requested `melt*dt/rho_0`.  Out: the APPLIED thickness
+         !! change (`hn - h0`), differing from the request only when the
+         !! withdrawal was clamped.
+      real(wp), intent(out) :: hn
+         !! Layer thickness after the source (m).
+      logical, intent(out) :: thin
+         !! `.true.` when the withdrawal had to be clamped.
+      thin = .false.
+      hn = h0 + dh
+      if (dh < 0.0_wp .and. hn < H_CAVITY_FLOOR) then
+         ! Pin the RESULT at the floor and derive the applied `dh`
+         ! from it, rather than pinning `dh` and adding: `h0 +
+         ! (H_CAVITY_FLOOR - h0)` rounds and can land a ulp BELOW
+         ! the floor, which is the one place a thin-layer gate must
+         ! never be.
+         !
+         ! `min(h0, ...)` takes only what sits ABOVE the floor: a
+         ! column already at or below it has its withdrawal REFUSED
+         ! (`hn = h0`, `dh = 0`) rather than turned into a deposit.
+         ! Clamping `hn` UP to the floor there would invent mass the
+         ! tracked source does not name — a worse failure than the
+         ! one being prevented, and it is what the unconditional
+         ! `hn = marker` form used to do.
+         !
+         ! Gated on `dh < 0` for the same reason: a MELTING column
+         ! (`dh >= 0`) is adding mass, and a thin result then means
+         ! the layer was already thin on arrival — not this kernel's
+         ! doing, and not this kernel's to fabricate away.
+         hn = min(h0, H_CAVITY_FLOOR)
+         dh = hn - h0
+         thin = .true.
+      end if
+   end subroutine cavity_melt_thickness_pair
+
    pure subroutine cavity_mass_apply_impl(nx, ny, nz, dt_over_rho0, inv_rho0_dt, s_ice, &
                                           active, melt, s_far, t_b, &
                                           h_layer, hTr_S, hTr_T, &
@@ -974,45 +1020,24 @@ contains
       integer, intent(out) :: n_thin
          !! Columns whose withdrawal had to be clamped.
       integer :: i, j, kt, c_thin
+      logical :: thin
       real(wp) :: dh, h0, hn, cell_s, cell_t, virt
 
       c_thin = 0
-      do concurrent(j=1:ny, i=1:nx) local(kt, dh, h0, hn, cell_s, cell_t, virt) reduce(+:c_thin)
+      do concurrent(j=1:ny, i=1:nx) local(kt, dh, h0, hn, cell_s, cell_t, virt, thin) reduce(+:c_thin)
          if (active(i, j) > 0.5_wp) then
             kt = k_top(i, j)
             h0 = h_layer(i, j, kt)
             dh = melt(i, j)*dt_over_rho0
-            hn = h0 + dh
-            if (dh < 0.0_wp .and. hn < H_CAVITY_FLOOR) then
-               ! Pin the RESULT at the floor and derive the applied `dh`
-               ! from it, rather than pinning `dh` and adding: `h0 +
-               ! (H_CAVITY_FLOOR - h0)` rounds and can land a ulp BELOW
-               ! the floor, which is the one place a thin-layer gate must
-               ! never be.
-               !
-               ! `min(h0, ...)` takes only what sits ABOVE the floor: a
-               ! column already at or below it has its withdrawal REFUSED
-               ! (`hn = h0`, `dh = 0`) rather than turned into a deposit.
-               ! Clamping `hn` UP to the floor there would invent mass the
-               ! tracked source does not name — a worse failure than the
-               ! one being prevented, and it is what the unconditional
-               ! `hn = marker` form used to do.
-               !
-               ! Gated on `dh < 0` for the same reason: a MELTING column
-               ! (`dh >= 0`) is adding mass, and a thin result then means
-               ! the layer was already thin on arrival — not this kernel's
-               ! doing, and not this kernel's to fabricate away.
-               hn = min(h0, H_CAVITY_FLOOR)
-               dh = hn - h0
-               c_thin = c_thin + 1
-            end if
+            call cavity_melt_thickness_pair(h0, dh, hn, thin)
+            if (thin) c_thin = c_thin + 1
             virt = -melt(i, j)*(s_far(i, j) - s_ice)
             cell_s = -inv_rho0_dt*virt + dh*s_ice
             cell_t = dh*t_b(i, j)
             h_layer(i, j, kt) = hn
-            hTr_S(i, j, kt) = hTr_S(i, j, kt) + cell_s
+            hTr_S(i, j, kt) = rdb_conc_add_source_mass(hTr_S(i, j, kt), h0, hn, cell_s)
             salt_budget(i, j, kt) = salt_budget(i, j, kt) + cell_s
-            hTr_T(i, j, kt) = hTr_T(i, j, kt) + cell_t
+            hTr_T(i, j, kt) = rdb_conc_add_source_mass(hTr_T(i, j, kt), h0, hn, cell_t)
             heat_budget(i, j, kt) = heat_budget(i, j, kt) + cell_t
          end if
       end do
@@ -1020,7 +1045,7 @@ contains
    end subroutine cavity_mass_apply_impl
 
    pure subroutine cavity_mass_salt_mirror_impl(nx, ny, nz, dt_over_rho0, inv_rho0_dt, &
-                                                s_ice, active, melt, s_far, hTr, k_top)
+                                                s_ice, active, melt, s_far, h_layer, hTr, k_top)
       !! The pseudo-salt mirror of `cavity_mass_apply_impl`'s SALT
       !! increment, with no budget accumulation — `budget_id = NONE`, so
       !! it must not touch `salt_budget_surface`.
@@ -1055,6 +1080,12 @@ contains
       real(wp), intent(in) :: s_far(nx, ny)
          !! Far-field salinity (g/kg); the virtual component being
          !! undone is rebuilt from it, exactly as in the sibling.
+      real(wp), intent(in) :: h_layer(nx, ny, nz)
+         !! Layer thickness BEFORE the source: call this mirror BEFORE
+         !! `cavity_mass_apply_impl` (which overwrites `h_layer` with the
+         !! post-source thickness).  The `h_before -> h_after` pair is
+         !! re-derived here by `cavity_melt_thickness_pair`, the SAME
+         !! clamp the sibling applies.
       real(wp), intent(inout) :: hTr(nx, ny, nz)
          !! Pseudo-salt `h*C`.
       integer, intent(in) :: k_top(nx, ny)
@@ -1062,13 +1093,17 @@ contains
          !! mirror's whole contract is that its increment is bit-identical
          !! to salinity's, which includes landing on the same row.
       integer :: i, j
-      real(wp) :: cell_s, virt
+      logical :: thin
+      real(wp) :: cell_s, virt, h0, hn, dh
 
-      do concurrent(j=1:ny, i=1:nx) local(cell_s, virt)
+      do concurrent(j=1:ny, i=1:nx) local(cell_s, virt, h0, hn, dh, thin)
          if (active(i, j) > 0.5_wp) then
+            h0 = h_layer(i, j, k_top(i, j))
+            dh = melt(i, j)*dt_over_rho0
+            call cavity_melt_thickness_pair(h0, dh, hn, thin)
             virt = -melt(i, j)*(s_far(i, j) - s_ice)
             cell_s = -inv_rho0_dt*virt + melt(i, j)*dt_over_rho0*s_ice
-            hTr(i, j, k_top(i, j)) = hTr(i, j, k_top(i, j)) + cell_s
+            hTr(i, j, k_top(i, j)) = rdb_conc_add_source_mass(hTr(i, j, k_top(i, j)), h0, hn, cell_s)
          end if
       end do
    end subroutine cavity_mass_salt_mirror_impl
@@ -1387,16 +1422,18 @@ contains
       cav%open_area = area_open
 
       ! (2) The source.
+      ! The pseudo-salt mirror goes FIRST: it needs the pre-source thickness
+      ! to form its own `h_before -> h_after` pair (the apply overwrites it).
+      if (idx_ps > 0) then
+         call cavity_mass_salt_mirror_impl(nx, ny, nz, dt_over_rho0, dt_over_rho0, &
+                                           cav%s_ice, cav%active, cav%melt, &
+                                           cav%s_far, ms%h_layer, ms%tracers(idx_ps)%hTr, ms%k_top)
+      end if
       call cavity_mass_apply_impl(nx, ny, nz, dt_over_rho0, dt_over_rho0, cav%s_ice, &
                                   cav%active, cav%melt, cav%s_far, cav%t_b, &
                                   ms%h_layer, ms%tracers(idx_s)%hTr, ms%tracers(idx_t)%hTr, &
                                   ms%salt_budget_surface, ms%heat_budget_surface, &
                                   ms%k_top, n_thin_src)
-      if (idx_ps > 0) then
-         call cavity_mass_salt_mirror_impl(nx, ny, nz, dt_over_rho0, dt_over_rho0, &
-                                           cav%s_ice, cav%active, cav%melt, &
-                                           cav%s_far, ms%tracers(idx_ps)%hTr, ms%k_top)
-      end if
       ms%mass_src = ms%mass_src + weight*RHO_WATER*vol_melt
 
       ! (3) The sink, when the knob asks for it.
@@ -1567,5 +1604,7 @@ contains
                                     " otherwise-refused column(s) this step")
       end if
    end subroutine ocean_cavity_flux_step
+
+#include "rdb_tracer_conc.inc"
 
 end module rdb_ocean_cavity_flux
