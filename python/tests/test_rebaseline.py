@@ -200,7 +200,7 @@ def test_salt_and_heat_totals_close_after_rebaseline_in_a_closed_basin():
             tot = [0.0, 0.0, 0.0]
             for i in range(NX):
                 for j in range(NY):
-                    if (i, j) == LAND:      # vanished land column reads NaN
+                    if (i, j) == LAND:      # land column: h = 0, no content
                         continue
                     for k in range(NZ):
                         tot[0] += h[i][j][k]

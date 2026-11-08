@@ -23,7 +23,7 @@ from . import _compose, _ffi
 from ._config import Config
 from ._errors import (AlreadyExistsError, NotInitialisedError,
                        RdbReadOnlyError, RdbUnsupportedError, check)
-from ._field import DerivedField, DiagnosticField, Field, Loc
+from ._field import DiagnosticField, Field, Loc
 from ._nml_parse import (config_from_namelist_text, merge_explicit,
                           resolve_relative_file_paths)
 
@@ -498,9 +498,8 @@ class Model:
         """Stage the initial CONCENTRATION of tracer ``name`` (its own
         units; ``"temperature"``, ``"salinity"``, ``"pseudo_salt"``, ...) on
         a pending handle: shape ``(nx, ny, nz)``, ``k = 0`` the bed. The
-        content ``conc * h`` is formed against the final ``h`` at
-        :meth:`finalize`, so staging order versus :meth:`stage_h` does not
-        matter. An unknown name raises
+        concentration is stored as given, so staging order versus
+        :meth:`stage_h` does not matter. An unknown name raises
         :class:`~rdb._errors.TracerNotFoundError` at finalize. Staging
         salinity re-seeds pseudo-salt from it unless pseudo-salt is staged
         itself."""
@@ -1038,12 +1037,12 @@ class Model:
 
     @property
     def temperature(self) -> Field:
-        """Layer temperature (degC), DERIVED from hT/h (D3.2)."""
+        """Layer temperature (degC): the stored concentration."""
         return self.tracer("temperature")
 
     @property
     def salinity(self) -> Field:
-        """Layer salinity (PSU), DERIVED from hS/h (D3.2)."""
+        """Layer salinity (PSU): the stored concentration."""
         return self.tracer("salinity")
 
     def __repr__(self):

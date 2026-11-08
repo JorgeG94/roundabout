@@ -49,7 +49,7 @@ def _check(field, shape):
         g = got
         for i in idx:
             g = g[i]
-        assert g == pytest.approx(_val(idx), rel=1e-12), idx  # T is hTr/h
+        assert g == pytest.approx(_val(idx), rel=1e-12), idx  # T is the stored concentration
 
 
 @pytest.mark.parametrize("order", ["C", "F"])
