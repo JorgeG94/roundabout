@@ -597,9 +597,8 @@ contains
             do k = 1, nz
                dz_eff = max(ms%h_layer(i, j, k), H_VANISHED)
                h_col(k) = dz_eff
-               denom = 1.0_wp/max(ms%h_layer(i, j, k), H_DIV_EPS)
-               t_col(k) = hT(i, j, k)*denom
-               s_col(k) = hS(i, j, k)*denom
+               t_col(k) = hT(i, j, k)
+               s_col(k) = hS(i, j, k)
                if (k >= kbed) h_tot = h_tot + ms%h_layer(i, j, k)
             end do
 
