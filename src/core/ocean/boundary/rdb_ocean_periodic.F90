@@ -45,33 +45,25 @@ contains
       logical, intent(in) :: wrap_y
          !! Wrap ghost rows (south ↔ north).
 
-      integer :: i, j
+      integer :: i, j, g
 
       ! X-wrap first, then Y-wrap in a separate loop.  The two passes must
       ! not share a single do-concurrent because the Y-wrap reads ghost
       ! columns that the X-wrap writes (data dependency across iterations).
       if (wrap_x) then
-         do concurrent(j=1:ny_total, i=1:nx_total)
+         do concurrent(j=1:ny_total, g=1:nghost)
             ! West ghosts: fld(1..nghost, j) := fld(nx_phys+1..nx_phys+nghost, j)
-            if (i <= nghost) then
-               fld(i, j) = fld(i + nx_phys, j)
-            end if
+            fld(g, j) = fld(g + nx_phys, j)
             ! East ghosts: fld(nx_phys+nghost+1..nx_total, j) := fld(nghost+1..2*nghost, j)
-            if (i > nx_phys + nghost) then
-               fld(i, j) = fld(i - nx_phys, j)
-            end if
+            fld(nx_phys + nghost + g, j) = fld(nghost + g, j)
          end do
       end if
       if (wrap_y) then
-         do concurrent(j=1:ny_total, i=1:nx_total)
+         do concurrent(g=1:nghost, i=1:nx_total)
             ! South ghosts: fld(i, 1..nghost) := fld(i, ny_phys+1..ny_phys+nghost)
-            if (j <= nghost) then
-               fld(i, j) = fld(i, j + ny_phys)
-            end if
+            fld(i, g) = fld(i, g + ny_phys)
             ! North ghosts: fld(i, ny_phys+nghost+1..ny_total) := fld(i, nghost+1..2*nghost)
-            if (j > ny_phys + nghost) then
-               fld(i, j) = fld(i, j - ny_phys)
-            end if
+            fld(i, ny_phys + nghost + g) = fld(i, nghost + g)
          end do
       end if
    end subroutine ocean_periodic_wrap_centre_2d
@@ -91,7 +83,7 @@ contains
       logical, intent(in) :: wrap_y
       logical, intent(in), optional :: no_wait
 
-      integer :: i, j, k
+      integer :: i, j, k, g
       logical :: lwait
 
       lwait = .true.   ! default: blocking (wait) — safe for non-batched callers
@@ -102,23 +94,15 @@ contains
       ! Same queue ⇒ ordered ⇒ the X→Y dependency holds.
       !$acc kernels async(1)
       if (wrap_x) then
-         do concurrent(k=1:nz, j=1:ny_total, i=1:nx_total)
-            if (i <= nghost) then
-               fld(i, j, k) = fld(i + nx_phys, j, k)
-            end if
-            if (i > nx_phys + nghost) then
-               fld(i, j, k) = fld(i - nx_phys, j, k)
-            end if
+         do concurrent(k=1:nz, j=1:ny_total, g=1:nghost)
+            fld(g, j, k) = fld(g + nx_phys, j, k)
+            fld(nx_phys + nghost + g, j, k) = fld(nghost + g, j, k)
          end do
       end if
       if (wrap_y) then
-         do concurrent(k=1:nz, j=1:ny_total, i=1:nx_total)
-            if (j <= nghost) then
-               fld(i, j, k) = fld(i, j + ny_phys, k)
-            end if
-            if (j > ny_phys + nghost) then
-               fld(i, j, k) = fld(i, j - ny_phys, k)
-            end if
+         do concurrent(k=1:nz, g=1:nghost, i=1:nx_total)
+            fld(i, g, k) = fld(i, g + ny_phys, k)
+            fld(i, ny_phys + nghost + g, k) = fld(i, nghost + g, k)
          end do
       end if
       !$acc end kernels
@@ -140,7 +124,7 @@ contains
       logical, intent(in) :: wrap_x
       logical, intent(in) :: wrap_y
 
-      integer :: i, j
+      integer :: i, j, g
       integer :: i_w, i_e
 
       i_w = nghost + 1          ! west physical-wall face index
@@ -149,28 +133,20 @@ contains
       ! X-wrap (including belt-and-braces seam copy) in its own DC loop,
       ! then Y-wrap in a separate loop to avoid cross-iteration data dependencies.
       if (wrap_x) then
-         do concurrent(j=1:ny_total, i=1:nx_face)
+         do concurrent(j=1:ny_total, g=1:nghost)
             ! West ghost faces i=1..nghost  ← interior face i+nx_phys
-            if (i <= nghost) then
-               fld(i, j) = fld(i + nx_phys, j)
-            end if
+            fld(g, j) = fld(g + nx_phys, j)
             ! East ghost faces i=nx_phys+nghost+2..nx_face ← interior face i-nx_phys
-            if (i > nx_phys + nghost + 1) then
-               fld(i, j) = fld(i - nx_phys, j)
-            end if
+            fld(i_e + g, j) = fld(i_w + g, j)
             ! Belt-and-braces: copy west wall face onto east wall face.
             ! Ensures property (b) even if a kernel breaks expression symmetry.
-            if (i == i_e) fld(i, j) = fld(i_w, j)
+            if (g == 1) fld(i_e, j) = fld(i_w, j)
          end do
       end if
       if (wrap_y) then
-         do concurrent(j=1:ny_total, i=1:nx_face)
-            if (j <= nghost) then
-               fld(i, j) = fld(i, j + ny_phys)
-            end if
-            if (j > ny_phys + nghost) then
-               fld(i, j) = fld(i, j - ny_phys)
-            end if
+         do concurrent(g=1:nghost, i=1:nx_face)
+            fld(i, g) = fld(i, g + ny_phys)
+            fld(i, ny_phys + nghost + g) = fld(i, nghost + g)
          end do
       end if
    end subroutine ocean_periodic_wrap_face_x_2d
@@ -189,7 +165,7 @@ contains
       logical, intent(in) :: wrap_y
       logical, intent(in), optional :: no_wait
 
-      integer :: i, j, k
+      integer :: i, j, k, g
       integer :: i_w, i_e
       logical :: lwait
 
@@ -201,24 +177,16 @@ contains
       ! Two-pass: X-wrap (+ belt-and-braces) first, Y-wrap second.
       !$acc kernels async(1)
       if (wrap_x) then
-         do concurrent(k=1:nz, j=1:ny_total, i=1:nx_face)
-            if (i <= nghost) then
-               fld(i, j, k) = fld(i + nx_phys, j, k)
-            end if
-            if (i > nx_phys + nghost + 1) then
-               fld(i, j, k) = fld(i - nx_phys, j, k)
-            end if
-            if (i == i_e) fld(i, j, k) = fld(i_w, j, k)
+         do concurrent(k=1:nz, j=1:ny_total, g=1:nghost)
+            fld(g, j, k) = fld(g + nx_phys, j, k)
+            fld(i_e + g, j, k) = fld(i_w + g, j, k)
+            if (g == 1) fld(i_e, j, k) = fld(i_w, j, k)
          end do
       end if
       if (wrap_y) then
-         do concurrent(k=1:nz, j=1:ny_total, i=1:nx_face)
-            if (j <= nghost) then
-               fld(i, j, k) = fld(i, j + ny_phys, k)
-            end if
-            if (j > ny_phys + nghost) then
-               fld(i, j, k) = fld(i, j - ny_phys, k)
-            end if
+         do concurrent(k=1:nz, g=1:nghost, i=1:nx_face)
+            fld(i, g, k) = fld(i, g + ny_phys, k)
+            fld(i, ny_phys + nghost + g, k) = fld(i, nghost + g, k)
          end do
       end if
       !$acc end kernels
@@ -239,7 +207,7 @@ contains
       logical, intent(in) :: wrap_x
       logical, intent(in) :: wrap_y
 
-      integer :: i, j
+      integer :: i, j, g
       integer :: j_s, j_n
 
       j_s = nghost + 1
@@ -247,27 +215,19 @@ contains
 
       ! Two-pass: X-wrap first, Y-wrap (+ belt-and-braces) second.
       if (wrap_x) then
-         do concurrent(j=1:ny_face, i=1:nx_total)
-            if (i <= nghost) then
-               fld(i, j) = fld(i + nx_phys, j)
-            end if
-            if (i > nx_phys + nghost) then
-               fld(i, j) = fld(i - nx_phys, j)
-            end if
+         do concurrent(j=1:ny_face, g=1:nghost)
+            fld(g, j) = fld(g + nx_phys, j)
+            fld(nx_phys + nghost + g, j) = fld(nghost + g, j)
          end do
       end if
       if (wrap_y) then
-         do concurrent(j=1:ny_face, i=1:nx_total)
+         do concurrent(g=1:nghost, i=1:nx_total)
             ! South ghost faces j=1..nghost ← interior face j+ny_phys
-            if (j <= nghost) then
-               fld(i, j) = fld(i, j + ny_phys)
-            end if
+            fld(i, g) = fld(i, g + ny_phys)
             ! North ghost faces j=ny_phys+nghost+2..ny_face ← interior face j-ny_phys
-            if (j > ny_phys + nghost + 1) then
-               fld(i, j) = fld(i, j - ny_phys)
-            end if
+            fld(i, j_n + g) = fld(i, j_s + g)
             ! Belt-and-braces: copy south wall face onto north wall face.
-            if (j == j_n) fld(i, j) = fld(i, j_s)
+            if (g == 1) fld(i, j_n) = fld(i, j_s)
          end do
       end if
    end subroutine ocean_periodic_wrap_face_y_2d
@@ -285,7 +245,7 @@ contains
       logical, intent(in) :: wrap_y
       logical, intent(in), optional :: no_wait
 
-      integer :: i, j, k
+      integer :: i, j, k, g
       integer :: j_s, j_n
       logical :: lwait
 
@@ -297,26 +257,18 @@ contains
       ! Two-pass: X-wrap first, Y-wrap (+ belt-and-braces) second.
       if (wrap_x) then
          !$acc kernels async(1)
-         do concurrent(k=1:nz, j=1:ny_face, i=1:nx_total)
-            if (i <= nghost) then
-               fld(i, j, k) = fld(i + nx_phys, j, k)
-            end if
-            if (i > nx_phys + nghost) then
-               fld(i, j, k) = fld(i - nx_phys, j, k)
-            end if
+         do concurrent(k=1:nz, j=1:ny_face, g=1:nghost)
+            fld(g, j, k) = fld(g + nx_phys, j, k)
+            fld(nx_phys + nghost + g, j, k) = fld(nghost + g, j, k)
          end do
          !$acc end kernels
       end if
       if (wrap_y) then
          !$acc kernels async(1)
-         do concurrent(k=1:nz, j=1:ny_face, i=1:nx_total)
-            if (j <= nghost) then
-               fld(i, j, k) = fld(i, j + ny_phys, k)
-            end if
-            if (j > ny_phys + nghost + 1) then
-               fld(i, j, k) = fld(i, j - ny_phys, k)
-            end if
-            if (j == j_n) fld(i, j, k) = fld(i, j_s, k)
+         do concurrent(k=1:nz, g=1:nghost, i=1:nx_total)
+            fld(i, g, k) = fld(i, g + ny_phys, k)
+            fld(i, j_n + g, k) = fld(i, j_s + g, k)
+            if (g == 1) fld(i, j_n, k) = fld(i, j_s, k)
          end do
          !$acc end kernels
       end if
