@@ -287,7 +287,7 @@ contains
             f = f - shift*pw
          end if
          inc = inv_scale*f
-         hTr(i, j, kt) = hTr(i, j, kt) + inc
+         hTr(i, j, kt) = rdb_conc_add_source(hTr(i, j, kt), h_layer(i, j, kt), inc)
          budget(i, j, kt) = budget(i, j, kt) + inc
       end do
    end subroutine sss_deposit_impl

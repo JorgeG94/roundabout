@@ -28,6 +28,13 @@
 !                                  floor the thickness)
 !   rdb_conc_of_eps(hTr,h,eps)   hTr/(h + eps)         (1/0 armour)
 !
+! Write-side twins (disappear, or collapse to a plain store, with the storage
+! change):
+!
+!   rdb_content_of_floor(c,h,hf) c*max(h, hf)          (solver reconstitute)
+!   rdb_content_of(c, h)         c*h                   (seed / reset / OBC ghost)
+!   rdb_conc_add_source(hTr,h,src)             hTr + src   (deposit, h unchanged)
+!
 ! The consuming module must already `use rdb_constants, only: wp`.  Everything
 ! here is `pure` and device-callable.  Do NOT add state, logging or anything
 ! impure to this file.
@@ -96,6 +103,18 @@
          !! Thickness floor (m) of the consumer; must equal the read's.
       rdb_content_of_floor = c*max(h, h_floor)
    end function rdb_content_of_floor
+
+   pure real(wp) function rdb_content_of(c, h)
+      !$acc routine seq
+      !! Content `c*h` of a layer seeded at concentration `c` (the write-side
+      !! twin of `rdb_conc_of_raw`; no guard, no floor).  Disappears with the
+      !! storage change (the seed then stores `c`).
+      real(wp), intent(in) :: c
+         !! Concentration.
+      real(wp), intent(in) :: h
+         !! Layer thickness (m).
+      rdb_content_of = c*h
+   end function rdb_content_of
 
    pure real(wp) function rdb_conc_add_source(hTr, h, src)
       !$acc routine seq

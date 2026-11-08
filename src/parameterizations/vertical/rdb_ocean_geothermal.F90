@@ -152,9 +152,11 @@ contains
             end if
          end do
          cell = src*wet_mask(i, j)
-         hTr(i, j, k_dep) = hTr(i, j, k_dep) + cell
+         hTr(i, j, k_dep) = rdb_conc_add_source(hTr(i, j, k_dep), h_layer(i, j, k_dep), cell)
          budget(i, j, k_dep) = budget(i, j, k_dep) + cell
       end do
    end subroutine apply_geothermal_src_impl
+
+#include "rdb_tracer_conc.inc"
 
 end module rdb_ocean_geothermal
