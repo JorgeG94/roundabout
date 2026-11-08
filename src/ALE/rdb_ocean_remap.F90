@@ -305,7 +305,8 @@ contains
          call remap_column(method, nz, &
                            h_old_col(1:nz), h_new_col(1:nz), &
                            c_old_col(1:nz), c_new_col(1:nz), bnd_extrap, nonunif)
-         call remap_bound_column(nz, h_old_col, h_new_col, c_old_col, c_new_col, clamp_col)
+         call remap_bound_column(nz, h_old_col, h_new_col, c_old_col, c_new_col, clamp_col, &
+                                 bnd_extrap)
          do k = 1, nz
             hTr_new = c_new_col(k)*h_new_col(k)
             if (present(budget)) budget(i, j, k) = budget(i, j, k) + (hTr_new - hTr(i, j, k))
@@ -316,7 +317,7 @@ contains
       end do
    end subroutine ocean_remap_tracer_field
 
-   pure subroutine remap_bound_column(nz, h_old_col, h_new_col, c_old, c_new, clamp_amt)
+   pure subroutine remap_bound_column(nz, h_old_col, h_new_col, c_old, c_new, clamp_amt, bnd_extrap)
       !$acc routine seq
       !! Concentration-form closure of one remapped column (reference path;
       !! the stream kernel 3 does the same per cell).  For each target layer
@@ -340,6 +341,20 @@ contains
       !! `clamp_amt(k) = h_new(k)·(c_new_final − c_new_raw)` is the content
       !! the closure moves; it is part of `hTr_new − hTr_old`, hence of the
       !! remap budget slot.
+      !!
+      !! **Boundary cells under `bnd_extrap`.**  The linear-exact boundary
+      !! closure (`boundary_half_jump` in `rdb_remap_column`) gives cells `1`
+      !! and `nz` the straight line `c ± d`, `|d| <= |c_nbr − c|`, whose OUTER
+      !! half lies outside `[c_nbr, c]` by construction — that is the point of
+      !! the closure (a profile linear in z is reproduced exactly).  Bounding
+      !! such a contributor by its neighbour means alone clamped every target
+      !! inside that outer half (a 20 m surface target under a 67 m source
+      !! cell: the whole linear-S column gained 1e-5 of its salt on the first
+      !! remap of the flat at-rest control, and the clamped bed/surface
+      !! density set rx0 slopes in motion).  Its range is therefore widened by
+      !! the mirror point `2c − c_nbr`, which contains the line for every
+      !! method that uses the closure (PLM/PPM/PPM_H4/PQM), so the bounding is
+      !! again a no-op on an exact reconstruction.
       integer, intent(in) :: nz
       real(wp), intent(in) :: h_old_col(NZ_STACK_MAX)
       real(wp), intent(in) :: h_new_col(NZ_STACK_MAX)
@@ -348,6 +363,10 @@ contains
       real(wp), intent(inout) :: c_new(NZ_STACK_MAX)
          !! Raw target concentration in, bounded concentration out.
       real(wp), intent(out) :: clamp_amt(NZ_STACK_MAX)
+      logical, intent(in) :: bnd_extrap
+         !! The column kernel ran with the linear-exact boundary closure
+         !! (`&vcoord_nml remap_boundary_extrap`): widen the range of the two
+         !! boundary cells to the line they carry (see above).
       real(wp) :: z_old(NZ_STACK_MAX), z_new(NZ_STACK_MAX)
       real(wp) :: zacc_o, zacc_n, zn_lo, zn_hi, zo_lo, zo_hi, overlap
       real(wp) :: c_lo, c_hi, c_raw, cs_lo, cs_hi
@@ -390,6 +409,15 @@ contains
                   ! (ko-1, ko, ko+1): the limited parabola cannot leave it.
                   cs_lo = min(c_old(max(ko - 1, 1)), min(c_old(ko), c_old(min(ko + 1, nz))))
                   cs_hi = max(c_old(max(ko - 1, 1)), max(c_old(ko), c_old(min(ko + 1, nz))))
+                  if (bnd_extrap .and. nz >= 2) then
+                     if (ko == 1) then
+                        cs_lo = min(cs_lo, 2.0_wp*c_old(1) - c_old(2))
+                        cs_hi = max(cs_hi, 2.0_wp*c_old(1) - c_old(2))
+                     else if (ko == nz) then
+                        cs_lo = min(cs_lo, 2.0_wp*c_old(nz) - c_old(nz - 1))
+                        cs_hi = max(cs_hi, 2.0_wp*c_old(nz) - c_old(nz - 1))
+                     end if
+                  end if
                   if (n_hit == 0) then
                      c_lo = cs_lo
                      c_hi = cs_hi
@@ -1290,7 +1318,7 @@ contains
       end do
       call rdb_vl_column_conc(nz, h_old_col, hTr_col, c_old)
       call remap_column(method, nz, h_old, h_new, c_old(1:nz), c_new(1:nz))
-      call remap_bound_column(nz, h_old_col, h_new_col, c_old, c_new, clamp_col)
+      call remap_bound_column(nz, h_old_col, h_new_col, c_old, c_new, clamp_col, .false.)
       do k = 1, nz
          hTr_inout(k) = c_new(k)*h_new(k)
       end do

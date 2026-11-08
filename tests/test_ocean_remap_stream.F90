@@ -36,7 +36,7 @@
 !! included, is mapped here and the results are pulled back with
 !! `update self` on the arrays (never on a derived type).
 module test_ocean_remap_stream
-   use rdb_constants, only: wp, REMAP_PPM, REMAP_PLM, H_VANISHED
+   use rdb_constants, only: wp, REMAP_PPM, REMAP_PLM, REMAP_PPM_H4, H_VANISHED
    use rdb_grid, only: hgrid_t
    use rdb_ocean_remap, only: ocean_remap_tracer_field, ocean_remap_tracer_field_stream, &
                               remap_use_stream
@@ -72,7 +72,8 @@ contains
                   new_unittest("stream_matches_reference_nz50", test_nz50), &
                   new_unittest("stream_matches_reference_nz128", test_nz128), &
                   new_unittest("stream_nz200_conserves_bounded_fallback", test_nz200), &
-                  new_unittest("dispatch_falls_back_to_reference", test_dispatch) &
+                  new_unittest("dispatch_falls_back_to_reference", test_dispatch), &
+                  new_unittest("bnd_extrap_linear_unclamped_conserved", test_bnd_extrap_linear) &
                   ]
    end subroutine collect_ocean_remap_stream_tests
 
@@ -710,5 +711,75 @@ contains
          call vc%destroy()
       end do
    end subroutine test_dispatch
+
+   subroutine test_bnd_extrap_linear(error)
+      !! Reference kernel with the linear-exact boundary closure
+      !! (`bnd_extrap = .true.`, the v0.1.0 fixed configuration): a
+      !! concentration LINEAR in z is reconstructed exactly, including the
+      !! outer half of cells 1 and nz, which lies outside the neighbour-mean
+      !! range.  Thin surface/bed targets inside those halves must not be
+      !! clamped (the bounding range of a boundary cell is widened to the
+      !! line), so the column content is conserved to round-off with ZERO
+      !! recorded bounding.  Regression: clamping them leaked 1.2e-5 of the
+      !! salt on the flat at-rest zstar_full control (`vcm_flat_zstar_full`).
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NZ = 15, NCOL = 4
+      integer, parameter :: METHODS(3) = [REMAP_PPM, REMAP_PLM, REMAP_PPM_H4]
+      real(wp) :: h_old(NCOL, 1, NZ), h_new(NCOL, 1, NZ), hTr(NCOL, 1, NZ), tr0(NCOL, 1, NZ)
+      real(wp) :: bud(NCOL, 1, NZ), cn(NCOL, 1, NZ), cl(NCOL, 1, NZ)
+      real(wp) :: z, s0, s1, worst_cons, worst_clamp
+      integer :: ic, k, im, inu
+      logical :: nu
+      character(len=160) :: msg
+
+      do ic = 1, NCOL
+         ! Source: uniform 1000/15 m layers.  Target: a fine surface band of
+         ! 3 x (5*ic) m, a thin bed layer of ic m, the rest uniform.
+         do k = 1, NZ
+            h_old(ic, 1, k) = 1000.0_wp/real(NZ, wp)
+         end do
+         h_new(ic, 1, 1) = real(ic, wp)
+         do k = NZ - 2, NZ
+            h_new(ic, 1, k) = 5.0_wp*real(ic, wp)
+         end do
+         do k = 2, NZ - 3
+            h_new(ic, 1, k) = (1000.0_wp - real(ic, wp) - 15.0_wp*real(ic, wp))/real(NZ - 4, wp)
+         end do
+         ! S linear in z (z up from the bed): fresher toward the surface.
+         z = 0.0_wp
+         do k = 1, NZ
+            tr0(ic, 1, k) = h_old(ic, 1, k)*(34.55_wp - 7.5e-4_wp*(z + 0.5_wp*h_old(ic, 1, k)))
+            z = z + h_old(ic, 1, k)
+         end do
+      end do
+
+      worst_cons = 0.0_wp
+      worst_clamp = 0.0_wp
+      do im = 1, size(METHODS)
+         do inu = 0, 1
+            nu = inu == 1
+            hTr = tr0
+            bud = 0.0_wp
+            cn = 0.0_wp
+            cl = 0.0_wp
+            !$acc enter data copyin(h_old, h_new, hTr, bud, cn, cl)
+            call ocean_remap_tracer_field(NCOL, 1, NZ, h_old, h_new, hTr, METHODS(im), &
+                                          .true., nu, budget=bud, c_new_out=cn, clamp_out=cl)
+            !$acc update self(hTr, bud, cn, cl)
+            !$acc exit data delete(h_old, h_new, hTr, bud, cn, cl)
+            do ic = 1, NCOL
+               s0 = sum(tr0(ic, 1, :))
+               s1 = sum(hTr(ic, 1, :))
+               worst_cons = max(worst_cons, abs(s1 - s0)/s0)
+               worst_clamp = max(worst_clamp, maxval(abs(cl(ic, 1, :)))/s0)
+            end do
+         end do
+      end do
+      write (msg, '(a,es9.2)') "bnd_extrap linear column: relative content change ", worst_cons
+      call check(error, worst_cons <= 1.0e-14_wp, trim(msg))
+      if (allocated(error)) return
+      write (msg, '(a,es9.2)') "bnd_extrap linear column: bounding moved (relative) ", worst_clamp
+      call check(error, worst_clamp <= 1.0e-14_wp, trim(msg))
+   end subroutine test_bnd_extrap_linear
 
 end module test_ocean_remap_stream
