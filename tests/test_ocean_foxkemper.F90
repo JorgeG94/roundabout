@@ -1244,6 +1244,12 @@ contains
       !!     mass flux on every step and ACCUMULATED into uhtr/vhtr
       !!     via the production continuity_tracer_step_split(ACCUMULATE);
       !!   * the FK fold applied on every dynamics step of the window;
+      !!   * ONE continuity call per step, so the transport is accumulated at
+      !!     weight 1 (the default 0.5 is the per-stage `ssp_rk2` value, two
+      !!     stages per step); with the default only half the thickness change
+      !!     reaches `uhtr` and the drain's reconstructed window-start
+      !!     thickness `h_end + div(uhtr)/A` no longer matches the
+      !!     concentration it is paired with;
       !!   * a genuine non-zero background zonal flow so the drain runs a
       !!     real multi-pass swept-PPM (not the FK-only degenerate case);
       !!   * `continuity_tracer_drain` at each window close;
@@ -1349,7 +1355,8 @@ contains
                call continuity_tracer_step_split(grid, metrics, ct, ms, DT, &
                                                  bc=bc, mle=mle, &
                                                  mle_fold_active=.true., &
-                                                 tracer_mode=TR_MODE_ACCUMULATE)
+                                                 tracer_mode=TR_MODE_ACCUMULATE, &
+                                                 tr_accum_weight=1.0_wp)
             end do
             ! --- window close: spend the accumulated transport.
             call continuity_tracer_drain(grid, metrics, ct, ms, RATIO, bc=bc)
