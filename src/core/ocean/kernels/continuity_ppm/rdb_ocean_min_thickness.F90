@@ -50,10 +50,6 @@ module rdb_ocean_min_thickness
    public :: ocean_apply_conservative_min_thickness
    public :: min_thickness_target_column   ! exposed for unit tests
 
-   real(wp), parameter :: H_CONC_FLOOR = 1.0e-20_wp
-      !! Pure 1/0 armour when forming a layer concentration c = q/h_old; only
-      !! guards genuinely-zero source layers (never a physical thickness).
-
 contains
 
    pure subroutine min_thickness_target_column(nz, h_old, h_floor, h_new, grounded)
@@ -255,8 +251,10 @@ contains
 
    pure subroutine remap_tracer_grounded(nx, ny, nz, h_old, h_new, mask, hTr)
       !! Conservative tracer remap gated on the grounded mask.  Non-grounded
-      !! columns are skipped -> hTr byte-unchanged; the concentration
-      !! divisions only happen on grounded columns.
+      !! columns are skipped -> hTr byte-unchanged; the source concentration
+      !! is the tracer-concentration accessor `rdb_conc_of` (a zero-thickness
+      !! layer reads `0`; no raw divide, no private floor), evaluated only on
+      !! grounded columns.
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: h_old(nx, ny, nz)
       real(wp), intent(in) :: h_new(nx, ny, nz)
@@ -272,11 +270,7 @@ contains
             do k = 1, nz
                h_old_col(k) = h_old(i, j, k)
                h_new_col(k) = h_new(i, j, k)
-               if (h_old_col(k) > H_CONC_FLOOR) then
-                  c_old(k) = rdb_conc_of_raw(hTr(i, j, k), h_old_col(k))
-               else
-                  c_old(k) = 0.0_wp
-               end if
+               c_old(k) = rdb_conc_of(hTr(i, j, k), h_old_col(k))
             end do
             call remap_column(REMAP_PPM, nz, h_old_col(1:nz), h_new_col(1:nz), &
                               c_old(1:nz), c_new(1:nz))

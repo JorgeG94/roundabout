@@ -495,11 +495,15 @@ contains
       !! donor's concentration preserves tracer constancy.
       !!
       !! **Placement:** once per outer step, after every tracer update and after
-      !! the ALE remap — `ocean_dyn_step_split_multilayer`'s tail.  The remap
-      !! already establishes I1′ internally; this catches everything that
-      !! writes AFTER it, and the families with no vanishing layers at all
-      !! (sigma, z*-lite, the whole double-gyre / Eady / channel set) see a
-      !! textual no-op: `rdb_vl_merge_content` mutates nothing on a column
+      !! the ALE remap — `ocean_dyn_step_split_multilayer`'s tail — and once
+      !! more immediately BEFORE the remap on remap steps.  The remap computes
+      !! on concentration (`ocean_remap_tracer_field`): it no longer pools
+      !! fillers itself, and it reads a filler's donor concentration, never a
+      !! filler's content, so the pre-remap sweep is what hands it the content
+      !! this step's writers parked in fillers.  The tail sweep catches
+      !! everything that writes AFTER the remap, and the families with no
+      !! vanishing layers at all (sigma, z*-lite, the whole double-gyre / Eady /
+      !! channel set) see a textual no-op: `rdb_vl_merge_content` mutates nothing on a column
       !! with no sub-threshold layer.
       !!
       !! Outer-shim + flat-impl: the registry is an array of derived types, so

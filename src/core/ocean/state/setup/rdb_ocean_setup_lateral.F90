@@ -141,6 +141,7 @@ contains
       ocean_state%vcoord%remap_vel_conserve_ke = cfg%remap_vel_conserve_ke
       ocean_state%vcoord%remap_boundary_extrap = cfg%remap_boundary_extrap
       ocean_state%vcoord%remap_nonuniform_weights = cfg%remap_nonuniform_weights
+      ocean_state%vcoord%remap_stream = trim(cfg%remap_kernel) /= "reference"
       ocean_state%vcoord%remap_check_preconditions = cfg%remap_check_preconditions
       ocean_state%vcoord%check_vanished_content = cfg%check_vanished_content
       if (compute_rank == 0) then

@@ -4326,6 +4326,17 @@ module rdb_config
          !! are linear-exact only on a UNIFORM source column.  PPM_H4 and
          !! PQM already carry thickness-weighted stencils and are unchanged.
          !! .false. (default) = bit-identical.
+      character(len=16) :: remap_kernel = "stream"
+         !! Tracer-remap kernel of the default PPM path: `"stream"` (default,
+         !! `ocean_remap_tracer_field_stream` — k-parallel kernels over
+         !! global scratch, no `NZ_STACK_MAX` column stacks) or
+         !! `"reference"` (`ocean_remap_tracer_field`, the stack-based
+         !! oracle).  Both compute the remap in concentration form and agree
+         !! BITWISE on columns without vanished layers (`test_ocean_remap_stream`),
+         !! so the default is a performance choice and `"reference"` is the
+         !! bisect escape hatch.  Other remap
+         !! methods, `nz <= 2`, `remap_boundary_extrap` and
+         !! `remap_nonuniform_weights` always use the reference kernel.
       logical :: remap_check_preconditions = .false.
          !! Assert, once per ALE remap (thermo cadence), that every column
          !! satisfies what the overlap sweep has always assumed: non-negative

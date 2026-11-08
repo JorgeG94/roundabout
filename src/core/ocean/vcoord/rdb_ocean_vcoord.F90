@@ -274,8 +274,28 @@ module rdb_ocean_vcoord
       real(wp), allocatable :: remap_conc_s(:, :, :)
          !! Layer-mean S concentration scratch for `VCOORD_RHO`, shape
          !! `(nx, ny, nz)`.
+      real(wp), allocatable :: remap_c_old(:, :, :)
+         !! Streaming tracer remap scratch (`ocean_remap_tracer_field_stream`):
+         !! SOURCE concentration `c_old` of every layer (a filler reads its
+         !! donor's), shape `(nx, ny, nz)`.
+      real(wp), allocatable :: remap_z_old(:, :, :)
+         !! Streaming tracer remap scratch: source interface heights
+         !! (`z_old(k)` = top of layer `k`), shape `(nx, ny, nz)`.
+      real(wp), allocatable :: remap_z_new(:, :, :)
+         !! Streaming tracer remap scratch: target interface heights.
+      real(wp), allocatable :: remap_q_l(:, :, :)
+         !! Streaming tracer remap scratch: limited PPM left edge per source cell.
+      real(wp), allocatable :: remap_q_r(:, :, :)
+         !! Streaming tracer remap scratch: limited PPM right edge per source cell.
+      real(wp), allocatable :: remap_q_6(:, :, :)
+         !! Streaming tracer remap scratch: PPM curvature `q6` per source cell.
 
       ! ---- Tuning knobs ----
+      logical :: remap_stream = .true.
+         !! Tracer remap kernel: `.true.` (default, `&vcoord_nml remap_kernel =
+         !! "stream"`) dispatches the default-PPM tracer remap to the
+         !! streaming kernel, `.false.` to the stack-based reference.
+         !! Same semantics either way (concentration-form remap).
       integer :: remap_method = REMAP_PPM
          !! ALE remap reconstruction order (REMAP_PCM/PLM/PPM/PPM_H4/PQM).
          !! PQM falls back to PPM for nz < 5 (see `remap_column_pqm`).
@@ -536,6 +556,12 @@ contains
       allocate (this%remap_h_old(grid%nx_total, grid%ny_total, nz_local), source=0.0_wp)
       allocate (this%remap_conc_t(grid%nx_total, grid%ny_total, nz_local), source=0.0_wp)
       allocate (this%remap_conc_s(grid%nx_total, grid%ny_total, nz_local), source=0.0_wp)
+      allocate (this%remap_c_old(grid%nx_total, grid%ny_total, nz_local), source=0.0_wp)
+      allocate (this%remap_z_old(grid%nx_total, grid%ny_total, nz_local), source=0.0_wp)
+      allocate (this%remap_z_new(grid%nx_total, grid%ny_total, nz_local), source=0.0_wp)
+      allocate (this%remap_q_l(grid%nx_total, grid%ny_total, nz_local), source=0.0_wp)
+      allocate (this%remap_q_r(grid%nx_total, grid%ny_total, nz_local), source=0.0_wp)
+      allocate (this%remap_q_6(grid%nx_total, grid%ny_total, nz_local), source=0.0_wp)
       this%is_init = .true.
    end subroutine ocean_vcoord_init
 
@@ -556,6 +582,12 @@ contains
       if (allocated(this%remap_h_old)) deallocate (this%remap_h_old)
       if (allocated(this%remap_conc_t)) deallocate (this%remap_conc_t)
       if (allocated(this%remap_conc_s)) deallocate (this%remap_conc_s)
+      if (allocated(this%remap_c_old)) deallocate (this%remap_c_old)
+      if (allocated(this%remap_z_old)) deallocate (this%remap_z_old)
+      if (allocated(this%remap_z_new)) deallocate (this%remap_z_new)
+      if (allocated(this%remap_q_l)) deallocate (this%remap_q_l)
+      if (allocated(this%remap_q_r)) deallocate (this%remap_q_r)
+      if (allocated(this%remap_q_6)) deallocate (this%remap_q_6)
       this%nx_total = 0
       this%ny_total = 0
       this%nz_ml = 0
@@ -580,6 +612,8 @@ contains
       !$acc enter data copyin(this%rho_target)
       !$acc enter data copyin(this%remap_total_h, this%remap_h_ref, this%remap_h_old)
       !$acc enter data copyin(this%remap_conc_t, this%remap_conc_s)
+      !$acc enter data copyin(this%remap_c_old)
+      !$acc enter data copyin(this%remap_z_old, this%remap_z_new, this%remap_q_l, this%remap_q_r, this%remap_q_6)
    end subroutine ocean_vcoord_enter_data_impl
 
    subroutine ocean_vcoord_exit_data(this)
@@ -593,6 +627,8 @@ contains
    subroutine ocean_vcoord_exit_data_impl(this)
       type(ocean_vcoord_t), intent(inout) :: this
       if (.not. this%is_init) return
+      !$acc exit data delete(this%remap_z_old, this%remap_z_new, this%remap_q_l, this%remap_q_r, this%remap_q_6)
+      !$acc exit data delete(this%remap_c_old)
       !$acc exit data delete(this%remap_conc_t, this%remap_conc_s)
       !$acc exit data delete(this%remap_h_old, this%remap_h_ref, this%remap_total_h)
       !$acc exit data delete(this%rho_target)
@@ -2678,7 +2714,13 @@ contains
                + arr_bytes(this%remap_h_ref) &
                + arr_bytes(this%remap_h_old) &
                + arr_bytes(this%remap_conc_t) &
-               + arr_bytes(this%remap_conc_s)
+               + arr_bytes(this%remap_conc_s) &
+               + arr_bytes(this%remap_c_old) &
+               + arr_bytes(this%remap_z_old) &
+               + arr_bytes(this%remap_z_new) &
+               + arr_bytes(this%remap_q_l) &
+               + arr_bytes(this%remap_q_r) &
+               + arr_bytes(this%remap_q_6)
    end function ocean_vcoord_bytes
 
 end module rdb_ocean_vcoord
