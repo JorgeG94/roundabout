@@ -110,11 +110,26 @@ jobs:
       # therefore hashes EVERY build input: all Fortran sources (src/, tests/,
       # app/, benchmarks/), the #include'd .inc bodies, and every
       # CMakeLists.txt.  A cold build is quick; a false red is not.
+      #
+      # The TOOLCHAIN is a build input too, so the key also carries a
+      # fingerprint of the runner image + the compiler path + its version.
+      # Without it, a cache saved when setup-fortran v1.9.0 set FC=gfortran
+      # was restored under v1.11.0's FC=gfortran-15: CMake saw the compiler
+      # change, discarded its cache and re-configured -- and that second
+      # pass no longer found netcdf-fortran, so every PR whose sources were
+      # unchanged since the bump went red at configure.
+      - name: Toolchain fingerprint (build-cache key)
+        id: toolchain
+        run: |
+          fp="${ImageOS:-unknown} $(command -v "${{ env.FC }}") $("${{ env.FC }}" --version | head -1)"
+          echo "toolchain: $fp"
+          echo "fingerprint=$(printf '%s' "$fp" | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
       - name: Cache build tree
         uses: actions/cache@v4
         with:
           path: build_ci
-          key: build_ci-${{ runner.os }}-gcc15-${{ hashFiles('**/CMakeLists.txt', 'cmake/**', '**/*.F90', '**/*.f90', '**/*.inc') }}
+          key: build_ci-${{ runner.os }}-gcc15-${{ steps.toolchain.outputs.fingerprint }}-${{ hashFiles('**/CMakeLists.txt', 'cmake/**', '**/*.F90', '**/*.f90', '**/*.inc') }}
 
       - name: Configure
         run: |
