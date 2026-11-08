@@ -175,7 +175,7 @@ contains
    end subroutine run_channel
 
    subroutine physical_totals(engine, salt, heat)
-      !! `Σ hTr·areaT` over the physical cells for salinity and temperature
+      !! `Σ h·c·areaT` over the physical cells for salinity and temperature
       !! (host, after pulling the two tracer payloads off the device).
       type(ocean_engine_t), intent(inout) :: engine
       real(wp), intent(out) :: salt, heat
@@ -183,7 +183,7 @@ contains
 
       is = engine%state%multilayer%idx_salinity
       it = engine%state%multilayer%idx_temperature
-      !$acc update self(engine%state%multilayer%tracers(is)%c)
+      !$acc update self(engine%state%multilayer%h_layer, engine%state%multilayer%tracers(is)%c)
       !$acc update self(engine%state%multilayer%tracers(it)%c)
       ng = engine%grid%nghost
       nx = engine%grid%nx_total
@@ -194,9 +194,9 @@ contains
       do k = 1, nz
          do j = ng + 1, ny - ng
             do i = ng + 1, nx - ng
-               salt = salt + engine%state%multilayer%tracers(is)%c(i, j, k)* &
+               salt = salt + engine%state%multilayer%h_layer(i, j, k)*engine%state%multilayer%tracers(is)%c(i, j, k)* &
                       engine%state%metrics%areaT(i, j)
-               heat = heat + engine%state%multilayer%tracers(it)%c(i, j, k)* &
+               heat = heat + engine%state%multilayer%h_layer(i, j, k)*engine%state%multilayer%tracers(it)%c(i, j, k)* &
                       engine%state%metrics%areaT(i, j)
             end do
          end do

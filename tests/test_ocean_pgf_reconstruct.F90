@@ -399,8 +399,8 @@ contains
                z3m = z_mid*z_mid*z_mid + z_mid*dz*dz/4.0_wp ! exact <z^3>
                Tk = T_REF + dTdz*z_mid + c2T*z2m + c3T*z3m
                Sk = S_REF + dSdz*z_mid + c2S*z2m + c3S*z3m
-               ms%tracers(ms%idx_temperature)%c(i, j, k) = Tk*dz
-               ms%tracers(ms%idx_salinity)%c(i, j, k) = Sk*dz
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = Tk
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = Sk
                ms%rho_layer(i, j, k) = rho_lin(Tk, Sk)
                e_lo = e_lo + dz
             end do

@@ -1494,9 +1494,6 @@ def _build_scheme_axis():
 # listed by hand, so a file that changes coordinate falls in or out on its
 # own.
 #
-# `&vcoord_nml check_vanished_content` (the vanished-layer content assertion)
-# is NOT switched on: it lands with `fix/remap-vanished-layer-content`, which
-# is not on this branch's base. Add it alongside this one when it merges.
 REMAP_CHECK_KNOB = "remap_check_preconditions"
 _NO_REMAP_VCOORDS = ("lagrangian", "isopycnal", "eulerian_z", "z")
 _REMAP_VCOORDS = ("sigma", "zsigma", "z-sigma", "z_sigma", "zstar", "z-star",

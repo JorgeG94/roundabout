@@ -1449,7 +1449,7 @@ go through a stdlib classic-NetCDF writer — nothing to install):
   with 40 % penetrating shortwave);
 * the v0.1.0 vertical-coordinate safety configuration everywhere:
   `remap_boundary_extrap`, `remap_nonuniform_weights`,
-  `remap_check_preconditions` and the I1′ `check_vanished_content` tripwire;
+  and `remap_check_preconditions`;
 * edge variants: `closed` (walls + island), `channel` (re-entrant in x, a
   north sponge band), `obc` (a Flather open east edge), and the single-rank
   rows `tripolar` (the analytic tripolar generator: 15 x 1 degree from 59 N,

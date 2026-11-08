@@ -93,8 +93,8 @@ contains
          ms%h_layer = H0
          ms%u_face_x_layer = 0.0_wp
          ms%v_face_y_layer = 0.0_wp
-         ms%tracers(ms%idx_salinity)%c = T0*H0
-         ms%tracers(ms%idx_temperature)%c = T0*H0
+         ms%tracers(ms%idx_salinity)%c = T0
+         ms%tracers(ms%idx_temperature)%c = T0
 
          ! uhbt: a huge zonal transport demand at every east face — the renorm
          ! saturates each layer at the CFL cap; the limiter then caps realised
@@ -141,7 +141,7 @@ contains
          do kt = 1, NZ
             do jt = NGHOST + 1, ny - NGHOST
                do it = NGHOST + 1, nx - NGHOST
-                  tr = ms%tracers(ms%idx_temperature)%c(it, jt, kt)/ms%h_layer(it, jt, kt)
+                  tr = ms%tracers(ms%idx_temperature)%c(it, jt, kt)
                   tr_dev = max(tr_dev, abs(tr - T0))
                end do
             end do
@@ -193,13 +193,13 @@ contains
          ms_a%h_layer = H0
          ms_a%u_face_x_layer = UGENTLE
          ms_a%v_face_y_layer = UGENTLE
-         ms_a%tracers(ms_a%idx_salinity)%c = T0*H0
-         ms_a%tracers(ms_a%idx_temperature)%c = T0*H0
+         ms_a%tracers(ms_a%idx_salinity)%c = T0
+         ms_a%tracers(ms_a%idx_temperature)%c = T0
          ms_b%h_layer = H0
          ms_b%u_face_x_layer = UGENTLE
          ms_b%v_face_y_layer = UGENTLE
-         ms_b%tracers(ms_b%idx_salinity)%c = T0*H0
-         ms_b%tracers(ms_b%idx_temperature)%c = T0*H0
+         ms_b%tracers(ms_b%idx_salinity)%c = T0
+         ms_b%tracers(ms_b%idx_temperature)%c = T0
 
          !$acc enter data copyin(ms_a, ms_b, ct_a, ct_b)
          call ms_a%enter_data()
@@ -352,8 +352,8 @@ contains
          ms%h_layer = H0
          ms%u_face_x_layer = 0.0_wp
          ms%v_face_y_layer = 0.0_wp
-         ms%tracers(ms%idx_salinity)%c = 10.0_wp*H0
-         ms%tracers(ms%idx_temperature)%c = 10.0_wp*H0
+         ms%tracers(ms%idx_salinity)%c = 10.0_wp
+         ms%tracers(ms%idx_temperature)%c = 10.0_wp
 
          allocate (uhbt(nx + 1, ny), source=1.0e9_wp)
          allocate (u_cor(nx + 1, ny, NZ), source=0.0_wp)

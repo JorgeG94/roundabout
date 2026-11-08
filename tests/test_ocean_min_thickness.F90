@@ -180,13 +180,13 @@ contains
       end do
 
       ! (c) Tracer mass conserved (both prognostic tracers).
-      s_old = sum(hTrS0(ic, jc, :))
-      s_new = sum(ms%tracers(ms%idx_salinity)%c(ic, jc, :))
+      s_old = sum(h0(ic, jc, :)*hTrS0(ic, jc, :))
+      s_new = sum(ms%h_layer(ic, jc, :)*ms%tracers(ms%idx_salinity)%c(ic, jc, :))
       call check(error, abs(s_new - s_old) <= 1.0e-12_wp*abs(s_old), &
                  "salinity mass must be conserved in the grounded column")
       if (allocated(error)) return
-      s_old = sum(hTrT0(ic, jc, :))
-      s_new = sum(ms%tracers(ms%idx_temperature)%c(ic, jc, :))
+      s_old = sum(h0(ic, jc, :)*hTrT0(ic, jc, :))
+      s_new = sum(ms%h_layer(ic, jc, :)*ms%tracers(ms%idx_temperature)%c(ic, jc, :))
       call check(error, abs(s_new - s_old) <= 1.0e-12_wp*abs(s_old), &
                  "temperature mass must be conserved in the grounded column")
       if (allocated(error)) return

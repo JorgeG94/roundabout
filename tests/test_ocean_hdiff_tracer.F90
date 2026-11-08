@@ -130,7 +130,7 @@ contains
       do k = 1, NZ
          do j = 1, ny
             do i = 1, nx
-               T_obs = ms%tracers(ms%idx_temperature)%c(i, j, k)/ms%h_layer(i, j, k)
+               T_obs = ms%tracers(ms%idx_temperature)%c(i, j, k)
                max_T_dev = max(max_T_dev, abs(T_obs - T0))
             end do
          end do
@@ -167,8 +167,7 @@ contains
          do j = 1, ny
             do i = 1, nx
                ms%tracers(ms%idx_temperature)%c(i, j, k) = &
-                  10.0_wp*sin(2.0_wp*PI*real(i, wp)/real(nx, wp))* &
-                  ms%h_layer(i, j, k)
+                  10.0_wp*sin(2.0_wp*PI*real(i, wp)/real(nx, wp))
                ms%tracers(ms%idx_salinity)%c(i, j, k) = 35.0_wp
             end do
          end do
@@ -231,7 +230,7 @@ contains
             do i = 1, nx
                ms%tracers(ms%idx_temperature)%c(i, j, k) = &
                   (5.0_wp + 3.0_wp*sin(2.0_wp*PI*real(i, wp)/real(nx, wp))* &
-                   cos(PI*real(j, wp)/real(ny, wp)))*ms%h_layer(i, j, k)
+                   cos(PI*real(j, wp)/real(ny, wp)))
                ms%tracers(ms%idx_salinity)%c(i, j, k) = 35.0_wp
             end do
          end do
@@ -247,14 +246,14 @@ contains
             end do
          end do
       end do
-      total_before = sum(ms%tracers(ms%idx_temperature)%c(i0:i1, j0:j1, :))
+      total_before = sum(ms%h_layer(i0:i1, j0:j1, :)*ms%tracers(ms%idx_temperature)%c(i0:i1, j0:j1, :))
 
       call map_in(ms, hd, metrics, grid)
       do step = 1, N_STEPS
          call tracer_hdiff(grid, metrics, hd, ms, DT)
       end do
       call map_out(ms, hd, metrics)
-      total_after = sum(ms%tracers(ms%idx_temperature)%c(i0:i1, j0:j1, :))
+      total_after = sum(ms%h_layer(i0:i1, j0:j1, :)*ms%tracers(ms%idx_temperature)%c(i0:i1, j0:j1, :))
 
       drift = abs(total_after - total_before)/abs(total_before)
       call check(error, drift < 1.0e-12_wp, &
@@ -299,8 +298,8 @@ contains
          do j = 1, ny
             do i = 1, nx
                ms%tracers(ms%idx_temperature)%c(i, j, k) = &
-                  cos(k_wave*real(i, wp)*grid%dx)*H0
-               ms%tracers(ms%idx_salinity)%c(i, j, k) = 35.0_wp*H0
+                  cos(k_wave*real(i, wp)*grid%dx)
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = 35.0_wp
             end do
          end do
       end do
@@ -318,7 +317,7 @@ contains
       j_probe = ny/2
       T_ic_at_probe = cos(k_wave*real(i_probe, wp)*grid%dx)
       T_expected = T_ic_at_probe*alpha**N_STEPS
-      T_obs = ms%tracers(ms%idx_temperature)%c(i_probe, j_probe, NZ/2)/H0
+      T_obs = ms%tracers(ms%idx_temperature)%c(i_probe, j_probe, NZ/2)
       rel_err = abs(T_obs - T_expected)/abs(T_expected)
 
       call check(error, rel_err < 5.0e-3_wp, &
@@ -358,10 +357,9 @@ contains
             do j = 1, ny
                do i = 1, nx
                   ms%tracers(ms%idx_temperature)%c(i, j, k) = &
-                     cos(2.0_wp*PI*real(i, wp)/real(nx, wp))*ms%h_layer(i, j, k)
+                     cos(2.0_wp*PI*real(i, wp)/real(nx, wp))
                   ms%tracers(ms%idx_salinity)%c(i, j, k) = &
-                     (35.0_wp + sin(2.0_wp*PI*real(j, wp)/real(ny, wp)))* &
-                     ms%h_layer(i, j, k)
+                     (35.0_wp + sin(2.0_wp*PI*real(j, wp)/real(ny, wp)))
                end do
             end do
          end do
@@ -426,23 +424,23 @@ contains
                do i = 1, nx
                   ms%tracers(ms%idx_temperature)%c(i, j, k) = &
                      (15.0_wp + 0.5_wp*sin(2.0_wp*PI*real(i, wp)/real(nx, wp))* &
-                      sin(PI*real(j, wp)/real(ny, wp)))*H0
+                      sin(PI*real(j, wp)/real(ny, wp)))
                   ms%tracers(ms%idx_salinity)%c(i, j, k) = &
-                     (35.0_wp + 0.3_wp*cos(2.0_wp*PI*real(i, wp)/real(nx, wp)))*H0
+                     (35.0_wp + 0.3_wp*cos(2.0_wp*PI*real(i, wp)/real(nx, wp)))
                end do
             end do
          end do
 
-         total_T_before = sum(ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
-         total_S_before = sum(ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
+         total_T_before = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
+         total_S_before = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
 
          call map_in(ms, hd, metrics, grid)
          call tracer_hdiff(grid, metrics, hd, ms, DT)
          call budgets%drain_contributors()
          call map_out(ms, hd, metrics)
 
-         total_T_after = sum(ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
-         total_S_after = sum(ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
+         total_T_after = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
+         total_S_after = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
 
          rel_T = abs(budgets%contributors(idx_heat)%total_integrated)/abs(total_T_before)
          rel_S = abs(budgets%contributors(idx_salt)%total_integrated)/abs(total_S_before)
@@ -512,7 +510,7 @@ contains
                do i = 1, nx
                   if (i < i0 .or. i > i1 .or. j < j0 .or. j > j1) then
                      ms_wall%tracers(ms_wall%idx_temperature)%c(i, j, k) = &
-                        POISON*ms_wall%h_layer(i, j, k)
+                        POISON
                   end if
                end do
             end do
@@ -531,8 +529,7 @@ contains
             do j = j0, j1
                do i = i0, i1
                   max_interior_dev = max(max_interior_dev, &
-                                         abs(ms_wall%tracers(ms_wall%idx_temperature)%c(i, j, k)/ &
-                                             ms_wall%h_layer(i, j, k) - T0))
+                                         abs(ms_wall%tracers(ms_wall%idx_temperature)%c(i, j, k) - T0))
                end do
             end do
          end do
@@ -556,7 +553,7 @@ contains
                do i = 1, nx
                   if (i < i0 .or. i > i1 .or. j < j0 .or. j > j1) then
                      ms_seam%tracers(ms_seam%idx_temperature)%c(i, j, k) = &
-                        POISON*ms_seam%h_layer(i, j, k)
+                        POISON
                   end if
                end do
             end do
@@ -575,8 +572,7 @@ contains
          do k = 1, NZ
             do j = j0, j1
                west_dev = max(west_dev, &
-                              abs(ms_seam%tracers(ms_seam%idx_temperature)%c(i0, j, k)/ &
-                                  ms_seam%h_layer(i0, j, k) - T0))
+                              abs(ms_seam%tracers(ms_seam%idx_temperature)%c(i0, j, k) - T0))
             end do
          end do
          call check(error, west_dev > 1.0e-6_wp, &

@@ -459,8 +459,8 @@ contains
          dyn%bt_work%bt_H_ref = real(NZ, wp)*H_BASE
 
          total_h0 = sum(ms%h_layer)*grid%dx*grid%dy
-         total_S0 = sum(ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
-         total_T0 = sum(ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
+         total_S0 = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
+         total_T0 = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
 
          call map_in(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn, vc)
          do step = 1, N_STEPS
@@ -470,8 +470,8 @@ contains
          call map_out(metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn, vc)
 
          total_h = sum(ms%h_layer)*grid%dx*grid%dy
-         total_S = sum(ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
-         total_T = sum(ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
+         total_S = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
+         total_T = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
          drift_h = abs(total_h - total_h0)/abs(total_h0)
          drift_S = abs(total_S - total_S0)/abs(total_S0)
          drift_T = abs(total_T - total_T0)/abs(total_T0)
@@ -568,8 +568,8 @@ contains
          dyn%dt_therm_ratio = 2
 
          total_h0 = sum(ms%h_layer)*grid%dx*grid%dy
-         total_S0 = sum(ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
-         total_T0 = sum(ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
+         total_S0 = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
+         total_T0 = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
 
          call map_in(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn, vc)
 
@@ -602,8 +602,8 @@ contains
          ! remap fires (Lagrangian continuity conserves mass; remap conserves
          ! by its own discrete accounting).
          total_h = sum(ms%h_layer)*grid%dx*grid%dy
-         total_S = sum(ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
-         total_T = sum(ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
+         total_S = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
+         total_T = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
          call check(error, abs(total_h - total_h0)/abs(total_h0) < 1.0e-10_wp, &
                     "cadence ZSTAR: total h not conserved")
          if (allocated(error)) exit checks

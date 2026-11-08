@@ -902,8 +902,8 @@ contains
          ms%u_face_x_layer = 0.0_wp
          ms%v_face_y_layer = 0.0_wp
          do k = 1, NZ
-            ms%tracers(ms%idx_salinity)%c(:, :, k) = eos%S_ref*H0
-            ms%tracers(ms%idx_temperature)%c(:, :, k) = eos%T_ref*H0
+            ms%tracers(ms%idx_salinity)%c(:, :, k) = eos%S_ref
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = eos%T_ref
          end do
 
          ! use_closure ON so vmix_apply_in_stage actually reaches

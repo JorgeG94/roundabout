@@ -136,8 +136,8 @@ contains
       do k = 1, nz
          ! bottom-up: warmer upward (stable). T(k) = T0 + dt_layer*(k-1).
          t_k = 10.0_wp + dt_layer*real(k - 1, wp)
-         ms%tracers(ms%idx_temperature)%c(:, :, k) = t_k*dz
-         ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp*dz
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = t_k
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp
       end do
    end subroutine fill_const_n2_column
 
@@ -542,8 +542,8 @@ contains
             else
                t_k = t_k + dt_layer
             end if
-            ms%tracers(ms%idx_temperature)%c(:, :, k) = t_k*DZ_G
-            ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp*DZ_G
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = t_k
+            ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp
          end do
 
          call tidal_mixing_compute(grid, tm, ms, 1800.0_wp)
@@ -637,8 +637,8 @@ contains
       ms%v_face_y_layer = 0.0_wp
       t_k = 10.0_wp
       do k = 1, nz
-         ms%tracers(ms%idx_temperature)%c(:, :, k) = t_k*dz
-         ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp*dz
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = t_k
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp
          if (k < nz) t_k = t_k + n2(k)*dz/dbuoy_t
       end do
    end subroutine fill_n2_profile

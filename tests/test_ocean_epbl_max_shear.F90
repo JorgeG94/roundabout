@@ -93,8 +93,8 @@ contains
       ms%u_face_x_layer = 0.0_wp
       ms%v_face_y_layer = 0.0_wp
       do k = 1, NZK
-         ms%tracers(ms%idx_temperature)%c(:, :, k) = (20.0_wp + dtdz*DZ*real(k - NZK, wp))*DZ
-         ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp*DZ
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = (20.0_wp + dtdz*DZ*real(k - NZK, wp))
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp
          if (k > KJ) ms%u_face_x_layer(:, :, k) = DU
       end do
 

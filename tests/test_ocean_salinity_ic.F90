@@ -23,7 +23,7 @@ module test_ocean_salinity_ic
    !!     This is the sigma-like behaviour the temperature path already
    !!     had, verified here so the two can't drift apart.
    !!   * **Ghosts + land** — every cell of the full local array,
-   !!     ghosts included, carries `hTr = S(k)*h_layer`; the seed writes
+   !!     ghosts included, carries the concentration `c = S(k)`; the seed writes
    !!     the same expression everywhere, exactly as the temperature
    !!     seed does, so a wall-adjacent EOS evaluation sees a real
    !!     density rather than the `rho_0` vanished-layer fallback.
@@ -114,7 +114,7 @@ contains
       type(ocean_state_t), intent(in) :: state
       integer, intent(in) :: iS, i, j, k
       real(wp) :: s
-      s = state%multilayer%tracers(iS)%c(i, j, k)/state%multilayer%h_layer(i, j, k)
+      s = state%multilayer%tracers(iS)%c(i, j, k)
    end function column_s
 
    pure function column_centre_span(state, i, j) result(dz)
@@ -163,8 +163,7 @@ contains
          do k = 1, NZ
             do j = 1, grid%ny_total
                do i = 1, grid%nx_total
-                  s_ijk = state%multilayer%tracers(iS)%c(i, j, k) &
-                          /state%multilayer%h_layer(i, j, k)
+                  s_ijk = state%multilayer%tracers(iS)%c(i, j, k)
                   call check(error, abs(s_ijk - s_expected(k)) < TOL, &
                              "S(k) must be linear in layer index, ghosts included")
                   if (allocated(error)) exit checks
@@ -174,13 +173,11 @@ contains
 
          ! Endpoint orientation, stated separately so a k-flip cannot
          ! hide inside the linearity loop.
-         s_ijk = state%multilayer%tracers(iS)%c(NGHOST + 1, NGHOST + 1, 1) &
-                 /state%multilayer%h_layer(NGHOST + 1, NGHOST + 1, 1)
+         s_ijk = state%multilayer%tracers(iS)%c(NGHOST + 1, NGHOST + 1, 1)
          call check(error, abs(s_ijk - S_BED) < TOL, &
                     "k = 1 is the BED and must carry S_init_bottom")
          if (allocated(error)) exit checks
-         s_ijk = state%multilayer%tracers(iS)%c(NGHOST + 1, NGHOST + 1, NZ) &
-                 /state%multilayer%h_layer(NGHOST + 1, NGHOST + 1, NZ)
+         s_ijk = state%multilayer%tracers(iS)%c(NGHOST + 1, NGHOST + 1, NZ)
          call check(error, abs(s_ijk - S_SURF) < TOL, &
                     "k = NZ is the SURFACE and must carry S_init_surface")
          if (allocated(error)) exit checks
@@ -193,8 +190,7 @@ contains
          dS_dz = (S_SURF - S_BED)/(real(NZ - 1, wp)*dz)
          do k = 1, NZ
             z_centre = (real(k, wp) - 0.5_wp)*dz
-            s_ijk = state%multilayer%tracers(iS)%c(NGHOST + 1, NGHOST + 1, k) &
-                    /state%multilayer%h_layer(NGHOST + 1, NGHOST + 1, k)
+            s_ijk = state%multilayer%tracers(iS)%c(NGHOST + 1, NGHOST + 1, k)
             call check(error, abs(s_ijk - (S_BED + dS_dz*(z_centre - 0.5_wp*dz))) &
                        < 1.0e-10_wp, &
                        "S must be affine in layer-centre depth with the expected slope")
@@ -229,8 +225,7 @@ contains
             do j = NGHOST + 1, NGHOST + NY_PHYS
                do i = NGHOST + 1, NGHOST + NX_PHYS
                   if (state%multilayer%h_layer(i, j, k) <= 0.0_wp) cycle
-                  s_ijk = state%multilayer%tracers(iS)%c(i, j, k) &
-                          /state%multilayer%h_layer(i, j, k)
+                  s_ijk = state%multilayer%tracers(iS)%c(i, j, k)
                   call check(error, abs(s_ijk - s_expected(k)) < TOL, &
                              "sloping bed: S(k) must still be linear in layer index")
                   if (allocated(error)) exit checks
@@ -271,13 +266,11 @@ contains
          if (allocated(error)) exit checks
 
          ! Endpoints on the shallow column too.
-         s_ijk = state%multilayer%tracers(iS)%c(i_shal, j, 1) &
-                 /state%multilayer%h_layer(i_shal, j, 1)
+         s_ijk = state%multilayer%tracers(iS)%c(i_shal, j, 1)
          call check(error, abs(s_ijk - S_BED) < TOL, &
                     "shallow column bed must still carry S_init_bottom")
          if (allocated(error)) exit checks
-         s_ijk = state%multilayer%tracers(iS)%c(i_shal, j, NZ) &
-                 /state%multilayer%h_layer(i_shal, j, NZ)
+         s_ijk = state%multilayer%tracers(iS)%c(i_shal, j, NZ)
          call check(error, abs(s_ijk - S_SURF) < TOL, &
                     "shallow column surface must still carry S_init_surface")
       end block checks
@@ -288,7 +281,7 @@ contains
    subroutine test_defaults_uniform(error)
       !! Both knobs at their `0.0` default ⇒ the historical uniform
       !! `initial_salinity` column, byte-identical — asserted as the
-      !! EXACT `hTr = S*h` product, not within a tolerance.
+      !! EXACT concentration `c = S`, not within a tolerance.
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
       type(hgrid_t) :: grid
@@ -304,8 +297,8 @@ contains
             do j = 1, grid%ny_total
                do i = 1, grid%nx_total
                   call check(error, state%multilayer%tracers(iS)%c(i, j, k) &
-                             == S_UNIFORM*state%multilayer%h_layer(i, j, k), &
-                             "default S IC must stay the exact uniform hTr = S*h product")
+                             == S_UNIFORM, &
+                             "default S IC must stay the exact uniform concentration S")
                   if (allocated(error)) exit checks
                end do
             end do

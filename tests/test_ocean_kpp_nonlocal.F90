@@ -99,8 +99,8 @@ contains
             ms%u_face_x_layer(:, :, k) = 0.0_wp
             ms%rho_layer(:, :, k) = 1030.0_wp - 0.5_wp*real(k - 1, wp)
          end if
-         ms%tracers(ms%idx_salinity)%c(:, :, k) = S_REF*H_LAYER
-         ms%tracers(ms%idx_temperature)%c(:, :, k) = T_REF*H_LAYER
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = S_REF
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = T_REF
       end do
    end subroutine setup_state
 

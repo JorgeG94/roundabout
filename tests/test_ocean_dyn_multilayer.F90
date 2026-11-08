@@ -216,8 +216,8 @@ contains
          S_k = [eos%S_ref + 1.0_wp, eos%S_ref, eos%S_ref - 1.0_wp]
          T_k = [eos%T_ref - 2.0_wp, eos%T_ref, eos%T_ref + 2.0_wp]
          do k = 1, NZ
-            ms%tracers(ms%idx_salinity)%c(:, :, k) = S_k(k)*H0
-            ms%tracers(ms%idx_temperature)%c(:, :, k) = T_k(k)*H0
+            ms%tracers(ms%idx_salinity)%c(:, :, k) = S_k(k)
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = T_k(k)
          end do
          allocate (hS_ic, source=ms%tracers(ms%idx_salinity)%c)
          allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%c)
@@ -319,8 +319,8 @@ contains
          ms%h_layer = H0
          ms%u_face_x_layer = U0
          ms%v_face_y_layer = 0.0_wp
-         ms%tracers(ms%idx_salinity)%c = eos%S_ref*H0
-         ms%tracers(ms%idx_temperature)%c = eos%T_ref*H0
+         ms%tracers(ms%idx_salinity)%c = eos%S_ref
+         ms%tracers(ms%idx_temperature)%c = eos%T_ref
 
          call map_in(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix)
          do step = 1, N_STEPS
@@ -444,8 +444,8 @@ contains
          end do
 
          total_h0 = sum(ms%h_layer)*grid%dx*grid%dy
-         total_S0 = sum(ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
-         total_T0 = sum(ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
+         total_S0 = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
+         total_T0 = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
 
          call map_in(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix)
          do step = 1, N_STEPS
@@ -454,8 +454,8 @@ contains
          call map_out(metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix)
 
          total_h = sum(ms%h_layer)*grid%dx*grid%dy
-         total_S = sum(ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
-         total_T = sum(ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
+         total_S = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
+         total_T = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
          drift_h = abs(total_h - total_h0)/abs(total_h0)
          drift_S = abs(total_S - total_S0)/abs(total_S0)
          drift_T = abs(total_T - total_T0)/abs(total_T0)
@@ -561,8 +561,8 @@ contains
       end do
       ms%v_face_y_layer = 0.0_wp
       do k = 1, NZ
-         ms%tracers(ms%idx_salinity)%c(:, :, k) = eos%S_ref*H0
-         ms%tracers(ms%idx_temperature)%c(:, :, k) = eos%T_ref*H0
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = eos%S_ref
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = eos%T_ref
       end do
 
       call map_in(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix)

@@ -91,9 +91,8 @@ contains
       j_hi = NGHOST + NY_PHYS
 
       do k = 1, NZ
-         ! Concentration = hTr / h_layer, averaged over the physical interior.
-         T_k(k) = sum(state%multilayer%tracers(idx_T)%c(i_lo:i_hi, j_lo:j_hi, k) &
-                      /state%multilayer%h_layer(i_lo:i_hi, j_lo:j_hi, k)) &
+         ! Concentration c, averaged over the physical interior.
+         T_k(k) = sum(state%multilayer%tracers(idx_T)%c(i_lo:i_hi, j_lo:j_hi, k)) &
                   /real(NX_PHYS*NY_PHYS, wp)
       end do
       dz_layer = cfg%ocean%topo%max_depth/real(NZ, wp)
@@ -122,11 +121,9 @@ contains
       k_mid = NZ/2
       j_lo = NGHOST + 2
       j_hi = NGHOST + NY_PHYS - 1
-      T_lo = sum(state%multilayer%tracers(idx_T)%c(NGHOST + 1:NGHOST + NX_PHYS, j_lo, k_mid) &
-                 /state%multilayer%h_layer(NGHOST + 1:NGHOST + NX_PHYS, j_lo, k_mid)) &
+      T_lo = sum(state%multilayer%tracers(idx_T)%c(NGHOST + 1:NGHOST + NX_PHYS, j_lo, k_mid)) &
              /real(NX_PHYS, wp)
-      T_hi = sum(state%multilayer%tracers(idx_T)%c(NGHOST + 1:NGHOST + NX_PHYS, j_hi, k_mid) &
-                 /state%multilayer%h_layer(NGHOST + 1:NGHOST + NX_PHYS, j_hi, k_mid)) &
+      T_hi = sum(state%multilayer%tracers(idx_T)%c(NGHOST + 1:NGHOST + NX_PHYS, j_hi, k_mid)) &
              /real(NX_PHYS, wp)
       computed = (T_hi - T_lo)/(real(j_hi - j_lo, wp)*grid%dy)
       call check(error, abs(computed - cfg%ocean%ic%eady_dT_dy) < 1.0e-8_wp, &
@@ -202,8 +199,7 @@ contains
             T_analytic = cfg%ocean%ic%eady_T_ref + cfg%ocean%ic%eady_dT_dz*z_k &
                          + cfg%ocean%ic%eady_dT_dy*(y_phys - y_mid)
             do i = NGHOST + 1, NGHOST + NX_PHYS
-               residual = state%multilayer%tracers(idx_T)%c(i, j, k) &
-                          /state%multilayer%h_layer(i, j, k) - T_analytic
+               residual = state%multilayer%tracers(idx_T)%c(i, j, k) - T_analytic
                max_res = max(max_res, abs(residual))
             end do
          end do

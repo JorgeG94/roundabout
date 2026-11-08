@@ -284,7 +284,7 @@ contains
             do i = 1, nxt
                ms%tracers(ms%idx_temperature)%c(i, j, k) = DZ*(T0 + GZ*(real(k, wp) - 0.5_wp)*DZ &
                                                                + gx*real(i, wp)*DX + gy*real(j, wp)*DX)
-               ms%tracers(ms%idx_salinity)%c(i, j, k) = S0*DZ
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = S0
             end do
          end do
       end do

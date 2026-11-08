@@ -81,8 +81,8 @@ contains
       call ms%init(grid)
       call eos%init(grid)
       ms%h_layer = H0
-      ms%tracers(ms%idx_salinity)%c = eos%S_ref*H0
-      ms%tracers(ms%idx_temperature)%c = eos%T_ref*H0
+      ms%tracers(ms%idx_salinity)%c = eos%S_ref
+      ms%tracers(ms%idx_temperature)%c = eos%T_ref
 
       call run_eos(ms, eos)
 
@@ -109,8 +109,8 @@ contains
       call ms%init(grid)
       call eos%init(grid)
       ms%h_layer = H0
-      ms%tracers(ms%idx_salinity)%c = (eos%S_ref + DS)*H0
-      ms%tracers(ms%idx_temperature)%c = eos%T_ref*H0
+      ms%tracers(ms%idx_salinity)%c = (eos%S_ref + DS)
+      ms%tracers(ms%idx_temperature)%c = eos%T_ref
 
       call run_eos(ms, eos)
 
@@ -139,8 +139,8 @@ contains
       call ms%init(grid)
       call eos%init(grid)
       ms%h_layer = H0
-      ms%tracers(ms%idx_salinity)%c = eos%S_ref*H0
-      ms%tracers(ms%idx_temperature)%c = (eos%T_ref + DT)*H0
+      ms%tracers(ms%idx_salinity)%c = eos%S_ref
+      ms%tracers(ms%idx_temperature)%c = (eos%T_ref + DT)
 
       call run_eos(ms, eos)
 
@@ -177,8 +177,8 @@ contains
          dT_k = [-2.0_wp, +1.5_wp, -3.0_wp]
          do k = 1, NZ
             ms%h_layer(:, :, k) = h_k(k)
-            ms%tracers(ms%idx_salinity)%c(:, :, k) = (eos%S_ref + dS_k(k))*h_k(k)
-            ms%tracers(ms%idx_temperature)%c(:, :, k) = (eos%T_ref + dT_k(k))*h_k(k)
+            ms%tracers(ms%idx_salinity)%c(:, :, k) = (eos%S_ref + dS_k(k))
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = (eos%T_ref + dT_k(k))
             expected_rho(k) = eos%rho0 + eos%beta_S*dS_k(k) - eos%alpha_T*dT_k(k)
          end do
 

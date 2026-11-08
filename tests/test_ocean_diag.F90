@@ -796,9 +796,9 @@ contains
    end subroutine test_default_diag_age
 
    subroutine test_fill_age(error)
-      !! End-to-end: seed hTr_age + h_layer, fire the registered age diag
+      !! End-to-end: seed c_age + h_layer, fire the registered age diag
       !! via step, and confirm the buffer reads back the concentration
-      !! age = hTr_age / h_layer (the fill runs on-device under enter_data).
+      !! age = c_age (the fill runs on-device under enter_data).
       type(error_type), allocatable, intent(out) :: error
       type(hgrid_t) :: grid
       type(ocean_state_t) :: state
@@ -811,7 +811,7 @@ contains
             do j = 1, NY
                do i = 1, NX
                   state%multilayer%h_layer(i, j, k) = H_COL
-                  state%multilayer%tracers(state%multilayer%idx_age)%c(i, j, k) = H_COL*AGE_S
+                  state%multilayer%tracers(state%multilayer%idx_age)%c(i, j, k) = AGE_S
                end do
             end do
          end do
@@ -829,7 +829,7 @@ contains
          call ocean_state_exit_data(state)
 
          call check(error, abs(state%diag%vars(iage)%output_buffer(3, 2, 2) - AGE_S) < 1.0e-9_wp, &
-                    "age readout should equal hTr_age / h_layer")
+                    "age readout should equal the stored concentration c_age")
 
       end block checks
       call state%destroy()
@@ -841,9 +841,10 @@ contains
       !! vanished bed layer used to read back as plausible ice-point
       !! freshwater rather than as missing data
       !! (rdb_ocean_diag_fills.F90's fill_tracer_impl docstring).
-      !! Vanishes ONE bed-layer (k=1) cell's h_layer/hTr below
-      !! H_VANISHED and confirms fill_temperature reads NaN there while
-      !! an untouched neighbour cell still reads the ordinary hTr/h.
+      !! Vanishes ONE bed-layer (k=1) cell's h_layer below
+      !! H_VANISHED (its stored c stays stale) and confirms fill_temperature
+      !! reads NaN there while an untouched neighbour cell still reads the
+      !! stored concentration c.
       use, intrinsic :: ieee_arithmetic, only: ieee_is_nan
       type(error_type), allocatable, intent(out) :: error
       type(hgrid_t) :: grid
@@ -858,12 +859,13 @@ contains
          if (allocated(error)) exit checks
 
          state%multilayer%h_layer = H_COL
-         state%multilayer%tracers(it)%c = H_COL*T_REF
-         ! Vanish one bed-layer cell (k=1): both h and hTr go to zero,
-         ! matching what a real dynamic-vanish (e.g. ZSTAR_FULL) leaves
-         ! behind -- an exact-zero thickness, not merely "small".
+         state%multilayer%tracers(it)%c = T_REF
+         ! Vanish one bed-layer cell (k=1): h goes to zero (an exact-zero
+         ! thickness, not merely "small") while the STORED concentration
+         ! stays at its stale, perfectly plausible value -- which is what a
+         ! real dynamic-vanish (e.g. ZSTAR_FULL) leaves behind.  The NaN
+         ! sentinel must therefore come from the thickness gate alone.
          state%multilayer%h_layer(3, 2, 1) = 0.0_wp
-         state%multilayer%tracers(it)%c(3, 2, 1) = 0.0_wp
 
          call fill_temperature(state, buf)
 
@@ -1111,10 +1113,10 @@ contains
          state%multilayer%h_layer = H_LAYER
 
          ! T values: layer k=3 = 20°C, k=2 = 10°C, k=1 = 5°C.  T is stored
-         ! as hTr = h * T, so hTr = H_LAYER * T per layer.
+         ! as a concentration, so c = T per layer.
          it = state%multilayer%idx_temperature
          do k = 1, NZ
-            state%multilayer%tracers(it)%c(:, :, k) = H_LAYER*real(k*5, wp)
+            state%multilayer%tracers(it)%c(:, :, k) = real(k*5, wp)
          end do
 
          call state%diag%set_output_z_levels(Z_OUT)
@@ -1412,7 +1414,7 @@ contains
    end subroutine test_derived_h_layer
 
    subroutine fill_ts_pattern(state)
-      !! Distinct theta/SP-like values per cell and layer (hTr = value*h).
+      !! Distinct theta/SP-like values per cell and layer (stored as concentration).
       type(ocean_state_t), intent(inout) :: state
       integer :: i, j, k, it, is
       real(wp) :: h
@@ -1457,8 +1459,8 @@ contains
          do k = 1, NZ
             do j = 1, grid%ny_total
                do i = 1, grid%nx_total
-                  ct = state%multilayer%tracers(it)%c(i, j, k)/state%multilayer%h_layer(i, j, k)
-                  sa = state%multilayer%tracers(is)%c(i, j, k)/state%multilayer%h_layer(i, j, k)
+                  ct = state%multilayer%tracers(it)%c(i, j, k)
+                  sa = state%multilayer%tracers(is)%c(i, j, k)
                   worst_t = max(worst_t, abs(state%diag%vars(1)%output_buffer(i, j, k) - pt_from_ct(sa, ct)))
                   worst_s = max(worst_s, abs(state%diag%vars(2)%output_buffer(i, j, k) - sp_from_sr(sa)))
                   gap = max(gap, abs(state%diag%vars(1)%output_buffer(i, j, k) - ct))
@@ -1497,9 +1499,9 @@ contains
                do i = 1, grid%nx_total
                   worst = max(worst, &
                               abs(state%diag%vars(1)%output_buffer(i, j, k) - &
-                                  state%multilayer%tracers(it)%c(i, j, k)/state%multilayer%h_layer(i, j, k)), &
+                                  state%multilayer%tracers(it)%c(i, j, k)), &
                               abs(state%diag%vars(2)%output_buffer(i, j, k) - &
-                                  state%multilayer%tracers(is)%c(i, j, k)/state%multilayer%h_layer(i, j, k)))
+                                  state%multilayer%tracers(is)%c(i, j, k)))
                end do
             end do
          end do
@@ -1932,8 +1934,8 @@ contains
          it = state%multilayer%idx_temperature
          is_ = state%multilayer%idx_salinity
          do k = 1, NZ
-            state%multilayer%tracers(it)%c(:, :, k) = 10.0_wp*(10.0_wp - real(k, wp))
-            state%multilayer%tracers(is_)%c(:, :, k) = 10.0_wp*35.0_wp
+            state%multilayer%tracers(it)%c(:, :, k) = (10.0_wp - real(k, wp))
+            state%multilayer%tracers(is_)%c(:, :, k) = 35.0_wp
          end do
 
          call state%diag%set_output_density_levels(RHO_OUT)
@@ -2285,7 +2287,7 @@ contains
          call check(error, it_S > 0, "salinity tracer must be registered")
          if (allocated(error)) exit checks
          state%multilayer%h_layer = H_LAYER
-         state%multilayer%tracers(it_S)%c = S_REF*H_LAYER
+         state%multilayer%tracers(it_S)%c = S_REF
          m = diag_mask_global(grid)
          allocate (areaT(grid%nx_total, grid%ny_total), source=grid%dx*grid%dy)
          total = budget_total_tracer(state%multilayer, it_S, m, areaT)
@@ -2371,8 +2373,8 @@ contains
          it_S = state%multilayer%idx_salinity
          it_T = state%multilayer%idx_temperature
          state%multilayer%h_layer = H_LAYER
-         if (it_S > 0) state%multilayer%tracers(it_S)%c = S_REF*H_LAYER
-         if (it_T > 0) state%multilayer%tracers(it_T)%c = T_REF*H_LAYER
+         if (it_S > 0) state%multilayer%tracers(it_S)%c = S_REF
+         if (it_T > 0) state%multilayer%tracers(it_T)%c = T_REF
 
          call budgets%init_snapshot(state%multilayer)
          call budgets%evaluate(state%multilayer)

@@ -112,8 +112,8 @@ contains
                do i = 1, ni
                   x_c = real(i, wp)*DX
                   t_val = T0 + GZ*z_c + GX*x_c
-                  ms%tracers(ms%idx_temperature)%c(i, j, k) = t_val*DZ
-                  ms%tracers(ms%idx_salinity)%c(i, j, k) = S0*DZ
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = t_val
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = S0
                end do
             end do
          end do
@@ -444,8 +444,8 @@ contains
                   x_c = real(i, wp)*DX
                   t_val = T0 + GZ*z_c + GX*x_c   ! tilted isopycnals (T-dominated)
                   s_val = S0 + GSX*x_c           ! cross-isopycnal S perturbation
-                  ms%tracers(ms%idx_temperature)%c(i, j, k) = t_val*DZ
-                  ms%tracers(ms%idx_salinity)%c(i, j, k) = s_val*DZ
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = t_val
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = s_val
                end do
             end do
          end do
@@ -529,8 +529,8 @@ contains
                do i = 1, ni
                   x_c = real(i, wp)*DX
                   t_val = T0 + GZ*z_c + GX*x_c
-                  ms%tracers(ms%idx_temperature)%c(i, j, k) = t_val*DZ
-                  ms%tracers(ms%idx_salinity)%c(i, j, k) = S0*DZ
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = t_val
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = S0
                   t_before(i, j, k) = t_val
                end do
             end do
@@ -540,14 +540,14 @@ contains
          call run_redi(grid, metrics, eos, rd, ms)
          call map_out(ms, metrics, rd)
 
-         ! Interior cells: T (=hTr/h) must be ~unchanged — the only tracer
+         ! Interior cells: T must be ~unchanged — the only tracer
          ! is T itself, which is constant along the neutral surfaces it
          ! defines, so the along-neutral difference (and flux) vanishes.
          mx = 0.0_wp
          do k = 1, NZ
             do j = 2, nj - 1
                do i = 2, ni - 1
-                  mx = max(mx, abs(ms%tracers(ms%idx_temperature)%c(i, j, k)/DZ &
+                  mx = max(mx, abs(ms%tracers(ms%idx_temperature)%c(i, j, k) &
                                    - t_before(i, j, k)))
                end do
             end do
@@ -613,8 +613,8 @@ contains
             do j = 1, nj
                do i = 1, ni
                   s_val = S0 + 0.01_wp*real(i, wp)   ! gentle cross-isopycnal step
-                  ms%tracers(ms%idx_temperature)%c(i, j, k) = t_val*DZ
-                  ms%tracers(ms%idx_salinity)%c(i, j, k) = s_val*DZ
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = t_val
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = s_val
                   s_before(i, j, k) = s_val
                end do
             end do
@@ -628,8 +628,8 @@ contains
          ! and the low-x interior column gains while the high-x loses.
          mn = minval(s_before)
          mx = maxval(s_before)
-         lo_gain = ms%tracers(ms%idx_salinity)%c(2, 3, NZ/2)/DZ - s_before(2, 3, NZ/2)
-         hi_loss = ms%tracers(ms%idx_salinity)%c(ni - 1, 3, NZ/2)/DZ - s_before(ni - 1, 3, NZ/2)
+         lo_gain = ms%tracers(ms%idx_salinity)%c(2, 3, NZ/2) - s_before(2, 3, NZ/2)
+         hi_loss = ms%tracers(ms%idx_salinity)%c(ni - 1, 3, NZ/2) - s_before(ni - 1, 3, NZ/2)
          block
             real(wp) :: smin_after, smax_after
             integer :: ii, jj, kk
@@ -638,8 +638,8 @@ contains
             do kk = 1, NZ
                do jj = 2, nj - 1
                   do ii = 2, ni - 1
-                     smin_after = min(smin_after, ms%tracers(ms%idx_salinity)%c(ii, jj, kk)/DZ)
-                     smax_after = max(smax_after, ms%tracers(ms%idx_salinity)%c(ii, jj, kk)/DZ)
+                     smin_after = min(smin_after, ms%tracers(ms%idx_salinity)%c(ii, jj, kk))
+                     smax_after = max(smax_after, ms%tracers(ms%idx_salinity)%c(ii, jj, kk))
                   end do
                end do
             end do
@@ -693,8 +693,8 @@ contains
          do j = 1, nj
             do i = 1, ni
                s_val = S0 + 0.01_wp*real(i, wp)
-               ms%tracers(ms%idx_temperature)%c(i, j, k) = t_val*DZ
-               ms%tracers(ms%idx_salinity)%c(i, j, k) = s_val*DZ
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = t_val
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = s_val
             end do
          end do
       end do
@@ -712,7 +712,7 @@ contains
       end if
       call map_out(ms, metrics, rd)
       allocate (sout(ni, nj, NZ))
-      sout = ms%tracers(ms%idx_salinity)%c/DZ
+      sout = ms%tracers(ms%idx_salinity)%c
       call rd%destroy()
       call ms%destroy()
    end subroutine cross_iso_salinity
@@ -745,7 +745,7 @@ contains
 
    subroutine fill_strat(ms, grid, nz, dz)
       !! Flat isopycnals: T increases upward (k=nz surface), S uniform,
-      !! uniform layer thickness `dz`.  hTr = value * h.
+      !! uniform layer thickness `dz`.  uniform h, so Sigma c is proportional to Sigma h*c.
       type(multilayer_state_t), intent(inout) :: ms
       type(hgrid_t), intent(in) :: grid
       integer, intent(in) :: nz
@@ -757,8 +757,8 @@ contains
       do k = 1, nz
          do j = 1, grid%ny_total
             do i = 1, grid%nx_total
-               ms%tracers(ms%idx_temperature)%c(i, j, k) = (T0 + 0.02_wp*(real(k, wp) - 0.5_wp)*dz)*dz
-               ms%tracers(ms%idx_salinity)%c(i, j, k) = S0*dz
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = (T0 + 0.02_wp*(real(k, wp) - 0.5_wp)*dz)
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = S0
             end do
          end do
       end do
@@ -997,7 +997,7 @@ contains
             do j = 1, grid%ny_total
                do i = 1, grid%nx_total
                   ms%tracers(ms%idx_salinity)%c(i, j, k) = &
-                     (S0 + 0.05_wp*sin(TWOPI*(real(i - grid%nghost, wp) - 0.5_wp)/real(NX, wp)))*DZ
+                     (S0 + 0.05_wp*sin(TWOPI*(real(i - grid%nghost, wp) - 0.5_wp)/real(NX, wp)))
                end do
             end do
          end do
@@ -1035,7 +1035,7 @@ contains
          call check(error, n_sub, 2, "check_diffusive_cfl picked n_itt = 2")
          if (allocated(error)) exit checks
          s_moved = maxval(abs(s_ref(i0:i1, j0:j1, :) - s_init(i0:i1, j0:j1, :)))
-         call check(error, s_moved > 1.0e-4_wp*DZ, "the seam flux moved S (test is live)")
+         call check(error, s_moved > 1.0e-4_wp, "the seam flux moved S (test is live)")
          if (allocated(error)) exit checks
          smax = maxval(abs(s_ref(i0:i1, j0:j1, :)))
          dmax = maxval(abs(s_sub(i0:i1, j0:j1, :) - s_ref(i0:i1, j0:j1, :)))
@@ -1074,7 +1074,7 @@ contains
             do j = 1, grid%ny_total
                do i = 1, grid%nx_total
                   ms%tracers(ms%idx_salinity)%c(i, j, k) = (S0 + 0.1_wp*sin(0.9_wp*real(i, wp)) &
-                                                            *cos(0.7_wp*real(j, wp)))*DZ
+                                                            *cos(0.7_wp*real(j, wp)))
                end do
             end do
          end do
@@ -1152,7 +1152,7 @@ contains
       do k = 1, NZ
          do j = 1, grid%ny_total
             do i = 1, grid%nx_total
-               ms%tracers(idx)%c(i, j, k) = real(1 - 2*modulo(i + j, 2), wp)*DZ
+               ms%tracers(idx)%c(i, j, k) = real(1 - 2*modulo(i + j, 2), wp)
             end do
          end do
       end do
@@ -1165,7 +1165,7 @@ contains
       i1 = grid%nghost + NX
       j0 = grid%nghost + 1
       j1 = grid%nghost + NY
-      amp = maxval(abs(ms%tracers(idx)%c(i0:i1, j0:j1, :)))/DZ
+      amp = maxval(abs(ms%tracers(idx)%c(i0:i1, j0:j1, :)))
       n_itt = rd%n_itt
       call rd%destroy()
       call ms%destroy()

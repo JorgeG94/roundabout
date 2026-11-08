@@ -69,8 +69,8 @@ contains
          do j = 1, grid%ny_total
             do i = 1, grid%nx_total
                ms%h_layer(i, j, k) = layer_pattern(k)
-               ms%tracers(ms%idx_salinity)%c(i, j, k) = s_ref*layer_pattern(k)
-               ms%tracers(ms%idx_temperature)%c(i, j, k) = t_ref*layer_pattern(k)
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = s_ref
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = t_ref
             end do
          end do
       end do
@@ -210,12 +210,12 @@ contains
          call setup_state(grid, ms, NX, NY, NZ, pattern, S0, T0)
          do k = 1, NZ
             ms%tracers(ms%idx_temperature)%c(:, :, k) = &
-               (T0 + 2.0_wp*real(k, wp))*pattern(k)
+               (T0 + 2.0_wp*real(k, wp))
             ms%tracers(ms%idx_salinity)%c(:, :, k) = &
-               (S0 - 0.5_wp*real(k, wp))*pattern(k)
+               (S0 - 0.5_wp*real(k, wp))
          end do
-         Th0 = sum(ms%tracers(ms%idx_temperature)%c(1, 1, :))
-         Sh0 = sum(ms%tracers(ms%idx_salinity)%c(1, 1, :))
+         Th0 = sum(ms%h_layer(1, 1, :)*ms%tracers(ms%idx_temperature)%c(1, 1, :))
+         Sh0 = sum(ms%h_layer(1, 1, :)*ms%tracers(ms%idx_salinity)%c(1, 1, :))
 
          call vc%init(grid, nz_ml=NZ)
          vc%coord_type = VCOORD_SIGMA
@@ -227,8 +227,8 @@ contains
          call ocean_apply_ale_remap_step(grid, vc, ms, bt_eta, bt_H_ref, &
                                          method=REMAP_PPM, dt=DT)
 
-         Th1 = sum(ms%tracers(ms%idx_temperature)%c(1, 1, :))
-         Sh1 = sum(ms%tracers(ms%idx_salinity)%c(1, 1, :))
+         Th1 = sum(ms%h_layer(1, 1, :)*ms%tracers(ms%idx_temperature)%c(1, 1, :))
+         Sh1 = sum(ms%h_layer(1, 1, :)*ms%tracers(ms%idx_salinity)%c(1, 1, :))
          call check(error, abs(Th1 - Th0) < 1.0e-7_wp, "tfilter conserves: T*h")
          if (allocated(error)) exit checks
          call check(error, abs(Sh1 - Sh0) < 1.0e-7_wp, "tfilter conserves: S*h")
@@ -431,9 +431,9 @@ contains
             ms%u_face_x_layer(:, :, k) = 0.1_wp + 0.3_wp*real(k - 1, wp)
             ms%v_face_y_layer(:, :, k) = -0.2_wp + 0.15_wp*real(k - 1, wp)
             ms%tracers(ms%idx_temperature)%c(:, :, k) = &
-               (T0 + 2.0_wp*real(k, wp))*pattern(k)
+               (T0 + 2.0_wp*real(k, wp))
          end do
-         Th0 = sum(ms%tracers(ms%idx_temperature)%c(1, 1, :))
+         Th0 = sum(ms%h_layer(1, 1, :)*ms%tracers(ms%idx_temperature)%c(1, 1, :))
 
          call vc%init(grid, nz_ml=NZ)
          vc%coord_type = VCOORD_SIGMA
@@ -466,7 +466,7 @@ contains
          call check(error, abs(col_sum - H_TOTAL) < 1.0e-7_wp, &
                     "device: column total conserved")
          if (allocated(error)) exit checks
-         Th1 = sum(ms%tracers(ms%idx_temperature)%c(1, 1, :))
+         Th1 = sum(ms%h_layer(1, 1, :)*ms%tracers(ms%idx_temperature)%c(1, 1, :))
          call check(error, abs(Th1 - Th0) < 1.0e-6_wp, "device: T*h conserved")
       end block checks
       if (allocated(bt_eta)) deallocate (bt_eta, bt_H_ref)

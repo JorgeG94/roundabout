@@ -131,7 +131,7 @@ contains
    end subroutine setup_state
 
    subroutine set_uniform_TS(state, temp_by_layer)
-      !! Stamp h_layer = 10 and T (via hTr) so layer k has temperature
+      !! Stamp h_layer = 10 and T (via the stored concentration c) so layer k has temperature
       !! `temp_by_layer(k)`; S held at S_ref (= 0) so density depends on T
       !! only.  rho(k) = 1025 - temp_by_layer(k).
       type(ocean_state_t), intent(inout) :: state
@@ -141,7 +141,7 @@ contains
       is_ = state%multilayer%idx_salinity
       state%multilayer%h_layer = 10.0_wp
       do k = 1, NZ
-         state%multilayer%tracers(it)%c(:, :, k) = 10.0_wp*temp_by_layer(k)
+         state%multilayer%tracers(it)%c(:, :, k) = temp_by_layer(k)
          state%multilayer%tracers(is_)%c(:, :, k) = 0.0_wp
       end do
    end subroutine set_uniform_TS
@@ -407,13 +407,12 @@ contains
          ! field = layer temperature (intensive), via fill_temperature path
          it = state%multilayer%idx_temperature
          ng = grid%nghost
-         ! hTr/h_layer are ghost-inclusive (nx_total); layer_buf is interior
+         ! c is ghost-inclusive (nx_total); layer_buf is interior
          ! (NX,NY) — slice to the interior so the shapes conform (the old whole
          ! -array assign was non-conformant: silently OOB without runtime checks).
          do k = 1, NZ
             layer_buf(:, :, k) = &
-               state%multilayer%tracers(it)%c(ng + 1:ng + NX, ng + 1:ng + NY, k)/ &
-               state%multilayer%h_layer(ng + 1:ng + NX, ng + 1:ng + NY, k)
+               state%multilayer%tracers(it)%c(ng + 1:ng + NX, ng + 1:ng + NY, k)
          end do
          call remap_layer_to_density(state, RHO_TGT, layer_buf, out_buf, .false.)
          ! lightest bin (surface, cell 1) should be near the warmest (T=2)
@@ -638,15 +637,11 @@ contains
 
    subroutine vanish_bed_layer(state)
       !! Make the bed layer (k=1) an inert filler everywhere: thickness ON
-      !! the marker, content zero (invariant I1).
+      !! the marker.  The stored concentration is left at its stale value --
+      !! a filler carries no content and keeps its last c -- so the zero
+      !! weight must come from the thickness gate, not from a zeroed c.
       type(ocean_state_t), intent(inout) :: state
-      integer :: t
       state%multilayer%h_layer(:, :, 1) = H_VANISHED
-      do t = 1, size(state%multilayer%tracers)
-         if (allocated(state%multilayer%tracers(t)%c)) then
-            state%multilayer%tracers(t)%c(:, :, 1) = 0.0_wp
-         end if
-      end do
    end subroutine vanish_bed_layer
 
    subroutine test_vanished_zero_weight(error)

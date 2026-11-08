@@ -445,9 +445,9 @@ contains
          ! overwrite the PHYSICAL interior with the real concentration, so only
          ! the ghosts (edges + corners) carry the sentinel.
          do k = 1, NZ
-            ms%tracers(it)%c(:, :, k) = SENTINEL*hlay
-            ms%tracers(it)%c(i0:i1, j0:j1, k) = S_INT*hlay
-            ms%tracers(ms%idx_temperature)%c(:, :, k) = 10.0_wp*hlay
+            ms%tracers(it)%c(:, :, k) = SENTINEL
+            ms%tracers(it)%c(i0:i1, j0:j1, k) = S_INT
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = 10.0_wp
          end do
 
          call ocean_bc_state_init(bc, grid, nz_ml=NZ, n_tracers=2)
@@ -557,9 +557,9 @@ contains
          ms%h_layer(1:ig, :, :) = DRIFT_H
          ms%h_layer(nxt - ig + 1:nxt, :, :) = DRIFT_H
          ms%h_layer(:, 1:ig, :) = DRIFT_H
-         ms%tracers(it)%c(1:ig, :, :) = 999.0_wp*DRIFT_H
-         ms%tracers(it)%c(nxt - ig + 1:nxt, :, :) = 999.0_wp*DRIFT_H
-         ms%tracers(it)%c(:, 1:ig, :) = 999.0_wp*DRIFT_H
+         ms%tracers(it)%c(1:ig, :, :) = 999.0_wp
+         ms%tracers(it)%c(nxt - ig + 1:nxt, :, :) = 999.0_wp
+         ms%tracers(it)%c(:, 1:ig, :) = 999.0_wp
 
          call ocean_bc_state_init(bc, grid, nz_ml=NZ, n_tracers=2)
          bc%west%bc_type = OBC_OPEN
@@ -601,15 +601,15 @@ contains
          do k = 1, NZ
             do j = 1, nyt
                do i = 1, ig
-                  conc = ms%tracers(it)%c(i, j, k)/ms%h_layer(i, j, k)
+                  conc = ms%tracers(it)%c(i, j, k)
                   conc_err = max(conc_err, abs(conc - C0))
-                  conc = ms%tracers(it)%c(nxt - i + 1, j, k)/ms%h_layer(nxt - i + 1, j, k)
+                  conc = ms%tracers(it)%c(nxt - i + 1, j, k)
                   conc_err = max(conc_err, abs(conc - C0))
                end do
             end do
             do j = 1, ig
                do i = 1, nxt
-                  conc = ms%tracers(it)%c(i, j, k)/ms%h_layer(i, j, k)
+                  conc = ms%tracers(it)%c(i, j, k)
                   conc_err = max(conc_err, abs(conc - C0))
                end do
             end do

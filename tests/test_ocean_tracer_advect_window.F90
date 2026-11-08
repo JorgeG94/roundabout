@@ -8,7 +8,7 @@
 !!   * hprev reconstruction (closed form): hprev = areaT·h_end + div(uhtr)
 !!     recovers a known window-start thickness to round-off.
 !!   * conservation (G2): drain a tracer blob on a periodic-x channel at
-!!     ratio = 2, 3, 5; Σ(areaT·hTr) conserved to ~1e-12 (interior).
+!!     ratio = 2, 3, 5; Σ(areaT·h·c) conserved to ~1e-12 (interior).
 !!   * positivity (G3): a positive blob stays >= 0 with no new maxima,
 !!     including a fast multi-pass (high ratio + fast flow) case.
 !!   * ratio = 1 bit-identity: the windowed dispatch at ratio = 1 is the
@@ -111,7 +111,7 @@ contains
             do j = 1, ny
                do i = 1, nx
                   ms%tracers(ms%idx_salinity)%c(i, j, k) = &
-                     (2.0_wp + sin(2.0_wp*PI*real(i, wp)/real(nx, wp)))*H0
+                     (2.0_wp + sin(2.0_wp*PI*real(i, wp)/real(nx, wp)))
                end do
             end do
          end do
@@ -258,8 +258,8 @@ contains
          do j = 1, ny
             do i = 1, nx
                blob = 1.0_wp + 3.0_wp*exp(-0.5_wp*((real(i, wp) - xc)/2.5_wp)**2)
-               ms%tracers(ms%idx_salinity)%c(i, j, k) = blob*H0
-               ms%tracers(ms%idx_temperature)%c(i, j, k) = 10.0_wp*H0
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = blob
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = 10.0_wp
             end do
          end do
       end do
@@ -268,7 +268,7 @@ contains
    subroutine test_conservation(error)
       !! G2: drain a positive blob on a periodic-x channel with a uniform
       !! rightward accumulated transport at ratio = 2, 3, 5.  The interior
-      !! tracer mass Σ(areaT·hTr) must conserve to ~1e-12 relative.  Uniform
+      !! tracer mass Σ(areaT·h·c) must conserve to ~1e-12 relative.  Uniform
       !! uhtr ⇒ div = 0 ⇒ hprev = h_end (no hatch); periodic ⇒ Σ closes.
       type(error_type), allocatable, intent(out) :: error
       type(hgrid_t) :: grid
@@ -300,7 +300,7 @@ contains
                do j = 1, ny
                   do i = 1, nx
                      ms%tracers(ms%idx_salinity)%c(i, j, k) = &
-                        (2.0_wp + sin(2.0_wp*PI*real(i - i0, wp)/real(nxp, wp)))*H0
+                        (2.0_wp + sin(2.0_wp*PI*real(i - i0, wp)/real(nxp, wp)))
                   end do
                end do
             end do
@@ -310,7 +310,7 @@ contains
             ct%uhtr = uvol
             ct%vhtr = 0.0_wp
 
-            mass0 = area*sum(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
+            mass0 = area*sum(ms%h_layer(i0:i1, j0:j1, :)*ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
 
             call map_in(ms, ct)
             !$acc enter data copyin(metrics)
@@ -322,7 +322,7 @@ contains
             !$acc exit data delete(metrics)
             call map_out(ms, ct)
 
-            mass1 = area*sum(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
+            mass1 = area*sum(ms%h_layer(i0:i1, j0:j1, :)*ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
             rel = abs(mass1 - mass0)/abs(mass0)
             call check(error, rel < 1.0e-12_wp, &
                        "windowed drain broke interior tracer conservation")
@@ -387,7 +387,7 @@ contains
             do j = 1, ny
                do i = 1, nx
                   ms%h_layer(i, j, k) = H0 - (ct%uhtr(i + 1, j, k) - ct%uhtr(i, j, k))/(DX*DY)
-                  ms%tracers(ms%idx_salinity)%c(i, j, k) = C0*H0
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = C0
                end do
             end do
          end do
@@ -407,7 +407,7 @@ contains
          do k = 1, NZ
             do j = j0, j1
                do i = i0, i1
-                  conc = ms%tracers(ms%idx_salinity)%c(i, j, k)/ms%h_layer(i, j, k)
+                  conc = ms%tracers(ms%idx_salinity)%c(i, j, k)
                   cmax_err = max(cmax_err, abs(conc - C0))
                end do
             end do
@@ -423,14 +423,14 @@ contains
    subroutine test_accumulate_holds_conc(error)
       !! REGRESSION (windowed-advect instability, eady dt=600 ratio=2):
       !! `continuity_tracer_step_split` in TR_MODE_ACCUMULATE must leave every
-      !! tracer's CONCENTRATION `T = hTr/h_layer` pointwise unchanged, however
+      !! tracer's CONCENTRATION `T = c` pointwise unchanged, however
       !! divergent the flow.
       !!
       !! The windowed path defers horizontal tracer advection to the
       !! end-of-window drain.  Roundabout's prognostic is the thickness-weighted
       !! CONTENT `hTr`, so "defer" was implemented as "freeze hTr" — while
       !! continuity kept advancing `h_layer` underneath it.  Every consumer
-      !! that derives `T = hTr/h_layer` (the EOS above all, hence ρ → PGF)
+      !! that derives `T = c` (the EOS above all, hence ρ → PGF)
       !! then read a concentration corrupted by the full window thickness
       !! divergence, `δT/T = −δh/h`.  In the eady benchmark that grid-scale
       !! buoyancy error closed an exponentially growing EOS→PGF→divergence
@@ -483,7 +483,7 @@ contains
          allocate (h_ref(nx, ny, NZ))
          h_ref = ms%h_layer
          do it = 1, size(ms%tracers)
-            conc_ref(:, :, :, it) = ms%tracers(it)%c/ms%h_layer
+            conc_ref(:, :, :, it) = ms%tracers(it)%c
          end do
 
          call map_in(ms, ct)
@@ -520,7 +520,7 @@ contains
                do j = j0, j1
                   do i = i0, i1
                      conc_err = max(conc_err, &
-                                    abs(ms%tracers(it)%c(i, j, k)/ms%h_layer(i, j, k) &
+                                    abs(ms%tracers(it)%c(i, j, k) &
                                         - conc_ref(i, j, k, it)))
                   end do
                end do
@@ -575,7 +575,7 @@ contains
             do j = 1, ny
                do i = 1, nx
                   ms%tracers(ms%idx_salinity)%c(i, j, k) = &
-                     (C0 + AMP*sin(2.0_wp*PI*real(i - i0, wp)/real(nxp, wp)))*H0
+                     (C0 + AMP*sin(2.0_wp*PI*real(i - i0, wp)/real(nxp, wp)))
                end do
             end do
          end do
@@ -604,7 +604,7 @@ contains
             do j = 1, ny
                do i = i0, i1                          ! interior only
                   ms%tracers(ms%idx_salinity)%c(i, j, k) = &
-                     (C0 + AMP*sin(2.0_wp*PI*real(i - i0, wp)/real(nxp, wp)))*H0
+                     (C0 + AMP*sin(2.0_wp*PI*real(i - i0, wp)/real(nxp, wp)))
                end do
             end do
          end do
@@ -671,7 +671,7 @@ contains
          i1 = NGHOST + grid%nx_phys
          j0 = NGHOST + 1
          j1 = NGHOST + grid%ny_phys
-         tr_max0 = maxval(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :)/H0)
+         tr_max0 = maxval(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
          ! Accumulated transport with per-step CFL ~0.7 over `ratio` steps.
          uvol = real(ratio, wp)*0.7_wp*H0*DY*DX
          ct%uhtr = uvol
@@ -687,8 +687,8 @@ contains
          !$acc exit data delete(metrics)
          call map_out(ms, ct)
 
-         tr_min = minval(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :)/H0)
-         tr_max = maxval(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :)/H0)
+         tr_min = minval(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
+         tr_max = maxval(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
          call check(error, tr_min >= -1.0e-12_wp, &
                     "windowed drain produced a negative concentration")
          if (allocated(error)) exit checks
@@ -730,8 +730,8 @@ contains
                do i = 1, nx
                   ms_a%h_layer(i, j, k) = H0
                   ms_a%tracers(ms_a%idx_salinity)%c(i, j, k) = &
-                     (34.0_wp + sin(2.0_wp*PI*real(i, wp)/real(nx, wp)))*H0
-                  ms_a%tracers(ms_a%idx_temperature)%c(i, j, k) = 12.0_wp*H0
+                     (34.0_wp + sin(2.0_wp*PI*real(i, wp)/real(nx, wp)))
+                  ms_a%tracers(ms_a%idx_temperature)%c(i, j, k) = 12.0_wp
                end do
                do i = 1, nx + 1
                   ms_a%u_face_x_layer(i, j, k) = 0.15_wp* &
@@ -802,7 +802,7 @@ contains
       bc%periodic_y = .true.
       bc%north_fold = .false.
       ms%h_layer = H0
-      ms%tracers(ms%idx_temperature)%c = 10.0_wp*H0
+      ms%tracers(ms%idx_temperature)%c = 10.0_wp
    end subroutine setup_periodic_blob_y
 
    subroutine test_conservation_y(error)
@@ -839,7 +839,7 @@ contains
                do j = 1, ny
                   do i = 1, nx
                      ms%tracers(ms%idx_salinity)%c(i, j, k) = &
-                        (2.0_wp + sin(2.0_wp*PI*real(j - j0, wp)/real(nyp, wp)))*H0
+                        (2.0_wp + sin(2.0_wp*PI*real(j - j0, wp)/real(nyp, wp)))
                   end do
                end do
             end do
@@ -848,7 +848,7 @@ contains
             ct%uhtr = 0.0_wp
             ct%vhtr = vvol
 
-            mass0 = area*sum(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
+            mass0 = area*sum(ms%h_layer(i0:i1, j0:j1, :)*ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
 
             call map_in(ms, ct)
             !$acc enter data copyin(metrics)
@@ -860,7 +860,7 @@ contains
             !$acc exit data delete(metrics)
             call map_out(ms, ct)
 
-            mass1 = area*sum(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
+            mass1 = area*sum(ms%h_layer(i0:i1, j0:j1, :)*ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
             rel = abs(mass1 - mass0)/abs(mass0)
             call check(error, rel < 1.0e-12_wp, &
                        "meridional windowed drain broke interior conservation")
@@ -900,11 +900,11 @@ contains
             do j = 1, ny
                do i = 1, nx
                   blob = 1.0_wp + 3.0_wp*exp(-0.5_wp*((real(j, wp) - real(j0c, wp))/2.5_wp)**2)
-                  ms%tracers(ms%idx_salinity)%c(i, j, k) = blob*H0
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = blob
                end do
             end do
          end do
-         tr_max0 = maxval(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :)/H0)
+         tr_max0 = maxval(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
          ! Accumulated transport with per-step CFL ~0.7 over `ratio` steps.
          vvol = real(ratio, wp)*0.7_wp*H0*DX*DY
          ct%uhtr = 0.0_wp
@@ -920,8 +920,8 @@ contains
          !$acc exit data delete(metrics)
          call map_out(ms, ct)
 
-         tr_min = minval(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :)/H0)
-         tr_max = maxval(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :)/H0)
+         tr_min = minval(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
+         tr_max = maxval(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
          call check(error, tr_min >= -1.0e-12_wp, &
                     "meridional drain produced a negative concentration")
          if (allocated(error)) exit checks
@@ -939,7 +939,7 @@ contains
       !! with an exactly bi-periodic positive sine tracer.  Validates the
       !! Lie-split x-then-y coupling on the shared evolving hprev_work:
       !! the zonal sub-pass mutates hprev (and Tr), the meridional sub-pass
-      !! then drains against THAT updated state, and Σ(areaT·hTr) must still
+      !! then drains against THAT updated state, and Σ(areaT·h·c) must still
       !! close to ~1e-12.  Uniform transports ⇒ div = 0 ⇒ hprev = h_end.
       type(error_type), allocatable, intent(out) :: error
       type(hgrid_t) :: grid
@@ -977,7 +977,7 @@ contains
             nxp = grid%nx_phys
             nyp = grid%ny_phys
             ms%h_layer = H0
-            ms%tracers(ms%idx_temperature)%c = 10.0_wp*H0
+            ms%tracers(ms%idx_temperature)%c = 10.0_wp
             ! Exactly bi-periodic positive tracer (separable sine product).
             do k = 1, NZ
                do j = 1, ny
@@ -985,7 +985,7 @@ contains
                      ms%tracers(ms%idx_salinity)%c(i, j, k) = &
                         (3.0_wp &
                          + sin(2.0_wp*PI*real(i - i0, wp)/real(nxp, wp)) &
-                         + sin(2.0_wp*PI*real(j - j0, wp)/real(nyp, wp)))*H0
+                         + sin(2.0_wp*PI*real(j - j0, wp)/real(nyp, wp)))
                   end do
                end do
             end do
@@ -994,7 +994,7 @@ contains
             ct%uhtr = uvol
             ct%vhtr = vvol
 
-            mass0 = area*sum(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
+            mass0 = area*sum(ms%h_layer(i0:i1, j0:j1, :)*ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
 
             call map_in(ms, ct)
             !$acc enter data copyin(metrics)
@@ -1006,7 +1006,7 @@ contains
             !$acc exit data delete(metrics)
             call map_out(ms, ct)
 
-            mass1 = area*sum(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
+            mass1 = area*sum(ms%h_layer(i0:i1, j0:j1, :)*ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
             rel = abs(mass1 - mass0)/abs(mass0)
             call check(error, rel < 1.0e-12_wp, &
                        "2D diagonal windowed drain broke interior conservation")
@@ -1052,7 +1052,7 @@ contains
 
          ms%h_layer = H0
          ! Constant tracer => flat PPM reconstruction (aL=aR, a6=0).
-         ms%tracers(ms%idx_salinity)%c = 2.0_wp*H0
+         ms%tracers(ms%idx_salinity)%c = 2.0_wp
          ct%hprev_work = H0
          ct%uhh_x = 0.0_wp
          ! Edge faces with OOB-triggering signs + one interior face.
@@ -1121,7 +1121,7 @@ contains
          area = DX*DY
 
          ms%h_layer = H0
-         ms%tracers(ms%idx_salinity)%c = 2.0_wp*H0
+         ms%tracers(ms%idx_salinity)%c = 2.0_wp
          ct%hprev_work = H0
          ct%uhh_y = 0.0_wp
          jfc = NGHOST + 3

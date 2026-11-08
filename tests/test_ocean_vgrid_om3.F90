@@ -175,7 +175,7 @@ contains
       is_ = state%multilayer%idx_salinity
       state%multilayer%h_layer = 10.0_wp
       do k = 1, NZ_D
-         state%multilayer%tracers(it)%c(:, :, k) = 10.0_wp*temp_by_layer(k)
+         state%multilayer%tracers(it)%c(:, :, k) = temp_by_layer(k)
          state%multilayer%tracers(is_)%c(:, :, k) = 0.0_wp
       end do
    end subroutine set_uniform_TS_d

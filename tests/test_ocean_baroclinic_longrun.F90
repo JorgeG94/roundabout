@@ -153,9 +153,9 @@ contains
                ms%h_layer(i, j, k) = dz - (ETA_STEP/real(NZ, wp))* &
                                      tanh((x_i - x_centre)/(3.0_wp*DX))
                ms%tracers(ms%idx_temperature)%c(i, j, k) = &
-                  eos%T_ref*ms%h_layer(i, j, k)
+                  eos%T_ref
                ms%tracers(ms%idx_salinity)%c(i, j, k) = &
-                  eos%S_ref*ms%h_layer(i, j, k)
+                  eos%S_ref
                ms%rho_layer(i, j, k) = eos%rho0
             end do
          end do
@@ -372,8 +372,8 @@ contains
             ms%u_face_x_layer(:, :, k) = 0.0_wp
             ms%v_face_y_layer(:, :, k) = 0.0_wp
             ms%rho_layer(:, :, k) = eos%rho0
-            ms%tracers(idx_T)%c(:, :, k) = eos%T_ref*dz
-            ms%tracers(idx_S)%c(:, :, k) = eos%S_ref*dz
+            ms%tracers(idx_T)%c(:, :, k) = eos%T_ref
+            ms%tracers(idx_S)%c(:, :, k) = eos%S_ref
          end do
          dyn%bt_work%bt_H_ref = H0
 
@@ -609,7 +609,7 @@ contains
          do j = j0, j1
             do i = i0, i1
                if (ms%h_layer(i, j, k) > 0.0_wp) then
-                  dS = abs(ms%tracers(iS)%c(i, j, k)/ms%h_layer(i, j, k) - S_ref)
+                  dS = abs(ms%tracers(iS)%c(i, j, k) - S_ref)
                   if (dS > max_dS) max_dS = dS
                end if
             end do

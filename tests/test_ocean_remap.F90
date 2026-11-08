@@ -7,8 +7,8 @@
 !!     redistribution exactly and bt_eta is re-derived correctly.
 !!   - Per-column tracer mass conservation holds across SIGMA + ZSTAR_FULL
 !!     remaps via the PLM column kernel.
-!!   - The `c = hTr/h` floor protects against vanishing-layer divisions
-!!     under VCOORD_ZSTAR_FULL.
+!!   - Empty (vanishing) layers keep their stale c and carry no content
+!!     under VCOORD_ZSTAR_FULL (no 1/h division on the concentration).
 !!   - `ocean_remap_tracer_column` (column entry point) gives the
 !!     same answer as a pre-computed analytic reference for a known
 !!     remap.
@@ -67,7 +67,7 @@ contains
          do j = 1, grid%ny_total
             do i = 1, grid%nx_total
                ms%h_layer(i, j, k) = h_per_layer
-               ms%tracers(ms%idx_salinity)%c(i, j, k) = salinity_ref*h_per_layer
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = salinity_ref
             end do
          end do
       end do
@@ -104,7 +104,7 @@ contains
          max_dS = maxval(abs(ms%tracers(ms%idx_salinity)%c - hS_before))
          call check(error, max_dh == 0.0_wp, "EULERIAN_Z: h_layer should be untouched")
          if (allocated(error)) exit checks
-         call check(error, max_dS == 0.0_wp, "EULERIAN_Z: tracer hTr should be untouched")
+         call check(error, max_dS == 0.0_wp, "EULERIAN_Z: tracer c should be untouched")
          if (allocated(error)) exit checks
          call check(error, all(bt_eta == 2.5_wp), "EULERIAN_Z: bt_eta should be untouched")
 
@@ -142,7 +142,7 @@ contains
          do j = 1, ny_tot
             do i = 1, nx_tot
                ms%h_layer(i, j, k) = layer_pattern(k)
-               ms%tracers(ms%idx_salinity)%c(i, j, k) = S0*layer_pattern(k)
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = S0
             end do
          end do
       end do
@@ -172,7 +172,7 @@ contains
    end subroutine test_sigma_h
 
    subroutine test_sigma_tracer_conservation(error)
-      !! Per-column ∫(hTr) should be preserved across the SIGMA remap.
+      !! Per-column ∫(h·S) should be preserved across the SIGMA remap.
       type(error_type), allocatable, intent(out) :: error
       type(hgrid_t) :: grid
       type(multilayer_state_t) :: ms
@@ -181,6 +181,7 @@ contains
       real(wp), parameter :: H0 = 80.0_wp, S0 = 34.5_wp, ETA0 = 7.0_wp
       real(wp), allocatable :: bt_eta(:, :), bt_H_ref(:, :)
       real(wp) :: col_total_before, col_total_after, max_drift
+      real(wp), allocatable :: cache(:, :)
       integer :: nx_tot, ny_tot, i, j, k
 
       call setup_state(grid, ms, NX, NY, NZ, H0, S0)
@@ -191,12 +192,13 @@ contains
       allocate (bt_eta(nx_tot, ny_tot), source=ETA0)
       allocate (bt_H_ref(nx_tot, ny_tot), source=real(NZ, wp)*H0)
 
+      allocate (cache(size(ms%h_layer, 1), size(ms%h_layer, 2)))
       ! Stamp a spatially varying tracer pattern (gradient with k).
       do k = 1, NZ
          do j = 1, ny_tot
             do i = 1, nx_tot
                ms%tracers(ms%idx_salinity)%c(i, j, k) = &
-                  (S0 + 0.5_wp*real(k - 1, wp))*ms%h_layer(i, j, k)
+                  (S0 + 0.5_wp*real(k - 1, wp))
             end do
          end do
       end do
@@ -206,10 +208,10 @@ contains
          do i = 1, nx_tot
             col_total_before = 0.0_wp
             do k = 1, NZ
-               col_total_before = col_total_before + ms%tracers(ms%idx_salinity)%c(i, j, k)
+               col_total_before = col_total_before + ms%h_layer(i, j, k)*ms%tracers(ms%idx_salinity)%c(i, j, k)
             end do
             ! Single-column conservation will be checked AFTER remap; stash for now.
-            ms%tracers(ms%idx_temperature)%c(i, j, 1) = col_total_before   ! abuse temp(1) as cache
+            cache(i, j) = col_total_before
          end do
       end do
 
@@ -219,9 +221,9 @@ contains
          do i = 1, nx_tot
             col_total_after = 0.0_wp
             do k = 1, NZ
-               col_total_after = col_total_after + ms%tracers(ms%idx_salinity)%c(i, j, k)
+               col_total_after = col_total_after + ms%h_layer(i, j, k)*ms%tracers(ms%idx_salinity)%c(i, j, k)
             end do
-            col_total_before = ms%tracers(ms%idx_temperature)%c(i, j, 1)
+            col_total_before = cache(i, j)
             max_drift = max(max_drift, abs(col_total_after - col_total_before))
          end do
       end do
@@ -288,6 +290,7 @@ contains
       real(wp), parameter :: H_BED = 400.0_wp, S0 = 35.0_wp, ETA0 = 5.0_wp
       real(wp), allocatable :: bt_eta(:, :), bt_H_ref(:, :), h_bed_2d(:, :)
       real(wp) :: col_before, col_after, max_drift
+      real(wp), allocatable :: cache(:, :)
       integer :: nx_tot, ny_tot, i, j, k
 
       call setup_state(grid, ms, NX, NY, NZ, H_BED/real(NZ, wp), S0)
@@ -304,14 +307,15 @@ contains
       allocate (bt_eta(nx_tot, ny_tot), source=ETA0)
       allocate (bt_H_ref(nx_tot, ny_tot), source=H_BED)
 
-      ! Per-column salt total snapshot, written into temperature(1).
+      allocate (cache(nx_tot, ny_tot))
+      ! Per-column salt CONTENT (sum h*S) snapshot.
       do j = 1, ny_tot
          do i = 1, nx_tot
             col_before = 0.0_wp
             do k = 1, NZ
-               col_before = col_before + ms%tracers(ms%idx_salinity)%c(i, j, k)
+               col_before = col_before + ms%h_layer(i, j, k)*ms%tracers(ms%idx_salinity)%c(i, j, k)
             end do
-            ms%tracers(ms%idx_temperature)%c(i, j, 1) = col_before
+            cache(i, j) = col_before
          end do
       end do
 
@@ -322,9 +326,9 @@ contains
          do i = 1, nx_tot
             col_after = 0.0_wp
             do k = 1, NZ
-               col_after = col_after + ms%tracers(ms%idx_salinity)%c(i, j, k)
+               col_after = col_after + ms%h_layer(i, j, k)*ms%tracers(ms%idx_salinity)%c(i, j, k)
             end do
-            col_before = ms%tracers(ms%idx_temperature)%c(i, j, 1)
+            col_before = cache(i, j)
             max_drift = max(max_drift, abs(col_after - col_before))
          end do
       end do
@@ -338,9 +342,9 @@ contains
 
    subroutine test_uniform_stays_uniform(error)
       !! A uniform concentration (constant S = S0 over the whole
-      !! column, hTr = S0 · h) should remain uniform across any
-      !! conservative remap.  Tests that the c = hTr/h ↔ hTr_new
-      !! = c_new · h_new pattern preserves uniformity.
+      !! column) should remain uniform across any
+      !! conservative remap.  Tests that the concentration-form
+      !! remap preserves uniformity to round-off.
       type(error_type), allocatable, intent(out) :: error
       type(hgrid_t) :: grid
       type(multilayer_state_t) :: ms
@@ -365,7 +369,7 @@ contains
       do k = 1, NZ
          do j = 1, ny_tot
             do i = 1, nx_tot
-               c = ms%tracers(ms%idx_salinity)%c(i, j, k)/ms%h_layer(i, j, k)
+               c = ms%tracers(ms%idx_salinity)%c(i, j, k)
                max_dev_from_S0 = max(max_dev_from_S0, abs(c - S0))
             end do
          end do
@@ -382,27 +386,27 @@ contains
       !! `ocean_remap_tracer_column` against an analytic reference:
       !! uniform old grid (10 m each), new grid shifted so surface
       !! layer gets +5 m of mass from the next layer.  Pre-fill old
-      !! hTr with linear-in-k pattern; check post-remap mass is
+      !! concentration with linear-in-k pattern; check post-remap mass is
       !! conserved AND surface concentration moved toward subsurface.
       type(error_type), allocatable, intent(out) :: error
       integer, parameter :: NZ = 4
       real(wp), parameter :: H_LAYER = 10.0_wp
-      real(wp) :: h_old(NZ), h_new(NZ), hTr_in(NZ), hTr(NZ)
+      real(wp) :: h_old(NZ), h_new(NZ), c_in(NZ), c(NZ)
       real(wp) :: total_old, total_new, k_top
       integer :: k
 
       ! Old grid: 10/10/10/10 = 40 m total.
       ! New grid: 5/10/10/15 = 40 m total (surface absorbed 5 m).
-      ! Old hTr: pattern 10, 20, 30, 40 (so concentration 1, 2, 3, 4 ROMS-ordered).
+      ! Old concentration 1, 2, 3, 4 (ROMS-ordered; content 10, 20, 30, 40).
       h_old = H_LAYER
       h_new = [5.0_wp, 10.0_wp, 10.0_wp, 15.0_wp]   ! k=1 bed, k=NZ surface
-      hTr_in = [10.0_wp, 20.0_wp, 30.0_wp, 40.0_wp]
-      hTr = hTr_in
+      c_in = [1.0_wp, 2.0_wp, 3.0_wp, 4.0_wp]
+      c = c_in
 
-      call ocean_remap_tracer_column(NZ, h_old, h_new, hTr, REMAP_PLM)
+      call ocean_remap_tracer_column(NZ, h_old, h_new, c, REMAP_PLM)
 
-      total_old = sum(hTr_in)
-      total_new = sum(hTr)
+      total_old = sum(h_old*c_in)
+      total_new = sum(h_new*c)
       call check(error, abs(total_new - total_old) < 1.0e-10_wp, &
                  "column helper: total tracer mass should be conserved")
       if (allocated(error)) return
@@ -410,7 +414,7 @@ contains
       ! Surface concentration after the remap should drop (it absorbed
       ! some of layer 3's lower-concentration mass).  Pre-remap surface
       ! concentration was 4.0; new must be < 4.0.
-      k_top = hTr(NZ)/h_new(NZ)
+      k_top = c(NZ)
       call check(error, k_top < 4.0_wp, &
                  "column helper: expanded surface should pull in less-concentrated mass")
    end subroutine test_column_helper_analytic
@@ -590,13 +594,13 @@ contains
             do j = 1, ny_tot
                do i = 1, nx_tot
                   ms%h_layer(i, j, k) = layer_pattern(k)
-                  ms%tracers(ms%idx_salinity)%c(i, j, k) = S0*layer_pattern(k)
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = S0
                   ms%u_face_x_layer(:, j, k) = 0.1_wp + 0.02_wp*real(k, wp)
                   ms%v_face_y_layer(i, :, k) = -0.05_wp + 0.01_wp*real(k, wp)
                end do
             end do
          end do
-         allocate (hS_before, source=ms%tracers(ms%idx_salinity)%c)
+         allocate (hS_before, source=ms%h_layer*ms%tracers(ms%idx_salinity)%c)   ! content h*S
          allocate (bt_eta(nx_tot, ny_tot), source=0.0_wp)
          allocate (bt_H_ref(nx_tot, ny_tot), source=H_TOTAL)
 
@@ -617,7 +621,7 @@ contains
                col_after = 0.0_wp
                do k = 1, NZ
                   col_before = col_before + hS_before(i, j, k)
-                  col_after = col_after + ms%tracers(ms%idx_salinity)%c(i, j, k)
+                  col_after = col_after + ms%h_layer(i, j, k)*ms%tracers(ms%idx_salinity)%c(i, j, k)
                end do
                max_drift = max(max_drift, abs(col_after - col_before))
             end do
@@ -708,9 +712,9 @@ contains
                do i = 1, nx_tot
                   ms%h_layer(i, j, k) = layer_pattern(k)
                   ms%tracers(ms%idx_salinity)%c(i, j, k) = &
-                     (S0 + 0.5_wp*real(k - 1, wp))*layer_pattern(k)
+                     (S0 + 0.5_wp*real(k - 1, wp))
                   ms%tracers(ms%idx_temperature)%c(i, j, k) = &
-                     (T0 + 0.3_wp*real(k - 1, wp))*layer_pattern(k)
+                     (T0 + 0.3_wp*real(k - 1, wp))
                end do
             end do
          end do
@@ -718,8 +722,8 @@ contains
          allocate (bt_H_ref(nx_tot, ny_tot), source=H_TOTAL)
 
          total_h_before = sum(ms%h_layer)*grid%dx*grid%dy
-         total_T_before = sum(ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
-         total_S_before = sum(ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
+         total_T_before = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
+         total_S_before = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
 
          call ocean_apply_ale_remap_step(grid, vc, ms, bt_eta, bt_H_ref)
          call budgets%drain_contributors()
@@ -740,19 +744,19 @@ contains
          if (allocated(error)) exit checks
 
          ! Closure: LHS = RHS for each quantity (remap is the only
-         ! thing touching h_layer + hTr here).
+         ! thing touching h_layer + c here).
          call check(error, abs((sum(ms%h_layer)*grid%dx*grid%dy - total_h_before) - &
                                budgets%contributors(idx_mass)%total_integrated) &
                     < 1.0e-10_wp*abs(total_h_before), &
                     "mass LHS = RHS for ALE remap")
          if (allocated(error)) exit checks
-         call check(error, abs((sum(ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy &
+         call check(error, abs((sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy &
                                 - total_T_before) - &
                                budgets%contributors(idx_heat)%total_integrated) &
                     < 1.0e-10_wp*abs(total_T_before), &
                     "heat LHS = RHS for ALE remap")
          if (allocated(error)) exit checks
-         call check(error, abs((sum(ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy &
+         call check(error, abs((sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy &
                                 - total_S_before) - &
                                budgets%contributors(idx_salt)%total_integrated) &
                     < 1.0e-10_wp*abs(total_S_before), &

@@ -142,9 +142,9 @@ contains
       call sf%set_surface_flux_const(0.0_wp, 0.0_wp)
 
       ms%h_layer = H_LAYER
-      ms%tracers(ms%idx_salinity)%c = S_INIT*H_LAYER
-      ms%tracers(ms%idx_temperature)%c = T_DEEP*H_LAYER
-      ms%tracers(ms%idx_temperature)%c(:, :, NZ) = t_surface*H_LAYER
+      ms%tracers(ms%idx_salinity)%c = S_INIT
+      ms%tracers(ms%idx_temperature)%c = T_DEEP
+      ms%tracers(ms%idx_temperature)%c(:, :, NZ) = t_surface
    end subroutine setup_state_snow
 
    subroutine teardown(ms, eos, ice, sf)
@@ -579,7 +579,7 @@ contains
       checks: block
          call setup_state_snow(grid, ms, eos, ice, sf, 1, .true., 0.0_wp)
          t_f = eos_freezing_point(eos, S_INIT, 0.0_wp)
-         ms%tracers(ms%idx_temperature)%c(:, :, NZ) = t_f*H_LAYER
+         ms%tracers(ms%idx_temperature)%c(:, :, NZ) = t_f
 
          ip_ice = NGHOST + 2; jp_ice = NGHOST + 2
          ip_free = NGHOST + 3; jp_free = NGHOST + 2
@@ -649,7 +649,7 @@ contains
       checks: block
          call setup_state_snow(grid, ms, eos, ice, sf, NCAT5, .true., 0.0_wp)
          t_f = eos_freezing_point(eos, S_INIT, 0.0_wp)
-         ms%tracers(ms%idx_temperature)%c(:, :, NZ) = t_f*H_LAYER
+         ms%tracers(ms%idx_temperature)%c(:, :, NZ) = t_f
 
          ip = NGHOST + 2; jp = NGHOST + 2
 
@@ -717,7 +717,7 @@ contains
       checks: block
          call setup_state_snow(grid, ms, eos, ice, sf, NCAT5, .true., 0.0_wp)
          t_f = eos_freezing_point(eos, S_INIT, 0.0_wp)
-         ms%tracers(ms%idx_temperature)%c(:, :, NZ) = t_f*H_LAYER
+         ms%tracers(ms%idx_temperature)%c(:, :, NZ) = t_f
 
          ip = NGHOST + 2; jp = NGHOST + 2
 
@@ -765,14 +765,14 @@ contains
          call setup_state_snow(grid, ms, eos, ice, sf, 1, .true., SST)
          ip = NGHOST + 2; jp = NGHOST + 2
 
-         hT_before = sum(ms%tracers(ms%idx_temperature)%c(ip, jp, :))
-         hS_before = sum(ms%tracers(ms%idx_salinity)%c(ip, jp, :))
+         hT_before = sum(ms%h_layer(ip, jp, :)*ms%tracers(ms%idx_temperature)%c(ip, jp, :))
+         hS_before = sum(ms%h_layer(ip, jp, :)*ms%tracers(ms%idx_salinity)%c(ip, jp, :))
 
          call run_chain_snow(grid, eos, ms, ice, sf, air_temp=0.0_wp, restore_lambda=0.0_wp, &
                              sw_down=0.0_wp, snowfall=FPREC)
 
-         hT_after = sum(ms%tracers(ms%idx_temperature)%c(ip, jp, :))
-         hS_after = sum(ms%tracers(ms%idx_salinity)%c(ip, jp, :))
+         hT_after = sum(ms%h_layer(ip, jp, :)*ms%tracers(ms%idx_temperature)%c(ip, jp, :))
+         hS_after = sum(ms%h_layer(ip, jp, :)*ms%tracers(ms%idx_salinity)%c(ip, jp, :))
 
          m_ocn = ice%fprec_ocn_diag(ip, jp)*DT_THERM
          call check(error, m_ocn > 0.0_wp, "sanity: the ice-free cell must receive ocean-bound snow")

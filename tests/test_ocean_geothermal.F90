@@ -75,9 +75,9 @@ contains
    subroutine test_energy_conservation(error)
       !! Q_geo = 80 W/m², no other forcing, all layers massive, one
       !! apply step at dt = 3600 s.  The column heat integral
-      !!   E = Σ_k ρ₀·cp·hTr_T(i,j,k)
+      !!   E = Σ_k ρ₀·cp·h_k·T(i,j,k)
       !! must gain exactly Q_geo·dt per unit area (the kernel deposits
-      !! ΔhT = Q_geo·dt/(ρ₀·cp) into k=1, so ρ₀·cp·ΔhT = Q_geo·dt).
+      !! h·ΔT = Q_geo·dt/(ρ₀·cp) into k=1, so ρ₀·cp·h·ΔT = Q_geo·dt).
       type(error_type), allocatable, intent(out) :: error
       type(hgrid_t) :: grid
       type(multilayer_state_t) :: ms
@@ -97,14 +97,14 @@ contains
          call geo%init(grid)
 
          ms%h_layer = H_LAYER
-         ms%tracers(ms%idx_temperature)%c = eos%T_ref*H_LAYER
-         ms%tracers(ms%idx_salinity)%c = eos%S_ref*H_LAYER
+         ms%tracers(ms%idx_temperature)%c = eos%T_ref
+         ms%tracers(ms%idx_salinity)%c = eos%S_ref
 
          ip = grid%nx_total/2
          jp = grid%ny_total/2
          e_before = 0.0_wp
          do k = 1, NZ
-            e_before = e_before + geo%rho0*geo%cp*ms%tracers(ms%idx_temperature)%c(ip, jp, k)
+            e_before = e_before + geo%rho0*geo%cp*ms%h_layer(ip, jp, k)*ms%tracers(ms%idx_temperature)%c(ip, jp, k)
          end do
 
          geo%enable = .true.
@@ -113,7 +113,7 @@ contains
 
          e_after = 0.0_wp
          do k = 1, NZ
-            e_after = e_after + geo%rho0*geo%cp*ms%tracers(ms%idx_temperature)%c(ip, jp, k)
+            e_after = e_after + geo%rho0*geo%cp*ms%h_layer(ip, jp, k)*ms%tracers(ms%idx_temperature)%c(ip, jp, k)
          end do
          ! Heat (J/m²) gained = Q_geo · dt.  Probe cell is interior (wet).
          expected_gain = Q_GEO*DT
@@ -130,7 +130,7 @@ contains
    ! -----------------------------------------------------------------
    subroutine test_bed_layer_only(error)
       !! Multi-layer column, all layers massive.  Only k=1 warms by the
-      !! analytic ΔhT = Q_geo·dt/(ρ₀·cp); k=2..nz bit-unchanged.
+      !! analytic ΔT = Q_geo·dt/(ρ₀·cp·h); k=2..nz bit-unchanged.
       type(error_type), allocatable, intent(out) :: error
       type(hgrid_t) :: grid
       type(multilayer_state_t) :: ms
@@ -150,8 +150,8 @@ contains
          call geo%init(grid)
 
          ms%h_layer = H_LAYER
-         ms%tracers(ms%idx_temperature)%c = eos%T_ref*H_LAYER
-         ms%tracers(ms%idx_salinity)%c = eos%S_ref*H_LAYER
+         ms%tracers(ms%idx_temperature)%c = eos%T_ref
+         ms%tracers(ms%idx_salinity)%c = eos%S_ref
 
          geo%enable = .true.
          geo%q_geo_const = Q_GEO
@@ -162,11 +162,11 @@ contains
          expected_dhT = DT*Q_GEO/(geo%rho0*geo%cp)
          ! Bed = k=1 (bottom-up convention).
          max_bed_err = abs(ms%tracers(ms%idx_temperature)%c(ip, jp, 1) &
-                           - (eos%T_ref*H_LAYER + expected_dhT))
+                           - (eos%T_ref + expected_dhT/H_LAYER))
          max_other_drift = 0.0_wp
          do k = 2, NZ
             max_other_drift = max(max_other_drift, &
-                                  abs(ms%tracers(ms%idx_temperature)%c(ip, jp, k) - eos%T_ref*H_LAYER))
+                                  abs(ms%tracers(ms%idx_temperature)%c(ip, jp, k) - eos%T_ref))
          end do
 
          call check(error, max_bed_err < 1.0e-10_wp, &
@@ -202,8 +202,8 @@ contains
          call geo%init(grid)
 
          ms%h_layer = H_LAYER
-         ms%tracers(ms%idx_temperature)%c = eos%T_ref*H_LAYER
-         ms%tracers(ms%idx_salinity)%c = eos%S_ref*H_LAYER
+         ms%tracers(ms%idx_temperature)%c = eos%T_ref
+         ms%tracers(ms%idx_salinity)%c = eos%S_ref
          allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%c)
          allocate (budget_ic, source=ms%heat_budget_geothermal)
 
@@ -253,7 +253,7 @@ contains
          ! Bed layer (k=1) pinched; k=2..nz massive.
          ms%h_layer = H_THICK
          ms%h_layer(:, :, 1) = H_THIN
-         ! hTr = T·h so the thin layer carries a tiny hTr (consistent IC).
+         ! Concentration storage: the thin layer carries the same T (no content to speak of).
          ms%tracers(ms%idx_temperature)%c = eos%T_ref
          ms%tracers(ms%idx_salinity)%c = eos%S_ref
 
@@ -261,7 +261,7 @@ contains
          jp = grid%ny_total/2
          e_before = 0.0_wp
          do k = 1, NZ
-            e_before = e_before + geo%rho0*geo%cp*ms%tracers(ms%idx_temperature)%c(ip, jp, k)
+            e_before = e_before + geo%rho0*geo%cp*ms%h_layer(ip, jp, k)*ms%tracers(ms%idx_temperature)%c(ip, jp, k)
          end do
 
          geo%enable = .true.
@@ -270,13 +270,13 @@ contains
 
          expected_dhT = DT*Q_GEO/(geo%rho0*geo%cp)
          ! k=1 (thin) must be untouched.
-         k1_drift = abs(ms%tracers(ms%idx_temperature)%c(ip, jp, 1) - eos%T_ref*H_THIN)
+         k1_drift = abs(ms%tracers(ms%idx_temperature)%c(ip, jp, 1) - eos%T_ref)
          ! k=2 (lowest massive) absorbs the increment.
          k2_err = abs(ms%tracers(ms%idx_temperature)%c(ip, jp, 2) &
-                      - (eos%T_ref*H_THICK + expected_dhT))
+                      - (eos%T_ref + expected_dhT/H_THICK))
          e_after = 0.0_wp
          do k = 1, NZ
-            e_after = e_after + geo%rho0*geo%cp*ms%tracers(ms%idx_temperature)%c(ip, jp, k)
+            e_after = e_after + geo%rho0*geo%cp*ms%h_layer(ip, jp, k)*ms%tracers(ms%idx_temperature)%c(ip, jp, k)
          end do
 
          call check(error, k1_drift < 1.0e-14_wp, &

@@ -646,7 +646,7 @@ contains
             do i = 1, nx
                if (k == kb) then
                   err_kb = max(err_kb, abs(ms%tracers(ms%idx_temperature)%c(i, j, k) &
-                                           - ht0(i, j, k) - src))
+                                           - ht0(i, j, k) - src/ms%h_layer(i, j, k)))
                else
                   err_other = max(err_other, abs(ms%tracers(ms%idx_temperature)%c(i, j, k) &
                                                  - ht0(i, j, k)))

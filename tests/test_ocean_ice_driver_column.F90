@@ -155,9 +155,9 @@ contains
       call sf%set_surface_flux_const(0.0_wp, 0.0_wp)
 
       ms%h_layer = H_LAYER
-      ms%tracers(ms%idx_salinity)%c = S_INIT*H_LAYER
-      ms%tracers(ms%idx_temperature)%c = T_DEEP*H_LAYER
-      ms%tracers(ms%idx_temperature)%c(:, :, NZ) = t_surface*H_LAYER
+      ms%tracers(ms%idx_salinity)%c = S_INIT
+      ms%tracers(ms%idx_temperature)%c = T_DEEP
+      ms%tracers(ms%idx_temperature)%c(:, :, NZ) = t_surface
    end subroutine setup_state
 
    subroutine seed_ice_cap(ice, ip, jp, h_ice, t_ice)
@@ -307,7 +307,7 @@ contains
       !! seeded ice, s_surf = S_INIT = 35 > ICE_BULK_SALINITY = 4. Assert
       !! salt_flux_diag < 0, Q_salt < 0, has_salt, S(nz) strictly
       !! DECREASES, and the salt increment matches
-      !! rho0*Delta(hS_top) == m_net*(s_surf - ICE_BULK_SALINITY) to
+      !! rho0*Delta(h*S_top) == m_net*(s_surf - ICE_BULK_SALINITY) to
       !! 1e-12 rel (m_net = h2o_ocn_to_ice - h2o_ice_to_ocn < 0 here).
       type(error_type), allocatable, intent(out) :: error
       type(hgrid_t) :: grid
@@ -323,12 +323,12 @@ contains
          ip = grid%nx_total/2
          jp = grid%ny_total/2
          call seed_ice_cap(ice, ip, jp, H_ICE0, T_ICE_COLD)
-         s_before = ms%tracers(ms%idx_salinity)%c(ip, jp, NZ)/H_LAYER
+         s_before = ms%tracers(ms%idx_salinity)%c(ip, jp, NZ)
 
          call run_chain(grid, eos, ms, ice, sf, air_temp=10.0_wp, restore_lambda=30.0_wp, &
                         sw_down=0.0_wp)
 
-         s_after = ms%tracers(ms%idx_salinity)%c(ip, jp, NZ)/H_LAYER
+         s_after = ms%tracers(ms%idx_salinity)%c(ip, jp, NZ)
 
          call check(error, ice%salt_flux_diag(ip, jp) < 0.0_wp, &
                     "salt_flux_diag must be strictly negative (net melt freshens)")
@@ -343,8 +343,8 @@ contains
          m_net = ice%h2o_ocn_to_ice(ip, jp, 1) - ice%h2o_ice_to_ocn(ip, jp, 1)
          expected_dhS = m_net*(S_INIT - ICE_BULK_SALINITY)
          tol = 1.0e-12_wp*abs(expected_dhS)
-         call check(error, abs(sf%rho0*(ms%tracers(ms%idx_salinity)%c(ip, jp, NZ) &
-                                        - s_before*H_LAYER) - expected_dhS) <= tol, &
+         call check(error, abs(sf%rho0*H_LAYER*(ms%tracers(ms%idx_salinity)%c(ip, jp, NZ) &
+                                                - s_before) - expected_dhS) <= tol, &
                     "salt removed from the ocean must equal m_net*(s_surf-bulk) to 1e-12 rel")
 
       end block checks
@@ -357,7 +357,7 @@ contains
       !! melt, fb=0 since SST=T_f exactly) must give Q_heat ~ 0 (ocean
       !! unchanged); a MELT window (warm restoring, seeded ice) must
       !! satisfy, through the REAL apply kernel,
-      !!   |rho0*cp*Delta(hT_top) - (heat_to_ocn - fb*dt_therm)| <= tol
+      !!   |rho0*cp*Delta(h*T_top) - (heat_to_ocn - fb*dt_therm)| <= tol
       !! with tol = 1e-9*scale, scale = rho0*cp*|hT_top|.
       type(error_type), allocatable, intent(out) :: error
       type(hgrid_t) :: grid
@@ -376,12 +376,12 @@ contains
          call setup_state(grid, ms, eos, ice, sf, t_f)
          ip = grid%nx_total/2
          jp = grid%ny_total/2
-         hT_before = ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
+         hT_before = ms%h_layer(ip, jp, NZ)*ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
 
          call run_chain(grid, eos, ms, ice, sf, air_temp=-20.0_wp, restore_lambda=20.0_wp, &
                         sw_down=0.0_wp)
 
-         hT_after = ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
+         hT_after = ms%h_layer(ip, jp, NZ)*ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
          call check(error, abs(ice%fb(ip, jp)) < 1.0e-12_wp, &
                     "fb must be ~0 when SST == T_f exactly")
          if (allocated(error)) exit checks
@@ -400,18 +400,18 @@ contains
          ip = grid%nx_total/2
          jp = grid%ny_total/2
          call seed_ice_cap(ice, ip, jp, H_ICE0, T_ICE_COLD)
-         hT_before = ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
+         hT_before = ms%h_layer(ip, jp, NZ)*ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
 
          call run_chain(grid, eos, ms, ice, sf, air_temp=15.0_wp, restore_lambda=25.0_wp, &
                         sw_down=0.0_wp)
 
-         hT_after = ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
+         hT_after = ms%h_layer(ip, jp, NZ)*ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
          d_ocean_heat = sf%rho0*SEAWATER_CP*(hT_after - hT_before)
          rhs = ice%heat_to_ocn(ip, jp, 1) - ice%fb(ip, jp)*DT_THERM
          scale = sf%rho0*SEAWATER_CP*abs(hT_before)
          tol = 1.0e-9_wp*max(scale, 1.0_wp)
          call check(error, abs(d_ocean_heat - rhs) <= tol, &
-                    "rho0*cp*Delta(hT_top) must equal heat_to_ocn - fb*dt_therm to round-off")
+                    "rho0*cp*Delta(h*T_top) must equal heat_to_ocn - fb*dt_therm to round-off")
 
       end block checks
       call teardown(ms, eos, ice, sf)
@@ -472,10 +472,10 @@ contains
          call sf%set_surface_flux_const(0.0_wp, 0.0_wp)
 
          ms%h_layer = H_LAYER
-         ms%tracers(ms%idx_salinity)%c = S_INIT*H_LAYER
-         ms%tracers(ms%idx_temperature)%c = T_DEEP*H_LAYER
+         ms%tracers(ms%idx_salinity)%c = S_INIT
+         ms%tracers(ms%idx_temperature)%c = T_DEEP
          t_f = eos_freezing_point(eos, S_INIT, 0.0_wp)
-         ms%tracers(ms%idx_temperature)%c(:, :, NZ) = 5.0_wp*H_LAYER
+         ms%tracers(ms%idx_temperature)%c(:, :, NZ) = 5.0_wp
 
          ip = grid%nx_total/2
          jp = grid%ny_total/2
@@ -581,10 +581,10 @@ contains
          call sf%set_surface_flux_const(0.0_wp, 0.0_wp)
 
          ms%h_layer = H_LAYER
-         ms%tracers(ms%idx_salinity)%c = S_INIT*H_LAYER
-         ms%tracers(ms%idx_temperature)%c = T_DEEP*H_LAYER
+         ms%tracers(ms%idx_salinity)%c = S_INIT
+         ms%tracers(ms%idx_temperature)%c = T_DEEP
          t_f = eos_freezing_point(eos, S_INIT, 0.0_wp)
-         ms%tracers(ms%idx_temperature)%c(:, :, NZ) = t_sst*H_LAYER
+         ms%tracers(ms%idx_temperature)%c(:, :, NZ) = t_sst
 
          ip = grid%nx_total/2
          jp = grid%ny_total/2
@@ -923,7 +923,7 @@ contains
       !! `heat_flux_diag*DT_THERM == Sum_c(heat_to_ocn) - fb*DT_THERM`
       !! to 1e-12 rel (ncat=1: a single term), AND, through the REAL
       !! `ocean_surface_flux_apply_tracers` kernel,
-      !! `rho0*SEAWATER_CP*Delta(hT_top) == heat_flux_diag*DT_THERM` to
+      !! `rho0*SEAWATER_CP*Delta(h*T_top) == heat_flux_diag*DT_THERM` to
       !! 1e-9 rel — the same identity `heat_budget_closes` checks with a
       !! DEAD bank; this is the live-bank twin.
       type(error_type), allocatable, intent(out) :: error
@@ -942,7 +942,7 @@ contains
          jp = grid%ny_total/2
          call seed_ice_cap(ice, ip, jp, H_ICE0, T_ICE_COLD)
          ice%frazil_heat(ip, jp) = E_BANK_COMPOSE
-         hT_before = ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
+         hT_before = ms%h_layer(ip, jp, NZ)*ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
 
          call run_chain(grid, eos, ms, ice, sf, air_temp=10.0_wp, restore_lambda=30.0_wp, &
                         sw_down=0.0_wp)
@@ -960,12 +960,12 @@ contains
                     "heat_flux_diag*dt must equal heat_to_ocn - fb*dt (frazil contributes 0)")
          if (allocated(error)) exit checks
 
-         hT_after = ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
+         hT_after = ms%h_layer(ip, jp, NZ)*ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
          d_ocean_heat = sf%rho0*SEAWATER_CP*(hT_after - hT_before)
          scale = sf%rho0*SEAWATER_CP*abs(hT_before)
          tol = 1.0e-9_wp*max(scale, 1.0_wp)
          call check(error, abs(d_ocean_heat - ice%heat_flux_diag(ip, jp)*DT_THERM) <= tol, &
-                    "rho0*cp*Delta(hT_top) must equal heat_flux_diag*dt to round-off")
+                    "rho0*cp*Delta(h*T_top) must equal heat_flux_diag*dt to round-off")
 
       end block checks
       call teardown(ms, eos, ice, sf)
@@ -1034,7 +1034,7 @@ contains
       !!   (a) sw_thru(ip,jp,1) > 0             — thin ice transmits SW;
       !!   (b) hT_after > hT_before             — thin ice WARMS the water;
       !!   (c) the closure identity, restored:
-      !!       |rho0*cp*Delta(hT_top) - (heat_to_ocn - fb*dt + sw_thru*dt)|
+      !!       |rho0*cp*Delta(h*T_top) - (heat_to_ocn - fb*dt + sw_thru*dt)|
       !!         <= 1e-9*scale.
       !! This is `heat_budget_closes`'s melt identity with the one missing
       !! shortwave term put back. It FAILS by -sw_thru*dt on a miss and by
@@ -1054,12 +1054,12 @@ contains
          ip = grid%nx_total/2
          jp = grid%ny_total/2
          call seed_ice_cap(ice, ip, jp, 0.2_wp, t_f)
-         hT_before = ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
+         hT_before = ms%h_layer(ip, jp, NZ)*ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
 
          call run_chain(grid, eos, ms, ice, sf, air_temp=0.0_wp, restore_lambda=0.0_wp, &
                         sw_down=400.0_wp)
 
-         hT_after = ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
+         hT_after = ms%h_layer(ip, jp, NZ)*ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
 
          call check(error, ice%sw_thru(ip, jp, 1) > 0.0_wp, &
                     "sw_thru must be strictly positive (thin snow-free ice transmits SW)")
@@ -1077,7 +1077,7 @@ contains
          scale = sf%rho0*SEAWATER_CP*abs(hT_before)
          tol = 1.0e-9_wp*max(scale, 1.0_wp)
          call check(error, abs(d_ocean_heat - rhs) <= tol, &
-                    "rho0*cp*Delta(hT_top) must equal heat_to_ocn - fb*dt + sw_thru*dt")
+                    "rho0*cp*Delta(h*T_top) must equal heat_to_ocn - fb*dt + sw_thru*dt")
 
       end block checks
       call teardown(ms, eos, ice, sf)
@@ -1230,12 +1230,12 @@ contains
          ip = grid%nx_total/2
          jp = grid%ny_total/2
          call seed_ice_cap(ice, ip, jp, 0.2_wp, t_f)
-         hT_before = ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
+         hT_before = ms%h_layer(ip, jp, NZ)*ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
 
          call run_chain(grid, eos, ms, ice, sf, air_temp=0.0_wp, restore_lambda=0.0_wp, &
                         sw_down=400.0_wp, use_components=.true.)
 
-         hT_after = ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
+         hT_after = ms%h_layer(ip, jp, NZ)*ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
 
          call check(error, ice%sw_thru_diag(ip, jp) > 0.0_wp, &
                     "sw_thru_diag must be strictly positive (else the test is vacuous)")

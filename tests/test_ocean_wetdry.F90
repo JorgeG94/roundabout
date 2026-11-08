@@ -685,7 +685,7 @@ contains
       !!        ⇒ wet_mask ≡ 0 — true land is still static.
       !!
       !! Host-only classification test: no metrics, no enter_data, no
-      !! dynamics.  Case (iii) seeds negative h_layer/hTr — irrelevant
+      !! dynamics.  Case (iii) seeds negative h_layer/c — irrelevant
       !! here, only wet_mask is read before the state is destroyed.
       type(error_type), allocatable, intent(out) :: error
       real(wp), parameter :: DXS = 100.0_wp
@@ -763,7 +763,7 @@ contains
       !!     2·H_VANISHED)`, so deep flanks keep the un-floored `b/nz_ml` —
       !!     the fix only touches the near-zero band.
       !!  5. Tracers stay non-negative and recover the seeded S/T exactly
-      !!     (`hTr/h` finite on both a deep and an emerged column).
+      !!     (`c` finite on both a deep and an emerged column).
       type(error_type), allocatable, intent(out) :: error
       real(wp), parameter :: DXS = 100.0_wp
       real(wp), parameter :: S0 = 35.0_wp, T0 = 10.0_wp
@@ -860,19 +860,16 @@ contains
          if (allocated(error)) exit checks
          ! Gate 5: tracers non-negative + S/T recovered on deep AND emerged.
          call check(error, min_htr >= 0.0_wp, &
-                    "emerged_seed: negative tracer mass hTr seeded")
+                    "emerged_seed: negative tracer concentration seeded")
          if (allocated(error)) exit checks
          call check(error, &
-                    abs(state%multilayer%tracers(idxS)%c(i_emrg, j_emrg, 1)/ &
-                        state%multilayer%h_layer(i_emrg, j_emrg, 1) - S0) < 1.0e-10_wp .and. &
-                    abs(state%multilayer%tracers(idxT)%c(i_emrg, j_emrg, 1)/ &
-                        state%multilayer%h_layer(i_emrg, j_emrg, 1) - T0) < 1.0e-10_wp, &
-                    "emerged_seed: emerged-crest T/S not recovered from hTr/h (EOS would read garbage)")
+                    abs(state%multilayer%tracers(idxS)%c(i_emrg, j_emrg, 1) - S0) < 1.0e-10_wp .and. &
+                    abs(state%multilayer%tracers(idxT)%c(i_emrg, j_emrg, 1) - T0) < 1.0e-10_wp, &
+                    "emerged_seed: emerged-crest T/S not recovered from c (EOS would read garbage)")
          if (allocated(error)) exit checks
          call check(error, &
-                    abs(state%multilayer%tracers(idxS)%c(i_deep, j_deep, 1)/ &
-                        state%multilayer%h_layer(i_deep, j_deep, 1) - S0) < 1.0e-10_wp, &
-                    "emerged_seed: deep-column S not recovered from hTr/h")
+                    abs(state%multilayer%tracers(idxS)%c(i_deep, j_deep, 1) - S0) < 1.0e-10_wp, &
+                    "emerged_seed: deep-column S not recovered from c")
       end block checks
       call state%destroy()
    end subroutine test_emerged_seed_production
@@ -994,10 +991,8 @@ contains
          do k = 1, NZ2
             do j = 1, ny
                do i = 1, nx
-                  ms%tracers(ms%idx_salinity)%c(i, j, k) = &
-                     ms%h_layer(i, j, k)*eos%S_ref
-                  ms%tracers(ms%idx_temperature)%c(i, j, k) = &
-                     ms%h_layer(i, j, k)*eos%T_ref
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = eos%S_ref
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = eos%T_ref
                end do
             end do
          end do
@@ -1245,8 +1240,8 @@ contains
          do j = NGHOST + 1, NGHOST + NYP
             do i = NGHOST + 1, NGHOST + NXP
                do k = 1, NZ2
-                  hs0 = hs0 + ms%tracers(idxS)%c(i, j, k)
-                  ht0 = ht0 + ms%tracers(idxT)%c(i, j, k)
+                  hs0 = hs0 + ms%h_layer(i, j, k)*ms%tracers(idxS)%c(i, j, k)
+                  ht0 = ht0 + ms%h_layer(i, j, k)*ms%tracers(idxT)%c(i, j, k)
                end do
             end do
          end do
@@ -1270,7 +1265,7 @@ contains
          end do
 
          !$acc update self(ms%h_layer)
-         !$acc update self(ms%tracers(idxS)%c, ms%tracers(idxT)%c)
+         !$acc update self(ms%h_layer, ms%tracers(idxS)%c, ms%tracers(idxT)%c)
          call destroy_cartesian_metrics(metrics)
          call vc%exit_data()
          call dyn%exit_data(); call vmix%exit_data(); call vd%exit_data()
@@ -1283,8 +1278,8 @@ contains
          do j = NGHOST + 1, NGHOST + NYP
             do i = NGHOST + 1, NGHOST + NXP
                do k = 1, NZ2
-                  hs1 = hs1 + ms%tracers(idxS)%c(i, j, k)
-                  ht1 = ht1 + ms%tracers(idxT)%c(i, j, k)
+                  hs1 = hs1 + ms%h_layer(i, j, k)*ms%tracers(idxS)%c(i, j, k)
+                  ht1 = ht1 + ms%h_layer(i, j, k)*ms%tracers(idxT)%c(i, j, k)
                   min_tr = min(min_tr, ms%tracers(idxS)%c(i, j, k))
                   min_tr = min(min_tr, ms%tracers(idxT)%c(i, j, k))
                   if (.not. ieee_is_finite(ms%tracers(idxS)%c(i, j, k))) &
@@ -1438,8 +1433,8 @@ contains
          do j = NGHOST + 1, NGHOST + NYP
             do i = NGHOST + 1, NGHOST + NXP
                do k = 1, NZ2
-                  hs0 = hs0 + ms%tracers(idxS)%c(i, j, k)
-                  ht0 = ht0 + ms%tracers(idxT)%c(i, j, k)
+                  hs0 = hs0 + ms%h_layer(i, j, k)*ms%tracers(idxS)%c(i, j, k)
+                  ht0 = ht0 + ms%h_layer(i, j, k)*ms%tracers(idxT)%c(i, j, k)
                end do
             end do
          end do
@@ -1474,7 +1469,7 @@ contains
          end do
 
          !$acc update self(ms%h_layer)
-         !$acc update self(ms%tracers(idxS)%c, ms%tracers(idxT)%c)
+         !$acc update self(ms%h_layer, ms%tracers(idxS)%c, ms%tracers(idxT)%c)
          call destroy_cartesian_metrics(metrics)
          call vc%exit_data()
          call dyn%exit_data(); call vmix%exit_data(); call vd%exit_data()
@@ -1487,8 +1482,8 @@ contains
          do j = NGHOST + 1, NGHOST + NYP
             do i = NGHOST + 1, NGHOST + NXP
                do k = 1, NZ2
-                  hs1 = hs1 + ms%tracers(idxS)%c(i, j, k)
-                  ht1 = ht1 + ms%tracers(idxT)%c(i, j, k)
+                  hs1 = hs1 + ms%h_layer(i, j, k)*ms%tracers(idxS)%c(i, j, k)
+                  ht1 = ht1 + ms%h_layer(i, j, k)*ms%tracers(idxT)%c(i, j, k)
                   min_tr = min(min_tr, ms%tracers(idxS)%c(i, j, k))
                   min_tr = min(min_tr, ms%tracers(idxT)%c(i, j, k))
                end do

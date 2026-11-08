@@ -249,8 +249,8 @@ contains
       ms%h_layer = H_TOTAL/real(NZ, wp)
       ms%u_face_x_layer = 0.0_wp
       ms%v_face_y_layer = 0.0_wp
-      ms%tracers(ms%idx_salinity)%c = 35.0_wp*(H_TOTAL/real(NZ, wp))
-      ms%tracers(ms%idx_temperature)%c = 10.0_wp*(H_TOTAL/real(NZ, wp))
+      ms%tracers(ms%idx_salinity)%c = 35.0_wp
+      ms%tracers(ms%idx_temperature)%c = 10.0_wp
       dyn%bt_work%bt_H_ref = H_TOTAL
       dyn%bt_work%g_bt = G_BT
    end subroutine seed_rest
@@ -436,7 +436,7 @@ contains
             do kk = 1, NZ
                do jj = ng + grid%ny_phys - 2, ng + grid%ny_phys
                   do ii = ng + 1, ng + grid%nx_phys
-                     ms%tracers(idxS)%c(ii, jj, kk) = 36.5_wp*(H_TOTAL/real(NZ, wp))
+                     ms%tracers(idxS)%c(ii, jj, kk) = 36.5_wp
                   end do
                end do
             end do
@@ -468,15 +468,15 @@ contains
          call make_bc_fold(bc, grid)
          call map_in(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
 
-         salt0 = interior_sum(ms%tracers(idxS)%c, grid)
+         salt0 = interior_sum(ms%h_layer*ms%tracers(idxS)%c, grid)
 
          do step = 1, 6
             call ocean_dyn_step_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, &
                                       bd, ss, va, hd, vd, vmix, ms, 300.0_wp, 20, bc=bc)
          end do
 
-         !$acc update self(ms%tracers(idxS)%c)
-         salt1 = interior_sum(ms%tracers(idxS)%c, grid)
+         !$acc update self(ms%h_layer, ms%tracers(idxS)%c)
+         salt1 = interior_sum(ms%h_layer*ms%tracers(idxS)%c, grid)
          ! No anomalous extrema growth (no seam doubling): interior salinity
          ! concentration must stay within the seeded [35, 36.5] band.
          smin = huge(1.0_wp)
@@ -508,10 +508,10 @@ contains
          ! No anomalous extrema growth (the doubling/ghosting failure mode
          ! produces a ~2x concentration spike at the seam).  The PPM scheme
          ! is not strictly monotone, so allow a small relative band slack.
-         call check(error, smax <= 36.5_wp*(H_TOTAL/real(NZ, wp))*(1.0_wp + 1.0e-4_wp), &
+         call check(error, smax <= 36.5_wp*(1.0_wp + 1.0e-4_wp), &
                     "T3: no anomalous salinity maximum growth at the seam")
          if (allocated(error)) exit checks
-         call check(error, smin >= 34.5_wp*(H_TOTAL/real(NZ, wp)), &
+         call check(error, smin >= 34.5_wp, &
                     "T3: no anomalous salinity minimum at the seam")
       end block checks
    end subroutine test_cross_seam
@@ -803,7 +803,7 @@ contains
    ! A surface-height bump and a salt blob are seeded ON the fold (the last
    ! physical T-row, x = NXP/4), so the gravity wave and the advected blob
    ! cross the north seam every step.  Over NSTEP steps:
-   !   * total mass  Σ h·areaT      and salt Σ hTr·areaT  are conserved to
+   !   * total mass  Σ h·areaT      and salt Σ h·c·areaT  are conserved to
    !     round-off (a closed periodic+fold basin has no boundary);
    !   * the accumulated boundary outflux `ms%mass_out` stays at round-off
    !     (the fold line telescopes).  Measured on this case, 40 steps:
@@ -894,7 +894,7 @@ contains
          call map_in(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
 
          mass0 = weighted_interior_sum(ms%h_layer, metrics%areaT, grid)
-         salt0 = weighted_interior_sum(ms%tracers(idxS)%c, metrics%areaT, grid)
+         salt0 = weighted_interior_sum(ms%h_layer*ms%tracers(idxS)%c, metrics%areaT, grid)
          ms%mass_out = 0.0_wp
 
          v_asym = 0.0_wp
@@ -929,7 +929,7 @@ contains
          end do
 
          mass1 = weighted_interior_sum(ms%h_layer, metrics%areaT, grid)
-         salt1 = weighted_interior_sum(ms%tracers(idxS)%c, metrics%areaT, grid)
+         salt1 = weighted_interior_sum(ms%h_layer*ms%tracers(idxS)%c, metrics%areaT, grid)
          rel_mass = abs(mass1 - mass0)/mass0
          rel_salt = abs(salt1 - salt0)/salt0
          ! mass_out is in kg (ρ_water·m³); normalise by the same total.
@@ -1048,7 +1048,7 @@ contains
             do i = 1, nxt
                ms%h_layer(i, j, NZ) = H_TOP
                ms%h_layer(i, j, 1) = depth(i, j) - H_TOP
-               ms%tracers(ms%idx_temperature)%c(i, j, NZ) = 15.0_wp*H_TOP
+               ms%tracers(ms%idx_temperature)%c(i, j, NZ) = 15.0_wp
                ms%tracers(ms%idx_temperature)%c(i, j, 1) = 5.0_wp
                ms%tracers(ms%idx_salinity)%c(i, j, :) = 35.0_wp
                dyn%bt_work%bt_H_ref(i, j) = depth(i, j)

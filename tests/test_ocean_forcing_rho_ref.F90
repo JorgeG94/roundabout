@@ -208,18 +208,18 @@ contains
          if (allocated(error)) exit checks
 
          state%multilayer%h_layer = H_LAYER
-         state%multilayer%tracers(idx_T)%c = T_IC*H_LAYER
+         state%multilayer%tracers(idx_T)%c = T_IC
          call state%surface_flux%set_surface_flux_const(Q_HEAT, 0.0_wp)
 
          call run_apply(grid, state)
 
          ! Closed form at the configured rho0 and at the old hard-coded one.
-         want_cfg = DT*Q_HEAT/(RHO0_CFG*state%surface_flux%cp)
-         want_default = DT*Q_HEAT/(RHO0_DEFAULT*state%surface_flux%cp)
+         want_cfg = DT*Q_HEAT/(RHO0_CFG*state%surface_flux%cp*H_LAYER)
+         want_default = DT*Q_HEAT/(RHO0_DEFAULT*state%surface_flux%cp*H_LAYER)
 
          i_probe = grid%nx_total/2
          j_probe = grid%ny_total/2
-         got = state%multilayer%tracers(idx_T)%c(i_probe, j_probe, NZ) - T_IC*H_LAYER
+         got = state%multilayer%tracers(idx_T)%c(i_probe, j_probe, NZ) - T_IC
 
          ! Non-vacuity 1: the step must actually have heated something.
          call check(error, want_cfg > 1.0e-6_wp, &
@@ -243,7 +243,7 @@ contains
          drift = 0.0_wp
          do k = 1, NZ - 1
             drift = max(drift, abs(state%multilayer%tracers(idx_T)%c(i_probe, j_probe, k) &
-                                   - T_IC*H_LAYER))
+                                   - T_IC))
          end do
          call check(error, drift < 1.0e-14_wp, &
                     "layers below the surface drifted under a surface-only heat flux")

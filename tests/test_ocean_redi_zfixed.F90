@@ -187,14 +187,13 @@ contains
                ip = min(max(i - NG, 1), NXP)
                x = real(ip, wp)*DX
                ms%tracers(ms%idx_temperature)%c(i, j, k) = &
-                  (T0 + gz_*zc + gx_*x + gy_*y)*tgt(i, j, k)
-               ms%tracers(ms%idx_salinity)%c(i, j, k) = (S0 + sx_*x + sy_*y)*tgt(i, j, k)
+                  (T0 + gz_*zc + gx_*x + gy_*y)
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = (S0 + sx_*x + sy_*y)
             end do
          end do
       end do
-      ! Hand each filler its donor's concentration BEFORE the I1' sweep, so
-      ! the sweep's pooling mixes equal concentrations and does not shift
-      ! the donor (cf. test_ocean_gm_zfixed).
+      ! Hand each filler its donor's concentration (fillers keep a stale
+      ! concentration and carry no content; cf. test_ocean_gm_zfixed).
       do it = 1, 2
          associate (q => ms%tracers(merge(ms%idx_temperature, ms%idx_salinity, it == 1))%c)
             do j = 1, nj
@@ -202,9 +201,9 @@ contains
                   c_val = -huge(1.0_wp)
                   do k = NZ, 1, -1
                      if (tgt(i, j, k) > H_VANISHED) then
-                        c_val = q(i, j, k)/tgt(i, j, k)
+                        c_val = q(i, j, k)
                      else if (c_val > -huge(1.0_wp)) then
-                        q(i, j, k) = c_val*tgt(i, j, k)
+                        q(i, j, k) = c_val
                      end if
                   end do
                end do
@@ -325,7 +324,8 @@ contains
       !! among themselves; the physical-domain walls are closed to Redi).
       type(multilayer_state_t), intent(in) :: ms
       integer, intent(in) :: idx
-      s = sum(ms%tracers(idx)%c(NG + 1:NG + NXP, NG + 1:NG + NYP, :))
+      s = sum(ms%h_layer(NG + 1:NG + NXP, NG + 1:NG + NYP, :)* &
+              ms%tracers(idx)%c(NG + 1:NG + NXP, NG + 1:NG + NYP, :))
    end function phys_content
 
    subroutine live_range(ms, idx, cmin, cmax)
@@ -341,7 +341,7 @@ contains
          do j = NG + 1, NG + NYP
             do i = NG + 1, NG + NXP
                if (ms%h_layer(i, j, k) <= H_VANISHED) cycle
-               c = ms%tracers(idx)%c(i, j, k)/ms%h_layer(i, j, k)
+               c = ms%tracers(idx)%c(i, j, k)
                cmin = min(cmin, c)
                cmax = max(cmax, c)
             end do
@@ -410,8 +410,8 @@ contains
       real(wp), allocatable :: tgt(:, :, :), t_prev(:, :, :), s_prev(:, :, :)
       real(wp), allocatable :: t_init(:, :, :)
       integer, parameter :: NSTEP = 10
-      integer :: it, ni, nj, n_pair, n_bad, n_pair_tot, n_bad_tot, n_i1, n_i1_max
-      real(wp) :: worst_heff, wh_max, worst_i1, t0s, s0s, t1s, s1s
+      integer :: it, ni, nj, n_pair, n_bad, n_pair_tot, n_bad_tot
+      real(wp) :: worst_heff, wh_max, t0s, s0s, t1s, s1s
       real(wp) :: tmin0, tmax0, smin0, smax0, tmin, tmax, smin, smax, ext, dtmax
       logical :: finite_all, fill_kept
       character(len=128) :: msg
@@ -428,7 +428,6 @@ contains
 
       n_pair_tot = 0
       n_bad_tot = 0
-      n_i1_max = 0
       wh_max = 0.0_wp
       ext = 0.0_wp
       finite_all = .true.
@@ -452,10 +451,6 @@ contains
             n_pair_tot = n_pair_tot + n_pair
             n_bad_tot = n_bad_tot + n_bad
             wh_max = max(wh_max, worst_heff)
-            ! The production step tail: restore I1′ (Redi moved the donors'
-            ! concentration), then the tripwire scan.
-            n_i1 = 0; worst_i1 = 0.0_wp  ! I1' retired: concentration storage
-            n_i1_max = max(n_i1_max, n_i1)
             !$acc update self(ms%tracers(ms%idx_temperature)%c)
             !$acc update self(ms%tracers(ms%idx_salinity)%c)
             finite_all = finite_all .and. &
@@ -479,11 +474,9 @@ contains
                     "no neutral sublayer may pair a CLOSED face-layer or a filler: "//trim(msg))
          if (allocated(error)) exit checks
          call check(error, fill_kept, &
-                    "Redi must not change a filler's content (no flux into or out of it)")
+                    "Redi must not change a filler's concentration (no flux into or out of it)")
          if (allocated(error)) exit checks
          call check(error, finite_all, "hTr and the Redi coefficients must stay finite")
-         if (allocated(error)) exit checks
-         call check(error, n_i1_max == 0, "I1' must hold after every step")
          if (allocated(error)) exit checks
          dtmax = maxval(abs(ms%tracers(ms%idx_temperature)%c - t_init))
          call check(error, dtmax > 1.0e-3_wp, &
@@ -645,8 +638,8 @@ contains
          call check(error, id > 0, "the open staircase must carry an interior bed filler")
          if (allocated(error)) exit checks
          kd = kd + 1
-         c_t = ms%tracers(ms%idx_temperature)%c(id, jd, kd)/ms%h_layer(id, jd, kd)
-         c_s = ms%tracers(ms%idx_salinity)%c(id, jd, kd)/ms%h_layer(id, jd, kd)
+         c_t = ms%tracers(ms%idx_temperature)%c(id, jd, kd)
+         c_s = ms%tracers(ms%idx_salinity)%c(id, jd, kd)
 
          ! Phase A on the healthy state (the model runs it at the start of
          ! the thermo step) ...
@@ -669,18 +662,18 @@ contains
                     all_finite_3d(ms%tracers(ms%idx_salinity)%c), &
                     "open steps, drained cell: the Redi update must stay finite")
          if (allocated(error)) exit checks
-         ! Content bound on EVERY cell, the drained one included: twice the
-         ! largest concentration times the thickest layer.  The initial state
-         ! sits ON `max|c|*H_NOM` (a full layer at the warmest T), so the bound
-         ! needs room for round-off (GPU FMA); the defect is 1e18.
-         write (msg, '(a,2es12.4)') "max|hT|, max|hS| = ", &
+         ! Bound on EVERY cell, the drained one included: no concentration may
+         ! exceed twice the largest initial |c| (a vanished/negative-h cell
+         ! keeps its stale c; dividing the Redi content change by its
+         ! sliver thickness blows c up).
+         write (msg, '(a,2es12.4)') "max|T|, max|S| = ", &
             maxval(abs(ms%tracers(ms%idx_temperature)%c)), &
             maxval(abs(ms%tracers(ms%idx_salinity)%c))
          call check(error, maxval(abs(ms%tracers(ms%idx_temperature)%c)) <= &
-                    2.0_wp*max(abs(tmin0), abs(tmax0))*H_NOM .and. &
+                    2.0_wp*max(abs(tmin0), abs(tmax0)) .and. &
                     maxval(abs(ms%tracers(ms%idx_salinity)%c)) <= &
-                    2.0_wp*max(abs(smin0), abs(smax0))*H_NOM, &
-                    "open steps, drained cell: unbounded content: "//trim(msg))
+                    2.0_wp*max(abs(smin0), abs(smax0)), &
+                    "open steps, drained cell: unbounded concentration: "//trim(msg))
          if (allocated(error)) exit checks
          call live_range(ms, ms%idx_temperature, tmin, tmax)
          call live_range(ms, ms%idx_salinity, smin, smax)

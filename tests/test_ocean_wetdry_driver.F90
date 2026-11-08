@@ -198,11 +198,11 @@ contains
             do k = 1, NZ
                ms%h_layer(i, j, k) = d_ic/real(NZ, wp)
                ! S: west saltier (S_ref+1) -> east fresher (S_ref-1);
-               ! T uniform.  hTr = conc * h_layer.
+               ! T uniform.  c = concentration.
                ms%tracers(ms%idx_salinity)%c(i, j, k) = &
-                  (eos%S_ref + 2.0_wp*(0.5_wp - frac))*ms%h_layer(i, j, k)
+                  (eos%S_ref + 2.0_wp*(0.5_wp - frac))
                ms%tracers(ms%idx_temperature)%c(i, j, k) = &
-                  eos%T_ref*ms%h_layer(i, j, k)
+                  eos%T_ref
                ms%rho_layer(i, j, k) = eos%rho0
             end do
             was_wet_rest(i) = .true.
@@ -488,7 +488,7 @@ contains
    end subroutine enable_wetdry_full
 
    pure real(wp) function tracer_content(ms, idx, i0, i1, j0, j1, nz) result(c)
-      !! Σ hTr over interior physical cells (all layers) — the conserved
+      !! Σ h·c over interior physical cells (all layers) — the conserved
       !! tracer CONTENT (concentration·thickness integrated).
       type(multilayer_state_t), intent(in) :: ms
       integer, intent(in) :: idx, i0, i1, j0, j1, nz
@@ -497,7 +497,7 @@ contains
       do k = 1, nz
          do j = j0, j1
             do i = i0, i1
-               c = c + ms%tracers(idx)%c(i, j, k)
+               c = c + ms%tracers(idx)%c(i, j, k)*ms%h_layer(i, j, k)
             end do
          end do
       end do
@@ -553,14 +553,14 @@ contains
       integer :: k
       do k = 1, nz
          ms%h_layer(i, j, k) = htop
-         ms%tracers(ms%idx_temperature)%c(i, j, k) = T_ref*htop
-         ms%tracers(ms%idx_salinity)%c(i, j, k) = S_ref*htop
+         ms%tracers(ms%idx_temperature)%c(i, j, k) = T_ref
+         ms%tracers(ms%idx_salinity)%c(i, j, k) = S_ref
       end do
    end subroutine set_column
 
    pure real(wp) function col_dtop(ms, ic, idx, i, ig, nyp, nz) result(dtop)
       !! Row-averaged top-layer (k = nz) concentration change for column
-      !! `i`: mean over physical rows of (hTr - hTr_ic)/h_layer.
+      !! `i`: mean over physical rows of (c - c_ic).
       type(multilayer_state_t), intent(in) :: ms
       real(wp), intent(in) :: ic(:, :, :)
       integer, intent(in) :: idx, i, ig, nyp, nz
@@ -570,7 +570,7 @@ contains
       do j = ig + 1, ig + nyp
          h = ms%h_layer(i, j, nz)
          if (h > 0.0_wp) then
-            acc = acc + (ms%tracers(idx)%c(i, j, nz) - ic(i, j, nz))/h
+            acc = acc + (ms%tracers(idx)%c(i, j, nz) - ic(i, j, nz))
          end if
       end do
       dtop = acc/real(nyp, wp)

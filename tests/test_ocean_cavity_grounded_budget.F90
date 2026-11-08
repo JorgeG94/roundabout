@@ -87,7 +87,7 @@ module test_ocean_cavity_grounded_budget
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_step, engine_step_ice, engine_step_finalize, &
                                engine_exit_data, engine_teardown
-   use rdb_ocean_console_stats, only: compute_total_h, compute_total_tracer, &
+   use rdb_ocean_console_stats, only: compute_total_h, compute_total_tracer, compute_total_content, &
                                       ocean_budget_src, ocean_budget_out, &
                                       ocean_budget_stage_weight, &
                                       ocean_salt_src_sum, ocean_heat_src_sum
@@ -351,23 +351,23 @@ contains
 
          src_salt = ocean_budget_src( &
                     ocean_salt_src_sum( &
-                    compute_total_tracer(ms%salt_budget_surface, mt%areaT, ng), &
-                    compute_total_tracer(ms%salt_budget_sponge, mt%areaT, ng)), &
+                    compute_total_content(ms%salt_budget_surface, mt%areaT, ng), &
+                    compute_total_content(ms%salt_budget_sponge, mt%areaT, ng)), &
                     stage_weight=bud_w)
          out_salt = ocean_budget_out( &
-                    compute_total_tracer(ms%salt_budget_horiz_adv, mt%areaT, ng), &
-                    compute_total_tracer(ms%salt_budget_hdiff, mt%areaT, ng), &
+                    compute_total_content(ms%salt_budget_horiz_adv, mt%areaT, ng), &
+                    compute_total_content(ms%salt_budget_hdiff, mt%areaT, ng), &
                     stage_weight=bud_w)
 
          src_heat = ocean_budget_src( &
                     ocean_heat_src_sum( &
-                    compute_total_tracer(ms%heat_budget_surface, mt%areaT, ng), &
-                    compute_total_tracer(ms%heat_budget_geothermal, mt%areaT, ng), &
-                    compute_total_tracer(ms%heat_budget_sponge, mt%areaT, ng)), &
+                    compute_total_content(ms%heat_budget_surface, mt%areaT, ng), &
+                    compute_total_content(ms%heat_budget_geothermal, mt%areaT, ng), &
+                    compute_total_content(ms%heat_budget_sponge, mt%areaT, ng)), &
                     stage_weight=bud_w)
          out_heat = ocean_budget_out( &
-                    compute_total_tracer(ms%heat_budget_horiz_adv, mt%areaT, ng), &
-                    compute_total_tracer(ms%heat_budget_hdiff, mt%areaT, ng), &
+                    compute_total_content(ms%heat_budget_horiz_adv, mt%areaT, ng), &
+                    compute_total_content(ms%heat_budget_hdiff, mt%areaT, ng), &
                     stage_weight=bud_w)
 
          mass_out = ms%mass_out

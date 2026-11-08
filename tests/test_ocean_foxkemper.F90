@@ -570,7 +570,7 @@ contains
       !!
       !! Note on thermo-cadence limitation (FIX 3): with velocities at
       !! zero the FK fold is the only flux; mass_flux sums to zero by
-      !! sum_k a(k) = 0 => Σh and Σ(hTr) are conserved exactly regardless
+      !! sum_k a(k) = 0 => Σh and Σ(h·c) are conserved exactly regardless
       !! of how many times the fold is applied.  The limitation (stale
       !! uhml re-folded when dt_therm_ratio>1) is documented on the slot
       !! fields and the fold call site; it does NOT affect this test.
@@ -635,9 +635,9 @@ contains
          do k = 1, NZ
             do j = 1, ny
                do i = 1, nx
-                  ms%tracers(ms%idx_salinity)%c(i, j, k) = DZ*35.0_wp
-                  ms%tracers(ms%idx_temperature)%c(i, j, k) = DZ*(15.0_wp + &
-                                                                  0.5_wp*real(i, wp))
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = 35.0_wp
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = 15.0_wp + &
+                                                              0.5_wp*real(i, wp)
                end do
             end do
          end do
@@ -651,7 +651,7 @@ contains
          h0_total = sum(ms%h_layer)*DX*DY
          allocate (hTr0(nx, ny, NZ, size(ms%tracers)))
          do it = 1, size(ms%tracers)
-            hTr0(:, :, :, it) = ms%tracers(it)%c
+            hTr0(:, :, :, it) = ms%h_layer*ms%tracers(it)%c
          end do
 
          ! Attach all state to device.
@@ -696,7 +696,7 @@ contains
 
          ! (ii) Tracer mass conserved per tracer.
          do it = 1, size(ms%tracers)
-            reldiff = abs(sum(ms%tracers(it)%c) - sum(hTr0(:, :, :, it))) &
+            reldiff = abs(sum(ms%h_layer*ms%tracers(it)%c) - sum(hTr0(:, :, :, it))) &
                       /(abs(sum(hTr0(:, :, :, it))) + 1.0e-30_wp)
             call check(error, reldiff < 1.0e-10_wp, &
                        "T7: tracer mass not conserved through FK fold + continuity")
@@ -793,8 +793,8 @@ contains
                   ms_a%u_face_x_layer(i, j, k) = 0.0_wp
                   ms_a%v_face_y_layer(i, j, k) = 0.0_wp
                   ms_a%rho_layer(i, j, k) = 1027.0_wp - 0.1_wp*real(i, wp)
-                  ms_a%tracers(ms_a%idx_salinity)%c(i, j, k) = DZ*35.0_wp
-                  ms_a%tracers(ms_a%idx_temperature)%c(i, j, k) = DZ*(15.0_wp + 0.5_wp*real(i, wp))
+                  ms_a%tracers(ms_a%idx_salinity)%c(i, j, k) = 35.0_wp
+                  ms_a%tracers(ms_a%idx_temperature)%c(i, j, k) = 15.0_wp + 0.5_wp*real(i, wp)
                end do
             end do
          end do
@@ -911,7 +911,7 @@ contains
       !! thin surface layer that, accumulated over a `ratio`-step window,
       !! used to exceed the layer's drainable volume.  The windowed drain's
       !! `hprev = h_end + div(uhtr)` reconstruction then clamped to ~0 in
-      !! the thin layer ⇒ `Tr = hTr/hprev` blew up / collapsed and Σ(hTr)
+      !! the thin layer ⇒ `Tr = hTr/hprev` blew up / collapsed and Σ(h·c)
       !! was not conserved.
       !!
       !! The fix is the MOM6 per-layer FK availability cap (a(k)*uDml ≤
@@ -921,8 +921,8 @@ contains
       !! over a 2-step window, then `continuity_tracer_drain` spends it.
       !!
       !! ASSERT after the drain:
-      !!   (i)  Σ(areaT·hTr) for S conserved to ~1e-10 relative.
-      !!   (ii) per-cell concentration S = hTr/h_layer stays within the IC
+      !!   (i)  Σ(areaT·h·c) for S conserved to ~1e-10 relative.
+      !!   (ii) per-cell concentration S (concentration) stays within the IC
       !!        bounds (no collapse, no negatives) to a small tolerance.
       !! WITHOUT the limiter (dt_limit absent) both (i) and (ii) fail —
       !! that is the failing-before behaviour this test guards.
@@ -987,8 +987,8 @@ contains
                   ! Density: stable strat + a strong x-front (period = nx_phys).
                   ms%rho_layer(i, j, k) = 1027.0_wp - 0.4_wp*real(k, wp) &
                                           - 0.6_wp*sin(2.0_wp*PI*real(i - NG, wp)/real(NX_PHYS, wp))
-                  ms%tracers(ms%idx_salinity)%c(i, j, k) = S_REF(k)*HCOL(k)
-                  ms%tracers(ms%idx_temperature)%c(i, j, k) = 12.0_wp*HCOL(k)
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = S_REF(k)
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = 12.0_wp
                end do
             end do
          end do
@@ -1003,7 +1003,7 @@ contains
          ! IC concentration bounds (with a slim PPM-overshoot tolerance).
          s_lo = minval(S_REF) - 0.05_wp*(maxval(S_REF) - minval(S_REF))
          s_hi = maxval(S_REF) + 0.05_wp*(maxval(S_REF) - minval(S_REF))
-         mass0 = area*sum(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
+         mass0 = area*sum(ms%h_layer(i0:i1, j0:j1, :)*ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
 
          !$acc enter data copyin(ms, ct, epbl, ss, mle, bc)
          call ms%enter_data()
@@ -1055,7 +1055,7 @@ contains
          !$acc exit data delete(ms, ct, epbl, ss, mle, bc)
 
          ! (i) conservation of interior salinity mass.
-         mass1 = area*sum(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
+         mass1 = area*sum(ms%h_layer(i0:i1, j0:j1, :)*ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
          rel = abs(mass1 - mass0)/abs(mass0)
          call check(error, rel < 1.0e-10_wp, &
                     "T9: FK windowed drain broke interior tracer conservation")
@@ -1067,7 +1067,7 @@ contains
          do k = 1, NZ
             do j = j0, j1
                do i = i0, i1
-                  conc = ms%tracers(ms%idx_salinity)%c(i, j, k)/ms%h_layer(i, j, k)
+                  conc = ms%tracers(ms%idx_salinity)%c(i, j, k)
                   smin = min(smin, conc)
                   smax = max(smax, conc)
                end do
@@ -1252,7 +1252,7 @@ contains
       !!     fires immediately after the drain in ocean_dyn_step_split.
       !!
       !! Returns the relative drift of the full-domain salt mass
-      !! Σ(areaT·hTr_S) over the whole run in `salt_rel_drift`.  Conservation
+      !! Σ(areaT·h·c_S) over the whole run in `salt_rel_drift`.  Conservation
       !! requires it ~ round-off; the FK x windowed-advect leak shows up here
       !! as a systematic O(1%/window) drift.
       type(error_type), allocatable, intent(out) :: error
@@ -1314,8 +1314,8 @@ contains
                   ms%v_face_y_layer(i, j, k) = 0.0_wp
                   ms%rho_layer(i, j, k) = 1027.0_wp - 0.4_wp*real(k, wp) &
                                           - 0.6_wp*sin(2.0_wp*PI*real(i - NG, wp)/real(NX_PHYS, wp))
-                  ms%tracers(ms%idx_salinity)%c(i, j, k) = S_REF(k)*HCOL(k)
-                  ms%tracers(ms%idx_temperature)%c(i, j, k) = 12.0_wp*HCOL(k)
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = S_REF(k)
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = 12.0_wp
                end do
             end do
          end do
@@ -1328,7 +1328,7 @@ contains
          j0 = NG + 1
          j1 = NG + grid%ny_phys
          ! Full-domain (interior) salt mass before the run.
-         mass0 = area*sum(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
+         mass0 = area*sum(ms%h_layer(i0:i1, j0:j1, :)*ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
 
          !$acc enter data copyin(ms, ct, epbl, ss, mle, bc)
          call ms%enter_data()
@@ -1365,7 +1365,7 @@ contains
          call ms%exit_data()
          !$acc exit data delete(ms, ct, epbl, ss, mle, bc)
 
-         mass1 = area*sum(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
+         mass1 = area*sum(ms%h_layer(i0:i1, j0:j1, :)*ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
          salt_rel_drift = abs(mass1 - mass0)/abs(mass0)
          call check(error, salt_rel_drift < 1.0e-10_wp, &
                     "dynamic multi-window FK x windowed-advect leaks salt mass")
@@ -1391,7 +1391,7 @@ contains
       integer, intent(in) :: nz
       real(wp), intent(in) :: target_h(nz)
       integer :: i, j, k, nx, ny, it
-      real(wp) :: col_h_old(nz), col_tr(nz), conc_old(nz), conc_new(nz)
+      real(wp) :: col_h_old(nz), conc_old(nz), conc_new(nz)
       real(wp) :: z_old(0:nz), z_new(0:nz), htot_old, htot_new, scale_h
 
       nx = grid%nx_total
@@ -1427,12 +1427,11 @@ contains
                do it = 1, size(ms%tracers)
                   if (.not. allocated(ms%tracers(it)%c)) cycle
                   do k = 1, nz
-                     col_tr(k) = ms%tracers(it)%c(i, j, k)
-                     conc_old(k) = col_tr(k)/max(col_h_old(k), 1.0e-12_wp)
+                     conc_old(k) = ms%tracers(it)%c(i, j, k)
                   end do
                   call pcm_column_remap(nz, z_old, conc_old, z_new, conc_new)
                   do k = 1, nz
-                     ms%tracers(it)%c(i, j, k) = conc_new(k)*(z_new(k) - z_new(k - 1))
+                     ms%tracers(it)%c(i, j, k) = conc_new(k)
                   end do
                end do
             end if

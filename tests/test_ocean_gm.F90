@@ -178,8 +178,8 @@ contains
             do i = 1, ni
                x_c = real(i, wp)*grid%dx
                t_val = T0 + GZ*z_c + gx*x_c
-               ms%tracers(ms%idx_temperature)%c(i, j, k) = t_val*dz
-               ms%tracers(ms%idx_salinity)%c(i, j, k) = S0*dz
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = t_val
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = S0
             end do
          end do
       end do
@@ -1026,8 +1026,8 @@ contains
          end do
          ebt(4, 3, :) = 0.0_wp
          hsum0 = sum(ms%h_layer)
-         tsum0 = sum(ms%tracers(ms%idx_temperature)%c)
-         ssum0 = sum(ms%tracers(ms%idx_salinity)%c)
+         tsum0 = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)
+         ssum0 = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)
          call map_in_ct(ms, sl, gm, ct)
          !$acc enter data copyin(ebt)
          call ocean_slopes_compute(grid, metrics, eos, sl, ms, DT)
@@ -1039,8 +1039,8 @@ contains
          !$acc exit data delete(ebt)
          call map_out_ct(ms, sl, gm, ct)
          hsum = sum(ms%h_layer)
-         tsum = sum(ms%tracers(ms%idx_temperature)%c)
-         ssum = sum(ms%tracers(ms%idx_salinity)%c)
+         tsum = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)
+         ssum = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)
          call check(error, maxval(abs(u0)) > 0.0_wp, "ebt conserve: transport must be non-trivial")
          if (allocated(error)) exit checks
          call check(error, abs(hsum - hsum0)/abs(hsum0) < 1.0e-10_wp, "ebt GM: mass conserved")
@@ -1109,7 +1109,7 @@ contains
          ms%tracers(ms%idx_temperature)%c(:, :, k) = (2.0_wp + 4.0_wp*real(k, wp))
          ms%tracers(ms%idx_salinity)%c(:, :, k) = S0
       end do
-      ! I1': the bed fillers carry the layer above's temperature.
+      ! Bed fillers (vanished) keep a stale concentration; they carry no content.
       where (h(:, :, 1) <= H_VANISHED) &
          ms%tracers(ms%idx_temperature)%c(:, :, 1) = 2.0_wp + 8.0_wp
    end subroutine fill_layers
@@ -1178,7 +1178,7 @@ contains
       do k = 1, nz
          do j = j0, j1
             do i = i0, i1
-               s = s + ms%tracers(idx)%c(i, j, k)
+               s = s + ms%h_layer(i, j, k)*ms%tracers(idx)%c(i, j, k)
             end do
          end do
       end do

@@ -390,12 +390,12 @@ contains
          ms%h_layer = H0
          ms%u_face_x_layer = 0.0_wp
          ms%v_face_y_layer = 0.0_wp
-         ms%tracers(ms%idx_temperature)%c = T_INTERIOR*H0
-         ms%tracers(ms%idx_salinity)%c = S_REF*H0
+         ms%tracers(ms%idx_temperature)%c = T_INTERIOR
+         ms%tracers(ms%idx_salinity)%c = S_REF
          dyn%bt_work%bt_H_ref = real(NZ, wp)*H0
 
-         ! Initial interior heat content (hTr is T * h, so sum / grid is total).
-         heat0 = sum(ms%tracers(ms%idx_temperature)%c(i0:i1, j0:j1, :))
+         ! Initial interior heat content (the prognostic is T, so weight by h).
+         heat0 = sum(ms%h_layer(i0:i1, j0:j1, :)*ms%tracers(ms%idx_temperature)%c(i0:i1, j0:j1, :))
 
          call map_in(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
 
@@ -408,7 +408,7 @@ contains
          !$acc update self(ms%tracers(ms%idx_temperature)%c)
          call map_out(metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
 
-         heat_after = sum(ms%tracers(ms%idx_temperature)%c(i0:i1, j0:j1, :))
+         heat_after = sum(ms%h_layer(i0:i1, j0:j1, :)*ms%tracers(ms%idx_temperature)%c(i0:i1, j0:j1, :))
 
          ! Heat must have risen (warmer inflow T_BC > T_INTERIOR).
          call check(error, heat_after > heat0, &
@@ -498,13 +498,13 @@ contains
                end if
                ms_obc%h_layer(i, j, 1) = ms_ref%h_layer(i, j, 1)
                ms_ref%tracers(ms_ref%idx_salinity)%c(i, j, 1) = &
-                  eos_r%S_ref*ms_ref%h_layer(i, j, 1)
+                  eos_r%S_ref
                ms_ref%tracers(ms_ref%idx_temperature)%c(i, j, 1) = &
-                  eos_r%T_ref*ms_ref%h_layer(i, j, 1)
+                  eos_r%T_ref
                ms_obc%tracers(ms_obc%idx_salinity)%c(i, j, 1) = &
-                  eos_o%S_ref*ms_obc%h_layer(i, j, 1)
+                  eos_o%S_ref
                ms_obc%tracers(ms_obc%idx_temperature)%c(i, j, 1) = &
-                  eos_o%T_ref*ms_obc%h_layer(i, j, 1)
+                  eos_o%T_ref
             end do
          end do
          ms_ref%u_face_x_layer = 0.0_wp
@@ -623,13 +623,13 @@ contains
                   end if
                   ms_bc%h_layer(i, j, k) = ms_ref%h_layer(i, j, k)
                   ms_ref%tracers(ms_ref%idx_salinity)%c(i, j, k) = &
-                     eos_r%S_ref*ms_ref%h_layer(i, j, k)
+                     eos_r%S_ref
                   ms_ref%tracers(ms_ref%idx_temperature)%c(i, j, k) = &
-                     eos_r%T_ref*ms_ref%h_layer(i, j, k)
+                     eos_r%T_ref
                   ms_bc%tracers(ms_bc%idx_salinity)%c(i, j, k) = &
-                     eos_b%S_ref*ms_bc%h_layer(i, j, k)
+                     eos_b%S_ref
                   ms_bc%tracers(ms_bc%idx_temperature)%c(i, j, k) = &
-                     eos_b%T_ref*ms_bc%h_layer(i, j, k)
+                     eos_b%T_ref
                end do
             end do
          end do
@@ -736,7 +736,7 @@ contains
          allocate (bc%tres_east(grid%ny_total, NZ, 2), source=T_DATA)
 
          ms%h_layer = H0
-         ms%tracers(1)%c = T_INT*H0
+         ms%tracers(1)%c = T_INT
          ! Outflow at east wall face: mass_flux_x(i_e+1) > 0 (eastward = outward at east).
          ms%mass_flux_x_layer = 0.0_wp
          ms%mass_flux_x_layer(i_e + 1, :, :) = U_OUTFLOW*H0
@@ -815,7 +815,7 @@ contains
          allocate (bc%tres_west(grid%ny_total, NZ, 2), source=T_INT)
 
          ms%h_layer = H0
-         ms%tracers(1)%c = T_INT*H0
+         ms%tracers(1)%c = T_INT
          ! Inflow at west: flux into domain = positive (eastward).
          ! Outward normal at west = -x, so u_n = -flux/h < 0 (inflow).
          ms%mass_flux_x_layer = 0.0_wp
@@ -891,7 +891,7 @@ contains
          allocate (bc%tres_east(grid%ny_total, NZ, 2), source=T_DATA)
 
          ms%h_layer = H0
-         ms%tracers(1)%c = T_INT*H0
+         ms%tracers(1)%c = T_INT
          ! Outflow at east: +ve flux at east wall face.
          ms%mass_flux_x_layer = 0.0_wp
          ms%mass_flux_x_layer(i_e + 1, :, :) = U_OUTFLOW*H0
@@ -936,7 +936,7 @@ contains
          allocate (bc%tres_west(grid%ny_total, NZ, 2), source=T_INT)
 
          ms%h_layer = H0
-         ms%tracers(1)%c = T_INT*H0
+         ms%tracers(1)%c = T_INT
          ! Inflow at west: +ve flux (eastward into domain).
          ms%mass_flux_x_layer = 0.0_wp
          i_e = ng + 1  ! west wall face for mass flux
@@ -1009,7 +1009,7 @@ contains
          allocate (bc%tres_east(grid%ny_total, NZ, 2), source=0.5_wp*(T_DATA + T_INT))
 
          ms%h_layer = H0
-         ms%tracers(1)%c = T_INT*H0
+         ms%tracers(1)%c = T_INT
          ms%mass_flux_x_layer = 0.0_wp
 
          call ms%enter_data()
@@ -1127,10 +1127,10 @@ contains
             do i = 1, grid_a%nx_total
                ms_a%h_layer(i, j, 1) = H0
                ms_b%h_layer(i, j, 1) = H0
-               ms_a%tracers(ms_a%idx_salinity)%c(i, j, 1) = eos_a%S_ref*H0
-               ms_a%tracers(ms_a%idx_temperature)%c(i, j, 1) = eos_a%T_ref*H0
-               ms_b%tracers(ms_b%idx_salinity)%c(i, j, 1) = eos_b%S_ref*H0
-               ms_b%tracers(ms_b%idx_temperature)%c(i, j, 1) = eos_b%T_ref*H0
+               ms_a%tracers(ms_a%idx_salinity)%c(i, j, 1) = eos_a%S_ref
+               ms_a%tracers(ms_a%idx_temperature)%c(i, j, 1) = eos_a%T_ref
+               ms_b%tracers(ms_b%idx_salinity)%c(i, j, 1) = eos_b%S_ref
+               ms_b%tracers(ms_b%idx_temperature)%c(i, j, 1) = eos_b%T_ref
             end do
          end do
          ms_a%u_face_x_layer = 0.0_wp
@@ -1590,13 +1590,13 @@ contains
                end if
                ms_orl%h_layer(i, j, 1) = ms_anom%h_layer(i, j, 1)
                ms_anom%tracers(ms_anom%idx_salinity)%c(i, j, 1) = &
-                  eos_a%S_ref*ms_anom%h_layer(i, j, 1)
+                  eos_a%S_ref
                ms_anom%tracers(ms_anom%idx_temperature)%c(i, j, 1) = &
-                  eos_a%T_ref*ms_anom%h_layer(i, j, 1)
+                  eos_a%T_ref
                ms_orl%tracers(ms_orl%idx_salinity)%c(i, j, 1) = &
-                  eos_o%S_ref*ms_orl%h_layer(i, j, 1)
+                  eos_o%S_ref
                ms_orl%tracers(ms_orl%idx_temperature)%c(i, j, 1) = &
-                  eos_o%T_ref*ms_orl%h_layer(i, j, 1)
+                  eos_o%T_ref
             end do
          end do
          ms_anom%u_face_x_layer = 0.0_wp
@@ -1820,13 +1820,13 @@ contains
                   end if
                   ms_b%h_layer(i, j, k) = ms_ref%h_layer(i, j, k)
                   ms_ref%tracers(ms_ref%idx_salinity)%c(i, j, k) = &
-                     eos_r%S_ref*ms_ref%h_layer(i, j, k)
+                     eos_r%S_ref
                   ms_ref%tracers(ms_ref%idx_temperature)%c(i, j, k) = &
-                     eos_r%T_ref*ms_ref%h_layer(i, j, k)
+                     eos_r%T_ref
                   ms_b%tracers(ms_b%idx_salinity)%c(i, j, k) = &
-                     eos_b%S_ref*ms_b%h_layer(i, j, k)
+                     eos_b%S_ref
                   ms_b%tracers(ms_b%idx_temperature)%c(i, j, k) = &
-                     eos_b%T_ref*ms_b%h_layer(i, j, k)
+                     eos_b%T_ref
                end do
             end do
          end do
@@ -2138,13 +2138,13 @@ contains
                   end if
                   ms_b%h_layer(i, j, k) = ms_ref%h_layer(i, j, k)
                   ms_ref%tracers(ms_ref%idx_salinity)%c(i, j, k) = &
-                     eos_r%S_ref*ms_ref%h_layer(i, j, k)
+                     eos_r%S_ref
                   ms_ref%tracers(ms_ref%idx_temperature)%c(i, j, k) = &
-                     eos_r%T_ref*ms_ref%h_layer(i, j, k)
+                     eos_r%T_ref
                   ms_b%tracers(ms_b%idx_salinity)%c(i, j, k) = &
-                     eos_b%S_ref*ms_b%h_layer(i, j, k)
+                     eos_b%S_ref
                   ms_b%tracers(ms_b%idx_temperature)%c(i, j, k) = &
-                     eos_b%T_ref*ms_b%h_layer(i, j, k)
+                     eos_b%T_ref
                end do
             end do
          end do

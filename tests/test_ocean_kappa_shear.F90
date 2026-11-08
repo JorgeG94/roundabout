@@ -111,8 +111,8 @@ contains
          ! bottom-up: k=nz is surface, k=1 is bed
          z_below = real(nz - k, wp)*dz + 0.5_wp*dz
          t_k = t_surf - dt_dz*z_below
-         ms%tracers(ms%idx_temperature)%c(:, :, k) = t_k*dz
-         ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp*dz
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = t_k
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp
       end do
    end subroutine setup_stable_column
 
@@ -141,8 +141,8 @@ contains
          t_k = 20.0_wp - dt_per_m*z_sd
          u_k = du*tanh((shear_depth_m - z_sd)/shear_width_m)
 
-         ms%tracers(ms%idx_temperature)%c(:, :, k) = t_k*dz
-         ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp*dz
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = t_k
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp
          ! Both faces equal u_k -> face-average = u_k
          ms%u_face_x_layer(:, :, k) = u_k
       end do
@@ -445,7 +445,7 @@ contains
             u_k = ms%u_face_x_layer(i_probe, j_probe, k)
             ms%u_face_x_layer(:, :, k) = u_mean + 0.2_wp*(u_k - u_mean)
          end do
-         ! Also relax hTr for T
+         ! Also relax c for T
          do k = 1, NZ
             ms%tracers(ms%idx_temperature)%c(:, :, k) = &
                ms%tracers(ms%idx_temperature)%c(:, :, k)
@@ -789,8 +789,8 @@ contains
          call make_wet_masks(wet_t, wet_u, wet_v, NXL, NYL)
 
          h_layer = 2.0_wp
-         hT = 2.0_wp*10.0_wp       ! T=10 background
-         hS = 2.0_wp*35.0_wp
+         hT = 10.0_wp       ! T=10 background
+         hS = 35.0_wp
          u_face = 0.0_wp
          v_face = 0.0_wp
          do kg = 1, NZC
@@ -798,15 +798,15 @@ contains
             h_layer(4, 3, kg) = 8.0_wp                ! SE
             h_layer(3, 4, kg) = 12.0_wp               ! NW
             h_layer(4, 4, kg) = 64.0_wp               ! NE (land, poison)
-            hT(3, 3, kg) = 2.0_wp*h_layer(3, 3, kg)   ! T_sw = 2
-            hT(4, 3, kg) = 1.0_wp*8.0_wp              ! T_se = 1
-            hT(3, 4, kg) = 1.0_wp*12.0_wp             ! T_nw = 1
-            hT(4, 4, kg) = 7.0_wp*64.0_wp             ! T_ne = 7 (poison)
-            ! Keep S = 35 in every WET patch cell (hS tracks the patched h).
-            hS(3, 3, kg) = 35.0_wp*h_layer(3, 3, kg)
-            hS(4, 3, kg) = 35.0_wp*8.0_wp
-            hS(3, 4, kg) = 35.0_wp*12.0_wp
-            hS(4, 4, kg) = 11.0_wp*64.0_wp            ! S_ne = 11 (poison)
+            hT(3, 3, kg) = 2.0_wp                     ! T_sw = 2
+            hT(4, 3, kg) = 1.0_wp                     ! T_se = 1
+            hT(3, 4, kg) = 1.0_wp                     ! T_nw = 1
+            hT(4, 4, kg) = 7.0_wp                     ! T_ne = 7 (poison)
+            ! Keep S = 35 in every WET patch cell (concentration).
+            hS(3, 3, kg) = 35.0_wp
+            hS(4, 3, kg) = 35.0_wp
+            hS(3, 4, kg) = 35.0_wp
+            hS(4, 4, kg) = 11.0_wp                    ! S_ne = 11 (poison)
          end do
          ! Faces: south u-face (into the wet SW/SE pair) carries 0.5;
          ! north u-face (NW/NE pair, closed by land) carries poison.

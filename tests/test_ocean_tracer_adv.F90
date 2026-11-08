@@ -133,15 +133,15 @@ contains
          ms%h_layer = H0
          ms%u_face_x_layer = 0.0_wp
          ms%v_face_y_layer = 0.0_wp
-         ms%tracers(ms%idx_salinity)%c = S0*H0
-         ms%tracers(ms%idx_temperature)%c = T0*H0
+         ms%tracers(ms%idx_salinity)%c = S0
+         ms%tracers(ms%idx_temperature)%c = T0
 
          call map_in(ms, ct)
          call run_step(grid, metrics, ct, ms, DT)
          call map_out(ms, ct)
 
-         max_dS = maxval(abs(ms%tracers(ms%idx_salinity)%c - S0*H0))
-         max_dT = maxval(abs(ms%tracers(ms%idx_temperature)%c - T0*H0))
+         max_dS = maxval(abs(ms%tracers(ms%idx_salinity)%c - S0))
+         max_dT = maxval(abs(ms%tracers(ms%idx_temperature)%c - T0))
          call check(error, max_dS < 1.0e-14_wp, &
                     "salinity hTr drifted under zero velocity")
          if (allocated(error)) exit checks
@@ -187,8 +187,8 @@ contains
          ny = grid%ny_total
 
          ms%h_layer = H_BASE
-         ms%tracers(ms%idx_salinity)%c = S_CONST*H_BASE
-         ms%tracers(ms%idx_temperature)%c = T_CONST*H_BASE
+         ms%tracers(ms%idx_salinity)%c = S_CONST
+         ms%tracers(ms%idx_temperature)%c = T_CONST
          ! Wall-vanishing velocity field per layer
          do k = 1, NZ
             do j = 1, ny
@@ -219,8 +219,8 @@ contains
          if (allocated(error)) exit checks
 
          allocate (S_new(nx, ny, NZ), T_new(nx, ny, NZ))
-         S_new = ms%tracers(ms%idx_salinity)%c/ms%h_layer
-         T_new = ms%tracers(ms%idx_temperature)%c/ms%h_layer
+         S_new = ms%tracers(ms%idx_salinity)%c
+         T_new = ms%tracers(ms%idx_temperature)%c
          max_dS = maxval(abs(S_new - S_CONST))
          max_dT = maxval(abs(T_new - T_CONST))
          deallocate (S_new, T_new)
@@ -272,12 +272,12 @@ contains
          do k = 1, NZ
             do j = 1, ny
                do i = 1, nx
-                  ms%tracers(ms%idx_salinity)%c(i, j, k) = H_BASE*(S_BASE + &
-                                                                   0.5_wp*sin(2.0_wp*PI*real(i, wp)/real(nx, wp))* &
-                                                                   cos(2.0_wp*PI*real(j, wp)/real(ny, wp)))
-                  ms%tracers(ms%idx_temperature)%c(i, j, k) = H_BASE*(T_BASE + &
-                                                                      0.3_wp*cos(2.0_wp*PI*real(i, wp)/real(nx, wp))* &
-                                                                      sin(2.0_wp*PI*real(j, wp)/real(ny, wp)))
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = (S_BASE + &
+                                                            0.5_wp*sin(2.0_wp*PI*real(i, wp)/real(nx, wp))* &
+                                                            cos(2.0_wp*PI*real(j, wp)/real(ny, wp)))
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = (T_BASE + &
+                                                               0.3_wp*cos(2.0_wp*PI*real(i, wp)/real(nx, wp))* &
+                                                               sin(2.0_wp*PI*real(j, wp)/real(ny, wp)))
                end do
             end do
             do j = 1, ny
@@ -296,8 +296,8 @@ contains
             end do
          end do
 
-         total_S0 = sum(ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
-         total_T0 = sum(ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
+         total_S0 = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
+         total_T0 = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
 
          call map_in(ms, ct)
          do step = 1, N_STEPS
@@ -305,8 +305,8 @@ contains
          end do
          call map_out(ms, ct)
 
-         total_S = sum(ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
-         total_T = sum(ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
+         total_S = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
+         total_T = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
          drift_S = abs(total_S - total_S0)/abs(total_S0)
          drift_T = abs(total_T - total_T0)/abs(total_T0)
 
@@ -357,10 +357,10 @@ contains
          do k = 1, NZ
             do j = 1, ny
                do i = 1, nx
-                  ms%tracers(ms%idx_salinity)%c(i, j, k) = H0*(35.0_wp + &
-                                                               0.5_wp*sin(2.0_wp*PI*real(i, wp)/real(nx, wp)))
-                  ms%tracers(ms%idx_temperature)%c(i, j, k) = H0*(15.0_wp + &
-                                                                  0.3_wp*cos(2.0_wp*PI*real(i, wp)/real(nx, wp)))
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = (35.0_wp + &
+                                                            0.5_wp*sin(2.0_wp*PI*real(i, wp)/real(nx, wp)))
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = (15.0_wp + &
+                                                               0.3_wp*cos(2.0_wp*PI*real(i, wp)/real(nx, wp)))
                end do
             end do
             do j = 1, ny
@@ -437,8 +437,8 @@ contains
          ny = grid%ny_total
 
          ms%h_layer = H_BASE
-         ms%tracers(ms%idx_salinity)%c = S_CONST*H_BASE
-         ms%tracers(ms%idx_temperature)%c = T_CONST*H_BASE
+         ms%tracers(ms%idx_salinity)%c = S_CONST
+         ms%tracers(ms%idx_temperature)%c = T_CONST
          do k = 1, NZ
             do j = 1, ny
                do i = 1, nx + 1
@@ -468,8 +468,8 @@ contains
          if (allocated(error)) exit checks
 
          allocate (S_new(nx, ny, NZ), T_new(nx, ny, NZ))
-         S_new = ms%tracers(ms%idx_salinity)%c/ms%h_layer
-         T_new = ms%tracers(ms%idx_temperature)%c/ms%h_layer
+         S_new = ms%tracers(ms%idx_salinity)%c
+         T_new = ms%tracers(ms%idx_temperature)%c
          max_dS = maxval(abs(S_new - S_CONST))
          max_dT = maxval(abs(T_new - T_CONST))
          deallocate (S_new, T_new)
@@ -520,9 +520,9 @@ contains
             do j = 1, ny
                do i = 1, nx
                   ms%h_layer(i, j, k) = H_BASE
-                  ms%tracers(ms%idx_salinity)%c(i, j, k) = H_BASE*( &
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = ( &
                                                            35.0_wp + 0.5_wp*sin(2.0_wp*PI*real(i, wp)/real(nx, wp) + layer_phase))
-                  ms%tracers(ms%idx_temperature)%c(i, j, k) = H_BASE*( &
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = ( &
                                                              15.0_wp + 2.0_wp*cos(2.0_wp*PI*real(j, wp)/real(ny, wp) + layer_phase))
                end do
             end do
@@ -543,8 +543,8 @@ contains
          end do
 
          do k = 1, NZ
-            total_S_init(k) = sum(ms%tracers(ms%idx_salinity)%c(:, :, k))*grid%dx*grid%dy
-            total_T_init(k) = sum(ms%tracers(ms%idx_temperature)%c(:, :, k))*grid%dx*grid%dy
+            total_S_init(k) = sum(ms%h_layer(:, :, k)*ms%tracers(ms%idx_salinity)%c(:, :, k))*grid%dx*grid%dy
+            total_T_init(k) = sum(ms%h_layer(:, :, k)*ms%tracers(ms%idx_temperature)%c(:, :, k))*grid%dx*grid%dy
          end do
 
          call map_in(ms, ct)
@@ -554,8 +554,8 @@ contains
          call map_out(ms, ct)
 
          do k = 1, NZ
-            total_S_final(k) = sum(ms%tracers(ms%idx_salinity)%c(:, :, k))*grid%dx*grid%dy
-            total_T_final(k) = sum(ms%tracers(ms%idx_temperature)%c(:, :, k))*grid%dx*grid%dy
+            total_S_final(k) = sum(ms%h_layer(:, :, k)*ms%tracers(ms%idx_salinity)%c(:, :, k))*grid%dx*grid%dy
+            total_T_final(k) = sum(ms%h_layer(:, :, k)*ms%tracers(ms%idx_temperature)%c(:, :, k))*grid%dx*grid%dy
             drift = abs(total_S_final(k) - total_S_init(k))/abs(total_S_init(k))
             call check(error, drift < 1.0e-10_wp, &
                        "split-form salinity mass drift exceeded 1e-10")

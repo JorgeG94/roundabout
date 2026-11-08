@@ -136,9 +136,9 @@ contains
       call ice%init(grid)
 
       ms%h_layer = H_LAYER
-      ms%tracers(ms%idx_salinity)%c = S_INIT*H_LAYER
-      ms%tracers(ms%idx_temperature)%c = T_DEEP*H_LAYER
-      ms%tracers(ms%idx_temperature)%c(:, :, NZ) = t_surface*H_LAYER
+      ms%tracers(ms%idx_salinity)%c = S_INIT
+      ms%tracers(ms%idx_temperature)%c = T_DEEP
+      ms%tracers(ms%idx_temperature)%c(:, :, NZ) = t_surface
    end subroutine setup_state
 
    subroutine run_adjust(grid, ms, ice)
@@ -631,7 +631,7 @@ contains
          ! the net-melt salt term are live in the same window. The bank
          ! spends via the open-water annexation into k_merge (SIS2 ITD
          ! mode, rdb_ice_frazil_uptake) since part(0) > 0 here.
-         ms%tracers(ms%idx_temperature)%c(:, :, NZ) = 5.0_wp*H_LAYER
+         ms%tracers(ms%idx_temperature)%c(:, :, NZ) = 5.0_wp
          ice%frazil_heat(ip, jp) = E_BANK
 
          m_before = 0.0_wp

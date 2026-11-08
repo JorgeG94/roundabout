@@ -99,8 +99,8 @@ contains
       ms%u_face_x_layer = 0.0_wp
       ms%v_face_y_layer = 0.0_wp
       do k = 1, nz
-         ms%tracers(ms%idx_temperature)%c(:, :, k) = t_val*dz
-         ms%tracers(ms%idx_salinity)%c(:, :, k) = s_val*dz
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = t_val
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = s_val
       end do
    end subroutine set_uniform_column
 

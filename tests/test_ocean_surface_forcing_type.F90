@@ -67,8 +67,8 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       real(wp), intent(in) :: t0, s0
       ms%h_layer = H_LAYER
-      ms%tracers(ms%idx_temperature)%c = t0*H_LAYER
-      ms%tracers(ms%idx_salinity)%c = s0*H_LAYER
+      ms%tracers(ms%idx_temperature)%c = t0
+      ms%tracers(ms%idx_salinity)%c = s0
    end subroutine seed_uniform
 
    ! -----------------------------------------------------------------
@@ -137,7 +137,7 @@ contains
          jp = grid%ny_total/2
          expected_dhT = DT*Q_HEAT/(sf%rho0*sf%cp)
          top_err = abs(ms%tracers(ms%idx_temperature)%c(ip, jp, NZ) &
-                       - (10.0_wp*H_LAYER + expected_dhT))
+                       - (10.0_wp + expected_dhT/H_LAYER))
          call check(error, top_err < 1.0e-10_wp, &
                     "components-off apply_tracers must match the pre-PR-12 analytic")
 
@@ -247,9 +247,9 @@ contains
 
          ms%h_layer = H_LAYER
          ms%h_layer(:, :, NZ) = H_TOP
-         ms%tracers(ms%idx_temperature)%c = T_S*H_LAYER
-         ms%tracers(ms%idx_temperature)%c(:, :, NZ) = T_S*H_TOP
-         ms%tracers(ms%idx_salinity)%c = 35.0_wp*H_LAYER
+         ms%tracers(ms%idx_temperature)%c = T_S
+         ms%tracers(ms%idx_temperature)%c(:, :, NZ) = T_S
+         ms%tracers(ms%idx_salinity)%c = 35.0_wp
 
          sf%evap = -E
          sf%lprec = E
@@ -307,9 +307,9 @@ contains
 
          ms2%h_layer = H_LAYER
          ms2%h_layer(:, :, NZ) = H_TOP
-         ms2%tracers(ms2%idx_temperature)%c = T_S*H_LAYER
-         ms2%tracers(ms2%idx_temperature)%c(:, :, NZ) = T_S*H_TOP
-         ms2%tracers(ms2%idx_salinity)%c = 35.0_wp*H_LAYER
+         ms2%tracers(ms2%idx_temperature)%c = T_S
+         ms2%tracers(ms2%idx_temperature)%c(:, :, NZ) = T_S
+         ms2%tracers(ms2%idx_salinity)%c = 35.0_wp
 
          sf2%evap = -E
          sf2%lprec = E

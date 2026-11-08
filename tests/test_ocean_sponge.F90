@@ -475,7 +475,7 @@ contains
          ms%nz_ml = NZ
          call ms%init(grid)
          ms%h_layer = H0
-         ms%tracers(ms%idx_temperature)%c = T0*H0
+         ms%tracers(ms%idx_temperature)%c = T0
 
          sp%enable = .true.
          call sp%init(grid, nz_ml=NZ, n_tracers=size(ms%tracers))
@@ -484,7 +484,7 @@ contains
          sp%idamp_h = LAMBDA
          sp%ref_tracer(:, :, :, ms%idx_temperature) = T_REF
 
-         ref_heat = area_sum(ms%tracers(ms%idx_temperature)%c, nx, ny, area_w)*RHO_WATER
+         ref_heat = area_sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c, nx, ny, area_w)*RHO_WATER
 
          ! Faithful two-stage RK2 (the sponge fires once per stage, like
          ! the surface flux): budget accumulates the raw sum over both
@@ -503,9 +503,9 @@ contains
          ! Manual RK2 average (physics 0.5) — matches the production
          ! rk2_average step (§3.5: the accumulator itself is NOT averaged).
          ms%tracers(ms%idx_temperature)%c = &
-            0.5_wp*(T0*H0 + ms%tracers(ms%idx_temperature)%c)
+            0.5_wp*(T0 + ms%tracers(ms%idx_temperature)%c)
 
-         total_heat = area_sum(ms%tracers(ms%idx_temperature)%c, nx, ny, area_w)*RHO_WATER
+         total_heat = area_sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c, nx, ny, area_w)*RHO_WATER
          change_heat = total_heat - ref_heat
 
          src_heat = ocean_budget_src(ocean_heat_src_sum(0.0_wp, 0.0_wp, &
@@ -559,7 +559,7 @@ contains
          call ms%init(grid)
          ms%h_layer = H0
          idx_T = ms%idx_temperature
-         ms%tracers(idx_T)%c = T_IC*H0
+         ms%tracers(idx_T)%c = T_IC
 
          sp%enable = .true.
          call sp%init(grid, nz_ml=NZ, n_tracers=size(ms%tracers))
@@ -570,7 +570,7 @@ contains
 
          ! Mutate ms AFTER the snapshot — stands in for a warm-restart read
          ! overwriting the seeded IC with a different mid-run state.
-         ms%tracers(idx_T)%c = T_RESTART*H0
+         ms%tracers(idx_T)%c = T_RESTART
 
          call check(error, all(sp%ref_tracer(:, :, :, idx_T) == T_IC), &
                     "sponge reference must equal the IC (T_IC), bit-for-bit, "// &
@@ -841,7 +841,7 @@ contains
          ! Seed the state exactly T_OFFSET above the analytic target.
          do k = 1, NZ
             ms%tracers(ms%idx_temperature)%c(:, :, k) = &
-               (sp%ref_tracer(:, :, k, ms%idx_temperature) + T_OFFSET)*ms%h_layer(:, :, k)
+               (sp%ref_tracer(:, :, k, ms%idx_temperature) + T_OFFSET)
          end do
          !$acc update device(ms%tracers(ms%idx_temperature)%c)
 
@@ -859,7 +859,7 @@ contains
             do j = grid%nghost + 1, grid%nghost + NY_PHYS
                do i = grid%nghost + 1, grid%nghost + NX_PHYS
                   tgt = sp%ref_tracer(i, j, k, ms%idx_temperature)
-                  got = ms%tracers(ms%idx_temperature)%c(i, j, k)/ms%h_layer(i, j, k)
+                  got = ms%tracers(ms%idx_temperature)%c(i, j, k)
                   dev = got - tgt
                   worst = max(worst, abs(dev - want_dev))
                end do
@@ -919,7 +919,7 @@ contains
          !$acc exit data delete(ms, sp)
 
          tgt_bed = sp%ref_tracer(ip, jp, 1, ms%idx_temperature)
-         t_bed_after = ms%tracers(ms%idx_temperature)%c(ip, jp, 1)/ms%h_layer(ip, jp, 1)
+         t_bed_after = ms%tracers(ms%idx_temperature)%c(ip, jp, 1)
 
          call check(error, tgt_bed > T_COLD + 0.1_wp, &
                     "the WARM linear target must be warmer than the COLD IC at the bed")

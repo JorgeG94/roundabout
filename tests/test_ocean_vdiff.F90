@@ -10,7 +10,7 @@
 !!   * Tracer zero-coefficient short-circuit — `K_v_tracer = 0` is
 !!     a no-op.
 !!   * Tracer column-mass conservation — closed-BC implicit
-!!     diffusion conserves `sum(hTr)` per column to round-off.
+!!     diffusion conserves `sum(h*c)` per column to round-off.
 !!   * Tracer relaxation to mean — large K_v + many steps drives
 !!     every column toward its initial column-mean.
 !!   * Momentum constancy — uniform u_face across the column ⇒ no
@@ -117,8 +117,8 @@ contains
       ny = grid%ny_total
 
       ms%h_layer = H0
-      ms%tracers(ms%idx_temperature)%c = T0*H0
-      ms%tracers(ms%idx_salinity)%c = 35.0_wp*H0
+      ms%tracers(ms%idx_temperature)%c = T0
+      ms%tracers(ms%idx_salinity)%c = 35.0_wp
 
       call map_in(ms, vd)
       call vdiff_apply_tracers(grid, vd, ms, DT)
@@ -128,7 +128,7 @@ contains
       do k = 1, NZ
          do j = 1, ny
             do i = 1, nx
-               T_obs = ms%tracers(ms%idx_temperature)%c(i, j, k)/H0
+               T_obs = ms%tracers(ms%idx_temperature)%c(i, j, k)
                max_T_dev = max(max_T_dev, abs(T_obs - T0))
             end do
          end do
@@ -159,8 +159,8 @@ contains
 
       ms%h_layer = H0
       do k = 1, NZ
-         ms%tracers(ms%idx_temperature)%c(:, :, k) = real(k, wp)*H0
-         ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp*H0
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = real(k, wp)
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp
       end do
       allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%c)
 
@@ -194,8 +194,8 @@ contains
       !! any interface touching a vanishing layer — so a collapsed layer is
       !! decoupled and its tracer mass is preserved EXACTLY while its thick
       !! neighbours conserve among themselves.  This asserts the
-      !! floored-thickness column mass Σ(max(h,H_VANISHED)·T) is conserved
-      !! to round-off and the vanishing layer keeps its hTr.
+      !! live-layer column content Σ(h·c) is conserved to round-off
+      !! and the vanishing layer keeps its (stale) concentration.
       use rdb_constants, only: H_VANISHED
       type(error_type), allocatable, intent(out) :: error
       type(hgrid_t) :: grid
@@ -218,8 +218,8 @@ contains
       ms%h_layer = H0
       ms%h_layer(:, :, NZ) = -1.0e-3_wp     ! over-drained z* surface band
       do k = 1, NZ
-         ms%tracers(ms%idx_temperature)%c(:, :, k) = (5.0_wp + 2.0_wp*real(k, wp))*H0
-         ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp*H0
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = (5.0_wp + 2.0_wp*real(k, wp))
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp
       end do
       ! Give the collapsed surface layer a distinct, nonzero tracer mass —
       ! the pre-fix bug zeroed exactly this.
@@ -230,7 +230,8 @@ contains
       do k = 1, NZ
          do j = 1, ny
             do i = 1, nx
-               total_before = total_before + ms%tracers(ms%idx_temperature)%c(i, j, k)
+               if (ms%h_layer(i, j, k) > H_VANISHED) total_before = total_before + &
+                                                                    ms%h_layer(i, j, k)*ms%tracers(ms%idx_temperature)%c(i, j, k)
             end do
          end do
       end do
@@ -245,7 +246,8 @@ contains
       do k = 1, NZ
          do j = 1, ny
             do i = 1, nx
-               total_after = total_after + ms%tracers(ms%idx_temperature)%c(i, j, k)
+               if (ms%h_layer(i, j, k) > H_VANISHED) total_after = total_after + &
+                                                                   ms%h_layer(i, j, k)*ms%tracers(ms%idx_temperature)%c(i, j, k)
             end do
          end do
       end do
@@ -254,13 +256,13 @@ contains
 
       drift = abs(total_after - total_before)/abs(total_before)
       call check(error, drift < 1.0e-12_wp, &
-                 "vdiff vanishing-layer: Σ(hTr) drift > 1e-12 (mass dropped at h≤0)")
+                 "vdiff vanishing-layer: live-layer Σ(h·c) drift > 1e-12 (content dropped at h≤0)")
       if (allocated(error)) then
          call vd%destroy(); call ms%destroy(); return
       end if
       ! The decoupled collapsed layer must keep its frozen tracer mass.
       call check(error, abs(htr_vanish_after - htr_vanish_before) < 1.0e-10_wp, &
-                 "vdiff vanishing-layer: collapsed layer hTr was not preserved")
+                 "vdiff vanishing-layer: collapsed layer c was not preserved")
 
       call vd%destroy(); call ms%destroy()
    end subroutine test_tracer_vanishing_layer
@@ -288,16 +290,16 @@ contains
 
       ms%h_layer = H0
       do k = 1, NZ
-         ms%tracers(ms%idx_temperature)%c(:, :, k) = (5.0_wp + 2.0_wp*real(k, wp))*H0
-         ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp*H0
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = (5.0_wp + 2.0_wp*real(k, wp))
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp
       end do
-      total_before = sum(ms%tracers(ms%idx_temperature)%c)
+      total_before = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)
 
       call map_in(ms, vd)
       call vdiff_apply_tracers(grid, vd, ms, DT)
       call map_out(ms, vd)
 
-      total_after = sum(ms%tracers(ms%idx_temperature)%c)
+      total_after = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)
       drift = abs(total_after - total_before)/abs(total_before)
       call check(error, drift < 1.0e-12_wp, &
                  "vdiff tracer: column mass drift > 1e-12")
@@ -328,8 +330,8 @@ contains
 
       ms%h_layer = H0
       do k = 1, NZ
-         ms%tracers(ms%idx_temperature)%c(:, :, k) = real(k, wp)*H0
-         ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp*H0
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = real(k, wp)
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp
       end do
       col_mean = 0.0_wp
       do k = 1, NZ
@@ -345,7 +347,7 @@ contains
          do j = 1, ny
             do i = 1, nx
                max_dev = max(max_dev, &
-                             abs(ms%tracers(ms%idx_temperature)%c(i, j, k)/H0 - col_mean))
+                             abs(ms%tracers(ms%idx_temperature)%c(i, j, k) - col_mean))
             end do
          end do
       end do
@@ -523,20 +525,20 @@ contains
 
          ms%h_layer = H0
          do k = 1, NZ
-            ms%tracers(ms%idx_temperature)%c(:, :, k) = (5.0_wp + 2.0_wp*real(k, wp))*H0
-            ms%tracers(ms%idx_salinity)%c(:, :, k) = (30.0_wp + 0.5_wp*real(k, wp))*H0
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = (5.0_wp + 2.0_wp*real(k, wp))
+            ms%tracers(ms%idx_salinity)%c(:, :, k) = (30.0_wp + 0.5_wp*real(k, wp))
          end do
 
-         total_T_before = sum(ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
-         total_S_before = sum(ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
+         total_T_before = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
+         total_S_before = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
 
          call map_in(ms, vd)
          call vdiff_apply_tracers(grid, vd, ms, DT)
          call budgets%drain_contributors()
          call map_out(ms, vd)
 
-         total_T_after = sum(ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
-         total_S_after = sum(ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
+         total_T_after = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
+         total_S_after = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
 
          rel_T = abs(budgets%contributors(idx_heat)%total_integrated)/abs(total_T_before)
          rel_S = abs(budgets%contributors(idx_salt)%total_integrated)/abs(total_S_before)
@@ -596,10 +598,10 @@ contains
       ms_arith%h_layer = H0
       ms_harm%h_layer = H0
       do k = 1, NZ
-         ms_arith%tracers(ms_arith%idx_temperature)%c(:, :, k) = real(k, wp)*H0
-         ms_harm%tracers(ms_harm%idx_temperature)%c(:, :, k) = real(k, wp)*H0
-         ms_arith%tracers(ms_arith%idx_salinity)%c(:, :, k) = 35.0_wp*H0
-         ms_harm%tracers(ms_harm%idx_salinity)%c(:, :, k) = 35.0_wp*H0
+         ms_arith%tracers(ms_arith%idx_temperature)%c(:, :, k) = real(k, wp)
+         ms_harm%tracers(ms_harm%idx_temperature)%c(:, :, k) = real(k, wp)
+         ms_arith%tracers(ms_arith%idx_salinity)%c(:, :, k) = 35.0_wp
+         ms_harm%tracers(ms_harm%idx_salinity)%c(:, :, k) = 35.0_wp
       end do
 
       call map_in(ms_arith, vd_arith)
@@ -746,8 +748,8 @@ contains
          end do
          S0 = T0
          do k = 1, NZ
-            ms%tracers(ms%idx_temperature)%c(:, :, k) = T0(k)*H0
-            ms%tracers(ms%idx_salinity)%c(:, :, k) = S0(k)*H0
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = T0(k)
+            ms%tracers(ms%idx_salinity)%c(:, :, k) = S0(k)
          end do
 
          allocate (kt3(nx, ny, NZ + 1), source=0.0_wp)
@@ -757,8 +759,8 @@ contains
             ks3(:, :, k) = KS0
          end do
 
-         sum_T_before = sum(ms%tracers(ms%idx_temperature)%c)
-         sum_S_before = sum(ms%tracers(ms%idx_salinity)%c)
+         sum_T_before = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)
+         sum_S_before = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)
 
          call map_in(ms, vd)
          !$acc enter data copyin(kt3, ks3)
@@ -781,9 +783,9 @@ contains
          max_abs_S = 0.0_wp
          do k = 1, NZ
             max_abs_T = max(max_abs_T, &
-                            abs(ms%tracers(ms%idx_temperature)%c(ic, jc, k)/H0 - T_ref(k)))
+                            abs(ms%tracers(ms%idx_temperature)%c(ic, jc, k) - T_ref(k)))
             max_abs_S = max(max_abs_S, &
-                            abs(ms%tracers(ms%idx_salinity)%c(ic, jc, k)/H0 - S_ref(k)))
+                            abs(ms%tracers(ms%idx_salinity)%c(ic, jc, k) - S_ref(k)))
          end do
 
          call check(error, max_abs_T < 1.0e-13_wp, &
@@ -796,15 +798,15 @@ contains
          dev_T = 0.0_wp
          dev_S = 0.0_wp
          do k = 1, NZ
-            dev_T = dev_T + (ms%tracers(ms%idx_temperature)%c(ic, jc, k)/H0 - T0(k))**2
-            dev_S = dev_S + (ms%tracers(ms%idx_salinity)%c(ic, jc, k)/H0 - S0(k))**2
+            dev_T = dev_T + (ms%tracers(ms%idx_temperature)%c(ic, jc, k) - T0(k))**2
+            dev_S = dev_S + (ms%tracers(ms%idx_salinity)%c(ic, jc, k) - S0(k))**2
          end do
          call check(error, dev_S > dev_T, &
                     "larger ks (4x kt) must depart from the IC more than kt does")
          if (allocated(error)) exit checks
 
-         sum_T_after = sum(ms%tracers(ms%idx_temperature)%c)
-         sum_S_after = sum(ms%tracers(ms%idx_salinity)%c)
+         sum_T_after = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)
+         sum_S_after = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)
          call check(error, abs(sum_T_after - sum_T_before) < 1.0e-12_wp*abs(sum_T_before), &
                     "temperature column integral not conserved under kt_source")
          if (allocated(error)) exit checks
@@ -843,13 +845,13 @@ contains
          ms_case3%h_layer = H0
          do k = 1, NZ
             ms_case1%tracers(ms_case1%idx_temperature)%c(:, :, k) = &
-               (5.0_wp + 2.0_wp*real(k, wp))*H0
+               (5.0_wp + 2.0_wp*real(k, wp))
             ms_case3%tracers(ms_case3%idx_temperature)%c(:, :, k) = &
-               (5.0_wp + 2.0_wp*real(k, wp))*H0
+               (5.0_wp + 2.0_wp*real(k, wp))
             ms_case1%tracers(ms_case1%idx_salinity)%c(:, :, k) = &
-               (30.0_wp + 0.5_wp*real(k, wp))*H0
+               (30.0_wp + 0.5_wp*real(k, wp))
             ms_case3%tracers(ms_case3%idx_salinity)%c(:, :, k) = &
-               (30.0_wp + 0.5_wp*real(k, wp))*H0
+               (30.0_wp + 0.5_wp*real(k, wp))
          end do
 
          allocate (k3(nx, ny, NZ + 1), source=0.0_wp)
@@ -916,9 +918,9 @@ contains
             profile(k) = real(k, wp)
          end do
          do k = 1, NZ
-            ms%tracers(ms%idx_temperature)%c(:, :, k) = profile(k)*H0
-            ms%tracers(ms%idx_salinity)%c(:, :, k) = profile(k)*H0
-            ms%tracers(ms%idx_age)%c(:, :, k) = profile(k)*H0
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = profile(k)
+            ms%tracers(ms%idx_salinity)%c(:, :, k) = profile(k)
+            ms%tracers(ms%idx_age)%c(:, :, k) = profile(k)
          end do
 
          allocate (kt3(nx, ny, NZ + 1), source=0.0_wp)
